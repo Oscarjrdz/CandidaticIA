@@ -28,6 +28,10 @@
             "destination": "/api/ai/tts?text=:text"
         },
         {
+            "source": "/lp/bolsadeempleo",
+            "destination": "/api/lp/bolsadeempleo"
+        },
+        {
             "source": "/api/:path*",
             "destination": "/api/:path*"
         }

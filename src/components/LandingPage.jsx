@@ -1,5 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import {
     ArrowRight, CheckCircle, Users, Zap, Loader2, MessageSquare, BrainCircuit,
     Bot, Search, Send, BarChart3, Workflow, FileText, Shield, Clock,
@@ -384,49 +385,34 @@ const LandingPage = ({ onLoginSuccess }) => {
                                 Ingresar
                             </Button>
 
-                            {/* LOGIN DROPDOWN / MOBILE FULLSCREEN MODAL */}
+                            {/* LOGIN DROPDOWN — desktop only (inside header) */}
                             {isLoginOpen && (
-                                <div className="fixed inset-0 sm:absolute sm:inset-auto sm:right-0 sm:top-full sm:mt-6 w-full sm:w-[38rem] h-full sm:h-auto bg-white sm:bg-white/95 sm:backdrop-blur-3xl sm:rounded-3xl shadow-none sm:shadow-[0_20px_50px_rgb(109_40_217_/_0.2)] border-0 sm:border sm:border-white/50 p-6 sm:p-8 z-50 sm:animate-in sm:zoom-in-95 sm:slide-in-from-top-4 sm:ease-out sm:origin-top-right sm:ring-1 sm:ring-violet-100/60 overflow-y-auto flex flex-col justify-center">
-                                    <div className="hidden sm:block absolute -top-3 right-8 w-6 h-6 bg-white/95 backdrop-blur-3xl transform rotate-45 border-t border-l border-violet-100/50"></div>
-                                    <div className="hidden sm:block absolute inset-0 rounded-3xl bg-gradient-to-b from-violet-50/30 to-transparent pointer-events-none"></div>
-                                    {/* Mobile close button */}
-                                    <button onClick={() => setIsLoginOpen(false)} className="sm:hidden absolute top-4 right-4 p-2 rounded-full bg-gray-100 hover:bg-gray-200 transition-colors z-20">
-                                        <X className="w-5 h-5 text-gray-600" />
-                                    </button>
+                                <div className="hidden sm:block absolute right-0 top-full mt-6 w-[38rem] bg-white/95 backdrop-blur-3xl rounded-3xl shadow-[0_20px_50px_rgb(109_40_217_/_0.2)] border border-white/50 p-8 z-[9999] animate-in zoom-in-95 slide-in-from-top-4 ease-out origin-top-right ring-1 ring-violet-100/60">
+                                    <div className="absolute -top-3 right-8 w-6 h-6 bg-white/95 backdrop-blur-3xl transform rotate-45 border-t border-l border-violet-100/50"></div>
+                                    <div className="absolute inset-0 rounded-3xl bg-gradient-to-b from-violet-50/30 to-transparent pointer-events-none"></div>
                                     <div className="relative z-10 max-w-md mx-auto w-full">
-                                        <div className="mb-6 sm:mb-8 text-center">
+                                        <div className="mb-8 text-center">
                                             <div className="relative inline-block mb-4">
                                                 <div className="absolute inset-0 bg-violet-500 blur-xl opacity-20 rounded-full animate-pulse"></div>
-                                                <div className="relative w-14 h-14 sm:w-16 sm:h-16 bg-gradient-to-tr from-blue-600 to-violet-800 rounded-2xl flex items-center justify-center shadow-lg transform rotate-3 hover:rotate-6 transition-transform ring-4 ring-violet-50">
-                                                    <BrainCircuit className="w-8 h-8 sm:w-10 sm:h-10 text-white stroke-[1.5] rotate-90" />
+                                                <div className="relative w-16 h-16 bg-gradient-to-tr from-blue-600 to-violet-800 rounded-2xl flex items-center justify-center shadow-lg transform rotate-3 hover:rotate-6 transition-transform ring-4 ring-violet-50">
+                                                    <BrainCircuit className="w-10 h-10 text-white stroke-[1.5] rotate-90" />
                                                 </div>
                                             </div>
-                                            <h3 className="text-2xl sm:text-3xl font-extrabold text-gray-900 tracking-tight mb-1">Bienvenido</h3>
-                                            <p className="text-sm sm:text-base text-gray-500 font-medium">Accede a tu cuenta</p>
+                                            <h3 className="text-3xl font-extrabold text-gray-900 tracking-tight mb-1">Bienvenido</h3>
+                                            <p className="text-base text-gray-500 font-medium">Accede a tu cuenta</p>
                                         </div>
-
-                                        {loginError && (
-                                            <div className="mb-4 p-3 bg-red-50/50 border border-red-100 text-red-600 text-xs rounded-xl text-center font-semibold shadow-sm backdrop-blur-sm">
-                                                {loginError}
-                                            </div>
-                                        )}
-
+                                        {loginError && (<div className="mb-4 p-3 bg-red-50/50 border border-red-100 text-red-600 text-xs rounded-xl text-center font-semibold shadow-sm">{loginError}</div>)}
                                         {loginStep === 'phone' ? (
                                             <form onSubmit={handlePhoneSubmit} className="space-y-6">
                                                 <div className="space-y-3 text-center">
-                                                    <label className="text-xs sm:text-sm font-bold text-gray-400 uppercase tracking-widest">WhatsApp (10 dígitos)</label>
+                                                    <label className="text-sm font-bold text-gray-400 uppercase tracking-widest">WhatsApp (10 dígitos)</label>
                                                     <div className="flex justify-center gap-1 overflow-x-auto px-2 py-1">
                                                         {Array(10).fill(0).map((_, i) => (
-                                                            <input key={i} id={`phone-${i}`} type="text" inputMode="numeric" maxLength={1}
-                                                                value={phone[i] || ''}
-                                                                onChange={(e) => {
-                                                                    const val = e.target.value.replace(/\D/g, '');
-                                                                    if (!val && !e.target.value) { const np = phone.split(''); np[i] = ''; setPhone(np.join('')); return; }
-                                                                    if (val) { const np = phone.split(''); np[i] = val; setPhone(np.join('')); if (i < 9) document.getElementById(`phone-${i + 1}`).focus(); }
-                                                                }}
+                                                            <input key={i} id={`phone-${i}`} type="text" inputMode="numeric" maxLength={1} value={phone[i] || ''}
+                                                                onChange={(e) => { const val = e.target.value.replace(/\D/g, ''); if (!val && !e.target.value) { const np = phone.split(''); np[i] = ''; setPhone(np.join('')); return; } if (val) { const np = phone.split(''); np[i] = val; setPhone(np.join('')); if (i < 9) document.getElementById(`phone-${i + 1}`).focus(); } }}
                                                                 onKeyDown={(e) => { if (e.key === 'Backspace' && !phone[i] && i > 0) document.getElementById(`phone-${i - 1}`).focus(); }}
                                                                 onFocus={(e) => e.target.select()}
-                                                                className={`w-[30px] sm:w-8 h-10 shrink-0 text-center text-base sm:text-lg font-bold rounded-lg border-2 outline-none transition-all duration-300 shadow-sm ${phone[i] ? 'border-green-500 text-green-600 bg-green-50/50 shadow-[0_0_8px_rgba(34,197,94,0.2)] transform scale-105' : 'border-gray-200 text-gray-400 bg-white/50 focus:border-violet-400 focus:bg-white'}`}
+                                                                className={`w-8 h-10 shrink-0 text-center text-lg font-bold rounded-lg border-2 outline-none transition-all duration-300 shadow-sm ${phone[i] ? 'border-green-500 text-green-600 bg-green-50/50 shadow-[0_0_8px_rgba(34,197,94,0.2)] transform scale-105' : 'border-gray-200 text-gray-400 bg-white/50 focus:border-violet-400 focus:bg-white'}`}
                                                             />
                                                         ))}
                                                     </div>
@@ -437,48 +423,22 @@ const LandingPage = ({ onLoginSuccess }) => {
                                             </form>
                                         ) : loginStep === 'pin' ? (
                                             <div className="space-y-6">
-                                                <div className="text-center">
-                                                    <p className="text-sm text-gray-500 font-medium bg-gray-50 inline-block px-3 py-1 rounded-full border border-gray-100">
-                                                        Código enviado a <b className="text-gray-800">{phone}</b>
-                                                    </p>
+                                                <div className="text-center"><p className="text-sm text-gray-500 font-medium bg-gray-50 inline-block px-3 py-1 rounded-full border border-gray-100">Código enviado a <b className="text-gray-800">{phone}</b></p></div>
+                                                <div className="flex justify-center gap-3">
+                                                    {pinDigits.map((d, i) => (<input key={i} ref={el => pinRefs.current[i] = el} type="text" value={d} maxLength={1} onChange={(e) => handlePinChange(i, e.target.value)} onKeyDown={(e) => handleKeyDown(i, e)} className={`w-12 h-14 text-center text-2xl font-bold border-2 rounded-xl outline-none transition-all duration-300 shadow-sm ${d ? 'border-green-500 text-green-600 bg-green-50/50 shadow-[0_0_10px_rgba(34,197,94,0.2)] transform scale-105' : 'border-gray-100 text-gray-400 bg-white/50 focus:border-violet-500 focus:ring-4 focus:ring-violet-100 focus:bg-white'}`} autoFocus={i === 0} />))}
                                                 </div>
-                                                <div className="flex justify-center gap-2 sm:gap-3">
-                                                    {pinDigits.map((d, i) => (
-                                                        <input key={i} ref={el => pinRefs.current[i] = el} type="text" value={d} maxLength={1}
-                                                            onChange={(e) => handlePinChange(i, e.target.value)}
-                                                            onKeyDown={(e) => handleKeyDown(i, e)}
-                                                            className={`w-14 h-16 sm:w-12 sm:h-14 text-center text-2xl font-bold border-2 rounded-xl outline-none transition-all duration-300 shadow-sm ${d ? 'border-green-500 text-green-600 bg-green-50/50 shadow-[0_0_10px_rgba(34,197,94,0.2)] transform scale-105' : 'border-gray-100 text-gray-400 bg-white/50 focus:border-violet-500 focus:ring-4 focus:ring-violet-100 focus:bg-white'}`}
-                                                            autoFocus={i === 0}
-                                                        />
-                                                    ))}
-                                                </div>
-                                                <button onClick={() => setLoginStep('phone')} className="block w-full text-xs text-violet-600 hover:text-violet-700 font-semibold hover:underline text-center">
-                                                    ¿Número incorrecto? Volver
-                                                </button>
+                                                <button onClick={() => setLoginStep('phone')} className="block w-full text-xs text-violet-600 hover:text-violet-700 font-semibold hover:underline text-center">¿Número incorrecto? Volver</button>
                                             </div>
                                         ) : loginStep === 'register' ? (
                                             <form onSubmit={handleRegisterSubmit} className="space-y-6">
-                                                <div className="text-center">
-                                                    <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                                                        <Users className="w-8 h-8 text-green-600" />
-                                                    </div>
-                                                    <h4 className="text-xl font-bold">Crea tu Perfil</h4>
-                                                    <p className="text-sm text-gray-500">Solo necesitamos tu nombre completo.</p>
-                                                </div>
+                                                <div className="text-center"><div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4"><Users className="w-8 h-8 text-green-600" /></div><h4 className="text-xl font-bold">Crea tu Perfil</h4><p className="text-sm text-gray-500">Solo necesitamos tu nombre completo.</p></div>
                                                 <Input placeholder="Ej. Ana García" value={name} onChange={(e) => setName(e.target.value)} className="h-12 text-lg text-center" required autoFocus />
-                                                <button type="submit" className="w-full h-12 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl shadow-lg transition-all transform hover:scale-[1.02]" disabled={loginLoading}>
-                                                    {loginLoading ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : 'Solicitar Acceso'}
-                                                </button>
+                                                <button type="submit" className="w-full h-12 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl shadow-lg transition-all transform hover:scale-[1.02]" disabled={loginLoading}>{loginLoading ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : 'Solicitar Acceso'}</button>
                                             </form>
                                         ) : (
                                             <div className="text-center space-y-6">
-                                                <div className="w-20 h-20 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse">
-                                                    <Zap className="w-10 h-10 text-yellow-600" />
-                                                </div>
-                                                <div>
-                                                    <h4 className="text-2xl font-bold">Solicitud Enviada</h4>
-                                                    <p className="text-sm text-gray-600 mt-2">Tu cuenta está en revisión. Te avisaremos por WhatsApp ({phone}) cuando esté activa.</p>
-                                                </div>
+                                                <div className="w-20 h-20 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse"><Zap className="w-10 h-10 text-yellow-600" /></div>
+                                                <div><h4 className="text-2xl font-bold">Solicitud Enviada</h4><p className="text-sm text-gray-600 mt-2">Tu cuenta está en revisión. Te avisaremos por WhatsApp ({phone}) cuando esté activa.</p></div>
                                                 <button onClick={() => setIsLoginOpen(false)} className="w-full h-12 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold rounded-xl active:scale-95 transition-all">Cerrar</button>
                                             </div>
                                         )}
@@ -504,6 +464,69 @@ const LandingPage = ({ onLoginSuccess }) => {
                     </div>
                 )}
             </header>
+
+            {/* ═══ MOBILE LOGIN PORTAL — rendered outside header to bypass backdrop-filter stacking context ═══ */}
+            {isLoginOpen && createPortal(
+                <div className="sm:hidden fixed inset-0 z-[9999] bg-white overflow-y-auto flex flex-col justify-center p-6">
+                    <button onClick={() => setIsLoginOpen(false)} className="absolute top-4 right-4 p-2 rounded-full bg-gray-100 hover:bg-gray-200 transition-colors z-20">
+                        <X className="w-5 h-5 text-gray-600" />
+                    </button>
+                    <div className="max-w-md mx-auto w-full">
+                        <div className="mb-6 text-center">
+                            <div className="relative inline-block mb-4">
+                                <div className="absolute inset-0 bg-violet-500 blur-xl opacity-20 rounded-full animate-pulse"></div>
+                                <div className="relative w-14 h-14 bg-gradient-to-tr from-blue-600 to-violet-800 rounded-2xl flex items-center justify-center shadow-lg transform rotate-3 ring-4 ring-violet-50">
+                                    <BrainCircuit className="w-8 h-8 text-white stroke-[1.5] rotate-90" />
+                                </div>
+                            </div>
+                            <h3 className="text-2xl font-extrabold text-gray-900 tracking-tight mb-1">Bienvenido</h3>
+                            <p className="text-sm text-gray-500 font-medium">Accede a tu cuenta</p>
+                        </div>
+                        {loginError && (<div className="mb-4 p-3 bg-red-50/50 border border-red-100 text-red-600 text-xs rounded-xl text-center font-semibold shadow-sm">{loginError}</div>)}
+                        {loginStep === 'phone' ? (
+                            <form onSubmit={handlePhoneSubmit} className="space-y-6">
+                                <div className="space-y-3 text-center">
+                                    <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">WhatsApp (10 dígitos)</label>
+                                    <div className="flex justify-center gap-1 px-2 py-1">
+                                        {Array(10).fill(0).map((_, i) => (
+                                            <input key={i} id={`mphone-${i}`} type="text" inputMode="numeric" maxLength={1} value={phone[i] || ''}
+                                                onChange={(e) => { const val = e.target.value.replace(/\D/g, ''); if (!val && !e.target.value) { const np = phone.split(''); np[i] = ''; setPhone(np.join('')); return; } if (val) { const np = phone.split(''); np[i] = val; setPhone(np.join('')); if (i < 9) document.getElementById(`mphone-${i + 1}`).focus(); } }}
+                                                onKeyDown={(e) => { if (e.key === 'Backspace' && !phone[i] && i > 0) document.getElementById(`mphone-${i - 1}`).focus(); }}
+                                                onFocus={(e) => e.target.select()}
+                                                className={`w-[28px] h-10 shrink-0 text-center text-base font-bold rounded-lg border-2 outline-none transition-all duration-300 shadow-sm ${phone[i] ? 'border-green-500 text-green-600 bg-green-50/50' : 'border-gray-200 text-gray-400 bg-white/50 focus:border-violet-400'}`}
+                                            />
+                                        ))}
+                                    </div>
+                                </div>
+                                <button type="submit" className={`w-full h-12 text-base font-bold shadow-lg rounded-xl transition-all inline-flex items-center justify-center text-white ${phone.length === 10 ? 'bg-gradient-to-r from-green-500 to-emerald-600 cursor-pointer' : 'bg-gray-400 cursor-not-allowed'}`} disabled={loginLoading || phone.length < 10}>
+                                    {loginLoading ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : 'Enviar Código'}
+                                </button>
+                            </form>
+                        ) : loginStep === 'pin' ? (
+                            <div className="space-y-6">
+                                <div className="text-center"><p className="text-sm text-gray-500 font-medium bg-gray-50 inline-block px-3 py-1 rounded-full border border-gray-100">Código enviado a <b className="text-gray-800">{phone}</b></p></div>
+                                <div className="flex justify-center gap-2">
+                                    {pinDigits.map((d, i) => (<input key={i} ref={el => pinRefs.current[i] = el} type="text" value={d} maxLength={1} onChange={(e) => handlePinChange(i, e.target.value)} onKeyDown={(e) => handleKeyDown(i, e)} className={`w-14 h-16 text-center text-2xl font-bold border-2 rounded-xl outline-none transition-all ${d ? 'border-green-500 text-green-600 bg-green-50/50' : 'border-gray-100 text-gray-400 bg-white/50 focus:border-violet-500'}`} autoFocus={i === 0} />))}
+                                </div>
+                                <button onClick={() => setLoginStep('phone')} className="block w-full text-xs text-violet-600 font-semibold hover:underline text-center">¿Número incorrecto? Volver</button>
+                            </div>
+                        ) : loginStep === 'register' ? (
+                            <form onSubmit={handleRegisterSubmit} className="space-y-6">
+                                <div className="text-center"><div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4"><Users className="w-8 h-8 text-green-600" /></div><h4 className="text-xl font-bold">Crea tu Perfil</h4><p className="text-sm text-gray-500">Solo necesitamos tu nombre completo.</p></div>
+                                <Input placeholder="Ej. Ana García" value={name} onChange={(e) => setName(e.target.value)} className="h-12 text-lg text-center" required autoFocus />
+                                <button type="submit" className="w-full h-12 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl shadow-lg transition-all" disabled={loginLoading}>{loginLoading ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : 'Solicitar Acceso'}</button>
+                            </form>
+                        ) : (
+                            <div className="text-center space-y-6">
+                                <div className="w-20 h-20 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse"><Zap className="w-10 h-10 text-yellow-600" /></div>
+                                <div><h4 className="text-2xl font-bold">Solicitud Enviada</h4><p className="text-sm text-gray-600 mt-2">Tu cuenta está en revisión. Te avisaremos por WhatsApp ({phone}) cuando esté activa.</p></div>
+                                <button onClick={() => setIsLoginOpen(false)} className="w-full h-12 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold rounded-xl active:scale-95 transition-all">Cerrar</button>
+                            </div>
+                        )}
+                    </div>
+                </div>,
+                document.body
+            )}
 
             <main>
                 {/* ═══ iPhone CSS Animations ═══ */}

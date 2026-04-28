@@ -249,6 +249,10 @@ export default async function handler(req, res) {
                            metaMsg.interactive?.list_reply?.title || '';
                     messageType = 'text';
                     break;
+                case 'request_welcome':
+                    body = 'Que tal! Info sobre la vacante!'; // Fallback para el anuncio
+                    messageType = 'text';
+                    break;
                 default:
                     body = '';
                     messageType = metaMsgType || 'text';
