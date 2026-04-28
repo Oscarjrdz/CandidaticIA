@@ -98,10 +98,13 @@ export default async function handler(req, res) {
 
     const payload = req.body;
 
-    // ═══ Debug: save raw webhook for inspection ═══
+    // ═══ Debug: save raw webhook for inspection (last 50) ═══
     try {
         const redis = getRedisClient();
         if (redis) {
+            const entry = JSON.stringify({ ts: new Date().toISOString(), payload });
+            await redis.lpush('debug:webhook_history', entry);
+            await redis.ltrim('debug:webhook_history', 0, 49); // Keep last 50
             await redis.set('debug:last_webhook_raw', JSON.stringify(payload));
         }
     } catch (e) { }
@@ -251,6 +254,13 @@ export default async function handler(req, res) {
                     messageType = metaMsgType || 'text';
             }
 
+            // ─── META AI FIX: Inject fallback text if hidden by referral ───
+            if (!body && metaMsg.referral) {
+                const headline = metaMsg.referral.headline || 'un anuncio';
+                body = `¡Hola! Vengo de ${headline}. Me gustaría más información.`;
+                messageType = 'text';
+            }
+
             // ─── Download media URL if present ───
             if (mediaId) {
                 try {
@@ -291,39 +301,127 @@ export default async function handler(req, res) {
                 }
             }
 
-            // 🛡️ BLOCK GROUPS (Meta doesn't send group messages to Cloud API by default, but just in case)
-            if (phone.length < 10 || phone.length > 13) {
+            // ═══════════════════════════════════════════════════════════
+            // 🎯 OPERACIÓN 0 FUGAS — Phase 1: Validate + Guarantee
+            // ═══════════════════════════════════════════════════════════
+
+            // 🛡️ PHONE VALIDATION (expanded: 10-15 digits, log suspicious)
+            if (phone.length < 10) {
+                await logTelemetry('ingress_dropped', { reason: 'phone_too_short', phone, length: phone.length });
                 continue;
             }
-            if (phone.length >= 12 && !phone.startsWith('52')) {
+            if (phone.length > 15) {
+                await logTelemetry('ingress_dropped', { reason: 'phone_too_long', phone, length: phone.length });
                 continue;
             }
 
-            // 🛡️ DEDUP
+            // 🛡️ DEDUP (legitimate — same message shouldn't be saved twice)
             if (await isMessageProcessed(msgId)) {
                 continue;
             }
 
-            // 🛡️ IGNORE OLD MESSAGES
+            // 🛡️ IGNORE OLD MESSAGES (expanded: 30 min window, with telemetry)
             if (timestamp) {
                 const msgTimeMs = Number(timestamp) > 1e11 ? Number(timestamp) : Number(timestamp) * 1000;
                 const diffMins = (Date.now() - msgTimeMs) / 1000 / 60;
-                if (diffMins > 5) {
+                if (diffMins > 30) {
+                    await logTelemetry('ingress_dropped', { reason: 'stale_message', phone, diffMins: Math.round(diffMins) });
                     continue;
                 }
             }
 
-            // (Removed markMessageAsRead automatically so it only turns blue when recruiter OPENS the chat)
+            // ═══════════════════════════════════════════════════════════
+            // 🎯 CANDIDATE GUARANTEE — Candidato se crea SIEMPRE aquí
+            // ═══════════════════════════════════════════════════════════
+            const redis = getRedisClient();
+            let candidateId = await getCandidateIdByPhone(phone);
+            let candidate = null;
+            let isNewCandidate = false;
 
-            await logTelemetry('ingress', {
-                msgId, from: phone, type: messageType,
+            if (candidateId) {
+                candidate = await getCandidateById(candidateId);
+                if (!candidate) candidateId = null;
+            }
+
+            if (!candidateId) {
+                const referral = metaMsg?.referral;
+                candidate = await saveCandidate({
+                    whatsapp: phone,
+                    nombre: pushName,
+                    origen: referral ? 'facebook_ctwa' : 'meta_cloud_api',
+                    esNuevo: 'SI',
+                    primerContacto: new Date().toISOString(),
+                    ...(referral && {
+                        adClickId: referral.ctwa_clid || null,
+                        adSource: referral.source_type || null,
+                        adId: referral.source_id || null,
+                        adUrl: referral.source_url || null,
+                        adHeadline: referral.headline || null,
+                        adBody: referral.body || null,
+                        adMediaType: referral.media_type || null,
+                        adImageUrl: referral.image_url || null,
+                        adVideoUrl: referral.video_url || null,
+                    })
+                });
+                candidateId = candidate.id;
+                isNewCandidate = true;
+                notifyNewCandidate(candidate).catch(() => {});
+            }
+
+            // ═══════════════════════════════════════════════════════════
+            // 🎯 MESSAGE PERSISTENCE — Mensaje se guarda SIEMPRE aquí
+            // ═══════════════════════════════════════════════════════════
+            const msgToSave = {
+                id: msgId, from: 'user', content: body,
+                type: messageType, timestamp: new Date().toISOString(),
+                ...(mediaUrl && { mediaUrl })
+            };
+            if (metaMsg.context?.id) {
+                msgToSave.contextInfo = { quotedMessage: { stanzaId: metaMsg.context.id, participant: metaMsg.context.from || '', text: '' } };
+            }
+
+            // Reaction is special — update reaction on existing message, don't save new
+            if (metaMsgType === 'reaction' && metaMsg.reaction) {
+                const targetMsgId = metaMsg.reaction.message_id;
+                if (targetMsgId && candidateId) {
+                    await updateMessageReaction(candidateId, targetMsgId, metaMsg.reaction.emoji || '');
+                    if (redis) await redis.del('stats:bot:last_calc');
+                }
+                continue; // Reactions don't need AI processing
+            }
+
+            const freshCandidate = await getCandidateById(candidateId) || candidate;
+            const updatedCandidate = {
+                ...freshCandidate,
+                ultimoMensaje: new Date().toISOString(),
+                lastUserMessageAt: new Date().toISOString(),
+                unreadMsgCount: (Number(freshCandidate?.unreadMsgCount) || 0) + 1,
+                mensajesTotales: (Number(freshCandidate?.mensajesTotales) || 0) + 1
+            };
+
+            if ((Number(freshCandidate?.unreadMsgCount) || 0) === 0) {
+                if (redis) await redis.incr('stats:bot:unread_v2').catch(() => {});
+            }
+
+            await saveWebhookTransaction({
+                candidateId, message: msgToSave,
+                candidateUpdates: updatedCandidate,
+                eventData: metaMsg, statsType: 'incoming'
+            });
+            if (redis) await redis.del('stats:bot:last_calc');
+
+            await logTelemetry('ingress_captured', {
+                msgId, from: phone, type: messageType, isNew: isNewCandidate,
                 text: body?.substring(0, 50)
             });
 
             try {
-                // ═══ ADMIN COMMANDS ═══
+                // ═══════════════════════════════════════════════════════════
+                // 🎯 OPERACIÓN 0 FUGAS — Phase 2: Business Logic
+                // (Candidato + mensaje YA están guardados. Los continue
+                //  aquí solo saltan la IA, NO pierden datos.)
+                // ═══════════════════════════════════════════════════════════
                 const adminNumber = process.env.ADMIN_NUMBER || '5218116038195';
-                const redis = getRedisClient();
                 const isAdmin = phone.slice(-10) === adminNumber.slice(-10);
 
                 if (isAdmin) {
@@ -462,27 +560,6 @@ export default async function handler(req, res) {
                     continue;
                 }
 
-                // ═══ CANDIDATE LOOKUP ═══
-                let candidateId = await getCandidateIdByPhone(phone);
-                let candidate = null;
-
-                if (candidateId) {
-                    candidate = await getCandidateById(candidateId);
-                    if (!candidate) candidateId = null;
-                }
-
-
-                if (!candidateId) {
-                    candidate = await saveCandidate({
-                        whatsapp: phone,
-                        nombre: pushName,
-                        origen: 'meta_cloud_api',
-                        esNuevo: 'SI',
-                        primerContacto: new Date().toISOString()
-                    });
-                    candidateId = candidate.id;
-                    notifyNewCandidate(candidate).catch(() => { });
-                }
 
                 // ── ADMIN STICKER CAPTURE ──
                 if (phone.slice(-10) === adminNumber.slice(-10) && messageType === 'sticker' && mediaUrl) {
@@ -532,79 +609,8 @@ export default async function handler(req, res) {
                     }
                 }
 
-                // ═══ BUILD MESSAGE TO SAVE ═══
-                const agentInput = body;
-                const msgToSave = {
-                    id: msgId,
-                    from: 'user',
-                    content: body,
-                    type: messageType,
-                    timestamp: new Date().toISOString()
-                };
-
-                // ── QUOTE HANDLING (Meta context) ──
-                if (metaMsg.context?.id) {
-                    msgToSave.contextInfo = {
-                        quotedMessage: {
-                            stanzaId: metaMsg.context.id,
-                            participant: metaMsg.context.from || '',
-                            text: '' // Meta doesn't include quoted text in webhook
-                        }
-                    };
-                }
-
-                // ── REACTION HANDLING ──
-                if (metaMsgType === 'reaction') {
-                    const reactionData = metaMsg.reaction;
-                    if (reactionData) {
-                        const targetMsgId = reactionData.message_id;
-                        const emoji = reactionData.emoji || '';
-
-                        if (targetMsgId && candidateId) {
-                            await updateMessageReaction(candidateId, targetMsgId, emoji);
-                            const redis = getRedisClient();
-                            if (redis) await redis.del('stats:bot:last_calc');
-                        }
-                        continue;
-                    }
-                }
-
-                if (mediaUrl) {
-                    msgToSave.mediaUrl = mediaUrl;
-                }
-
-                // ═══ PERSISTENCE ═══
-                const freshCandidate = await getCandidateById(candidateId) || candidate;
-
-                const updatedCandidate = {
-                    ...freshCandidate,
-                    ultimoMensaje: new Date().toISOString(),
-                    lastUserMessageAt: new Date().toISOString(),
-                    unreadMsgCount: (Number(freshCandidate?.unreadMsgCount) || 0) + 1,
-                    mensajesTotales: (Number(freshCandidate?.mensajesTotales) || 0) + 1
-                };
-
-                // 📊 ATOMIC UNREAD: Increment global counter only when candidate goes from 0→1 unread
-                if ((Number(freshCandidate?.unreadMsgCount) || 0) === 0) {
-                    const redisAtomic = getRedisClient();
-                    if (redisAtomic) await redisAtomic.incr('stats:bot:unread_v2').catch(() => {});
-                }
-
-                await saveWebhookTransaction({
-                    candidateId,
-                    message: msgToSave,
-                    candidateUpdates: updatedCandidate,
-                    eventData: metaMsg,
-                    statsType: 'incoming'
-                });
-
-                // Force instant SSE stat recalculation
-                const redisForCache = getRedisClient();
-                if (redisForCache) {
-                    await redisForCache.del('stats:bot:last_calc');
-                }
-
                 // ═══ AI PROCESSING (Turbo Mode) ═══
+                const agentInput = body;
                 const aiPromise = (async () => {
                     try {
                         const redis = getRedisClient();

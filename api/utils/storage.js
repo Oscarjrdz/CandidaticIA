@@ -1855,3 +1855,86 @@ export const getAITelemetry = async () => {
         return {};
     }
 };
+
+/**
+ * getAdsStatistics
+ * Aggregates candidates by ad campaigns.
+ */
+export const getAdsStatistics = async () => {
+    const client = getClient();
+    if (!client) return { ads: [], totalAdsLeads: 0 };
+
+    const totalDbCount = async () => (await client.scard(KEYS.LIST_COMPLETE)) + (await client.scard(KEYS.LIST_PENDING));
+    const dbSize = await totalDbCount();
+
+    const adsMap = new Map();
+    let totalAdsLeads = 0;
+    
+    const CHUNK_SIZE = 500;
+    let currentIndex = 0;
+    
+    const todayStr = new Date().toISOString().split('T')[0];
+
+    while (currentIndex < dbSize) {
+        const ids = await client.zrevrange(KEYS.CANDIDATES_LIST, currentIndex, currentIndex + CHUNK_SIZE - 1);
+        if (!ids || ids.length === 0) break;
+        
+        const pipeline = client.pipeline();
+        ids.forEach(id => pipeline.get(`${KEYS.CANDIDATE_PREFIX}${id}`));
+        const results = await pipeline.exec();
+        
+        for (let i = 0; i < results.length; i++) {
+            const [err, res] = results[i];
+            if (err || !res) continue;
+            
+            try {
+                const c = JSON.parse(res);
+                
+                // Only process candidates from Meta Ads
+                if (c.origen === 'facebook_ctwa' || c.adId || c.adHeadline) {
+                    totalAdsLeads++;
+                    
+                    const adKey = c.adId || c.adHeadline || 'organic_or_unknown';
+                    
+                    if (!adsMap.has(adKey)) {
+                        adsMap.set(adKey, {
+                            adId: c.adId || null,
+                            adHeadline: c.adHeadline || 'Anuncio sin título',
+                            adUrl: c.adUrl || null,
+                            totalLeads: 0,
+                            todayLeads: 0,
+                            recentCandidates: []
+                        });
+                    }
+                    
+                    const adStats = adsMap.get(adKey);
+                    adStats.totalLeads++;
+                    
+                    const contactDateStr = (c.primerContacto || c.ultimoMensaje || '').split('T')[0];
+                    if (contactDateStr === todayStr) {
+                        adStats.todayLeads++;
+                    }
+                    
+                    // Keep up to 10 recent candidates for preview
+                    if (adStats.recentCandidates.length < 10) {
+                        adStats.recentCandidates.push({
+                            id: c.id,
+                            nombre: c.nombre,
+                            whatsapp: c.whatsapp,
+                            fecha: c.primerContacto || c.ultimoMensaje,
+                            profilePic: c.profilePic || null
+                        });
+                    }
+                }
+            } catch (e) {
+                // Ignore parse errors
+            }
+        }
+        
+        currentIndex += CHUNK_SIZE;
+    }
+
+    const ads = Array.from(adsMap.values()).sort((a, b) => b.totalLeads - a.totalLeads);
+    
+    return { ads, totalAdsLeads };
+};

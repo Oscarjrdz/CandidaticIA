@@ -17,6 +17,7 @@ import BotIASection from './components/BotIASection';
 import MediaLibrarySection from './components/MediaLibrarySection';
 import CRMProjectsSection from './components/CRMProjectsSection';
 import ByPassSection from './components/ByPassSection';
+import AdsStatisticsSection from './components/AdsStatisticsSection';
 import LoadingOverlay from './components/ui/LoadingOverlay';
 import ErrorBoundary from './components/ui/ErrorBoundary';
 import LoginPage from './components/LoginPage';
@@ -208,6 +209,7 @@ function App() {
                     {activeSection === 'candidates' ? 'Candidatos'
                       : activeSection === 'chat' ? 'Chat Web'
                       : activeSection === 'bulks' ? 'Envíos Masivos'
+                      : activeSection === 'ads-stats' ? 'Estadísticas de Ads'
                       : activeSection === 'bot-ia' ? 'Bot IA'
                       : activeSection === 'automations' ? 'Automatizaciones'
                       : activeSection === 'vacancies' ? 'Vacantes'
@@ -254,6 +256,7 @@ function App() {
                     {activeSection === 'candidates' ? 'Gestión de candidatos de WhatsApp'
                       : activeSection === 'chat' ? 'Chatea nativamente con tus candidatos'
                       : activeSection === 'bulks' ? 'Manda mensajes en secuencia a múltiples candidatos a la vez'
+                      : activeSection === 'ads-stats' ? 'Seguimiento y rendimiento de campañas de Meta Ads'
                       : activeSection === 'bot-ia' ? 'Configuración del comportamiento del Bot'
                       : activeSection === 'automations' ? 'Reglas de extracción inteligente de datos'
                       : activeSection === 'vacancies' ? 'Gestión y publicación de vacantes'
@@ -314,7 +317,8 @@ function App() {
             <BulksSection showToast={showToast} />
           ) : activeSection === 'bot-ia' ? (
             <BotIASection showToast={showToast} />
-
+          ) : activeSection === 'ads-stats' ? (
+            <AdsStatisticsSection showToast={showToast} />
           ) : activeSection === 'automations' ? (
             <AutomationsSection showToast={showToast} />
           ) : activeSection === 'vacancies' ? (

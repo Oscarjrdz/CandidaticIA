@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useCandidatesSSE } from '../hooks/useCandidatesSSE';
 import {
-    Users, Settings, Bot, History, Zap, Briefcase, Send, User, LogOut,
+    Users, Settings, Bot, History, Zap, Briefcase, Send, User, LogOut, BarChart3,
     MessageSquare, Layout, Smartphone, Folder, FolderKanban, GripVertical, Wifi, BrainCircuit, X, ChevronLeft, ChevronRight
 } from 'lucide-react';
 import {
@@ -31,6 +31,7 @@ const DEFAULT_MENU_ITEMS = [
     { id: 'candidates', label: 'Candidatos', icon: Users, position: 'top' },
     { id: 'chat', label: 'Chat Web', icon: MessageSquare, position: 'top' },
     { id: 'bulks', label: 'Envíos Masivos', icon: Send, position: 'top' },
+    { id: 'ads-stats', label: 'Estadísticas de Ads', icon: BarChart3, position: 'top' },
     { id: 'bot-ia', label: 'Bot IA (2.0)', icon: Smartphone, position: 'top' },
     { id: 'automations', label: 'Automatizaciones', icon: Zap, position: 'top' },
     { id: 'vacancies', label: 'Vacantes', icon: Briefcase, position: 'top' },
@@ -117,7 +118,19 @@ const Sidebar = ({ activeSection, onSectionChange, onLogout, user, onUserUpdate,
         return localStorage.getItem('sidebar_collapsed') === 'true';
     });
     const { globalStats } = useCandidatesSSE();
-    const unreadCount = globalStats?.unread || 0;
+    const [rbacUnread, setRbacUnread] = useState(null);
+
+    // Listen for RBAC-filtered unread count from ChatSection
+    useEffect(() => {
+        const handler = (e) => setRbacUnread(e.detail);
+        window.addEventListener('chat_unread_rbac', handler);
+        return () => window.removeEventListener('chat_unread_rbac', handler);
+    }, []);
+
+    // For SuperAdmin/Admin: use global count. For restricted users: prefer RBAC count if available.
+    const unreadCount = (user?.role === 'SuperAdmin' || user?.role === 'Admin')
+        ? (globalStats?.unread || 0)
+        : (rbacUnread !== null ? rbacUnread : (globalStats?.unread || 0));
 
     const toggleCollapse = () => {
         setIsCollapsed(prev => {

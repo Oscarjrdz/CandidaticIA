@@ -343,7 +343,7 @@ const AVATAR_COLORS = ['#f9a8d4','#a5b4fc','#86efac','#fcd34d','#fdba74','#c4b5f
 
 // HIGH-1: Shared RBAC filter (eliminates duplication between filteredCandidates & baseCandidates)
 const passesRBACFilter = (c, user) => {
-    if (!user || user.role === 'SuperAdmin') return true;
+    if (!user || user.role === 'SuperAdmin' || user.role === 'Admin') return true;
 
     const allowedCrm = user?.allowed_crm_projects;
     const hasCrmRestriction = Array.isArray(allowedCrm) && allowedCrm.length > 0;
@@ -355,8 +355,8 @@ const passesRBACFilter = (c, user) => {
 
     const inAllowedCrm = hasCrmRestriction && c?.manualProjectId && allowedCrm.includes(c.manualProjectId);
     const inAllowedLabel = hasLabelRestriction && Array.isArray(c?.tags) && c.tags.some(t => {
-        const searchLabel = typeof t === 'string' ? t.trim().toLowerCase() : t?.name?.trim().toLowerCase();
-        return allowedLabels.some(al => typeof al === 'string' && al.trim().toLowerCase() === searchLabel);
+        const searchLabel = typeof t === 'string' ? t.trim().toLowerCase() : (t?.name?.trim()?.toLowerCase() || '');
+        return searchLabel && allowedLabels.some(al => typeof al === 'string' && al.trim().toLowerCase() === searchLabel);
     });
 
     return inAllowedCrm || inAllowedLabel;
@@ -808,15 +808,16 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
 
     // Helper for RBAC
     const canSeeFilter = (filterKey) => {
-        if (!user || user.role === 'SuperAdmin') return true;
-        if (!rolePermissions) return true;
+        if (!user || user.role === 'SuperAdmin' || user.role === 'Admin') return true;
+        // Safety: treat null, undefined, AND empty {} as "no restrictions"
+        if (!rolePermissions || Object.keys(rolePermissions).length === 0) return true;
         return rolePermissions[filterKey] === true;
     };
 
     // No AI projects
 
     const filteredManualProjects = (() => {
-        if (!user || user.role === 'SuperAdmin') return manualProjects;
+        if (!user || user.role === 'SuperAdmin' || user.role === 'Admin') return manualProjects;
         const allowed = user?.allowed_crm_projects;
         if (!Array.isArray(allowed) || allowed.length === 0) return manualProjects;
         return manualProjects.filter(p => allowed.includes(p.id));
@@ -1030,6 +1031,7 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
             const result = await getCandidates(5000, 0, "", false, tagParam);
             if (result.success) {
                 let fetchedCandidates = result.candidates || [];
+                console.log(`📊 [ChatSection] loadCandidates: fetched ${fetchedCandidates.length} candidates from API (tagParam="${tagParam}")`);
                 
                 setCandidates(fetchedCandidates);
                 if (fetchedCandidates.length > 0) {
@@ -1067,7 +1069,9 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
             // --- Strict Inbox para Reclutadores (Sin botón 'Todos') ---
             if (!canSeeFilter('filter_todos') && activeFilter === 'all') {
                 const hasAnyTag = Array.isArray(c?.tags) && c.tags.length > 0;
-                if (!hasAnyTag) return false;
+                // 🛡️ Exception: Never hide candidates created in last 24h (protects new Facebook CTWA leads)
+                const isRecent = c?.primerContacto && (Date.now() - new Date(c.primerContacto).getTime()) < 86400000;
+                if (!hasAnyTag && !isRecent) return false;
             }
 
             if (activeFilter === 'unread' && !checkIfUnread(c)) return false;
@@ -1085,6 +1089,11 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
 
             return true;
         });
+
+        // 🔍 DIAGNOSTIC: Track filter pipeline losses
+        if ((candidates || []).length !== result.length) {
+            console.log(`🔍 [ChatSection] Filter Pipeline: ${(candidates || []).length} total → ${result.length} visible | role=${user?.role} filter=${activeFilter} search="${debouncedSearch}" crmFilter=${manualPipelineFilter || 'none'}`);
+        }
 
         // 🏎️ Pre-compute timestamps ONCE (eliminates ~44,000 Date objects per sort)
         const tsCache = new Map();
@@ -1154,6 +1163,11 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
         }
         return counts;
     }, [baseCandidates]);
+
+    // 📡 Broadcast RBAC-filtered unread count to Sidebar badge
+    useEffect(() => {
+        window.dispatchEvent(new CustomEvent('chat_unread_rbac', { detail: unreadCounts.all }));
+    }, [unreadCounts.all]);
 
     // Scroll to bottom
     const prevMessagesLength = useRef(0);
@@ -2142,7 +2156,7 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
                                             </div>
                                             {(Array.isArray(availableTags) ? availableTags : []).filter(tagObj => {
                                                 // User-level label filtering
-                                                if (!user || user.role === 'SuperAdmin') return true;
+                                                if (!user || user.role === 'SuperAdmin' || user.role === 'Admin') return true;
                                                 const userLabels = user?.allowed_labels;
                                                 if (!Array.isArray(userLabels) || userLabels.length === 0) return true;
                                                 const name = typeof tagObj === 'string' ? tagObj : tagObj.name;
