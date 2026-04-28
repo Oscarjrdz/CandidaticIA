@@ -399,6 +399,16 @@ export default async function handler(req, res) {
                 mensajesTotales: (Number(freshCandidate?.mensajesTotales) || 0) + 1
             };
 
+            // ─── META AI RETARGETING FIX: Update referral for existing candidates ───
+            if (metaMsg.referral) {
+                updatedCandidate.origen = 'facebook_ctwa';
+                if (metaMsg.referral.source_id) updatedCandidate.adId = metaMsg.referral.source_id;
+                if (metaMsg.referral.headline) updatedCandidate.adHeadline = metaMsg.referral.headline;
+                if (metaMsg.referral.source_url) updatedCandidate.adUrl = metaMsg.referral.source_url;
+                if (metaMsg.referral.source_type) updatedCandidate.adSource = metaMsg.referral.source_type;
+                if (metaMsg.referral.ctwa_clid) updatedCandidate.adClickId = metaMsg.referral.ctwa_clid;
+            }
+
             if ((Number(freshCandidate?.unreadMsgCount) || 0) === 0) {
                 if (redis) await redis.incr('stats:bot:unread_v2').catch(() => {});
             }
