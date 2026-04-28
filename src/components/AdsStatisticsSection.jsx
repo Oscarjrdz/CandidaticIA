@@ -54,7 +54,7 @@ const AdsStatisticsSection = ({ showToast }) => {
                 </div>
                 <div className="flex space-x-2">
                     <a
-                        href="/api/debug-webhook"
+                        href="/api/webhook-logs"
                         target="_blank"
                         className="flex items-center px-4 py-2 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800 rounded-xl hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors shadow-sm text-sm font-medium"
                     >
