@@ -85,6 +85,38 @@ export default async function handler(req, res) {
             });
         }
 
+        // POST /api/candidates - Crear candidato manualmente
+        if (req.method === 'POST') {
+            const { whatsapp, nombre } = req.body || {};
+            if (!whatsapp || !nombre) {
+                return res.status(400).json({ success: false, error: 'Número y nombre son requeridos' });
+            }
+            const cleanPhone = whatsapp.replace(/\D/g, '');
+            if (cleanPhone.length < 10) {
+                return res.status(400).json({ success: false, error: 'Número inválido (mínimo 10 dígitos)' });
+            }
+
+            const { saveCandidate, getCandidateIdByPhone } = await import('./utils/storage.js');
+
+            // Check if candidate already exists
+            const existingId = await getCandidateIdByPhone(cleanPhone);
+            if (existingId) {
+                const existing = await getCandidateById(existingId);
+                return res.status(200).json({ success: true, candidate: existing, existed: true });
+            }
+
+            const candidate = await saveCandidate({
+                whatsapp: cleanPhone,
+                nombre: nombre.trim(),
+                origen: 'manual_chat',
+                esNuevo: 'SI',
+                primerContacto: new Date().toISOString(),
+                ultimoMensaje: new Date().toISOString()
+            });
+
+            return res.status(201).json({ success: true, candidate, existed: false });
+        }
+
         // PUT /api/candidates - Actualizar candidato
         if (req.method === 'PUT') {
             const body = req.body || {};
@@ -155,7 +187,7 @@ export default async function handler(req, res) {
         // Método no permitido
         return res.status(405).json({
             error: 'Método no permitido',
-            message: 'Solo se aceptan peticiones GET y DELETE'
+            message: 'Solo se aceptan peticiones GET, POST, PUT y DELETE'
         });
 
     } catch (error) {

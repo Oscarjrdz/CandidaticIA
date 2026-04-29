@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import ConfirmModal from './ui/ConfirmModal';
-import { MapPin, List as ListIcon, ShoppingBag, UserSquare, MousePointerClick, Search, MessageSquare, Plus, Smile, Paperclip, Mic, ArrowLeft, Send, Tag, Pencil, Check, X, Trash2, Briefcase, Kanban, BookOpen, Keyboard, Loader2, Edit2, Reply, Zap, Pin } from 'lucide-react';
+import { MapPin, List as ListIcon, ShoppingBag, UserSquare, MousePointerClick, Search, MessageSquare, Plus, Smile, Paperclip, Mic, ArrowLeft, Send, Tag, Pencil, Check, X, Trash2, Briefcase, Kanban, BookOpen, Keyboard, Loader2, Edit2, Reply, Zap, Pin, MessageCirclePlus, Phone, User } from 'lucide-react';
 import EmojiPicker from 'emoji-picker-react';
 import { getCandidates, blockCandidate, deleteCandidate } from '../services/candidatesService';
 import ManualProjectsSidepanel from './ManualProjectsSidepanel';
@@ -803,6 +803,12 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
     const [manualStepFilter, setManualStepFilter] = useState(null);
 
     const [showDropdown, setShowDropdown] = useState(null);
+
+    // New Chat creation
+    const [showNewChat, setShowNewChat] = useState(false);
+    const [newChatPhone, setNewChatPhone] = useState('');
+    const [newChatName, setNewChatName] = useState('');
+    const [newChatLoading, setNewChatLoading] = useState(false);
 
     // RBAC: base-level candidate restriction
 
@@ -2327,6 +2333,90 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
                                 </div>
                             )}
                         </div> {/* Cierra Row 3 */}
+
+                        {/* ── Agregar Chat (Nuevo Candidato) ── */}
+                        <div className="w-full">
+                            <button
+                                onClick={() => setShowNewChat(!showNewChat)}
+                                className={`w-full bg-[#f0f2f5] dark:bg-[#202c33] border ${
+                                    showNewChat ? 'border-[#25d366] dark:border-[#00a884]' : 'border-gray-200 dark:border-gray-700'
+                                } rounded-lg px-3 py-2 text-xs font-medium text-left cursor-pointer transition-all flex items-center shadow-sm gap-2`}
+                            >
+                                <MessageCirclePlus className={`w-3.5 h-3.5 ${showNewChat ? 'text-[#25d366] dark:text-[#00a884]' : 'text-gray-400 dark:text-gray-500'}`} />
+                                <span className="flex-1 text-[#111b21] dark:text-[#e9edef]">Agregar Chat</span>
+                                <div className={`transition-transform ${showNewChat ? 'rotate-45' : ''}`}>
+                                    <Plus className={`w-3.5 h-3.5 ${showNewChat ? 'text-[#25d366] dark:text-[#00a884]' : 'text-gray-400 dark:text-gray-500'}`} />
+                                </div>
+                            </button>
+                            {showNewChat && (
+                                <div className="mt-2 bg-[#f0f2f5] dark:bg-[#202c33] rounded-lg p-3 border border-gray-200 dark:border-gray-700 flex flex-col gap-2 animate-in slide-in-from-top-2 duration-200">
+                                    <div className="flex items-center gap-2">
+                                        <Phone className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                                        <input
+                                            type="tel"
+                                            placeholder="Número WhatsApp (ej: 8112345678)"
+                                            value={newChatPhone}
+                                            onChange={e => setNewChatPhone(e.target.value.replace(/[^\d+]/g, ''))}
+                                            className="flex-1 bg-white dark:bg-[#111b21] border border-gray-200 dark:border-gray-600 rounded-md px-2.5 py-1.5 text-xs text-[#111b21] dark:text-[#e9edef] outline-none focus:border-[#25d366] dark:focus:border-[#00a884] transition-colors placeholder-gray-400"
+                                        />
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <User className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                                        <input
+                                            type="text"
+                                            placeholder="Nombre del contacto"
+                                            value={newChatName}
+                                            onChange={e => setNewChatName(e.target.value)}
+                                            onKeyDown={e => { if (e.key === 'Enter' && newChatPhone && newChatName.trim()) handleCreateChat(); }}
+                                            className="flex-1 bg-white dark:bg-[#111b21] border border-gray-200 dark:border-gray-600 rounded-md px-2.5 py-1.5 text-xs text-[#111b21] dark:text-[#e9edef] outline-none focus:border-[#25d366] dark:focus:border-[#00a884] transition-colors placeholder-gray-400"
+                                        />
+                                    </div>
+                                    <button
+                                        onClick={async () => {
+                                            if (!newChatPhone || !newChatName.trim() || newChatLoading) return;
+                                            setNewChatLoading(true);
+                                            try {
+                                                const res = await fetch('/api/candidates', {
+                                                    method: 'POST',
+                                                    headers: { 'Content-Type': 'application/json' },
+                                                    body: JSON.stringify({ whatsapp: newChatPhone, nombre: newChatName.trim() })
+                                                });
+                                                const data = await res.json();
+                                                if (data.success && data.candidate) {
+                                                    setSelectedChat(data.candidate);
+                                                    setNewChatPhone('');
+                                                    setNewChatName('');
+                                                    setShowNewChat(false);
+                                                    if (data.existed) {
+                                                        showToast && showToast('Candidato ya existía, abriendo chat', 'info');
+                                                    } else {
+                                                        showToast && showToast('Chat creado exitosamente', 'success');
+                                                    }
+                                                } else {
+                                                    showToast && showToast(data.error || 'Error al crear chat', 'error');
+                                                }
+                                            } catch (err) {
+                                                showToast && showToast('Error de red', 'error');
+                                            } finally {
+                                                setNewChatLoading(false);
+                                            }
+                                        }}
+                                        disabled={!newChatPhone || !newChatName.trim() || newChatLoading}
+                                        className="w-full bg-[#25d366] hover:bg-[#1da851] disabled:bg-gray-300 dark:disabled:bg-gray-600 text-white font-medium text-xs py-2 rounded-md transition-colors flex items-center justify-center gap-2"
+                                    >
+                                        {newChatLoading ? (
+                                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                        ) : (
+                                            <>
+                                                <MessageCirclePlus className="w-3.5 h-3.5" />
+                                                Crear Chat
+                                            </>
+                                        )}
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+
                     </div> {/* Cierra outer flex-col */}
                 </div> {/* Cierra header container */}
 
