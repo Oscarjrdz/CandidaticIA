@@ -4145,30 +4145,34 @@ ${safeDnaLines}
 }
 SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, escribe el texto literal [MSG_SPLIT] dentro de response_text como separador. Ej: "Primera burbuja.[MSG_SPLIT]Segunda burbuja." El sistema lo divide y envía por separado.`;
 
-                if (!customPrompt) {
-                    // Extended behavior rules — only for bots without a custom prompt
-                    // (custom prompts define their own behavior, code rules would conflict)
-                    systemInstruction += `
-[RECONOCIMIENTO DE TURNO Y REGLAS DE NOMBRE]: 
-- Si el usuario provee su nombre o apellidos, extráelo en "extracted_data.nombreReal" formatiendo a Title Case (Ej: "juan perez" -> "Juan Perez").
+                // 🧬 CRITICAL EXTRACTION RULES — Always injected (even with custom prompts)
+                // These are technical data-capture rules, NOT behavioral — they must always be present
+                // so the JSON extraction works correctly regardless of the prompt personality.
+                systemInstruction += `
+[REGLAS DE EXTRACCIÓN TÉCNICA (SIEMPRE ACTIVAS)]:
+- Si el usuario provee su nombre o apellidos, extráelo en "extracted_data.nombreReal" formateando a Title Case (Ej: "juan perez" -> "Juan Perez").
 - ⚠️ REGLA DE COMBINACIÓN DE NOMBRES: Si el candidato YA tiene un nombre guardado en su [ADN] (ej: "Oscar") y ahora te da sus apellidos ("Rodriguez"), DEBES combinarlos y devolver el nombre COMPLETO (Ej: "Oscar Rodriguez"). NUNCA devuelvas solo el apellido si ya tenías el nombre, porque reemplazará sus datos y causará un error.
 - REGLA ESTRICTA DE NOMBRES: NUNCA extraigas apodos, frases de cortesía o afirmaciones como "Si", "Claro", "sin problema", "buenas noches" como nombre. Si el texto no es un nombre real válido, NO LO EXTRAIGAS.
-- 🕒 REGLA DE RETENCIÓN DE AGENDA: Si el candidato YA tiene "citaFecha" o "citaHora" en su [ADN], OBLIGATORIAMENTE debes re-escribir ese mismo valor en tu "extracted_data" a menos que el candidato pida explícitamente cambiar la fecha/hora.
-- FECHAS CRÍTICAS: "citaFecha" DEBE ser estrictamente formato "YYYY-MM-DD". Transforma menciones como "el lunes" a la fecha exacta correspondiente.
-- GÉNERO (OBLIGATORIO Y SILENCIOSO): Está estrictamente prohibido preguntarle al candidato por su género. Sin embargo, SIEMPRE debes deducirlo del nombre del candidato o contexto del chat.
-- ESCOLARIDAD (FORMATO OBLIGATORIO): Cuando preguntes por escolaridad, muestra opciones en lista VERTICAL con emojis.
 - Si el usuario sólo te da un nombre sin apellidos (ej: "Oscar"), extráelo y PREGUNTA POR SUS APELLIDOS.
 - CRÍTICO: Tú eres la Licenciada Brenda Rodríguez. EL USUARIO ES OTRA PERSONA. NUNCA extraigas "Brenda" o "Brenda Rodríguez" como nombre del usuario.
+- GÉNERO (OBLIGATORIO Y SILENCIOSO): Está estrictamente prohibido preguntarle al candidato por su género. Sin embargo, SIEMPRE debes deducirlo del nombre del candidato o contexto del chat.
+- 🕒 REGLA DE RETENCIÓN DE AGENDA: Si el candidato YA tiene "citaFecha" o "citaHora" en su [ADN], OBLIGATORIAMENTE debes re-escribir ese mismo valor en tu "extracted_data" a menos que el candidato pida explícitamente cambiar la fecha/hora.
+- FECHAS CRÍTICAS: "citaFecha" DEBE ser estrictamente formato "YYYY-MM-DD". Transforma menciones como "el lunes" a la fecha exacta correspondiente.
 
 [REGLA ANTI-REDUNDANCIA OBLIGATORIA]:
-- NUNCA preguntes al candidato por un dato que acabas de extraer exitosamente en el campo "extracted_data" de este mismo JSON.
+- NUNCA preguntes al candidato por un dato que acabas de extraer exitosamente en el campo "extracted_data" de este mismo JSON.\n`;
 
+                if (!customPrompt) {
+                    // Extended behavior/formatting rules — only for bots without a custom prompt
+                    // (custom prompts define their own UX behavior, these rules would conflict)
+                    systemInstruction += `
 [REGLAS DE HOMOGENEIZACIÓN (ESTRICTAS)]:
 - **Municipio**: Devuelve ÚNICAMENTE el nombre CORTO del municipio (ej: "Cadereyta", NO "Cadereyta Jiménez"; "Escobedo", NO "General Escobedo") sin direcciones ni calles.
 - **Escolaridad**: Clasifica en una sola palabra: Primaria, Secundaria, Preparatoria, Licenciatura, Técnica, o Posgrado.
+- ESCOLARIDAD (FORMATO OBLIGATORIO): Cuando preguntes por escolaridad, muestra opciones en lista VERTICAL con emojis.
 - **Categoría**: Si el candidato escribe "Ayudante", extrae estrictamente "Ayudante General" u otra categoría que haga *match exacto* a la lista. Si opera maquinaria -> "Montacarguista".\n`;
                 }
-                // When customPrompt is active: NO behavioral rules injected — the prompt owns everything.
+                // When customPrompt is active: behavioral rules stay in the prompt, but extraction rules above are always present.
 
 
 
