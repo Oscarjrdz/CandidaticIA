@@ -32,7 +32,13 @@ export class MediaEngine {
                     await saveMessage(candidateId, { from: 'bot', content: `[Sticker: ${stickerUrl}]`, timestamp: new Date().toISOString() }).catch(() => {});
                 });
             }
-            return await sendMetaMessage(phone, stickerUrl, 'sticker', { mediaId: metaMediaId });
+            // 🛡️ Try sticker first — if Meta rejects (non-WebP, too large), fall back to image
+            const result = await sendMetaMessage(phone, stickerUrl, 'sticker', { mediaId: metaMediaId });
+            if (result && result.success) return result;
+
+            // Fallback: send as regular image (works with any format)
+            console.warn(`[MEDIA ENGINE] ⚠️ Sticker rejected by Meta, falling back to image for: ${customStickerKey}`);
+            return await sendMetaMessage(phone, stickerUrl, 'image', { mediaId: metaMediaId });
         }
         return false;
     }

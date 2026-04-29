@@ -1255,14 +1255,24 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
                         return [...prev, newMsg];
                     });
                 } else {
-                    // Fallback for legacy hooks that don't send payload
+                    // Fallback: SSE hook didn't send payload — do a surgical merge
+                    // instead of full array replace (prevents flickering)
                     const chatId = selectedChatRef.current?.id;
                     if (chatId) {
                         fetch(`/api/chat?candidateId=${chatId}`)
                             .then(r => r.json())
                             .then(data => {
                                 if (data.success && selectedChatRef.current?.id === chatId) {
-                                    setMessages(data.messages || []);
+                                    const freshMsgs = data.messages || [];
+                                    setMessages(prev => {
+                                        // Only update if there are genuinely new messages
+                                        if (freshMsgs.length === prev.length) return prev;
+                                        // Append only messages not already in the array
+                                        const existingIds = new Set(prev.map(m => m.id).filter(Boolean));
+                                        const newOnes = freshMsgs.filter(m => m.id && !existingIds.has(m.id));
+                                        if (newOnes.length === 0) return prev;
+                                        return [...prev, ...newOnes];
+                                    });
                                 }
                             })
                             .catch(() => {});
