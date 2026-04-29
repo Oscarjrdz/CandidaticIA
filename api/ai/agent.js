@@ -280,6 +280,16 @@ function formatRecruiterMessage(text, candidateData = null, stepContext = {}) {
         text = text.split('[MSG_SPLIT]').map(seg => _DATE_KEYWORDS.test(seg) ? seg : seg.replace(_DATE_EJ_RE, '')).join('[MSG_SPLIT]');
     }
 
+    // 🗓️ DATE FORMAT NORMALIZER: Convert any "(ej. DD/MM/YYYY)" GPT outputs → "(ejemplo DD de MES de YYYY)"
+    {
+        const _MONTH_NAMES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+        text = text.replace(/\((?:ej\.?:?\s*|ejemplo\s*)(\d{1,2})\s*[\/\-]\s*(\d{1,2})\s*[\/\-]\s*(\d{4})\)/gi, (_m, d, m, y) => {
+            const mi = parseInt(m, 10) - 1;
+            const monthName = _MONTH_NAMES[mi] || m;
+            return `(ejemplo ${parseInt(d, 10)} de ${monthName} de ${y})`;
+        });
+    }
+
     // 📝 NOMBRE Y APELLIDOS GUARD: "Nombre completo" → "Nombre y Apellidos completos" everywhere.
     text = text.replace(/\btu\s+Nombre\s+completo\b(?!\s+y\s+Apellidos)/gi, 'tu Nombre y Apellidos completos');
     text = text.replace(/\bNombre\s+completo\b(?!\s+y\s+Apellidos)/g, 'Nombre y Apellidos completos');
