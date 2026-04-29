@@ -200,7 +200,7 @@ export class AIGuard {
                     `${firstName ? firstName + ', c' : 'C'}uéntame sobre tu ${actualFirstMissing}, ¡me falta ese dato! ✨`,
                     `¡Ok! ✨ Pero me falta confirmar tu ${actualFirstMissing}. 🌸 ¿Me lo dices?`
                 ];
-                recoveryText = variationTemplates[Math.floor(Math.random() * templates.length)];
+                recoveryText = variationTemplates[Math.floor(Math.random() * variationTemplates.length)];
             } else {
                 const missingKey = actualFirstMissing.toLowerCase().trim();
                 const isDate = missingKey.includes('fecha') || missingKey === 'fechanacimiento';
@@ -210,7 +210,7 @@ export class AIGuard {
 
 
                 const connector = isNames ? 'tus' : 'tu';
-                const maybeExample = isDate ? ' (ej: 19/05/1990)' : '';
+                const maybeExample = isDate ? ' (ejemplo 19 de mayo de 1988)' : '';
 
                 const templates = [
                     // Neutral openers — safe for ALL cases including first message

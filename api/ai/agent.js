@@ -4333,15 +4333,32 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
                     }
                     // 🧹 CLEANER PIPELINE: Normalize extracted values through dictionary before saving
                     // These are instant for known values (local Map lookup), AI fallback only for unknowns
+                    // 🏎️ PARALLEL EXECUTION: All 3 cleaners run simultaneously to save 2-4s latency
                     try {
+                        const cleanerPromises = [];
+                        const cleanerKeys = [];
+
                         if (ext.municipio && typeof ext.municipio === 'string') {
-                            ext.municipio = await cleanMunicipioWithAI(ext.municipio);
+                            cleanerKeys.push('municipio');
+                            cleanerPromises.push(cleanMunicipioWithAI(ext.municipio));
                         }
                         if (ext.escolaridad && typeof ext.escolaridad === 'string') {
-                            ext.escolaridad = await cleanEscolaridadWithAI(ext.escolaridad);
+                            cleanerKeys.push('escolaridad');
+                            cleanerPromises.push(cleanEscolaridadWithAI(ext.escolaridad));
                         }
                         if (ext.categoria && typeof ext.categoria === 'string') {
-                            ext.categoria = await cleanCategoryWithAI(ext.categoria);
+                            cleanerKeys.push('categoria');
+                            cleanerPromises.push(cleanCategoryWithAI(ext.categoria));
+                        }
+
+                        if (cleanerPromises.length > 0) {
+                            const results = await Promise.allSettled(cleanerPromises);
+                            results.forEach((r, i) => {
+                                if (r.status === 'fulfilled' && r.value) {
+                                    ext[cleanerKeys[i]] = r.value;
+                                }
+                                // If rejected, keep raw GPT value (same as before)
+                            });
                         }
                     } catch (_cleanErr) {
                         // Cleaning failed — keep raw GPT values (same behavior as before)

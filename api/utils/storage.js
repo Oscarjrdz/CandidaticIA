@@ -804,7 +804,7 @@ export const addToWaitlist = async (candidateId, text) => {
     const key = `${KEYS.CANDIDATE_WAITLIST_PREFIX}${candidateId}`;
     const value = typeof text === 'object' ? JSON.stringify(text) : text;
     await client.rpush(key, value);
-    await client.expire(key, 60); // 1-minute safety TTL
+    await client.expire(key, 120); // 2-minute safety TTL (accounts for GPT + cleaners + media)
 };
 
 // 🛡️ SAFETY NET: Just PEEK at the messages. Do NOT delete them yet.
