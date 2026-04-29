@@ -4061,6 +4061,7 @@ ${safeDnaLines}
         // 🧼 Token Saver: Clean ADN to prevent massive JSON stringification of telemetry logs
         const cleanAdnBase = { 
             nombreReal: candidateData.nombreReal || null,
+            fechaNacimiento: candidateData.fechaNacimiento || null,
             edad: candidateData.edad || null,
             municipio: candidateData.municipio || null,
             categoria: candidateData.categoria || null,
