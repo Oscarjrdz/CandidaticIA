@@ -5,6 +5,8 @@ export default async function handler(req, res) {
     if (!client) return res.status(500).send('No Redis');
 
     const filter = req.query.phone || '';
+    const filterPhones = filter ? filter.split(',').map(p => p.trim()).filter(Boolean) : [];
+    const matchesFilter = (raw) => filterPhones.length === 0 || filterPhones.some(p => raw.includes(p));
 
     try {
         const raw = await client.lrange('debug:webhook_history', 0, 49);
@@ -55,8 +57,8 @@ export default async function handler(req, res) {
             const statuses = changes.statuses || [];
             const contacts = changes.contacts || [];
 
-            const hasTarget = filter && rawStr.includes(filter);
-            if (filter && !hasTarget) continue;
+            const hasTarget = matchesFilter(rawStr);
+            if (filterPhones.length > 0 && !hasTarget) continue;
 
             if (msgs.length > 0) {
                 const m = msgs[0];
