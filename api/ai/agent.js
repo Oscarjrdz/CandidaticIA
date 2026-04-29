@@ -273,9 +273,9 @@ function formatRecruiterMessage(text, candidateData = null, stepContext = {}) {
         text = text.split('[MSG_SPLIT]').map(seg => seg.replace(_PRAISE_RE, '')).join('[MSG_SPLIT]');
     }
 
-    // 🔧 DATE-EXAMPLE GUARD: Strip "(ej. DD/MM/YYYY)" from segments NOT about birth date (per-segment).
+    // 🔧 DATE-EXAMPLE GUARD: Strip "(ejemplo ...)" from segments NOT about birth date (per-segment).
     {
-        const _DATE_EJ_RE = /\s*\(ej\.?\s*\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}\)/gi;
+        const _DATE_EJ_RE = /\s*\((?:ej\.?|ejemplo)\s*(?:\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}|\d{1,2}\s+de\s+\w+\s+de\s+\d{4})\)/gi;
         const _DATE_KEYWORDS = /fecha|nacimiento|cumplea|cu[aá]ndo naciste|nac[íi]|d[íi]a.*mes|cuantos a[nñ]os/i;
         text = text.split('[MSG_SPLIT]').map(seg => _DATE_KEYWORDS.test(seg) ? seg : seg.replace(_DATE_EJ_RE, '')).join('[MSG_SPLIT]');
     }
@@ -564,13 +564,13 @@ function formatRecruiterMessage(text, candidateData = null, stepContext = {}) {
     // Only inject when ASKING for the date, not when confirming it was saved.
     {
         const _DATE_Q_RE = /fecha de nacimiento|cu[aá]ndo naciste|d[ií]a de nacimiento/i;
-        const _HAS_EX_RE = /(?:ej\.|ejemplo|DD\/|por ejemplo|\d{2}\/\d{2}\/\d{4})/i;
+        const _HAS_EX_RE = /(?:ej\.|ejemplo|DD\/|por ejemplo|\d{2}\/\d{2}\/\d{4}|\d{1,2}\s+de\s+\w+\s+de\s+\d{4})/i;
         const _IS_CONFIRM_RE = /ya tengo|tengo tu|registr|anot[eéaó]|captur|guard[aáe]/i;
 
         let parts = text.includes('[MSG_SPLIT]') ? text.split('[MSG_SPLIT]') : [text];
         for (let i = 0; i < parts.length; i++) {
             if (_DATE_Q_RE.test(parts[i]) && !_HAS_EX_RE.test(parts[i]) && !_IS_CONFIRM_RE.test(parts[i]) && parts[i].includes('?')) {
-                parts[i] = parts[i].trimEnd() + '\n(ej. 19/05/1983)';
+                parts[i] = parts[i].trimEnd() + '\n(ejemplo 19 de mayo de 1988)';
             }
         }
         text = parts.join('[MSG_SPLIT]');
@@ -837,7 +837,7 @@ Tu objetivo técnico es obtener: {{faltantes}}.
 
      ¿Cuál de estas opciones te interesa?"
  4. FORMATO ESCOLARIDAD: Cuando preguntes por el nivel de escolaridad, es ESTRICTAMENTE OBLIGATORIO que muestres las opciones en una lista VERTICAL con un emoji diferente y un DOBLE salto de línea (\n\n) entre cada opción (ej: 🎒 Primaria \n\n 🏫 Secundaria \n\n ...). ¡PROHIBIDO ponerlas en el mismo renglón separadas por comas!
- 5. FECHA DE NACIMIENTO: Pídela SIEMPRE dando el ejemplo exacto: "(ej: 19/05/1990)". No lo olvides.
+ 5. FECHA DE NACIMIENTO: Pídela SIEMPRE dando el ejemplo exacto: "(ejemplo 19 de mayo de 1988)". No lo olvides.
  5. DINÁMICA: Si responde algo que no sea el dato (ej: "No vivo ahí", "No sé"), SIEMPRE sé empática primero ("Entiendo perfectamente") y luego re-enfoca pidiendo el dato que falta o el siguiente.
  6. PERSUASIÓN (PREGUNTAS DE VACANTES/SUELDO/LUGAR/ENTREVISTAS): Cuando el candidato pregunta algo sobre vacantes, entrevistas o sueldos, DEBES: (a) Responder BREVEMENTE explicando que necesitas sus datos completos para darle la mejor opción. ESTRICTAMENTE PROHIBIDO inventar respuestas de la vacante, y (b) Redirigir amablemente preguntando el dato faltante: {{faltantes}}. Ejemplo: "😊 Tengo opciones, pero para darte la mejor necesito conocerte primero. ¿Me apoyas con el dato que falta?"
  7. ORDEN ESTRICTO: Siempre debes pedir el PRIMER dato de la lista de {{faltantes}}. ¡PROHIBIDO saltarte al segundo dato si el candidato evadió la pregunta o no respondió con el primero!
@@ -868,7 +868,7 @@ Usa frases como: "¡Hola! 👋 Qué gusto saludarte", "¡Hola, hola! 👋 Soy la
 - No uses "Hola" en segundos mensajes, solo en el inicial.
 - No hagas halagos personales (guapo, lindo, etc.).
 - LISTAS VERTICALES: Categorías siempre una por renglón con ✅.
-- FECHAS: Siempre usa el ejemplo (19/05/1990).
+- FECHAS: Siempre usa el ejemplo (ejemplo 19 de mayo de 1988).
 - NO digas "base de datos", di "tu registro" o "nuestro sistema".
 
 - NOMBRES: NUNCA uses el municipio, ciudad, colonia o cualquier dato diferente al nombre como forma de dirigirte al candidato. Siempre usa su nombre real del [ESTADO]. Si aún no tienes su nombre, no uses ningún dato de reemplazo.
@@ -4210,7 +4210,7 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
                             const isPersonalQ = /cu[aá]ntos a[nñ]os tienes?|qu[eé] edad tienes?|eres casada?|tienes novio?|d[oó]nde vives?|eres de aqu[íi]?|de d[oó]nde eres?|c[oó]mo te llamas?|cu[aá]l es tu nombre?|tienes hijos?|qu[eé] haces cuando|qu[eé] te gusta|cu[aá]nto ganas?|eres bonita?|eres guapa?/i.test(aggregatedText);
                             if (isVacancyQ) {
                                 const _nextLabel = auditForMode.missingLabels[0];
-                                const _fechaHint = /fecha|nacimiento/i.test(_nextLabel) ? ` (ej. 19/05/1990)` : '';
+                                const _fechaHint = /fecha|nacimiento/i.test(_nextLabel) ? ` (ejemplo 19 de mayo de 1988)` : '';
                                 systemInstruction += `\n[NOTA DE CONTEXTO]: El candidato preguntó sobre vacantes/entrevistas. Responde en DOS burbujas con [MSG_SPLIT]: Burbuja 1 = MÁXIMO 2 líneas, cálida con emoji, dile que necesitas su información completa para que el sistema encuentre la mejor opción — ESTRICTAMENTE PROHIBIDO inventar sueldos, horarios o domicilios de la vacante. Burbuja 2 = Pregunta DIRECTA y ESPECÍFICA (NO genérica) por: "${_nextLabel}"${_fechaHint} — con emoji. PROHIBIDO usar frases vagas como "¿me ayudas con tus datos?".\n`;
                             } else if (isPersonalQ) {
                                 systemInstruction += `\n[NOTA DE CONTEXTO - PREGUNTA PERSONAL/LIGUE]: El candidato hizo una pregunta personal o de ligue. Usa [MSG_SPLIT] para DOS burbujas: Burbuja 1 = respuesta BREVE y coqueta en personaje (con picardía/humor), PROHIBIDO usar halagos descontextualizados como "¡Vas excelente!", "¡Genial!", "¡Perfecto!" — solo evasión divertida. Burbuja 2 = pregunta DIRECTA por el dato faltante: ${auditForMode.missingLabels[0]} — con emoji. PROHIBIDO mezclar ambas en una sola burbuja.\n`;
