@@ -534,11 +534,8 @@ export default async function handler(req, res) {
                     continue;
                 }
 
-                try {
-                    const allUsers = await getUsers();
-                    const isPending = allUsers.find(u => u.whatsapp.includes(phone) && u.status === 'Pending');
-                    if (isPending && phone !== '8116038195') continue;
-                } catch (e) { }
+                // [REMOVED] Pending-user gatekeeper — team members must be able to
+                // test the candidate flow with Brenda regardless of their user status.
 
                 // ── 🌪️ RESET COMMAND INTERCEPTOR ──
                 const upperBody = body?.toUpperCase().trim() || '';
