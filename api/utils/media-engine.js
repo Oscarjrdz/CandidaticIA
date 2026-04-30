@@ -25,21 +25,55 @@ export class MediaEngine {
             } catch (e) {}
         }
 
-        if (stickerUrl) {
-            console.log(`[MEDIA ENGINE] 🚀 Sending Congrats Sticker: ${customStickerKey}`);
-            if (candidateId) {
-                import('./storage.js').then(async ({ saveMessage }) => {
-                    await saveMessage(candidateId, { from: 'bot', content: `[Sticker: ${stickerUrl}]`, timestamp: new Date().toISOString() }).catch(() => {});
-                });
-            }
-            // 🛡️ Try sticker first — if Meta rejects (non-WebP, too large), fall back to image
-            const result = await sendMetaMessage(phone, stickerUrl, 'sticker', { mediaId: metaMediaId });
-            if (result && result.success) return result;
+        if (!stickerUrl) return false;
 
-            // Fallback: send as regular image (works with any format)
-            console.warn(`[MEDIA ENGINE] ⚠️ Sticker rejected by Meta, falling back to image for: ${customStickerKey}`);
-            return await sendMetaMessage(phone, stickerUrl, 'image', { mediaId: metaMediaId });
+        console.log(`[MEDIA ENGINE] 🚀 Sending Congrats Sticker: ${customStickerKey} (mediaId: ${metaMediaId || 'none'})`);
+
+        // Save sticker message to chat history (with correct type for UI display)
+        if (candidateId) {
+            import('./storage.js').then(async ({ saveMessage }) => {
+                await saveMessage(candidateId, { from: 'bot', content: '[Sticker]', type: 'sticker', mediaUrl: stickerUrl, timestamp: new Date().toISOString() }).catch(() => {});
+            });
         }
+
+        // Attempt 1: Send with stored mediaId
+        if (metaMediaId) {
+            const result = await sendMetaMessage(phone, stickerUrl, 'sticker', { mediaId: metaMediaId });
+            if (result?.success) return result;
+            console.warn(`[MEDIA ENGINE] ⚠️ Stored mediaId expired for ${customStickerKey}, re-uploading...`);
+        }
+
+        // Attempt 2: Re-upload from Redis buffer (sticker was saved as base64)
+        const imageId = stickerUrl?.split('id=')?.[1];
+        if (imageId) {
+            const base64 = await client?.get(`image:${imageId}`);
+            if (base64) {
+                try {
+                    const { uploadMediaToMeta } = await import('../whatsapp/utils.js');
+                    const buffer = Buffer.from(base64, 'base64');
+                    const upload = await uploadMediaToMeta(buffer, 'image/webp', 'sticker.webp');
+                    if (upload?.mediaId) {
+                        // Update stored mediaId for future sends
+                        await client?.set(customStickerKey, JSON.stringify({ url: stickerUrl, mediaId: upload.mediaId }));
+                        const result = await sendMetaMessage(phone, stickerUrl, 'sticker', { mediaId: upload.mediaId });
+                        if (result?.success) return result;
+
+                        // If sticker format rejected, try as image
+                        console.warn(`[MEDIA ENGINE] ⚠️ Sticker format rejected, falling back to image`);
+                        return await sendMetaMessage(phone, stickerUrl, 'image', { mediaId: upload.mediaId });
+                    }
+                } catch (e) {
+                    console.error(`[MEDIA ENGINE] ❌ Re-upload failed:`, e.message);
+                }
+            }
+        }
+
+        // Attempt 3: Last resort — try link-based send (only works if URL is publicly accessible)
+        if (stickerUrl?.startsWith('http')) {
+            return await sendMetaMessage(phone, stickerUrl, 'image');
+        }
+
+        console.error(`[MEDIA ENGINE] ❌ All sticker delivery methods failed for ${customStickerKey}`);
         return false;
     }
 
