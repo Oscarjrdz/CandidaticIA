@@ -761,6 +761,7 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
     const [activeFilter, setActiveFilter] = useState('unread'); // 'all', 'unread', 'label', 'profile'
     const [filterValue, setFilterValue] = useState(null);
     const activeFilterRef = useRef('unread');
+    const hasSetInitialFilter = useRef(false);
     const filterValueRef = useRef(null);
     const selectedChatRef = useRef(null);
 

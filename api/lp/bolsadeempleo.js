@@ -176,7 +176,7 @@ body{
 </main>
 
 <footer class="footer">
-  <p>© 2026 <a href="https://candidatic.com">Candidatic IA</a> · HR One México</p>
+  <p>© 2026 <a href="https://candidatic.com">Candidatic IA</a></p>
   <p style="margin-top:4px"><a href="/terms">Términos</a> · <a href="/privacy">Privacidad</a></p>
 </footer>
 
