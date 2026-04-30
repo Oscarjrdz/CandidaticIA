@@ -1903,15 +1903,29 @@ export const getAdsStatistics = async () => {
                         adsMap.set(adKey, {
                             adId: c.adId || null,
                             adHeadline: c.adHeadline || 'Anuncio sin título',
+                            adBody: c.adBody || null,
                             adUrl: c.adUrl || null,
+                            adSource: c.adSource || null,
+                            adImageUrl: c.adImageUrl || null,
+                            adVideoUrl: c.adVideoUrl || null,
+                            adMediaType: c.adMediaType || null,
                             totalLeads: 0,
                             todayLeads: 0,
+                            firstSeen: null,
+                            lastSeen: null,
                             recentCandidates: []
                         });
                     }
                     
                     const adStats = adsMap.get(adKey);
                     adStats.totalLeads++;
+                    
+                    // Track first/last candidate dates
+                    const contactDate = c.primerContacto || c.ultimoMensaje;
+                    if (contactDate) {
+                        if (!adStats.firstSeen || contactDate < adStats.firstSeen) adStats.firstSeen = contactDate;
+                        if (!adStats.lastSeen || contactDate > adStats.lastSeen) adStats.lastSeen = contactDate;
+                    }
                     
                     const contactDateStr = (c.primerContacto || c.ultimoMensaje || '').split('T')[0];
                     if (contactDateStr === todayStr) {
