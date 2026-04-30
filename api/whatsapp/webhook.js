@@ -264,6 +264,22 @@ export default async function handler(req, res) {
                     mediaId = metaMsg.sticker?.id;
                     messageType = 'sticker';
                     break;
+                case 'contacts':
+                    if (metaMsg.contacts?.[0]) {
+                        const c = metaMsg.contacts[0];
+                        const cName = c.name?.formatted_name || 'Contacto';
+                        const cPhone = c.phones?.[0]?.phone || c.phones?.[0]?.wa_id || '';
+                        body = `📇 Contacto: ${cName} ${cPhone}`;
+                    }
+                    messageType = 'contacts';
+                    break;
+                case 'order':
+                    if (metaMsg.order) {
+                        const items = metaMsg.order.product_items?.map(i => `${i.product_retailer_id} x${i.quantity}`).join(', ') || 'sin items';
+                        body = `🛒 Pedido: ${items}`;
+                    }
+                    messageType = 'order';
+                    break;
                 case 'reaction':
                     // Handle reaction separately below
                     break;
@@ -662,7 +678,7 @@ export default async function handler(req, res) {
 
                         let finalAgentInput = agentInput;
 
-                        // 🎧 AUDIO TRANSCRIPTION
+                        // 🎧 AUDIO TRANSCRIPTION (reuses Redis-stored buffer to avoid double download)
                         if ((messageType === 'audio' || messageType === 'ptt') && mediaId) {
                             try {
                                 const aiConfigStr = await redis?.get('ai_config');
@@ -670,15 +686,36 @@ export default async function handler(req, res) {
                                 const openAiKey = aiConfig.openaiApiKey || process.env.OPENAI_API_KEY;
 
                                 if (openAiKey && mediaUrl) {
-                                    const axios = (await import('axios')).default;
-                                    // Download audio from Meta's CDN
-                                    const mediaData = await downloadMetaMedia(mediaId);
-                                    if (mediaData?.buffer) {
+                                    // Reuse buffer from Redis (already downloaded in media save step)
+                                    let audioBuffer = null;
+                                    let audioMime = 'audio/ogg';
+                                    const redisMediaId = mediaUrl?.split('id=')?.[1];
+                                    if (redisMediaId) {
+                                        const base64 = await redis?.get(`image:${redisMediaId}`);
+                                        const metaRaw = await redis?.get(`meta:image:${redisMediaId}`);
+                                        if (base64) {
+                                            audioBuffer = Buffer.from(base64, 'base64');
+                                            if (metaRaw) {
+                                                try { audioMime = JSON.parse(metaRaw).mime || audioMime; } catch(e) {}
+                                            }
+                                        }
+                                    }
+                                    // Fallback: re-download if Redis buffer not available
+                                    if (!audioBuffer) {
+                                        const fallbackMedia = await downloadMetaMedia(mediaId);
+                                        if (fallbackMedia?.buffer) {
+                                            audioBuffer = fallbackMedia.buffer;
+                                            audioMime = fallbackMedia.mimeType || audioMime;
+                                        }
+                                    }
+
+                                    if (audioBuffer) {
+                                        const axios = (await import('axios')).default;
                                         const FormData = (await import('form-data')).default;
                                         const formData = new FormData();
-                                        formData.append('file', mediaData.buffer, {
+                                        formData.append('file', audioBuffer, {
                                             filename: 'audio.ogg',
-                                            contentType: mediaData.mimeType || 'audio/ogg'
+                                            contentType: audioMime
                                         });
                                         formData.append('model', 'whisper-1');
                                         formData.append('language', 'es');
@@ -690,7 +727,8 @@ export default async function handler(req, res) {
                                                 headers: {
                                                     'Authorization': `Bearer ${openAiKey}`,
                                                     ...formData.getHeaders()
-                                                }
+                                                },
+                                                timeout: 30000
                                             }
                                         );
 
@@ -700,7 +738,8 @@ export default async function handler(req, res) {
                                     }
                                 }
                             } catch (e) {
-                                finalAgentInput = `[DEV-ERR] Whisper: ${e.message}`;
+                                console.error('❌ Whisper transcription error:', e.message);
+                                finalAgentInput = agentInput || '[Audio no pudo ser transcrito]';
                             }
 
                             try {
