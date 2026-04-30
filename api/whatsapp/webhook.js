@@ -524,7 +524,9 @@ export default async function handler(req, res) {
                                     const cDate = mtyFormatter.format(new Date(created));
                                     if (cDate === todayStr) {
                                         countToday++;
-                                        if (c.source === 'manual' || c.source === 'web') {
+                                        const isManual = c.source === 'manual' || c.source === 'web' 
+                                            || (c.origen && (c.origen.includes('manual') || c.origen === 'web'));
+                                        if (isManual) {
                                             countManual++;
                                         } else {
                                             countBot++;
