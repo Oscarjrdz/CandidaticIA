@@ -489,10 +489,7 @@ export default async function handler(req, res) {
                 const lowerBodyPublic = body.toLowerCase().trim();
                 if (lowerBodyPublic === 'candidatos nuevos') {
                     try {
-                        const { getAllCandidates } = await import('../utils/storage.js');
-                        const allCandidates = await getAllCandidates();
-
-                        // Get today's date in Monterrey timezone (CST/CDT)
+                        // Get today's start/end timestamps in Monterrey timezone
                         const now = new Date();
                         const mtyFormatter = new Intl.DateTimeFormat('en-CA', {
                             timeZone: 'America/Monterrey',
@@ -500,21 +497,40 @@ export default async function handler(req, res) {
                         });
                         const todayStr = mtyFormatter.format(now); // YYYY-MM-DD
 
+                        // Calculate start-of-day in Monterrey → UTC timestamp
+                        const todayStartUTC = new Date(`${todayStr}T00:00:00-06:00`).getTime();
+                        const todayEndUTC = new Date(`${todayStr}T23:59:59-06:00`).getTime();
+
+                        // Fetch only candidates with score (ultimoMensaje) within today
+                        const ids = await redis.zrangebyscore('candidates:list', todayStartUTC, todayEndUTC);
+
                         let countToday = 0;
                         let countBot = 0;
                         let countManual = 0;
-                        for (const c of allCandidates) {
-                            const created = c.primerContacto || c.ultimoMensaje;
-                            if (!created) continue;
-                            // Convert candidate creation date to Monterrey date
-                            const cDate = mtyFormatter.format(new Date(created));
-                            if (cDate === todayStr) {
-                                countToday++;
-                                if (c.source === 'manual' || c.source === 'web') {
-                                    countManual++;
-                                } else {
-                                    countBot++;
-                                }
+
+                        if (ids && ids.length > 0) {
+                            // Load candidate data in pipeline
+                            const pipeline = redis.pipeline();
+                            ids.forEach(id => pipeline.get(`candidate:${id}`));
+                            const results = await pipeline.exec();
+
+                            for (const [err, res] of results) {
+                                if (err || !res) continue;
+                                try {
+                                    const c = JSON.parse(res);
+                                    const created = c.primerContacto;
+                                    if (!created) continue;
+                                    // Verify primerContacto is actually today (score is ultimoMensaje)
+                                    const cDate = mtyFormatter.format(new Date(created));
+                                    if (cDate === todayStr) {
+                                        countToday++;
+                                        if (c.source === 'manual' || c.source === 'web') {
+                                            countManual++;
+                                        } else {
+                                            countBot++;
+                                        }
+                                    }
+                                } catch (e) {}
                             }
                         }
 
