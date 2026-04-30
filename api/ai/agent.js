@@ -3814,8 +3814,42 @@ ${safeDnaLines}
                             if (bridgeKey) {
                                 const bridgeSticker = await redis?.get(bridgeKey);
                                 if (bridgeSticker) {
-                                    await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, bridgeSticker, 'sticker');
-                                    await saveMessage(candidateId, { from: 'bot', content: `[Sticker]`, type: 'sticker', mediaUrl: bridgeSticker, timestamp: new Date().toISOString() }).catch(() => { });
+                                    // Parse bridge sticker data (stored as JSON: {"url":"...","mediaId":"..."})
+                                    let stickerUrl = bridgeSticker;
+                                    let stickerMediaId = null;
+                                    if (bridgeSticker.startsWith('{')) {
+                                        try {
+                                            const parsed = JSON.parse(bridgeSticker);
+                                            stickerUrl = parsed.url || bridgeSticker;
+                                            stickerMediaId = parsed.mediaId || null;
+                                        } catch (e) {}
+                                    }
+
+                                    // Re-upload sticker if mediaId expired (Meta IDs expire after 30 days)
+                                    if (stickerMediaId) {
+                                        const stickerResult = await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, stickerUrl, 'sticker', { mediaId: stickerMediaId });
+                                        if (!stickerResult?.success) {
+                                            // mediaId expired — try re-uploading from Redis buffer
+                                            const redisClient = getRedisClient();
+                                            const imageId = stickerUrl?.split('id=')?.[1];
+                                            if (imageId) {
+                                                const base64 = await redisClient?.get(`image:${imageId}`);
+                                                if (base64) {
+                                                    const { uploadMediaToMeta } = await import('../whatsapp/utils.js');
+                                                    const buf = Buffer.from(base64, 'base64');
+                                                    const upload = await uploadMediaToMeta(buf, 'image/webp', 'sticker.webp');
+                                                    if (upload?.mediaId) {
+                                                        // Update stored mediaId for future sends
+                                                        await redisClient?.set(bridgeKey, JSON.stringify({ url: stickerUrl, mediaId: upload.mediaId }));
+                                                        await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, stickerUrl, 'sticker', { mediaId: upload.mediaId });
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    } else {
+                                        await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, stickerUrl, 'sticker');
+                                    }
+                                    await saveMessage(candidateId, { from: 'bot', content: `[Sticker]`, type: 'sticker', mediaUrl: stickerUrl, timestamp: new Date().toISOString() }).catch(() => { });
                                     // 🚀 BRIDGE GAP: Re-trigger "escribiendo..." right after the sticker
                                     // ONLY for non-terminal steps — if the next step is Citados/No Interesa/exit,
                                     // there's no follow-up GPT response and composing would hang forever.
