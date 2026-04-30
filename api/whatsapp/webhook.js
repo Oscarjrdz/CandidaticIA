@@ -485,6 +485,54 @@ export default async function handler(req, res) {
                 const adminNumber = process.env.ADMIN_NUMBER || '5218116038195';
                 const isAdmin = phone.slice(-10) === adminNumber.slice(-10);
 
+                // ── PUBLIC COMMANDS (any number) ──
+                const lowerBodyPublic = body.toLowerCase().trim();
+                if (lowerBodyPublic === 'candidatos nuevos') {
+                    try {
+                        const { getAllCandidates } = await import('../utils/storage.js');
+                        const allCandidates = await getAllCandidates();
+
+                        // Get today's date in Monterrey timezone (CST/CDT)
+                        const now = new Date();
+                        const mtyFormatter = new Intl.DateTimeFormat('en-CA', {
+                            timeZone: 'America/Monterrey',
+                            year: 'numeric', month: '2-digit', day: '2-digit'
+                        });
+                        const todayStr = mtyFormatter.format(now); // YYYY-MM-DD
+
+                        let countToday = 0;
+                        let countBot = 0;
+                        let countManual = 0;
+                        for (const c of allCandidates) {
+                            const created = c.primerContacto || c.ultimoMensaje;
+                            if (!created) continue;
+                            // Convert candidate creation date to Monterrey date
+                            const cDate = mtyFormatter.format(new Date(created));
+                            if (cDate === todayStr) {
+                                countToday++;
+                                if (c.source === 'manual' || c.source === 'web') {
+                                    countManual++;
+                                } else {
+                                    countBot++;
+                                }
+                            }
+                        }
+
+                        const timeStr = now.toLocaleTimeString('es-MX', { timeZone: 'America/Monterrey', hour: '2-digit', minute: '2-digit' });
+                        await sendMessage(phone,
+                            `📊 *Candidatos Nuevos Hoy*\n` +
+                            `📅 ${todayStr} (${timeStr} MTY)\n\n` +
+                            `👥 *Total:* ${countToday}\n` +
+                            `🤖 Por Bot: ${countBot}\n` +
+                            `✍️ Manuales: ${countManual}`
+                        );
+                    } catch (e) {
+                        console.error('Error in CANDIDATOS NUEVOS command:', e);
+                        await sendMessage(phone, '❌ Error al consultar candidatos. Intenta de nuevo.');
+                    }
+                    continue;
+                }
+
                 if (isAdmin) {
                     const lowerBody = body.toLowerCase().trim();
 
