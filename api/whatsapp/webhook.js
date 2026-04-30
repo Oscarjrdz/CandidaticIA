@@ -652,7 +652,18 @@ export default async function handler(req, res) {
 
                         await redis.set(redisKey, JSON.stringify({ url: mediaUrl, mediaId: outboundMediaId }));
                         await redis.del(`admin_state:${phone}`);
-                        await sendMessage(adminNumber, `✅ ¡Puente *"${label}"* guardado con éxito! 🚀\n\nClave: \`${redisKey}\``);
+
+                        // 🔒 Make the sticker buffer PERMANENT (remove 48h TTL)
+                        // so bridge stickers never expire from Redis
+                        try {
+                            const imageId = mediaUrl.split('?id=')[1];
+                            if (imageId) {
+                                await redis.persist(`image:${imageId}`);
+                                await redis.persist(`meta:image:${imageId}`);
+                            }
+                        } catch (e) {}
+
+                        await sendMessage(adminNumber, `✅ ¡Puente *"${label}"* guardado con éxito! 🚀\n\nClave: \`${redisKey}\`\n♾️ Sticker guardado permanentemente.`);
                         continue;
                     }
                     // If not waiting for a bridge sticker, fall through and treat as normal candidate message
