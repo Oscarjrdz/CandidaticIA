@@ -1907,10 +1907,12 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
                 // If it came back failed explicitly from Meta API (e.g., 24h rule)
                 if (data.message.status === 'failed') {
                     const fallbackErrorStr = String(data.message.error || '').toLowerCase();
-                    if (fallbackErrorStr.includes('131047') || fallbackErrorStr.includes('24 hours')) {
-                        showToast('Bloqueado por Meta 🛑: Han pasado >24 hrs. Toca el Rayito Verde ⚡ abajo para mandar una plantilla oficial.', 'error', 8000);
+                    const is24h = data.message.metaCode === 131047 || String(data.message.metaCode) === '131047'
+                        || fallbackErrorStr.includes('131047') || fallbackErrorStr.includes('24 hour') || fallbackErrorStr.includes('re-engagement');
+                    if (is24h) {
+                        showToast('⛔ Ventana de 24 hrs cerrada. Toca el Rayito Verde ⚡ abajo para mandar una plantilla oficial.', 'error', 8000);
                     } else {
-                        showToast(`Error de Meta: ${data.message.error || 'Desconocido'}`, 'error');
+                        showToast(`⚠️ Meta: ${data.message.error || 'Error desconocido'}`, 'error');
                     }
                 }
 
@@ -3053,13 +3055,18 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
                                     </div>
                                     
                                     {/* Mostrar Error Nativamente si falló */}
-                                    {msg.status === 'failed' && msg.error && (
-                                        <div className={`text-[10px] text-red-500 font-medium mt-1 ${isMe ? 'text-right' : 'text-left'}`}>
-                                            {String(msg.error).toLowerCase().includes('131047') || String(msg.error).toLowerCase().includes('24 hours') 
-                                                ? 'Bloqueado por Meta (Ventana 24 hrs). Usa el Rayito Verde ⚡' 
-                                                : `Falló: ${msg.error}`}
-                                        </div>
-                                    )}
+                                    {msg.status === 'failed' && msg.error && (() => {
+                                        const errStr = String(msg.error).toLowerCase();
+                                        const is24h = msg.metaCode === 131047 || String(msg.metaCode) === '131047' 
+                                            || errStr.includes('131047') || errStr.includes('24 hour') || errStr.includes('re-engagement');
+                                        return (
+                                            <div className={`text-[10px] text-red-500 font-medium mt-1 ${isMe ? 'text-right' : 'text-left'}`}>
+                                                {is24h
+                                                    ? '⛔ Ventana de 24 hrs cerrada. Usa el Rayito Verde ⚡ para enviar plantilla.'
+                                                    : `⚠️ Meta: ${msg.error}`}
+                                            </div>
+                                        );
+                                    })()}
                                 </div>
                             );
                         })}

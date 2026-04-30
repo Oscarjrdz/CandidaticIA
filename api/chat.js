@@ -344,14 +344,22 @@ export default async function handler(req, res) {
                         msgToSave.status = 'sent';
                         msgToSave.ultraMsgId = remoteId;
                     } else {
-                        throw new Error(`UltraMSG Error: ${sendResult.error || JSON.stringify(sendResult.data)}`);
+                        // Preserve the full Meta error for UI display
+                        const metaErrorCode = sendResult.data?.error?.code || '';
+                        const metaErrorMsg = sendResult.error || JSON.stringify(sendResult.data?.error || sendResult.data || 'Unknown');
+                        const err = new Error(metaErrorMsg);
+                        err.metaCode = metaErrorCode;
+                        throw err;
                     }
                 }
             } catch (sendErr) {
-                console.error('❌ Error sending via UltraMsg:', sendErr.message);
-                await updateMessageStatus(candidateId, msgToSave.id, 'failed', { error: sendErr.message });
+                console.error('❌ Error sending via Meta:', sendErr.message);
+                const errorPayload = { error: sendErr.message };
+                if (sendErr.metaCode) errorPayload.metaCode = sendErr.metaCode;
+                await updateMessageStatus(candidateId, msgToSave.id, 'failed', errorPayload);
                 msgToSave.status = 'failed';
                 msgToSave.error = sendErr.message;
+                if (sendErr.metaCode) msgToSave.metaCode = sendErr.metaCode;
             }
 
             // Update candidate last activity timestamps globally
