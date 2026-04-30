@@ -159,6 +159,8 @@ const VacanciesSection = ({ showToast }) => {
     const [categories, setCategories] = useState([]);
     const [newCategoryName, setNewCategoryName] = useState('');
     const [addingCategory, setAddingCategory] = useState(false);
+    const [editingCategoryId, setEditingCategoryId] = useState(null);
+    const [editingCategoryName, setEditingCategoryName] = useState('');
 
 
 
@@ -352,6 +354,38 @@ const VacanciesSection = ({ showToast }) => {
         }
     };
 
+    const handleStartEditCategory = (cat) => {
+        setEditingCategoryId(cat.id);
+        setEditingCategoryName(cat.name);
+    };
+
+    const handleSaveEditCategory = async () => {
+        if (!editingCategoryName.trim() || !editingCategoryId) return;
+        try {
+            const res = await fetch('/api/categories', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: editingCategoryId, name: editingCategoryName })
+            });
+            const data = await res.json();
+            if (data.success) {
+                showToast('Categoría actualizada', 'success');
+                setEditingCategoryId(null);
+                setEditingCategoryName('');
+                loadCategories();
+            } else {
+                showToast(data.error || 'Error al editar', 'error');
+            }
+        } catch (e) {
+            showToast('Error de conexión', 'error');
+        }
+    };
+
+    const handleCancelEditCategory = () => {
+        setEditingCategoryId(null);
+        setEditingCategoryName('');
+    };
+
     return (
         <div className="space-y-4 w-full pb-8">
             {/* Command Bar: Homologated with Bot IA Style */}
@@ -424,15 +458,61 @@ const VacanciesSection = ({ showToast }) => {
                         {categories.map(cat => (
                             <div
                                 key={cat.id}
-                                className="group flex items-center gap-2 px-3 py-1 bg-white dark:bg-gray-800 border border-blue-100 dark:border-blue-800/50 rounded-full text-xs font-medium text-blue-700 dark:text-blue-300 shadow-sm"
+                                className="group flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-gray-800 border border-blue-100 dark:border-blue-800/50 rounded-full text-xs font-medium text-blue-700 dark:text-blue-300 shadow-sm transition-all"
                             >
-                                <span>{cat.name}</span>
-                                <button
-                                    onClick={() => handleDeleteCategory(cat.id)}
-                                    className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-red-50 dark:hover:bg-red-900/30 text-red-500 rounded-full transition-all"
-                                >
-                                    <Trash2 className="w-3 h-3" />
-                                </button>
+                                {editingCategoryId === cat.id ? (
+                                    <>
+                                        <input
+                                            type="text"
+                                            value={editingCategoryName}
+                                            onChange={(e) => setEditingCategoryName(e.target.value)}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter') handleSaveEditCategory();
+                                                if (e.key === 'Escape') handleCancelEditCategory();
+                                            }}
+                                            className="w-28 px-1.5 py-0.5 text-xs border border-blue-300 dark:border-blue-600 rounded bg-blue-50 dark:bg-gray-900 text-blue-800 dark:text-blue-200 outline-none focus:ring-1 focus:ring-blue-400"
+                                            autoFocus
+                                        />
+                                        <button
+                                            onClick={handleSaveEditCategory}
+                                            className="p-0.5 hover:bg-green-50 dark:hover:bg-green-900/30 text-green-600 rounded-full transition-all"
+                                            title="Guardar"
+                                        >
+                                            <Save className="w-3 h-3" />
+                                        </button>
+                                        <button
+                                            onClick={handleCancelEditCategory}
+                                            className="p-0.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 rounded-full transition-all"
+                                            title="Cancelar"
+                                        >
+                                            <X className="w-3 h-3" />
+                                        </button>
+                                    </>
+                                ) : (
+                                    <>
+                                        <span
+                                            onDoubleClick={() => handleStartEditCategory(cat)}
+                                            className="cursor-default select-none"
+                                            title="Doble clic para editar"
+                                        >
+                                            {cat.name}
+                                        </span>
+                                        <button
+                                            onClick={() => handleStartEditCategory(cat)}
+                                            className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-blue-50 dark:hover:bg-blue-900/30 text-blue-500 rounded-full transition-all"
+                                            title="Editar"
+                                        >
+                                            <Pencil className="w-3 h-3" />
+                                        </button>
+                                        <button
+                                            onClick={() => handleDeleteCategory(cat.id)}
+                                            className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-red-50 dark:hover:bg-red-900/30 text-red-500 rounded-full transition-all"
+                                            title="Eliminar"
+                                        >
+                                            <Trash2 className="w-3 h-3" />
+                                        </button>
+                                    </>
+                                )}
                             </div>
                         ))}
                     </div>

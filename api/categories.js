@@ -72,6 +72,28 @@ export default async function handler(req, res) {
             return res.status(200).json({ success: true });
         }
 
+        // PUT - Edit category name
+        if (req.method === 'PUT') {
+            const { id, name } = req.body;
+            if (!id || !name) return res.status(400).json({ error: 'Missing id or name' });
+
+            const data = await redis.get(KEY);
+            let categories = data ? JSON.parse(data) : [];
+
+            const idx = categories.findIndex(c => c.id === id);
+            if (idx === -1) return res.status(404).json({ error: 'Categoría no encontrada' });
+
+            // Avoid duplicates (excluding itself)
+            if (categories.some(c => c.id !== id && c.name.toLowerCase() === name.trim().toLowerCase())) {
+                return res.status(400).json({ error: 'Ya existe una categoría con ese nombre' });
+            }
+
+            categories[idx].name = name.trim();
+            await redis.set(KEY, JSON.stringify(categories));
+
+            return res.status(200).json({ success: true, data: categories[idx] });
+        }
+
         return res.status(405).json({ error: 'Method not allowed' });
 
     } catch (error) {
