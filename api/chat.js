@@ -114,12 +114,10 @@ export default async function handler(req, res) {
             }
 
             if (action === 'mark_unread') {
-                // Set unreadMsgCount=1 and clear botTime so it triggers unread visual
+                // Set unreadMsgCount=1 — this is the only field that matters for unread state
                 try {
                     await updateCandidate(candidateId, { 
-                        unreadMsgCount: 1,
-                        lastBotMessageAt: null,
-                        ultimoMensajeBot: null
+                        unreadMsgCount: 1
                     });
                 } catch (e) {}
                 return res.status(200).json({ success: true, marked: 'unread' });

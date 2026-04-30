@@ -313,24 +313,17 @@ const MessageInputBox = React.forwardRef(({ onSend, onTyping, fileInputRef, hand
 // 🧱 STANDALONE HELPERS (outside component to avoid re-creation on every render)
 const checkIfUnreadStandalone = (chat) => {
     if (!chat) return false;
-    if (chat.unreadMsgCount > 0) return true;
 
-    // Use ultimoMensaje to guarantee we capture the absolute latest message time if the user spoke last
-    const userTime = Math.max(
-        chat.lastUserMessageAt ? new Date(chat.lastUserMessageAt).getTime() : 0,
-        chat.ultimoMensaje ? new Date(chat.ultimoMensaje).getTime() : 0
-    );
+    // Primary rule: unreadMsgCount is the single source of truth.
+    // Incremented by webhook on every incoming user message.
+    // Decremented ONLY by explicit recruiter action: writing a reply, 
+    // clicking "Mark as Read", or clicking "Mark as Handled".
+    if (Number(chat.unreadMsgCount) > 0) return true;
 
-    const botTime = Math.max(
-        chat.lastBotMessageAt ? new Date(chat.lastBotMessageAt).getTime() : 0, 
-        chat.ultimoMensajeBot ? new Date(chat.ultimoMensajeBot).getTime() : 0
-    );
-
-    // 1000ms tolerance for DB race conditions when bot writes timestamps sequentially
-    if (userTime > botTime + 1000) return true;
-
-    // Rule 3: No human recruiter has ever participated in this conversation
-    // If candidate has had activity but no recruiter has ever sent a message or handled the chat
+    // Secondary safety net: if the candidate has had activity but NO
+    // recruiter has EVER interacted (lastHumanMessageAt is null), 
+    // treat as unread so new chats always surface.
+    const userTime = chat.lastUserMessageAt ? new Date(chat.lastUserMessageAt).getTime() : 0;
     if (userTime > 0 && !chat.lastHumanMessageAt) return true;
 
     return false;
@@ -1314,7 +1307,6 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
                     if (patch.lastBotMessageAt) {
                         updated.lastBotMessageAt = patch.lastBotMessageAt;
                         updated.ultimoMensajeBot = patch.lastBotMessageAt;
-                        updated.unreadMsgCount = 0;
                     }
                     if (patch.lastUserMessageAt) {
                         updated.lastUserMessageAt = patch.lastUserMessageAt;
@@ -1573,7 +1565,7 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
 
         // Optimistic update: set unread state
         setCandidates(prev => prev.map(c => 
-            c.id === chatToMark.id ? { ...c, unreadMsgCount: 1, lastBotMessageAt: null, ultimoMensajeBot: null } : c
+            c.id === chatToMark.id ? { ...c, unreadMsgCount: 1 } : c
         ));
 
         try {

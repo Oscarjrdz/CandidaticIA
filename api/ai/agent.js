@@ -1164,7 +1164,7 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
         const candidateUpdates = {
             lastBotMessageAt: new Date().toISOString(),
             ultimoMensaje: new Date().toISOString(),
-            unreadMsgCount: 0,
+            // ⚠️ Do NOT reset unreadMsgCount here — only recruiter actions clear the badge
             esNuevo: candidateData.esNuevo === 'SI' ? 'NO' : candidateData.esNuevo
         };
 

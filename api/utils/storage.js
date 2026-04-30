@@ -1304,7 +1304,10 @@ export const saveMessage = async (candidateId, message) => {
                     messagePayload: message, // 🚀 ENRICHED PAYLOAD: Send full object to avoid HTTP polling
                     messageFrom: message.from,
                     ultimoMensaje: now,
-                    ...(isFromUser ? { lastUserMessageAt: now } : { lastBotMessageAt: now, unreadMsgCount: 0 })
+                    // ⚠️ Bot replies should NOT clear recruiter's unread badge.
+                    // unreadMsgCount is only cleared by explicit recruiter action
+                    // (writing a message or clicking "mark as read").
+                    ...(isFromUser ? { lastUserMessageAt: now } : { lastBotMessageAt: now })
                 });
             } catch (err) {
                 console.error('Error in SSE notify:', err);
