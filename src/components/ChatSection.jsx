@@ -758,9 +758,9 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
     const [draggedIcon, setDraggedIcon] = useState(null);
 
     // Filter Chips State
-    const [activeFilter, setActiveFilter] = useState('all'); // 'all', 'label', 'profile'
+    const [activeFilter, setActiveFilter] = useState('unread'); // 'all', 'unread', 'label', 'profile'
     const [filterValue, setFilterValue] = useState(null);
-    const activeFilterRef = useRef('all');
+    const activeFilterRef = useRef('unread');
     const filterValueRef = useRef(null);
     const selectedChatRef = useRef(null);
 
