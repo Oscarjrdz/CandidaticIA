@@ -1897,7 +1897,7 @@ export const getAdsStatistics = async () => {
                 if (c.origen === 'facebook_ctwa' || c.adId || c.adHeadline) {
                     totalAdsLeads++;
                     
-                    const adKey = c.adId || c.adHeadline || 'organic_or_unknown';
+                    const adKey = c.adId || (c.adBody ? String(c.adBody).substring(0, 50) : null) || c.adHeadline || 'organic_or_unknown';
                     
                     if (!adsMap.has(adKey)) {
                         adsMap.set(adKey, {
@@ -1921,14 +1921,19 @@ export const getAdsStatistics = async () => {
                     adStats.totalLeads++;
                     
                     // Track first/last candidate dates
-                    const contactDate = c.primerContacto || c.ultimoMensaje;
-                    if (contactDate) {
-                        if (!adStats.firstSeen || contactDate < adStats.firstSeen) adStats.firstSeen = contactDate;
-                        if (!adStats.lastSeen || contactDate > adStats.lastSeen) adStats.lastSeen = contactDate;
+                    const firstContact = c.primerContacto || c.createdAt; // Use creation date for first seen
+                    const lastContact = c.ultimoMensaje || firstContact;
+                    
+                    if (firstContact) {
+                        if (!adStats.firstSeen || firstContact < adStats.firstSeen) adStats.firstSeen = firstContact;
+                    }
+                    if (lastContact) {
+                        if (!adStats.lastSeen || lastContact > adStats.lastSeen) adStats.lastSeen = lastContact;
                     }
                     
-                    const contactDateStr = (c.primerContacto || c.ultimoMensaje || '').split('T')[0];
-                    if (contactDateStr === todayStr) {
+                    // todayLeads should only count NEW leads today, not recurring messages
+                    const newLeadDateStr = (firstContact || '').split('T')[0];
+                    if (newLeadDateStr === todayStr) {
                         adStats.todayLeads++;
                     }
                     
