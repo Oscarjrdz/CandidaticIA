@@ -468,7 +468,7 @@ const CRMProjectsSection = ({ showToast, user }) => {
                         <FolderPlus className="w-4 h-4 mr-2" /> Nuevo Proyecto
                     </Button>
 
-                    <div className="flex-1 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
+                    <div className="flex-1 overflow-y-auto space-y-2 px-2 pb-4 pt-1 custom-scrollbar -mx-2">
                         {loading ? (
                             <div className="flex items-center justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-blue-500" /></div>
                         ) : projects.length === 0 ? (
