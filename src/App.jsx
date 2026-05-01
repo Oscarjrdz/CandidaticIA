@@ -129,8 +129,6 @@ function AppShell() {
         activeSection={activeSection}
         onSectionChange={setActiveSection}
         onLogout={handleLogout}
-        user={user}
-        onUserUpdate={setUser}
         isMobileOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
       />

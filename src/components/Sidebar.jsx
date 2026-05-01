@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useAuthContext } from '../contexts/AuthContext';
 import { useCandidatesSSE } from '../hooks/useCandidatesSSE';
 import {
     Users, Settings, Bot, History, Zap, Briefcase, Send, User, LogOut, BarChart3,
@@ -111,7 +112,9 @@ const SortableMenuItem = ({ item, activeSection, onSectionChange, badge, isColla
     );
 };
 
-const Sidebar = ({ activeSection, onSectionChange, onLogout, user, onUserUpdate, isMobileOpen, onClose }) => {
+const Sidebar = ({ activeSection, onSectionChange, onLogout, isMobileOpen, onClose }) => {
+    const { user, setUser } = useAuthContext();
+
     const [items, setItems] = useState([]);
     const [rolePermissions, setRolePermissions] = useState(null);
     const [isCollapsed, setIsCollapsed] = useState(() => {
@@ -227,7 +230,7 @@ const Sidebar = ({ activeSection, onSectionChange, onLogout, user, onUserUpdate,
                     });
                     const data = await res.json();
                     if (data.success) {
-                        onUserUpdate(data.user);
+                        setUser(data.user);
                         localStorage.setItem('candidatic_user_session', JSON.stringify(data.user));
                     }
                 } catch (e) {
