@@ -1876,7 +1876,7 @@ export const getAdsStatistics = async () => {
     const CHUNK_SIZE = 500;
     let currentIndex = 0;
     
-    const todayStr = new Date().toISOString().split('T')[0];
+    const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Monterrey' });
 
     while (currentIndex < dbSize) {
         const ids = await client.zrevrange(KEYS.CANDIDATES_LIST, currentIndex, currentIndex + CHUNK_SIZE - 1);
