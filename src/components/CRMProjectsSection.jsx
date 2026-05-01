@@ -45,9 +45,17 @@ const SortableCandCard = ({ candidate, onRemove, onChat }) => {
                     <p className="text-sm font-semibold text-slate-700 dark:text-slate-200 truncate">{candidate.nombreReal || candidate.from || candidate.nombre || 'Sin nombre'}</p>
                     <p className="text-[10px] text-slate-400 truncate">{formatPhone(candidate.whatsapp)}</p>
                 </div>
-                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className={`flex gap-1 transition-opacity ${Number(candidate.unreadMsgCount) > 0 ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
                     <button onClick={(e) => { e.stopPropagation(); onChat(candidate); }}
-                        className="p-1 rounded hover:bg-blue-50 dark:hover:bg-blue-900/30 text-blue-500"><MessageCircle className="w-3.5 h-3.5" /></button>
+                        className="relative p-1 rounded hover:bg-blue-50 dark:hover:bg-blue-900/30 text-blue-500">
+                        <MessageCircle className="w-3.5 h-3.5" />
+                        {Number(candidate.unreadMsgCount) > 0 && (
+                            <span className="absolute -top-0.5 -right-0.5 flex h-2.5 w-2.5">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500 border border-white dark:border-slate-800"></span>
+                            </span>
+                        )}
+                    </button>
                     <button onClick={(e) => { e.stopPropagation(); onRemove(candidate.id); }}
                         className="p-1 rounded hover:bg-red-50 dark:hover:bg-red-900/30 text-red-400"><X className="w-3.5 h-3.5" /></button>
                 </div>
