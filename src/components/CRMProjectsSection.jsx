@@ -161,6 +161,7 @@ const CRMProjectsSection = ({ showToast, user }) => {
     const [projDesc, setProjDesc] = useState('');
     const [projColor, setProjColor] = useState('#3b82f6');
     const [editingProject, setEditingProject] = useState(null);
+    const [searchOpen, setSearchOpen] = useState(false);
     const [activeChatCandidate, setActiveChatCandidate] = useState(null);
     
     const [calendarModalConfig, setCalendarModalConfig] = useState({ isOpen: false, projectId: null, projectName: '', candidateId: null, candidateName: '' });
