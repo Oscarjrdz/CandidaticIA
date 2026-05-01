@@ -496,8 +496,6 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
         });
     };
 
-    if (!isOpen) return null;
-
     const displayMessages = useMemo(() => {
         return Array.isArray(messages) ? messages.flatMap((msg) => {
             if (!msg) return [];
@@ -519,6 +517,8 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
             return [{...msg, content}];
         }) : [];
     }, [messages]);
+
+    if (!isOpen) return null;
 
     // --- RENDER MESSAGE ---
     const renderMessage = (idx, msg) => {
