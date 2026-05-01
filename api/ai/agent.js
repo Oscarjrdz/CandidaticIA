@@ -1032,12 +1032,14 @@ function coalesceName(existing, incoming) {
 
 function coalesceDate(existing, incoming) {
     if (!incoming) return existing;
+    if (incoming.length < 4 || incoming.toLowerCase().includes('null')) return existing;
+    
     const normalizedIn = normalizeBirthDate(incoming);
     if (normalizedIn.isValid) return normalizedIn.date;
 
     // If existing part exists and new part arrives (e.g. "25" then "Mayo")
-    // For now, satisfy with normalization, but additive logic could go here
-    return incoming;
+    // For now, satisfy with normalization, but if it lacks a year, reject it to avoid corrupting DB
+    return existing;
 }
 
 function getFirstName(fullName) {
@@ -4202,6 +4204,7 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
 - GÉNERO (OBLIGATORIO Y SILENCIOSO): Está estrictamente prohibido preguntarle al candidato por su género. Sin embargo, SIEMPRE debes deducirlo del nombre del candidato o contexto del chat.
 - 🕒 REGLA DE RETENCIÓN DE AGENDA: Si el candidato YA tiene "citaFecha" o "citaHora" en su [ADN], OBLIGATORIAMENTE debes re-escribir ese mismo valor en tu "extracted_data" a menos que el candidato pida explícitamente cambiar la fecha/hora.
 - FECHAS CRÍTICAS: "citaFecha" DEBE ser estrictamente formato "YYYY-MM-DD". Transforma menciones como "el lunes" a la fecha exacta correspondiente.
+- 🛑 AÑO DE NACIMIENTO OBLIGATORIO: Si el candidato te da el día y mes pero NO incluye el AÑO (ej. "19 de junio"), TIENES ESTRICTAMENTE PROHIBIDO extraerlo. En su lugar, usa el \`response_text\` para preguntarle de forma amable: "¿En qué año naciste?".
 
 [REGLA ANTI-REDUNDANCIA OBLIGATORIA]:
 - NUNCA preguntes al candidato por un dato que acabas de extraer exitosamente en el campo "extracted_data" de este mismo JSON.\n`;
