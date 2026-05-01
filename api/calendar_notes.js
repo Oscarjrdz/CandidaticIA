@@ -55,6 +55,16 @@ export default async function handler(req, res) {
                 return res.status(200).json({ success: true });
             }
 
+            if (action === 'update') {
+                if (!noteId || !content) return res.status(400).json({ error: 'Faltan campos' });
+                const noteIndex = notes.findIndex(n => n.id === noteId);
+                if (noteIndex === -1) return res.status(404).json({ error: 'Nota no encontrada' });
+                
+                notes[noteIndex].content = content;
+                await redis.set(KEY, JSON.stringify(notes));
+                return res.status(200).json({ success: true, note: notes[noteIndex] });
+            }
+
             return res.status(400).json({ error: 'Acción no válida' });
         }
 

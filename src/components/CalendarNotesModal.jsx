@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { X, Calendar as CalendarIcon, ChevronLeft, ChevronRight, Plus, Trash2, Loader2, User, FileText, MapPin, GraduationCap, MessageCircle } from 'lucide-react';
+import { X, Calendar as CalendarIcon, ChevronLeft, ChevronRight, Plus, Trash2, Loader2, User, FileText, MapPin, GraduationCap, MessageCircle, Pencil, Check } from 'lucide-react';
 import Button from './ui/Button';
+import { useConfirmModal } from './ui/ConfirmModal';
 
 // Utilities
 const getDaysInMonth = (year, month) => new Date(year, month + 1, 0).getDate();
@@ -20,6 +21,9 @@ export default function CalendarNotesModal({ isOpen, onClose, projectId, project
     const [selectedDate, setSelectedDate] = useState(new Date());
     const [newNoteContent, setNewNoteContent] = useState('');
     const [isSaving, setIsSaving] = useState(false);
+    
+    const [editingNoteId, setEditingNoteId] = useState(null);
+    const { confirmModalJSX, showConfirm } = useConfirmModal();
 
     useEffect(() => {
         if (isOpen && projectId) {
@@ -28,6 +32,7 @@ export default function CalendarNotesModal({ isOpen, onClose, projectId, project
             setCurrentDate(new Date());
             setSelectedDate(new Date());
             setNewNoteContent('');
+            setEditingNoteId(null);
         }
     }, [isOpen, projectId]);
 
@@ -46,19 +51,21 @@ export default function CalendarNotesModal({ isOpen, onClose, projectId, project
         }
     };
 
-    const handleAddNote = async () => {
+    const handleSaveNote = async () => {
         if (!newNoteContent.trim() || !selectedDate) return;
 
         setIsSaving(true);
         const dateStr = selectedDate.toLocaleDateString('en-CA'); // YYYY-MM-DD
+        const action = editingNoteId ? 'update' : 'create';
         
         try {
             const res = await fetch(`${API_BASE}/api/calendar_notes`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    action: 'create',
+                    action,
                     projectId,
+                    noteId: editingNoteId,
                     date: dateStr,
                     content: newNoteContent.trim(),
                     candidateId: candidateId || null,
@@ -67,8 +74,13 @@ export default function CalendarNotesModal({ isOpen, onClose, projectId, project
             });
             const data = await res.json();
             if (data.success) {
-                setNotes(prev => [...prev, data.note]);
+                if (action === 'create') {
+                    setNotes(prev => [...prev, data.note]);
+                } else {
+                    setNotes(prev => prev.map(n => n.id === editingNoteId ? data.note : n));
+                }
                 setNewNoteContent('');
+                setEditingNoteId(null);
             }
         } catch (e) {
             console.error('Error saving note:', e);
@@ -78,6 +90,14 @@ export default function CalendarNotesModal({ isOpen, onClose, projectId, project
     };
 
     const handleDeleteNote = async (noteId) => {
+        const confirmed = await showConfirm({
+            title: 'Eliminar anotación',
+            message: '¿Estás seguro de que deseas eliminar esta anotación del calendario? Esta acción no se puede deshacer.',
+            confirmText: 'Eliminar',
+            variant: 'danger'
+        });
+        if (!confirmed) return;
+
         try {
             const res = await fetch(`${API_BASE}/api/calendar_notes`, {
                 method: 'POST',
@@ -87,10 +107,23 @@ export default function CalendarNotesModal({ isOpen, onClose, projectId, project
             const data = await res.json();
             if (data.success) {
                 setNotes(prev => prev.filter(n => n.id !== noteId));
+                if (editingNoteId === noteId) {
+                    setEditingNoteId(null);
+                    setNewNoteContent('');
+                }
             }
         } catch (e) {
             console.error('Error deleting note:', e);
         }
+    };
+
+    const handleEditClick = (note) => {
+        setEditingNoteId(note.id);
+        setNewNoteContent(note.content);
+        // Scroll bottom (optional, but nice)
+        setTimeout(() => {
+            document.querySelector('#note-textarea')?.focus();
+        }, 50);
     };
 
     // Derived data
@@ -321,13 +354,22 @@ export default function CalendarNotesModal({ isOpen, onClose, projectId, project
                                             })()}
                                             <p className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">{note.content}</p>
                                         </div>
-                                        <button 
-                                            onClick={() => handleDeleteNote(note.id)}
-                                            className="p-1.5 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 opacity-0 group-hover:opacity-100 transition-all flex-shrink-0"
-                                            title="Eliminar anotación"
-                                        >
-                                            <Trash2 className="w-4 h-4" />
-                                        </button>
+                                        <div className="flex gap-1 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-all">
+                                            <button 
+                                                onClick={() => handleEditClick(note)}
+                                                className="p-1.5 rounded-lg text-slate-300 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20"
+                                                title="Editar anotación"
+                                            >
+                                                <Pencil className="w-4 h-4" />
+                                            </button>
+                                            <button 
+                                                onClick={() => handleDeleteNote(note.id)}
+                                                className="p-1.5 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"
+                                                title="Eliminar anotación"
+                                            >
+                                                <Trash2 className="w-4 h-4" />
+                                            </button>
+                                        </div>
                                     </div>
                                     <div className="mt-3 text-[10px] text-slate-400 font-medium">
                                         Creado a las {new Date(note.createdAt).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}
@@ -337,9 +379,15 @@ export default function CalendarNotesModal({ isOpen, onClose, projectId, project
                         )}
                     </div>
 
-                    {/* New Note Form */}
-                    <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-2xl border border-slate-200 dark:border-slate-700">
-                        {candidateName && (
+                    {/* New/Edit Note Form */}
+                    <div className={`p-4 rounded-2xl border transition-all ${editingNoteId ? 'bg-blue-50/50 dark:bg-blue-900/10 border-blue-200 dark:border-blue-800' : 'bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700'}`}>
+                        {editingNoteId && (
+                            <div className="mb-2 flex items-center justify-between">
+                                <span className="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider flex items-center gap-1"><Pencil className="w-3 h-3" /> Editando anotación</span>
+                                <button onClick={() => { setEditingNoteId(null); setNewNoteContent(''); }} className="text-xs font-bold text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">Cancelar</button>
+                            </div>
+                        )}
+                        {candidateName && !editingNoteId && (
                             <div className="mb-2 flex items-center gap-2">
                                 <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Agendando a:</span>
                                 <span className="text-xs font-bold bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400 px-2 py-0.5 rounded-md">{candidateName}</span>
@@ -348,23 +396,25 @@ export default function CalendarNotesModal({ isOpen, onClose, projectId, project
                         <div className="flex items-end gap-3">
                             <div className="flex-1">
                                 <textarea
+                                    id="note-textarea"
                                     value={newNoteContent}
                                     onChange={(e) => setNewNoteContent(e.target.value)}
                                     placeholder="Escribe una nota o recordatorio..."
-                                    className="w-full bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-700 rounded-xl p-3 text-sm focus:outline-none focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 resize-none h-[60px] transition-all"
+                                    className={`w-full bg-white dark:bg-slate-900 border-2 rounded-xl p-3 text-sm focus:outline-none transition-all resize-none h-[60px] ${editingNoteId ? 'border-blue-200 dark:border-blue-800 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10' : 'border-slate-200 dark:border-slate-700 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10'}`}
                                 />
                             </div>
                             <Button 
-                                onClick={handleAddNote} 
+                                onClick={handleSaveNote} 
                                 disabled={!newNoteContent.trim() || isSaving}
-                                className="h-[60px] px-6 bg-orange-500 hover:bg-orange-600 text-white rounded-xl font-bold shadow-lg shadow-orange-500/20 disabled:opacity-50 disabled:shadow-none"
+                                className={`h-[60px] px-6 text-white rounded-xl font-bold disabled:opacity-50 disabled:shadow-none ${editingNoteId ? 'bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-500/20' : 'bg-orange-500 hover:bg-orange-600 shadow-lg shadow-orange-500/20'}`}
                             >
-                                {isSaving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Plus className="w-5 h-5" />}
+                                {isSaving ? <Loader2 className="w-5 h-5 animate-spin" /> : (editingNoteId ? <Check className="w-5 h-5" /> : <Plus className="w-5 h-5" />)}
                             </Button>
                         </div>
                     </div>
                 </div>
             </div>
+            {confirmModalJSX}
         </div>
     );
 }
