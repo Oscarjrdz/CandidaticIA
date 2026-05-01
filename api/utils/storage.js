@@ -1932,7 +1932,14 @@ export const getAdsStatistics = async () => {
                     }
                     
                     // todayLeads should only count NEW leads today, not recurring messages
-                    const newLeadDateStr = (firstContact || '').split('T')[0];
+                    let newLeadDateStr = '';
+                    if (firstContact) {
+                        try {
+                            newLeadDateStr = new Date(firstContact).toLocaleDateString('en-CA', { timeZone: 'America/Monterrey' });
+                        } catch (e) {
+                            newLeadDateStr = firstContact.split('T')[0];
+                        }
+                    }
                     if (newLeadDateStr === todayStr) {
                         adStats.todayLeads++;
                     }
