@@ -2786,10 +2786,10 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                                             {msg.mediaUrl && (
                                                 <div className="mb-0.5 rounded overflow-hidden mt-1 cursor-pointer">
                                                     {(msg.type === 'image' || msg.type === 'sticker') && (
-                                                        <img src={msg.mediaUrl} alt="media" loading="lazy" width="260" height="260" className="max-w-[260px] max-h-[260px] w-auto h-auto object-cover rounded shadow-sm bg-transparent" />
+                                                        <img src={msg.mediaUrl} alt="media" loading="lazy" width="260" height="260" className="max-w-[260px] aspect-square object-cover rounded shadow-sm bg-gray-100 dark:bg-gray-800 animate-pulse" onLoad={(e) => e.target.classList.remove('animate-pulse')} />
                                                     )}
                                                     {msg.type === 'video' && (
-                                                        <video src={msg.mediaUrl} controls className="max-w-[260px] max-h-[260px] rounded shadow-sm bg-black" />
+                                                        <video src={msg.mediaUrl} controls width="260" className="w-[260px] aspect-video rounded shadow-sm bg-black" />
                                                     )}
                                                     {(msg.type === 'audio' || msg.type === 'ptt' || msg.type === 'voice') && (
                                                         <audio src={msg.mediaUrl} controls className="max-w-[240px] h-[35px] mt-1 mb-1" />

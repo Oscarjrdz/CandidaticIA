@@ -73,7 +73,7 @@ export const formatWhatsAppText = (text) => {
         .replace(/\[Imagen Adjunta:\s*(https?:\/\/[^\s\]]+)\](?:\nCaption:\s*(.*))?/gi, (match, url, caption) => {
             const sUrl = safeUrl(url);
             if (!sUrl) return match;
-            return storeToken(`<div class="mt-1 mb-1"><img src="${sUrl}" alt="Adjunto" class="max-w-[200px] object-cover rounded shadow-sm bg-transparent" />${caption ? `<div class="text-[11px] text-gray-600 dark:text-gray-300 mt-1">${caption}</div>` : ''}</div>`);
+            return storeToken(`<div class="mt-1 mb-1"><img src="${sUrl}" alt="Adjunto" width="200" height="200" class="max-w-[200px] aspect-square object-cover rounded shadow-sm bg-gray-100 dark:bg-gray-800" />${caption ? `<div class="text-[11px] text-gray-600 dark:text-gray-300 mt-1">${caption}</div>` : ''}</div>`);
         })
         .replace(/\[Ubicación:\s*(.*?)\s*\(([-.\d]+),\s*([-.\d]+)\)\]/gi, (match, address, lat, lng) => {
             return storeToken(`<div class="mt-1 mb-1 border border-black/10 dark:border-white/10 rounded overflow-hidden max-w-[220px]">
@@ -83,7 +83,7 @@ export const formatWhatsAppText = (text) => {
         .replace(/\[Sticker:\s*([^\s\]]+)\]/gi, (match, url) => {
             const sUrl = safeUrl(url);
             if (!sUrl) return match;
-            return storeToken(`<div class="mt-1 mb-1"><img src="${sUrl}" alt="Sticker" class="max-w-[120px] max-h-[120px] object-contain rounded bg-transparent" /></div>`);
+            return storeToken(`<div class="mt-1 mb-1"><img src="${sUrl}" alt="Sticker" width="120" height="120" class="max-w-[120px] aspect-square object-contain rounded bg-transparent" /></div>`);
         });
 
     // 4. Apply standard markdown formatting safely on the remaining text
