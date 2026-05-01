@@ -778,6 +778,11 @@ const CRMProjectsSection = ({ showToast, user }) => {
                 projectName={calendarModalConfig.projectName}
                 candidateId={calendarModalConfig.candidateId}
                 candidateName={calendarModalConfig.candidateName}
+                candidates={candidates}
+                onChat={(c) => {
+                    setCalendarModalConfig({ ...calendarModalConfig, isOpen: false });
+                    setChatCandidate(c);
+                }}
             />
 
             {confirmModalJSX}

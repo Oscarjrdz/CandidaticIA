@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { X, Calendar as CalendarIcon, ChevronLeft, ChevronRight, Plus, Trash2, Loader2, User, FileText } from 'lucide-react';
+import { X, Calendar as CalendarIcon, ChevronLeft, ChevronRight, Plus, Trash2, Loader2, User, FileText, MapPin, GraduationCap, MessageCircle } from 'lucide-react';
 import Button from './ui/Button';
 
 // Utilities
@@ -9,7 +9,10 @@ const monthNames = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Juli
 const dayNames = ["Do", "Lu", "Ma", "Mi", "Ju", "Vi", "Sa"];
 const API_BASE = import.meta.env.PROD ? '' : 'http://localhost:3000';
 
-export default function CalendarNotesModal({ isOpen, onClose, projectId, projectName, candidateId, candidateName }) {
+const calculateAge = (fechaNac, edad) => edad || (fechaNac ? Math.floor((new Date() - new Date(fechaNac)) / 31557600000) + ' años' : null);
+const formatPhone = (phone) => phone ? '+' + String(phone).replace(/\D/g, '') : 'Sin teléfono';
+
+export default function CalendarNotesModal({ isOpen, onClose, projectId, projectName, candidateId, candidateName, candidates = [], onChat }) {
     const [notes, setNotes] = useState([]);
     const [loading, setLoading] = useState(true);
     
@@ -236,16 +239,86 @@ export default function CalendarNotesModal({ isOpen, onClose, projectId, project
                                 <div key={note.id} className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-2xl border border-slate-100 dark:border-slate-700 group hover:border-orange-200 dark:hover:border-orange-900/50 transition-colors">
                                     <div className="flex justify-between items-start gap-4">
                                         <div className="flex-1 min-w-0">
-                                            {note.candidateName && (
-                                                <div className="flex items-center gap-1.5 mb-2">
-                                                    <div className="w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center flex-shrink-0">
-                                                        <User className="w-3 h-3 text-blue-600 dark:text-blue-400" />
-                                                    </div>
-                                                    <span className="text-xs font-bold text-blue-600 dark:text-blue-400 truncate">
-                                                        {note.candidateName}
-                                                    </span>
-                                                </div>
-                                            )}
+                                            {(() => {
+                                                const cand = note.candidateId ? candidates.find(c => c.id === note.candidateId) : null;
+                                                if (cand) {
+                                                    return (
+                                                        <div className="mb-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-3 shadow-sm group/cand">
+                                                            <div className="flex items-center gap-2">
+                                                                {cand.profilePic ? (
+                                                                    <img src={cand.profilePic} className="w-8 h-8 rounded-full object-cover" alt="" />
+                                                                ) : (
+                                                                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
+                                                                        {(cand.nombreReal || cand.from || cand.nombre || '?')[0]?.toUpperCase()}
+                                                                    </div>
+                                                                )}
+                                                                <div className="flex-1 min-w-0">
+                                                                    <p className="text-sm font-semibold text-slate-700 dark:text-slate-200 truncate">{cand.nombreReal || cand.from || cand.nombre || 'Sin nombre'}</p>
+                                                                    <p className="text-[10px] text-slate-400 truncate">{formatPhone(cand.whatsapp)}</p>
+                                                                </div>
+                                                                <div className="flex gap-1">
+                                                                    <button onClick={(e) => { e.stopPropagation(); onChat && onChat(cand); }}
+                                                                        className="relative p-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/20 dark:hover:bg-blue-900/40 text-blue-600 dark:text-blue-400 transition-colors"
+                                                                        title="Abrir chat">
+                                                                        <MessageCircle className="w-4 h-4" />
+                                                                        {Number(cand.unreadMsgCount) > 0 && (
+                                                                            <span className="absolute -top-0.5 -right-0.5 flex h-2.5 w-2.5">
+                                                                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                                                                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500 border border-white dark:border-slate-800"></span>
+                                                                            </span>
+                                                                        )}
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] text-slate-500 font-medium mt-2.5">
+                                                                {cand.municipio && (
+                                                                    <div className="flex items-center gap-1 whitespace-nowrap">
+                                                                        <MapPin className="w-3 h-3 text-blue-500" />
+                                                                        {cand.municipio}
+                                                                    </div>
+                                                                )}
+                                                                {cand.escolaridad && (
+                                                                    <div className="flex items-center gap-1 whitespace-nowrap">
+                                                                        <GraduationCap className="w-3 h-3 text-blue-500" />
+                                                                        {cand.escolaridad}
+                                                                    </div>
+                                                                )}
+                                                                {(cand.edad || cand.fechaNacimiento) && (
+                                                                    <div className="flex items-center gap-1 whitespace-nowrap">
+                                                                        <CalendarIcon className="w-3 h-3 text-blue-500" />
+                                                                        {calculateAge(cand.fechaNacimiento, cand.edad)}
+                                                                    </div>
+                                                                )}
+                                                                {cand.genero && cand.genero !== 'Desconocido' && (
+                                                                    <div className="flex items-center gap-1 whitespace-nowrap">
+                                                                        <User className="w-3 h-3 text-blue-500" />
+                                                                        {cand.genero}
+                                                                    </div>
+                                                                )}
+                                                                {cand.categoria && (
+                                                                    <div className="flex items-center gap-1 whitespace-nowrap px-1.5 py-0.5 rounded-full bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 border border-blue-100 dark:border-blue-800/50">
+                                                                        {cand.categoria}
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                }
+                                                // Fallback if candidate object not found but name exists
+                                                if (note.candidateName) {
+                                                    return (
+                                                        <div className="flex items-center gap-1.5 mb-2">
+                                                            <div className="w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center flex-shrink-0">
+                                                                <User className="w-3 h-3 text-blue-600 dark:text-blue-400" />
+                                                            </div>
+                                                            <span className="text-xs font-bold text-blue-600 dark:text-blue-400 truncate">
+                                                                {note.candidateName}
+                                                            </span>
+                                                        </div>
+                                                    );
+                                                }
+                                                return null;
+                                            })()}
                                             <p className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">{note.content}</p>
                                         </div>
                                         <button 
