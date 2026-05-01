@@ -100,7 +100,7 @@ const AdsStatisticsSection = ({ showToast }) => {
 
                                 {/* Body - max 2 lines */}
                                 {ad.adBody && (
-                                    <p className="px-3 pb-1.5 text-[11px] text-gray-600 dark:text-gray-400 leading-snug line-clamp-2">{ad.adBody}</p>
+                                    <p className="px-3 pb-1.5 text-[11px] text-gray-600 dark:text-gray-400 leading-snug whitespace-pre-line">{ad.adBody}</p>
                                 )}
 
                                 {/* Image - contained, smaller */}
