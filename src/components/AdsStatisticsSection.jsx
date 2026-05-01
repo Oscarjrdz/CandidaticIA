@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Target, TrendingUp, Users, Calendar, Megaphone, Loader2, Clock, Copy, ExternalLink, RefreshCw, Video, DollarSign, Eye, MousePointerClick, Percent, MessageCircle, Heart, ArrowUpRight } from 'lucide-react';
+import { Target, TrendingUp, Users, Calendar, Megaphone, Loader2, Clock, Copy, ExternalLink, RefreshCw, Video, DollarSign, Eye, MousePointerClick, Percent, MessageCircle, Heart, ArrowUpRight, Trash2 } from 'lucide-react';
+import { useConfirmModal } from './ui/ConfirmModal';
 import { getAdsStats } from '../services/adsService';
 
 /* ─── Skeleton Components ─────────────────────────────────────────────── */
@@ -67,6 +68,7 @@ const AdCardSkeleton = () => (
 const AdsStatisticsSection = ({ showToast }) => {
     const [stats, setStats] = useState({ ads: [], totalAdsLeads: 0 });
     const [loading, setLoading] = useState(true);
+    const { confirmModalJSX, showConfirm } = useConfirmModal();
 
     const loadStats = async () => {
         setLoading(true);
@@ -77,6 +79,41 @@ const AdsStatisticsSection = ({ showToast }) => {
     };
 
     useEffect(() => { loadStats(); }, []);
+
+    const handleHideAd = async (ad) => {
+        const adKey = ad.adId || ad.adHeadline || 'unknown';
+        const adName = ad.adHeadline || ad.adName || 'este anuncio';
+
+        const ok = await showConfirm({
+            title: 'Ocultar Anuncio',
+            message: `¿Seguro que quieres ocultar "${adName}" del dashboard? Sus ${ad.totalLeads || 0} leads seguirán en la base de datos pero el anuncio ya no aparecerá aquí.`,
+            confirmText: 'Ocultar',
+            variant: 'warning'
+        });
+        if (!ok) return;
+
+        try {
+            const res = await fetch('/api/ads-stats', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ adKey })
+            });
+            const data = await res.json();
+            if (data.success) {
+                // Optimistic removal
+                setStats(prev => ({
+                    ...prev,
+                    ads: prev.ads.filter(a => (a.adId || a.adHeadline || 'unknown') !== adKey),
+                    totalAdsLeads: Math.max(0, prev.totalAdsLeads - (ad.totalLeads || 0))
+                }));
+                showToast?.('Anuncio ocultado', 'success');
+            } else {
+                showToast?.(data.error || 'Error al ocultar', 'error');
+            }
+        } catch (e) {
+            showToast?.('Error de red', 'error');
+        }
+    };
 
     const todayLeadsTotal = stats.ads.reduce((a, ad) => a + (ad.todayLeads || 0), 0);
     const totalSpend = stats.ads.reduce((a, ad) => a + (parseFloat(ad.spend) || 0), 0);
@@ -146,7 +183,7 @@ const AdsStatisticsSection = ({ showToast }) => {
                     {stats.ads.map((ad, i) => {
                         const has = ad.impressions || ad.spend;
                         return (
-                            <div key={i} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-sm overflow-hidden hover:shadow-lg transition-shadow"
+                            <div key={i} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-sm overflow-hidden hover:shadow-lg transition-shadow group/card relative"
                                 style={{ maxWidth:'420px', margin:'0 auto', width:'100%' }}>
                                 
                                 {/* Header */}
@@ -167,11 +204,21 @@ const AdsStatisticsSection = ({ showToast }) => {
                                             </div>
                                         </div>
                                     </div>
-                                    {ad.adUrl && (
-                                        <a href={ad.adUrl} target="_blank" rel="noreferrer" className="text-[9px] text-blue-500 bg-blue-50 dark:bg-blue-900/20 px-1.5 py-0.5 rounded font-medium flex items-center gap-0.5 shrink-0">
-                                            FB<ExternalLink className="w-2.5 h-2.5" />
-                                        </a>
-                                    )}
+                                    <div className="flex items-center gap-1 shrink-0">
+                                        {/* Delete button — visible on hover */}
+                                        <button
+                                            onClick={() => handleHideAd(ad)}
+                                            className="p-1.5 rounded-lg opacity-0 group-hover/card:opacity-100 hover:bg-red-50 dark:hover:bg-red-900/20 text-gray-400 hover:text-red-500 transition-all duration-200"
+                                            title="Ocultar anuncio"
+                                        >
+                                            <Trash2 className="w-3.5 h-3.5" />
+                                        </button>
+                                        {ad.adUrl && (
+                                            <a href={ad.adUrl} target="_blank" rel="noreferrer" className="text-[9px] text-blue-500 bg-blue-50 dark:bg-blue-900/20 px-1.5 py-0.5 rounded font-medium flex items-center gap-0.5">
+                                                FB<ExternalLink className="w-2.5 h-2.5" />
+                                            </a>
+                                        )}
+                                    </div>
                                 </div>
 
                                 {/* Body - max 2 lines */}
@@ -247,6 +294,9 @@ const AdsStatisticsSection = ({ showToast }) => {
                     ))}
                 </div>
             )}
+
+            {/* Confirm Modal Portal */}
+            {confirmModalJSX}
         </div>
     );
 };

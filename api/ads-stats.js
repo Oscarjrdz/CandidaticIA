@@ -1,7 +1,7 @@
 /**
  * Endpoint for Ads Statistics
- * GET /api/ads-stats
- * Combines Redis candidate data with live Meta Marketing API insights
+ * GET /api/ads-stats — returns aggregated ad stats
+ * DELETE /api/ads-stats — hides an ad from the dashboard
  */
 
 export default async function handler(req, res) {
@@ -9,10 +9,63 @@ export default async function handler(req, res) {
         return res.status(200).end();
     }
 
+    // ─── DELETE: Hide an ad from the dashboard ───────────────────────
+    if (req.method === 'DELETE') {
+        try {
+            const { adKey } = req.body || {};
+            if (!adKey) {
+                return res.status(400).json({ success: false, error: 'adKey is required' });
+            }
+
+            const { getRedisClient } = await import('./utils/storage.js');
+            const client = getRedisClient();
+            if (!client) {
+                return res.status(500).json({ success: false, error: 'Redis unavailable' });
+            }
+
+            await client.sadd('ads:hidden', adKey);
+            return res.status(200).json({ success: true, message: 'Ad hidden successfully' });
+        } catch (error) {
+            console.error('Error hiding ad:', error);
+            return res.status(500).json({ success: false, error: 'Error al ocultar anuncio' });
+        }
+    }
+
+    // ─── GET: Return ad statistics ───────────────────────────────────
     if (req.method === 'GET') {
         try {
-            const { getAdsStatistics } = await import('./utils/storage.js');
+            const { getAdsStatistics, getRedisClient } = await import('./utils/storage.js');
             const data = await getAdsStatistics();
+
+            // Filter out hidden ads
+            const client = getRedisClient();
+            let hiddenAds = new Set();
+            if (client) {
+                try {
+                    const hidden = await client.smembers('ads:hidden');
+                    if (hidden && hidden.length > 0) {
+                        hiddenAds = new Set(hidden);
+                    }
+                } catch (e) {
+                    // Non-fatal
+                }
+            }
+
+            // Filter hidden from ads and recalculate total
+            if (hiddenAds.size > 0 && data.ads) {
+                const hiddenLeads = data.ads
+                    .filter(a => {
+                        const key = a.adId || a.adHeadline || 'unknown';
+                        return hiddenAds.has(key);
+                    })
+                    .reduce((sum, a) => sum + (a.totalLeads || 0), 0);
+
+                data.ads = data.ads.filter(a => {
+                    const key = a.adId || a.adHeadline || 'unknown';
+                    return !hiddenAds.has(key);
+                });
+                data.totalAdsLeads = Math.max(0, data.totalAdsLeads - hiddenLeads);
+            }
             
             // Enrich with Meta Marketing API insights if token is available
             const adsToken = process.env.META_ADS_TOKEN;
