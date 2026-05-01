@@ -1,10 +1,9 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Trash2, AlertCircle, Maximize2, Minimize2, Paperclip, Mic, Image as ImageIcon, Send, ArrowLeft, RefreshCw, X, Play, Square, Download, Smile, Plus, Camera, MoreVertical, Reply, Copy, Check, CheckCheck, Clock } from 'lucide-react';
 import Button from './ui/Button';
 import VacancyHistoryCard from './VacancyHistoryCard';
 import CandidateADNCard from './CandidateADNCard';
 
-import { Virtuoso } from 'react-virtuoso';
 const formatWhatsAppText = (text) => {
     if (!text) return '';
     
@@ -81,7 +80,7 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
 
     // Refs
     const windowRef = useRef(null);
-    const virtuosoRef = useRef(null);
+    const messagesEndRef = useRef(null);
     const lastPresenceTimeRef = useRef(0);
 
     const handleTyping = () => {
@@ -181,12 +180,15 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
         }
     };
 
-    // Auto-scroll ONLY on new messages
-    // Auto-scroll ONLY on new messages
-    // (Virtuoso maneja esto con followOutput, por lo que deshabilitamos el scroll manual viejo)
-    const prevMessagesLength = useRef(0);
+    // Auto-scroll on new messages
+    const scrollToBottom = () => {
+        if (messagesEndRef.current) {
+            messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+        }
+    };
+
     useEffect(() => {
-        prevMessagesLength.current = messages.length;
+        scrollToBottom();
     }, [messages]);
 
     const loadMessages = async () => {
@@ -498,25 +500,27 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
 
     if (!isOpen) return null;
 
-    const displayMessages = Array.isArray(messages) ? messages.flatMap((msg) => {
-        if (!msg) return [];
-        let content = msg.content || '';
-        if (content.includes('[REACCI')) {
-            content = content.replace(/\[REACCI[OÓ]N:\s*.*?\]/gi, '').trim();
-            if (!content && !msg.mediaUrl) return [];
-        }
+    const displayMessages = useMemo(() => {
+        return Array.isArray(messages) ? messages.flatMap((msg) => {
+            if (!msg) return [];
+            let content = msg.content || '';
+            if (content.includes('[REACCI')) {
+                content = content.replace(/\[REACCI[OÓ]N:\s*.*?\]/gi, '').trim();
+                if (!content && !msg.mediaUrl) return [];
+            }
 
-        if (content && content.includes('[MSG_SPLIT]')) {
-            const parts = content.split('[MSG_SPLIT]').filter(p => p.trim());
-            return parts.map((part, index) => ({
-                ...msg,
-                content: part.trim(),
-                mediaUrl: index === 0 ? msg.mediaUrl : null,
-                isSplit: true
-            }));
-        }
-        return [{...msg, content}];
-    }) : [];
+            if (content && content.includes('[MSG_SPLIT]')) {
+                const parts = content.split('[MSG_SPLIT]').filter(p => p.trim());
+                return parts.map((part, index) => ({
+                    ...msg,
+                    content: part.trim(),
+                    mediaUrl: index === 0 ? msg.mediaUrl : null,
+                    isSplit: true
+                }));
+            }
+            return [{...msg, content}];
+        }) : [];
+    }, [messages]);
 
     // --- RENDER MESSAGE ---
     const renderMessage = (idx, msg) => {
@@ -731,16 +735,13 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
                             <p className="text-[10.5px] leading-tight">Los mensajes están protegidos por Candidatic IA Nivel Meta.</p>
                         </div>
                     ) : (
-                        <div className="flex-1 relative z-10">
-                            <Virtuoso
-                                ref={virtuosoRef}
-                                data={displayMessages}
-                                initialTopMostItemIndex={displayMessages.length - 1}
-                                followOutput="smooth"
-                                alignToBottom
-                                itemContent={renderMessage}
-                                className="w-full h-full [&>div]:py-2 [&>div]:space-y-1.5 custom-scrollbar"
-                            />
+                        <div className="flex-1 relative z-10 overflow-y-auto custom-scrollbar py-2">
+                            {displayMessages.map((msg, index) => (
+                                <React.Fragment key={msg.id + '-' + index}>
+                                    {renderMessage(index, msg)}
+                                </React.Fragment>
+                            ))}
+                            <div ref={messagesEndRef} className="h-4 w-full" />
                         </div>
                     )}
                 </div>
