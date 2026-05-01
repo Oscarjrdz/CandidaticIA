@@ -4,6 +4,7 @@ import Card from './ui/Card';
 import Button from './ui/Button';
 import Input from './ui/Input';
 import Modal from './ui/Modal';
+import { useToastContext } from '../contexts/ToastContext';
 
 /**
  * Componente de Selección Ribbon (v4.5)
@@ -116,7 +117,8 @@ const RibbonSelect = ({ label, options, selected, onToggle, placeholder = "Selec
 /**
  * Sección de Gestión de ByPass (Enrutamiento Automático)
  */
-const ByPassSection = ({ showToast }) => {
+const ByPassSection = () => {
+    const { showToast } = useToastContext();
     const [rules, setRules] = useState([]);
     const [projects, setProjects] = useState([]);
     const [categories, setCategories] = useState([]);

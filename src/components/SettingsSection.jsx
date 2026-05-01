@@ -3,11 +3,13 @@ import { Settings } from 'lucide-react';
 import GPTSettings from './GPTSettings';
 import WhatsAppSettings from './WhatsAppSettings';
 import RedisMonitorSettings from './RedisMonitorSettings';
+import { useToastContext } from '../contexts/ToastContext';
 
 /**
  * Sección de Settings (configuración)
  */
-const SettingsSection = ({ showToast }) => {
+const SettingsSection = () => {
+    const { showToast } = useToastContext();
     return (
         <div className="max-w-6xl mx-auto space-y-6 pb-12">
             {/* Header: Command Bar Style */}

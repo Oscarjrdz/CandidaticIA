@@ -6,6 +6,7 @@ import Button from './ui/Button';
 import Modal from './ui/Modal';
 import Input from './ui/Input';
 import Select from './ui/Select';
+import { useToastContext } from '../contexts/ToastContext';
 
 const AVAILABLE_SECTIONS = [
     { id: 'settings', name: 'Configuración' },
@@ -35,7 +36,8 @@ const AVAILABLE_EXTRA_PERMS = [
     { id: 'can_manage_tags', name: 'Crear / Editar Etiquetas' }
 ];
 
-const UsersSection = ({ showToast }) => {
+const UsersSection = () => {
+    const { showToast } = useToastContext();
     const [activeTab, setActiveTab] = useState('users');
     const { confirmModalJSX, showConfirm } = useConfirmModal();
     const [users, setUsers] = useState([]);

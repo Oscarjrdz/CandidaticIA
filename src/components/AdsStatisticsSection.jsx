@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Target, TrendingUp, Users, Calendar, Megaphone, Loader2, Clock, Copy, ExternalLink, RefreshCw, Video, DollarSign, Eye, MousePointerClick, Percent, MessageCircle, Heart, ArrowUpRight, Trash2 } from 'lucide-react';
 import { useConfirmModal } from './ui/ConfirmModal';
 import { getAdsStats } from '../services/adsService';
+import { useToastContext } from '../contexts/ToastContext';
 
 /* ─── Skeleton Components ─────────────────────────────────────────────── */
 const Shimmer = ({ className = '' }) => (
@@ -65,7 +66,8 @@ const AdCardSkeleton = () => (
 );
 
 /* ─── Main Component ──────────────────────────────────────────────────── */
-const AdsStatisticsSection = ({ showToast }) => {
+const AdsStatisticsSection = () => {
+    const { showToast } = useToastContext();
     const [stats, setStats] = useState({ ads: [], totalAdsLeads: 0 });
     const [loading, setLoading] = useState(true);
     const { confirmModalJSX, showConfirm } = useConfirmModal();

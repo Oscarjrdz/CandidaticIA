@@ -3,12 +3,14 @@ import { useConfirmModal } from './ui/ConfirmModal';
 import { Folder, Upload, Image as ImageIcon, Video, Mic, Trash2, Search, Plus, Loader2 } from 'lucide-react';
 import Card from './ui/Card';
 import Button from './ui/Button';
+import { useToastContext } from '../contexts/ToastContext';
 
 /**
  * Biblioteca Multimedia - Zuckerberg Level Robust Implementation
  * Centralized repository for bot-accessible assets.
  */
-const MediaLibrarySection = ({ showToast }) => {
+const MediaLibrarySection = () => {
+    const { showToast } = useToastContext();
     const { confirmModalJSX, showConfirm } = useConfirmModal();
     const [assets, setAssets] = useState([]);
     const [loading, setLoading] = useState(true);

@@ -9,6 +9,8 @@ import CalendarNotesModal from './CalendarNotesModal';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, DragOverlay, useDroppable } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { useToastContext } from '../contexts/ToastContext';
+import { useAuthContext } from '../contexts/AuthContext';
 
 // Droppable step container — accepts candidates dropped into it
 const DroppableStepZone = ({ stepId, isOver, children }) => {
@@ -149,7 +151,9 @@ const SortableProjectCard = ({ project, isActive, onSelect, onEdit, onClone, onD
     );
 };
 
-const CRMProjectsSection = ({ showToast, user }) => {
+const CRMProjectsSection = () => {
+    const { showToast } = useToastContext();
+    const { user } = useAuthContext();
     const { confirmModalJSX, showConfirm } = useConfirmModal();
     const [projects, setProjects] = useState([]);
     const [activeProject, setActiveProject] = useState(null);

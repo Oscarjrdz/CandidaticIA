@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Trash2, Power, Save, X, Brain } from 'lucide-react';
 import Button from './ui/Button';
+import { useToastContext } from '../contexts/ToastContext';
 import {
     getAutomationRules,
     createAutomationRule,
@@ -10,7 +11,8 @@ import {
     createField
 } from '../services/automationsService';
 
-const AutomationsSection = ({ showToast }) => {
+const AutomationsSection = () => {
+    const { showToast } = useToastContext();
     // --- STATE ---
     const [rules, setRules] = useState([]);
     const [loading, setLoading] = useState(true);

@@ -19,6 +19,8 @@ import { formatPhone, formatRelativeDate, formatDateTime, calculateAge, formatVa
 import { useCandidatesSSE } from '../hooks/useCandidatesSSE';
 import { fireConfetti } from '../utils/confetti';
 import { isProfileComplete, isChatEmpty } from '../utils/profileUtils';
+import { useToastContext } from '../contexts/ToastContext';
+import { useAuthContext } from '../contexts/AuthContext';
 
 /**
  * Sortable Header Sub-component
@@ -178,7 +180,9 @@ const CandidateRow = React.memo(({ candidate, columnOrder, fieldsMap, magicLoadi
     );
 }, areCandidatePropsEqual);
 
-const CandidatesSection = ({ showToast, user }) => {
+const CandidatesSection = () => {
+    const { showToast } = useToastContext();
+    const { user } = useAuthContext();
     const canManageTags = user?.role === 'SuperAdmin' || user?.can_manage_tags === true;
     const { confirmModalJSX, showConfirm } = useConfirmModal();
     const [candidates, setCandidates] = useState([]);

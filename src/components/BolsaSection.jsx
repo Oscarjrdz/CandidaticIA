@@ -5,8 +5,9 @@ import Button from './ui/Button';
 import Input from './ui/Input';
 import Modal from './ui/Modal';
 import { useConfirmModal } from './ui/ConfirmModal';
+import { useToastContext } from '../contexts/ToastContext';
 
-const BolsaSection = ({ showToast }) => {
+const BolsaSection = () => {
     const [jobs, setJobs] = useState([]);
     const [loading, setLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -38,6 +39,7 @@ const BolsaSection = ({ showToast }) => {
     };
 
     const handleOpenCreate = () => {
+    const { showToast } = useToastContext();
         setEditingJob(null);
         setFormData(defaultForm);
         setIsModalOpen(true);

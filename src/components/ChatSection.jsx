@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback, useTransition, useDeferredValue } from 'react';
 import ConfirmModal from './ui/ConfirmModal';
 import { MapPin, List as ListIcon, ShoppingBag, UserSquare, MousePointerClick, Search, MessageSquare, Plus, Smile, Paperclip, Mic, ArrowLeft, Send, Tag, Pencil, Check, X, Trash2, Briefcase, Kanban, BookOpen, Keyboard, Loader2, Edit2, Reply, Zap, Pin, MessageCirclePlus, Phone, User } from 'lucide-react';
 import EmojiPicker from 'emoji-picker-react';
@@ -8,107 +8,13 @@ import { formatRelativeDate } from '../utils/formatters';
 import { useCandidatesSSE, useSSECandidateUpdate } from '../hooks/useCandidatesSSE';
 import { Virtuoso } from 'react-virtuoso';
 import { isProfileComplete } from '../utils/profileUtils';
+import { useToastContext } from '../contexts/ToastContext';
+import { useAuthContext } from '../contexts/AuthContext';
+import { safeFormatTime, toTitleCase, formatWhatsAppText, TAG_COLORS } from './chat/chatUtils';
 
-// ✅ META AUDIT: Intl.DateTimeFormat singletons — created ONCE, reused forever
-const _fmtTime = new Intl.DateTimeFormat('es-MX', { timeZone: 'America/Monterrey', hour: 'numeric', minute: '2-digit', hour12: true });
-const _fmtMidnight = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Monterrey', year: 'numeric', month: '2-digit', day: '2-digit' });
-const _fmtWeekday = new Intl.DateTimeFormat('es-MX', { timeZone: 'America/Monterrey', weekday: 'long' });
-const _fmtDate = new Intl.DateTimeFormat('es-MX', { timeZone: 'America/Monterrey', day: '2-digit', month: '2-digit', year: 'numeric' });
-
-const safeFormatTime = (dateStr) => {
-    if (!dateStr) return '';
-    const d = new Date(dateStr);
-    if (isNaN(d.getTime())) return '';
-
-    const timeStr = _fmtTime.format(d).replace(' p. m.', ' pm').replace(' a. m.', ' am').toLowerCase();
-
-    // Calculate elapsed days accurately in Monterrey timezone
-    const getMid = (dateObj) => {
-        const str = _fmtMidnight.format(dateObj);
-        const [m, day, y] = str.split('/');
-        return new Date(y, m - 1, day);
-    };
-
-    const diffDays = Math.round((getMid(new Date()) - getMid(d)) / 86400000);
-
-    if (diffDays === 0) return `Hoy ${timeStr}`;
-    if (diffDays === 1) return `Ayer ${timeStr}`;
-    if (diffDays > 1 && diffDays < 7) {
-        const weekdayStr = _fmtWeekday.format(d);
-        const capitalized = weekdayStr.charAt(0).toUpperCase() + weekdayStr.slice(1);
-        return `${capitalized} ${timeStr}`;
-    }
-
-    return `${_fmtDate.format(d)} ${timeStr}`;
-};
-
-const toTitleCase = (str) => {
-    if (!str) return '';
-    const trimmed = str.toString().trim();
-    const lc = trimmed.toLowerCase();
-    if (!trimmed || lc === 'null' || lc === 'undefined' || lc === 'none' || lc === 'n/a' || lc === '-' || lc === '.') return '';
-    return trimmed.toLowerCase().split(' ').map(word => 
-        word.charAt(0).toUpperCase() + word.slice(1)
-    ).join(' ');
-};
-
-const formatWhatsAppText = (text) => {
-    if (!text) return '';
-    
-    // 1. First, protect HTML characters
-    let processed = text
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;');
-
-    const tokens = {};
-    let tokenCounter = 0;
-
-    // Helper to store matches safely
-    const storeToken = (html) => {
-        const token = `@@@MEDIATOKEN${tokenCounter++}@@@`;
-        tokens[token] = html;
-        return token;
-    };
-
-    // 2. Validate URLs start with https:// to prevent injection, or allow safe internal relative routes
-    const safeUrl = (u) => /^(https?:\/\/|\/api\/|\/uploads\/)/i.test(u) ? u : '';
-
-    // 3. Extract specific media blocks and replace them with safe tokens
-    processed = processed
-        .replace(/\[Imagen Adjunta:\s*(https?:\/\/[^\s\]]+)\](?:\nCaption:\s*(.*))?/gi, (match, url, caption) => {
-            const sUrl = safeUrl(url);
-            if (!sUrl) return match;
-            return storeToken(`<div class="mt-1 mb-1"><img src="${sUrl}" alt="Adjunto" class="max-w-[200px] object-cover rounded shadow-sm bg-transparent" />${caption ? `<div class="text-[11px] text-gray-600 dark:text-gray-300 mt-1">${caption}</div>` : ''}</div>`);
-        })
-        .replace(/\[Ubicación:\s*(.*?)\s*\(([-.\d]+),\s*([-.\d]+)\)\]/gi, (match, address, lat, lng) => {
-            return storeToken(`<div class="mt-1 mb-1 border border-black/10 dark:border-white/10 rounded overflow-hidden max-w-[220px]">
-                <a href="https://maps.google.com/?q=${lat},${lng}" target="_blank" class="bg-gray-100 dark:bg-gray-800 p-2 text-blue-500 hover:text-blue-600 text-[11px] flex items-center gap-1 font-medium select-none whitespace-normal"><span class="text-xs shrink-0">📍</span> <span>Google Maps</span></a>
-            </div>`);
-        })
-        .replace(/\[Sticker:\s*([^\s\]]+)\]/gi, (match, url) => {
-            const sUrl = safeUrl(url);
-            if (!sUrl) return match;
-            return storeToken(`<div class="mt-1 mb-1"><img src="${sUrl}" alt="Sticker" class="max-w-[120px] max-h-[120px] object-contain rounded bg-transparent" /></div>`);
-        });
-
-    // 4. Apply standard markdown formatting safely on the remaining text
-    processed = processed
-        .replace(/\*(.*?)\*/g, '<strong class="font-bold">$1</strong>')
-        .replace(/_(.*?)_/g, '<em class="italic">$1</em>')
-        .replace(/~(.*?)~/g, '<del class="line-through opacity-70">$1</del>')
-        .replace(/```(.*?)```/g, '<code class="bg-black/5 dark:bg-black/30 px-1 py-0.5 rounded font-mono text-[11px]">$1</code>');
-
-    // 4. Restore the protected tokens
-    for (const [token, html] of Object.entries(tokens)) {
-        processed = processed.replace(token, html);
-    }
-
-    return processed;
-};
 
 // ─── Componente de Palomitas WhatsApp ────────────────────────────────────────
-const MessageStatusTicks = ({ status, size = 'md' }) => {
+const MessageStatusTicks = React.memo(({ status, size = 'md' }) => {
     const isRead = status === 'seen' || status === 'read';
     const isDelivered = isRead || status === 'delivered';
     const isSent = isDelivered || status === 'sent';
@@ -154,7 +60,7 @@ const MessageStatusTicks = ({ status, size = 'md' }) => {
             </svg>
         </span>
     );
-};
+});
 // ─── Componente Input (Memoizado) ──────────────────────────────────────────────
 const MessageInputBox = React.forwardRef(({ onSend, onTyping, fileInputRef, handleFileUpload, replyingToMsg, onCancelReply, metaTemplates = [], onSendTemplate, onSendVCard, onSendInteractive, onSendLocation, onSendList, onSendProduct }, ref) => {
     const [localMessage, setLocalMessage] = useState("");
@@ -365,7 +271,7 @@ const ChevronIcon = () => (
     </div>
 );
 
-const CustomSelect = ({ name, value, options, onChange, placeholder, disabled = false }) => {
+const CustomSelect = React.memo(({ name, value, options, onChange, placeholder, disabled = false }) => {
     const [isOpen, setIsOpen] = useState(false);
     const dropdownRef = useRef(null);
 
@@ -415,12 +321,12 @@ const CustomSelect = ({ name, value, options, onChange, placeholder, disabled = 
             )}
         </div>
     );
-};
+});
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 📝 Profile Edit Modal
 // ─────────────────────────────────────────────────────────────────────────────
-const ProfileModal = ({ candidate, onClose, onSave }) => {
+const ProfileModal = React.memo(({ candidate, onClose, onSave }) => {
     const [formData, setFormData] = useState({
         nombreReal: candidate.nombreReal || candidate.nombre || '',
         edad: candidate.edad || candidate.fechaNacimiento || '',
@@ -495,7 +401,7 @@ const ProfileModal = ({ candidate, onClose, onSave }) => {
             </div>
         </div>
     );
-};
+});
 
 // 🏎️ MEMOIZED ChatRow — only re-renders when THIS chat's data changes (not the whole list)
 const ChatRow = React.memo(({ chat, isSelected, isPinned, onSelect, onBlock, onDelete, onTogglePin, onlineReaders, blockLoading, userId, onOpenProfileModal, onMarkAsRead, onMarkAsUnread }) => {
@@ -638,7 +544,9 @@ const ChatRow = React.memo(({ chat, isSelected, isPinned, onSelect, onBlock, onD
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-export default function ChatSection({ showToast, user, rolePermissions, onlineUsers = [] }) {
+export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
+    const { showToast } = useToastContext();
+    const { user } = useAuthContext();
     const canManageTags = user?.role === 'SuperAdmin' || user?.can_manage_tags === true;
     const { newCandidate: sseNewCandidate } = useCandidatesSSE();
     const [candidates, setCandidates] = useState([]);
@@ -679,7 +587,7 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
     }, [selectedChat]);
 
     const [searchQuery, setSearchQuery] = useState("");
-    const [debouncedSearch, setDebouncedSearch] = useState("");
+    const deferredSearch = useDeferredValue(searchQuery);
     const [candidateTyping, setCandidateTyping] = useState(false);
     const [showRightPanel, setShowRightPanel] = useState(true);
     const [messages, setMessages] = useState([]);
@@ -709,8 +617,6 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
 
     // ═══ INSTANCE MAP for I01/I02 badges ═══
 
-
-    const TAG_COLORS = ["#ef4444", "#f97316", "#eab308", "#22c55e", "#3b82f6", "#a855f7", "#ec4899", "#8b5cf6", "#64748b"];
 
     const messagesEndRef = useRef(null);
     const fileInputRef = useRef(null);
@@ -823,11 +729,7 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
         return manualProjects.filter(p => allowed.includes(p.id));
     })();
 
-    // Debounce search input (300ms)
-    useEffect(() => {
-        const timer = setTimeout(() => setDebouncedSearch(searchQuery), 300);
-        return () => clearTimeout(timer);
-    }, [searchQuery]);
+
 
     // Optimistic unread clearance
     useEffect(() => {
@@ -1055,7 +957,7 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
     // Fast search filter for the list with robust safety checks
     const filteredCandidates = useMemo(() => {
         const result = (candidates || []).filter(c => {
-            const searchVal = (debouncedSearch || "").toLowerCase();
+            const searchVal = (deferredSearch || "").toLowerCase();
             const matchesSearch = 
                 (c?.nombreReal && String(c.nombreReal).toLowerCase().includes(searchVal)) ||
                 (c?.nombre && String(c.nombre).toLowerCase().includes(searchVal)) ||
@@ -1092,7 +994,7 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
 
         // 🔍 DIAGNOSTIC: Track filter pipeline losses
         if ((candidates || []).length !== result.length) {
-            console.log(`🔍 [ChatSection] Filter Pipeline: ${(candidates || []).length} total → ${result.length} visible | role=${user?.role} filter=${activeFilter} search="${debouncedSearch}" crmFilter=${manualPipelineFilter || 'none'}`);
+            console.log(`🔍 [ChatSection] Filter Pipeline: ${(candidates || []).length} total → ${result.length} visible | role=${user?.role} filter=${activeFilter} search="${deferredSearch}" crmFilter=${manualPipelineFilter || 'none'}`);
         }
 
         // 🏎️ Pre-compute timestamps ONCE (eliminates ~44,000 Date objects per sort)
@@ -1110,7 +1012,7 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
             return (tsCache.get(b.id) || 0) - (tsCache.get(a.id) || 0);
         });
     }, [
-        candidates, debouncedSearch, user, 
+        candidates, deferredSearch, user, 
         activeFilter, filterValue, 
         manualPipelineFilter, manualStepFilter,
         pinnedChats
@@ -1462,7 +1364,7 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
         }
     };
 
-    const handleBlockToggle = async (chatToBlock, e) => {
+    const handleBlockToggle = useCallback(async (chatToBlock, e) => {
         if (e) e.stopPropagation();
         if (!chatToBlock) return;
         const isCurrentlyBlocked = chatToBlock.blocked === true;
@@ -1499,9 +1401,9 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
         } finally {
             setBlockLoading(false);
         }
-    };
+    }, [showToast, selectedChat]);
 
-    const handleDeleteChat = async (chatToDelete, e) => {
+    const handleDeleteChat = useCallback(async (chatToDelete, e) => {
         if (e) e.stopPropagation();
         if (!chatToDelete) return;
         
@@ -1537,9 +1439,9 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
             showToast && showToast('Error de red al eliminar', 'error');
             loadCandidates(); // Rollback
         }
-    };
+    }, [showToast, selectedChat]);
 
-    const handleMarkAsRead = async (chatToMark, e) => {
+    const handleMarkAsRead = useCallback(async (chatToMark, e) => {
         if (e) e.stopPropagation();
         if (!chatToMark) return;
 
@@ -1558,9 +1460,9 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
         } catch(err) {
             console.error('Error marking as read', err);
         }
-    };
+    }, []);
 
-    const handleMarkAsUnread = async (chatToMark, e) => {
+    const handleMarkAsUnread = useCallback(async (chatToMark, e) => {
         if (e) e.stopPropagation();
         if (!chatToMark) return;
 
@@ -1578,7 +1480,7 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
         } catch(err) {
             console.error('Error marking as unread', err);
         }
-    };
+    }, []);
 
     const handleFileUpload = async (e) => {
         const file = e.target.files?.[0];

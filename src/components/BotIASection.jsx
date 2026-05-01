@@ -5,8 +5,10 @@ import Button from './ui/Button';
 import Input from './ui/Input';
 import Skeleton from './ui/Skeleton';
 import { useToast } from '../hooks/useToast';
+import { useToastContext } from '../contexts/ToastContext';
 
-const BotIASection = ({ showToast }) => {
+const BotIASection = () => {
+    const { showToast } = useToastContext();
     // Bot Status & Config
     const [isActive, setIsActive] = useState(false);
     const [loading, setLoading] = useState(false);

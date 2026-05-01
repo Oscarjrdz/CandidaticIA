@@ -24,6 +24,7 @@ import {
     useSortable,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { useToastContext } from '../contexts/ToastContext';
 
 /**
  * Sortable Vacancy Card Component
@@ -143,7 +144,8 @@ const SortableVacancyCard = ({ vacancy, handleToggleActive, handleEdit, handleCl
 /**
  * Sección de Gestión de Vacantes
  */
-const VacanciesSection = ({ showToast }) => {
+const VacanciesSection = () => {
+    const { showToast } = useToastContext();
     const [vacancies, setVacancies] = useState([]);
     const [loading, setLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);

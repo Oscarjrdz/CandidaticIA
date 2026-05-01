@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useConfirmModal } from './ui/ConfirmModal';
 import { Search, Plus, Trash2, Copy, Sparkles, Send, PauseCircle, PlayCircle, XCircle, Tag, X, ChevronDown, CheckCircle2, ArrowUpDown } from 'lucide-react';
 import { getCandidates } from '../services/candidatesService';
+import { useToastContext } from '../contexts/ToastContext';
 
 const getCandidateTimestamp = (c) => {
     // Priority: primerContacto (real creation date) > createdAt > ID-embedded timestamp
@@ -103,7 +104,8 @@ const CampaignHistoryItem = ({ h, reuseCampaign, deleteCampaign }) => {
     );
 };
 
-const BulksSection = ({ showToast }) => {
+const BulksSection = () => {
+    const { showToast } = useToastContext();
     const { confirmModalJSX, showConfirm } = useConfirmModal();
     // Col 1: Candidates
     const [candidates, setCandidates] = useState([]);

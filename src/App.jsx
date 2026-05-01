@@ -1,58 +1,43 @@
-import React, { useState, useEffect } from 'react';
-import { Moon, Sun, Menu, Users } from 'lucide-react';
-import { useToast } from './hooks/useToast';
-import Button from './components/ui/Button';
+import React, { useState, useEffect, Suspense, useCallback } from 'react';
+import { Moon, Sun, Menu } from 'lucide-react';
 import Sidebar from './components/Sidebar';
-import CandidatesSection from './components/CandidatesSection';
-import ChatSection from './components/ChatSection';
-import BulksSection from './components/BulksSection';
-
-import SettingsSection from './components/SettingsSection';
-import AutomationsSection from './components/AutomationsSection';
-import VacanciesSection from './components/VacanciesSection';
-import BolsaSection from './components/BolsaSection';
-import UsersSection from './components/UsersSection';
-import PostMakerSection from './components/PostMakerSection';
-import BotIASection from './components/BotIASection';
-import MediaLibrarySection from './components/MediaLibrarySection';
-import CRMProjectsSection from './components/CRMProjectsSection';
-import ByPassSection from './components/ByPassSection';
-import AdsStatisticsSection from './components/AdsStatisticsSection';
 import LoadingOverlay from './components/ui/LoadingOverlay';
 import ErrorBoundary from './components/ui/ErrorBoundary';
-import LoginPage from './components/LoginPage';
+import SectionSkeleton from './components/ui/SectionSkeleton';
 import LandingPage from './components/LandingPage';
+import { ToastProvider, useToastContext } from './contexts/ToastContext';
+import { AuthProvider, useAuthContext } from './contexts/AuthContext';
 import { getTheme, saveTheme } from './utils/storage';
 import { usePresence } from './hooks/usePresence';
 
-function App() {
-  const [user, setUser] = useState(null);
-  const [isAuthChecking, setIsAuthChecking] = useState(true);
-  const [showLogin, setShowLogin] = useState(false);
+// ⚡ React.lazy — each section loads as a separate chunk on demand
+const CandidatesSection = React.lazy(() => import('./components/CandidatesSection'));
+const ChatSection = React.lazy(() => import('./components/ChatSection'));
+const BulksSection = React.lazy(() => import('./components/BulksSection'));
+const SettingsSection = React.lazy(() => import('./components/SettingsSection'));
+const AutomationsSection = React.lazy(() => import('./components/AutomationsSection'));
+const VacanciesSection = React.lazy(() => import('./components/VacanciesSection'));
+const BolsaSection = React.lazy(() => import('./components/BolsaSection'));
+const UsersSection = React.lazy(() => import('./components/UsersSection'));
+const PostMakerSection = React.lazy(() => import('./components/PostMakerSection'));
+const BotIASection = React.lazy(() => import('./components/BotIASection'));
+const MediaLibrarySection = React.lazy(() => import('./components/MediaLibrarySection'));
+const CRMProjectsSection = React.lazy(() => import('./components/CRMProjectsSection'));
+const ByPassSection = React.lazy(() => import('./components/ByPassSection'));
+const AdsStatisticsSection = React.lazy(() => import('./components/AdsStatisticsSection'));
+
+/**
+ * Inner app shell — consumes both contexts.
+ * Separated from providers to avoid re-rendering providers on state change.
+ */
+function AppShell() {
+  const { user, setUser, isAuthChecking, isAppReady, rolePermissions, login, logout } = useAuthContext();
+  const { showToast } = useToastContext();
 
   const [theme, setTheme] = useState('light');
   const [activeSection, setActiveSection] = useState('candidates');
-  const [isAppReady, setIsAppReady] = useState(false);
-  const [rolePermissions, setRolePermissions] = useState({});
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const { toast, showToast, hideToast, ToastComponent } = useToast();
   const { onlineUsers } = usePresence(user, activeSection);
-
-  // Check LocalStorage for session
-  useEffect(() => {
-    const savedUser = localStorage.getItem('candidatic_user_session');
-    if (savedUser) {
-      try {
-        setUser(JSON.parse(savedUser));
-      } catch (e) {
-        console.error('Invalid session', e);
-        localStorage.removeItem('candidatic_user_session');
-      }
-    }
-    setTimeout(() => {
-      setIsAuthChecking(false);
-    }, 600);
-  }, []);
 
   // Cargar tema al iniciar
   useEffect(() => {
@@ -63,52 +48,15 @@ function App() {
     }
   }, []);
 
-  // Validar permisos iniciales para evitar flickeo (Ghosting)
+  // Permission-based initial section routing
   useEffect(() => {
-    if (!user) {
-      setIsAppReady(false);
-      return;
+    if (!user || user.role === 'SuperAdmin' || !rolePermissions) return;
+    if (rolePermissions['candidates'] !== true) {
+      const fallbackKeys = ['chat', 'bot-ia', 'automations', 'vacancies', 'bypass', 'projects', 'post-maker', 'users', 'settings'];
+      const fallback = fallbackKeys.find(k => rolePermissions[k] === true);
+      if (fallback) setActiveSection(fallback);
     }
-    if (user.role === 'SuperAdmin') {
-      setIsAppReady(true);
-      return;
-    }
-    
-    Promise.all([
-      fetch('/api/roles').then(r => r.json()),
-      fetch('/api/users').then(r => r.json())
-    ])
-      .then(([rolesData, usersData]) => {
-         if (rolesData.success && rolesData.roles) {
-             const currentUserRole = rolesData.roles.find(r => r.name === user.role);
-             if (currentUserRole && currentUserRole.permissions) {
-                 setRolePermissions(currentUserRole.permissions);
-                 if (currentUserRole.permissions['candidates'] !== true) {
-                     // Fallback orderly based on typical Sidebar order
-                     const fallbackKeys = ['chat', 'bot-ia', 'automations', 'vacancies', 'bypass', 'projects', 'post-maker', 'users', 'settings'];
-                     const fallback = fallbackKeys.find(k => currentUserRole.permissions[k] === true);
-                     if (fallback) {
-                         setActiveSection(fallback);
-                     }
-                 }
-             }
-         }
-         // Refresh user data with user-level assignments (allowed_projects, allowed_crm_projects, allowed_labels)
-         if (usersData.success && usersData.users) {
-             const freshUser = usersData.users.find(u => u.id === user.id || u.whatsapp === user.whatsapp);
-             if (freshUser) {
-                 const merged = { ...user, ...freshUser };
-                 setUser(merged);
-                 localStorage.setItem('candidatic_user_session', JSON.stringify(merged));
-             }
-         }
-         setIsAppReady(true);
-      })
-      .catch(e => {
-         console.error('Failed fetching role perms in App', e);
-         setIsAppReady(true);
-      });
-  }, [user?.id]);
+  }, [user, rolePermissions]);
 
   // Global heartbeat — Web Worker impulsado para que NO se congele al cambiar de pestaña
   useEffect(() => {
@@ -134,27 +82,26 @@ function App() {
   }, [user]);
 
   // Toggle tema
-  const toggleTheme = () => {
-    const newTheme = theme === 'light' ? 'dark' : 'light';
-    setTheme(newTheme);
-    saveTheme(newTheme);
-    if (newTheme === 'dark') {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
-  };
+  const toggleTheme = useCallback(() => {
+    setTheme(prev => {
+      const newTheme = prev === 'light' ? 'dark' : 'light';
+      saveTheme(newTheme);
+      if (newTheme === 'dark') {
+        document.documentElement.classList.add('dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+      }
+      return newTheme;
+    });
+  }, []);
 
-  const handleLogout = () => {
-    localStorage.removeItem('candidatic_user_session');
-    setUser(null);
+  const handleLogout = useCallback(() => {
+    logout();
     showToast('Sesión cerrada... 👋', 'info');
     setTimeout(() => {
       window.location.reload();
     }, 500);
-  };
-
-
+  }, [logout, showToast]);
 
   // AUTH GUARD
   if (isAuthChecking) {
@@ -164,8 +111,7 @@ function App() {
   if (!user) {
     return (
       <LandingPage onLoginSuccess={(userData) => {
-        localStorage.setItem('candidatic_user_session', JSON.stringify(userData));
-        setUser(userData);
+        login(userData);
         showToast(`Bienvenido, ${userData.name}`, 'success');
       }} />
     );
@@ -228,7 +174,7 @@ function App() {
                     <div className="hidden sm:flex items-center">
                       <div className="flex -space-x-2 mr-2">
                         {onlineUsers.slice(0, 4).map((u, i) => (
-                          <div key={i} className="relative group">
+                          <div key={u.userId || i} className="relative group">
                             <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full border-2 border-white dark:border-gray-800 bg-gradient-to-br from-blue-400 to-indigo-500 text-white flex items-center justify-center text-xs font-bold uppercase shadow-sm">
                               {u.userName ? u.userName.charAt(0) : '?'}
                             </div>
@@ -309,38 +255,37 @@ function App() {
 
         <main className={`flex-1 overflow-y-auto overflow-x-hidden flex flex-col min-h-0 ${activeSection === 'chat' || activeSection === 'bulks' ? 'p-0' : 'px-3 sm:px-8 py-4 sm:py-8'}`}>
           <ErrorBoundary>
+          <Suspense fallback={<SectionSkeleton />}>
           {activeSection === 'candidates' ? (
-            <CandidatesSection showToast={showToast} user={user} />
+            <CandidatesSection />
           ) : activeSection === 'chat' ? (
-            <ChatSection showToast={showToast} user={user} rolePermissions={rolePermissions} onlineUsers={onlineUsers} />
+            <ChatSection rolePermissions={rolePermissions} onlineUsers={onlineUsers} />
           ) : activeSection === 'bulks' ? (
-            <BulksSection showToast={showToast} />
+            <BulksSection />
           ) : activeSection === 'bot-ia' ? (
-            <BotIASection showToast={showToast} />
+            <BotIASection />
           ) : activeSection === 'ads-stats' ? (
-            <AdsStatisticsSection showToast={showToast} />
+            <AdsStatisticsSection />
           ) : activeSection === 'automations' ? (
-            <AutomationsSection showToast={showToast} />
+            <AutomationsSection />
           ) : activeSection === 'vacancies' ? (
-            <VacanciesSection showToast={showToast} />
+            <VacanciesSection />
           ) : activeSection === 'bolsa' ? (
-            <BolsaSection showToast={showToast} />
+            <BolsaSection />
           ) : activeSection === 'users' ? (
-            <UsersSection showToast={showToast} />
+            <UsersSection />
           ) : activeSection === 'post-maker' ? (
-            <PostMakerSection showToast={showToast} />
+            <PostMakerSection />
           ) : activeSection === 'media-library' ? (
-            <MediaLibrarySection showToast={showToast} />
+            <MediaLibrarySection />
           ) : activeSection === 'projects' ? (
-            <CRMProjectsSection showToast={showToast} user={user} />
+            <CRMProjectsSection />
           ) : activeSection === 'bypass' ? (
-            <ByPassSection showToast={showToast} />
-
+            <ByPassSection />
           ) : (
-            <SettingsSection
-              showToast={showToast}
-            />
+            <SettingsSection />
           )}
+          </Suspense>
           </ErrorBoundary>
         </main>
 
@@ -353,10 +298,21 @@ function App() {
           </div>
         </footer>
       </div>
-
-      {/* Toast notifications */}
-      {ToastComponent}
     </div>
+  );
+}
+
+/**
+ * Root App — wraps providers around the shell.
+ * Providers never re-render on internal state changes.
+ */
+function App() {
+  return (
+    <AuthProvider>
+      <ToastProvider>
+        <AppShell />
+      </ToastProvider>
+    </AuthProvider>
   );
 }
 
