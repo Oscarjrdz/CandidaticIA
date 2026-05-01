@@ -134,10 +134,8 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
 
             const updates = data.updates || {};
 
-            // Inyectar actualización del perfil del candidato (tarjeta top)
-            if (Object.keys(updates).length > 0) {
-                setCandidate(prev => ({ ...prev, ...updates }));
-            }
+            // Nota: Las actualizaciones del perfil del candidato se manejan
+            // en el componente padre (CandidatesSection) via setSelectedCandidate
 
             // Inyectar nuevo mensaje
             if (updates.newMessage && updates.messagePayload) {

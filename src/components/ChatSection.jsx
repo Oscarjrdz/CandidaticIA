@@ -2475,7 +2475,7 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
                                         {toTitleCase(selectedChat.nombreReal || selectedChat.nombre) || selectedChat.whatsapp}
                                     </h2>
                                     <div className="flex items-center shrink-0 ml-1.5 overflow-visible pt-1 pb-1 pr-1">
-                                    {selectedChat.tags && selectedChat.tags.map(t => {
+                                    {selectedChat.tags && (Array.isArray(selectedChat.tags) ? selectedChat.tags : []).map(t => {
                                         const tObj = availableTags.find(at => (typeof at === 'string' ? at : at.name) === t);
                                         const tColor = tObj ? (tObj.color || '#3b82f6') : '#3b82f6';
                                         return (
@@ -3016,7 +3016,7 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
                                             {/* Reaction Badges */}
                                             {msg.reactions && msg.reactions.length > 0 && (
                                                 <div className="absolute -bottom-2.5 right-0 bg-white dark:bg-[#202c33] shadow-md rounded-full px-1.5 py-0.5 text-[11px] z-20 flex gap-0.5 border border-gray-100 dark:border-gray-800">
-                                                    {msg.reactions.map((r, rIdx) => <span key={rIdx}>{r.emoji || r}</span>)}
+                                                    {Array.isArray(msg.reactions) ? msg.reactions.map((r, rIdx) => <span key={rIdx}>{r.emoji || r}</span>) : <span>{msg.reactions}</span>}
                                                 </div>
                                             )}
                                         </div>
