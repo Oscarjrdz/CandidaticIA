@@ -97,7 +97,7 @@ const SortableCandCard = ({ candidate, onRemove, onChat, onCalendar }) => {
                 )}
             </div>
 
-            {candidate.tags?.length > 0 && (
+            {candidate.tags?.length > 0 && Array.isArray(candidate.tags) && (
                 <div className="flex flex-wrap gap-1 mt-2">
                     {candidate.tags.map((t, i) => (
                         <span key={i} className="text-[9px] px-1.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 font-medium">
