@@ -84,6 +84,7 @@ const AdsStatisticsSection = ({ showToast }) => {
                                             <p className="text-xs font-bold text-gray-900 dark:text-white truncate leading-tight">{ad.adHeadline}</p>
                                             <div className="flex items-center gap-1 text-[9px] text-gray-400">
                                                 <span>{ad.adSource === 'ad' ? '📣' : '📝'}</span>
+                                                {ad.effectiveStatus && <StatusBadge status={ad.effectiveStatus} />}
                                                 {ad.adId && (
                                                     <span className="font-mono bg-gray-100 dark:bg-gray-700 px-1 rounded cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
                                                         onClick={() => cp(ad.adId)}>{fId(ad.adId)}<Copy className="w-2 h-2 inline ml-0.5 opacity-40" /></span>
@@ -189,5 +190,27 @@ const T = ({ l, v, hl }) => (
         <span className="opacity-60">{l}</span> <span className="font-semibold">{v}</span>
     </span>
 );
+
+// Status badge
+const statusConfig = {
+    ACTIVE: { label: 'Activo', dot: 'bg-green-500', bg: 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400' },
+    PAUSED: { label: 'Pausado', dot: 'bg-yellow-500', bg: 'bg-yellow-50 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-400' },
+    DELETED: { label: 'Eliminado', dot: 'bg-red-500', bg: 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400' },
+    ARCHIVED: { label: 'Archivado', dot: 'bg-gray-500', bg: 'bg-gray-100 dark:bg-gray-700/40 text-gray-600 dark:text-gray-400' },
+    CAMPAIGN_PAUSED: { label: 'Campaña pausada', dot: 'bg-yellow-500', bg: 'bg-yellow-50 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-400' },
+    ADSET_PAUSED: { label: 'Conjunto pausado', dot: 'bg-yellow-500', bg: 'bg-yellow-50 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-400' },
+    DISAPPROVED: { label: 'Rechazado', dot: 'bg-red-500', bg: 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400' },
+    PENDING_REVIEW: { label: 'En revisión', dot: 'bg-blue-500', bg: 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400' },
+};
+
+const StatusBadge = ({ status }) => {
+    const cfg = statusConfig[status] || { label: status, dot: 'bg-gray-400', bg: 'bg-gray-100 dark:bg-gray-700/40 text-gray-500 dark:text-gray-400' };
+    return (
+        <span className={`inline-flex items-center gap-1 ${cfg.bg} px-1.5 py-0.5 rounded-full text-[8px] font-bold`}>
+            <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot} ${status === 'ACTIVE' ? 'animate-pulse' : ''}`}></span>
+            {cfg.label}
+        </span>
+    );
+};
 
 export default AdsStatisticsSection;

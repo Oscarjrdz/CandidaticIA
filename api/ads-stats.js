@@ -32,6 +32,23 @@ export default async function handler(req, res) {
                             )
                         );
 
+                        // Also fetch ad status in parallel
+                        const statusResults = await Promise.allSettled(
+                            adIds.map(adId =>
+                                fetch(`https://graph.facebook.com/v21.0/${adId}?fields=effective_status,name&access_token=${adsToken}`)
+                                    .then(r => r.json())
+                                    .then(json => ({ adId, status: json.effective_status || null, name: json.name || null }))
+                            )
+                        );
+
+                        // Build status map
+                        const statusMap = new Map();
+                        for (const result of statusResults) {
+                            if (result.status === 'fulfilled' && result.value.status) {
+                                statusMap.set(result.value.adId, result.value);
+                            }
+                        }
+
                         // Merge insights into ads data
                         const insightsMap = new Map();
                         for (const result of insightResults) {
@@ -41,6 +58,12 @@ export default async function handler(req, res) {
                         }
 
                         for (const ad of data.ads) {
+                            // Merge status
+                            if (ad.adId && statusMap.has(ad.adId)) {
+                                const st = statusMap.get(ad.adId);
+                                ad.effectiveStatus = st.status;
+                                if (st.name) ad.adName = st.name;
+                            }
                             if (ad.adId && insightsMap.has(ad.adId)) {
                                 const insight = insightsMap.get(ad.adId);
                                 ad.impressions = insight.impressions || null;
