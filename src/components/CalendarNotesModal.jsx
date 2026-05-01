@@ -7,6 +7,7 @@ const getDaysInMonth = (year, month) => new Date(year, month + 1, 0).getDate();
 const getFirstDayOfMonth = (year, month) => new Date(year, month, 1).getDay();
 const monthNames = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
 const dayNames = ["Do", "Lu", "Ma", "Mi", "Ju", "Vi", "Sa"];
+const API_BASE = import.meta.env.PROD ? '' : 'http://localhost:3000';
 
 export default function CalendarNotesModal({ isOpen, onClose, projectId, projectName, candidateId, candidateName }) {
     const [notes, setNotes] = useState([]);
@@ -30,7 +31,7 @@ export default function CalendarNotesModal({ isOpen, onClose, projectId, project
     const loadNotes = async () => {
         setLoading(true);
         try {
-            const res = await fetch(`/api/calendar_notes?projectId=${projectId}`);
+            const res = await fetch(`${API_BASE}/api/calendar_notes?projectId=${projectId}`);
             const data = await res.json();
             if (data.success) {
                 setNotes(data.notes || []);
@@ -49,7 +50,7 @@ export default function CalendarNotesModal({ isOpen, onClose, projectId, project
         const dateStr = selectedDate.toLocaleDateString('en-CA'); // YYYY-MM-DD
         
         try {
-            const res = await fetch('/api/calendar_notes', {
+            const res = await fetch(`${API_BASE}/api/calendar_notes`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -75,7 +76,7 @@ export default function CalendarNotesModal({ isOpen, onClose, projectId, project
 
     const handleDeleteNote = async (noteId) => {
         try {
-            const res = await fetch('/api/calendar_notes', {
+            const res = await fetch(`${API_BASE}/api/calendar_notes`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ action: 'delete', projectId, noteId })
