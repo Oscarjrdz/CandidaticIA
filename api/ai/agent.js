@@ -915,6 +915,16 @@ function normalizeBirthDate(input) {
     let day, month, year;
     let matched = false;
 
+    // 0. Try YYYY-MM-DD or YYYY/MM/DD (ISO/GPT format)
+    const isoPattern = /^(\d{4})[\/\-\.](\d{1,2})[\/\-\.](\d{1,2})$/;
+    const isoMatch = cleaned.match(isoPattern);
+    if (isoMatch) {
+        year = isoMatch[1];
+        month = isoMatch[2];
+        day = isoMatch[3];
+        matched = true;
+    }
+
     // 1. Try Natural Spanish Date (e.g. "19 de mayo de 1988" or "19 mayo 88")
     const textPattern = /^(\d{1,2})\s*(?:de\s+)?([a-zA-Z]+)\s*(?:de\s+)?(\d{2,4})$/i;
     const textMatch = cleaned.match(textPattern);
