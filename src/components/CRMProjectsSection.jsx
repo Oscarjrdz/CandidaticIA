@@ -105,6 +105,45 @@ const SortableCandCard = ({ candidate, onRemove, onChat }) => {
     );
 };
 
+const SortableProjectCard = ({ project, isActive, onSelect, onEdit, onClone, onDelete }) => {
+    const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+        id: `proj_${project.id}`, data: { type: 'project', project }
+    });
+    const style = { transform: CSS.Translate.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
+    const pColor = project.color || '#3b82f6';
+
+    return (
+        <div ref={setNodeRef} {...attributes} {...listeners}
+            onClick={() => onSelect(project)}
+            className={`group p-4 rounded-2xl cursor-pointer border transition-all duration-300 ${isActive
+                ? 'text-white shadow-xl scale-[1.02]'
+                : 'bg-white dark:bg-slate-800 hover:shadow-lg'}`}
+            style={{
+                ...style,
+                ...(isActive
+                    ? { backgroundColor: pColor, borderColor: pColor, boxShadow: `0 10px 25px -5px ${pColor}40` }
+                    : { borderColor: `${pColor}30`, borderLeftWidth: '4px', borderLeftColor: pColor })
+            }}>
+            <div className="flex items-center justify-between">
+                <div className="min-w-0 flex-1">
+                    <h3 className={`font-bold truncate ${isActive ? 'text-white' : 'text-slate-700 dark:text-slate-200'}`}>{project.name}</h3>
+                    <p className={`text-xs mt-1 truncate ${isActive ? 'text-white/70' : 'text-slate-400'}`}>{project.description || 'Sin descripción'}</p>
+                </div>
+                <div className="flex gap-1 ml-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button onClick={onEdit} className="p-1 rounded hover:bg-white/20"><Pencil className="w-3.5 h-3.5" /></button>
+                    <button onClick={onClone} className="p-1 rounded hover:bg-white/20"><Copy className="w-3.5 h-3.5" /></button>
+                    <button onClick={onDelete} className="p-1 rounded hover:bg-red-500/20 text-red-300"><Trash2 className="w-3.5 h-3.5" /></button>
+                </div>
+            </div>
+            <div className="flex items-center gap-2 mt-2">
+                <span className={`text-[10px] font-medium ${isActive ? 'text-white/70' : 'text-slate-400'}`}>
+                    {project.steps?.length || 0} pasos
+                </span>
+            </div>
+        </div>
+    );
+};
+
 const CRMProjectsSection = ({ showToast, user }) => {
     const { confirmModalJSX, showConfirm } = useConfirmModal();
     const [projects, setProjects] = useState([]);
@@ -332,7 +371,30 @@ const CRMProjectsSection = ({ showToast, user }) => {
         setActiveItem(null);
         setOverStepId(null);
 
-        if (!over || !active.data.current?.candidate) return;
+        if (!over) return;
+
+        // Project Reordering
+        if (active.data.current?.type === 'project' && over.data.current?.type === 'project') {
+            if (active.id !== over.id) {
+                const oldIndex = projects.findIndex(p => `proj_${p.id}` === active.id);
+                const newIndex = projects.findIndex(p => `proj_${p.id}` === over.id);
+                if (oldIndex !== -1 && newIndex !== -1) {
+                    const newProjects = arrayMove(projects, oldIndex, newIndex);
+                    setProjects(newProjects);
+                    try {
+                        await fetch('/api/manual_projects', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ action: 'reorderProjects', projectIds: newProjects.map(p => p.id) })
+                        });
+                    } catch (e) { showToast('Error al reordenar', 'error'); }
+                }
+            }
+            return;
+        }
+
+        // Candidate Reordering
+        if (!active.data.current?.candidate) return;
         const candidate = active.data.current.candidate;
         const currentStepId = candidate.crmMeta?.stepId;
 
@@ -411,38 +473,21 @@ const CRMProjectsSection = ({ showToast, user }) => {
                             <div className="flex items-center justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-blue-500" /></div>
                         ) : projects.length === 0 ? (
                             <div className="text-center py-12 text-slate-400 text-sm">No hay proyectos aún</div>
-                        ) : projects.map(p => {
-                            const pColor = p.color || '#3b82f6';
-                            const isActive = activeProject?.id === p.id;
-                            return (
-                            <div key={p.id} onClick={() => setActiveProject(p)}
-                                className={`group p-4 rounded-2xl cursor-pointer border transition-all duration-300 ${isActive
-                                    ? 'text-white shadow-xl scale-[1.02]'
-                                    : 'bg-white dark:bg-slate-800 hover:shadow-lg'}`}
-                                style={isActive
-                                    ? { backgroundColor: pColor, borderColor: pColor, boxShadow: `0 10px 25px -5px ${pColor}40` }
-                                    : { borderColor: `${pColor}30`, borderLeftWidth: '4px', borderLeftColor: pColor }
-                                }>
-                                <div className="flex items-center justify-between">
-                                    <div className="min-w-0 flex-1">
-                                        <h3 className={`font-bold truncate ${isActive ? 'text-white' : 'text-slate-700 dark:text-slate-200'}`}>{p.name}</h3>
-                                        <p className={`text-xs mt-1 truncate ${isActive ? 'text-white/70' : 'text-slate-400'}`}>{p.description || 'Sin descripción'}</p>
-                                    </div>
-                                    <div className="flex gap-1 ml-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                        <button onClick={(e) => { e.stopPropagation(); setEditingProject(p); setProjName(p.name); setProjDesc(p.description || ''); setProjColor(p.color || '#3b82f6'); setShowCreate(true); }}
-                                            className="p-1 rounded hover:bg-white/20"><Pencil className="w-3.5 h-3.5" /></button>
-                                        <button onClick={(e) => handleClone(p.id, e)} className="p-1 rounded hover:bg-white/20"><Copy className="w-3.5 h-3.5" /></button>
-                                        <button onClick={(e) => handleDelete(p.id, e)} className="p-1 rounded hover:bg-red-500/20 text-red-300"><Trash2 className="w-3.5 h-3.5" /></button>
-                                    </div>
-                                </div>
-                                <div className="flex items-center gap-2 mt-2">
-                                    <span className={`text-[10px] font-medium ${isActive ? 'text-white/70' : 'text-slate-400'}`}>
-                                        {p.steps?.length || 0} pasos
-                                    </span>
-                                </div>
-                            </div>
-                            );
-                        })}
+                        ) : (
+                            <SortableContext items={projects.map(p => `proj_${p.id}`)} strategy={verticalListSortingStrategy}>
+                                {projects.map(p => (
+                                    <SortableProjectCard
+                                        key={p.id}
+                                        project={p}
+                                        isActive={activeProject?.id === p.id}
+                                        onSelect={setActiveProject}
+                                        onEdit={(e) => { e.stopPropagation(); setEditingProject(p); setProjName(p.name); setProjDesc(p.description || ''); setProjColor(p.color || '#3b82f6'); setShowCreate(true); }}
+                                        onClone={(e) => handleClone(p.id, e)}
+                                        onDelete={(e) => handleDelete(p.id, e)}
+                                    />
+                                ))}
+                            </SortableContext>
+                        )}
                     </div>
                 </div>
 
@@ -552,6 +597,13 @@ const CRMProjectsSection = ({ showToast, user }) => {
                                 <p className="text-sm font-bold text-slate-700 dark:text-slate-200 truncate">{activeItem.candidate.nombreReal || activeItem.candidate.from || activeItem.candidate.nombre || 'Sin nombre'}</p>
                                 <p className="text-[10px] text-slate-400 truncate">{formatPhone(activeItem.candidate.whatsapp)}</p>
                             </div>
+                        </div>
+                    </div>
+                ) : activeId && activeItem?.project ? (
+                    <div className="p-4 rounded-2xl bg-white dark:bg-slate-800 border-l-4 shadow-2xl shadow-slate-500/20 w-[270px] scale-105 rotate-[1deg] opacity-95" style={{ borderLeftColor: activeItem.project.color || '#3b82f6' }}>
+                        <div className="min-w-0 flex-1">
+                            <h3 className="font-bold text-slate-700 dark:text-slate-200 truncate">{activeItem.project.name}</h3>
+                            <p className="text-xs mt-1 text-slate-400 truncate">{activeItem.project.description || 'Sin descripción'}</p>
                         </div>
                     </div>
                 ) : null}
