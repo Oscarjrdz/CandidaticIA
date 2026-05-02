@@ -271,6 +271,93 @@ const ChevronIcon = () => (
     </div>
 );
 
+// ─── Audio Player personalizado (WhatsApp-style) ─────────────────────────────
+const AudioPlayer = React.memo(({ src }) => {
+    const audioRef = useRef(null);
+    const [playing, setPlaying] = useState(false);
+    const [progress, setProgress] = useState(0);
+    const [duration, setDuration] = useState(0);
+    const [currentTime, setCurrentTime] = useState(0);
+    const [speed, setSpeed] = useState(1);
+
+    const toggle = () => {
+        const a = audioRef.current;
+        if (!a) return;
+        if (playing) { a.pause(); setPlaying(false); }
+        else { a.play(); setPlaying(true); }
+    };
+    const handleTimeUpdate = () => {
+        const a = audioRef.current;
+        if (!a || !a.duration) return;
+        setCurrentTime(a.currentTime);
+        setProgress((a.currentTime / a.duration) * 100);
+    };
+    const handleLoaded = () => setDuration(audioRef.current?.duration || 0);
+    const handleEnded = () => { setPlaying(false); setProgress(0); setCurrentTime(0); };
+    const handleSeek = (e) => {
+        const a = audioRef.current;
+        if (!a || !a.duration) return;
+        const rect = e.currentTarget.getBoundingClientRect();
+        a.currentTime = ((e.clientX - rect.left) / rect.width) * a.duration;
+    };
+    const cycleSpeed = () => {
+        const next = speed === 1 ? 1.5 : speed === 1.5 ? 2 : 1;
+        setSpeed(next);
+        if (audioRef.current) audioRef.current.playbackRate = next;
+    };
+    const fmt = (s) => {
+        if (!s || isNaN(s)) return '0:00';
+        return `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+    };
+
+    return (
+        <div className="flex items-center gap-2 py-1 px-1 min-w-[210px] max-w-[240px]">
+            <audio ref={audioRef} src={src} onTimeUpdate={handleTimeUpdate} onLoadedMetadata={handleLoaded} onEnded={handleEnded} />
+            <button onClick={toggle} className="w-9 h-9 rounded-full bg-[#00a884] flex items-center justify-center shrink-0 hover:bg-[#008f72] transition-colors shadow-sm">
+                {playing
+                    ? <svg viewBox="0 0 24 24" width="14" height="14" fill="white"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>
+                    : <svg viewBox="0 0 24 24" width="14" height="14" fill="white"><polygon points="6 3 20 12 6 21 6 3"/></svg>
+                }
+            </button>
+            <div className="flex-1 flex flex-col gap-1">
+                <div className="w-full h-[3px] bg-black/10 dark:bg-white/15 rounded-full cursor-pointer relative" onClick={handleSeek}>
+                    <div className="h-full bg-[#00a884] rounded-full" style={{ width: `${progress}%` }} />
+                    <div className="absolute top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full bg-[#00a884] shadow" style={{ left: `calc(${progress}% - 5px)` }} />
+                </div>
+                <div className="flex justify-between text-[9px] text-[#8696a0] font-medium">
+                    <span>{fmt(currentTime)}</span>
+                    <span>{fmt(duration)}</span>
+                </div>
+            </div>
+            <button onClick={cycleSpeed} className="text-[9px] font-bold text-[#8696a0] hover:text-[#54656f] dark:hover:text-white transition-colors shrink-0 bg-black/5 dark:bg-white/5 rounded px-1.5 py-0.5 min-w-[28px] text-center">
+                {speed}x
+            </button>
+        </div>
+    );
+});
+
+// ─── Separador de Fecha WhatsApp-style ───────────────────────────────────────
+const DateSeparator = React.memo(({ date }) => {
+    const label = (() => {
+        if (!date) return '';
+        const d = new Date(date);
+        if (isNaN(d)) return '';
+        const today = new Date(); today.setHours(0,0,0,0);
+        const yesterday = new Date(today); yesterday.setDate(today.getDate() - 1);
+        const msgDay = new Date(d); msgDay.setHours(0,0,0,0);
+        if (msgDay.getTime() === today.getTime()) return 'HOY';
+        if (msgDay.getTime() === yesterday.getTime()) return 'AYER';
+        return new Intl.DateTimeFormat('es-MX', { day: '2-digit', month: 'long', year: 'numeric', timeZone: 'America/Monterrey' }).format(d).toUpperCase();
+    })();
+    return (
+        <div className="flex items-center justify-center my-3 select-none">
+            <div className="bg-[#fff8dc] dark:bg-[#1f2c34] text-[#54656f] dark:text-[#8696a0] text-[11px] font-medium px-3 py-1 rounded-full shadow-sm border border-black/5 dark:border-white/5 tracking-wide">
+                {label}
+            </div>
+        </div>
+    );
+});
+
 const CustomSelect = React.memo(({ name, value, options, onChange, placeholder, disabled = false }) => {
     const [isOpen, setIsOpen] = useState(false);
     const dropdownRef = useRef(null);
@@ -619,8 +706,14 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
 
 
     const messagesEndRef = useRef(null);
+    const messagesContainerRef = useRef(null);
     const fileInputRef = useRef(null);
     const lastPresenceTimeRef = useRef(0);
+    const [showScrollBtn, setShowScrollBtn] = useState(false);
+    const [chatSearch, setChatSearch] = useState('');
+    const [showChatSearch, setShowChatSearch] = useState(false);
+    const [chatSearchIdx, setChatSearchIdx] = useState(0);
+    const chatSearchInputRef = useRef(null);
     // ✅ META AUDIT: Ghost guard — prevents SSE re-insertion after delete (same pattern as CandidatesSection)
     const recentlyDeletedRef = useRef(new Set());
 
@@ -1071,6 +1164,18 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
         window.dispatchEvent(new CustomEvent('chat_unread_rbac', { detail: unreadCounts.all }));
     }, [unreadCounts.all]);
 
+    // 🏎️ Online readers por chat — evita recalcular dentro de cada ChatRow
+    const EMPTY_READERS = [];
+    const onlineReadersByChat = useMemo(() => {
+        const map = new Map();
+        for (const u of onlineUsers) {
+            if (!u.currentChatId) continue;
+            if (!map.has(u.currentChatId)) map.set(u.currentChatId, []);
+            map.get(u.currentChatId).push(u);
+        }
+        return map;
+    }, [onlineUsers]);
+
     // Scroll to bottom
     const prevMessagesLength = useRef(0);
     useEffect(() => {
@@ -1482,6 +1587,16 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
         }
     }, []);
 
+    // Seleccionar chat con limpieza optimista de no leídos
+    const handleSelectChat = useCallback((chat) => {
+        setSelectedChat(chat);
+        if (chat && Number(chat.unreadMsgCount) > 0) {
+            setCandidates(prev => prev.map(c =>
+                c.id === chat.id ? { ...c, unreadMsgCount: 0 } : c
+            ));
+        }
+    }, []);
+
     const handleFileUpload = async (e) => {
         const file = e.target.files?.[0];
         if (!file || !selectedChat) return;
@@ -1882,27 +1997,67 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
     // 🚀 MEMOIZED: Pre-compute display messages + formatted HTML (eliminates 700 regex ops/render)
     const displayMessages = useMemo(() => {
         if (!Array.isArray(messages)) return [];
-        return messages.flatMap((msg) => {
-            if (!msg) return [];
+        const result = [];
+        let lastDateKey = null;
+        const unreadCount = selectedChat?.unreadMsgCount || 0;
+        const unreadSepIdx = unreadCount > 0 ? Math.max(0, messages.length - unreadCount) : -1;
+        let msgIdx = 0;
+
+        for (const msg of messages) {
+            if (!msg) { msgIdx++; continue; }
             let content = typeof msg.content === 'string' ? msg.content : '';
             if (content.includes('[REACCI')) {
                 content = content.replace(/\[REACCI[OÓ]N:\s*.*?\]/gi, '').trim();
-                if (!content && !msg.mediaUrl) return [];
+                if (!content && !msg.mediaUrl) { msgIdx++; continue; }
+            }
+
+            // Separador de no leídos
+            if (unreadSepIdx >= 0 && msgIdx === unreadSepIdx) {
+                result.push({ id: '__unread_sep', type: 'unread-separator', count: unreadCount });
+            }
+
+            // Separador de fecha
+            const ts = msg.timestamp || msg.fecha;
+            if (ts) {
+                const d = new Date(ts);
+                if (!isNaN(d)) {
+                    const key = d.toDateString();
+                    if (key !== lastDateKey) {
+                        lastDateKey = key;
+                        result.push({ id: `date-sep-${key}-${msgIdx}`, type: 'date-separator', date: ts });
+                    }
+                }
             }
 
             if (content && content.includes('[MSG_SPLIT]')) {
                 const parts = content.split('[MSG_SPLIT]').filter(p => p.trim());
-                return parts.map((part, index) => ({
+                parts.forEach((part, index) => result.push({
                     ...msg,
                     content: part.trim(),
                     mediaUrl: index === 0 ? msg.mediaUrl : null,
                     isSplit: true,
                     _formattedHtml: formatWhatsAppText(part.trim())
                 }));
+            } else {
+                result.push({ ...msg, content, _formattedHtml: formatWhatsAppText(content) });
             }
-            return [{...msg, content, _formattedHtml: formatWhatsAppText(content)}];
-        });
-    }, [messages]);
+            msgIdx++;
+        }
+
+        // Pre-computar isFirstInSeries para evitar cálculo en render
+        let lastMsgFrom = null;
+        for (const item of result) {
+            if (item.type === 'date-separator' || item.type === 'unread-separator') {
+                lastMsgFrom = null; // reset para que el siguiente sea "primero en serie"
+                continue;
+            }
+            const isMe = item.from === 'me' || item.from === 'bot';
+            item._isFirstInSeries = lastMsgFrom === null || isMe !== lastMsgFrom;
+            lastMsgFrom = isMe;
+        }
+
+        return result;
+    }, [messages, selectedChat?.unreadMsgCount]);
 
     return (
         <div className="flex h-full w-full bg-[#f0f2f5] dark:bg-[#111b21] font-sans">
