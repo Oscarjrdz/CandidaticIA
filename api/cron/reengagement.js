@@ -20,42 +20,100 @@ function isBusinessHour(startH, endH) {
     return h >= startH && h < endH;
 }
 
-// ── Generador de mensajes ─────────────────────────────────────────────────────
+// ── Selector determinista: mismo candidato → misma variante siempre ───────────
+// Usa el ID del candidato para elegir variante (no aleatorio en cada ejecución)
+function pickVariant(candidateId, count) {
+    let hash = 0;
+    const s = String(candidateId);
+    for (let i = 0; i < s.length; i++) {
+        hash = (hash * 31 + s.charCodeAt(i)) >>> 0;
+    }
+    return hash % count;
+}
+
+// ── Generador de mensajes — 3 variantes por intento, ángulos completamente distintos
 function buildMessage(candidate, missingFields, attemptNumber) {
     const rawName = candidate.nombreReal || candidate.nombre || '';
     const firstName = rawName.split(' ')[0] || '';
-    const nombre = firstName
+    const n = firstName
         ? firstName.charAt(0).toUpperCase() + firstName.slice(1).toLowerCase()
         : null;
 
-    const campo1 = missingFields[0] ? `*${missingFields[0]}*` : null;
-    const campo2 = missingFields[1] ? `*${missingFields[1]}*` : null;
+    const c1 = missingFields[0] ? `*${missingFields[0]}*` : null;
+    const c2 = missingFields[1] ? `*${missingFields[1]}*` : null;
+    const lista = [c1, c2].filter(Boolean).join(' y ');
 
+    const v = pickVariant(candidate.id, 3);
+
+    // ── Intento 1: Cálido y directo ── ángulo: "te estoy esperando"
     if (attemptNumber === 1) {
-        // Primer intento: cálido y directo
-        if (nombre && campo1) {
-            return `¡Hola ${nombre}! 😊 Solo me falta saber ${campo1} para poder encontrarte la vacante ideal. ¿Me lo compartes?`;
-        }
-        if (campo1) {
-            return `¡Hola! 👋 Solo necesito saber ${campo1} para poder ayudarte a encontrar empleo. ¿Me lo dices?`;
-        }
-        return `¡Hola! 👋 Quedé esperando algunos datos para poder ayudarte. ¿Seguimos con tu registro?`;
+        const opts = [
+            // Variante A — pregunta directa
+            n && c1
+                ? `¡Hola ${n}! 😊 Solo me falta saber ${c1} para encontrarte la vacante ideal. ¿Me lo compartes?`
+                : c1 ? `¡Hola! 👋 Solo necesito ${c1} para ayudarte a encontrar empleo. ¿Me lo dices?`
+                      : `¡Hola! 👋 Quedé esperando algunos datos. ¿Seguimos con tu registro?`,
+
+            // Variante B — ángulo: "ya casi está listo tu perfil"
+            n && c1
+                ? `Hola ${n} 👋 Tu registro quedó casi completo, solo falta ${c1}. ¿Me lo dices para poder buscarte opciones?`
+                : c1 ? `Hola 👋 Tu registro quedó casi completo, solo falta ${c1}. ¿Me lo compartes?`
+                      : `Hola 👋 Tu registro quedó incompleto. ¿Puedes ayudarme con los datos que faltan?`,
+
+            // Variante C — ángulo: "necesito ese dato para ayudarte"
+            n && c1
+                ? `${n}, me quedé a medias con tu registro 🙌 Necesito que me digas ${c1} para poder buscarte trabajo. ¿Me ayudas?`
+                : c1 ? `Me quedé a medias con tu registro. Necesito ${c1} para poder buscarte trabajo. ¿Me lo dices?`
+                      : `Me quedé a medias con tu registro. ¿Puedes completar los datos que faltan?`,
+        ];
+        return opts[v];
     }
 
+    // ── Intento 2: Urgencia + contexto de competencia ── ángulo: "otros candidatos avanzan"
     if (attemptNumber === 2) {
-        // Segundo intento: urgencia suave con reconocimiento de avance
-        const camposList = [campo1, campo2].filter(Boolean).join(' y ');
-        if (nombre) {
-            return `¡${nombre}, casi terminas tu registro! 💪 Ya tengo varios de tus datos — solo me falta ${camposList}. ¡No dejes pasar esta oportunidad!`;
-        }
-        return `¡Casi terminas tu registro! 💪 Solo falta ${camposList}. ¿Me lo dices para poder ayudarte?`;
+        const opts = [
+            // Variante A — "estamos recibiendo muchos candidatos"
+            n && lista
+                ? `${n}, esta semana estamos recibiendo muchos candidatos 📋 Para considerarte necesito que me confirmes ${lista}. ¿Puedes?`
+                : lista ? `Esta semana estamos recibiendo muchos candidatos. Para considerarte falta ${lista}. ¿Me lo dices?`
+                        : `Seguimos recibiendo candidatos esta semana. ¿Puedes completar tu registro?`,
+
+            // Variante B — "ya tengo candidatos con perfil similar avanzando"
+            n && lista
+                ? `Ey ${n} 👀 Tengo candidatos con un perfil similar al tuyo avanzando en el proceso. Solo me falta ${lista} de tu parte. ¿Seguimos?`
+                : lista ? `Tengo candidatos similares avanzando en el proceso. Solo falta ${lista}. ¿Seguimos?`
+                        : `Tengo candidatos avanzando en proceso. ¿Completamos tu registro?`,
+
+            // Variante C — "no quiero que pierdas la oportunidad"
+            n && lista
+                ? `${n}, no quiero que pierdas una buena oportunidad por un dato 🙏 Solo me falta ${lista}. ¿Me lo compartes?`
+                : lista ? `No quiero que pierdas una buena oportunidad por un dato. Solo falta ${lista}. ¿Me lo dices?`
+                        : `No quiero que pierdas una buena oportunidad. ¿Completamos tu registro?`,
+        ];
+        return opts[v];
     }
 
-    // Tercer intento o más: FOMO / cierre
-    if (nombre && campo1) {
-        return `${nombre}, esta es mi última pregunta para considerarte en nuestras vacantes activas 🎯 ¿Cuál es tu ${campo1}? ¡Solo eso nos falta!`;
-    }
-    return `Esta es la última oportunidad de considerarte en nuestras vacantes activas 🎯 Solo falta ${campo1 || 'un dato'}. ¿Me lo compartes?`;
+    // ── Intento 3: FOMO + cierre definitivo ── ángulo: "última oportunidad real"
+    const opts3 = [
+        // Variante A — "cierro tu expediente si no respondo"
+        n && c1
+            ? `${n}, voy a cerrar tu expediente si no me confirmas ${c1} 📁 ¿Me lo dices antes de que lo archive?`
+            : c1 ? `Voy a cerrar tu expediente si no me confirmas ${c1}. ¿Me lo dices?`
+                  : `Voy a archivar tu registro. ¿Deseas continuar con tu búsqueda de empleo?`,
+
+        // Variante B — "tengo una vacante pero necesito ese dato"
+        n && c1
+            ? `${n} 🎯 Tengo una vacante que podría ser para ti pero necesito confirmar ${c1} antes de incluirte. ¿Me lo dices?`
+            : c1 ? `Tengo una vacante disponible pero necesito confirmar ${c1} para incluirte. ¿Me lo dices?`
+                  : `Tengo vacantes disponibles pero tu perfil está incompleto. ¿Terminamos el registro?`,
+
+        // Variante C — tono directo sin dramatismo
+        n && c1
+            ? `${n}, solo para cerrar: necesito ${c1} para tenerte en cuenta en futuras vacantes. ¿Me lo puedes decir? 🙌`
+            : c1 ? `Para cerrar tu registro necesito ${c1}. ¿Me lo puedes decir?`
+                  : `Para cerrar tu registro me faltan algunos datos. ¿Puedes completarlos?`,
+    ];
+    return opts3[v];
 }
 
 // ── Handler ───────────────────────────────────────────────────────────────────

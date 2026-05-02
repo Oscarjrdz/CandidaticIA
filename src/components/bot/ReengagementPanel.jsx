@@ -465,22 +465,54 @@ const ReengagementPanel = () => {
                         </div>
 
                         {/* Preview de templates */}
-                        <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4 space-y-2">
-                            <p className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">
-                                Preview de mensajes (campo ejemplo: escolaridad)
+                        <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4 space-y-4">
+                            <p className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                Preview de mensajes — 3 variantes por intento (campo ejemplo: escolaridad)
                             </p>
                             {[
-                                { n: 1, msg: '¡Hola Oscar! 😊 Solo me falta saber *tu nivel de escolaridad* para encontrarte la vacante ideal. ¿Me lo compartes?' },
-                                { n: 2, msg: '¡Oscar, casi terminas tu registro! 💪 Ya tengo varios de tus datos — solo me falta *tu nivel de escolaridad*. ¡No dejes pasar esta oportunidad!' },
-                                { n: 3, msg: 'Oscar, esta es mi última pregunta para considerarte en nuestras vacantes activas 🎯 ¿Cuál es tu *nivel de escolaridad*? ¡Solo eso nos falta!' },
-                            ].slice(0, draft.maxAttempts).map(({ n, msg }) => (
-                                <div key={n} className="flex gap-2">
-                                    <span className="shrink-0 w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 text-[10px] font-black flex items-center justify-center">
-                                        {n}
-                                    </span>
-                                    <p className="text-xs text-gray-600 dark:text-gray-300 leading-relaxed">{msg}</p>
+                                {
+                                    n: 1, tone: 'Cálido · directo',
+                                    variants: [
+                                        '¡Hola Oscar! 😊 Solo me falta saber *tu nivel de escolaridad* para encontrarte la vacante ideal. ¿Me lo compartes?',
+                                        'Hola Oscar 👋 Tu registro quedó casi completo, solo falta *tu nivel de escolaridad*. ¿Me lo dices para poder buscarte opciones?',
+                                        'Oscar, me quedé a medias con tu registro 🙌 Necesito que me digas *tu nivel de escolaridad* para poder buscarte trabajo. ¿Me ayudas?',
+                                    ],
+                                },
+                                {
+                                    n: 2, tone: 'Urgencia · competencia',
+                                    variants: [
+                                        'Oscar, esta semana estamos recibiendo muchos candidatos 📋 Para considerarte necesito que me confirmes *tu nivel de escolaridad*. ¿Puedes?',
+                                        'Ey Oscar 👀 Tengo candidatos con un perfil similar al tuyo avanzando en el proceso. Solo me falta *tu nivel de escolaridad* de tu parte. ¿Seguimos?',
+                                        'Oscar, no quiero que pierdas una buena oportunidad por un dato 🙏 Solo me falta *tu nivel de escolaridad*. ¿Me lo compartes?',
+                                    ],
+                                },
+                                {
+                                    n: 3, tone: 'FOMO · cierre',
+                                    variants: [
+                                        'Oscar, voy a cerrar tu expediente si no me confirmas *tu nivel de escolaridad* 📁 ¿Me lo dices antes de que lo archive?',
+                                        'Oscar 🎯 Tengo una vacante que podría ser para ti pero necesito confirmar *tu nivel de escolaridad* antes de incluirte. ¿Me lo dices?',
+                                        'Oscar, solo para cerrar: necesito *tu nivel de escolaridad* para tenerte en cuenta en futuras vacantes. ¿Me lo puedes decir? 🙌',
+                                    ],
+                                },
+                            ].slice(0, draft.maxAttempts).map(({ n, tone, variants }) => (
+                                <div key={n}>
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <span className="shrink-0 w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 text-[10px] font-black flex items-center justify-center">{n}</span>
+                                        <span className="text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">{tone}</span>
+                                    </div>
+                                    <div className="space-y-1.5 pl-7">
+                                        {variants.map((msg, i) => (
+                                            <p key={i} className="text-xs text-gray-600 dark:text-gray-300 leading-relaxed bg-white dark:bg-gray-800 rounded-lg px-3 py-2 border border-gray-100 dark:border-gray-700">
+                                                <span className="text-[9px] font-bold text-gray-300 dark:text-gray-600 mr-1.5">V{i + 1}</span>
+                                                {msg}
+                                            </p>
+                                        ))}
+                                    </div>
                                 </div>
                             ))}
+                            <p className="text-[10px] text-gray-400 dark:text-gray-500 pt-1">
+                                La variante (V1/V2/V3) se elige automáticamente por candidato y no cambia entre intentos.
+                            </p>
                         </div>
 
                         <button
