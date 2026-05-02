@@ -33,7 +33,8 @@ function pickVariant(candidateId, count) {
 
 // ── Generador de mensajes — 3 variantes por intento, ángulos completamente distintos
 function buildMessage(candidate, missingFields, attemptNumber) {
-    const rawName = candidate.nombreReal || candidate.nombre || '';
+    // Solo nombreReal — candidate.nombre es el display name de WhatsApp (puede tener emojis o texto no relacionado)
+    const rawName = candidate.nombreReal || '';
     const firstName = rawName.split(' ')[0] || '';
     const n = firstName
         ? firstName.charAt(0).toUpperCase() + firstName.slice(1).toLowerCase()
