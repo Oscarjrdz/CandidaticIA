@@ -1961,7 +1961,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                         >
                         {canSeeFilter('filter_todos') && (
                             <button 
-                                onClick={() => { setActiveFilter('all'); setFilterValue(null); setAiProjectFilter(null); setAiStepFilter(null); setManualPipelineFilter(null); setManualStepFilter(null); setShowDropdown(null); }}
+                                onClick={() => { setActiveFilter('all'); setFilterValue(null); setManualPipelineFilter(null); setManualStepFilter(null); setShowDropdown(null); }}
                                 className={`flex-1 flex justify-center px-1.5 py-1.5 rounded-full font-medium whitespace-nowrap transition-colors border border-transparent items-center gap-1 min-w-[50px] ${
                                     activeFilter === 'all' 
                                     ? 'bg-[#d9fdd3] text-[#111b21] dark:bg-[#0a332c] dark:text-[#25d366]' 
@@ -2264,11 +2264,12 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                                             placeholder="Nombre del contacto"
                                             value={newChatName}
                                             onChange={e => setNewChatName(e.target.value)}
-                                            onKeyDown={e => { if (e.key === 'Enter' && newChatPhone && newChatName.trim()) handleCreateChat(); }}
+                                            onKeyDown={e => { if (e.key === 'Enter' && newChatPhone && newChatName.trim()) document.getElementById('btn-create-chat')?.click(); }}
                                             className="flex-1 bg-white dark:bg-[#111b21] border border-gray-200 dark:border-gray-600 rounded-md px-2.5 py-1.5 text-xs text-[#111b21] dark:text-[#e9edef] outline-none focus:border-[#25d366] dark:focus:border-[#00a884] transition-colors placeholder-gray-400"
                                         />
                                     </div>
                                     <button
+                                        id="btn-create-chat"
                                         onClick={async () => {
                                             if (!newChatPhone || !newChatName.trim() || newChatLoading) return;
                                             setNewChatLoading(true);

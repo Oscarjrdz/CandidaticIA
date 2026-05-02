@@ -3,31 +3,63 @@ import React from 'react';
 class ErrorBoundary extends React.Component {
     constructor(props) {
         super(props);
-        this.state = { hasError: false };
+        this.state = { hasError: false, error: null, errorInfo: null };
     }
 
     static getDerivedStateFromError(error) {
-        return { hasError: true };
+        return { hasError: true, error };
     }
 
     componentDidCatch(error, errorInfo) {
         console.error("ErrorBoundary caught an error:", error, errorInfo);
+        this.setState({ errorInfo });
     }
 
     render() {
         if (this.state.hasError) {
+            const errorMsg = this.state.error?.message || 'Error desconocido';
+            const errorStack = this.state.error?.stack || '';
+            const componentStack = this.state.errorInfo?.componentStack || '';
+
             return this.props.fallback || (
                 <div className="p-10 bg-red-600 text-white rounded-2xl text-center shadow-2xl animate-in zoom-in-95 duration-300">
                     <h3 className="text-xl font-black mb-4 uppercase tracking-widest text-white">⚠️ Error Crítico de Renderizado</h3>
-                    <p className="text-sm opacity-90 mb-6 max-w-xs mx-auto">
-                        JavaScript colapsó en este componente específico. Esto suele ser por datos inválidos o una falla en el motor de React.
+                    <p className="text-sm opacity-90 mb-2 max-w-lg mx-auto">
+                        JavaScript colapsó en este componente específico.
                     </p>
-                    <button
-                        onClick={() => this.setState({ hasError: false })}
-                        className="px-8 py-3 bg-white text-red-600 rounded-full text-xs font-black hover:bg-red-50 transition-all uppercase shadow-lg hover:scale-105 active:scale-95"
-                    >
-                        Forzar Reintento
-                    </button>
+                    
+                    {/* Show actual error for debugging */}
+                    <div className="bg-red-900/50 rounded-lg p-3 mb-4 max-w-2xl mx-auto text-left overflow-auto max-h-48">
+                        <p className="text-xs font-mono text-red-200 font-bold mb-1">💥 {errorMsg}</p>
+                        {errorStack && (
+                            <pre className="text-[10px] font-mono text-red-300/70 whitespace-pre-wrap break-words mt-1 max-h-20 overflow-auto">
+                                {errorStack.split('\n').slice(1, 6).join('\n')}
+                            </pre>
+                        )}
+                        {componentStack && (
+                            <pre className="text-[10px] font-mono text-yellow-300/70 whitespace-pre-wrap break-words mt-1 border-t border-red-700 pt-1 max-h-20 overflow-auto">
+                                {componentStack.split('\n').slice(0, 5).join('\n')}
+                            </pre>
+                        )}
+                    </div>
+
+                    <div className="flex gap-3 justify-center">
+                        <button
+                            onClick={() => {
+                                const text = `Error: ${errorMsg}\nStack: ${errorStack}\nComponent: ${componentStack}`;
+                                navigator.clipboard.writeText(text).catch(() => {});
+                            }}
+                            className="px-6 py-3 bg-red-800 text-white rounded-full text-xs font-bold hover:bg-red-700 transition-all uppercase shadow-lg"
+                        >
+                            📋 Copiar Error
+                        </button>
+                        <button
+                            onClick={() => this.setState({ hasError: false, error: null, errorInfo: null })}
+                            className="px-8 py-3 bg-white text-red-600 rounded-full text-xs font-black hover:bg-red-50 transition-all uppercase shadow-lg hover:scale-105 active:scale-95"
+                        >
+                            Forzar Reintento
+                        </button>
+                    </div>
                 </div>
             );
         }
