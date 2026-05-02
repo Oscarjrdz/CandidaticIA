@@ -2060,7 +2060,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
     }, [messages, selectedChat?.unreadMsgCount]);
 
     return (
-        <div className="flex h-full w-full bg-[#f0f2f5] dark:bg-[#111b21] font-sans relative">
+        <div className="flex h-full w-full bg-[#f0f2f5] dark:bg-[#111b21] font-sans">
             
             {/* LADO IZQUIERDO: LISTA DE CHATS */}
             <div className={`w-full md:w-[30%] lg:w-[35%] xl:w-[500px] flex-col border-r border-[#d1d7db] dark:border-[#222e35] bg-white dark:bg-[#111b21] ${selectedChat ? 'hidden md:flex' : 'flex'}`}>
@@ -3236,25 +3236,23 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                 </div>
             )}
 
-            {/* RIGHT PANEL: CRM Manual Projects — absolute overlay */}
+            {/* RIGHT PANEL: CRM Manual Projects */}
             {showRightPanel && (
-                <div className="absolute right-0 top-0 h-full z-50 shadow-2xl animate-in slide-in-from-right-4 duration-200">
-                    <ManualProjectsSidepanel
-                        selectedChat={selectedChat}
-                        onClose={() => setShowRightPanel(false)}
-                        showToast={showToast}
-                        candidates={candidates}
-                        onCandidateUpdated={(updatedCandidate) => {
-                            setCandidates(prev => prev.map(c => c.id === updatedCandidate.id ? updatedCandidate : c));
-                            if(selectedChat?.id === updatedCandidate.id) setSelectedChat(updatedCandidate);
-                        }}
-                    />
-                </div>
+                <ManualProjectsSidepanel
+                    selectedChat={selectedChat}
+                    onClose={() => setShowRightPanel(false)}
+                    showToast={showToast}
+                    candidates={candidates}
+                    onCandidateUpdated={(updatedCandidate) => {
+                        setCandidates(prev => prev.map(c => c.id === updatedCandidate.id ? updatedCandidate : c));
+                        if(selectedChat?.id === updatedCandidate.id) setSelectedChat(updatedCandidate);
+                    }}
+                />
             )}
 
-            {/* QUICK REPLIES PANEL — absolute overlay */}
+            {/* QUICK REPLIES PANEL */}
             {showQuickRepliesPanel && (
-                <div className="absolute right-0 top-0 h-full z-50 w-[340px] shadow-2xl flex flex-col bg-white dark:bg-[#111b21] animate-in slide-in-from-right-4 duration-200">
+                <div className="w-[340px] border-l border-[#d1d7db] dark:border-[#222e35] bg-white dark:bg-[#111b21] flex flex-col h-full">
                     {/* Header */}
                     <div className="px-4 py-3 bg-[#f0f2f5] dark:bg-[#202c33] border-b border-[#d1d7db] dark:border-[#222e35] flex items-center justify-between">
                         <div className="flex items-center gap-2">
