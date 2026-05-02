@@ -9,7 +9,7 @@ const SETTINGS_KEY = 'reengagement:settings';
 // Campos requeridos en orden de prioridad
 export const FIELD_PRIORITY = ['nombreReal', 'fechaNacimiento', 'municipio', 'categoria', 'escolaridad'];
 export const FIELD_LABELS = {
-    nombreReal:      'nombre completo',
+    nombreReal:      'nombre y apellidos',
     fechaNacimiento: 'fecha de nacimiento',
     municipio:       'municipio donde vives',
     categoria:       'tipo de trabajo que buscas',
