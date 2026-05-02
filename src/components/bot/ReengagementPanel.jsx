@@ -22,13 +22,19 @@ function humanDate(iso) {
 }
 
 const SILENCE_OPTIONS = [
-    { label: '1 hora', value: 1 },
-    { label: '2 horas', value: 2 },
-    { label: '4 horas', value: 4 },
-    { label: '8 horas', value: 8 },
+    { label: '5 min',    value: 5 / 60 },
+    { label: '15 min',   value: 15 / 60 },
+    { label: '30 min',   value: 30 / 60 },
+    { label: '1 hora',   value: 1 },
+    { label: '2 horas',  value: 2 },
+    { label: '4 horas',  value: 4 },
+    { label: '8 horas',  value: 8 },
     { label: '24 horas', value: 24 },
 ];
 const INTERVAL_OPTIONS = [
+    { label: '5 min',    value: 5 / 60 },
+    { label: '15 min',   value: 15 / 60 },
+    { label: '30 min',   value: 30 / 60 },
     { label: '12 horas', value: 12 },
     { label: '24 horas', value: 24 },
     { label: '48 horas', value: 48 },
