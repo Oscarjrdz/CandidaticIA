@@ -136,22 +136,25 @@ export default async function handler(req, res) {
         return res.status(500).json({ error: 'Cannot read settings' });
     }
 
-    if (!settings?.enabled) {
+    // ── Modo forzado: "Enviar ya" desde UI ───────────────────────────────────
+    const forceCandidateId = req.body?.forceCandidateId || null;
+
+    if (!settings?.enabled && !forceCandidateId) {
         return res.json({ success: true, skipped: 'disabled', processed: 0 });
     }
 
-    // ── Verificar horario de negocio ─────────────────────────────────────────
-    const startH = settings.businessHoursStart ?? 8;
-    const endH   = settings.businessHoursEnd   ?? 20;
-    if (!isBusinessHour(startH, endH)) {
+    // ── Verificar horario de negocio (omitir si es envío forzado) ────────────
+    const startH = settings?.businessHoursStart ?? 8;
+    const endH   = settings?.businessHoursEnd   ?? 20;
+    if (!forceCandidateId && !isBusinessHour(startH, endH)) {
         return res.json({ success: true, skipped: 'outside_business_hours', processed: 0 });
     }
 
-    const activeFromMs  = settings.activeFrom ? new Date(settings.activeFrom).getTime() : 0;
-    const silenceMs     = (settings.silenceHours  || 2)  * 3_600_000;
-    const intervalMs    = (settings.intervalHours || 24) * 3_600_000;
-    const maxSilenceMs  = (settings.maxSilenceDays || 7) * 86_400_000;
-    const maxAttempts   = settings.maxAttempts || 2;
+    const activeFromMs  = settings?.activeFrom ? new Date(settings.activeFrom).getTime() : 0;
+    const silenceMs     = (settings?.silenceHours  || 2)  * 3_600_000;
+    const intervalMs    = (settings?.intervalHours || 24) * 3_600_000;
+    const maxSilenceMs  = (settings?.maxSilenceDays || 7) * 86_400_000;
+    const maxAttempts   = settings?.maxAttempts || 2;
     const now           = Date.now();
 
     // ── Cargar candidatos ─────────────────────────────────────────────────────
@@ -159,6 +162,10 @@ export default async function handler(req, res) {
     try {
         const result = await getCandidates(10000, 0, '', false, '');
         candidates = result.candidates || result;
+        // Si es envío forzado, filtrar solo ese candidato
+        if (forceCandidateId) {
+            candidates = candidates.filter(c => c.id === forceCandidateId);
+        }
     } catch (e) {
         return res.status(500).json({ error: 'Cannot fetch candidates' });
     }
@@ -185,7 +192,8 @@ export default async function handler(req, res) {
                 : 0;
 
             // Solo candidatos que interactuaron después de activar el feature
-            if (!lastMsgTs || lastMsgTs < activeFromMs) { skipped++; continue; }
+            // Si no es envío forzado, validar fecha de activación
+            if (!forceCandidateId && (!lastMsgTs || lastMsgTs < activeFromMs)) { skipped++; continue; }
 
             const missingLabels = getMissingFields(candidate).map(f => FIELD_LABELS[f]);
             if (missingLabels.length === 0) { skipped++; continue; }  // perfil completo
@@ -195,18 +203,17 @@ export default async function handler(req, res) {
             const lastSentTs  = candidate.reengagement_last_sent
                 ? new Date(candidate.reengagement_last_sent).getTime()
                 : 0;
-            const silenceElapsed = now - lastMsgTs;
+            const silenceElapsed = now - (lastMsgTs || now);
 
-            if (attempts >= maxAttempts)   { skipped++; continue; }
-            if (silenceElapsed > maxSilenceMs) { skipped++; continue; }  // demasiado viejo
-
-            // ¿Ya ha pasado el tiempo de silencio requerido?
-            if (lastSentTs === 0) {
-                // Primer intento
-                if (silenceElapsed < silenceMs) { skipped++; continue; }
-            } else {
-                // Intentos posteriores — respetar intervalo entre mensajes
-                if ((now - lastSentTs) < intervalMs) { skipped++; continue; }
+            // Envío forzado omite checks de tiempo — va directo
+            if (!forceCandidateId) {
+                if (attempts >= maxAttempts)            { skipped++; continue; }
+                if (silenceElapsed > maxSilenceMs)      { skipped++; continue; }
+                if (lastSentTs === 0) {
+                    if (silenceElapsed < silenceMs)     { skipped++; continue; }
+                } else {
+                    if ((now - lastSentTs) < intervalMs){ skipped++; continue; }
+                }
             }
 
             // ── Generar y enviar mensaje ──────────────────────────────────────
