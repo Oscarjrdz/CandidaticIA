@@ -105,13 +105,11 @@ export default async function handler(req, res) {
         }
     };
 
-    // Execute immediately upon connection so the UI doesn't wait 2 seconds, then loop
+    // Execute once on connection to seed the UI; Pub/Sub handles subsequent updates
     runPoll();
-    const pollInterval = setInterval(runPoll, 5000);
 
     req.on('close', () => {
         clearInterval(keepAliveInterval);
-        clearInterval(pollInterval);
         if (subscriber) {
             subscriber.unsubscribe();
             subscriber.quit();

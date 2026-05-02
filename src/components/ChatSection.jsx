@@ -2060,7 +2060,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
     }, [messages, selectedChat?.unreadMsgCount]);
 
     return (
-        <div className="flex h-full w-full bg-[#f0f2f5] dark:bg-[#111b21] font-sans">
+        <div className="flex h-full w-full bg-[#f0f2f5] dark:bg-[#111b21] font-sans relative">
             
             {/* LADO IZQUIERDO: LISTA DE CHATS */}
             <div className={`w-full md:w-[30%] lg:w-[35%] xl:w-[500px] flex-col border-r border-[#d1d7db] dark:border-[#222e35] bg-white dark:bg-[#111b21] ${selectedChat ? 'hidden md:flex' : 'flex'}`}>
@@ -2485,11 +2485,11 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                                     chat={chat}
                                     isSelected={selectedChat?.id === chat.id}
                                     isPinned={pinnedChats.includes(chat.id)}
-                                    onSelect={setSelectedChat}
+                                    onSelect={handleSelectChat}
                                     onBlock={handleBlockToggle}
                                     onDelete={handleDeleteChat}
                                     onTogglePin={togglePin}
-                                    onlineReaders={(onlineUsers || []).filter(u => u.currentChatId === chat.id)}
+                                    onlineReaders={onlineReadersByChat.get(chat.id) || EMPTY_READERS}
                                     blockLoading={blockLoading}
                                     userId={user?.id || user?.whatsapp}
                                     onOpenProfileModal={setProfileModalCandidate}
@@ -2862,8 +2862,41 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
 
                                 return null;
                             })}
+
+                            {/* Search icon */}
+                            <button
+                                onClick={() => { setShowChatSearch(v => !v); if (!showChatSearch) setTimeout(() => chatSearchInputRef.current?.focus(), 50); }}
+                                className={`p-2 rounded-full transition-all ${showChatSearch ? 'bg-black/10 dark:bg-white/10 text-[#111b21] dark:text-white' : 'hover:bg-black/5 dark:hover:bg-white/5 text-[#54656f] dark:text-[#aebac1]'}`}
+                                title="Buscar en conversación"
+                            >
+                                <Search className="w-5 h-5" />
+                            </button>
                         </div>
                     </div>
+
+                    {/* In-chat search bar */}
+                    {showChatSearch && (
+                        <div className="bg-[#f0f2f5] dark:bg-[#202c33] border-b border-[#d1d7db] dark:border-[#222e35] px-4 py-2 flex items-center gap-2 z-20 shrink-0">
+                            <Search className="w-4 h-4 text-[#54656f] dark:text-[#aebac1] shrink-0" />
+                            <input
+                                ref={chatSearchInputRef}
+                                autoFocus
+                                type="text"
+                                placeholder="Buscar en conversación..."
+                                value={chatSearch}
+                                onChange={e => { setChatSearch(e.target.value); setChatSearchIdx(0); }}
+                                className="flex-1 bg-transparent outline-none text-[14px] text-[#111b21] dark:text-[#e9edef] placeholder-[#8696a0]"
+                            />
+                            {chatSearch && (
+                                <span className="text-[11px] text-[#8696a0] shrink-0">
+                                    {displayMessages.filter(m => m.type !== 'date-separator' && m.type !== 'unread-separator' && typeof m.content === 'string' && m.content.toLowerCase().includes(chatSearch.toLowerCase())).length} resultados
+                                </span>
+                            )}
+                            <button onClick={() => { setShowChatSearch(false); setChatSearch(''); }} className="p-1 rounded-full text-[#54656f] hover:text-[#111b21] dark:text-[#aebac1] dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5">
+                                <X className="w-4 h-4" />
+                            </button>
+                        </div>
+                    )}
 
                     {/* WhatsApp Background Pattern */}
                     <div 
@@ -2876,20 +2909,43 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                     ></div>
 
                     {/* Mensajes */}
-                    <div className="flex-1 overflow-y-auto p-[5%] z-10 space-y-[2px]" onClick={() => setShowDropdown(null)}>
+                    <div
+                        ref={messagesContainerRef}
+                        className="flex-1 overflow-y-auto p-[5%] z-10 space-y-[2px]"
+                        onClick={() => setShowDropdown(null)}
+                        onScroll={(e) => {
+                            const el = e.currentTarget;
+                            setShowScrollBtn(el.scrollHeight - el.scrollTop - el.clientHeight > 150);
+                        }}
+                    >
                         <div className="text-center py-2 bg-[#ffeed0] dark:bg-[#cca868]/10 text-[#111b21] dark:text-[#f7cd73]/70 rounded-lg mx-auto w-fit px-4 shadow-sm select-none mb-4 border border-black/5 dark:border-white/5">
                             <p className="text-[12px] leading-tight">Los mensajes están protegidos de extremo a extremo por Candidatic y la IA.</p>
                         </div>
 
                         {displayMessages.map((msg, i) => {
                             if (!msg) return null;
+
+                            // Date separator chip
+                            if (msg.type === 'date-separator') {
+                                return <DateSeparator key={msg.id} date={msg.date} />;
+                            }
+
+                            // Unread separator
+                            if (msg.type === 'unread-separator') {
+                                return (
+                                    <div key="__unread_sep" className="flex items-center justify-center my-2 select-none">
+                                        <div className="bg-[#d0f0e8] dark:bg-[#025144]/60 text-[#075e54] dark:text-[#00a884] text-[11px] font-medium px-3 py-1 rounded-full shadow-sm border border-black/5 dark:border-white/5">
+                                            {msg.count} mensaje{msg.count !== 1 ? 's' : ''} no leído{msg.count !== 1 ? 's' : ''}
+                                        </div>
+                                    </div>
+                                );
+                            }
+
                             // Prevenir renderizado de burbujas fantasma (eventos de sistema sin texto ni multimedia)
                             if (!msg.content && !msg.mediaUrl) return null;
-                            
+
                             const isMe = msg.from === 'me' || msg.from === 'bot';
-                            const prevMsg = i > 0 ? displayMessages[i - 1] : null;
-                            const isPrevMe = prevMsg ? (prevMsg.from === 'me' || prevMsg.from === 'bot') : null;
-                            const isFirstInSeries = !prevMsg || isMe !== isPrevMe;
+                            const isFirstInSeries = msg._isFirstInSeries;
 
                             return (
                                 <div key={msg.id + '-' + i} className={`flex ${isMe ? 'justify-end' : 'justify-start'} group max-w-full relative ${!isFirstInSeries ? '-mt-1.5' : 'mt-1'} ${(msg.reactions && msg.reactions.length > 0) ? 'pb-5' : ''}`}>
@@ -2948,7 +3004,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                                                         <video src={msg.mediaUrl} controls width="260" className="w-[260px] aspect-video rounded shadow-sm bg-black" />
                                                     )}
                                                     {(msg.type === 'audio' || msg.type === 'ptt' || msg.type === 'voice') && (
-                                                        <audio src={msg.mediaUrl} controls className="max-w-[240px] h-[35px] mt-1 mb-1" />
+                                                        <AudioPlayer src={msg.mediaUrl} />
                                                     )}
                                                     {msg.type === 'document' && (
                                                         <a href={msg.mediaUrl} target="_blank" rel="noreferrer" className="flex items-center gap-2 px-3 py-2 bg-black/5 dark:bg-white/5 rounded text-blue-500 hover:text-blue-600 font-medium break-all">
@@ -3122,13 +3178,35 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                             );
                         })}
                         
-                        {/* Typing Indicators (Removed as requested) */}
+                        {/* Typing Indicator */}
+                        {candidateTyping && (
+                            <div className="flex justify-start mt-1">
+                                <div className="bg-white dark:bg-[#202c33] rounded-[7.5px] rounded-tl-none px-3 py-2.5 shadow-[0_1px_0.5px_rgba(11,20,26,.13)]">
+                                    <div className="flex items-center gap-1 h-4">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-[#8696a0] animate-bounce" style={{ animationDelay: '0ms' }} />
+                                        <span className="w-1.5 h-1.5 rounded-full bg-[#8696a0] animate-bounce" style={{ animationDelay: '150ms' }} />
+                                        <span className="w-1.5 h-1.5 rounded-full bg-[#8696a0] animate-bounce" style={{ animationDelay: '300ms' }} />
+                                    </div>
+                                </div>
+                            </div>
+                        )}
 
                     <div ref={messagesEndRef} />
                     </div>
 
+                    {/* Scroll-to-bottom button */}
+                    {showScrollBtn && (
+                        <button
+                            onClick={() => messagesContainerRef.current?.scrollTo({ top: messagesContainerRef.current.scrollHeight, behavior: 'smooth' })}
+                            className="absolute bottom-[72px] right-5 z-30 w-10 h-10 rounded-full bg-white dark:bg-[#202c33] shadow-lg flex items-center justify-center border border-black/10 dark:border-white/10 hover:bg-gray-50 dark:hover:bg-[#2a3942] transition-colors"
+                            title="Ir al final"
+                        >
+                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-[#54656f] dark:text-[#aebac1]"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                        </button>
+                    )}
+
                     {/* Input Area */}
-                    <MessageInputBox 
+                    <MessageInputBox
                         ref={messageInputRef}
                         onSend={handleSend}
                         onTyping={handleTyping}
@@ -3158,23 +3236,25 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                 </div>
             )}
 
-            {/* RIGHT PANEL: CRM Manual Projects */}
+            {/* RIGHT PANEL: CRM Manual Projects — absolute overlay */}
             {showRightPanel && (
-                <ManualProjectsSidepanel
-                    selectedChat={selectedChat}
-                    onClose={() => setShowRightPanel(false)}
-                    showToast={showToast}
-                    candidates={candidates}
-                    onCandidateUpdated={(updatedCandidate) => {
-                        setCandidates(prev => prev.map(c => c.id === updatedCandidate.id ? updatedCandidate : c));
-                        if(selectedChat?.id === updatedCandidate.id) setSelectedChat(updatedCandidate);
-                    }}
-                />
+                <div className="absolute right-0 top-0 h-full z-50 shadow-2xl animate-in slide-in-from-right-4 duration-200">
+                    <ManualProjectsSidepanel
+                        selectedChat={selectedChat}
+                        onClose={() => setShowRightPanel(false)}
+                        showToast={showToast}
+                        candidates={candidates}
+                        onCandidateUpdated={(updatedCandidate) => {
+                            setCandidates(prev => prev.map(c => c.id === updatedCandidate.id ? updatedCandidate : c));
+                            if(selectedChat?.id === updatedCandidate.id) setSelectedChat(updatedCandidate);
+                        }}
+                    />
+                </div>
             )}
 
-            {/* QUICK REPLIES PANEL */}
+            {/* QUICK REPLIES PANEL — absolute overlay */}
             {showQuickRepliesPanel && (
-                <div className="w-[340px] border-l border-[#d1d7db] dark:border-[#222e35] bg-white dark:bg-[#111b21] flex flex-col h-full">
+                <div className="absolute right-0 top-0 h-full z-50 w-[340px] shadow-2xl flex flex-col bg-white dark:bg-[#111b21] animate-in slide-in-from-right-4 duration-200">
                     {/* Header */}
                     <div className="px-4 py-3 bg-[#f0f2f5] dark:bg-[#202c33] border-b border-[#d1d7db] dark:border-[#222e35] flex items-center justify-between">
                         <div className="flex items-center gap-2">
