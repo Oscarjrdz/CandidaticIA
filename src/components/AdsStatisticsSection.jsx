@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Target, TrendingUp, Users, Calendar, Megaphone, Loader2, Clock, Copy, ExternalLink, RefreshCw, Video, DollarSign, Eye, MousePointerClick, Percent, MessageCircle, Heart, ArrowUpRight, Trash2 } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Target, TrendingUp, Users, Calendar, Megaphone, Loader2, Clock, Copy, ExternalLink, RefreshCw, Video, DollarSign, Eye, MousePointerClick, Percent, MessageCircle, Heart, ArrowUpRight, Trash2, X, Send, MessageSquare, ChevronDown, ChevronUp, CornerDownRight } from 'lucide-react';
 import { useConfirmModal } from './ui/ConfirmModal';
 import { getAdsStats } from '../services/adsService';
 import { useToastContext } from '../contexts/ToastContext';
@@ -65,11 +65,228 @@ const AdCardSkeleton = () => (
     </div>
 );
 
+/* ─── Comments Modal ──────────────────────────────────────────────────── */
+const CommentsModal = ({ ad, onClose, showToast }) => {
+    const [comments, setComments] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [replyingTo, setReplyingTo] = useState(null);
+    const [replyText, setReplyText] = useState('');
+    const [sending, setSending] = useState(false);
+    const [expandedReplies, setExpandedReplies] = useState(new Set());
+
+    useEffect(() => {
+        if (!ad?.adId) return;
+        fetchComments();
+    }, [ad?.adId]);
+
+    const fetchComments = async () => {
+        setLoading(true);
+        try {
+            const res = await fetch(`/api/ads-comments?adId=${ad.adId}`);
+            const data = await res.json();
+            if (data.success) {
+                setComments(data.comments || []);
+            } else {
+                showToast?.(data.error || 'Error al cargar comentarios', 'error');
+            }
+        } catch (e) {
+            showToast?.('Error de red', 'error');
+        }
+        setLoading(false);
+    };
+
+    const handleReply = async (commentId) => {
+        if (!replyText.trim()) return;
+        setSending(true);
+        try {
+            const res = await fetch('/api/ads-comments', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ commentId, message: replyText.trim() })
+            });
+            const data = await res.json();
+            if (data.success) {
+                showToast?.('Respuesta enviada ✅', 'success');
+                setReplyText('');
+                setReplyingTo(null);
+                fetchComments();
+            } else {
+                showToast?.(data.error || 'Error al responder', 'error');
+            }
+        } catch (e) {
+            showToast?.('Error de red', 'error');
+        }
+        setSending(false);
+    };
+
+    const toggleReplies = (commentId) => {
+        setExpandedReplies(prev => {
+            const next = new Set(prev);
+            if (next.has(commentId)) next.delete(commentId);
+            else next.add(commentId);
+            return next;
+        });
+    };
+
+    const timeAgo = (dateStr) => {
+        if (!dateStr) return '';
+        const diff = Date.now() - new Date(dateStr).getTime();
+        const mins = Math.floor(diff / 60000);
+        if (mins < 60) return `${mins}m`;
+        const hrs = Math.floor(mins / 60);
+        if (hrs < 24) return `${hrs}h`;
+        const days = Math.floor(hrs / 24);
+        return `${days}d`;
+    };
+
+    return (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4" onClick={onClose}>
+            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+            <div className="relative bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-lg max-h-[80vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200"
+                 onClick={e => e.stopPropagation()}>
+                {/* Header */}
+                <div className="px-5 py-4 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between shrink-0">
+                    <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shrink-0">
+                            <MessageSquare className="w-4 h-4 text-white" />
+                        </div>
+                        <div className="min-w-0">
+                            <h3 className="text-sm font-bold text-gray-900 dark:text-white truncate">
+                                Comentarios
+                            </h3>
+                            <p className="text-[10px] text-gray-400 truncate">{ad.adHeadline}</p>
+                        </div>
+                    </div>
+                    <button onClick={onClose} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                        <X className="w-4 h-4 text-gray-500" />
+                    </button>
+                </div>
+
+                {/* Comments List */}
+                <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                    {loading ? (
+                        <div className="flex flex-col items-center justify-center py-12 gap-3">
+                            <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
+                            <p className="text-xs text-gray-400">Cargando comentarios...</p>
+                        </div>
+                    ) : comments.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center py-12 gap-2 text-gray-400">
+                            <MessageCircle className="w-10 h-10 opacity-30" />
+                            <p className="text-sm font-medium">Sin comentarios aún</p>
+                            <p className="text-xs opacity-60">Los comentarios del post aparecerán aquí</p>
+                        </div>
+                    ) : (
+                        comments.map(comment => (
+                            <div key={comment.id} className="space-y-1.5">
+                                {/* Main Comment */}
+                                <div className="bg-gray-50 dark:bg-gray-700/40 rounded-xl p-3">
+                                    <div className="flex items-start gap-2.5">
+                                        <div className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center text-white text-[10px] font-bold shrink-0 mt-0.5">
+                                            {(comment.from?.name || '?').charAt(0).toUpperCase()}
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-xs font-bold text-gray-900 dark:text-white">
+                                                    {comment.from?.name || 'Usuario'}
+                                                </span>
+                                                <span className="text-[9px] text-gray-400">
+                                                    {timeAgo(comment.createdTime)}
+                                                </span>
+                                            </div>
+                                            <p className="text-[11px] text-gray-700 dark:text-gray-300 mt-0.5 leading-relaxed break-words">
+                                                {comment.message}
+                                            </p>
+                                            {/* Attachment */}
+                                            {comment.attachment?.media?.image?.src && (
+                                                <img src={comment.attachment.media.image.src} alt="" className="mt-2 max-w-[180px] rounded-lg shadow-sm" />
+                                            )}
+                                            {/* Actions */}
+                                            <div className="flex items-center gap-3 mt-1.5">
+                                                {comment.likeCount > 0 && (
+                                                    <span className="text-[9px] text-gray-400 flex items-center gap-0.5">
+                                                        <Heart className="w-2.5 h-2.5" /> {comment.likeCount}
+                                                    </span>
+                                                )}
+                                                <button
+                                                    onClick={() => { setReplyingTo(replyingTo === comment.id ? null : comment.id); setReplyText(''); }}
+                                                    className="text-[10px] font-semibold text-blue-500 hover:text-blue-600 transition-colors"
+                                                >
+                                                    Responder
+                                                </button>
+                                                {comment.replyCount > 0 && (
+                                                    <button
+                                                        onClick={() => toggleReplies(comment.id)}
+                                                        className="text-[10px] text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 flex items-center gap-0.5 transition-colors"
+                                                    >
+                                                        {expandedReplies.has(comment.id) ? <ChevronUp className="w-2.5 h-2.5" /> : <ChevronDown className="w-2.5 h-2.5" />}
+                                                        {comment.replyCount} respuesta{comment.replyCount !== 1 ? 's' : ''}
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Replies */}
+                                {expandedReplies.has(comment.id) && comment.replies?.length > 0 && (
+                                    <div className="ml-6 space-y-1.5">
+                                        {comment.replies.map(reply => (
+                                            <div key={reply.id} className="bg-blue-50/50 dark:bg-blue-900/10 rounded-lg p-2.5 border-l-2 border-blue-300 dark:border-blue-700">
+                                                <div className="flex items-start gap-2">
+                                                    <CornerDownRight className="w-3 h-3 text-blue-400 shrink-0 mt-0.5" />
+                                                    <div className="flex-1 min-w-0">
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="text-[10px] font-bold text-gray-800 dark:text-gray-200">
+                                                                {reply.from?.name || 'Usuario'}
+                                                            </span>
+                                                            <span className="text-[8px] text-gray-400">{timeAgo(reply.createdTime)}</span>
+                                                        </div>
+                                                        <p className="text-[10px] text-gray-600 dark:text-gray-400 mt-0.5 break-words">
+                                                            {reply.message}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+
+                                {/* Reply Input */}
+                                {replyingTo === comment.id && (
+                                    <div className="ml-6 flex gap-2 items-end animate-in fade-in slide-in-from-top-2 duration-200">
+                                        <input
+                                            type="text"
+                                            value={replyText}
+                                            onChange={e => setReplyText(e.target.value)}
+                                            onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleReply(comment.id)}
+                                            placeholder="Escribe tu respuesta..."
+                                            className="flex-1 text-xs px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+                                            autoFocus
+                                        />
+                                        <button
+                                            onClick={() => handleReply(comment.id)}
+                                            disabled={!replyText.trim() || sending}
+                                            className="p-2 rounded-lg bg-blue-500 hover:bg-blue-600 text-white disabled:opacity-40 disabled:cursor-not-allowed transition-colors shrink-0"
+                                        >
+                                            {sending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        ))
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+};
+
 /* ─── Main Component ──────────────────────────────────────────────────── */
 const AdsStatisticsSection = () => {
     const { showToast } = useToastContext();
     const [stats, setStats] = useState({ ads: [], totalAdsLeads: 0 });
     const [loading, setLoading] = useState(true);
+    const [commentsAd, setCommentsAd] = useState(null);
     const { confirmModalJSX, showConfirm } = useConfirmModal();
 
     const loadStats = async () => {
@@ -282,6 +499,19 @@ const AdsStatisticsSection = () => {
                                             </div>
                                         </div>
                                     )}
+
+                                    {/* Comments Button */}
+                                    {ad.adId && (
+                                        <div className="border-t border-gray-100 dark:border-gray-700 pt-2">
+                                            <button
+                                                onClick={() => setCommentsAd(ad)}
+                                                className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-[10px] font-semibold text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
+                                            >
+                                                <MessageSquare className="w-3 h-3" />
+                                                Ver Comentarios
+                                            </button>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         );
@@ -295,6 +525,11 @@ const AdsStatisticsSection = () => {
                         </div>
                     ))}
                 </div>
+            )}
+
+            {/* Comments Modal */}
+            {commentsAd && (
+                <CommentsModal ad={commentsAd} onClose={() => setCommentsAd(null)} showToast={showToast} />
             )}
 
             {/* Confirm Modal Portal */}
