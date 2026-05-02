@@ -47,7 +47,7 @@ export const toTitleCase = (str) => {
 };
 
 export const formatWhatsAppText = (text) => {
-    if (!text) return '';
+    if (!text || typeof text !== 'string') return '';
     
     // 1. First, protect HTML characters
     let processed = text

@@ -1884,7 +1884,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
         if (!Array.isArray(messages)) return [];
         return messages.flatMap((msg) => {
             if (!msg) return [];
-            let content = msg.content || '';
+            let content = typeof msg.content === 'string' ? msg.content : '';
             if (content.includes('[REACCI')) {
                 content = content.replace(/\[REACCI[OÓ]N:\s*.*?\]/gi, '').trim();
                 if (!content && !msg.mediaUrl) return [];

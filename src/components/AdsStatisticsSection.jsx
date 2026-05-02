@@ -69,6 +69,7 @@ const AdCardSkeleton = () => (
 const CommentsModal = ({ ad, onClose, showToast }) => {
     const [comments, setComments] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [errorMsg, setErrorMsg] = useState(null);
     const [replyingTo, setReplyingTo] = useState(null);
     const [replyText, setReplyText] = useState('');
     const [sending, setSending] = useState(false);
@@ -81,15 +82,22 @@ const CommentsModal = ({ ad, onClose, showToast }) => {
 
     const fetchComments = async () => {
         setLoading(true);
+        setErrorMsg(null);
         try {
             const res = await fetch(`/api/ads-comments?adId=${ad.adId}`);
             const data = await res.json();
             if (data.success) {
                 setComments(data.comments || []);
+                // If it succeeded but explicitly returned a message (e.g. no post linked)
+                if (data.message && (!data.comments || data.comments.length === 0)) {
+                    setErrorMsg(data.message);
+                }
             } else {
+                setErrorMsg(data.error || 'Error al cargar comentarios');
                 showToast?.(data.error || 'Error al cargar comentarios', 'error');
             }
         } catch (e) {
+            setErrorMsg('Error de red al cargar comentarios');
             showToast?.('Error de red', 'error');
         }
         setLoading(false);
@@ -169,6 +177,17 @@ const CommentsModal = ({ ad, onClose, showToast }) => {
                             <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
                             <p className="text-xs text-gray-400">Cargando comentarios...</p>
                         </div>
+                    ) : errorMsg ? (
+                        <div className="flex flex-col items-center justify-center py-12 gap-2 text-red-400">
+                            <Target className="w-10 h-10 opacity-50 mb-2" />
+                            <p className="text-sm font-bold text-center px-4">Error de permisos</p>
+                            <p className="text-xs opacity-80 text-center px-4 max-w-sm">
+                                {errorMsg}
+                            </p>
+                            <div className="mt-4 p-3 bg-red-50/10 rounded-lg text-[10px] border border-red-500/20 max-w-sm">
+                                Para ver y contestar comentarios, asegúrate de que el token en META_ACCESS_TOKEN tenga los permisos <strong>pages_read_engagement</strong> y <strong>pages_manage_engagement</strong>, y que la Página de Facebook esté asignada al Usuario del Sistema en el Administrador Comercial.
+                            </div>
+                        </div>
                     ) : comments.length === 0 ? (
                         <div className="flex flex-col items-center justify-center py-12 gap-2 text-gray-400">
                             <MessageCircle className="w-10 h-10 opacity-30" />
@@ -229,7 +248,7 @@ const CommentsModal = ({ ad, onClose, showToast }) => {
 
                                 {/* Replies */}
                                 {expandedReplies.has(comment.id) && comment.replies?.length > 0 && (
-                                    <div className="ml-6 space-y-1.5">
+                                    <div className="ml-6 space-y-1.5 mt-1.5">
                                         {comment.replies.map(reply => (
                                             <div key={reply.id} className="bg-blue-50/50 dark:bg-blue-900/10 rounded-lg p-2.5 border-l-2 border-blue-300 dark:border-blue-700">
                                                 <div className="flex items-start gap-2">
@@ -244,6 +263,20 @@ const CommentsModal = ({ ad, onClose, showToast }) => {
                                                         <p className="text-[10px] text-gray-600 dark:text-gray-400 mt-0.5 break-words">
                                                             {reply.message}
                                                         </p>
+                                                        {/* Reply Actions */}
+                                                        <div className="flex items-center gap-3 mt-1.5">
+                                                            {reply.likeCount > 0 && (
+                                                                <span className="text-[8px] text-gray-400 flex items-center gap-0.5">
+                                                                    <Heart className="w-2.5 h-2.5" /> {reply.likeCount}
+                                                                </span>
+                                                            )}
+                                                            <button
+                                                                onClick={() => { setReplyingTo(replyingTo === reply.id ? null : reply.id); setReplyText(''); }}
+                                                                className="text-[9px] font-semibold text-blue-500 hover:text-blue-600 transition-colors"
+                                                            >
+                                                                Responder
+                                                            </button>
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </div>
@@ -252,19 +285,19 @@ const CommentsModal = ({ ad, onClose, showToast }) => {
                                 )}
 
                                 {/* Reply Input */}
-                                {replyingTo === comment.id && (
-                                    <div className="ml-6 flex gap-2 items-end animate-in fade-in slide-in-from-top-2 duration-200">
+                                {(replyingTo === comment.id || comment.replies?.some(r => r.id === replyingTo)) && (
+                                    <div className="ml-6 flex gap-2 items-end animate-in fade-in slide-in-from-top-2 duration-200 mt-2">
                                         <input
                                             type="text"
                                             value={replyText}
                                             onChange={e => setReplyText(e.target.value)}
-                                            onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleReply(comment.id)}
+                                            onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleReply(replyingTo)}
                                             placeholder="Escribe tu respuesta..."
                                             className="flex-1 text-xs px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
                                             autoFocus
                                         />
                                         <button
-                                            onClick={() => handleReply(comment.id)}
+                                            onClick={() => handleReply(replyingTo)}
                                             disabled={!replyText.trim() || sending}
                                             className="p-2 rounded-lg bg-blue-500 hover:bg-blue-600 text-white disabled:opacity-40 disabled:cursor-not-allowed transition-colors shrink-0"
                                         >
