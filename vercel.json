@@ -76,6 +76,10 @@
         {
             "path": "/api/cron/bandwidth-tracker",
             "schedule": "0 * * * *"
+        },
+        {
+            "path": "/api/cron/reengagement",
+            "schedule": "*/15 * * * *"
         }
     ]
 }

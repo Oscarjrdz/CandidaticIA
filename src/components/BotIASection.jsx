@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Bot, Save, Power, Settings as SettingsIcon, MessageSquare, Smartphone, Clock, Shield, Sparkles, Trash2, Send, RefreshCw, CheckCircle } from 'lucide-react';
+import ReengagementPanel from './bot/ReengagementPanel';
 import Card from './ui/Card';
 import Button from './ui/Button';
 import Input from './ui/Input';
@@ -389,6 +390,15 @@ const BotIASection = () => {
                     <Save className="w-4 h-4 mr-2" />
                     <span>Guardar Cambios</span>
                 </Button>
+            </div>
+
+            {/* Re-engagement Proactivo */}
+            <div>
+                <h2 className="text-base font-black text-gray-900 dark:text-white mb-1">Re-engagement Proactivo IA</h2>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
+                    Brenda retoma candidatos incompletos después de un período de silencio con mensajes personalizados.
+                </p>
+                <ReengagementPanel />
             </div>
         </div>
     );
