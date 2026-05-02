@@ -1587,14 +1587,8 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
         }
     }, []);
 
-    // Seleccionar chat con limpieza optimista de no leídos
     const handleSelectChat = useCallback((chat) => {
         setSelectedChat(chat);
-        if (chat && Number(chat.unreadMsgCount) > 0) {
-            setCandidates(prev => prev.map(c =>
-                c.id === chat.id ? { ...c, unreadMsgCount: 0 } : c
-            ));
-        }
     }, []);
 
     const handleFileUpload = async (e) => {
