@@ -4,6 +4,15 @@ export function usePresence(user, activeSection) {
     const [onlineUsers, setOnlineUsers] = useState([]);
     const currentChatIdRef = useRef(null);
 
+    // Listen for real-time presence pushes via SSE (no polling needed for others' state)
+    useEffect(() => {
+        const handleSSE = (e) => {
+            if (e.detail?.onlineUsers) setOnlineUsers(e.detail.onlineUsers);
+        };
+        window.addEventListener('sse:presence:update', handleSSE);
+        return () => window.removeEventListener('sse:presence:update', handleSSE);
+    }, []);
+
     // Provide a way for ChatWindow to report which chat we are in
     useEffect(() => {
         const handleChatChange = (e) => {

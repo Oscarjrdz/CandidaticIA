@@ -88,6 +88,8 @@ function _connectSingleton() {
                     _updateState({ updatedCandidate: data.data });
                 } else if (data.type === 'stats:global') {
                     _updateState({ globalStats: data.data });
+                } else if (data.type === 'presence:update') {
+                    window.dispatchEvent(new CustomEvent('sse:presence:update', { detail: data.data }));
                 }
             } catch (parseError) {
                 console.error('SSE parse error:', parseError);
