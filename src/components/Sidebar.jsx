@@ -121,17 +121,24 @@ const Sidebar = ({ activeSection, onSectionChange, onLogout, isMobileOpen, onClo
         return localStorage.getItem('sidebar_collapsed') === 'true';
     });
     const { globalStats } = useCandidatesSSE();
-    const [rbacUnread, setRbacUnread] = useState(null);
+    // Seed from localStorage so the badge doesn't jump when switching sections
+    const [rbacUnread, setRbacUnread] = useState(() => {
+        const v = localStorage.getItem('chat_unread_rbac');
+        return v !== null ? Number(v) : null;
+    });
 
-    // Listen for RBAC-filtered unread count from ChatSection
+    // Listen for RBAC-filtered unread count from ChatSection and persist it
     useEffect(() => {
-        const handler = (e) => setRbacUnread(e.detail);
+        const handler = (e) => {
+            setRbacUnread(e.detail);
+            localStorage.setItem('chat_unread_rbac', String(e.detail));
+        };
         window.addEventListener('chat_unread_rbac', handler);
         return () => window.removeEventListener('chat_unread_rbac', handler);
     }, []);
 
-    // Prefer live RBAC count from ChatSection (updates instantly on mark read/unread).
-    // Fall back to globalStats from SSE only before ChatSection has sent its first event.
+    // Prefer live RBAC count (persisted across section changes).
+    // Fall back to globalStats only on very first ever load before ChatSection fires.
     const unreadCount = rbacUnread !== null ? rbacUnread : (globalStats?.unread || 0);
 
     const toggleCollapse = () => {
