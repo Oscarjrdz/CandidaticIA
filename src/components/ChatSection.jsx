@@ -567,15 +567,11 @@ const ChatRow = React.memo(({ chat, isSelected, isPinned, onSelect, onBlock, onD
                             </button>
                         )}
                         {onlineReaders.length > 0 && (
-                            <div className="flex -space-x-1.5 mr-1 group/presence" title="Viendo este chat">
+                            <div className="flex gap-1 mr-1 flex-wrap">
                                 {onlineReaders.map((r, idx) => (
-                                    <div key={idx} className="relative group/tooltip">
-                                        <div className="w-4 h-4 rounded-full border border-white dark:border-[#202c33] bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center text-[8px] text-white font-bold shadow-sm ring-1 ring-black/5">
-                                            {r.userName ? r.userName.charAt(0).toUpperCase() : '?'}
-                                        </div>
-                                        <div className="absolute right-0 bottom-full mb-1 opacity-0 group-hover/tooltip:opacity-100 bg-gray-900 text-white text-[10px] py-0.5 px-1.5 rounded pointer-events-none whitespace-nowrap transition-opacity z-50">
-                                            {r.userId === userId ? 'Tú lo estás viendo' : `${r.userName} viéndolo`}
-                                        </div>
+                                    <div key={idx} className="flex items-center gap-0.5 bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 text-[10px] font-medium px-1.5 py-0.5 rounded-full whitespace-nowrap">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-blue-500 dark:bg-blue-400 inline-block shrink-0" />
+                                        {r.userId === userId ? 'Tú' : (r.userName || '?')}
                                     </div>
                                 ))}
                             </div>

@@ -44,8 +44,8 @@ export function usePresence(user, activeSection) {
         // Initial heartbeat
         sendHeartbeat();
 
-        // Interval heartbeat every 10 seconds
-        const id = setInterval(sendHeartbeat, 10000);
+        // Interval heartbeat every 3 seconds for near-real-time presence
+        const id = setInterval(sendHeartbeat, 3000);
         return () => clearInterval(id);
     }, [user]);
 
