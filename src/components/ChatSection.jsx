@@ -1159,10 +1159,11 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
         return counts;
     }, [baseCandidates]);
 
-    // 📡 Broadcast RBAC-filtered unread count to Sidebar badge
+    // 📡 Broadcast RBAC-filtered unread count to Sidebar badge (only after candidates are loaded)
     useEffect(() => {
+        if (loadingChats) return;
         window.dispatchEvent(new CustomEvent('chat_unread_rbac', { detail: unreadCounts.all }));
-    }, [unreadCounts.all]);
+    }, [unreadCounts.all, loadingChats]);
 
     // 🏎️ Online readers por chat — evita recalcular dentro de cada ChatRow
     const EMPTY_READERS = [];
