@@ -130,10 +130,9 @@ const Sidebar = ({ activeSection, onSectionChange, onLogout, isMobileOpen, onClo
         return () => window.removeEventListener('chat_unread_rbac', handler);
     }, []);
 
-    // For SuperAdmin/Admin: use global count. For restricted users: prefer RBAC count if available.
-    const unreadCount = (user?.role === 'SuperAdmin' || user?.role === 'Admin')
-        ? (globalStats?.unread || 0)
-        : (rbacUnread !== null ? rbacUnread : (globalStats?.unread || 0));
+    // Prefer live RBAC count from ChatSection (updates instantly on mark read/unread).
+    // Fall back to globalStats from SSE only before ChatSection has sent its first event.
+    const unreadCount = rbacUnread !== null ? rbacUnread : (globalStats?.unread || 0);
 
     const toggleCollapse = () => {
         setIsCollapsed(prev => {
