@@ -127,10 +127,33 @@ export default function InternalChat({ onlineUsers = [] }) {
         return () => clearInterval(id);
     }, [open, loaded, fetchHistory]);
 
-    // Scroll to bottom on new messages
+    const containerRef = useRef(null);
+    const isNearBottomRef = useRef(true);
+    const justOpenedRef = useRef(false);
+
+    // Track if user is near the bottom so we only auto-scroll when appropriate
+    const handleScroll = useCallback(() => {
+        const el = containerRef.current;
+        if (!el) return;
+        isNearBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 100;
+    }, []);
+
+    // Scroll to bottom only when user is already near bottom or chat just opened
     useEffect(() => {
-        if (open) bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+        if (!open) return;
+        if (justOpenedRef.current || isNearBottomRef.current) {
+            bottomRef.current?.scrollIntoView({ behavior: justOpenedRef.current ? 'auto' : 'smooth' });
+            justOpenedRef.current = false;
+        }
     }, [messages, open]);
+
+    // Mark "just opened" so the first render scrolls to bottom
+    useEffect(() => {
+        if (open) {
+            justOpenedRef.current = true;
+            isNearBottomRef.current = true;
+        }
+    }, [open]);
 
     // Focus input when opened
     useEffect(() => {
@@ -271,7 +294,7 @@ export default function InternalChat({ onlineUsers = [] }) {
                     )}
 
                     {/* Messages */}
-                    <div className="flex-1 overflow-y-auto px-3 py-3 space-y-2">
+                    <div ref={containerRef} onScroll={handleScroll} className="flex-1 overflow-y-auto px-3 py-3 space-y-2">
                         {messages.length === 0 && (
                             <p className="text-center text-xs text-gray-400 dark:text-gray-500 mt-8">
                                 {others.length === 0 ? 'No hay nadie más en línea' : 'Nadie ha escrito aún. ¡Di hola!'}
