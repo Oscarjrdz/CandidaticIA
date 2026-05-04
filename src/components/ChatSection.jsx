@@ -1899,7 +1899,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
         fetch('/api/chat', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ candidateId: currentCandidateId, message: msg, type: 'text', replyToId: replyId })
+            body: JSON.stringify({ candidateId: currentCandidateId, message: msg, type: 'text', replyToId: replyId, senderId: user?.id || user?.whatsapp, senderName: user?.name || user?.nombre })
         }).then(res => res.json()).then(data => {
             if (data.success && data.message) {
                 // Instantly swap the temp pending message for the real failed/sent one

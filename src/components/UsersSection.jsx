@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useConfirmModal } from './ui/ConfirmModal';
-import { UserPlus, Trash2, Pencil, Shield, Loader2, RefreshCw, Search, User, ShieldCheck, Plus, Check, X, Tag } from 'lucide-react';
+import { UserPlus, Trash2, Pencil, Shield, Loader2, RefreshCw, Search, User, ShieldCheck, Plus, Check, X, Tag, BarChart2, MessageSquare, Clock, CheckCircle, XCircle } from 'lucide-react';
 import Card from './ui/Card';
 import Button from './ui/Button';
 import Modal from './ui/Modal';
@@ -46,6 +46,28 @@ const UsersSection = () => {
     const [allTags, setAllTags] = useState([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
+
+    // Activity stats state
+    const [activityStats, setActivityStats] = useState([]);
+    const [activityDate, setActivityDate] = useState(() => new Date().toISOString().split('T')[0]);
+    const [activityLoading, setActivityLoading] = useState(false);
+
+    const loadActivityStats = async (date) => {
+        setActivityLoading(true);
+        try {
+            const res = await fetch(`/api/recruiter-stats?date=${date}`);
+            const data = await res.json();
+            if (data.success) setActivityStats(data.stats);
+        } catch (e) {
+            showToast('Error cargando estadísticas', 'error');
+        } finally {
+            setActivityLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        if (activeTab === 'activity') loadActivityStats(activityDate);
+    }, [activeTab, activityDate]);
     
     // User Modal State
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -424,6 +446,17 @@ const UsersSection = () => {
                 >
                     Roles y Permisos
                 </button>
+                <button
+                    onClick={() => setActiveTab('activity')}
+                    className={`px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-1.5 ${
+                        activeTab === 'activity'
+                            ? 'bg-white dark:bg-gray-700 text-blue-600 dark:text-blue-400 shadow-sm'
+                            : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+                    }`}
+                >
+                    <BarChart2 className="w-3.5 h-3.5" />
+                    Actividad
+                </button>
             </div>
 
             <Card>
@@ -591,6 +624,97 @@ const UsersSection = () => {
                     )}
                 </div>
             </Card>
+
+            {/* ----------- ACTIVITY TAB ----------- */}
+            {activeTab === 'activity' && (
+                <Card>
+                    <div className="p-4 border-b border-gray-100 dark:border-gray-700/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div>
+                            <h3 className="text-sm font-bold text-gray-900 dark:text-white">Actividad de Reclutadores</h3>
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Estadísticas diarias de todos los usuarios</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <input
+                                type="date"
+                                value={activityDate}
+                                onChange={e => setActivityDate(e.target.value)}
+                                className="text-xs px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                            <button onClick={() => loadActivityStats(activityDate)} className="p-1.5 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                                <RefreshCw className={`w-3.5 h-3.5 text-gray-500 ${activityLoading ? 'animate-spin' : ''}`} />
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="overflow-x-auto">
+                        {activityLoading ? (
+                            <div className="flex items-center justify-center py-12">
+                                <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
+                            </div>
+                        ) : activityStats.length === 0 ? (
+                            <div className="text-center py-12 text-gray-400 dark:text-gray-500 text-sm">
+                                Sin actividad registrada para este día
+                            </div>
+                        ) : (
+                            <table className="w-full text-left">
+                                <thead>
+                                    <tr className="border-b border-gray-100 dark:border-gray-700/50">
+                                        {['Reclutador', 'Tiempo activo', 'Chats atendidos', 'Mensajes enviados', 'Dentro 24h ✅', 'Fuera 24h ⛔'].map(label => (
+                                            <th key={label} className="px-4 py-3 text-[10px] font-black uppercase tracking-widest text-gray-400 dark:text-gray-500 whitespace-nowrap">
+                                                {label}
+                                            </th>
+                                        ))}
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-50 dark:divide-gray-700/30">
+                                    {activityStats.map((s) => (
+                                        <tr key={s.userId} className="hover:bg-gray-50 dark:hover:bg-gray-700/20 transition-colors">
+                                            <td className="px-4 py-3">
+                                                <div className="flex items-center gap-2">
+                                                    <div className="w-7 h-7 rounded-full bg-blue-600 flex items-center justify-center text-white text-[11px] font-bold shrink-0">
+                                                        {s.userName.charAt(0).toUpperCase()}
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-sm font-semibold text-gray-900 dark:text-white">{s.userName}</p>
+                                                        <p className="text-[10px] text-gray-400">{s.role}</p>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td className="px-4 py-3">
+                                                <span className="flex items-center gap-1 text-sm font-mono font-semibold text-gray-700 dark:text-gray-200">
+                                                    <Clock className="w-3.5 h-3.5 text-blue-400" />
+                                                    {s.timeHuman}
+                                                </span>
+                                            </td>
+                                            <td className="px-4 py-3">
+                                                <span className="flex items-center gap-1 text-sm font-semibold text-gray-700 dark:text-gray-200">
+                                                    <MessageSquare className="w-3.5 h-3.5 text-indigo-400" />
+                                                    {s.uniqueChats}
+                                                </span>
+                                            </td>
+                                            <td className="px-4 py-3">
+                                                <span className="text-sm font-semibold text-gray-700 dark:text-gray-200">{s.messagesSent}</span>
+                                            </td>
+                                            <td className="px-4 py-3">
+                                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 text-xs font-bold">
+                                                    <CheckCircle className="w-3 h-3" />
+                                                    {s.chatsIn24h}
+                                                </span>
+                                            </td>
+                                            <td className="px-4 py-3">
+                                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 text-xs font-bold">
+                                                    <XCircle className="w-3 h-3" />
+                                                    {s.chatsOut24h}
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        )}
+                    </div>
+                </Card>
+            )}
 
             {/* ----------- USER MODAL ----------- */}
             <Modal

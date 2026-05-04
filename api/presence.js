@@ -34,6 +34,22 @@ export default async function handler(req, res) {
                 lastSeen: Date.now()
             }), 'EX', 12);
 
+            // ── Activity tracking (daily stats) ──────────────────────────────
+            const today = new Date().toISOString().split('T')[0];
+            const ttl = 86400 * 30; // keep 30 days
+            const actPipe = redis.pipeline();
+            // Store name/role for stats lookup
+            actPipe.set(`recruiter:meta:${userId}`, JSON.stringify({ userName, role: role || 'User' }), 'EX', ttl);
+            // Accumulate active seconds (3s per heartbeat)
+            actPipe.incrby(`recruiter:time:${userId}:${today}`, 3);
+            actPipe.expire(`recruiter:time:${userId}:${today}`, ttl);
+            // Track unique chats opened
+            if (currentChatId) {
+                actPipe.sadd(`recruiter:chats:${userId}:${today}`, currentChatId);
+                actPipe.expire(`recruiter:chats:${userId}:${today}`, ttl);
+            }
+            actPipe.exec().catch(() => {});
+
             // Fetch all currently online users
             const allKeys = await redis.keys('presence:online:*');
             

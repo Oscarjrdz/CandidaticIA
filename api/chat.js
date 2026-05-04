@@ -127,7 +127,7 @@ export default async function handler(req, res) {
         }
 
         if (req.method === 'POST') {
-            const { candidateId, message, type = 'text', mediaUrl, base64Data, replyToId, extraParams: incomingExtraParams = {} } = req.body;
+            const { candidateId, message, type = 'text', mediaUrl, base64Data, replyToId, extraParams: incomingExtraParams = {}, senderId, senderName } = req.body;
 
             if (!candidateId || (!message && !mediaUrl && type !== 'template')) {
                 return res.status(400).json({ error: 'Faltan datos requeridos' });
@@ -330,6 +330,28 @@ export default async function handler(req, res) {
                             lastHumanMessageAt: timestamp,
                             unreadMsgCount: 0
                         });
+
+                        // ── Recruiter activity stats ──────────────────────────
+                        if (senderId) {
+                            const today = new Date().toISOString().split('T')[0];
+                            const ttl = 86400 * 30;
+                            const lastUserMsg = candidate.lastUserMessageAt
+                                ? new Date(candidate.lastUserMessageAt).getTime() : 0;
+                            const inWindow = lastUserMsg > 0 && (Date.now() - lastUserMsg) < 86400000;
+                            const redis2 = getRedisClient();
+                            if (redis2) {
+                                const p = redis2.pipeline();
+                                if (senderName) p.set(`recruiter:meta:${senderId}`, JSON.stringify({ userName: senderName }), 'EX', ttl);
+                                p.incr(`recruiter:msgs:${senderId}:${today}`);
+                                p.expire(`recruiter:msgs:${senderId}:${today}`, ttl);
+                                p.sadd(`recruiter:chats:${senderId}:${today}`, candidateId);
+                                p.expire(`recruiter:chats:${senderId}:${today}`, ttl);
+                                const windowKey = inWindow ? `recruiter:win24:${senderId}:${today}` : `recruiter:out24:${senderId}:${today}`;
+                                p.sadd(windowKey, candidateId);
+                                p.expire(windowKey, ttl);
+                                p.exec().catch(() => {});
+                            }
+                        }
 
                         // Update the message in the Redis list
                         const remoteId = sendResult.messageId || sendResult.data?.messages?.[0]?.id || sendResult.data?.id || sendResult.data?.messageId;
