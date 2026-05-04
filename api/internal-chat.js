@@ -1,11 +1,11 @@
 /**
- * GET  /api/internal-chat        → last N messages
- * POST /api/internal-chat        → send a message (saves + pushes via SSE)
+ * GET  /api/internal-chat?userId=X  → messages for user X (direct + broadcast)
+ * POST /api/internal-chat            → send message (to: userId | 'all')
  */
 import { getRedisClient } from './utils/storage.js';
 
 const KEY = 'internal:messages';
-const MAX = 100;
+const MAX = 200;
 
 export default async function handler(req, res) {
     if (req.method === 'OPTIONS') return res.status(200).end();
@@ -14,20 +14,27 @@ export default async function handler(req, res) {
     if (!redis) return res.status(500).json({ error: 'Redis unavailable' });
 
     if (req.method === 'GET') {
+        const { userId } = req.query;
         const raw = await redis.lrange(KEY, 0, MAX - 1);
-        const messages = raw.map(r => { try { return JSON.parse(r); } catch { return null; } }).filter(Boolean).reverse();
+        const all = raw.map(r => { try { return JSON.parse(r); } catch { return null; } }).filter(Boolean).reverse();
+        // Return only messages relevant to this user: broadcast + DMs to/from them
+        const messages = userId
+            ? all.filter(m => m.to === 'all' || m.from === userId || m.to === userId)
+            : all;
         return res.json({ success: true, messages });
     }
 
     if (req.method === 'POST') {
-        const { userId, userName, role, content } = req.body;
-        if (!userId || !content?.trim()) return res.status(400).json({ error: 'Faltan datos' });
+        const { from, fromName, fromRole, to, toName, content } = req.body;
+        if (!from || !content?.trim() || !to) return res.status(400).json({ error: 'Faltan datos' });
 
         const msg = {
-            id: `im_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
-            userId,
-            userName,
-            role: role || 'User',
+            id: `im_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+            from,
+            fromName: fromName || 'Reclutador',
+            fromRole: fromRole || 'User',
+            to,           // userId or 'all'
+            toName: toName || (to === 'all' ? 'Todos' : to),
             content: content.trim(),
             timestamp: new Date().toISOString(),
         };
@@ -35,7 +42,6 @@ export default async function handler(req, res) {
         await redis.lpush(KEY, JSON.stringify(msg));
         await redis.ltrim(KEY, 0, MAX - 1);
 
-        // Push to all SSE clients instantly
         redis.publish('channel:sse:updates', JSON.stringify({
             type: 'internal:message',
             data: msg,
