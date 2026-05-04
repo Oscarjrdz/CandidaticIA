@@ -90,6 +90,8 @@ function _connectSingleton() {
                     _updateState({ globalStats: data.data });
                 } else if (data.type === 'presence:update') {
                     window.dispatchEvent(new CustomEvent('sse:presence:update', { detail: data.data }));
+                } else if (data.type === 'internal:message') {
+                    window.dispatchEvent(new CustomEvent('sse:internal:message', { detail: data.data }));
                 }
             } catch (parseError) {
                 console.error('SSE parse error:', parseError);

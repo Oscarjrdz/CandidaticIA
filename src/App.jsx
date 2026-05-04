@@ -9,6 +9,7 @@ import { ToastProvider, useToastContext } from './contexts/ToastContext';
 import { AuthProvider, useAuthContext } from './contexts/AuthContext';
 import { getTheme, saveTheme } from './utils/storage';
 import { usePresence } from './hooks/usePresence';
+import InternalChat from './components/InternalChat';
 
 // ⚡ React.lazy — each section loads as a separate chunk on demand
 const CandidatesSection = React.lazy(() => import('./components/CandidatesSection'));
@@ -286,6 +287,8 @@ function AppShell() {
           </Suspense>
           </ErrorBoundary>
         </main>
+
+        <InternalChat onlineUsers={onlineUsers} />
 
         {/* Footer */}
         <footer className="py-3 sm:py-4 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shrink-0 sticky bottom-0 z-10" style={{ WebkitBackdropFilter: 'blur(12px)', backdropFilter: 'blur(12px)', backgroundColor: 'rgba(255,255,255,0.9)' }}>
