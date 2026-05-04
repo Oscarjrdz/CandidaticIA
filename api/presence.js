@@ -74,10 +74,10 @@ export default async function handler(req, res) {
                 });
             }
 
-            // Push live presence to all SSE clients so they update instantly
+            // Flat format so SSE double-wrap resolves correctly in useCandidatesSSE
             redis.publish('channel:sse:updates', JSON.stringify({
                 type: 'presence:update',
-                data: { onlineUsers },
+                onlineUsers,
             })).catch(() => {});
 
             return res.status(200).json({ success: true, onlineUsers });

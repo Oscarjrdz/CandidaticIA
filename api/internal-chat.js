@@ -43,9 +43,10 @@ export default async function handler(req, res) {
         await redis.lpush(KEY, JSON.stringify(msg));
         await redis.ltrim(KEY, 0, MAX - 1);
 
+        // Flat format (matches candidate:update convention) so SSE double-wrap resolves correctly
         redis.publish('channel:sse:updates', JSON.stringify({
             type: 'internal:message',
-            data: msg,
+            ...msg,
         })).catch(() => {});
 
         return res.json({ success: true, message: msg });

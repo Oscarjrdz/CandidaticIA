@@ -2,6 +2,23 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { MessageSquare, X, Send, ChevronDown, Users, Lock } from 'lucide-react';
 import { useAuthContext } from '../contexts/AuthContext';
 
+function playNotificationSound() {
+    try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(880, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(660, ctx.currentTime + 0.12);
+        gain.gain.setValueAtTime(0.25, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.25);
+        osc.start(ctx.currentTime);
+        osc.stop(ctx.currentTime + 0.25);
+    } catch {}
+}
+
 function formatTime(iso) {
     if (!iso) return '';
     const d = new Date(iso);
@@ -29,6 +46,7 @@ export default function InternalChat({ onlineUsers = [] }) {
     const [sending, setSending] = useState(false);
     const [recipientId, setRecipientId] = useState(null); // null = first online user or 'all'
     const [showRecipients, setShowRecipients] = useState(false);
+    const [pulsing, setPulsing] = useState(false);
     const bottomRef = useRef(null);
     const inputRef = useRef(null);
     // Use whatsapp as the stable identity — always present and consistent across all presence entries
@@ -84,6 +102,9 @@ export default function InternalChat({ onlineUsers = [] }) {
             });
             if (msg.from !== myId && (!open || document.hidden)) {
                 setUnread(u => u + 1);
+                playNotificationSound();
+                setPulsing(true);
+                setTimeout(() => setPulsing(false), 1200);
             }
         };
         window.addEventListener('sse:internal:message', handle);
@@ -275,17 +296,22 @@ export default function InternalChat({ onlineUsers = [] }) {
             )}
 
             {/* Floating button */}
-            <button
-                onClick={() => { setOpen(o => !o); if (!open) setUnread(0); }}
-                className="w-12 h-12 rounded-full bg-blue-600 hover:bg-blue-700 shadow-lg flex items-center justify-center transition-all active:scale-95 relative"
-            >
-                <MessageSquare className="w-5 h-5 text-white" />
-                {unread > 0 && (
-                    <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1">
-                        {unread > 9 ? '9+' : unread}
-                    </span>
+            <div className="relative">
+                {pulsing && (
+                    <span className="absolute inset-0 rounded-full bg-blue-400 animate-ping opacity-75 pointer-events-none" />
                 )}
-            </button>
+                <button
+                    onClick={() => { setOpen(o => !o); if (!open) { setUnread(0); setPulsing(false); } }}
+                    className="w-12 h-12 rounded-full bg-blue-600 hover:bg-blue-700 shadow-lg flex items-center justify-center transition-all active:scale-95 relative"
+                >
+                    <MessageSquare className="w-5 h-5 text-white" />
+                    {unread > 0 && (
+                        <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1">
+                            {unread > 9 ? '9+' : unread}
+                        </span>
+                    )}
+                </button>
+            </div>
         </div>
     );
 }
