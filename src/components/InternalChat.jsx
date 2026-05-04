@@ -31,10 +31,14 @@ export default function InternalChat({ onlineUsers = [] }) {
     const [showRecipients, setShowRecipients] = useState(false);
     const bottomRef = useRef(null);
     const inputRef = useRef(null);
-    const myId = user?.id || user?.whatsapp;
+    // Use whatsapp as the stable identity — always present and consistent across all presence entries
+    const myId = user?.whatsapp;
 
-    // Others online (excluding self)
-    const others = onlineUsers.filter(u => u.userId !== myId);
+    // Others online (excluding self) — compare by whatsapp when available, fall back to userId
+    const others = onlineUsers.filter(u => {
+        const theirId = u.whatsapp || u.userId;
+        return theirId !== myId;
+    });
 
     // Auto-select first online user as default recipient (private by default)
     useEffect(() => {
@@ -51,7 +55,7 @@ export default function InternalChat({ onlineUsers = [] }) {
     useEffect(() => {
         if (!open || !myId) return;
         setUnread(0);
-        fetch(`/api/internal-chat?userId=${encodeURIComponent(myId)}`)
+        fetch(`/api/internal-chat?whatsapp=${encodeURIComponent(myId)}`)
             .then(r => r.json())
             .then(d => { if (d.success) setMessages(d.messages); })
             .catch(() => {});
@@ -96,7 +100,7 @@ export default function InternalChat({ onlineUsers = [] }) {
             id: `tmp_${Date.now()}`,
             from: myId,
             fromName: user?.name || user?.nombre || 'Yo',
-            to: recipient.userId,
+            to: recipient.whatsapp || recipient.userId,
             toName: recipient.userName,
             content: text,
             timestamp: new Date().toISOString(),
@@ -112,7 +116,7 @@ export default function InternalChat({ onlineUsers = [] }) {
                     from: myId,
                     fromName: user?.name || user?.nombre || 'Reclutador',
                     fromRole: user?.role || 'User',
-                    to: recipient.userId,
+                    to: recipient.whatsapp || recipient.userId,
                     toName: recipient.userName,
                     content: text,
                 }),

@@ -14,12 +14,13 @@ export default async function handler(req, res) {
     if (!redis) return res.status(500).json({ error: 'Redis unavailable' });
 
     if (req.method === 'GET') {
-        const { userId } = req.query;
+        // Accept whatsapp (preferred stable identity) or legacy userId
+        const meId = req.query.whatsapp || req.query.userId;
         const raw = await redis.lrange(KEY, 0, MAX - 1);
         const all = raw.map(r => { try { return JSON.parse(r); } catch { return null; } }).filter(Boolean).reverse();
         // Return only messages relevant to this user: broadcast + DMs to/from them
-        const messages = userId
-            ? all.filter(m => m.to === 'all' || m.from === userId || m.to === userId)
+        const messages = meId
+            ? all.filter(m => m.to === 'all' || m.from === meId || m.to === meId)
             : all;
         return res.json({ success: true, messages });
     }

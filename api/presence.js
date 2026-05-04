@@ -17,17 +17,20 @@ export default async function handler(req, res) {
         }
 
         if (req.method === 'POST') {
-            const { userId, userName, role, currentChatId, idle } = req.body;
-            
+            const { userId, whatsapp, userName, role, currentChatId, idle } = req.body;
+
             if (!userId) {
                 return res.status(400).json({ error: 'Missing userId' });
             }
 
-            const activeKey = `presence:online:${userId}`;
-            
+            // Use whatsapp as the canonical key when available (stable, no prefix ambiguity)
+            const stableKey = whatsapp || userId;
+            const activeKey = `presence:online:${stableKey}`;
+
             // Set data in Redis, expires in 12 seconds if no heartbeat received
             await redis.set(activeKey, JSON.stringify({
-                userId,
+                userId: stableKey,
+                whatsapp: whatsapp || null,
                 userName,
                 role: role || 'User',
                 currentChatId: currentChatId || null,
