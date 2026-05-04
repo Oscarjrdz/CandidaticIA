@@ -43,10 +43,10 @@ export default async function handler(req, res) {
             // Accumulate active seconds (3s per heartbeat)
             actPipe.incrby(`recruiter:time:${userId}:${today}`, 3);
             actPipe.expire(`recruiter:time:${userId}:${today}`, ttl);
-            // Track unique chats opened
+            // Track unique chats visited (opened, not necessarily responded)
             if (currentChatId) {
-                actPipe.sadd(`recruiter:chats:${userId}:${today}`, currentChatId);
-                actPipe.expire(`recruiter:chats:${userId}:${today}`, ttl);
+                actPipe.sadd(`recruiter:visited:${userId}:${today}`, currentChatId);
+                actPipe.expire(`recruiter:visited:${userId}:${today}`, ttl);
             }
             actPipe.exec().catch(() => {});
 

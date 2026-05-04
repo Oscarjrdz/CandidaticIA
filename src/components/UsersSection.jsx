@@ -659,7 +659,7 @@ const UsersSection = () => {
                             <table className="w-full text-left">
                                 <thead>
                                     <tr className="border-b border-gray-100 dark:border-gray-700/50">
-                                        {['Reclutador', 'Tiempo activo', 'Chats atendidos', 'Mensajes enviados', 'Dentro 24h ✅', 'Fuera 24h ⛔'].map(label => (
+                                        {['Reclutador', 'Tiempo activo', 'Chats visitados', 'Chats respondidos', 'Mensajes enviados', 'Dentro 24h ✅', 'Fuera 24h ⛔'].map(label => (
                                             <th key={label} className="px-4 py-3 text-[10px] font-black uppercase tracking-widest text-gray-400 dark:text-gray-500 whitespace-nowrap">
                                                 {label}
                                             </th>
@@ -688,8 +688,14 @@ const UsersSection = () => {
                                             </td>
                                             <td className="px-4 py-3">
                                                 <span className="flex items-center gap-1 text-sm font-semibold text-gray-700 dark:text-gray-200">
+                                                    <MessageSquare className="w-3.5 h-3.5 text-gray-400" />
+                                                    {s.chatsVisited}
+                                                </span>
+                                            </td>
+                                            <td className="px-4 py-3">
+                                                <span className="flex items-center gap-1 text-sm font-semibold text-gray-700 dark:text-gray-200">
                                                     <MessageSquare className="w-3.5 h-3.5 text-indigo-400" />
-                                                    {s.uniqueChats}
+                                                    {s.chatsResponded}
                                                 </span>
                                             </td>
                                             <td className="px-4 py-3">
