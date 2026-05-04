@@ -89,8 +89,10 @@ function _connectSingleton() {
                 } else if (data.type === 'stats:global') {
                     _updateState({ globalStats: data.data });
                 } else if (data.type === 'presence:update') {
+                    // data.data = { type, onlineUsers } (flat publish from presence.js)
                     window.dispatchEvent(new CustomEvent('sse:presence:update', { detail: data.data }));
                 } else if (data.type === 'internal:message') {
+                    // data.data = { type, id, from, to, content, ... } (flat publish from internal-chat.js)
                     window.dispatchEvent(new CustomEvent('sse:internal:message', { detail: data.data }));
                 }
             } catch (parseError) {

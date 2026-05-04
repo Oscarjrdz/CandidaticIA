@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { MessageSquare, X, Send, ChevronDown, Users, Lock } from 'lucide-react';
+import { MessageSquare, Send, ChevronDown, Users, Lock } from 'lucide-react';
 import { useAuthContext } from '../contexts/AuthContext';
 
 function playNotificationSound() {
@@ -29,12 +29,34 @@ function formatTime(iso) {
 const COLORS = ['bg-blue-500', 'bg-emerald-500', 'bg-violet-500', 'bg-rose-500', 'bg-amber-500', 'bg-cyan-500'];
 function avatarColor(name) { return COLORS[(name?.charCodeAt(0) || 0) % COLORS.length]; }
 
-function Avatar({ name, size = 6 }) {
+function Avatar({ name }) {
     return (
-        <div className={`w-${size} h-${size} rounded-full ${avatarColor(name)} flex items-center justify-center text-white font-bold shrink-0 text-[10px]`}>
+        <div className={`w-6 h-6 rounded-full ${avatarColor(name)} flex items-center justify-center text-white font-bold shrink-0 text-[10px]`}>
             {name?.charAt(0)?.toUpperCase() || '?'}
         </div>
     );
+}
+
+// Merge new messages into existing list, deduplicating by id.
+// Replaces any optimistic (_opt) entry that matches the incoming real message.
+function mergeMessages(prev, incoming) {
+    const results = [...prev];
+    for (const msg of (Array.isArray(incoming) ? incoming : [incoming])) {
+        const existingIdx = results.findIndex(m => m.id === msg.id);
+        if (existingIdx >= 0) {
+            // Already present (possibly optimistic replaced by real) — update in place
+            results[existingIdx] = msg;
+            continue;
+        }
+        // Remove any matching optimistic (same sender + same content)
+        const optIdx = results.findIndex(m => m._opt && m.from === msg.from && m.content === msg.content);
+        if (optIdx >= 0) {
+            results[optIdx] = msg;
+        } else {
+            results.push(msg);
+        }
+    }
+    return results;
 }
 
 export default function InternalChat({ onlineUsers = [] }) {
@@ -44,21 +66,27 @@ export default function InternalChat({ onlineUsers = [] }) {
     const [input, setInput] = useState('');
     const [unread, setUnread] = useState(0);
     const [sending, setSending] = useState(false);
-    const [recipientId, setRecipientId] = useState(null); // null = first online user or 'all'
-    const [showRecipients, setShowRecipients] = useState(false);
+    const [recipientId, setRecipientId] = useState(null);
     const [pulsing, setPulsing] = useState(false);
+    const [loaded, setLoaded] = useState(false);
+
     const bottomRef = useRef(null);
     const inputRef = useRef(null);
-    // Use whatsapp as the stable identity — always present and consistent across all presence entries
-    const myId = user?.whatsapp;
+    // Stable refs so SSE handler never has stale closures
+    const myIdRef = useRef(null);
+    const openRef = useRef(false);
 
-    // Others online (excluding self) — compare by whatsapp when available, fall back to userId
+    const myId = user?.whatsapp;
+    myIdRef.current = myId;
+    openRef.current = open;
+
+    // Others online (excluding self)
     const others = onlineUsers.filter(u => {
-        const theirId = u.whatsapp || u.userId;
-        return theirId !== myId;
+        const id = u.whatsapp || u.userId;
+        return id && id !== myId;
     });
 
-    // Auto-select first online user as default recipient (private by default)
+    // Auto-select first online user as default DM recipient
     useEffect(() => {
         if (recipientId === null && others.length > 0) {
             setRecipientId(others[0].userId);
@@ -67,17 +95,37 @@ export default function InternalChat({ onlineUsers = [] }) {
 
     const recipient = recipientId === 'all'
         ? { userId: 'all', userName: 'Todos' }
-        : others.find(u => u.userId === recipientId) || (recipientId ? { userId: recipientId, userName: recipientId } : null);
+        : others.find(u => u.userId === recipientId) ?? (recipientId ? { userId: recipientId, userName: recipientId } : null);
 
-    // Load history on first open
-    useEffect(() => {
-        if (!open || !myId) return;
-        setUnread(0);
+    // ── Fetch message history ──────────────────────────────────────────────
+    const fetchHistory = useCallback(() => {
+        if (!myId) return;
         fetch(`/api/internal-chat?whatsapp=${encodeURIComponent(myId)}`)
             .then(r => r.json())
-            .then(d => { if (d.success) setMessages(d.messages); })
+            .then(d => {
+                if (d.success && Array.isArray(d.messages)) {
+                    setMessages(d.messages);
+                    setLoaded(true);
+                }
+            })
             .catch(() => {});
-    }, [open, myId]);
+    }, [myId]);
+
+    // Load once when chat first opens
+    useEffect(() => {
+        if (open && !loaded) {
+            fetchHistory();
+            setUnread(0);
+        }
+        if (open) setUnread(0);
+    }, [open, loaded, fetchHistory]);
+
+    // Polling safety-net when open: syncs any missed SSE events every 4s
+    useEffect(() => {
+        if (!open || !loaded) return;
+        const id = setInterval(fetchHistory, 4000);
+        return () => clearInterval(id);
+    }, [open, loaded, fetchHistory]);
 
     // Scroll to bottom on new messages
     useEffect(() => {
@@ -89,18 +137,19 @@ export default function InternalChat({ onlineUsers = [] }) {
         if (open) setTimeout(() => inputRef.current?.focus(), 50);
     }, [open]);
 
-    // Real-time SSE — only show messages relevant to me
+    // ── SSE real-time handler ──────────────────────────────────────────────
     useEffect(() => {
         const handle = (e) => {
             const msg = e.detail;
-            if (!myId) return;
-            const relevant = msg.to === 'all' || msg.from === myId || msg.to === myId;
+            const me = myIdRef.current;
+            if (!me || !msg?.id) return;
+
+            const relevant = msg.to === 'all' || msg.from === me || msg.to === me;
             if (!relevant) return;
-            setMessages(prev => {
-                if (prev.some(m => m.id === msg.id)) return prev;
-                return [...prev, msg];
-            });
-            if (msg.from !== myId && (!open || document.hidden)) {
+
+            setMessages(prev => mergeMessages(prev, msg));
+
+            if (msg.from !== me && !openRef.current) {
                 setUnread(u => u + 1);
                 playNotificationSound();
                 setPulsing(true);
@@ -109,19 +158,21 @@ export default function InternalChat({ onlineUsers = [] }) {
         };
         window.addEventListener('sse:internal:message', handle);
         return () => window.removeEventListener('sse:internal:message', handle);
-    }, [open, myId]);
+    }, []); // No deps — uses refs for live values
 
+    // ── Send ───────────────────────────────────────────────────────────────
     const send = useCallback(async () => {
         const text = input.trim();
         if (!text || !myId || sending || !recipient) return;
         setInput('');
         setSending(true);
 
+        const toId = recipient.whatsapp || recipient.userId;
         const optimistic = {
             id: `tmp_${Date.now()}`,
             from: myId,
             fromName: user?.name || user?.nombre || 'Yo',
-            to: recipient.whatsapp || recipient.userId,
+            to: toId,
             toName: recipient.userName,
             content: text,
             timestamp: new Date().toISOString(),
@@ -137,14 +188,17 @@ export default function InternalChat({ onlineUsers = [] }) {
                     from: myId,
                     fromName: user?.name || user?.nombre || 'Reclutador',
                     fromRole: user?.role || 'User',
-                    to: recipient.whatsapp || recipient.userId,
+                    to: toId,
                     toName: recipient.userName,
                     content: text,
                 }),
             });
             const data = await res.json();
             if (data.success) {
-                setMessages(prev => prev.map(m => m._opt && m.content === text ? data.message : m));
+                // SSE may have already delivered this — mergeMessages handles both cases
+                setMessages(prev => mergeMessages(prev, data.message));
+            } else {
+                setMessages(prev => prev.filter(m => !m._opt));
             }
         } catch {
             setMessages(prev => prev.filter(m => !m._opt));
@@ -188,7 +242,7 @@ export default function InternalChat({ onlineUsers = [] }) {
                     {others.length > 0 && (
                         <div className="flex gap-2 px-3 py-2 border-b border-gray-100 dark:border-gray-700 overflow-x-auto shrink-0">
                             <button
-                                onClick={() => { setRecipientId('all'); setShowRecipients(false); }}
+                                onClick={() => setRecipientId('all')}
                                 className={`flex flex-col items-center gap-0.5 shrink-0 px-1.5 py-1 rounded-xl transition-colors ${recipientId === 'all' ? 'bg-blue-50 dark:bg-blue-900/30' : 'hover:bg-gray-50 dark:hover:bg-gray-800'}`}
                             >
                                 <div className={`w-8 h-8 rounded-full flex items-center justify-center ${recipientId === 'all' ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-700'}`}>
@@ -199,7 +253,7 @@ export default function InternalChat({ onlineUsers = [] }) {
                             {others.map(u => (
                                 <button
                                     key={u.userId}
-                                    onClick={() => { setRecipientId(u.userId); setShowRecipients(false); }}
+                                    onClick={() => setRecipientId(u.userId)}
                                     className={`flex flex-col items-center gap-0.5 shrink-0 px-1.5 py-1 rounded-xl transition-colors ${recipientId === u.userId ? 'bg-blue-50 dark:bg-blue-900/30' : 'hover:bg-gray-50 dark:hover:bg-gray-800'}`}
                                 >
                                     <div className="relative">
@@ -220,7 +274,7 @@ export default function InternalChat({ onlineUsers = [] }) {
                     <div className="flex-1 overflow-y-auto px-3 py-3 space-y-2">
                         {messages.length === 0 && (
                             <p className="text-center text-xs text-gray-400 dark:text-gray-500 mt-8">
-                                {others.length === 0 ? 'No hay nadie más en línea' : 'Nadie ha escrito aún. ¡Di hola! 👋'}
+                                {others.length === 0 ? 'No hay nadie más en línea' : 'Nadie ha escrito aún. ¡Di hola!'}
                             </p>
                         )}
                         {messages.map((msg, i) => {
