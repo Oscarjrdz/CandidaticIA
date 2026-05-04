@@ -1659,7 +1659,9 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                     candidateId: selectedChat.id,
                     message: '',
                     type: msgType,
-                    mediaUrl
+                    mediaUrl,
+                    senderId: user?.id || user?.whatsapp,
+                    senderName: user?.name || user?.nombre,
                 })
             });
             const chatData = await res.json();
@@ -1743,11 +1745,13 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
         fetch('/api/chat', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                candidateId: selectedChat.id, 
-                message: name, 
-                type: 'contacts', 
-                extraParams: { contactName: name, contactPhone: phone, company, title, email, url } 
+            body: JSON.stringify({
+                candidateId: selectedChat.id,
+                message: name,
+                type: 'contacts',
+                extraParams: { contactName: name, contactPhone: phone, company, title, email, url },
+                senderId: user?.id || user?.whatsapp,
+                senderName: user?.name || user?.nombre,
             })
         }).then(res => res.json()).then(data => {
             if (data.success && data.message) {
@@ -1770,7 +1774,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
         }]);
         fetch('/api/chat', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ candidateId: selectedChat.id, message: '', type: 'location', extraParams: { name, address, lat, lng } })
+            body: JSON.stringify({ candidateId: selectedChat.id, message: '', type: 'location', extraParams: { name, address, lat, lng }, senderId: user?.id || user?.whatsapp, senderName: user?.name || user?.nombre })
         }).then(res => res.json()).then(data => {
             if (data.success && data.message) {
                 setMessages(prev => prev.map(m => m.id === optimisticId ? data.message : m));
@@ -1788,7 +1792,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
         }]);
         fetch('/api/chat', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ candidateId: selectedChat.id, message: bodyTxt, type: 'interactive', extraParams: { interactiveType: 'list', listButtonText: btnText, listSectionTitle: section, listItems: items } })
+            body: JSON.stringify({ candidateId: selectedChat.id, message: bodyTxt, type: 'interactive', extraParams: { interactiveType: 'list', listButtonText: btnText, listSectionTitle: section, listItems: items }, senderId: user?.id || user?.whatsapp, senderName: user?.name || user?.nombre })
         }).then(res => res.json()).then(data => {
             if (data.success && data.message) {
                 setMessages(prev => prev.map(m => m.id === optimisticId ? data.message : m));
@@ -1806,7 +1810,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
         }]);
         fetch('/api/chat', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ candidateId: selectedChat.id, message: bodyTxt, type: 'interactive', extraParams: { interactiveType: 'product', catalogId, productSku } })
+            body: JSON.stringify({ candidateId: selectedChat.id, message: bodyTxt, type: 'interactive', extraParams: { interactiveType: 'product', catalogId, productSku }, senderId: user?.id || user?.whatsapp, senderName: user?.name || user?.nombre })
         }).then(res => res.json()).then(data => {
             if (data.success && data.message) {
                 setMessages(prev => prev.map(m => m.id === optimisticId ? data.message : m));
@@ -1833,11 +1837,13 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
         fetch('/api/chat', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                candidateId: selectedChat.id, 
-                message: bodyTxt, 
-                type: 'interactive', 
-                extraParams: { buttons } 
+            body: JSON.stringify({
+                candidateId: selectedChat.id,
+                message: bodyTxt,
+                type: 'interactive',
+                extraParams: { buttons },
+                senderId: user?.id || user?.whatsapp,
+                senderName: user?.name || user?.nombre,
             })
         }).then(res => res.json()).then(data => {
             if (data.success && data.message) {
@@ -1957,10 +1963,12 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
         fetch('/api/chat', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                candidateId: currentCandidateId, 
-                type: 'template', 
-                templateData: templateObj 
+            body: JSON.stringify({
+                candidateId: currentCandidateId,
+                type: 'template',
+                templateData: templateObj,
+                senderId: user?.id || user?.whatsapp,
+                senderName: user?.name || user?.nombre,
             })
         }).then(res => res.json()).then(data => {
             if (data.success && data.message) {

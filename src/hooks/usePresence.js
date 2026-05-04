@@ -1,10 +1,22 @@
 import { useState, useEffect, useRef } from 'react';
 
+const IDLE_THRESHOLD_MS = 60_000; // 60s without activity = idle, stop counting time
+
 export function usePresence(user, activeSection) {
     const [onlineUsers, setOnlineUsers] = useState([]);
     const currentChatIdRef = useRef(null);
+    const lastActivityRef = useRef(Date.now());
+    const sendHeartbeatRef = useRef(null);
 
-    // Listen for real-time presence pushes via SSE (no polling needed for others' state)
+    // Track real user activity — any of these resets the idle timer
+    useEffect(() => {
+        const onActivity = () => { lastActivityRef.current = Date.now(); };
+        const events = ['mousemove', 'keydown', 'click', 'scroll', 'touchstart'];
+        events.forEach(e => window.addEventListener(e, onActivity, { passive: true }));
+        return () => events.forEach(e => window.removeEventListener(e, onActivity));
+    }, []);
+
+    // Listen for real-time presence pushes via SSE
     useEffect(() => {
         const handleSSE = (e) => {
             if (e.detail?.onlineUsers) setOnlineUsers(e.detail.onlineUsers);
@@ -13,47 +25,49 @@ export function usePresence(user, activeSection) {
         return () => window.removeEventListener('sse:presence:update', handleSSE);
     }, []);
 
-    // Provide a way for ChatWindow to report which chat we are in
+    // When recruiter changes chat, force an immediate heartbeat
     useEffect(() => {
         const handleChatChange = (e) => {
             currentChatIdRef.current = e.detail?.chatId || null;
-            // Force immediate heartbeat when changing chat
-            sendHeartbeat();
+            sendHeartbeatRef.current?.();
         };
-
         window.addEventListener('presence_chat_change', handleChatChange);
         return () => window.removeEventListener('presence_chat_change', handleChatChange);
     }, []);
 
-    const sendHeartbeat = async () => {
-        if (!user) return;
-        try {
-            const res = await fetch('/api/presence', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    userId: user.id || user.whatsapp,
-                    userName: user.name || user.nombre || 'Recruiter',
-                    role: user.role || 'User',
-                    currentChatId: currentChatIdRef.current
-                })
-            });
-            const data = await res.json();
-            if (data.success && Array.isArray(data.onlineUsers)) {
-                setOnlineUsers(data.onlineUsers);
-            }
-        } catch (e) {
-            console.error('Presence error:', e);
-        }
-    };
-
     useEffect(() => {
         if (!user) return;
-        
+
+        const sendHeartbeat = async () => {
+            if (!user) return;
+            const isIdle = (Date.now() - lastActivityRef.current) > IDLE_THRESHOLD_MS;
+            try {
+                const res = await fetch('/api/presence', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        userId: user.id || user.whatsapp,
+                        userName: user.name || user.nombre || 'Recruiter',
+                        role: user.role || 'User',
+                        currentChatId: currentChatIdRef.current,
+                        idle: isIdle,  // server skips time accumulation when idle
+                    })
+                });
+                const data = await res.json();
+                if (data.success && Array.isArray(data.onlineUsers)) {
+                    setOnlineUsers(data.onlineUsers);
+                }
+            } catch (e) {
+                console.error('Presence error:', e);
+            }
+        };
+
+        sendHeartbeatRef.current = sendHeartbeat;
+
         // Initial heartbeat
         sendHeartbeat();
 
-        // Interval heartbeat every 3 seconds for near-real-time presence
+        // Heartbeat every 3s for real-time presence indicator
         const id = setInterval(sendHeartbeat, 3000);
         return () => clearInterval(id);
     }, [user]);
