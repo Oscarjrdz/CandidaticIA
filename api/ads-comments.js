@@ -17,9 +17,19 @@ export default async function handler(req, res) {
         return res.status(500).json({ success: false, error: 'No Meta tokens configured' });
     }
 
-    // The best token for comments: page token has pages_read_engagement,
-    // ads token has ads_read. We try page token first for comments.
-    const commentsToken = pageToken || adsToken;
+    // --- NEW: Fetch Page Access Token dynamically ---
+    let commentsToken = pageToken || adsToken;
+    try {
+        if (pageToken) {
+            const accountsRes = await fetch(`https://graph.facebook.com/v21.0/me/accounts?access_token=${pageToken}`);
+            const accountsData = await accountsRes.json();
+            if (accountsData?.data?.[0]?.access_token) {
+                commentsToken = accountsData.data[0].access_token;
+            }
+        }
+    } catch (e) {
+        console.error('[Ads Comments] Failed to fetch Page Token fallback', e);
+    }
 
     // ─── GET: Fetch comments for an ad ──────────────────────────────
     if (req.method === 'GET') {
@@ -98,7 +108,7 @@ export default async function handler(req, res) {
 
         try {
             // Page token is required for posting replies
-            const replyToken = pageToken || adsToken;
+            const replyToken = commentsToken;
 
             const replyRes = await fetch(
                 `https://graph.facebook.com/v21.0/${commentId}/comments`,
