@@ -11,21 +11,42 @@ import { getTheme, saveTheme } from './utils/storage';
 import { usePresence } from './hooks/usePresence';
 import InternalChat from './components/InternalChat';
 
-// ⚡ React.lazy — each section loads as a separate chunk on demand
-const CandidatesSection = React.lazy(() => import('./components/CandidatesSection'));
-const ChatSection = React.lazy(() => import('./components/ChatSection'));
-const BulksSection = React.lazy(() => import('./components/BulksSection'));
-const SettingsSection = React.lazy(() => import('./components/SettingsSection'));
-const AutomationsSection = React.lazy(() => import('./components/AutomationsSection'));
-const VacanciesSection = React.lazy(() => import('./components/VacanciesSection'));
-const BolsaSection = React.lazy(() => import('./components/BolsaSection'));
-const UsersSection = React.lazy(() => import('./components/UsersSection'));
-const PostMakerSection = React.lazy(() => import('./components/PostMakerSection'));
-const BotIASection = React.lazy(() => import('./components/BotIASection'));
-const MediaLibrarySection = React.lazy(() => import('./components/MediaLibrarySection'));
-const CRMProjectsSection = React.lazy(() => import('./components/CRMProjectsSection'));
-const ByPassSection = React.lazy(() => import('./components/ByPassSection'));
-const AdsStatisticsSection = React.lazy(() => import('./components/AdsStatisticsSection'));
+// ⚡ React.lazy with auto-retry on stale chunk errors (post-deploy cache mismatch)
+// If a dynamic import fails (e.g. old chunk hash no longer exists), reload the page ONCE
+// to fetch the new HTML manifest. A sessionStorage flag prevents infinite reload loops.
+function lazyWithRetry(importFn, chunkName) {
+  return React.lazy(() =>
+    importFn().catch((error) => {
+      const key = `chunk_reload_${chunkName}`;
+      const hasReloaded = sessionStorage.getItem(key);
+      if (!hasReloaded) {
+        console.warn(`[LazyRetry] Chunk "${chunkName}" failed to load. Reloading page to fetch new build…`, error);
+        sessionStorage.setItem(key, '1');
+        window.location.reload();
+        // Return a never-resolving promise so the reload takes effect cleanly
+        return new Promise(() => {});
+      }
+      // Already reloaded once — clear the flag and surface the error
+      sessionStorage.removeItem(key);
+      throw error;
+    })
+  );
+}
+
+const CandidatesSection = lazyWithRetry(() => import('./components/CandidatesSection'), 'CandidatesSection');
+const ChatSection = lazyWithRetry(() => import('./components/ChatSection'), 'ChatSection');
+const BulksSection = lazyWithRetry(() => import('./components/BulksSection'), 'BulksSection');
+const SettingsSection = lazyWithRetry(() => import('./components/SettingsSection'), 'SettingsSection');
+const AutomationsSection = lazyWithRetry(() => import('./components/AutomationsSection'), 'AutomationsSection');
+const VacanciesSection = lazyWithRetry(() => import('./components/VacanciesSection'), 'VacanciesSection');
+const BolsaSection = lazyWithRetry(() => import('./components/BolsaSection'), 'BolsaSection');
+const UsersSection = lazyWithRetry(() => import('./components/UsersSection'), 'UsersSection');
+const PostMakerSection = lazyWithRetry(() => import('./components/PostMakerSection'), 'PostMakerSection');
+const BotIASection = lazyWithRetry(() => import('./components/BotIASection'), 'BotIASection');
+const MediaLibrarySection = lazyWithRetry(() => import('./components/MediaLibrarySection'), 'MediaLibrarySection');
+const CRMProjectsSection = lazyWithRetry(() => import('./components/CRMProjectsSection'), 'CRMProjectsSection');
+const ByPassSection = lazyWithRetry(() => import('./components/ByPassSection'), 'ByPassSection');
+const AdsStatisticsSection = lazyWithRetry(() => import('./components/AdsStatisticsSection'), 'AdsStatisticsSection');
 
 /**
  * Inner app shell — consumes both contexts.
