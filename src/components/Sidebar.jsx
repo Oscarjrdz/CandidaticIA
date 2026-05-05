@@ -176,9 +176,13 @@ const Sidebar = ({ activeSection, onSectionChange, onLogout, isMobileOpen, onClo
         if (!rolePermissions) return; // Wait for permissions to load
 
         // Filter DEFAULT_MENU_ITEMS based on permissions
-        const permittedDefaults = DEFAULT_MENU_ITEMS.filter(item => {
-            return rolePermissions[item.id] === true || user?.role === 'SuperAdmin';
-        });
+        // Viewer role: only Chat Web
+        const isViewerRole = user?.role === 'Viewer';
+        const permittedDefaults = isViewerRole
+            ? DEFAULT_MENU_ITEMS.filter(item => item.id === 'chat')
+            : DEFAULT_MENU_ITEMS.filter(item => {
+                return rolePermissions[item.id] === true || user?.role === 'SuperAdmin';
+            });
 
         // Initialize from user config or default
         if (user?.sidebarConfig && Array.isArray(user.sidebarConfig)) {
@@ -320,7 +324,7 @@ const Sidebar = ({ activeSection, onSectionChange, onLogout, isMobileOpen, onClo
                 {/* Footer / Bottom Items */}
                 <div className="relative p-4 mt-auto border-t border-white/5 bg-white/5" style={{ WebkitBackdropFilter: 'blur(4px)', backdropFilter: 'blur(4px)' }}>
                     <div className="space-y-2">
-                        {bottomItem && (
+                        {bottomItem && user?.role !== 'Viewer' && (
                             <button
                                 onClick={() => handleSectionClick(bottomItem.id)}
                                 className={`
