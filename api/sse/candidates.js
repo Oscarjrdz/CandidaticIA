@@ -105,11 +105,13 @@ export default async function handler(req, res) {
         }
     };
 
-    // Execute once on connection to seed the UI; Pub/Sub handles subsequent updates
+    // Execute once on connection to seed the UI, then periodically to keep stats fresh
     runPoll();
+    const statsPollInterval = setInterval(runPoll, 10000); // Refresh stats every 10s for live badge
 
     req.on('close', () => {
         clearInterval(keepAliveInterval);
+        clearInterval(statsPollInterval);
         if (subscriber) {
             subscriber.unsubscribe();
             subscriber.quit();

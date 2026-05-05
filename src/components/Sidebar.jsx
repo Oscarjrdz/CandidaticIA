@@ -137,9 +137,12 @@ const Sidebar = ({ activeSection, onSectionChange, onLogout, isMobileOpen, onClo
         return () => window.removeEventListener('chat_unread_rbac', handler);
     }, []);
 
-    // Prefer live RBAC count (persisted across section changes).
-    // Fall back to globalStats only on very first ever load before ChatSection fires.
-    const unreadCount = rbacUnread !== null ? rbacUnread : (globalStats?.unread || 0);
+    // Use the higher of RBAC count (from ChatSection) and live SSE count.
+    // This prevents stale badge when ChatSection isn't mounted:
+    // - globalStats.unread updates every 10s via SSE (always fresh)
+    // - rbacUnread is precise but freezes when ChatSection unmounts
+    const sseUnread = globalStats?.unread || 0;
+    const unreadCount = Math.max(rbacUnread ?? 0, sseUnread);
 
     const toggleCollapse = () => {
         setIsCollapsed(prev => {
