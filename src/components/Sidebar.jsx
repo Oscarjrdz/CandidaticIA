@@ -137,12 +137,26 @@ const Sidebar = ({ activeSection, onSectionChange, onLogout, isMobileOpen, onClo
         return () => window.removeEventListener('chat_unread_rbac', handler);
     }, []);
 
-    // Use the higher of RBAC count (from ChatSection) and live SSE count.
-    // This prevents stale badge when ChatSection isn't mounted:
-    // - globalStats.unread updates every 10s via SSE (always fresh)
-    // - rbacUnread is precise but freezes when ChatSection unmounts
-    const sseUnread = globalStats?.unread || 0;
-    const unreadCount = Math.max(rbacUnread ?? 0, sseUnread);
+    // Listen for new incoming messages via SSE to increment badge when not on Chat
+    useEffect(() => {
+        const handler = (e) => {
+            const data = e.detail;
+            // Only increment for actual new incoming messages from candidates (not bot replies, tag changes, etc.)
+            if (data?.newMessage && data?.messageFrom === 'user') {
+                setRbacUnread(prev => {
+                    const next = (prev ?? 0) + 1;
+                    localStorage.setItem('chat_unread_rbac', String(next));
+                    return next;
+                });
+            }
+        };
+        window.addEventListener('sse:candidate:update', handler);
+        return () => window.removeEventListener('sse:candidate:update', handler);
+    }, []);
+
+    // RBAC count is source of truth (matches what user sees inside chat).
+    // Fall back to SSE global count only on very first load before ChatSection runs.
+    const unreadCount = rbacUnread !== null ? rbacUnread : (globalStats?.unread || 0);
 
     const toggleCollapse = () => {
         setIsCollapsed(prev => {
