@@ -196,87 +196,107 @@ const CommentsModal = ({ ad, onClose, showToast }) => {
                         </div>
                     ) : (
                         comments.map(comment => (
-                            <div key={comment.id} className="space-y-1.5">
+                            <div key={comment.id} className="space-y-1.5 pt-2">
                                 {/* Main Comment */}
-                                <div className="bg-gray-50 dark:bg-gray-700/40 rounded-xl p-3">
-                                    <div className="flex items-start gap-2.5">
-                                        <div className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center text-white text-[10px] font-bold shrink-0 mt-0.5">
-                                            {(comment.from?.name || '?').charAt(0).toUpperCase()}
-                                        </div>
-                                        <div className="flex-1 min-w-0">
-                                            <div className="flex items-center gap-2">
-                                                <span className="text-xs font-bold text-gray-900 dark:text-white">
-                                                    {comment.from?.name || 'Usuario'}
+                                <div className="flex items-start gap-2">
+                                    {/* Avatar */}
+                                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white text-xs font-bold shrink-0 mt-0.5">
+                                        {(comment.from?.name || '?').charAt(0).toUpperCase()}
+                                    </div>
+                                    
+                                    <div className="flex-1 min-w-0">
+                                        {/* Gray Bubble */}
+                                        <div className="inline-block bg-[#f0f2f5] dark:bg-[#3a3b3c] rounded-[18px] px-3 py-2 max-w-full">
+                                            <span className="text-[13px] font-bold text-[#050505] dark:text-[#e4e6eb] block leading-tight mb-0.5">
+                                                {comment.from?.name || 'Usuario'}
+                                            </span>
+                                            {comment.message && (
+                                                <span className="text-[14px] text-[#050505] dark:text-[#e4e6eb] leading-snug break-words">
+                                                    {comment.message}
                                                 </span>
-                                                <span className="text-[9px] text-gray-400">
-                                                    {timeAgo(comment.createdTime)}
-                                                </span>
-                                            </div>
-                                            <p className="text-[11px] text-gray-700 dark:text-gray-300 mt-0.5 leading-relaxed break-words">
-                                                {comment.message}
-                                            </p>
-                                            {/* Attachment */}
-                                            {comment.attachment?.media?.image?.src && (
-                                                <img src={comment.attachment.media.image.src} alt="" className="mt-2 max-w-[180px] rounded-lg shadow-sm" />
                                             )}
-                                            {/* Actions */}
-                                            <div className="flex items-center gap-3 mt-1.5">
-                                                {comment.likeCount > 0 && (
-                                                    <span className="text-[9px] text-gray-400 flex items-center gap-0.5">
-                                                        <Heart className="w-2.5 h-2.5" /> {comment.likeCount}
-                                                    </span>
-                                                )}
-                                                <button
-                                                    onClick={() => { setReplyingTo(replyingTo === comment.id ? null : comment.id); setReplyText(''); }}
-                                                    className="text-[10px] font-semibold text-blue-500 hover:text-blue-600 transition-colors"
-                                                >
-                                                    Responder
-                                                </button>
-                                                {comment.replyCount > 0 && (
-                                                    <button
-                                                        onClick={() => toggleReplies(comment.id)}
-                                                        className="text-[10px] text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 flex items-center gap-0.5 transition-colors"
-                                                    >
-                                                        {expandedReplies.has(comment.id) ? <ChevronUp className="w-2.5 h-2.5" /> : <ChevronDown className="w-2.5 h-2.5" />}
-                                                        {comment.replyCount} respuesta{comment.replyCount !== 1 ? 's' : ''}
-                                                    </button>
-                                                )}
-                                            </div>
+                                            {comment.attachment?.media?.image?.src && (
+                                                <img src={comment.attachment.media.image.src} alt="" className="mt-1 max-w-[200px] rounded-lg" />
+                                            )}
                                         </div>
+                                        
+                                        {/* Action Links */}
+                                        <div className="flex items-center gap-3 px-3 mt-1 mb-1 text-[12px] font-semibold text-[#65676B] dark:text-[#b0b3b8]">
+                                            <span className="cursor-pointer hover:underline">Me gusta</span>
+                                            <span 
+                                                className="cursor-pointer hover:underline"
+                                                onClick={() => { setReplyingTo(replyingTo === comment.id ? null : comment.id); setReplyText(''); }}
+                                            >
+                                                Responder
+                                            </span>
+                                            <span className="font-normal hover:underline cursor-pointer">{timeAgo(comment.createdTime)}</span>
+                                            
+                                            {comment.likeCount > 0 && (
+                                                <span className="flex items-center gap-1 ml-auto font-normal">
+                                                    <span className="w-4 h-4 rounded-full bg-blue-500 flex items-center justify-center">
+                                                        <Heart className="w-2.5 h-2.5 text-white fill-current" />
+                                                    </span>
+                                                    <span>{comment.likeCount}</span>
+                                                </span>
+                                            )}
+                                        </div>
+
+                                        {/* View Replies Button */}
+                                        {comment.replyCount > 0 && !expandedReplies.has(comment.id) && (
+                                            <div className="px-3 mt-1.5 mb-2">
+                                                <button
+                                                    onClick={() => toggleReplies(comment.id)}
+                                                    className="flex items-center gap-2 text-[13px] font-semibold text-[#65676B] dark:text-[#b0b3b8] hover:underline"
+                                                >
+                                                    <CornerDownRight className="w-4 h-4" />
+                                                    Ver {comment.replyCount} respuesta{comment.replyCount !== 1 ? 's' : ''}
+                                                </button>
+                                            </div>
+                                        )}
+                                        {comment.replyCount > 0 && expandedReplies.has(comment.id) && (
+                                            <div className="px-3 mt-1.5 mb-2">
+                                                <button
+                                                    onClick={() => toggleReplies(comment.id)}
+                                                    className="flex items-center gap-2 text-[13px] font-semibold text-[#65676B] dark:text-[#b0b3b8] hover:underline"
+                                                >
+                                                    Ocultar respuestas
+                                                </button>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
 
                                 {/* Replies */}
                                 {expandedReplies.has(comment.id) && comment.replies?.length > 0 && (
-                                    <div className="ml-6 space-y-1.5 mt-1.5">
+                                    <div className="ml-10 space-y-3 mt-2">
                                         {comment.replies.map(reply => (
-                                            <div key={reply.id} className="bg-blue-50/50 dark:bg-blue-900/10 rounded-lg p-2.5 border-l-2 border-blue-300 dark:border-blue-700">
-                                                <div className="flex items-start gap-2">
-                                                    <CornerDownRight className="w-3 h-3 text-blue-400 shrink-0 mt-0.5" />
-                                                    <div className="flex-1 min-w-0">
-                                                        <div className="flex items-center gap-2">
-                                                            <span className="text-[10px] font-bold text-gray-800 dark:text-gray-200">
-                                                                {reply.from?.name || 'Usuario'}
-                                                            </span>
-                                                            <span className="text-[8px] text-gray-400">{timeAgo(reply.createdTime)}</span>
-                                                        </div>
-                                                        <p className="text-[10px] text-gray-600 dark:text-gray-400 mt-0.5 break-words">
+                                            <div key={reply.id} className="flex items-start gap-2">
+                                                <div className="w-6 h-6 rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center text-white text-[10px] font-bold shrink-0 mt-0.5">
+                                                    {(reply.from?.name || '?').charAt(0).toUpperCase()}
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="inline-block bg-[#f0f2f5] dark:bg-[#3a3b3c] rounded-[18px] px-3 py-1.5 max-w-full">
+                                                        <span className="text-[12px] font-bold text-[#050505] dark:text-[#e4e6eb] block leading-tight mb-0.5">
+                                                            {reply.from?.name || 'Usuario'}
+                                                        </span>
+                                                        <span className="text-[13px] text-[#050505] dark:text-[#e4e6eb] leading-snug break-words">
                                                             {reply.message}
-                                                        </p>
-                                                        {/* Reply Actions */}
-                                                        <div className="flex items-center gap-3 mt-1.5">
-                                                            {reply.likeCount > 0 && (
-                                                                <span className="text-[8px] text-gray-400 flex items-center gap-0.5">
-                                                                    <Heart className="w-2.5 h-2.5" /> {reply.likeCount}
-                                                                </span>
-                                                            )}
-                                                            <button
-                                                                onClick={() => { setReplyingTo(replyingTo === reply.id ? null : reply.id); setReplyText(''); }}
-                                                                className="text-[9px] font-semibold text-blue-500 hover:text-blue-600 transition-colors"
-                                                            >
-                                                                Responder
-                                                            </button>
-                                                        </div>
+                                                        </span>
+                                                    </div>
+                                                    <div className="flex items-center gap-3 px-3 mt-1 text-[11px] font-semibold text-[#65676B] dark:text-[#b0b3b8]">
+                                                        <span className="cursor-pointer hover:underline">Me gusta</span>
+                                                        <span 
+                                                            className="cursor-pointer hover:underline"
+                                                            onClick={() => { setReplyingTo(replyingTo === reply.id ? null : reply.id); setReplyText(''); }}
+                                                        >
+                                                            Responder
+                                                        </span>
+                                                        <span className="font-normal hover:underline cursor-pointer">{timeAgo(reply.createdTime)}</span>
+                                                        {reply.likeCount > 0 && (
+                                                            <span className="flex items-center gap-0.5 ml-auto font-normal">
+                                                                <Heart className="w-3 h-3 text-red-500 fill-current" /> {reply.likeCount}
+                                                            </span>
+                                                        )}
                                                     </div>
                                                 </div>
                                             </div>
@@ -286,23 +306,33 @@ const CommentsModal = ({ ad, onClose, showToast }) => {
 
                                 {/* Reply Input */}
                                 {(replyingTo === comment.id || comment.replies?.some(r => r.id === replyingTo)) && (
-                                    <div className="ml-6 flex gap-2 items-end animate-in fade-in slide-in-from-top-2 duration-200 mt-2">
-                                        <input
-                                            type="text"
-                                            value={replyText}
-                                            onChange={e => setReplyText(e.target.value)}
-                                            onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleReply(replyingTo)}
-                                            placeholder="Escribe tu respuesta..."
-                                            className="flex-1 text-xs px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
-                                            autoFocus
-                                        />
-                                        <button
-                                            onClick={() => handleReply(replyingTo)}
-                                            disabled={!replyText.trim() || sending}
-                                            className="p-2 rounded-lg bg-blue-500 hover:bg-blue-600 text-white disabled:opacity-40 disabled:cursor-not-allowed transition-colors shrink-0"
-                                        >
-                                            {sending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
-                                        </button>
+                                    <div className="ml-10 flex gap-2 items-start animate-in fade-in slide-in-from-top-2 duration-200 mt-2">
+                                        <div className="w-6 h-6 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-gray-500 text-[10px] font-bold shrink-0 mt-1">
+                                            Tú
+                                        </div>
+                                        <div className="flex-1 relative">
+                                            <textarea
+                                                value={replyText}
+                                                onChange={e => setReplyText(e.target.value)}
+                                                onKeyDown={e => {
+                                                    if (e.key === 'Enter' && !e.shiftKey) {
+                                                        e.preventDefault();
+                                                        handleReply(replyingTo);
+                                                    }
+                                                }}
+                                                placeholder="Escribe una respuesta..."
+                                                className="w-full text-[13px] px-3 py-2 pr-10 rounded-[18px] bg-[#f0f2f5] dark:bg-[#3a3b3c] text-[#050505] dark:text-[#e4e6eb] focus:outline-none resize-none overflow-hidden min-h-[36px]"
+                                                rows={1}
+                                                autoFocus
+                                            />
+                                            <button
+                                                onClick={() => handleReply(replyingTo)}
+                                                disabled={!replyText.trim() || sending}
+                                                className="absolute right-2 top-1.5 p-1 rounded-full text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 disabled:opacity-40 disabled:hover:bg-transparent transition-colors"
+                                            >
+                                                {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                                            </button>
+                                        </div>
                                     </div>
                                 )}
                             </div>
