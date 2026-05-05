@@ -19,11 +19,18 @@ let _cacheTimestamp = 0;
 const PAGE_TOKEN_TTL_MS = 30 * 60 * 1000; // 30 minutes
 
 /**
- * Fetches the Page Access Token dynamically from /me/accounts
- * using the system user token (META_ACCESS_TOKEN).
- * Caches it in-memory for 30 minutes to avoid hitting the API on every message.
+ * Fetches the Page Access Token.
+ * Priority: 
+ *   1. MESSENGER_PAGE_TOKEN env var (dedicated, most reliable)
+ *   2. Dynamic fetch from /me/accounts
+ *   3. Fallback to META_ACCESS_TOKEN directly
  */
 export const getPageToken = async () => {
+    // Priority 1: Dedicated Messenger Page Token
+    const dedicatedToken = process.env.MESSENGER_PAGE_TOKEN;
+    if (dedicatedToken) return dedicatedToken;
+
+    // Priority 2: Cache check
     const now = Date.now();
     if (_cachedPageToken && (now - _cacheTimestamp) < PAGE_TOKEN_TTL_MS) {
         return _cachedPageToken;
@@ -31,10 +38,11 @@ export const getPageToken = async () => {
 
     const systemToken = process.env.META_ACCESS_TOKEN;
     if (!systemToken) {
-        console.error('[Messenger Utils] ❌ META_ACCESS_TOKEN not configured');
+        console.error('[Messenger Utils] ❌ No token configured');
         return null;
     }
 
+    // Priority 3: Dynamic fetch from /me/accounts
     try {
         const res = await axios.get(`${GRAPH_BASE_URL}/me/accounts`, {
             params: { access_token: systemToken },
@@ -48,12 +56,13 @@ export const getPageToken = async () => {
             return pageToken;
         }
 
-        console.error('[Messenger Utils] ❌ No page found in /me/accounts');
-        return null;
+        console.error('[Messenger Utils] ⚠️ No page in /me/accounts, using META_ACCESS_TOKEN as fallback');
     } catch (e) {
-        console.error('[Messenger Utils] ❌ Failed to fetch Page Token:', e.message);
-        return null;
+        console.error('[Messenger Utils] ⚠️ /me/accounts failed:', e.message, '— using fallback');
     }
+
+    // Priority 4: Use META_ACCESS_TOKEN directly (may work if it has page permissions)
+    return systemToken;
 };
 
 /**
