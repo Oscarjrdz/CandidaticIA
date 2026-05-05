@@ -4112,6 +4112,18 @@ ${safeDnaLines}
         const aiConfigJson = batchConfig.ai_config;
         const activeAiConfig = aiConfigJson ? (typeof aiConfigJson === 'string' ? JSON.parse(aiConfigJson) : aiConfigJson) : {};
 
+        // 🧼 Token Saver: Clean ADN to prevent massive JSON stringification of telemetry logs
+        const cleanAdnBase = { 
+            nombreReal: candidateData.nombreReal || null,
+            fechaNacimiento: candidateData.fechaNacimiento || null,
+            edad: candidateData.edad || null,
+            municipio: candidateData.municipio || null,
+            categoria: candidateData.categoria || null,
+            escolaridad: candidateData.escolaridad || null,
+            citaFecha: candidateData.citaFecha || null,
+            citaHora: candidateData.citaHora || null
+        };
+
         if (!isRecruiterMode && !isBridgeActive && isProfileComplete && activeAiConfig.gptHostEnabled) {
             isHostMode = true;
             try {
