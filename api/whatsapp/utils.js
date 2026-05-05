@@ -332,7 +332,23 @@ export const sendMetaMessage = async (to, body, type = 'chat', extraParams = {})
 };
 
 export const sendUltraMsgMessage = async (_instanceId, _token, to, body, type = 'chat', extraParams = {}) => {
-    // All messages always go via Meta Cloud API
+    // Multi-platform routing: check if recipient is a Messenger PSID
+    try {
+        const { getRedisClient: getRedis } = await import('../utils/storage.js');
+        const redis = getRedis();
+        if (redis) {
+            const identifier = String(to).replace(/[^\d@.]/g, '');
+            const isMessenger = await redis.hget('messenger:psid_index', identifier);
+            if (isMessenger) {
+                const { sendMessengerMessage } = await import('../messenger/utils.js');
+                const messengerType = type === 'chat' ? 'text' : type;
+                return sendMessengerMessage(identifier, body, messengerType, extraParams);
+            }
+        }
+    } catch (e) {
+        // Fallback to WhatsApp on any error
+    }
+    // Default: WhatsApp Cloud API
     return sendMetaMessage(to, body, type, extraParams);
 };
 
