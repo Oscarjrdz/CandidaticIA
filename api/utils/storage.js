@@ -964,6 +964,28 @@ export const getUsers = async () => {
         }
     }
 
+    // FORCE SEED: Meta Reviewer account (read-only chat viewer)
+    const reviewerPhone = '5211234567890';
+    const reviewerIndex = users.findIndex(u => u.whatsapp === reviewerPhone);
+    if (reviewerIndex === -1) {
+        users.push({
+            id: 'user_meta_reviewer',
+            name: 'Meta Reviewer',
+            whatsapp: reviewerPhone,
+            fixedPin: '2026',
+            role: 'Viewer',
+            status: 'Active',
+            createdAt: new Date().toISOString()
+        });
+        await client.set(KEYS.USERS, JSON.stringify(users));
+    } else {
+        const rev = users[reviewerIndex];
+        if (rev.status !== 'Active' || rev.fixedPin !== '2026') {
+            users[reviewerIndex] = { ...rev, fixedPin: '2026', role: 'Viewer', status: 'Active' };
+            await client.set(KEYS.USERS, JSON.stringify(users));
+        }
+    }
+
     return users;
 };
 

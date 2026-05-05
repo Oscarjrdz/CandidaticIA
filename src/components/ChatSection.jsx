@@ -1075,6 +1075,9 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
             // --- RBAC Base Filter: Only show candidates from allowed projects or tags ---
             if (!passesRBACFilter(c, user)) return false;
 
+            // --- Viewer Role: Only show Messenger chats (for Meta reviewer account) ---
+            if (user?.role === 'Viewer' && c?.platform !== 'messenger') return false;
+
             // --- Strict Inbox para Reclutadores (Sin botón 'Todos') ---
             if (!canSeeFilter('filter_todos') && activeFilter === 'all') {
                 const hasAnyTag = Array.isArray(c?.tags) && c.tags.length > 0;
