@@ -40,8 +40,8 @@ function buildMessage(candidate, missingFields, attemptNumber) {
         ? firstName.charAt(0).toUpperCase() + firstName.slice(1).toLowerCase()
         : null;
 
-    const c1 = missingFields[0] ? `*${missingFields[0]}*` : null;
-    const c2 = missingFields[1] ? `*${missingFields[1]}*` : null;
+    const c1 = missingFields[0] ? `tu *${missingFields[0]}*` : null;
+    const c2 = missingFields[1] ? `tu *${missingFields[1]}*` : null;
     const lista = [c1, c2].filter(Boolean).join(' y ');
 
     const v = pickVariant(candidate.id, 3);
@@ -51,68 +51,68 @@ function buildMessage(candidate, missingFields, attemptNumber) {
         const opts = [
             // Variante A — pregunta directa
             n && c1
-                ? `¡Hola ${n}! 😊 Solo me falta saber ${c1} para encontrarte la vacante ideal. ¿Me lo compartes?`
-                : c1 ? `¡Hola! 👋 Solo necesito ${c1} para ayudarte a encontrar empleo. ¿Me lo dices?`
-                      : `¡Hola! 👋 Quedé esperando algunos datos. ¿Seguimos con tu registro?`,
+                ? `¡Hola ${n}! 😊 Solo me falta saber ${c1} para encontrarte la vacante ideal. ¿Me lo compartes? 🌸`
+                : c1 ? `¡Hola! 😊 Solo necesito ${c1} para ayudarte a encontrar empleo. ¿Me lo dices? 🌸`
+                      : `¡Hola! 😊 Quedé esperando algunos datos. ¿Seguimos con tu registro? ✨`,
 
             // Variante B — ángulo: "ya casi está listo tu perfil"
             n && c1
-                ? `Hola ${n} 👋 Tu registro quedó casi completo, solo falta ${c1}. ¿Me lo dices para poder buscarte opciones?`
-                : c1 ? `Hola 👋 Tu registro quedó casi completo, solo falta ${c1}. ¿Me lo compartes?`
-                      : `Hola 👋 Tu registro quedó incompleto. ¿Puedes ayudarme con los datos que faltan?`,
+                ? `Hola ${n} 🌸 Tu registro quedó casi completo, solo falta ${c1}. ¿Me lo dices para poder buscarte opciones? ✨`
+                : c1 ? `Hola 🌸 Tu registro quedó casi completo, solo falta ${c1}. ¿Me lo compartes? ✨`
+                      : `Hola 🌸 Tu registro quedó incompleto. ¿Puedes ayudarme con los datos que faltan? ✨`,
 
             // Variante C — ángulo: "necesito ese dato para ayudarte"
             n && c1
-                ? `${n}, me quedé a medias con tu registro 🙌 Necesito que me digas ${c1} para poder buscarte trabajo. ¿Me ayudas?`
-                : c1 ? `Me quedé a medias con tu registro. Necesito ${c1} para poder buscarte trabajo. ¿Me lo dices?`
-                      : `Me quedé a medias con tu registro. ¿Puedes completar los datos que faltan?`,
+                ? `${n}, me quedé a medias con tu registro 😊 Necesito que me digas ${c1} para poder buscarte trabajo. ¿Me ayudas? 🌟`
+                : c1 ? `Me quedé a medias con tu registro 😊 Necesito ${c1} para poder buscarte trabajo. ¿Me lo dices? 🌟`
+                      : `Me quedé a medias con tu registro 😊 ¿Puedes completar los datos que faltan? 🌟`,
         ];
         return opts[v];
     }
 
-    // ── Intento 2: Urgencia + contexto de competencia ── ángulo: "otros candidatos avanzan"
+    // ── Intento 2: Urgencia suave + contexto ── ángulo: "otros candidatos avanzan"
     if (attemptNumber === 2) {
         const opts = [
             // Variante A — "estamos recibiendo muchos candidatos"
             n && lista
-                ? `${n}, esta semana estamos recibiendo muchos candidatos 📋 Para considerarte necesito que me confirmes ${lista}. ¿Puedes?`
-                : lista ? `Esta semana estamos recibiendo muchos candidatos. Para considerarte falta ${lista}. ¿Me lo dices?`
-                        : `Seguimos recibiendo candidatos esta semana. ¿Puedes completar tu registro?`,
+                ? `${n}, esta semana estamos recibiendo muchos candidatos 🌟 Para considerarte necesito que me confirmes ${lista}. ¿Puedes? 😊`
+                : lista ? `Esta semana estamos recibiendo muchos candidatos 🌟 Para considerarte falta ${lista}. ¿Me lo dices? 😊`
+                        : `Seguimos recibiendo candidatos esta semana 🌟 ¿Puedes completar tu registro? 😊`,
 
             // Variante B — "ya tengo candidatos con perfil similar avanzando"
             n && lista
-                ? `Ey ${n} 👀 Tengo candidatos con un perfil similar al tuyo avanzando en el proceso. Solo me falta ${lista} de tu parte. ¿Seguimos?`
-                : lista ? `Tengo candidatos similares avanzando en el proceso. Solo falta ${lista}. ¿Seguimos?`
-                        : `Tengo candidatos avanzando en proceso. ¿Completamos tu registro?`,
+                ? `${n} 🌸 Tengo candidatos con un perfil similar al tuyo avanzando en el proceso. Solo me falta ${lista} de tu parte. ¿Seguimos? ✨`
+                : lista ? `Tengo candidatos similares avanzando en el proceso 🌸 Solo falta ${lista}. ¿Seguimos? ✨`
+                        : `Tengo candidatos avanzando en proceso 🌸 ¿Completamos tu registro? ✨`,
 
             // Variante C — "no quiero que pierdas la oportunidad"
             n && lista
-                ? `${n}, no quiero que pierdas una buena oportunidad por un dato 🙏 Solo me falta ${lista}. ¿Me lo compartes?`
-                : lista ? `No quiero que pierdas una buena oportunidad por un dato. Solo falta ${lista}. ¿Me lo dices?`
-                        : `No quiero que pierdas una buena oportunidad. ¿Completamos tu registro?`,
+                ? `${n}, no quiero que pierdas una buena oportunidad 🙏 Solo me falta ${lista}. ¿Me lo compartes? 🌸`
+                : lista ? `No quiero que pierdas una buena oportunidad 🙏 Solo falta ${lista}. ¿Me lo dices? 🌸`
+                        : `No quiero que pierdas una buena oportunidad 🙏 ¿Completamos tu registro? 🌸`,
         ];
         return opts[v];
     }
 
-    // ── Intento 3: FOMO + cierre definitivo ── ángulo: "última oportunidad real"
+    // ── Intento 3: Cierre definitivo con calidez ── ángulo: "última oportunidad"
     const opts3 = [
-        // Variante A — "cierro tu expediente si no respondo"
+        // Variante A — "voy a cerrar tu expediente"
         n && c1
-            ? `${n}, voy a cerrar tu expediente si no me confirmas ${c1} 📁 ¿Me lo dices antes de que lo archive?`
-            : c1 ? `Voy a cerrar tu expediente si no me confirmas ${c1}. ¿Me lo dices?`
-                  : `Voy a archivar tu registro. ¿Deseas continuar con tu búsqueda de empleo?`,
+            ? `${n}, voy a cerrar tu expediente si no me confirmas ${c1} 😊 ¿Me lo dices antes de que lo archive? 🌸`
+            : c1 ? `Voy a cerrar tu expediente si no me confirmas ${c1} 😊 ¿Me lo dices? 🌸`
+                  : `Voy a archivar tu registro 😊 ¿Deseas continuar con tu búsqueda de empleo? 🌸`,
 
         // Variante B — "tengo una vacante pero necesito ese dato"
         n && c1
-            ? `${n} 🎯 Tengo una vacante que podría ser para ti pero necesito confirmar ${c1} antes de incluirte. ¿Me lo dices?`
-            : c1 ? `Tengo una vacante disponible pero necesito confirmar ${c1} para incluirte. ¿Me lo dices?`
-                  : `Tengo vacantes disponibles pero tu perfil está incompleto. ¿Terminamos el registro?`,
+            ? `${n} 🌟 Tengo una vacante que podría ser para ti pero necesito confirmar ${c1} antes de incluirte. ¿Me lo dices? 💖`
+            : c1 ? `Tengo una vacante disponible pero necesito confirmar ${c1} para incluirte 🌟 ¿Me lo dices? 💖`
+                  : `Tengo vacantes disponibles pero tu perfil está incompleto 🌟 ¿Terminamos el registro? 💖`,
 
-        // Variante C — tono directo sin dramatismo
+        // Variante C — tono directo y cálido
         n && c1
-            ? `${n}, solo para cerrar: necesito ${c1} para tenerte en cuenta en futuras vacantes. ¿Me lo puedes decir? 🙌`
-            : c1 ? `Para cerrar tu registro necesito ${c1}. ¿Me lo puedes decir?`
-                  : `Para cerrar tu registro me faltan algunos datos. ¿Puedes completarlos?`,
+            ? `${n}, solo para cerrar: necesito ${c1} para tenerte en cuenta en futuras vacantes. ¿Me lo puedes decir? 🌸✨`
+            : c1 ? `Para cerrar tu registro necesito ${c1}. ¿Me lo puedes decir? 🌸✨`
+                  : `Para cerrar tu registro me faltan algunos datos. ¿Puedes completarlos? 🌸✨`,
     ];
     return opts3[v];
 }

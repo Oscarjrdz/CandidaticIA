@@ -47,10 +47,11 @@ export function usePresence(user, activeSection) {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         userId: user.id || user.whatsapp,
+                        whatsapp: user.whatsapp,           // always present, used as stable identity
                         userName: user.name || user.nombre || 'Recruiter',
                         role: user.role || 'User',
                         currentChatId: currentChatIdRef.current,
-                        idle: isIdle,  // server skips time accumulation when idle
+                        idle: isIdle,
                     })
                 });
                 const data = await res.json();

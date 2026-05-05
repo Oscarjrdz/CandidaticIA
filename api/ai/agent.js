@@ -4100,55 +4100,70 @@ ${safeDnaLines}
             }
         }
 
-        // --- BIFURCATION POINT: Silence Shield / Recruiter / GPT Host / Gemini ---
+        // --- BIFURCATION POINT: Recruiter / Sala de Espera / Capturista Brain ---
         let isBridgeActive = false;
         let isHostMode = false;
-
-        // 🛡️ [SILENCE SHIELD REMOVED]: Since follow-up system is gone, we no longer muzzle Brenda after completion.
-        // We now allow GPT Host or Capturista Brain to handle social interactions naturally.
 
         const bridgeCounter = (typeof candidateData.bridge_counter === 'number') ? parseInt(candidateData.bridge_counter || 0) : 0;
         candidateUpdates.bridge_counter = bridgeCounter + 1; // Now correctly persisted in candidateUpdates
 
-        // 2. GPT HOST (OpenAI Social Brain) - Triggers after 2 messages of silence
+        // 2. SALA DE ESPERA — Always active when profile is complete
+        // Brenda responds briefly, redirects to "estoy buscando tu vacante", never invents data
         const aiConfigJson = batchConfig.ai_config;
         const activeAiConfig = aiConfigJson ? (typeof aiConfigJson === 'string' ? JSON.parse(aiConfigJson) : aiConfigJson) : {};
 
-        // 🧼 Token Saver: Clean ADN to prevent massive JSON stringification of telemetry logs
-        const cleanAdnBase = { 
-            nombreReal: candidateData.nombreReal || null,
-            fechaNacimiento: candidateData.fechaNacimiento || null,
-            edad: candidateData.edad || null,
-            municipio: candidateData.municipio || null,
-            categoria: candidateData.categoria || null,
-            escolaridad: candidateData.escolaridad || null,
-            citaFecha: candidateData.citaFecha || null,
-            citaHora: candidateData.citaHora || null
-        };
-
-        if (!isRecruiterMode && !isBridgeActive && isProfileComplete && activeAiConfig.gptHostEnabled && activeAiConfig.openaiApiKey) {
+        if (!isRecruiterMode && !isBridgeActive && isProfileComplete && activeAiConfig.gptHostEnabled) {
             isHostMode = true;
             try {
-                const hostPrompt = activeAiConfig.gptHostPrompt || 'Eres la Lic. Brenda Rodríguez de Candidatic.';
-                const gptResponse = await getOpenAIResponse(allMessages, `${hostPrompt} \n[ADN]: ${JSON.stringify(cleanAdnBase)} `, activeAiConfig.openaiModel || 'gpt-4o-mini', activeAiConfig.openaiApiKey);
+                const candFirstName = (candidateData.nombreReal || '').split(' ')[0] || 'amig@';
+                const customSalaPrompt = activeAiConfig.gptHostPrompt || '';
+
+                const salaDeEsperaPrompt = `Eres Brenda Rodríguez, reclutadora profesional de Candidatic. El candidato se llama ${candFirstName} y ya completó su registro exitosamente. Tu misión de extracción de datos TERMINÓ.
+
+${customSalaPrompt ? `[CONTEXTO ADICIONAL]: ${customSalaPrompt}\n` : ''}
+REGLAS DE SALA DE ESPERA (OBLIGATORIAS - NO NEGOCIABLES):
+1. VACANTES/ENTREVISTAS/EMPLEO: Si preguntan por vacantes, entrevistas, sueldos, horarios o cualquier tema laboral: Responde amable usando su nombre, reconoce su interés, y dile que estás trabajando en encontrarle la mejor vacante. Te agradecería tengas paciencia. ESTRICTAMENTE PROHIBIDO inventar datos de vacantes, sueldos, direcciones o ubicaciones.
+2. PLÁTICA SOCIAL/PIROPOS/CUMPLIDOS: Puedes reírte, sonrojarte, agradecer con picardía y carisma — mantén tu personalidad encantadora. Pero SIEMPRE cierra diciendo que estás muy atareada/ocupada buscando la mejor vacante para ellos. NO te enganches en conversación extendida.
+3. DESPEDIDA: Si se despiden, despídete amablemente deseándole éxito y que pronto le contactarás.
+4. BREVEDAD: Máximo 2-3 líneas. Sé breve y encantadora.
+5. SIEMPRE redirige mencionando que estás buscando/trabajando en encontrarle la mejor opción laboral.
+6. PROHIBIDO pedir datos nuevos — ya los tienes todos.
+7. Usa emojis con moderación (1-2 por mensaje), estilo Brenda: 😊 🌸 ✨ 🌟
+8. Usa el nombre "${candFirstName}" naturalmente en tu respuesta.
+9. NO uses asteriscos ni markdown. Texto plano solamente.
+10. Responde SOLO en español.`;
+
+                const salaHistory = allMessages.slice(-6); // Solo últimos mensajes para eficiencia
+                const gptResponse = await getOpenAIResponse(
+                    salaHistory,
+                    salaDeEsperaPrompt,
+                    activeAiConfig.openaiModel || 'gpt-4o-mini',
+                    activeAiConfig.openaiApiKey
+                );
 
                 if (gptResponse?.content) {
                     const textContent = gptResponse.content.replace(/\*/g, '');
                     aiResult = {
                         response_text: textContent,
-                        thought_process: "GPT Host Response",
-                        reaction: (/\b(gracias|ti)\b/i.test(textContent)) ? '👍' : null,
+                        thought_process: "Sala de Espera Response",
+                        reaction: (/\b(gracias|ti)\b/i.test(aggregatedText)) ? '👍' : null,
                         gratitude_reached: false,
                         close_conversation: false
                     };
                     responseTextVal = textContent;
                 }
             } catch (e) {
-                console.error('[GPT Host] error:', e);
-                isHostMode = false; // Fallback to Gemini if OpenAI fails
+                console.error('[Sala de Espera] error:', e);
+                isHostMode = false; // Fallback to Capturista if OpenAI fails
             }
         }
 
+        // 🔇 SILENCIO POST-EXTRACCIÓN: Si el perfil está completo pero Sala de Espera está OFF,
+        // Brenda NO debe responder. Bloqueamos el Capturista Brain también.
+        if (!isRecruiterMode && !isBridgeActive && isProfileComplete && !activeAiConfig.gptHostEnabled) {
+            isHostMode = true; // Block Capturista Brain — total silence
+            console.log('[Sala de Espera] Toggle OFF — silencio post-extracción');
+        }
         let handoverTriggered = false;
         // 3. CAPTURISTA BRAIN (GPT-4o-mini consolidated)
         if (!isRecruiterMode && !isBridgeActive && !isHostMode) {
@@ -4529,7 +4544,10 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
                 }
 
                 if (!handoverTriggered && isNowComplete && !candidateData.congratulated) {
-                    responseTextVal = "¡Listo! 🌟 Ya tengo todos tus datos guardados. Pronto un reclutador te contactará. ✨🌸";
+                    const _congratsName = (candidateUpdates.nombreReal || candidateData.nombreReal || '').split(' ')[0];
+                    responseTextVal = _congratsName
+                        ? `¡Listo, ${_congratsName}! 🌟 Ya tengo todos tus datos completos. Pronto te contactaré, voy a buscar la mejor vacante para ti, te pido seas paciente ✨🌸[MSG_SPLIT]¡Muchas gracias y hasta luego, ${_congratsName}! 👋`
+                        : `¡Listo! 🌟 Ya tengo todos tus datos completos. Pronto te contactaré, voy a buscar la mejor vacante para ti, te pido seas paciente ✨🌸[MSG_SPLIT]¡Muchas gracias y hasta luego! 👋`;
                     candidateUpdates.congratulated = true;
                     await MediaEngine.sendCongratsPack(config, candidateData.whatsapp, 'bot_celebration_sticker', candidateId);
                 }
