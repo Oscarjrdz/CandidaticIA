@@ -1057,7 +1057,8 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
             const matchesSearch = 
                 (c?.nombreReal && String(c.nombreReal).toLowerCase().includes(searchVal)) ||
                 (c?.nombre && String(c.nombre).toLowerCase().includes(searchVal)) ||
-                (c?.whatsapp && String(c.whatsapp).includes(searchVal));
+                (c?.whatsapp && String(c.whatsapp).includes(searchVal)) ||
+                (c?.adId && String(c.adId).includes(searchVal));
                 
             if (!matchesSearch && searchVal !== "") return false;
 
@@ -2128,7 +2129,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                                     ? 'bg-[#d9fdd3] text-[#111b21] dark:bg-[#0a332c] dark:text-[#25d366]' 
                                     : 'bg-[#f0f2f5] text-[#54656f] hover:bg-[#e9edef] dark:bg-[#202c33] dark:text-[#aebac1] dark:hover:bg-[#2a3942]'
                                 }`}
-                                style={{ fontSize: 'clamp(9px, 2.5cqw, 12px)' }}
+                                style={{ fontSize: 'clamp(8px, 2.2cqw, 11px)' }}
                             >
                                 Todos
                             </button>
@@ -2140,7 +2141,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                                 ? 'bg-[#d9fdd3] text-[#111b21] dark:bg-[#0a332c] dark:text-[#25d366]' 
                                 : 'bg-[#f0f2f5] text-[#54656f] hover:bg-[#e9edef] dark:bg-[#202c33] dark:text-[#aebac1] dark:hover:bg-[#2a3942]'
                             }`}
-                            style={{ fontSize: 'clamp(9px, 2.5cqw, 12px)' }}
+                            style={{ fontSize: 'clamp(8px, 2.2cqw, 11px)' }}
                         >
                             No Leídos
                             {unreadCounts.all > 0 && (
@@ -2157,7 +2158,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                                     ? 'bg-[#d9fdd3] text-[#111b21] dark:bg-[#0a332c] dark:text-[#25d366]' 
                                     : 'bg-[#f0f2f5] text-[#54656f] hover:bg-[#e9edef] dark:bg-[#202c33] dark:text-[#aebac1] dark:hover:bg-[#2a3942]'
                                 }`}
-                                style={{ fontSize: 'clamp(9px, 2.5cqw, 12px)' }}
+                                style={{ fontSize: 'clamp(8px, 2.2cqw, 11px)' }}
                             >
                                 Completos ({badgeCounts.complete})
                                 {unreadCounts.complete > 0 && (
@@ -2175,7 +2176,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                                     ? 'bg-[#d9fdd3] text-[#111b21] dark:bg-[#0a332c] dark:text-[#25d366]' 
                                     : 'bg-[#f0f2f5] text-[#54656f] hover:bg-[#e9edef] dark:bg-[#202c33] dark:text-[#aebac1] dark:hover:bg-[#2a3942]'
                                 }`}
-                                style={{ fontSize: 'clamp(9px, 2.5cqw, 12px)' }}
+                                style={{ fontSize: 'clamp(8px, 2.2cqw, 11px)' }}
                             >
                                 Incompletos ({badgeCounts.incomplete})
                                 {unreadCounts.incomplete > 0 && (
