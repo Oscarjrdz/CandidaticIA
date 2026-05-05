@@ -253,16 +253,31 @@ async function processMessengerMessage(psid, message, timestamp, referral) {
         if (candidateId) {
             candidate = await getCandidateById(candidateId);
             if (!candidate) candidateId = null;
+            // Auto-fix: update name/pic if still default
+            if (candidate && (!candidate.nombre || candidate.nombre === 'Usuario Messenger' || candidate.nombre === 'Usuario de Messenger')) {
+                const profile = await getMessengerProfile(psid);
+                if (profile?.fullName) {
+                    console.error(`[Messenger] Updating name for ${psid}: ${profile.fullName}`);
+                    await updateCandidate(candidateId, {
+                        nombre: profile.fullName,
+                        nombreReal: profile.fullName,
+                        ...(profile.profilePic && { profilePic: profile.profilePic })
+                    });
+                    candidate = await getCandidateById(candidateId);
+                }
+            }
         }
 
         if (!candidateId) {
             // Fetch profile from Facebook
             const profile = await getMessengerProfile(psid);
+            console.error(`[Messenger] Profile for ${psid}:`, profile ? `${profile.fullName} ✅` : '❌ null (token/permissions issue?)');
 
             candidate = await saveCandidate({
                 whatsapp: psid, // PSID stored in whatsapp field for compatibility
                 platform: 'messenger',
                 nombre: profile?.fullName || 'Usuario Messenger',
+                nombreReal: profile?.fullName || null,
                 profilePic: profile?.profilePic || null,
                 origen: referral?.ad_id ? 'facebook_messenger_ad' : 'facebook_messenger',
                 esNuevo: 'SI',
