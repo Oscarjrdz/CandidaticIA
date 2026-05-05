@@ -523,6 +523,14 @@ const ChatRow = React.memo(({ chat, isSelected, isPinned, onSelect, onBlock, onD
                         {chat.whatsapp && <span className="text-[10px] text-[#8696a0] dark:text-[#697882] shrink-0 ml-1">{chat.whatsapp}</span>}
                     </div>
                     <div className="flex flex-col items-end shrink-0 ml-2 gap-0.5">
+                        <div className="flex items-center gap-1">
+                            {chat.lastMessageFrom === 'me' || chat.lastMessageFrom === 'bot' ? (
+                                <MessageStatusTicks status={chat.lastMessageStatus} size="sm" />
+                            ) : null}
+                            <span className={`text-xs whitespace-nowrap ${isUnread ? 'text-[#25d366] dark:text-[#00a884] font-medium' : 'text-[#667781] dark:text-[#8696a0]'}`}>
+                                {formatRelativeDate(chat.ultimoMensaje)}
+                            </span>
+                        </div>
                         {onlineReaders.length > 0 && (
                             <div className="flex gap-1 flex-wrap justify-end">
                                 {onlineReaders.map((r, idx) => (
@@ -532,14 +540,6 @@ const ChatRow = React.memo(({ chat, isSelected, isPinned, onSelect, onBlock, onD
                                 ))}
                             </div>
                         )}
-                        <div className="flex items-center gap-1">
-                            {chat.lastMessageFrom === 'me' || chat.lastMessageFrom === 'bot' ? (
-                                <MessageStatusTicks status={chat.lastMessageStatus} size="sm" />
-                            ) : null}
-                            <span className={`text-xs whitespace-nowrap ${isUnread ? 'text-[#25d366] dark:text-[#00a884] font-medium' : 'text-[#667781] dark:text-[#8696a0]'}`}>
-                                {formatRelativeDate(chat.ultimoMensaje)}
-                            </span>
-                        </div>
                     </div>
                 </div>
                 <div className="flex justify-between items-center mt-0.5">
