@@ -530,16 +530,6 @@ const ChatRow = React.memo(({ chat, isSelected, isPinned, onSelect, onBlock, onD
                             <span className={`text-xs whitespace-nowrap ${isUnread ? 'text-[#25d366] dark:text-[#00a884] font-medium' : 'text-[#667781] dark:text-[#8696a0]'}`}>
                                 {formatRelativeDate(chat.ultimoMensaje)}
                             </span>
-                        </div>
-                        {onlineReaders.length > 0 && (
-                            <div className="flex gap-1 flex-wrap justify-end">
-                                {onlineReaders.map((r, idx) => (
-                                    <span key={idx} className="text-[10px] text-blue-600 dark:text-blue-400 font-medium whitespace-nowrap">
-                                        {r.userId === userId ? 'Tú' : (r.userName || '?')}
-                                    </span>
-                                ))}
-                            </div>
-                        )}
                     </div>
                 </div>
                 <div className="flex justify-between items-center mt-0.5">
@@ -612,9 +602,18 @@ const ChatRow = React.memo(({ chat, isSelected, isPinned, onSelect, onBlock, onD
                     {(chat.edad || chat.escolaridad || chat.municipio) && chat.categoria && <span className="shrink-0">•</span>}
                     {chat.categoria && <span className="truncate shrink-0">{toTitleCase(chat.categoria)}</span>}
                 </div>
-                {chat.adId && (
-                    <div className="flex items-center gap-1 mt-0.5 text-[10px] text-[#8696a0] dark:text-[#697882] truncate">
-                        <span className="shrink-0">Ad id: {chat.adId}</span>
+                {(chat.adId || onlineReaders.length > 0) && (
+                    <div className="flex items-center justify-between mt-0.5 text-[10px] text-[#8696a0] dark:text-[#697882]">
+                        <span className="truncate">{chat.adId ? `Ad id: ${chat.adId}` : ''}</span>
+                        {onlineReaders.length > 0 && (
+                            <div className="flex gap-1 shrink-0 ml-2">
+                                {onlineReaders.map((r, idx) => (
+                                    <span key={idx} className="text-[10px] text-blue-600 dark:text-blue-400 font-medium whitespace-nowrap">
+                                        {r.userId === userId ? 'Tú' : (r.userName || '?')}
+                                    </span>
+                                ))}
+                            </div>
+                        )}
                     </div>
                 )}
             </div>
