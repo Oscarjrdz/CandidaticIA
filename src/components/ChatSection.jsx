@@ -496,6 +496,7 @@ const ChatRow = React.memo(({ chat, isSelected, isPinned, onSelect, onBlock, onD
     const profileComplete = isProfileCompleteStandalone(chat);
     const avatarColor = AVATAR_COLORS[((chat.nombre||'C').charCodeAt(0)*7)%10];
     const isEmptyChat = chat.mensajesTotales === 0 || !chat.ultimoMensaje;
+    const [imgError, setImgError] = React.useState(false);
 
     return (
         <div 
@@ -503,9 +504,9 @@ const ChatRow = React.memo(({ chat, isSelected, isPinned, onSelect, onBlock, onD
             className={`group flex items-center px-3 py-3 cursor-pointer hover:bg-[#f5f6f6] dark:hover:bg-[#202c33] transition-all duration-200 border-l-4 ${isSelected ? 'bg-[#f0f2f5] dark:bg-[#2a3942] border-[#25d366] dark:border-[#00a884] shadow-sm relative z-10' : 'border-transparent'}`}
         >
             <div className={`w-12 h-12 rounded-full flex-shrink-0 flex items-center justify-center mr-3 relative overflow-hidden ${isEmptyChat ? 'ring-2 ring-blue-500 ring-offset-2 ring-offset-[#ffffff] dark:ring-offset-[#111b21]' : ''}`}>
-                {chat.profilePic ? (
+                {chat.profilePic && !imgError ? (
                     <img src={chat.profilePic} className="w-full h-full object-cover" alt="profile" loading="lazy"
-                        onError={(e)=>{e.target.onerror=null; e.target.style.display='none'; e.target.parentElement.innerHTML=`<span class="flex items-center justify-center w-full h-full text-lg font-bold text-white" style="background:${avatarColor}">${(chat.nombre||'C')[0].toUpperCase()}</span>`;}} />
+                        onError={() => setImgError(true)} />
                 ) : (
                     <span className="flex items-center justify-center w-full h-full text-lg font-bold text-white rounded-full"
                         style={{ background: avatarColor }}>
@@ -651,6 +652,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
     const { newCandidate: sseNewCandidate } = useCandidatesSSE();
     const [candidates, setCandidates] = useState([]);
     const [selectedChat, setSelectedChat] = useState(null);
+    const [headerImgError, setHeaderImgError] = useState(false);
     const [showVCardModal, setShowVCardModal] = useState(false);
     const [showInteractiveModal, setShowInteractiveModal] = useState(false);
     const [vcardName, setVcardName] = useState('');
@@ -1607,6 +1609,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
 
     const handleSelectChat = useCallback((chat) => {
         setSelectedChat(chat);
+        setHeaderImgError(false);
     }, []);
 
     const handleFileUpload = async (e) => {
@@ -2537,9 +2540,9 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                                 <ArrowLeft className="w-6 h-6" />
                             </button>
                             <div className="min-w-[40px] w-10 h-10 rounded-full flex items-center justify-center mr-3 overflow-hidden shrink-0">
-                                {selectedChat.profilePic ? (
+                                {selectedChat.profilePic && !headerImgError ? (
                                     <img src={selectedChat.profilePic} className="w-full h-full object-cover" alt="profile"
-                                        onError={(e)=>{e.target.onerror=null; e.target.style.display='none'; e.target.parentElement.innerHTML=`<span class="flex items-center justify-center w-full h-full text-sm font-bold text-white" style="background:${['#f9a8d4','#a5b4fc','#86efac','#fcd34d','#fdba74','#c4b5fd','#67e8f9','#f0abfc','#fca5a5','#bef264'][((selectedChat.nombre||'C').charCodeAt(0)*7)%10]}">${(selectedChat.nombre||'C')[0].toUpperCase()}</span>`;}} />
+                                        onError={() => setHeaderImgError(true)} />
                                 ) : (
                                     <span className="flex items-center justify-center w-full h-full text-sm font-bold text-white rounded-full"
                                         style={{ background: ['#f9a8d4','#a5b4fc','#86efac','#fcd34d','#fdba74','#c4b5fd','#67e8f9','#f0abfc','#fca5a5','#bef264'][((selectedChat.nombre||'C').charCodeAt(0)*7)%10] }}>
