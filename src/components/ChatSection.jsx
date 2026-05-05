@@ -530,6 +530,7 @@ const ChatRow = React.memo(({ chat, isSelected, isPinned, onSelect, onBlock, onD
                             <span className={`text-xs whitespace-nowrap ${isUnread ? 'text-[#25d366] dark:text-[#00a884] font-medium' : 'text-[#667781] dark:text-[#8696a0]'}`}>
                                 {formatRelativeDate(chat.ultimoMensaje)}
                             </span>
+                        </div>
                     </div>
                 </div>
                 <div className="flex justify-between items-center mt-0.5">
