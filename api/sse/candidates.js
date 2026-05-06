@@ -66,37 +66,25 @@ export default async function handler(req, res) {
             pipeline.get('stats:msg:outgoing');
             pipeline.scard('stats:list:complete');
             pipeline.scard('stats:list:pending');
-            pipeline.get('stats:bot:flight_plan');
-            pipeline.get('stats:bot:last_calc');
-            pipeline.get('stats:bot:unread_v2'); // renamed to avoid conflict with old backend
+            pipeline.get('stats:bot:unread_v2');
 
             const results = await pipeline.exec();
 
-            const incoming = results[0][1] || '0';
-            const outgoing = results[1][1] || '0';
-            const complete = results[2][1] || 0;
-            const pending = results[3][1] || 0;
-            const flightPlan = results[4][1] ? JSON.parse(results[4][1]) : null;
-            const lastCalc = results[5][1];
-            const unreadCount = parseInt(results[6][1]) || 0;
-
-            // Trigger background flight plan update if stale (5 mins)
-            const now = Date.now();
-            if (!lastCalc || (now - parseInt(lastCalc)) > 300000) {
-                import('../utils/bot-stats.js').then(m => m.calculateBotStats()).catch(() => { });
-                await redis.set('stats:bot:last_calc', now.toString(), 'EX', 60);
-            }
+            const incoming   = results[0][1] || '0';
+            const outgoing   = results[1][1] || '0';
+            const complete   = results[2][1] || 0;
+            const pending    = results[3][1] || 0;
+            const unreadCount = parseInt(results[4][1]) || 0;
 
             sendEvent({
                 type: 'stats:global',
                 data: {
                     incoming: parseInt(incoming),
                     outgoing: parseInt(outgoing),
-                    total: complete + pending,
-                    complete: complete,
-                    pending: pending,
-                    unread: unreadCount,
-                    flightPlan
+                    total:    complete + pending,
+                    complete,
+                    pending,
+                    unread:   unreadCount,
                 }
             });
 
