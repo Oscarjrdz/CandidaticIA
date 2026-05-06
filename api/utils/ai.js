@@ -211,7 +211,7 @@ Debes responder ESTRICTAMENTE con un JSON con la siguiente estructura:
 
 // ─────────────────────────────────────────────────────────────────
 // 🗺️ MUNICIPIO DICTIONARY — Nuevo León + estados frecuentes
-// Capa 1: instantánea, sin costo de IA. Nombres cortos canónicos.
+// Capa 1: instantánea, sin costo de IA. Nombres oficiales completos.
 // ─────────────────────────────────────────────────────────────────
 const normalize = (s) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
 
@@ -220,25 +220,27 @@ const MUNICIPIO_MAP = new Map(Object.entries({
     'monterrey': 'Monterrey', 'mty': 'Monterrey', 'mtyrrey': 'Monterrey',
     'guadalupe': 'Guadalupe', 'gdlpe': 'Guadalupe', 'guada': 'Guadalupe',
     'apodaca': 'Apodaca', 'ciudad apodaca': 'Apodaca', 'cd apodaca': 'Apodaca',
-    'escobedo': 'Escobedo', 'gral escobedo': 'Escobedo', 'general escobedo': 'Escobedo',
-    'general mariano escobedo': 'Escobedo', 'gral mariano escobedo': 'Escobedo',
-    'san nicolas': 'San Nicolás', 'san nicolas de los garza': 'San Nicolás',
-    'san nico': 'San Nicolás', 'sn nicolas': 'San Nicolás',
-    'san pedro': 'San Pedro', 'san pedro garza garcia': 'San Pedro',
-    'spgg': 'San Pedro', 'san pedro garza garcía': 'San Pedro',
-    'santa catarina': 'Santa Catarina', 'santa': 'Santa Catarina', 'sta catarina': 'Santa Catarina',
-    'juarez': 'Juárez', 'ciudad juarez nl': 'Juárez', 'cd juarez nl': 'Juárez',
+    'escobedo': 'General Escobedo', 'gral escobedo': 'General Escobedo', 'general escobedo': 'General Escobedo',
+    'general mariano escobedo': 'General Escobedo', 'gral mariano escobedo': 'General Escobedo',
+    'san nicolas': 'San Nicolás de los Garza', 'san nicolas de los garza': 'San Nicolás de los Garza',
+    'san nico': 'San Nicolás de los Garza', 'sn nicolas': 'San Nicolás de los Garza',
+    'san pedro': 'San Pedro Garza García', 'san pedro garza garcia': 'San Pedro Garza García',
+    'spgg': 'San Pedro Garza García', 'san pedro garza garcia': 'San Pedro Garza García',
+    'santa catarina': 'Santa Catarina', 'sta catarina': 'Santa Catarina',
+    'juarez': 'Benito Juárez', 'benito juarez': 'Benito Juárez', 'ciudad juarez nl': 'Benito Juárez', 'cd juarez nl': 'Benito Juárez',
     'garcia': 'García', 'ciudad garcia': 'García', 'cd garcia': 'García',
     'pesqueria': 'Pesquería', 'pesqueria nl': 'Pesquería',
-    'zuazua': 'Zuazua', 'general zuazua': 'Zuazua', 'gral zuazua': 'Zuazua',
+    'zuazua': 'General Zuazua', 'general zuazua': 'General Zuazua', 'gral zuazua': 'General Zuazua',
     'santiago': 'Santiago', 'santiago nl': 'Santiago',
     // ── NUEVO LEÓN — RESTO ──
-    'abasolo': 'Abasolo', 'agualeguas': 'Agualeguas', 'aldama': 'Aldama',
+    'abasolo': 'Abasolo', 'agualeguas': 'Agualeguas',
+    'los aldamas': 'Los Aldamas', 'aldamas': 'Los Aldamas', 'aldama': 'Los Aldamas',
     'allende': 'Allende', 'anahuac': 'Anáhuac', 'anahuac nl': 'Anáhuac',
     'aramberri': 'Aramberri', 'bustamante': 'Bustamante',
-    'cadereyta': 'Cadereyta', 'cadereyta jimenez': 'Cadereyta', 'cadereyta garibaldi': 'Cadereyta',
-    'carmen': 'Carmen', 'cerralvo': 'Cerralvo', 'china': 'China',
-    'cienega': 'Ciénega', 'cienega de flores': 'Ciénega',
+    'cadereyta': 'Cadereyta Jiménez', 'cadereyta jimenez': 'Cadereyta Jiménez', 'cadereyta garibaldi': 'Cadereyta Jiménez',
+    'el carmen': 'El Carmen', 'carmen': 'El Carmen',
+    'cerralvo': 'Cerralvo', 'china': 'China',
+    'cienega': 'Ciénega de Flores', 'cienega de flores': 'Ciénega de Flores',
     'doctor arroyo': 'Doctor Arroyo', 'dr arroyo': 'Doctor Arroyo',
     'doctor coss': 'Doctor Coss', 'dr coss': 'Doctor Coss',
     'doctor gonzalez': 'Doctor González', 'dr gonzalez': 'Doctor González',
@@ -249,13 +251,16 @@ const MUNICIPIO_MAP = new Map(Object.entries({
     'general zaragoza': 'General Zaragoza', 'gral zaragoza': 'General Zaragoza',
     'los herreras': 'Los Herreras', 'herreras': 'Los Herreras',
     'higueras': 'Higueras', 'hualahuises': 'Hualahuises',
-    'iturbide': 'Iturbide', 'lampazos': 'Lampazos', 'lampazos de naranjo': 'Lampazos',
+    'iturbide': 'Iturbide',
+    'lampazos': 'Lampazos de Naranjo', 'lampazos de naranjo': 'Lampazos de Naranjo',
     'linares': 'Linares', 'marin': 'Marín',
     'melchor ocampo': 'Melchor Ocampo', 'mier y noriega': 'Mier y Noriega',
     'mina': 'Mina', 'montemorelos': 'Montemorelos',
-    'paras': 'Parás', 'los ramones': 'Los Ramones', 'ramones': 'Los Ramones',
-    'rayones': 'Rayones', 'sabinas hidalgo': 'Sabinas', 'sabinas': 'Sabinas',
-    'salinas victoria': 'Salinas', 'salinas': 'Salinas',
+    'paras': 'Parás',
+    'los ramones': 'Los Ramones', 'ramones': 'Los Ramones',
+    'rayones': 'Rayones',
+    'sabinas hidalgo': 'Sabinas Hidalgo', 'sabinas': 'Sabinas Hidalgo',
+    'salinas victoria': 'Salinas Victoria', 'salinas': 'Salinas Victoria',
     'hidalgo': 'Hidalgo', 'vallecillo': 'Vallecillo', 'villaldama': 'Villaldama',
     // ── OTROS ESTADOS FRECUENTES ──
     // CDMX / Estado de México
@@ -300,7 +305,7 @@ export async function cleanMunicipioWithAI(municipio) {
         const knownNames = [...new Set(MUNICIPIO_MAP.values())].join(', ');
         const prompt = `Identifica el municipio o ciudad en: "${municipio}".
 Si está en esta lista de nombres canónicos, devuelve el nombre EXACTAMENTE como aparece en la lista: ${knownNames}.
-Si no está en la lista, devuelve el nombre corto y común en Title Case, sin estado ni puntos.
+Si no está en la lista, devuelve el nombre oficial completo en Title Case, sin estado ni puntos.
 Responde SOLO con el nombre, sin explicaciones.
 Respuesta:`;
 

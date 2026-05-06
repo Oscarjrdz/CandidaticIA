@@ -211,7 +211,7 @@ IMPORTANTE: Responde SÓLO con el JSON en bruto, sin backticks (\`\`\`) ni marca
         const queryLower = normalize(query);
         const genderTerms = ['hombre', 'hombres', 'caballero', 'caballeros', 'chico', 'chicos'];
         const femaleTerms = ['mujer', 'mujeres', 'dama', 'damas', 'chica', 'chicas'];
-        const muniTerms = ['monterrey', 'apodaca', 'guadalupe', 'san nicolas', 'escobedo', 'santa catarina', 'garcia', 'juarez', 'cadereyta', 'san pedro'];
+        const muniTerms = ['monterrey', 'apodaca', 'guadalupe', 'san nicolas', 'escobedo', 'general escobedo', 'santa catarina', 'garcia', 'juarez', 'benito juarez', 'cadereyta', 'cadereyta jimenez', 'san pedro', 'san pedro garza garcia', 'zuazua', 'general zuazua', 'pesqueria', 'santiago', 'salinas victoria', 'sabinas hidalgo', 'linares', 'allende', 'montemorelos', 'galeana', 'anahuac', 'doctor arroyo', 'general bravo', 'general teran', 'general trevino', 'general zaragoza', 'mina', 'lampazos', 'cerralvo', 'china', 'los aldamas', 'los herreras', 'los ramones', 'hidalgo', 'vallecillo', 'villaldama', 'abasolo', 'agualeguas', 'aramberri', 'bustamante', 'cienega de flores', 'doctor coss', 'doctor gonzalez', 'higueras', 'hualahuises', 'iturbide', 'marin', 'melchor ocampo', 'mier y noriega', 'paras', 'rayones', 'salinas', 'sabinas'];
         const educationTerms = ['preparatoria', 'prepa', 'bachillerato', 'secundaria', 'primaria', 'universidad', 'carrera', 'licenciatura', 'ingenieria'];
 
         // 2. Force Gender Filter (Sniffer)

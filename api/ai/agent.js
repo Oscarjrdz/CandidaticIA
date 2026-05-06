@@ -827,7 +827,7 @@ export const DEFAULT_EXTRACTION_RULES = `
 [EXTRAER]: nombreReal, genero, fechaNacimiento, edad, municipio, categoria, escolaridad.
 1. REFINAR: Si el dato en [ESTADO] ya existe y es válido, mantenlo. Si el candidato da info nueva, actualiza.
 2. FORMATO: Nombres en Title Case. Fecha DD/MM/YYYY (Si el usuario te da números amontonados como "191274" o "190590", INTUYE LA FECHA y guárdala formateada como "19/12/1974". No se la rechaces si puedes deducirla).
-3. MUNICIPIO: Extrae ÚNICAMENTE el nombre base CORTO del municipio/ciudad (ej: "Monterrey", "Apodaca", "Juárez", "Escobedo", "Cadereyta"). Si el usuario incluye su colonia o fraccionamiento (ej: "Centro Apodaca", "Santamonika villa de Juárez", "Valle del roble Cadereyta"), IGNORA la colonia y extrae SÓLO el municipio base corto (ej: "Apodaca", "Juárez", "Cadereyta"). NUNCA uses el nombre oficial largo del municipio (ej: "Cadereyta Jiménez" → "Cadereyta", "General Escobedo" → "Escobedo", "San Nicolás de los Garza" → "San Nicolás", "Cadereyta Garibaldi" → "Cadereyta"). Si ya está en [ESTADO], mantenlo intacto.
+3. MUNICIPIO: Extrae el nombre OFICIAL COMPLETO del municipio (ej: "Monterrey", "Apodaca", "Benito Juárez", "General Escobedo", "Cadereyta Jiménez", "San Nicolás de los Garza", "San Pedro Garza García", "General Zuazua", "Salinas Victoria", "Sabinas Hidalgo", "El Carmen", "Los Aldamas", "Los Herreras", "Los Ramones", "Lampazos de Naranjo", "Ciénega de Flores"). Si el usuario incluye su colonia o fraccionamiento (ej: "Centro Apodaca", "Valle del roble Cadereyta"), IGNORA la colonia y extrae SÓLO el municipio con su nombre oficial. Si el usuario dice solo "Escobedo" → guarda "General Escobedo"; "San Nicolás" → "San Nicolás de los Garza"; "San Pedro" → "San Pedro Garza García"; "Juárez" → "Benito Juárez"; "Zuazua" → "General Zuazua"; "Cadereyta" → "Cadereyta Jiménez"; "Sabinas" → "Sabinas Hidalgo"; "Salinas" → "Salinas Victoria". Si ya está en [ESTADO], mantenlo intacto.
 4. ESCOLARIDAD: Primaria, Secundaria, Preparatoria, Licenciatura, Técnica, Posgrado.
 5. CATEGORÍA: Solo de: {{categorias}}.
 `;
@@ -4241,7 +4241,7 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
                     // (custom prompts define their own UX behavior, these rules would conflict)
                     systemInstruction += `
 [REGLAS DE HOMOGENEIZACIÓN (ESTRICTAS)]:
-- **Municipio**: Devuelve ÚNICAMENTE el nombre CORTO del municipio (ej: "Cadereyta", NO "Cadereyta Jiménez"; "Escobedo", NO "General Escobedo") sin direcciones ni calles.
+- **Municipio**: Devuelve el nombre OFICIAL COMPLETO del municipio de Nuevo León (ej: "Cadereyta Jiménez" NO "Cadereyta"; "General Escobedo" NO "Escobedo"; "San Nicolás de los Garza" NO "San Nicolás"; "San Pedro Garza García" NO "San Pedro"; "Benito Juárez" NO "Juárez"; "General Zuazua" NO "Zuazua"; "Sabinas Hidalgo" NO "Sabinas"; "Salinas Victoria" NO "Salinas"; "El Carmen" NO "Carmen"; "Los Aldamas" NO "Aldama"; "Lampazos de Naranjo" NO "Lampazos"; "Ciénega de Flores" NO "Ciénega") sin direcciones ni calles.
 - **Escolaridad**: Clasifica en una sola palabra: Primaria, Secundaria, Preparatoria, Licenciatura, Técnica, o Posgrado.
 - ESCOLARIDAD (FORMATO OBLIGATORIO): Cuando preguntes por escolaridad, muestra opciones en lista VERTICAL con emojis.
 - **Categoría**: Si el candidato escribe "Ayudante", extrae estrictamente "Ayudante General" u otra categoría que haga *match exacto* a la lista. Si opera maquinaria -> "Montacarguista".\n`;
