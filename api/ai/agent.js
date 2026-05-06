@@ -34,6 +34,7 @@ import { MediaEngine } from '../utils/media-engine.js';
 import { intelligentExtract } from '../utils/intelligent-extractor.js';
 import { scheduleRemindersForCandidate } from '../utils/reminder-scheduler.js';
 import { cleanMunicipioWithAI, cleanCategoryWithAI, cleanEscolaridadWithAI } from '../utils/ai.js';
+import { getMissingFields } from '../reengagement-queue.js';
 
 // 🚀 TURBO MODE: Silence all synchronous Vercel console I/O unless actively debugging
 if (process.env.DEBUG_MODE !== 'true') {
@@ -4909,6 +4910,19 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
                     candidateUpdates.escolaridad = nivel;
                     break;
                 }
+            }
+        }
+
+        // Conversion tracking: if candidate was reengaged and now has fewer missing fields, mark as converted
+        if (
+            !candidateData.reengagement_converted &&
+            (Number(candidateData.reengagement_attempts) || 0) > 0
+        ) {
+            const missingBefore = getMissingFields(candidateData);
+            const missingAfter  = getMissingFields({ ...candidateData, ...candidateUpdates });
+            if (missingBefore.length > 0 && missingAfter.length < missingBefore.length) {
+                candidateUpdates.reengagement_converted = true;
+                candidateUpdates.reengagement_converted_at = new Date().toISOString();
             }
         }
 

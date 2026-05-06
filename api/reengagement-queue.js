@@ -67,10 +67,11 @@ export default async function handler(req, res) {
         const maxSilenceMs  = (settings.maxSilenceDays || 7) * 86_400_000;
         const maxAttempts   = settings.maxAttempts || 2;
 
-        const pending  = [];
-        const sent     = [];
-        const skipped  = [];
-        let sentToday  = 0;
+        const pending    = [];
+        const sent       = [];
+        const skipped    = [];
+        const converted  = [];
+        let sentToday    = 0;
 
         const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
 
@@ -93,6 +94,12 @@ export default async function handler(req, res) {
                 lastSent: c.reengagement_last_sent || null,
             };
             const lastSentTs = meta.lastSent ? new Date(meta.lastSent).getTime() : 0;
+
+            // ── Convertidos: respondieron y completaron campos ────────────────
+            if (c.reengagement_converted) {
+                converted.push({ ...meta, convertedAt: c.reengagement_converted_at || null });
+                continue;
+            }
 
             // ── Saltados manualmente ──────────────────────────────────────────
             if (c.reengagement_skip) {
@@ -144,10 +151,12 @@ export default async function handler(req, res) {
             pending,
             sent,
             skipped,
+            converted,
             stats: {
-                pendingCount:  pending.length,
+                pendingCount:    pending.length,
                 sentToday,
-                skippedCount:  skipped.length,
+                skippedCount:    skipped.length,
+                convertedCount:  converted.length,
             }
         });
     } catch (e) {

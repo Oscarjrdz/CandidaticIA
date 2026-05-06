@@ -161,9 +161,61 @@ export default async function handler(req, res) {
         }
     }
 
+    // ── Recordatorios directos de candidato (direct_reminders ZSET) ──────────
+    let directMembers = [];
+    try {
+        directMembers = await redis.zrangebyscore('direct_reminders', 0, now);
+    } catch (e) {
+        console.error('[SEND-REMINDERS] direct_reminders ZRANGEBYSCORE error:', e.message);
+    }
+
+    for (const remId of directMembers) {
+        await redis.zrem('direct_reminders', remId).catch(() => {});
+
+        try {
+            const raw = await redis.get(`direct_reminder:${remId}`);
+            if (!raw) { skipped++; continue; }
+
+            const reminder = JSON.parse(raw);
+            if (!reminder.whatsapp || !reminder.message) { skipped++; continue; }
+
+            const config = await getUltraMsgConfig();
+            if (!config) { skipped++; continue; }
+
+            await sendUltraMsgMessage(
+                config.instanceId,
+                config.token,
+                reminder.whatsapp,
+                reminder.message,
+                'chat',
+                { priority: 1 }
+            );
+
+            await saveMessage(reminder.candidateId, {
+                from: 'me',
+                content: reminder.message,
+                timestamp: new Date().toISOString(),
+                meta: { directReminder: true, reminderId: remId }
+            }).catch(() => {});
+
+            // Marcar como enviado (no eliminar — sirve para historial)
+            await redis.set(
+                `direct_reminder:${remId}`,
+                JSON.stringify({ ...reminder, status: 'sent', sentAt: new Date().toISOString() }),
+                'EX', 60 * 60 * 24 * 7  // conservar 7 días después de enviar
+            ).catch(() => {});
+
+            console.log(`[SEND-REMINDERS] ✅ Direct reminder → ${reminder.nombre} (${reminder.whatsapp})`);
+            sent++;
+        } catch (e) {
+            console.error(`[SEND-REMINDERS] Error in direct reminder "${remId}":`, e.message);
+            errors++;
+        }
+    }
+
     return res.json({
         success: true,
-        processed: members.length,
+        processed: members.length + directMembers.length,
         sent,
         skipped,
         errors,

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback, useTransition, useDeferredValue } from 'react';
 import ConfirmModal from './ui/ConfirmModal';
-import { MapPin, List as ListIcon, ShoppingBag, UserSquare, MousePointerClick, Search, MessageSquare, Plus, Smile, Paperclip, Mic, ArrowLeft, Send, Tag, Pencil, Check, X, Trash2, Briefcase, Kanban, BookOpen, Keyboard, Loader2, Edit2, Reply, Zap, Pin, MessageCirclePlus, Phone, User } from 'lucide-react';
+import { MapPin, List as ListIcon, ShoppingBag, UserSquare, MousePointerClick, Search, MessageSquare, Plus, Smile, Paperclip, Mic, ArrowLeft, Send, Tag, Pencil, Check, X, Trash2, Briefcase, Kanban, BookOpen, Keyboard, Loader2, Edit2, Reply, Zap, Pin, MessageCirclePlus, Phone, User, Bell } from 'lucide-react';
 import EmojiPicker from 'emoji-picker-react';
 import { getCandidates, blockCandidate, deleteCandidate } from '../services/candidatesService';
 import ManualProjectsSidepanel from './ManualProjectsSidepanel';
@@ -11,6 +11,7 @@ import { isProfileComplete } from '../utils/profileUtils';
 import { useToastContext } from '../contexts/ToastContext';
 import { useAuthContext } from '../contexts/AuthContext';
 import { safeFormatTime, toTitleCase, formatWhatsAppText, TAG_COLORS } from './chat/chatUtils';
+import CandidateReminderModal from './CandidateReminderModal';
 
 
 // ─── Componente de Palomitas WhatsApp ────────────────────────────────────────
@@ -568,7 +569,7 @@ const ProfileModal = React.memo(({ candidate, onClose, onSave }) => {
 });
 
 // 🏎️ MEMOIZED ChatRow — only re-renders when THIS chat's data changes (not the whole list)
-const ChatRow = React.memo(({ chat, isSelected, isPinned, onSelect, onBlock, onDelete, onTogglePin, onlineReaders, blockLoading, userId, onOpenProfileModal, onMarkAsRead, onMarkAsUnread }) => {
+const ChatRow = React.memo(({ chat, isSelected, isPinned, onSelect, onBlock, onDelete, onTogglePin, onlineReaders, blockLoading, userId, onOpenProfileModal, onMarkAsRead, onMarkAsUnread, onScheduleReminder }) => {
     const isUnread = checkIfUnreadStandalone(chat);
     const profileComplete = isProfileCompleteStandalone(chat);
     const avatarColor = AVATAR_COLORS[((chat.nombre||'C').charCodeAt(0)*7)%10];
@@ -657,6 +658,13 @@ const ChatRow = React.memo(({ chat, isSelected, isPinned, onSelect, onBlock, onD
                             </button>
                         )}
                         
+                        <button
+                            onClick={(e) => { e.stopPropagation(); onScheduleReminder && onScheduleReminder(chat); }}
+                            className="p-1 rounded text-gray-400 hover:text-amber-500 dark:hover:text-amber-400 opacity-0 group-hover:opacity-100 transition-colors"
+                            title="Programar mensaje"
+                        >
+                            <Bell className="w-3.5 h-3.5" />
+                        </button>
                         <button
                             onClick={(e) => { e.stopPropagation(); onTogglePin(chat.id); }}
                             className={`p-1 rounded transition-colors ${isPinned ? 'text-[#25d366] dark:text-[#00a884]' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 opacity-0 group-hover:opacity-100'}`}
@@ -785,6 +793,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
     const [reactionPopupId, setReactionPopupId] = useState(null);
     const [replyingToMsg, setReplyingToMsg] = useState(null);
     const [profileModalCandidate, setProfileModalCandidate] = useState(null);
+    const [reminderModalCandidate, setReminderModalCandidate] = useState(null);
     // 🎨 Styled Confirm Modal (replaces ugly window.confirm)
     const [confirmModal, setConfirmModal] = useState(null);
 
@@ -2654,6 +2663,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                                     onOpenProfileModal={setProfileModalCandidate}
                                     onMarkAsRead={handleMarkAsRead}
                                     onMarkAsUnread={handleMarkAsUnread}
+                                    onScheduleReminder={setReminderModalCandidate}
                                 />
                             )}
                         />
@@ -3808,6 +3818,13 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
             )}
 
             <ConfirmModal config={confirmModal} onClose={() => setConfirmModal(null)} />
+
+            {reminderModalCandidate && (
+                <CandidateReminderModal
+                    candidate={reminderModalCandidate}
+                    onClose={() => setReminderModalCandidate(null)}
+                />
+            )}
         </div>
     );
 }
