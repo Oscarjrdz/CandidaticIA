@@ -4386,11 +4386,11 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
                         // We trust the AI validation from the prompt above
                         ext.nombreReal = coalesceName(candidateData.nombreReal, ext.nombreReal);
 
-                        // If we got a valid gender inference and the candidate doesn't have one yet
-                        if (!candidateData.genero && ext.genero && ext.genero !== 'Desconocido') {
+                        // Keep inferred gender if candidate has none or has "Desconocido"
+                        if ((!candidateData.genero || candidateData.genero === 'Desconocido') && ext.genero && ext.genero !== 'Desconocido') {
                             // Keep inferred gender
                         } else {
-                            delete ext.genero; // Don't override existing or save 'Desconocido'
+                            delete ext.genero; // Don't override a known gender or save 'Desconocido'
                         }
                     } else if (ext.nombreReal !== undefined) {
                         // Name was null, rejected by validation, or too short. Do not save.
