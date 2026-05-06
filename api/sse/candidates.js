@@ -82,7 +82,7 @@ export default async function handler(req, res) {
 
             // Trigger background flight plan update if stale (5 mins)
             const now = Date.now();
-            if (!lastCalc || (now - parseInt(lastCalc)) > 900000) {
+            if (!lastCalc || (now - parseInt(lastCalc)) > 1800000) {
                 import('../utils/bot-stats.js').then(m => m.calculateBotStats()).catch(() => { });
                 await redis.set('stats:bot:last_calc', now.toString(), 'EX', 60);
             }
@@ -107,7 +107,7 @@ export default async function handler(req, res) {
 
     // Execute once on connection to seed the UI, then periodically to keep stats fresh
     runPoll();
-    const statsPollInterval = setInterval(runPoll, 10000); // Refresh stats every 10s for live badge
+    const statsPollInterval = setInterval(runPoll, 30000); // Refresh stats every 30s for live badge
 
     req.on('close', () => {
         clearInterval(keepAliveInterval);

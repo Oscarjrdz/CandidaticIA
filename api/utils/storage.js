@@ -1148,16 +1148,32 @@ export const deleteRole = async (id) => {
  * VACANCIES (Blob) 💼
  * ==========================================
  */
+// In-memory cache for vacancies — 182 KB key, avoid re-reading on every getVacancyById call
+let _vacanciesCache = null;
+let _vacanciesCacheAt = 0;
+const VACANCIES_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
 export const getVacancies = async () => {
+    const now = Date.now();
+    if (_vacanciesCache && (now - _vacanciesCacheAt) < VACANCIES_CACHE_TTL) {
+        return _vacanciesCache;
+    }
     const client = getClient();
     if (!client) return [];
     try {
         const data = await client.get(KEYS.VACANCIES);
-        return data ? JSON.parse(data) : [];
+        _vacanciesCache = data ? JSON.parse(data) : [];
+        _vacanciesCacheAt = now;
+        return _vacanciesCache;
     } catch (e) {
         console.error('Error fetching vacancies:', e);
-        return [];
+        return _vacanciesCache || [];
     }
+};
+
+export const invalidateVacanciesCache = () => {
+    _vacanciesCache = null;
+    _vacanciesCacheAt = 0;
 };
 
 export const getVacancyById = async (id) => {
@@ -1181,6 +1197,7 @@ export const saveVacancy = async (vacancy) => {
     else vacancies.push(vacancy);
 
     await client.set(KEYS.VACANCIES, JSON.stringify(vacancies));
+    invalidateVacanciesCache();
     return vacancy;
 };
 

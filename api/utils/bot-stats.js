@@ -17,7 +17,7 @@ import { getRedisClient } from './storage.js';
  * ═══════════════════════════════════════════════════════════════════════
  */
 
-const CACHE_TTL_MS = 600000;       // 10 minutes
+const CACHE_TTL_MS = 1800000;      // 30 minutes
 const CACHE_RESULT_KEY = 'stats:bot:cached_result';
 const CACHE_LAST_CALC_KEY = 'stats:bot:last_calc';
 const ACTIVITY_TRACKER_KEY = 'activity:tracker';
