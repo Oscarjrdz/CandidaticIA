@@ -445,7 +445,7 @@ const MultiSelectDropdown = React.memo(({ label, options, selected, onChange }) 
                 className={`w-full bg-[#f0f2f5] dark:bg-[#202c33] border ${selected.length > 0 ? 'border-blue-500' : 'border-gray-200 dark:border-gray-700'} rounded-lg pl-3 pr-14 py-2 text-xs outline-none font-medium text-left cursor-pointer transition-all flex items-center shadow-sm relative min-h-[34px]`}
             >
                 <span className={`flex-1 truncate ${selected.length > 0 ? 'text-[#111b21] dark:text-[#e9edef] font-bold' : 'text-[#111b21] dark:text-[#e9edef]'}`}>
-                    {selected.length > 0 ? `${label}: ${selected.length} selec.` : label}
+                    {selected.length > 0 ? `${label}: ${selected.join(', ')}` : label}
                 </span>
                 <div className={`absolute right-2 top-1/2 -translate-y-1/2 transition-transform ${isOpen ? 'rotate-180' : ''}`}>
                     <ChevronIcon />
@@ -1211,10 +1211,11 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
             return (tsCache.get(b.id) || 0) - (tsCache.get(a.id) || 0);
         });
     }, [
-        candidates, deferredSearch, user, 
-        activeFilter, filterValue, 
+        candidates, deferredSearch, user,
+        activeFilter, filterValue,
         manualPipelineFilter, manualStepFilter,
-        pinnedChats
+        pinnedChats,
+        selectedAges, selectedGenders, selectedMunicipalities
     ]);
 
     // ── Badge counts (MEMOIZED — only recalculated when candidates change) ──
