@@ -5,7 +5,7 @@
  * Busca candidatos incompletos que llevan N horas en silencio
  * y les manda un mensaje personalizado de Brenda invitándolos a completar su perfil.
  */
-import { getRedisClient, getCandidates, updateCandidate, saveMessage } from '../utils/storage.js';
+import { getRedisClient, getCandidateById, updateCandidate, saveMessage } from '../utils/storage.js';
 import { getUltraMsgConfig, sendUltraMsgMessage } from '../whatsapp/utils.js';
 import { getMissingFields, FIELD_LABELS } from '../reengagement-queue.js';
 
@@ -159,13 +159,26 @@ export default async function handler(req, res) {
     const now           = Date.now();
 
     // ── Cargar candidatos ─────────────────────────────────────────────────────
+    // Solo pendientes (perfil incompleto) — evita escanear completos innecesariamente
     let candidates;
     try {
-        const result = await getCandidates(10000, 0, '', false, '');
-        candidates = result.candidates || result;
-        // Si es envío forzado, filtrar solo ese candidato
+        const redis = getRedisClient();
         if (forceCandidateId) {
-            candidates = candidates.filter(c => c.id === forceCandidateId);
+            // Envío forzado: fetch solo ese candidato
+            const c = await getCandidateById(forceCandidateId);
+            candidates = c ? [c] : [];
+        } else {
+            // Usar el índice de pendientes en lugar de escanear todos
+            const pendingIds = await redis.smembers('stats:list:pending');
+            if (!pendingIds.length) { candidates = []; }
+            else {
+                const pipeline = redis.pipeline();
+                pendingIds.forEach(id => pipeline.get(`candidate:${id}`));
+                const results = await pipeline.exec();
+                candidates = results
+                    .map(([err, raw]) => { try { return raw ? JSON.parse(raw) : null; } catch { return null; } })
+                    .filter(Boolean);
+            }
         }
     } catch (e) {
         return res.status(500).json({ error: 'Cannot fetch candidates' });

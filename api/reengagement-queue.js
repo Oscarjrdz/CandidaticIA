@@ -2,7 +2,7 @@
  * GET /api/reengagement-queue
  * Devuelve candidatos pendientes, enviados y saltados para el panel de control.
  */
-import { getRedisClient, getCandidates } from './utils/storage.js';
+import { getRedisClient } from './utils/storage.js';
 
 const SETTINGS_KEY = 'reengagement:settings';
 
@@ -49,7 +49,17 @@ export default async function handler(req, res) {
             return res.status(200).json({ success: true, pending: [], sent: [], skipped: [], stats: { pendingCount: 0, sentToday: 0, skippedCount: 0 } });
         }
 
-        const { candidates } = await getCandidates(10000, 0, '', false, '');
+        // Usar índice de pendientes — evita cargar los 3500+ candidatos completos
+        const pendingIds = await redis.smembers('stats:list:pending');
+        let candidates = [];
+        if (pendingIds.length > 0) {
+            const pipeline = redis.pipeline();
+            pendingIds.forEach(id => pipeline.get(`candidate:${id}`));
+            const pResults = await pipeline.exec();
+            candidates = pResults
+                .map(([err, raw]) => { try { return raw ? JSON.parse(raw) : null; } catch { return null; } })
+                .filter(Boolean);
+        }
         const now = Date.now();
         const activeFromMs  = new Date(settings.activeFrom).getTime();
         const silenceMs     = (settings.silenceHours  || 2)  * 3_600_000;
