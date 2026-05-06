@@ -57,10 +57,6 @@ export default async function handler(req, res) {
         return res.status(500).json({ error: 'Redis query failed' });
     }
 
-    if (!members || members.length === 0) {
-        return res.json({ success: true, processed: 0, sent: 0 });
-    }
-
     let sent = 0;
     let skipped = 0;
     let errors = 0;
