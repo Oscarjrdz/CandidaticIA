@@ -410,6 +410,83 @@ const CustomSelect = React.memo(({ name, value, options, onChange, placeholder, 
     );
 });
 
+const MultiSelectDropdown = React.memo(({ label, options, selected, onChange }) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const dropdownRef = useRef(null);
+
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+                setIsOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    const toggleOption = (opt, e) => {
+        e.stopPropagation();
+        if (selected.includes(opt)) {
+            onChange(selected.filter(item => item !== opt));
+        } else {
+            onChange([...selected, opt]);
+        }
+    };
+
+    const clearAll = (e) => {
+        e.stopPropagation();
+        onChange([]);
+    };
+
+    return (
+        <div className="relative w-full" ref={dropdownRef}>
+            <div 
+                onClick={() => setIsOpen(!isOpen)}
+                className={`w-full bg-[#f0f2f5] dark:bg-[#202c33] border ${selected.length > 0 ? 'border-blue-500' : 'border-gray-200 dark:border-gray-700'} rounded-lg pl-3 pr-14 py-2 text-xs outline-none font-medium text-left cursor-pointer transition-all flex items-center shadow-sm relative min-h-[34px]`}
+            >
+                <span className={`flex-1 truncate ${selected.length > 0 ? 'text-[#111b21] dark:text-[#e9edef] font-bold' : 'text-[#111b21] dark:text-[#e9edef]'}`}>
+                    {selected.length > 0 ? `${label}: ${selected.length} selec.` : label}
+                </span>
+                <div className={`absolute right-2 top-1/2 -translate-y-1/2 transition-transform ${isOpen ? 'rotate-180' : ''}`}>
+                    <ChevronIcon />
+                </div>
+            </div>
+            {selected.length > 0 && (
+                <button
+                    onClick={clearAll}
+                    className="absolute right-8 top-1/2 -translate-y-1/2 p-1 rounded-md bg-red-50 dark:bg-red-900/20 text-red-500 hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors shrink-0 z-10"
+                    title="Limpiar filtro"
+                >
+                    <X className="w-3.5 h-3.5" />
+                </button>
+            )}
+            {isOpen && (
+                <div className="absolute top-full left-0 mt-1 w-full bg-white dark:bg-[#202c33] border border-gray-100 dark:border-gray-700 shadow-xl rounded-lg z-[100] py-1 max-h-56 overflow-y-auto custom-scrollbar">
+                    {options.length === 0 ? (
+                        <div className="px-4 py-2 text-xs text-gray-500 italic">No hay opciones</div>
+                    ) : (
+                        options.map(opt => {
+                            const isSelected = selected.includes(opt);
+                            return (
+                                <div 
+                                    key={opt}
+                                    onClick={(e) => toggleOption(opt, e)}
+                                    className={`px-3 py-2 text-xs cursor-pointer flex items-center gap-2 hover:bg-[#f0f2f5] dark:hover:bg-[#111b21] ${isSelected ? 'text-[#111b21] dark:text-[#e9edef] font-bold' : 'text-[#111b21] dark:text-[#e9edef]'}`}
+                                >
+                                    <div className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${isSelected ? 'bg-blue-500 border-blue-500' : 'border-gray-300 dark:border-gray-600'}`}>
+                                        {isSelected && <Check className="w-3 h-3 text-white" />}
+                                    </div>
+                                    <span className="truncate">{opt}</span>
+                                </div>
+                            );
+                        })
+                    )}
+                </div>
+            )}
+        </div>
+    );
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 // 📝 Profile Edit Modal
 // ─────────────────────────────────────────────────────────────────────────────
@@ -779,6 +856,11 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
     const filterValueRef = useRef(null);
     const selectedChatRef = useRef(null);
 
+    // Multi-select Filters State
+    const [selectedAges, setSelectedAges] = useState([]);
+    const [selectedGenders, setSelectedGenders] = useState([]);
+    const [selectedMunicipalities, setSelectedMunicipalities] = useState([]);
+
     // 📌 PINNING SYSTEM (WhatsApp-native, max 3, persisted in localStorage)
     const [pinnedChats, setPinnedChats] = useState(() => {
         try { return JSON.parse(localStorage.getItem('candidatic:pinned_chats') || '[]'); } catch { return []; }
@@ -1096,6 +1178,11 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                 if (filterValue === 'incomplete' && isComplete) return false;
             }
 
+            // --- Filtros Múltiples (Edad, Género, Municipio) ---
+            if (selectedAges.length > 0 && (!c.edad || !selectedAges.includes(String(c.edad).trim()))) return false;
+            if (selectedGenders.length > 0 && (!c.genero || !selectedGenders.includes(String(c.genero).trim()))) return false;
+            if (selectedMunicipalities.length > 0 && (!c.municipio || !selectedMunicipalities.includes(String(c.municipio).trim()))) return false;
+
 
             // --- Ruta B: Filtros CRM Manual ---
             if (manualPipelineFilter && c?.manualProjectId !== manualPipelineFilter) return false;
@@ -1147,6 +1234,33 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
         }
         return { all, complete, incomplete };
     }, [baseCandidates]);
+
+    const filterOptions = useMemo(() => {
+        const ages = new Set();
+        const genders = new Set();
+        const municipalities = new Set();
+
+        (baseCandidates || []).forEach(c => {
+            if (c.edad) ages.add(String(c.edad).trim());
+            if (c.genero) genders.add(String(c.genero).trim());
+            if (c.municipio) municipalities.add(String(c.municipio).trim());
+        });
+
+        // Numeric sort for ages
+        const sortedAges = Array.from(ages).filter(Boolean).sort((a, b) => {
+            const numA = parseInt(a, 10);
+            const numB = parseInt(b, 10);
+            if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+            return a.localeCompare(b);
+        });
+
+        return {
+            ages: sortedAges,
+            genders: Array.from(genders).filter(Boolean).sort(),
+            municipalities: Array.from(municipalities).filter(Boolean).sort()
+        };
+    }, [baseCandidates]);
+
     const unreadCounts = useMemo(() => {
         const counts = { tags: {}, crmProjects: {}, complete: 0, incomplete: 0, all: 0 };
         for (const c of baseCandidates) {
@@ -2288,6 +2402,27 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                         {/* Renglón 3: Proyectos y CRM Manual */}
                         <div className="flex flex-col gap-2 w-full">
 
+                            {/* Filtros Multiples (Edad, Genero, Municipio) */}
+                            <div className="flex flex-col gap-2 w-full">
+                                <MultiSelectDropdown 
+                                    label="Edad" 
+                                    options={filterOptions.ages} 
+                                    selected={selectedAges} 
+                                    onChange={setSelectedAges} 
+                                />
+                                <MultiSelectDropdown 
+                                    label="Género" 
+                                    options={filterOptions.genders} 
+                                    selected={selectedGenders} 
+                                    onChange={setSelectedGenders} 
+                                />
+                                <MultiSelectDropdown 
+                                    label="Municipio" 
+                                    options={filterOptions.municipalities} 
+                                    selected={selectedMunicipalities} 
+                                    onChange={setSelectedMunicipalities} 
+                                />
+                            </div>
 
                             {/* Riel B: CRM Manual */}
                             {canSeeFilter('filter_crm') && (
