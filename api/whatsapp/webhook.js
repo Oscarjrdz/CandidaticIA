@@ -551,6 +551,73 @@ export default async function handler(req, res) {
                     continue;
                 }
 
+                if (lowerBodyPublic === 'candidatos nuevos de ayer') {
+                    try {
+                        const now = new Date();
+                        const mtyFormatter = new Intl.DateTimeFormat('en-CA', {
+                            timeZone: 'America/Monterrey',
+                            year: 'numeric', month: '2-digit', day: '2-digit'
+                        });
+
+                        // Get yesterday's date in Monterrey timezone
+                        const yesterdayDate = new Date(now);
+                        yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+                        // Format in Monterrey timezone to handle DST correctly
+                        const yesterdayStr = mtyFormatter.format(yesterdayDate); // YYYY-MM-DD
+
+                        // Calculate yesterday start/end in UTC
+                        const yesterdayStartUTC = new Date(`${yesterdayStr}T00:00:00-06:00`).getTime();
+                        const yesterdayEndUTC = new Date(`${yesterdayStr}T23:59:59-06:00`).getTime();
+
+                        // Fetch candidates with score (ultimoMensaje) within yesterday
+                        const ids = await redis.zrangebyscore('candidates:list', yesterdayStartUTC, yesterdayEndUTC);
+
+                        let countYesterday = 0;
+                        let countBot = 0;
+                        let countManual = 0;
+
+                        if (ids && ids.length > 0) {
+                            const pipeline = redis.pipeline();
+                            ids.forEach(id => pipeline.get(`candidate:${id}`));
+                            const results = await pipeline.exec();
+
+                            for (const [err, res] of results) {
+                                if (err || !res) continue;
+                                try {
+                                    const c = JSON.parse(res);
+                                    const created = c.primerContacto;
+                                    if (!created) continue;
+                                    // Verify primerContacto is actually yesterday
+                                    const cDate = mtyFormatter.format(new Date(created));
+                                    if (cDate === yesterdayStr) {
+                                        countYesterday++;
+                                        const isManual = c.source === 'manual' || c.source === 'web' 
+                                            || (c.origen && (c.origen.includes('manual') || c.origen === 'web'));
+                                        if (isManual) {
+                                            countManual++;
+                                        } else {
+                                            countBot++;
+                                        }
+                                    }
+                                } catch (e) {}
+                            }
+                        }
+
+                        const timeStr = now.toLocaleTimeString('es-MX', { timeZone: 'America/Monterrey', hour: '2-digit', minute: '2-digit' });
+                        await sendMessage(phone,
+                            `📊 *Candidatos Nuevos de Ayer*\n` +
+                            `📅 ${yesterdayStr} (día completo)\n\n` +
+                            `👥 *Total:* ${countYesterday}\n` +
+                            `🤖 Por Bot: ${countBot}\n` +
+                            `✍️ Manuales: ${countManual}`
+                        );
+                    } catch (e) {
+                        console.error('Error in CANDIDATOS NUEVOS DE AYER command:', e);
+                        await sendMessage(phone, '❌ Error al consultar candidatos de ayer. Intenta de nuevo.');
+                    }
+                    continue;
+                }
+
                 if (isAdmin) {
                     const lowerBody = body.toLowerCase().trim();
 
