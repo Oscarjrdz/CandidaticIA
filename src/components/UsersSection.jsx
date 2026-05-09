@@ -13,7 +13,6 @@ const AVAILABLE_SECTIONS = [
     { id: 'candidates', name: 'Candidatos' },
     { id: 'chat', name: 'Chat Web' },
     { id: 'bulks', name: 'Envíos Masivos' },
-    { id: 'copilot', name: 'Copiloto Brenda' },
     { id: 'bot-ia', name: 'Bot IA' },
     { id: 'automations', name: 'Automatizaciones' },
     { id: 'vacancies', name: 'Vacantes' },
@@ -21,8 +20,7 @@ const AVAILABLE_SECTIONS = [
     { id: 'users', name: 'Usuarios' },
     { id: 'post-maker', name: 'Post Maker' },
     { id: 'media-library', name: 'Biblioteca' },
-    { id: 'projects', name: 'Proyectos' },
-    { id: 'bypass', name: 'ByPass' }
+    { id: 'projects', name: 'Proyectos' }
 ];
 
 const AVAILABLE_CHAT_FILTERS = [

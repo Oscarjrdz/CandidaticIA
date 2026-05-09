@@ -44,10 +44,8 @@ const BolsaSection = lazyWithRetry(() => import('./components/BolsaSection'), 'B
 const UsersSection = lazyWithRetry(() => import('./components/UsersSection'), 'UsersSection');
 const PostMakerSection = lazyWithRetry(() => import('./components/PostMakerSection'), 'PostMakerSection');
 const BotIASection = lazyWithRetry(() => import('./components/BotIASection'), 'BotIASection');
-const CopilotSection = lazyWithRetry(() => import('./components/CopilotSection'), 'CopilotSection');
 const MediaLibrarySection = lazyWithRetry(() => import('./components/MediaLibrarySection'), 'MediaLibrarySection');
 const CRMProjectsSection = lazyWithRetry(() => import('./components/CRMProjectsSection'), 'CRMProjectsSection');
-const ByPassSection = lazyWithRetry(() => import('./components/ByPassSection'), 'ByPassSection');
 const AdsStatisticsSection = lazyWithRetry(() => import('./components/AdsStatisticsSection'), 'AdsStatisticsSection');
 
 /**
@@ -79,7 +77,7 @@ function AppShell() {
     if (isViewer) { setActiveSection('chat'); return; }
     if (!user || user.role === 'SuperAdmin' || !rolePermissions) return;
     if (rolePermissions['candidates'] !== true) {
-      const fallbackKeys = ['chat', 'copilot', 'bot-ia', 'automations', 'vacancies', 'bypass', 'projects', 'post-maker', 'users', 'settings'];
+      const fallbackKeys = ['chat', 'bot-ia', 'automations', 'vacancies', 'projects', 'post-maker', 'users', 'settings'];
       const fallback = fallbackKeys.find(k => rolePermissions[k] === true);
       if (fallback) setActiveSection(fallback);
     }
@@ -181,7 +179,6 @@ function AppShell() {
                       : activeSection === 'chat' ? 'Chat Web'
                       : activeSection === 'bulks' ? 'Envíos Masivos'
                       : activeSection === 'ads-stats' ? 'Estadísticas de Ads'
-                      : activeSection === 'copilot' ? 'Copiloto Brenda'
                       : activeSection === 'bot-ia' ? 'Bot IA'
                       : activeSection === 'automations' ? 'Automatizaciones'
                       : activeSection === 'vacancies' ? 'Vacantes'
@@ -191,7 +188,6 @@ function AppShell() {
                       : activeSection === 'post-maker' ? 'Post Maker'
                       : activeSection === 'media-library' ? 'Biblioteca'
                       : activeSection === 'projects' ? 'Proyectos'
-                      : activeSection === 'bypass' ? 'ByPass'
                       : 'Configuración'}
                   </h1>
 
@@ -229,7 +225,6 @@ function AppShell() {
                       : activeSection === 'chat' ? 'Chatea nativamente con tus candidatos'
                       : activeSection === 'bulks' ? 'Manda mensajes en secuencia a múltiples candidatos a la vez'
                       : activeSection === 'ads-stats' ? 'Seguimiento y rendimiento de campañas de Meta Ads'
-                      : activeSection === 'copilot' ? 'Asistente interno para tareas y conocimiento del sistema'
                       : activeSection === 'bot-ia' ? 'Configuración del comportamiento del Bot'
                       : activeSection === 'automations' ? 'Reglas de extracción inteligente de datos'
                       : activeSection === 'vacancies' ? 'Gestión y publicación de vacantes'
@@ -238,8 +233,7 @@ function AppShell() {
                       : activeSection === 'post-maker' ? 'Creación de posts para Facebook'
                       : activeSection === 'media-library' ? 'Biblioteca de archivos y recursos del Bot'
                       : activeSection === 'projects' ? 'Kanban de reclutamiento'
-                      : activeSection === 'bypass' ? 'Enrutamiento automático de candidatos'
-                      : 'Credenciales y configuración del sistema'}
+                      : 'Credenciales y configuración del sistema'}}
                   </p>
                 </div>
               </div>
@@ -293,8 +287,6 @@ function AppShell() {
             <BotIASection />
           ) : activeSection === 'ads-stats' ? (
             <AdsStatisticsSection />
-          ) : activeSection === 'copilot' ? (
-            <CopilotSection />
           ) : activeSection === 'automations' ? (
             <AutomationsSection />
           ) : activeSection === 'vacancies' ? (
@@ -309,8 +301,6 @@ function AppShell() {
             <MediaLibrarySection />
           ) : activeSection === 'projects' ? (
             <CRMProjectsSection />
-          ) : activeSection === 'bypass' ? (
-            <ByPassSection />
           ) : (
             <SettingsSection />
           )}
@@ -319,9 +309,7 @@ function AppShell() {
         </main>
 
         <InternalChat onlineUsers={onlineUsers} />
-        {activeSection !== 'copilot' && (
-          <FloatingCopilot onOpenFull={() => setActiveSection('copilot')} />
-        )}
+        <FloatingCopilot />
 
         {/* Footer */}
         <footer className="py-3 sm:py-4 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shrink-0 sticky bottom-0 z-10" style={{ WebkitBackdropFilter: 'blur(12px)', backdropFilter: 'blur(12px)', backgroundColor: 'rgba(255,255,255,0.9)' }}>
