@@ -945,6 +945,15 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
         return () => window.removeEventListener('candidate_replied', handleReply);
     }, []);
 
+    // 📡 Broadcast mount/unmount lifecycle to Sidebar so it knows when to trust
+    // RBAC-accurate unread counts vs SSE-based global fallback
+    useEffect(() => {
+        window.dispatchEvent(new CustomEvent('chat_section_mounted', { detail: { mounted: true } }));
+        return () => {
+            window.dispatchEvent(new CustomEvent('chat_section_mounted', { detail: { mounted: false } }));
+        };
+    }, []);
+
     // Load Data
     useEffect(() => {
         loadCandidates();

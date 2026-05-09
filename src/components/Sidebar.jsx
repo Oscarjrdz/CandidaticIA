@@ -121,16 +121,35 @@ const Sidebar = ({ activeSection, onSectionChange, onLogout, isMobileOpen, onClo
         return localStorage.getItem('sidebar_collapsed') === 'true';
     });
     const { globalStats } = useCandidatesSSE();
+
+    // Track whether ChatSection is currently mounted (broadcasting accurate RBAC counts)
+    const [chatMounted, setChatMounted] = useState(false);
+
     // Seed from localStorage so the badge doesn't jump when switching sections
     const [rbacUnread, setRbacUnread] = useState(() => {
         const v = localStorage.getItem('chat_unread_rbac');
         return v !== null ? Number(v) : null;
     });
 
+    // SSE-based optimistic delta: tracks increments from new messages while Chat is unmounted
+    const [sseDelta, setSseDelta] = useState(0);
+
+    // Listen for ChatSection mount/unmount lifecycle
+    useEffect(() => {
+        const mountHandler = (e) => {
+            setChatMounted(e.detail?.mounted ?? false);
+            // Reset SSE delta when ChatSection mounts (it will broadcast accurate count)
+            if (e.detail?.mounted) setSseDelta(0);
+        };
+        window.addEventListener('chat_section_mounted', mountHandler);
+        return () => window.removeEventListener('chat_section_mounted', mountHandler);
+    }, []);
+
     // Listen for RBAC-filtered unread count from ChatSection and persist it
     useEffect(() => {
         const handler = (e) => {
             setRbacUnread(e.detail);
+            setSseDelta(0); // Reset delta — RBAC is the source of truth
             localStorage.setItem('chat_unread_rbac', String(e.detail));
         };
         window.addEventListener('chat_unread_rbac', handler);
@@ -143,20 +162,30 @@ const Sidebar = ({ activeSection, onSectionChange, onLogout, isMobileOpen, onClo
             const data = e.detail;
             // Only increment for actual new incoming messages from candidates (not bot replies, tag changes, etc.)
             if (data?.newMessage && data?.messageFrom === 'user') {
-                setRbacUnread(prev => {
-                    const next = (prev ?? 0) + 1;
-                    localStorage.setItem('chat_unread_rbac', String(next));
-                    return next;
-                });
+                setSseDelta(prev => prev + 1);
             }
         };
         window.addEventListener('sse:candidate:update', handler);
         return () => window.removeEventListener('sse:candidate:update', handler);
     }, []);
 
-    // RBAC count is source of truth (matches what user sees inside chat).
-    // Fall back to SSE global count only on very first load before ChatSection runs.
-    const unreadCount = rbacUnread !== null ? rbacUnread : (globalStats?.unread || 0);
+    // Unread count logic:
+    // 1. When ChatSection is mounted → use its RBAC-accurate broadcast (source of truth)
+    // 2. When ChatSection is unmounted → use globalStats.unread from SSE (refreshed every 30s) + optimistic delta
+    // 3. First load fallback → use localStorage-seeded rbacUnread
+    const unreadCount = (() => {
+        if (chatMounted && rbacUnread !== null) {
+            // ChatSection is live and broadcasting accurate counts
+            return rbacUnread;
+        }
+        // ChatSection is unmounted — use SSE global stats as live baseline
+        const sseBaseline = globalStats?.unread;
+        if (sseBaseline !== undefined && sseBaseline !== null) {
+            return sseBaseline + sseDelta;
+        }
+        // Fallback: use last known RBAC count + any SSE increments
+        return (rbacUnread ?? 0) + sseDelta;
+    })();
 
     const toggleCollapse = () => {
         setIsCollapsed(prev => {
