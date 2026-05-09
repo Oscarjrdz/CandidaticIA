@@ -230,7 +230,7 @@ Reglas:
 async function learnNewSkill(redis, userRequest, model) {
     const skills = await getLearnedSkills(redis);
     
-    if (skills.length >= 20) {
+    if (skills.length >= 100) {
         return { success: false, error: 'limit', skills };
     }
 
