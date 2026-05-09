@@ -262,6 +262,7 @@ export async function getCandidateKnowledgeSnapshot() {
     let withoutAge = 0;
     const recentCandidates = [];
     const allCandidatesSummary = [];
+    const unreadCandidates = [];
 
     const customFieldsJson = await redis.get('custom_fields').catch(() => null);
     let customFields = [];
@@ -376,7 +377,8 @@ export async function getCandidateKnowledgeSnapshot() {
                 projectId: candidate.projectId || '',
                 colonia: candidate.colonia || '',
                 ciudad: candidate.ciudad || '',
-                disponibilidad: candidate.disponibilidad || ''
+                disponibilidad: candidate.disponibilidad || '',
+                unreadMsgCount: Number(candidate.unreadMsgCount) || 0
             };
 
             // Add custom field values to summary
@@ -387,6 +389,17 @@ export async function getCandidateKnowledgeSnapshot() {
 
             allCandidatesSummary.push(safeSummary);
             if (recentCandidates.length < 50) recentCandidates.push(safeSummary);
+
+            // Track unread chats
+            if (safeSummary.unreadMsgCount > 0) {
+                unreadCandidates.push({
+                    nombre: safeSummary.nombre,
+                    unreadMsgCount: safeSummary.unreadMsgCount,
+                    ultimoMensaje: candidate.ultimoMensaje || '',
+                    municipio: safeSummary.municipio,
+                    categoria: safeSummary.categoria
+                });
+            }
         }
 
         scanned += ids.length;
@@ -454,6 +467,19 @@ export async function getCandidateKnowledgeSnapshot() {
         customFieldDistributions: customDistributions,
         recentCandidates,
         allCandidatesSummary,
+        chatSummary: {
+            totalUnread: unreadCandidates.length,
+            topUnread: unreadCandidates
+                .sort((a, b) => b.unreadMsgCount - a.unreadMsgCount)
+                .slice(0, 15)
+                .map(c => ({
+                    nombre: c.nombre,
+                    msgs: c.unreadMsgCount,
+                    ultimoMensaje: c.ultimoMensaje,
+                    municipio: c.municipio,
+                    categoria: c.categoria
+                }))
+        },
         privacy: {
             mode: 'aggregate_and_roster',
             note: 'No phone numbers or profile pictures are included. Roster contains safe profile fields only.',
@@ -516,6 +542,23 @@ export function formatCompactSnapshot(snapshot) {
             if (c.categoria) parts.push(c.categoria);
             parts.push(c.estado || '?');
             lines.push(`  • ${parts.join(' | ')}`);
+        }
+    }
+
+    // Chat web summary
+    if (snapshot.chatSummary) {
+        const cs = snapshot.chatSummary;
+        lines.push('');
+        lines.push(`=== CHAT WEB STATUS ===`);
+        lines.push(`Chats no leídos: ${cs.totalUnread}`);
+        if (cs.topUnread?.length) {
+            lines.push('Top candidatos con mensajes pendientes:');
+            for (const c of cs.topUnread.slice(0, 10)) {
+                const parts = [c.nombre, `${c.msgs} msg${c.msgs > 1 ? 's' : ''}`];
+                if (c.municipio) parts.push(c.municipio);
+                if (c.categoria) parts.push(c.categoria);
+                lines.push(`  • ${parts.join(' | ')}`);
+            }
         }
     }
     lines.push('');
@@ -656,7 +699,10 @@ export async function searchCandidateRoster(roster, searchContext) {
         'genero', 'perfil', 'perfiles', 'dato', 'datos', 'estadistica',
         'quien', 'quienes', 'donde', 'reporte',
         'reciente', 'recientes', 'ultimo', 'ultima', 'ultimos', 'ultimas',
-        'primero', 'primera', 'mas viejo', 'mas antigua', 'antiguo'
+        'primero', 'primera', 'mas viejo', 'mas antigua', 'antiguo',
+        'chat', 'chats', 'mensaje', 'mensajes', 'no leido', 'no leidos',
+        'sin leer', 'pendientes', 'sin contestar', 'sin responder',
+        'unread', 'inbox', 'bandeja', 'conversacion', 'conversaciones'
     ];
     const hasDataIntent = DATA_KEYWORDS.some(kw => normalized.includes(kw));
     if (!hasDataIntent) return { totalMatches: 0, candidates: [] };
