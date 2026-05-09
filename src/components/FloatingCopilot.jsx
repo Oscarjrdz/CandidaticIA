@@ -98,24 +98,24 @@ export default function FloatingCopilot({ onOpenFull }) {
     return (
         <div className="fixed bottom-6 right-24 z-40 flex flex-col items-end gap-3 pointer-events-none">
             {open && (
-                <div className="pointer-events-auto w-[calc(100vw-2.5rem)] max-w-[360px] h-[520px] rounded-[32px] overflow-hidden shadow-[0_8px_32px_rgba(31,38,135,0.25)] border-[1.5px] border-white/50 dark:border-white/10 bg-white/20 dark:bg-gray-950/40 backdrop-blur-3xl flex flex-col relative before:absolute before:inset-0 before:bg-gradient-to-br before:from-white/40 before:to-transparent before:pointer-events-none">
-                    <div className="relative px-4 py-4 bg-gradient-to-br from-blue-600/90 via-indigo-600/90 to-fuchsia-900/90 backdrop-blur-xl border-b border-white/20 z-10">
-                        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-white/20 via-transparent to-transparent opacity-50" />
+                <div className="pointer-events-auto w-[calc(100vw-2.5rem)] max-w-[360px] h-[520px] rounded-[32px] overflow-hidden shadow-[0_8px_32px_rgba(0,0,0,0.15)] border-[1px] border-white/40 dark:border-white/10 bg-white/5 dark:bg-black/10 backdrop-blur-md flex flex-col relative before:absolute before:inset-0 before:bg-gradient-to-br before:from-white/10 before:to-transparent before:pointer-events-none">
+                    <div className="relative px-4 py-4 bg-gradient-to-br from-blue-500/20 via-indigo-500/20 to-purple-500/20 backdrop-blur-lg border-b border-white/20 z-10">
+                        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-white/10 via-transparent to-transparent opacity-30" />
                         <div className="relative flex items-center justify-between gap-3">
                             <div className="flex items-center gap-3 min-w-0">
                                 <BrendaAvatar size="md" active />
                                 <div className="min-w-0">
                                     <div className="flex items-center gap-1.5">
-                                        <h3 className="text-white text-sm font-black tracking-tight truncate drop-shadow-md">Brenda Rodriguez</h3>
-                                        <Sparkles className="w-3.5 h-3.5 text-cyan-300 drop-shadow-[0_0_8px_rgba(103,232,249,0.8)]" />
+                                        <h3 className="text-gray-900 dark:text-white text-sm font-black tracking-tight truncate drop-shadow-md">Brenda Rodriguez</h3>
+                                        <Sparkles className="w-3.5 h-3.5 text-blue-500 dark:text-cyan-300" />
                                     </div>
-                                    <p className="text-[11px] text-blue-100 font-medium truncate opacity-90">Copiloto IA Activo</p>
+                                    <p className="text-[11px] text-blue-700 dark:text-blue-200 font-medium truncate opacity-90">Copiloto IA Activo</p>
                                 </div>
                             </div>
                             <div className="flex items-center gap-1">
                                 <button
                                     onClick={() => setOpen(false)}
-                                    className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 border border-white/10 text-white flex items-center justify-center transition-all backdrop-blur-sm"
+                                    className="w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 border border-white/20 text-gray-800 dark:text-white flex items-center justify-center transition-all backdrop-blur-sm"
                                     title="Minimizar"
                                 >
                                     <ChevronDown className="w-4 h-4" />
@@ -132,8 +132,8 @@ export default function FloatingCopilot({ onOpenFull }) {
                                     {!isUser && <BrendaAvatar size="sm" />}
                                     <div className={`max-w-[82%] rounded-2xl px-4 py-2.5 text-[13px] leading-relaxed whitespace-pre-wrap shadow-sm backdrop-blur-md border ${
                                         isUser
-                                            ? 'bg-blue-600/80 text-white border-blue-400/30 rounded-br-md shadow-[0_4px_12px_rgba(37,99,235,0.2)]'
-                                            : 'bg-white/60 dark:bg-gray-900/60 text-gray-800 dark:text-gray-100 border-white/50 dark:border-white/10 rounded-bl-md shadow-[0_4px_12px_rgba(0,0,0,0.05)]'
+                                            ? 'bg-blue-600/60 text-white border-blue-400/20 rounded-br-md shadow-[0_4px_12px_rgba(37,99,235,0.1)]'
+                                            : 'bg-white/30 dark:bg-gray-900/30 text-gray-800 dark:text-gray-100 border-white/40 dark:border-white/10 rounded-bl-md shadow-[0_4px_12px_rgba(0,0,0,0.05)]'
                                     }`}>
                                         {message.content}
                                     </div>
