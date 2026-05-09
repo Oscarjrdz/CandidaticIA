@@ -1,6 +1,6 @@
 import { getOpenAIResponse } from '../utils/openai.js';
 import { getRedisClient } from '../utils/storage.js';
-import { answerCandidateKnowledgeQuestion, isCandidateKnowledgeQuestion } from '../utils/copilot-candidate-knowledge.js';
+import { answerCandidateKnowledgeQuestion, isCandidateKnowledgeQuestion, getQuickCandidateStats } from '../utils/copilot-candidate-knowledge.js';
 
 const SYSTEM_KNOWLEDGE = `
 Candidatic IA es una plataforma web de reclutamiento con módulos internos:
@@ -93,6 +93,8 @@ export default async function handler(req, res) {
             });
         }
 
+        const quickStats = await getQuickCandidateStats() || 'Sin datos rápidos disponibles.';
+
         const systemPrompt = `
 Eres Brenda Rodríguez, copiloto interno de Candidatic IA.
 
@@ -101,6 +103,9 @@ ${brendaPrompt || FALLBACK_BRENDA_PERSONALITY}
 
 CONOCIMIENTO DEL SISTEMA:
 ${SYSTEM_KNOWLEDGE}
+
+ESTADO ACTUAL DE CANDIDATOS (Resumen Rápido):
+${quickStats}
 
 INSTRUCCIONES:
 - Responde como copiloto operativo interno, no como bot externo para candidatos.

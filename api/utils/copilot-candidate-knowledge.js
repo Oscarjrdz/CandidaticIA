@@ -242,6 +242,8 @@ export async function getCandidateKnowledgeSnapshot() {
     let pendingAudited = 0;
     let withAge = 0;
     let withoutAge = 0;
+    const recentCandidates = [];
+    const allCandidatesSummary = [];
 
     const customFieldsJson = await redis.get('custom_fields').catch(() => null);
     let customFields = [];
@@ -330,6 +332,38 @@ export async function getCandidateKnowledgeSnapshot() {
                 pendingAudited++;
                 increment(byStatus, 'Pendiente');
             }
+
+            // Build searchable candidate roster (safe fields only)
+            const safeSummary = {
+                id: candidate.id,
+                nombre: candidate.nombreReal || candidate.nombre || 'Sin nombre',
+                genero: candidate.genero || '',
+                edad: calculateAge(candidate) || '',
+                municipio: candidate.municipio || '',
+                categoria: candidate.categoria || '',
+                escolaridad: candidate.escolaridad || '',
+                puesto: candidate.puesto || '',
+                experiencia: candidate.experiencia || '',
+                origen: candidate.origen || candidate.source || '',
+                estado: audit.isComplete ? 'Completo' : 'Pendiente',
+                datosFaltantes: audit.missingLabels.join(', ') || '',
+                fecha: createdDate ? formatDateKey(createdDate) : '',
+                ultimoMensaje: candidate.ultimoMensaje ? formatDateKey(new Date(candidate.ultimoMensaje)) : '',
+                tags: Array.isArray(candidate.tags) ? candidate.tags.join(', ') : '',
+                projectId: candidate.projectId || '',
+                colonia: candidate.colonia || '',
+                ciudad: candidate.ciudad || '',
+                disponibilidad: candidate.disponibilidad || ''
+            };
+
+            // Add custom field values to summary
+            for (const key of customFieldKeys) {
+                const val = candidate[key];
+                if (val && typeof val !== 'object') safeSummary[key] = String(val);
+            }
+
+            allCandidatesSummary.push(safeSummary);
+            if (recentCandidates.length < 50) recentCandidates.push(safeSummary);
         }
 
         scanned += ids.length;
@@ -394,33 +428,175 @@ export async function getCandidateKnowledgeSnapshot() {
         },
         fieldDistributions,
         customFieldDistributions: customDistributions,
+        recentCandidates,
+        allCandidatesSummary,
         privacy: {
-            mode: 'aggregate_only',
-            excludesPersonalFields: ['nombre', 'nombreReal', 'whatsapp', 'profilePic', 'messages']
+            mode: 'aggregate_and_roster',
+            note: 'No phone numbers or profile pictures are included. Roster contains safe profile fields only.',
+            excludesPersonalFields: ['whatsapp', 'profilePic', 'messages']
         }
     };
+}
+
+/**
+ * O(1) quick stats for the general copilot prompt (~50 tokens).
+ */
+export async function getQuickCandidateStats() {
+    const redis = getRedisClient();
+    if (!redis) return null;
+    try {
+        const [complete, pending] = await Promise.all([
+            redis.scard('stats:list:complete').catch(() => 0),
+            redis.scard('stats:list:pending').catch(() => 0)
+        ]);
+        return `Base de candidatos: ${complete + pending} total (${complete} completos, ${pending} pendientes).`;
+    } catch { return null; }
+}
+
+/**
+ * Converts the heavy JSON snapshot into compact text (~500-800 tokens).
+ */
+function formatCompactSnapshot(snapshot) {
+    const t = snapshot.totals;
+    const nc = snapshot.newCandidates;
+    const lines = [];
+
+    lines.push(`=== BASE DE CANDIDATOS (cifras reales, ${snapshot.timezone}) ===`);
+    lines.push(`Total: ${t.candidates} | Completos: ${t.completeAudited} | Pendientes: ${t.pendingAudited}`);
+    lines.push(`Con fecha: ${t.withCreationDate} | Sin fecha: ${t.withoutCreationDate}`);
+    lines.push(`Con edad: ${t.withAge} | Sin edad: ${t.withoutAge}`);
+    lines.push(`Desde Ads: ${t.adsCandidates} | Manual/Chat: ${t.manualCandidates}`);
+    lines.push('');
+    lines.push(`Hoy (${nc.today.date}): ${nc.today.count} | Ayer (${nc.yesterday.date}): ${nc.yesterday.count}`);
+    lines.push(`Mejor día: ${nc.bestDay.date} (${nc.bestDay.count})`);
+    lines.push(`Promedio 7d: ${nc.averageLast7Days} | Promedio 30d: ${nc.averageLast30Days}`);
+    lines.push(`Últimos 7 días: ${nc.last7Days.map(d => `${d.date}:${d.count}`).join(', ')}`);
+    lines.push('');
+
+    const distMap = {
+        byGender: 'Género', byMunicipality: 'Municipio', byCategory: 'Categoría',
+        byEducation: 'Escolaridad', byOrigin: 'Origen', byStatus: 'Estado', byWeekday: 'Día semana'
+    };
+    for (const [key, label] of Object.entries(distMap)) {
+        const dist = snapshot.distributions[key];
+        if (dist?.length) lines.push(`${label}: ${dist.slice(0, 25).map(d => `${d.label}(${d.count})`).join(', ')}`);
+    }
+
+    if (snapshot.ageAnalytics?.byBucket?.length) {
+        lines.push(`Rangos edad: ${snapshot.ageAnalytics.byBucket.map(d => `${d.label}(${d.count})`).join(', ')}`);
+    }
+
+    // Custom/extra field distributions (compact)
+    const skipKeys = new Set(['genero', 'municipio', 'categoria', 'escolaridad', 'origen', 'statusAudit']);
+    if (snapshot.fieldDistributions) {
+        for (const [field, entries] of Object.entries(snapshot.fieldDistributions)) {
+            if (!skipKeys.has(field) && entries.length > 0) {
+                lines.push(`${field}: ${entries.slice(0, 15).map(d => `${d.label}(${d.count})`).join(', ')}`);
+            }
+        }
+    }
+
+    return lines.join('\n');
+}
+
+/**
+ * Server-side candidate search. Filters the roster in Node.js so only
+ * matching candidates are sent to GPT (max 30 results).
+ */
+function searchCandidateRoster(roster, question) {
+    if (!roster?.length) return [];
+    const q = normalizeText(question);
+    let results = roster;
+
+    // --- Date filters ---
+    const today = formatDateKey(new Date());
+    const yesterday = formatDateKey(addDays(new Date(), -1));
+    if (q.includes('hoy')) results = results.filter(c => c.fecha === today);
+    else if (q.includes('ayer')) results = results.filter(c => c.fecha === yesterday);
+    else if (q.includes('esta semana') || (q.includes('semana') && !q.includes('dia'))) {
+        const weekAgo = formatDateKey(addDays(new Date(), -7));
+        results = results.filter(c => c.fecha >= weekAgo);
+    }
+
+    // --- Gender filter ---
+    if (q.includes('mujer') || q.includes('mujeres') || q.includes('femenino'))
+        results = results.filter(c => { const g = normalizeText(c.genero); return g.includes('femenino') || g.includes('mujer'); });
+    else if (q.includes('hombre') || q.includes('hombres') || q.includes('masculino'))
+        results = results.filter(c => { const g = normalizeText(c.genero); return g.includes('masculino') || g.includes('hombre'); });
+
+    // --- Status filter ---
+    if (q.includes('completo') && !q.includes('incompleto')) results = results.filter(c => c.estado === 'Completo');
+    if (q.includes('incompleto') || (q.includes('pendiente') && !q.includes('completo'))) results = results.filter(c => c.estado === 'Pendiente');
+
+    // --- Keyword search across all fields ---
+    const stopWords = new Set([
+        'como', 'cuantos', 'cuantas', 'dime', 'dame', 'muestra', 'lista', 'listame',
+        'candidatos', 'candidato', 'candidatas', 'base', 'datos', 'perfil', 'perfiles',
+        'total', 'todos', 'todas', 'nuevo', 'nuevos', 'nueva', 'nuevas', 'tiene', 'tienen',
+        'esta', 'estan', 'quien', 'quienes', 'donde', 'cuales', 'cuantos', 'brenda',
+        'mujeres', 'hombres', 'mujer', 'hombre', 'femenino', 'masculino',
+        'completo', 'incompleto', 'pendiente', 'completos', 'pendientes',
+        'hoy', 'ayer', 'semana', 'registraron', 'registrados', 'hay'
+    ]);
+    const terms = q.split(/\s+/).filter(w => w.length > 2 && !stopWords.has(w));
+
+    if (terms.length > 0) {
+        results = results.filter(c => {
+            const text = normalizeText(Object.values(c).filter(v => typeof v === 'string').join(' '));
+            return terms.some(t => text.includes(t));
+        });
+    }
+
+    return results.slice(0, 30);
+}
+
+/**
+ * Format search results as compact text for GPT.
+ */
+function formatSearchResults(results) {
+    if (!results.length) return '';
+    const lines = [`\n=== CANDIDATOS ENCONTRADOS (${results.length}) ===`];
+    for (const c of results) {
+        const parts = [c.nombre];
+        if (c.genero) parts.push(c.genero);
+        if (c.edad) parts.push(`${c.edad} años`);
+        if (c.municipio) parts.push(c.municipio);
+        if (c.categoria) parts.push(c.categoria);
+        if (c.puesto) parts.push(c.puesto);
+        parts.push(c.estado);
+        if (c.datosFaltantes) parts.push(`faltan: ${c.datosFaltantes}`);
+        if (c.fecha) parts.push(c.fecha);
+        lines.push(`• ${parts.join(' | ')}`);
+    }
+    return lines.join('\n');
 }
 
 export async function answerCandidateKnowledgeQuestion(question, history = [], model = 'gpt-4o-mini') {
     const snapshot = await getCandidateKnowledgeSnapshot();
 
+    // Compact stats text (~500-800 tokens instead of 10K+ JSON)
+    const compactStats = formatCompactSnapshot(snapshot);
+
+    // Server-side search: only matching candidates go to GPT
+    const searchResults = searchCandidateRoster(snapshot.allCandidatesSummary, question);
+    const searchText = formatSearchResults(searchResults);
+
     const systemPrompt = `
 Eres Brenda Rodriguez, copiloto interno de Candidatic IA.
-Estás usando la skill "Conocimiento de la base de Candidatos".
+Tienes acceso a datos REALES de la base de candidatos.
 
 Reglas:
 - Responde en español natural, claro y ejecutivo.
-- Usa solo los datos del SNAPSHOT. No inventes números.
-- Puedes responder preguntas por género, edad exacta, rangos de edad, municipio, categoría, escolaridad, origen, estado, campos personalizados y fechas usando las distribuciones del SNAPSHOT.
-- Si te preguntan "cuántas mujeres", usa distributions.byGender. Si preguntan edades, usa ageAnalytics.byExactAge o ageAnalytics.byBucket.
-- Si preguntan por un municipio, categoría u otro valor específico, busca el valor más cercano en las distribuciones disponibles.
-- Si el usuario pregunta "hoy" o "ayer", usa la zona horaria ${TIME_ZONE}.
-- Explica cuando un dato dependa de "primerContacto", "createdAt" o respaldo por id.
+- Usa SOLO los datos proporcionados. No inventes números.
+- Para preguntas de conteo, usa las distribuciones de ESTADÍSTICAS.
+- Para preguntas sobre candidatos específicos, usa CANDIDATOS ENCONTRADOS.
+- Si te preguntan "hoy" o "ayer", usa zona horaria ${TIME_ZONE}.
 - No muestres teléfonos ni datos personales.
-- Si conviene, da una lectura operativa breve: tendencia, pico, alerta o siguiente pregunta útil.
+- Da lectura operativa breve cuando convenga: tendencia, pico o alerta.
 
-SNAPSHOT:
-${JSON.stringify(snapshot, null, 2)}
+ESTADÍSTICAS:
+${compactStats}
+${searchText}
 `;
 
     const messages = [
@@ -432,7 +608,6 @@ ${JSON.stringify(snapshot, null, 2)}
 
     return {
         reply: result.content,
-        snapshot,
         model: result.model,
         skill: 'candidate_knowledge'
     };
