@@ -126,45 +126,62 @@ export function formatSearchResultsForPrompt(searchData) {
 export function detectWebSearchIntent(message) {
     const normalized = message.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
 
+    // Skip if it's about Candidatic platform
+    const CANDIDATIC_KEYWORDS = [
+        'candidatic', 'candidato', 'candidata', 'candidatos', 'candidatas',
+        'brenda', 'whatsapp', 'plataforma', 'modulo', 'bot', 'regla',
+        'vacante', 'copiloto', 'dashboard', 'chat web', 'envio masivo',
+        'bypass', 'proyecto', 'kanban'
+    ];
+    const isCandidaticQuestion = CANDIDATIC_KEYWORDS.some(kw => normalized.includes(kw));
+    if (isCandidaticQuestion) return null;
+
     // Explicit triggers — user explicitly asks to search
     const EXPLICIT_TRIGGERS = [
         'busca en internet', 'busca en google', 'busca en la web', 'busca online',
         'investiga sobre', 'investiga en internet', 'googleame', 'googlea',
         'busca informacion sobre', 'busca info sobre', 'busca info de',
         'que dice internet', 'que dice google', 'search',
-        'busca en linea', 'averigua sobre', 'averigua en internet'
+        'busca en linea', 'averigua sobre', 'averigua en internet',
+        'busca sobre', 'investiga que'
     ];
 
     for (const trigger of EXPLICIT_TRIGGERS) {
         if (normalized.includes(trigger)) {
-            // Extract query after trigger
             const idx = normalized.indexOf(trigger);
             const queryAfter = message.slice(idx + trigger.length).trim();
             return queryAfter.length > 2 ? queryAfter : message;
         }
     }
 
-    // Implicit triggers — questions about external knowledge
+    // Topic-based triggers — always search for these topics
+    const TOPIC_TRIGGERS = [
+        'clima', 'temperatura', 'pronostico', 'lluvia',
+        'noticias', 'noticia', 'ultima hora',
+        'precio', 'costo', 'cuanto cuesta', 'cuanto vale',
+        'dolar', 'tipo de cambio', 'bitcoin',
+        'ley federal', 'nom-', 'imss', 'infonavit', 'sat',
+        'tendencia', 'tendencias',
+        'receta', 'ingredientes'
+    ];
+
+    if (TOPIC_TRIGGERS.some(t => normalized.includes(t))) {
+        return message;
+    }
+
+    // Implicit patterns — questions about external knowledge
     const IMPLICIT_PATTERNS = [
-        /^(?:que|qué) (?:es|son|significa|significa) (.+)/,
-        /^(?:como|cómo) (?:funciona|se hace|se usa|puedo) (.+)/,
-        /^(?:quien|quién) (?:es|fue|era) (.+)/,
-        /^(?:donde|dónde) (?:esta|está|queda) (.+)/,
-        /^(?:cuando|cuándo) (?:fue|es|sera|será) (.+)/,
+        /^(?:que|qué) (?:es|son|significa|fue|era|hay de nuevo) (.+)/,
+        /^(?:como|cómo) (?:esta|está|funciona|se hace|se usa|puedo|se llama) (.+)/,
+        /^(?:quien|quién) (?:es|fue|era|gano|ganó) (.+)/,
+        /^(?:donde|dónde) (?:esta|está|queda|se encuentra) (.+)/,
+        /^(?:cuando|cuándo) (?:fue|es|sera|será|empieza|sale) (.+)/,
         /^(?:por que|porqué|por qué) (.+)/,
         /^(?:cual|cuál) es (?:el|la|los|las) (.+)/,
-        /^(?:dime|explica|explicame) (?:que|qué|sobre|acerca) (.+)/
+        /^(?:dime|explica|explicame|cuentame) (?:que|qué|sobre|acerca|del|de la|como) (.+)/,
+        /^(?:sabes) (?:que|qué|si|algo|sobre) (.+)/,
+        /^(?:cuanto|cuánto) (?:cuesta|vale|es|gana|paga) (.+)/
     ];
-
-    // Only match implicit patterns if it's NOT about candidatic/candidates/platform
-    const CANDIDATIC_KEYWORDS = [
-        'candidatic', 'candidato', 'candidata', 'candidatos', 'candidatas',
-        'brenda', 'whatsapp', 'plataforma', 'modulo', 'bot', 'regla',
-        'vacante', 'copiloto', 'dashboard', 'chat web'
-    ];
-
-    const isCandidaticQuestion = CANDIDATIC_KEYWORDS.some(kw => normalized.includes(kw));
-    if (isCandidaticQuestion) return null;
 
     for (const pattern of IMPLICIT_PATTERNS) {
         const match = normalized.match(pattern);
