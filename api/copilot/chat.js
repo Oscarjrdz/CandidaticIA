@@ -72,19 +72,14 @@ export default async function handler(req, res) {
         }
 
         const redis = getRedisClient();
-        let brendaPrompt = '';
         let model = 'gpt-4o-mini';
 
         if (redis) {
             try {
-                const [storedPrompt, storedModel] = await Promise.all([
-                    redis.get('bot_ia_prompt'),
-                    redis.get('bot_ia_model')
-                ]);
-                brendaPrompt = storedPrompt || '';
+                const storedModel = await redis.get('bot_ia_model');
                 model = storedModel || model;
             } catch (error) {
-                console.warn('[Copilot] No se pudo leer configuración de Brenda:', error.message);
+                console.warn('[Copilot] No se pudo leer configuración:', error.message);
             }
         }
 
@@ -99,8 +94,8 @@ export default async function handler(req, res) {
         const systemPrompt = `
 Eres Brenda Rodríguez, copiloto interno de Candidatic IA.
 
-PERSONALIDAD BASE DE BRENDA:
-${brendaPrompt || FALLBACK_BRENDA_PERSONALITY}
+PERSONALIDAD (COPILOTO, NO BOT DE WHATSAPP):
+${FALLBACK_BRENDA_PERSONALITY}
 
 CONOCIMIENTO DEL SISTEMA Y MÓDULOS:
 ${SYSTEM_KNOWLEDGE}
