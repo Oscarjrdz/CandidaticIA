@@ -226,6 +226,7 @@ export async function getCandidateKnowledgeSnapshot() {
     const byGender = new Map();
     const byStatus = new Map();
     const byWeekday = new Map();
+    const byHour = new Map();
     const byAge = new Map();
     const byAgeBucket = new Map();
     const customFieldDistributions = new Map();
@@ -279,6 +280,11 @@ export async function getCandidateKnowledgeSnapshot() {
                 const dateKey = formatDateKey(createdDate);
                 increment(countsByDate, dateKey);
                 increment(byWeekday, weekdayName(dateKey));
+                
+                const hour = createdDate.getHours();
+                const hourLabel = `${hour.toString().padStart(2, '0')}:00`;
+                increment(byHour, hourLabel);
+                
                 withDate++;
             } else {
                 withoutDate++;
@@ -416,7 +422,8 @@ export async function getCandidateKnowledgeSnapshot() {
             byEducation: topEntries(byEducation, 100),
             byGender: topEntries(byGender, 50),
             byStatus: topEntries(byStatus, 20),
-            byWeekday: topEntries(byWeekday, 7)
+            byWeekday: topEntries(byWeekday, 7),
+            byHour: topEntries(byHour, 24)
         },
         ageAnalytics: {
             byExactAge: sortedNumberEntries(byAge),
@@ -475,7 +482,7 @@ function formatCompactSnapshot(snapshot) {
 
     const distMap = {
         byGender: 'Género', byMunicipality: 'Municipio', byCategory: 'Categoría',
-        byEducation: 'Escolaridad', byOrigin: 'Origen', byStatus: 'Estado', byWeekday: 'Día semana'
+        byEducation: 'Escolaridad', byOrigin: 'Origen', byStatus: 'Estado', byWeekday: 'Día semana', byHour: 'Hora del día'
     };
     for (const [key, label] of Object.entries(distMap)) {
         const dist = snapshot.distributions[key];
