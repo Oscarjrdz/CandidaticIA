@@ -155,8 +155,23 @@ export function detectWebSearchIntent(message) {
     }
 
     // Topic-based triggers — always search for these topics
+    const WEATHER_KEYWORDS = [
+        'clima', 'temperatura', 'pronostico', 'lluvia', 'llover', 'llovera',
+        'calor', 'frio', 'sol', 'soleado', 'nublado', 'nube', 'tormenta',
+        'granizo', 'viento', 'humedad', 'grados', 'centigrados',
+        'tiempo hoy', 'tiempo manana', 'va a llover', 'hace calor', 'hace frio',
+        'como esta el tiempo', 'como va el clima', 'que tiempo hace'
+    ];
+
+    const isWeatherQuery = WEATHER_KEYWORDS.some(kw => normalized.includes(kw));
+    if (isWeatherQuery) {
+        // Append location if no city is mentioned for relevant local results
+        const CITIES = ['monterrey', 'guadalajara', 'cdmx', 'ciudad de mexico', 'tijuana', 'cancun', 'merida', 'puebla', 'queretaro', 'leon', 'saltillo', 'chihuahua'];
+        const hasCity = CITIES.some(c => normalized.includes(c));
+        return hasCity ? `${message}` : `${message} Monterrey Mexico`;
+    }
+
     const TOPIC_TRIGGERS = [
-        'clima', 'temperatura', 'pronostico', 'lluvia',
         'noticias', 'noticia', 'ultima hora',
         'precio', 'costo', 'cuanto cuesta', 'cuanto vale',
         'dolar', 'tipo de cambio', 'bitcoin',
