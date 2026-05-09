@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Bot, ChevronDown, Maximize2, Send, Sparkles, X } from 'lucide-react';
 import Button from './ui/Button';
 
@@ -13,12 +13,42 @@ const sparkleKeyframes = `
 
 const AVATAR_SRC = '/brenda/avatar-candidatic.png';
 
+const WELCOME_TEXT = 'Hola Oscar, estoy aquí para ayudarte ✨';
+
 const INITIAL_MESSAGES = [
     {
         role: 'assistant',
-        content: 'Estoy aqui como copiloto ligero. Puedo ayudarte a pensar tareas, skills y pasos dentro de Candidatic.'
+        content: WELCOME_TEXT,
+        isWelcome: true
     }
 ];
+
+function TypewriterText({ text, speed = 40 }) {
+    const [displayed, setDisplayed] = useState('');
+    const [done, setDone] = useState(false);
+
+    useEffect(() => {
+        setDisplayed('');
+        setDone(false);
+        let i = 0;
+        const timer = setInterval(() => {
+            i++;
+            setDisplayed(text.slice(0, i));
+            if (i >= text.length) {
+                clearInterval(timer);
+                setDone(true);
+            }
+        }, speed);
+        return () => clearInterval(timer);
+    }, [text, speed]);
+
+    return (
+        <span>
+            {displayed}
+            {!done && <span className="inline-block w-[2px] h-[14px] bg-blue-500 dark:bg-cyan-300 ml-0.5 align-middle animate-pulse" />}
+        </span>
+    );
+}
 
 function BrendaAvatar({ size = 'md', active = false }) {
     const sizes = {
@@ -152,7 +182,10 @@ export default function FloatingCopilot({ onOpenFull }) {
                                             ? 'bg-blue-600/60 text-white border-blue-400/20 rounded-br-md shadow-[0_4px_12px_rgba(37,99,235,0.1)]'
                                             : 'bg-white/30 dark:bg-gray-900/30 text-gray-800 dark:text-gray-100 border-white/40 dark:border-white/10 rounded-bl-md shadow-[0_4px_12px_rgba(0,0,0,0.05)]'
                                     }`}>
-                                        {message.content}
+                                        {message.isWelcome && index === 0
+                                            ? <TypewriterText text={message.content} speed={45} />
+                                            : message.content
+                                        }
                                     </div>
                                 </div>
                             );
