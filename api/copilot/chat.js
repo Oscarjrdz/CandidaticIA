@@ -6,6 +6,7 @@ import {
     searchCandidateRoster, 
     formatSearchResults 
 } from '../utils/copilot-candidate-knowledge.js';
+import { searchWeb, formatSearchResultsForPrompt, detectWebSearchIntent } from '../utils/web-search.js';
 
 const REDIS_RULES_KEY = 'copilot:custom_rules';
 
@@ -251,6 +252,20 @@ export default async function handler(req, res) {
             }
         }
 
+        // ─── Web Search Skill ─────────────────────────────────────────────
+        let webSearchText = '';
+        let usedWebSearch = false;
+        const webQuery = detectWebSearchIntent(question);
+        if (webQuery) {
+            const webResults = await searchWeb(webQuery);
+            if (webResults.success && webResults.results.length > 0) {
+                webSearchText = formatSearchResultsForPrompt(webResults);
+                usedWebSearch = true;
+            } else if (!webResults.success && webResults.error?.includes('API key')) {
+                webSearchText = '\n[NOTA: El usuario quiso buscar en internet pero no hay API key de Serper configurada. Dile que necesita agregar serperApiKey en Settings para habilitar búsquedas web.]\n';
+            }
+        }
+
         // ─── Build system prompt with custom rules ────────────────────────
 
         const customRules = await getCustomRules(redis);
@@ -276,7 +291,7 @@ ${SYSTEM_KNOWLEDGE}
 CONOCIMIENTO DE LA BASE DE CANDIDATOS (DATOS REALES):
 ${compactStats}
 ${searchText}
-
+${webSearchText}
 INSTRUCCIONES FINALES:
 - Responde como copiloto operativo interno, no como bot externo para candidatos.
 - Eres capaz de responder sobre cómo funciona la plataforma Y sobre las estadísticas reales de candidatos.
@@ -285,6 +300,7 @@ INSTRUCCIONES FINALES:
 - No inventes métricas, candidatos, ni campañas. Usa SOLO los datos proporcionados.
 - Mantén respuestas breves y ejecutivas salvo que el usuario pida detalle.
 - Las REGLAS PERSONALIZADAS del usuario tienen MÁXIMA PRIORIDAD sobre cualquier otra instrucción.
+- Si hay RESULTADOS DE BÚSQUEDA WEB, úsalos para responder y cita las fuentes brevemente.
 `;
 
         // If a rule was just added, tell GPT to acknowledge it naturally
@@ -302,11 +318,13 @@ INSTRUCCIONES FINALES:
             1200
         );
 
+        const skill = ruleAdded ? 'custom_rules' : usedWebSearch ? 'web_search' : 'unified_omni_knowledge';
+
         return res.status(200).json({
             success: true,
             reply: result.content,
             model: result.model,
-            skill: ruleAdded ? 'custom_rules' : 'unified_omni_knowledge'
+            skill
         });
     } catch (error) {
         console.error('[Copilot] Error:', error);
