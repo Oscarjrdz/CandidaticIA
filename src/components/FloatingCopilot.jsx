@@ -114,13 +114,6 @@ export default function FloatingCopilot({ onOpenFull }) {
                             </div>
                             <div className="flex items-center gap-1">
                                 <button
-                                    onClick={onOpenFull}
-                                    className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 border border-white/10 text-white flex items-center justify-center transition-all backdrop-blur-sm"
-                                    title="Abrir copiloto completo"
-                                >
-                                    <Maximize2 className="w-4 h-4" />
-                                </button>
-                                <button
                                     onClick={() => setOpen(false)}
                                     className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 border border-white/10 text-white flex items-center justify-center transition-all backdrop-blur-sm"
                                     title="Minimizar"
