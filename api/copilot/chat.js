@@ -1,6 +1,11 @@
 import { getOpenAIResponse } from '../utils/openai.js';
 import { getRedisClient } from '../utils/storage.js';
-import { answerCandidateKnowledgeQuestion, isCandidateKnowledgeQuestion, getQuickCandidateStats } from '../utils/copilot-candidate-knowledge.js';
+import { 
+    getCandidateKnowledgeSnapshot, 
+    formatCompactSnapshot, 
+    searchCandidateRoster, 
+    formatSearchResults 
+} from '../utils/copilot-candidate-knowledge.js';
 
 const SYSTEM_KNOWLEDGE = `
 Candidatic IA es una plataforma web de reclutamiento con módulos internos:
@@ -83,17 +88,13 @@ export default async function handler(req, res) {
             }
         }
 
-        if (isCandidateKnowledgeQuestion(question)) {
-            const result = await answerCandidateKnowledgeQuestion(question, history, model);
-            return res.status(200).json({
-                success: true,
-                reply: result.reply,
-                model: result.model,
-                skill: result.skill
-            });
-        }
-
-        const quickStats = await getQuickCandidateStats() || 'Sin datos rápidos disponibles.';
+        const snapshot = await getCandidateKnowledgeSnapshot();
+        const compactStats = formatCompactSnapshot(snapshot);
+        
+        // Pass context from the last few messages for cross-referenced questions
+        const searchContext = history.slice(-2).map(m => m.content).join(' ') + ' ' + question;
+        const searchResults = searchCandidateRoster(snapshot.allCandidatesSummary, searchContext);
+        const searchText = formatSearchResults(searchResults);
 
         const systemPrompt = `
 Eres Brenda Rodríguez, copiloto interno de Candidatic IA.
@@ -101,20 +102,20 @@ Eres Brenda Rodríguez, copiloto interno de Candidatic IA.
 PERSONALIDAD BASE DE BRENDA:
 ${brendaPrompt || FALLBACK_BRENDA_PERSONALITY}
 
-CONOCIMIENTO DEL SISTEMA:
+CONOCIMIENTO DEL SISTEMA Y MÓDULOS:
 ${SYSTEM_KNOWLEDGE}
 
-ESTADO ACTUAL DE CANDIDATOS (Resumen Rápido):
-${quickStats}
+CONOCIMIENTO DE LA BASE DE CANDIDATOS (DATOS REALES):
+${compactStats}
+${searchText}
 
-INSTRUCCIONES:
+INSTRUCCIONES FINALES:
 - Responde como copiloto operativo interno, no como bot externo para candidatos.
-- Sé concreta, útil y honesta sobre lo que sabes.
-- Si no tienes datos en vivo suficientes, dilo y sugiere cómo obtenerlos.
-- No inventes métricas, candidatos, campañas ni estados.
-- Para preguntas sobre uso del sistema, explica pasos claros.
-- Para automatizaciones o skills, propone estructura y criterios.
-- Mantén respuestas breves salvo que el usuario pida detalle.
+- Eres capaz de responder sobre cómo funciona la plataforma Y sobre las estadísticas reales de candidatos.
+- Si el usuario pregunta "cuántos", "cuántas", o hace preguntas de conteo cruzado y hay una "BÚSQUEDA ESPECÍFICA", usa el "Total coincidencias" de esa búsqueda como la respuesta matemática.
+- Si te preguntan "hoy" o "ayer", usa zona horaria ${snapshot.timezone}.
+- No inventes métricas, candidatos, ni campañas. Usa SOLO los datos proporcionados.
+- Mantén respuestas breves y ejecutivas salvo que el usuario pida detalle.
 `;
 
         const result = await getOpenAIResponse(
@@ -124,13 +125,14 @@ INSTRUCCIONES:
             null,
             null,
             null,
-            900
+            1200
         );
 
         return res.status(200).json({
             success: true,
             reply: result.content,
-            model: result.model
+            model: result.model,
+            skill: 'unified_omni_knowledge'
         });
     } catch (error) {
         console.error('[Copilot] Error:', error);
