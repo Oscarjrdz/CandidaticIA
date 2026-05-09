@@ -516,17 +516,17 @@ export function formatCompactSnapshot(snapshot) {
     if (snapshot.ageAnalytics?.byBucket?.length) {
         lines.push(`Rangos edad: ${snapshot.ageAnalytics.byBucket.map(d => `${d.label}(${d.count})`).join(', ')}`);
     }
-    if (snapshot.ageAnalytics?.byExactAge?.length) {
-        lines.push(`Edades exactas: ${snapshot.ageAnalytics.byExactAge.slice(0, 30).map(d => `${d.label}(${d.count})`).join(', ')}`);
-    }
+    // NOTE: byExactAge removed — redundant with byBucket, saves ~68 tokens/msg
 
-    // Custom/extra field distributions (compact)
+    // Custom/extra field distributions — top 5 most populated only (token optimization)
     const skipKeys = new Set(['genero', 'municipio', 'categoria', 'escolaridad', 'origen', 'statusAudit']);
     if (snapshot.fieldDistributions) {
-        for (const [field, entries] of Object.entries(snapshot.fieldDistributions)) {
-            if (!skipKeys.has(field) && entries.length > 0) {
-                lines.push(`${field}: ${entries.slice(0, 15).map(d => `${d.label}(${d.count})`).join(', ')}`);
-            }
+        const extraFields = Object.entries(snapshot.fieldDistributions)
+            .filter(([field, entries]) => !skipKeys.has(field) && entries.length > 0)
+            .sort((a, b) => b[1].reduce((s, e) => s + e.count, 0) - a[1].reduce((s, e) => s + e.count, 0))
+            .slice(0, 5);
+        for (const [field, entries] of extraFields) {
+            lines.push(`${field}: ${entries.slice(0, 10).map(d => `${d.label}(${d.count})`).join(', ')}`);
         }
     }
 
@@ -620,6 +620,21 @@ export async function searchCandidateRoster(roster, searchContext) {
     // Quick heuristic to skip LLM extraction if there's clearly no context
     if (!searchContext || searchContext.trim().length < 3) return { totalMatches: 0, candidates: [] };
 
+    // ─── Smart gate: skip GPT extraction for casual/non-data messages ───
+    // This saves ~360 tokens on ~80% of messages (greetings, rules, thanks, etc.)
+    const normalized = searchContext.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+    const DATA_KEYWORDS = [
+        'cuanto', 'cuanta', 'cuantos', 'cuantas', 'total', 'hay', 'tiene',
+        'mujer', 'hombre', 'edad', 'anos', 'municipio', 'ciudad', 'hoy', 'ayer',
+        'semana', 'mes', 'candidato', 'candidata', 'candidatos', 'candidatas',
+        'completo', 'pendiente', 'nuevo', 'nuevos', 'lista', 'dime', 'muestrame',
+        'busca', 'encuentra', 'filtra', 'escolaridad', 'categoria', 'origen',
+        'genero', 'perfil', 'perfiles', 'dato', 'datos', 'estadistica',
+        'quien', 'quienes', 'donde', 'reporte'
+    ];
+    const hasDataIntent = DATA_KEYWORDS.some(kw => normalized.includes(kw));
+    if (!hasDataIntent) return { totalMatches: 0, candidates: [] };
+
     const filter = await extractSearchFilter(searchContext);
     if (!filter.hasFilter) return { totalMatches: 0, candidates: [] };
 
@@ -676,7 +691,7 @@ export async function searchCandidateRoster(roster, searchContext) {
         }
     }
 
-    return { totalMatches: results.length, candidates: results.slice(0, 30) };
+    return { totalMatches: results.length, candidates: results.slice(0, 15) };
 }
 
 /**
