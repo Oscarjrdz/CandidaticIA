@@ -216,9 +216,18 @@ export function isCandidateKnowledgeQuestion(message = '') {
     return (mentionsCandidates && asksCandidateMetric) || (asksDatabaseDimension && (text.includes('cuanto') || text.includes('cuantos') || text.includes('cuantas') || text.includes('dime') || text.includes('analiza') || text.includes('hay')));
 }
 
+const SNAPSHOT_CACHE_KEY = 'copilot:snapshot:cache';
+const SNAPSHOT_CACHE_TTL = 5 * 60; // 5 min en segundos
+
 export async function getCandidateKnowledgeSnapshot() {
     const redis = getRedisClient();
     if (!redis) throw new Error('Redis no disponible');
+
+    // Devolver snapshot cacheado si está fresco
+    try {
+        const cached = await redis.get(SNAPSHOT_CACHE_KEY);
+        if (cached) return JSON.parse(cached);
+    } catch { /* ignore cache miss */ }
 
     const [completeCount, pendingCount, totalIndexed] = await Promise.all([
         redis.scard('stats:list:complete').catch(() => 0),
@@ -451,6 +460,13 @@ export async function getCandidateKnowledgeSnapshot() {
             excludesPersonalFields: ['whatsapp', 'profilePic', 'messages']
         }
     };
+
+    // Guardar en caché 5 min (fire-and-forget)
+    try {
+        await redis.set(SNAPSHOT_CACHE_KEY, JSON.stringify(snapshot), 'EX', SNAPSHOT_CACHE_TTL);
+    } catch { /* ignore */ }
+
+    return snapshot;
 }
 
 /**
