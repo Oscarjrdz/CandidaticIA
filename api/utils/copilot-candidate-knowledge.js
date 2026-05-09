@@ -502,6 +502,22 @@ export function formatCompactSnapshot(snapshot) {
     lines.push(`Mejor día: ${nc.bestDay.date} (${nc.bestDay.count})`);
     lines.push(`Promedio 7d: ${nc.averageLast7Days} | Promedio 30d: ${nc.averageLast30Days}`);
     lines.push(`Últimos 7 días: ${nc.last7Days.map(d => `${d.date}:${d.count}`).join(', ')}`);
+
+    // Most recent candidates by name (~50 tokens, enables "quién es el más nuevo")
+    if (snapshot.recentCandidates?.length) {
+        const recent = snapshot.recentCandidates.slice(0, 5);
+        lines.push('');
+        lines.push('Candidatos más recientes:');
+        for (const c of recent) {
+            const parts = [c.nombre || '?'];
+            if (c.fecha) parts.push(c.fecha);
+            if (c.genero) parts.push(c.genero);
+            if (c.municipio) parts.push(c.municipio);
+            if (c.categoria) parts.push(c.categoria);
+            parts.push(c.estado || '?');
+            lines.push(`  • ${parts.join(' | ')}`);
+        }
+    }
     lines.push('');
 
     const distMap = {
@@ -554,6 +570,8 @@ Rules:
   "status": string | null, // "Completo" or "Pendiente"
   "municipality": string | null,
   "dateRelative": string | null, // "hoy", "ayer", "semana"
+  "sortBy": string | null, // "newest" or "oldest" — if user asks for most recent, last, newest, or oldest
+  "limit": number | null, // if user asks for top N, first N, last N
   "keywords": string[] // any other specific nouns, names, roles, or keywords mentioned
 }
 
@@ -566,30 +584,36 @@ Example: "cuantas mujeres de 20 a 25 años de Monterrey llegaron hoy"
   "status": null,
   "municipality": "Monterrey",
   "dateRelative": "hoy",
+  "sortBy": null,
+  "limit": null,
   "keywords": []
 }
 
-Example: "y de 28" (Context implies women because of conversation)
+Example: "cuál es el candidato más nuevo"
 {
   "hasFilter": true,
-  "gender": "femenino",
-  "ageMin": 28,
-  "ageMax": 28,
-  "status": null,
-  "municipality": null,
-  "dateRelative": null,
-  "keywords": []
-}
-
-Example: "hombres mayores a 30"
-{
-  "hasFilter": true,
-  "gender": "masculino",
-  "ageMin": 31,
+  "gender": null,
+  "ageMin": null,
   "ageMax": null,
   "status": null,
   "municipality": null,
   "dateRelative": null,
+  "sortBy": "newest",
+  "limit": 1,
+  "keywords": []
+}
+
+Example: "últimos 5 candidatos"
+{
+  "hasFilter": true,
+  "gender": null,
+  "ageMin": null,
+  "ageMax": null,
+  "status": null,
+  "municipality": null,
+  "dateRelative": null,
+  "sortBy": "newest",
+  "limit": 5,
   "keywords": []
 }
 `;
@@ -627,10 +651,12 @@ export async function searchCandidateRoster(roster, searchContext) {
         'cuanto', 'cuanta', 'cuantos', 'cuantas', 'total', 'hay', 'tiene',
         'mujer', 'hombre', 'edad', 'anos', 'municipio', 'ciudad', 'hoy', 'ayer',
         'semana', 'mes', 'candidato', 'candidata', 'candidatos', 'candidatas',
-        'completo', 'pendiente', 'nuevo', 'nuevos', 'lista', 'dime', 'muestrame',
+        'completo', 'pendiente', 'nuevo', 'nuevos', 'nueva', 'nuevas', 'lista', 'dime', 'muestrame',
         'busca', 'encuentra', 'filtra', 'escolaridad', 'categoria', 'origen',
         'genero', 'perfil', 'perfiles', 'dato', 'datos', 'estadistica',
-        'quien', 'quienes', 'donde', 'reporte'
+        'quien', 'quienes', 'donde', 'reporte',
+        'reciente', 'recientes', 'ultimo', 'ultima', 'ultimos', 'ultimas',
+        'primero', 'primera', 'mas viejo', 'mas antigua', 'antiguo'
     ];
     const hasDataIntent = DATA_KEYWORDS.some(kw => normalized.includes(kw));
     if (!hasDataIntent) return { totalMatches: 0, candidates: [] };
@@ -691,7 +717,15 @@ export async function searchCandidateRoster(roster, searchContext) {
         }
     }
 
-    return { totalMatches: results.length, candidates: results.slice(0, 15) };
+    // --- Sorting ---
+    if (filter.sortBy === 'newest') {
+        results.sort((a, b) => (b.fecha || '').localeCompare(a.fecha || ''));
+    } else if (filter.sortBy === 'oldest') {
+        results.sort((a, b) => (a.fecha || '').localeCompare(b.fecha || ''));
+    }
+
+    const limit = filter.limit && filter.limit > 0 ? Math.min(filter.limit, 15) : 15;
+    return { totalMatches: results.length, candidates: results.slice(0, limit) };
 }
 
 /**
