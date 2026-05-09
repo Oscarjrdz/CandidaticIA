@@ -7,6 +7,8 @@ import {
     formatSearchResults 
 } from '../utils/copilot-candidate-knowledge.js';
 
+const REDIS_RULES_KEY = 'copilot:custom_rules';
+
 const SYSTEM_KNOWLEDGE = `
 Candidatic IA es una plataforma web de reclutamiento con módulos internos:
 - Candidatos: gestión de perfiles capturados desde WhatsApp y otras fuentes.
@@ -56,6 +58,109 @@ function normalizeHistory(history = []) {
         }));
 }
 
+// ─── Custom Rules Engine ─────────────────────────────────────────────────────
+
+function normalizeText(text) {
+    return text.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+}
+
+const RULE_TRIGGERS = [
+    'quiero que siempre', 'siempre que', 'a partir de ahora', 'de ahora en adelante',
+    'nunca uses', 'no uses', 'no utilices', 'nunca utilices', 'nunca digas', 'no digas',
+    'siempre hablame', 'siempre dime', 'siempre llamame', 'siempre respondeme',
+    'quiero que me', 'tratame como', 'llamame', 'dime siempre',
+    'recuerda que', 'ten en cuenta que', 'acuerdate que', 'nueva regla',
+    'quiero que nunca', 'quiero que no', 'necesito que siempre', 'necesito que nunca',
+    'formatea siempre', 'usa siempre', 'pon siempre', 'agrega siempre'
+];
+
+const DELETE_TRIGGERS = [
+    'borra las reglas', 'elimina las reglas', 'quita las reglas', 'resetea las reglas',
+    'borra todas las reglas', 'elimina todas las reglas', 'limpia las reglas',
+    'borra reglas', 'elimina reglas', 'quita reglas', 'sin reglas'
+];
+
+const LIST_TRIGGERS = [
+    'mis reglas', 'que reglas', 'cuales son mis reglas', 'lista de reglas',
+    'muestra las reglas', 'dime las reglas', 'que instrucciones', 'muestra instrucciones'
+];
+
+const DELETE_ONE_TRIGGERS = [
+    'borra la regla', 'elimina la regla', 'quita la regla'
+];
+
+function isRuleMessage(text) {
+    const normalized = normalizeText(text);
+    return RULE_TRIGGERS.some(trigger => normalized.includes(trigger));
+}
+
+function isDeleteAllMessage(text) {
+    const normalized = normalizeText(text);
+    return DELETE_TRIGGERS.some(trigger => normalized.includes(trigger));
+}
+
+function isListRulesMessage(text) {
+    const normalized = normalizeText(text);
+    return LIST_TRIGGERS.some(trigger => normalized.includes(trigger));
+}
+
+function isDeleteOneMessage(text) {
+    const normalized = normalizeText(text);
+    return DELETE_ONE_TRIGGERS.some(trigger => normalized.includes(trigger));
+}
+
+async function getCustomRules(redis) {
+    if (!redis) return [];
+    try {
+        const raw = await redis.get(REDIS_RULES_KEY);
+        return raw ? JSON.parse(raw) : [];
+    } catch { return []; }
+}
+
+async function saveCustomRules(redis, rules) {
+    if (!redis) return;
+    await redis.set(REDIS_RULES_KEY, JSON.stringify(rules));
+}
+
+async function addCustomRule(redis, ruleText) {
+    const rules = await getCustomRules(redis);
+    // Avoid exact duplicates
+    const normalized = normalizeText(ruleText);
+    if (rules.some(r => normalizeText(r.text) === normalized)) {
+        return { rules, added: false, duplicate: true };
+    }
+    rules.push({ text: ruleText, createdAt: new Date().toISOString() });
+    await saveCustomRules(redis, rules);
+    return { rules, added: true, duplicate: false };
+}
+
+async function deleteAllRules(redis) {
+    await saveCustomRules(redis, []);
+    return [];
+}
+
+async function deleteRuleByIndex(redis, index) {
+    const rules = await getCustomRules(redis);
+    if (index < 0 || index >= rules.length) return { rules, removed: false };
+    const removed = rules.splice(index, 1);
+    await saveCustomRules(redis, rules);
+    return { rules, removed: removed[0] };
+}
+
+function formatRulesForPrompt(rules) {
+    if (!rules.length) return '';
+    const lines = rules.map((r, i) => `${i + 1}. ${r.text}`);
+    return `\nREGLAS PERSONALIZADAS DEL USUARIO (CUMPLIR SIEMPRE, MÁXIMA PRIORIDAD):\n${lines.join('\n')}\n`;
+}
+
+function formatRulesListForReply(rules) {
+    if (!rules.length) return '📋 No tienes reglas personalizadas guardadas. Puedes decirme cosas como:\n• "Nunca uses asteriscos"\n• "Siempre háblame como dios Oscar"\n• "A partir de ahora usa negritas para los números"';
+    const lines = rules.map((r, i) => `${i + 1}. ${r.text}`);
+    return `📋 Tus reglas personalizadas:\n${lines.join('\n')}\n\nPara borrar una regla di: "borra la regla #N"\nPara borrar todas: "borra las reglas"`;
+}
+
+// ─── Main Handler ────────────────────────────────────────────────────────────
+
 export default async function handler(req, res) {
     if (req.method === 'OPTIONS') return res.status(200).end();
     if (req.method !== 'POST') {
@@ -83,6 +188,74 @@ export default async function handler(req, res) {
             }
         }
 
+        // ─── Handle custom rules commands ─────────────────────────────────
+        
+        // List rules
+        if (isListRulesMessage(question)) {
+            const rules = await getCustomRules(redis);
+            return res.status(200).json({
+                success: true,
+                reply: formatRulesListForReply(rules),
+                model: 'system',
+                skill: 'custom_rules'
+            });
+        }
+
+        // Delete all rules
+        if (isDeleteAllMessage(question)) {
+            await deleteAllRules(redis);
+            return res.status(200).json({
+                success: true,
+                reply: '🗑️ Listo, borré todas tus reglas personalizadas. Empezamos de cero ✨',
+                model: 'system',
+                skill: 'custom_rules'
+            });
+        }
+
+        // Delete one rule by number
+        if (isDeleteOneMessage(question)) {
+            const numMatch = question.match(/#?(\d+)/);
+            if (numMatch) {
+                const idx = parseInt(numMatch[1]) - 1;
+                const { rules, removed } = await deleteRuleByIndex(redis, idx);
+                if (removed) {
+                    return res.status(200).json({
+                        success: true,
+                        reply: `🗑️ Regla eliminada: "${removed.text}"\n\n${formatRulesListForReply(rules)}`,
+                        model: 'system',
+                        skill: 'custom_rules'
+                    });
+                }
+            }
+            const rules = await getCustomRules(redis);
+            return res.status(200).json({
+                success: true,
+                reply: `No encontré esa regla. ${formatRulesListForReply(rules)}`,
+                model: 'system',
+                skill: 'custom_rules'
+            });
+        }
+
+        // Detect and save new rule
+        let ruleAdded = false;
+        if (isRuleMessage(question)) {
+            const result = await addCustomRule(redis, question);
+            ruleAdded = true;
+            if (result.duplicate) {
+                return res.status(200).json({
+                    success: true,
+                    reply: '👌 Ya tengo esa regla guardada, no te preocupes ✨',
+                    model: 'system',
+                    skill: 'custom_rules'
+                });
+            }
+        }
+
+        // ─── Build system prompt with custom rules ────────────────────────
+
+        const customRules = await getCustomRules(redis);
+        const customRulesText = formatRulesForPrompt(customRules);
+
         const snapshot = await getCandidateKnowledgeSnapshot();
         const compactStats = formatCompactSnapshot(snapshot);
         
@@ -96,7 +269,7 @@ Eres Brenda Rodríguez, copiloto interno de Candidatic IA.
 
 PERSONALIDAD (COPILOTO, NO BOT DE WHATSAPP):
 ${FALLBACK_BRENDA_PERSONALITY}
-
+${customRulesText}
 CONOCIMIENTO DEL SISTEMA Y MÓDULOS:
 ${SYSTEM_KNOWLEDGE}
 
@@ -111,10 +284,16 @@ INSTRUCCIONES FINALES:
 - Si te preguntan "hoy" o "ayer", usa zona horaria ${snapshot.timezone}.
 - No inventes métricas, candidatos, ni campañas. Usa SOLO los datos proporcionados.
 - Mantén respuestas breves y ejecutivas salvo que el usuario pida detalle.
+- Las REGLAS PERSONALIZADAS del usuario tienen MÁXIMA PRIORIDAD sobre cualquier otra instrucción.
 `;
 
+        // If a rule was just added, tell GPT to acknowledge it naturally
+        const userContent = ruleAdded
+            ? `[SISTEMA: El usuario acaba de guardar una nueva regla personalizada. Confirma brevemente que la entendiste y que la aplicarás siempre. La regla fue: "${question}"]\n\n${question}`
+            : question;
+
         const result = await getOpenAIResponse(
-            [...history, { role: 'user', content: question }],
+            [...history, { role: 'user', content: userContent }],
             systemPrompt,
             model,
             null,
@@ -127,7 +306,7 @@ INSTRUCCIONES FINALES:
             success: true,
             reply: result.content,
             model: result.model,
-            skill: 'unified_omni_knowledge'
+            skill: ruleAdded ? 'custom_rules' : 'unified_omni_knowledge'
         });
     } catch (error) {
         console.error('[Copilot] Error:', error);
