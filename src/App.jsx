@@ -10,6 +10,7 @@ import { AuthProvider, useAuthContext } from './contexts/AuthContext';
 import { getTheme, saveTheme } from './utils/storage';
 import { usePresence } from './hooks/usePresence';
 import InternalChat from './components/InternalChat';
+import FloatingCopilot from './components/FloatingCopilot';
 
 // ⚡ React.lazy with auto-retry on stale chunk errors (post-deploy cache mismatch)
 // If a dynamic import fails (e.g. old chunk hash no longer exists), reload the page ONCE
@@ -43,6 +44,7 @@ const BolsaSection = lazyWithRetry(() => import('./components/BolsaSection'), 'B
 const UsersSection = lazyWithRetry(() => import('./components/UsersSection'), 'UsersSection');
 const PostMakerSection = lazyWithRetry(() => import('./components/PostMakerSection'), 'PostMakerSection');
 const BotIASection = lazyWithRetry(() => import('./components/BotIASection'), 'BotIASection');
+const CopilotSection = lazyWithRetry(() => import('./components/CopilotSection'), 'CopilotSection');
 const MediaLibrarySection = lazyWithRetry(() => import('./components/MediaLibrarySection'), 'MediaLibrarySection');
 const CRMProjectsSection = lazyWithRetry(() => import('./components/CRMProjectsSection'), 'CRMProjectsSection');
 const ByPassSection = lazyWithRetry(() => import('./components/ByPassSection'), 'ByPassSection');
@@ -77,7 +79,7 @@ function AppShell() {
     if (isViewer) { setActiveSection('chat'); return; }
     if (!user || user.role === 'SuperAdmin' || !rolePermissions) return;
     if (rolePermissions['candidates'] !== true) {
-      const fallbackKeys = ['chat', 'bot-ia', 'automations', 'vacancies', 'bypass', 'projects', 'post-maker', 'users', 'settings'];
+      const fallbackKeys = ['chat', 'copilot', 'bot-ia', 'automations', 'vacancies', 'bypass', 'projects', 'post-maker', 'users', 'settings'];
       const fallback = fallbackKeys.find(k => rolePermissions[k] === true);
       if (fallback) setActiveSection(fallback);
     }
@@ -179,6 +181,7 @@ function AppShell() {
                       : activeSection === 'chat' ? 'Chat Web'
                       : activeSection === 'bulks' ? 'Envíos Masivos'
                       : activeSection === 'ads-stats' ? 'Estadísticas de Ads'
+                      : activeSection === 'copilot' ? 'Copiloto Brenda'
                       : activeSection === 'bot-ia' ? 'Bot IA'
                       : activeSection === 'automations' ? 'Automatizaciones'
                       : activeSection === 'vacancies' ? 'Vacantes'
@@ -226,6 +229,7 @@ function AppShell() {
                       : activeSection === 'chat' ? 'Chatea nativamente con tus candidatos'
                       : activeSection === 'bulks' ? 'Manda mensajes en secuencia a múltiples candidatos a la vez'
                       : activeSection === 'ads-stats' ? 'Seguimiento y rendimiento de campañas de Meta Ads'
+                      : activeSection === 'copilot' ? 'Asistente interno para tareas y conocimiento del sistema'
                       : activeSection === 'bot-ia' ? 'Configuración del comportamiento del Bot'
                       : activeSection === 'automations' ? 'Reglas de extracción inteligente de datos'
                       : activeSection === 'vacancies' ? 'Gestión y publicación de vacantes'
@@ -289,6 +293,8 @@ function AppShell() {
             <BotIASection />
           ) : activeSection === 'ads-stats' ? (
             <AdsStatisticsSection />
+          ) : activeSection === 'copilot' ? (
+            <CopilotSection />
           ) : activeSection === 'automations' ? (
             <AutomationsSection />
           ) : activeSection === 'vacancies' ? (
@@ -313,6 +319,9 @@ function AppShell() {
         </main>
 
         <InternalChat onlineUsers={onlineUsers} />
+        {activeSection !== 'copilot' && (
+          <FloatingCopilot onOpenFull={() => setActiveSection('copilot')} />
+        )}
 
         {/* Footer */}
         <footer className="py-3 sm:py-4 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shrink-0 sticky bottom-0 z-10" style={{ WebkitBackdropFilter: 'blur(12px)', backdropFilter: 'blur(12px)', backgroundColor: 'rgba(255,255,255,0.9)' }}>

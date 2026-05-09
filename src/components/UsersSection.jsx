@@ -13,6 +13,7 @@ const AVAILABLE_SECTIONS = [
     { id: 'candidates', name: 'Candidatos' },
     { id: 'chat', name: 'Chat Web' },
     { id: 'bulks', name: 'Envíos Masivos' },
+    { id: 'copilot', name: 'Copiloto Brenda' },
     { id: 'bot-ia', name: 'Bot IA' },
     { id: 'automations', name: 'Automatizaciones' },
     { id: 'vacancies', name: 'Vacantes' },
