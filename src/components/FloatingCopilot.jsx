@@ -69,7 +69,14 @@ export default function FloatingCopilot({ onOpenFull }) {
                     history
                 })
             });
-            const data = await res.json();
+
+            const rawText = await res.text();
+            let data;
+            try {
+                data = JSON.parse(rawText);
+            } catch {
+                throw new Error('El servidor no respondió correctamente. Intenta de nuevo en unos segundos.');
+            }
 
             if (!res.ok || !data.success) {
                 throw new Error(data.error || 'No pude consultar a Brenda');

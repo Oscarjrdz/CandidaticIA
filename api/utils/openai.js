@@ -73,7 +73,7 @@ export async function getOpenAIResponse(messages, systemPrompt = '', model = 'gp
                 'Authorization': `Bearer ${apiKey.trim()}`,
                 'Content-Type': 'application/json'
             },
-            timeout: 10000 // ⏱️ Strict 10s failsafe guillotine to prevent mutismo
+            timeout: 25000 // ⏱️ 25s failsafe for copilot + search calls
         });
 
         const choice = response.data.choices[0];

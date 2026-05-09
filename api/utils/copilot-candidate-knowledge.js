@@ -406,7 +406,7 @@ export async function getCandidateKnowledgeSnapshot() {
         if (map.size > 0) customDistributions[field] = topEntries(map, 150);
     }
 
-    return {
+    const snapshot = {
         generatedAt: new Date().toISOString(),
         timezone: TIME_ZONE,
         totals: {
