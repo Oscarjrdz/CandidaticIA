@@ -2,6 +2,15 @@ import { useMemo, useRef, useState } from 'react';
 import { Bot, ChevronDown, Maximize2, Send, Sparkles, X } from 'lucide-react';
 import Button from './ui/Button';
 
+const sparkleKeyframes = `
+@keyframes sparkle-glow {
+  0%, 100% { filter: drop-shadow(0 0 2px rgba(96,165,250,0.4)); transform: scale(1) rotate(0deg); opacity: 0.8; }
+  25% { filter: drop-shadow(0 0 6px rgba(34,211,238,0.8)); transform: scale(1.15) rotate(8deg); opacity: 1; }
+  50% { filter: drop-shadow(0 0 10px rgba(168,85,247,0.7)); transform: scale(1.25) rotate(-5deg); opacity: 1; }
+  75% { filter: drop-shadow(0 0 6px rgba(96,165,250,0.8)); transform: scale(1.1) rotate(3deg); opacity: 0.9; }
+}
+`;
+
 const AVATAR_SRC = '/brenda/avatar-candidatic.png';
 
 const INITIAL_MESSAGES = [
@@ -106,17 +115,18 @@ export default function FloatingCopilot({ onOpenFull }) {
         <div className="fixed bottom-6 right-24 z-40 flex flex-col items-end gap-3 pointer-events-none">
             {open && (
                 <div className="pointer-events-auto w-[calc(100vw-2.5rem)] max-w-[360px] h-[520px] rounded-[32px] overflow-hidden shadow-[0_8px_32px_rgba(0,0,0,0.15)] border-[1px] border-white/40 dark:border-white/10 bg-white/5 dark:bg-black/10 backdrop-blur-md flex flex-col relative before:absolute before:inset-0 before:bg-gradient-to-br before:from-white/10 before:to-transparent before:pointer-events-none">
-                    <div className="relative px-4 py-4 bg-gradient-to-br from-blue-500/20 via-indigo-500/20 to-purple-500/20 backdrop-blur-lg border-b border-white/20 z-10">
+                    <div className="relative px-4 py-4 bg-gradient-to-br from-blue-500/10 via-indigo-500/8 to-purple-500/10 backdrop-blur-xl border-b border-white/10 z-10">
                         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-white/10 via-transparent to-transparent opacity-30" />
                         <div className="relative flex items-center justify-between gap-3">
                             <div className="flex items-center gap-3 min-w-0">
                                 <BrendaAvatar size="md" active />
                                 <div className="min-w-0">
+                                    <style>{sparkleKeyframes}</style>
                                     <div className="flex items-center gap-1.5">
-                                        <h3 className="text-gray-900 dark:text-white text-sm font-black tracking-tight truncate drop-shadow-md">Brenda Rodriguez</h3>
-                                        <Sparkles className="w-3.5 h-3.5 text-blue-500 dark:text-cyan-300" />
+                                        <h3 className="text-gray-900 dark:text-white text-sm font-black tracking-tight truncate drop-shadow-md">Brenda IA</h3>
+                                        <Sparkles className="w-3.5 h-3.5 text-blue-500 dark:text-cyan-300" style={{ animation: 'sparkle-glow 2.5s ease-in-out infinite' }} />
                                     </div>
-                                    <p className="text-[11px] text-blue-700 dark:text-blue-200 font-medium truncate opacity-90">Copiloto IA Activo</p>
+                                    <p className="text-[11px] text-blue-700 dark:text-blue-200 font-medium truncate opacity-90">Copiloto</p>
                                 </div>
                             </div>
                             <div className="flex items-center gap-1">
