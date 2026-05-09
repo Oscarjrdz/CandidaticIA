@@ -492,6 +492,9 @@ function formatCompactSnapshot(snapshot) {
     if (snapshot.ageAnalytics?.byBucket?.length) {
         lines.push(`Rangos edad: ${snapshot.ageAnalytics.byBucket.map(d => `${d.label}(${d.count})`).join(', ')}`);
     }
+    if (snapshot.ageAnalytics?.byExactAge?.length) {
+        lines.push(`Edades exactas: ${snapshot.ageAnalytics.byExactAge.slice(0, 30).map(d => `${d.label}(${d.count})`).join(', ')}`);
+    }
 
     // Custom/extra field distributions (compact)
     const skipKeys = new Set(['genero', 'municipio', 'categoria', 'escolaridad', 'origen', 'statusAudit']);
@@ -550,20 +553,24 @@ function searchCandidateRoster(roster, question) {
     if (terms.length > 0) {
         results = results.filter(c => {
             const text = normalizeText(Object.values(c).filter(v => typeof v === 'string').join(' '));
-            return terms.some(t => text.includes(t));
+            return terms.some(t => text.includes(t) || text === t);
         });
     }
 
-    return results.slice(0, 30);
+    return { totalMatches: results.length, candidates: results.slice(0, 30) };
 }
 
 /**
  * Format search results as compact text for GPT.
  */
-function formatSearchResults(results) {
-    if (!results.length) return '';
-    const lines = [`\n=== CANDIDATOS ENCONTRADOS (${results.length}) ===`];
-    for (const c of results) {
+function formatSearchResults(searchData) {
+    if (!searchData || !searchData.candidates || searchData.candidates.length === 0) return '';
+    const { totalMatches, candidates } = searchData;
+    
+    const lines = [`\n=== BÚSQUEDA ESPECÍFICA (Total coincidencias: ${totalMatches}. Mostrando ${candidates.length}) ===`];
+    lines.push(`NOTA PARA BRENDA: Si te preguntan "cuántos" y la búsqueda específica tiene resultados, usa el "Total coincidencias: ${totalMatches}" como tu respuesta oficial.`);
+    
+    for (const c of candidates) {
         const parts = [c.nombre];
         if (c.genero) parts.push(c.genero);
         if (c.edad) parts.push(`${c.edad} años`);
@@ -584,8 +591,11 @@ export async function answerCandidateKnowledgeQuestion(question, history = [], m
     // Compact stats text (~500-800 tokens instead of 10K+ JSON)
     const compactStats = formatCompactSnapshot(snapshot);
 
+    // Pass context from the last few messages so cross-referenced questions (like "mujeres" then "de 20") work
+    const searchContext = history.slice(-2).map(m => m.content).join(' ') + ' ' + question;
+    
     // Server-side search: only matching candidates go to GPT
-    const searchResults = searchCandidateRoster(snapshot.allCandidatesSummary, question);
+    const searchResults = searchCandidateRoster(snapshot.allCandidatesSummary, searchContext);
     const searchText = formatSearchResults(searchResults);
 
     const systemPrompt = `
