@@ -518,51 +518,146 @@ function formatCompactSnapshot(snapshot) {
 }
 
 /**
- * Server-side candidate search. Filters the roster in Node.js so only
- * matching candidates are sent to GPT (max 30 results).
+ * Extract structured filter constraints from the conversation context.
+ * Flash LLM call (gpt-4o-mini).
  */
-function searchCandidateRoster(roster, question) {
-    if (!roster?.length) return [];
-    const q = normalizeText(question);
+async function extractSearchFilter(questionContext) {
+    const systemPrompt = `
+You are an intent extractor for a database of job candidates.
+Extract the mathematical/logical filter constraints from the query and return a valid JSON object.
+
+Rules:
+1. Return ONLY JSON.
+2. If the user is NOT asking about candidates or NOT applying a specific filter, set hasFilter to false.
+3. The schema must exactly match this interface:
+{
+  "hasFilter": boolean,
+  "gender": string | null, // "femenino" or "masculino"
+  "ageMin": number | null,
+  "ageMax": number | null,
+  "status": string | null, // "Completo" or "Pendiente"
+  "municipality": string | null,
+  "dateRelative": string | null, // "hoy", "ayer", "semana"
+  "keywords": string[] // any other specific nouns, names, roles, or keywords mentioned
+}
+
+Example: "cuantas mujeres de 20 a 25 años de Monterrey llegaron hoy"
+{
+  "hasFilter": true,
+  "gender": "femenino",
+  "ageMin": 20,
+  "ageMax": 25,
+  "status": null,
+  "municipality": "Monterrey",
+  "dateRelative": "hoy",
+  "keywords": []
+}
+
+Example: "y de 28" (Context implies women because of conversation)
+{
+  "hasFilter": true,
+  "gender": "femenino",
+  "ageMin": 28,
+  "ageMax": 28,
+  "status": null,
+  "municipality": null,
+  "dateRelative": null,
+  "keywords": []
+}
+
+Example: "hombres mayores a 30"
+{
+  "hasFilter": true,
+  "gender": "masculino",
+  "ageMin": 31,
+  "ageMax": null,
+  "status": null,
+  "municipality": null,
+  "dateRelative": null,
+  "keywords": []
+}
+`;
+
+    try {
+        const result = await getOpenAIResponse(
+            [{ role: 'user', content: questionContext }],
+            systemPrompt,
+            'gpt-4o-mini',
+            null,
+            { type: 'json_object' },
+            null,
+            150
+        );
+        return JSON.parse(result.content);
+    } catch(e) {
+        console.error("[Search Extractor] Failed:", e.message);
+        return { hasFilter: true, keywords: questionContext.split(' ') }; // fallback
+    }
+}
+
+/**
+ * Server-side candidate search. Filters the roster in Node.js using structured intent.
+ */
+export async function searchCandidateRoster(roster, searchContext) {
+    if (!roster?.length) return { totalMatches: 0, candidates: [] };
+    
+    // Quick heuristic to skip LLM extraction if there's clearly no context
+    if (!searchContext || searchContext.trim().length < 3) return { totalMatches: 0, candidates: [] };
+
+    const filter = await extractSearchFilter(searchContext);
+    if (!filter.hasFilter) return { totalMatches: 0, candidates: [] };
+
     let results = roster;
 
     // --- Date filters ---
-    const today = formatDateKey(new Date());
-    const yesterday = formatDateKey(addDays(new Date(), -1));
-    if (q.includes('hoy')) results = results.filter(c => c.fecha === today);
-    else if (q.includes('ayer')) results = results.filter(c => c.fecha === yesterday);
-    else if (q.includes('esta semana') || (q.includes('semana') && !q.includes('dia'))) {
+    if (filter.dateRelative) {
+        const today = formatDateKey(new Date());
+        const yesterday = formatDateKey(addDays(new Date(), -1));
         const weekAgo = formatDateKey(addDays(new Date(), -7));
-        results = results.filter(c => c.fecha >= weekAgo);
+
+        if (filter.dateRelative === 'hoy') results = results.filter(c => c.fecha === today);
+        else if (filter.dateRelative === 'ayer') results = results.filter(c => c.fecha === yesterday);
+        else if (filter.dateRelative === 'semana') results = results.filter(c => c.fecha >= weekAgo);
     }
 
     // --- Gender filter ---
-    if (q.includes('mujer') || q.includes('mujeres') || q.includes('femenino'))
-        results = results.filter(c => { const g = normalizeText(c.genero); return g.includes('femenino') || g.includes('mujer'); });
-    else if (q.includes('hombre') || q.includes('hombres') || q.includes('masculino'))
-        results = results.filter(c => { const g = normalizeText(c.genero); return g.includes('masculino') || g.includes('hombre'); });
+    if (filter.gender) {
+        results = results.filter(c => {
+            const g = normalizeText(c.genero || '');
+            return filter.gender === 'femenino' ? (g.includes('mujer') || g.includes('femenin')) : (g.includes('hombre') || g.includes('masculin'));
+        });
+    }
+
+    // --- Age filter ---
+    if (filter.ageMin !== null) {
+        results = results.filter(c => c.edad >= filter.ageMin);
+    }
+    if (filter.ageMax !== null) {
+        results = results.filter(c => c.edad <= filter.ageMax);
+    }
 
     // --- Status filter ---
-    if (q.includes('completo') && !q.includes('incompleto')) results = results.filter(c => c.estado === 'Completo');
-    if (q.includes('incompleto') || (q.includes('pendiente') && !q.includes('completo'))) results = results.filter(c => c.estado === 'Pendiente');
+    if (filter.status) {
+        results = results.filter(c => filter.status === 'Completo' ? c.estado === 'Completo' : c.estado === 'Pendiente');
+    }
 
-    // --- Keyword search across all fields ---
-    const stopWords = new Set([
-        'como', 'cuantos', 'cuantas', 'dime', 'dame', 'muestra', 'lista', 'listame',
-        'candidatos', 'candidato', 'candidatas', 'base', 'datos', 'perfil', 'perfiles',
-        'total', 'todos', 'todas', 'nuevo', 'nuevos', 'nueva', 'nuevas', 'tiene', 'tienen',
-        'esta', 'estan', 'quien', 'quienes', 'donde', 'cuales', 'cuantos', 'brenda',
-        'mujeres', 'hombres', 'mujer', 'hombre', 'femenino', 'masculino',
-        'completo', 'incompleto', 'pendiente', 'completos', 'pendientes',
-        'hoy', 'ayer', 'semana', 'registraron', 'registrados', 'hay'
-    ]);
-    const terms = q.split(/\s+/).filter(w => w.length > 2 && !stopWords.has(w));
+    // --- Municipality filter ---
+    if (filter.municipality) {
+        const searchMuni = normalizeText(filter.municipality);
+        results = results.filter(c => normalizeText(c.municipality || c.municipio || '').includes(searchMuni));
+    }
 
-    if (terms.length > 0) {
-        results = results.filter(c => {
-            const text = normalizeText(Object.values(c).filter(v => typeof v === 'string').join(' '));
-            return terms.some(t => text.includes(t) || text === t);
-        });
+    // --- Keyword search ---
+    if (filter.keywords && filter.keywords.length > 0) {
+        const stopWords = new Set(['como', 'dime', 'lista', 'candidatos', 'base', 'datos', 'perfiles', 'tiene', 'donde', 'brenda']);
+        const terms = filter.keywords.map(k => normalizeText(k)).filter(w => w.length > 2 && !stopWords.has(w));
+        
+        if (terms.length > 0) {
+            results = results.filter(c => {
+                const text = normalizeText(Object.values(c).filter(v => typeof v === 'string').join(' '));
+                return terms.some(t => text.includes(t) || text === t);
+            });
+        }
     }
 
     return { totalMatches: results.length, candidates: results.slice(0, 30) };

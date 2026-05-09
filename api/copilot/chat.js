@@ -93,7 +93,7 @@ export default async function handler(req, res) {
         
         // Pass context from the last few messages for cross-referenced questions
         const searchContext = history.slice(-2).map(m => m.content).join(' ') + ' ' + question;
-        const searchResults = searchCandidateRoster(snapshot.allCandidatesSummary, searchContext);
+        const searchResults = await searchCandidateRoster(snapshot.allCandidatesSummary, searchContext);
         const searchText = formatSearchResults(searchResults);
 
         const systemPrompt = `
