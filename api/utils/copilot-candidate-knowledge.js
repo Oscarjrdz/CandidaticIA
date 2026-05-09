@@ -264,6 +264,15 @@ export async function getCandidateKnowledgeSnapshot() {
     const allCandidatesSummary = [];
     const unreadCandidates = [];
 
+    // Chat Web tracking
+    const tagDistribution = new Map();
+    let candidatesWithTags = 0;
+    let awaitingReply = 0;       // user spoke last, recruiter hasn't replied
+    let botHandled = 0;          // bot spoke last
+    let recruiterHandled = 0;    // recruiter spoke last
+    let conversationsToday = 0;  // had any message today
+    let over24hNoReply = 0;      // user wrote >24h ago, no human reply
+
     const customFieldsJson = await redis.get('custom_fields').catch(() => null);
     let customFields = [];
     try {
@@ -400,6 +409,31 @@ export async function getCandidateKnowledgeSnapshot() {
                     categoria: safeSummary.categoria
                 });
             }
+
+            // Chat activity tracking
+            if (Array.isArray(candidate.tags) && candidate.tags.length > 0) {
+                candidatesWithTags++;
+                candidate.tags.forEach(t => increment(tagDistribution, t));
+            }
+
+            const lastUserAt = candidate.lastUserMessageAt ? new Date(candidate.lastUserMessageAt).getTime() : 0;
+            const lastBotAt = candidate.lastBotMessageAt ? new Date(candidate.lastBotMessageAt).getTime() : 0;
+            const lastHumanAt = candidate.lastHumanMessageAt ? new Date(candidate.lastHumanMessageAt).getTime() : 0;
+            const nowMs = Date.now();
+
+            if (lastUserAt > lastBotAt && lastUserAt > lastHumanAt) {
+                awaitingReply++;
+                if ((nowMs - lastUserAt) > 86400000) over24hNoReply++;
+            } else if (lastBotAt > lastHumanAt) {
+                botHandled++;
+            } else if (lastHumanAt > 0) {
+                recruiterHandled++;
+            }
+
+            if (candidate.ultimoMensaje) {
+                const lastMsgDate = new Date(candidate.ultimoMensaje);
+                if (formatDateKey(lastMsgDate) === todayKey) conversationsToday++;
+            }
         }
 
         scanned += ids.length;
@@ -469,6 +503,13 @@ export async function getCandidateKnowledgeSnapshot() {
         allCandidatesSummary,
         chatSummary: {
             totalUnread: unreadCandidates.length,
+            conversationsToday,
+            awaitingReply,
+            over24hNoReply,
+            botHandled,
+            recruiterHandled,
+            candidatesWithTags,
+            tagDistribution: topEntries(tagDistribution, 50),
             topUnread: unreadCandidates
                 .sort((a, b) => b.unreadMsgCount - a.unreadMsgCount)
                 .slice(0, 15)
@@ -550,7 +591,13 @@ export function formatCompactSnapshot(snapshot) {
         const cs = snapshot.chatSummary;
         lines.push('');
         lines.push(`=== CHAT WEB STATUS ===`);
-        lines.push(`Chats no leídos: ${cs.totalUnread}`);
+        lines.push(`Chats no leídos: ${cs.totalUnread} | Conversaciones hoy: ${cs.conversationsToday}`);
+        lines.push(`Esperando respuesta del reclutador: ${cs.awaitingReply} | Más de 24h sin respuesta: ${cs.over24hNoReply}`);
+        lines.push(`Último mensaje fue del bot: ${cs.botHandled} | Último mensaje fue del reclutador: ${cs.recruiterHandled}`);
+        lines.push(`Candidatos con etiquetas: ${cs.candidatesWithTags}`);
+        if (cs.tagDistribution?.length) {
+            lines.push(`Etiquetas: ${cs.tagDistribution.slice(0, 20).map(d => `${d.label}(${d.count})`).join(', ')}`);
+        }
         if (cs.topUnread?.length) {
             lines.push('Top candidatos con mensajes pendientes:');
             for (const c of cs.topUnread.slice(0, 10)) {
