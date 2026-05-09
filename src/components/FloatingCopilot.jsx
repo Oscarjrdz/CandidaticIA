@@ -98,31 +98,31 @@ export default function FloatingCopilot({ onOpenFull }) {
     return (
         <div className="fixed bottom-6 right-24 z-40 flex flex-col items-end gap-3 pointer-events-none">
             {open && (
-                <div className="pointer-events-auto w-[calc(100vw-2.5rem)] max-w-[360px] h-[520px] rounded-[28px] overflow-hidden shadow-[0_24px_70px_rgba(15,23,42,0.28)] border border-white/70 dark:border-white/10 bg-white/85 dark:bg-gray-950/90 backdrop-blur-2xl flex flex-col">
-                    <div className="relative px-4 py-4 bg-gradient-to-br from-blue-600 via-indigo-600 to-slate-950 overflow-hidden">
-                        <div className="absolute inset-x-0 bottom-0 h-px bg-white/20" />
+                <div className="pointer-events-auto w-[calc(100vw-2.5rem)] max-w-[360px] h-[520px] rounded-[32px] overflow-hidden shadow-[0_8px_32px_rgba(31,38,135,0.25)] border-[1.5px] border-white/50 dark:border-white/10 bg-white/20 dark:bg-gray-950/40 backdrop-blur-3xl flex flex-col relative before:absolute before:inset-0 before:bg-gradient-to-br before:from-white/40 before:to-transparent before:pointer-events-none">
+                    <div className="relative px-4 py-4 bg-gradient-to-br from-blue-600/90 via-indigo-600/90 to-fuchsia-900/90 backdrop-blur-xl border-b border-white/20 z-10">
+                        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-white/20 via-transparent to-transparent opacity-50" />
                         <div className="relative flex items-center justify-between gap-3">
                             <div className="flex items-center gap-3 min-w-0">
                                 <BrendaAvatar size="md" active />
                                 <div className="min-w-0">
                                     <div className="flex items-center gap-1.5">
-                                        <h3 className="text-white text-sm font-black tracking-tight truncate">Brenda Rodriguez</h3>
-                                        <Sparkles className="w-3.5 h-3.5 text-cyan-200" />
+                                        <h3 className="text-white text-sm font-black tracking-tight truncate drop-shadow-md">Brenda Rodriguez</h3>
+                                        <Sparkles className="w-3.5 h-3.5 text-cyan-300 drop-shadow-[0_0_8px_rgba(103,232,249,0.8)]" />
                                     </div>
-                                    <p className="text-[11px] text-blue-100 font-medium truncate">Copiloto activo</p>
+                                    <p className="text-[11px] text-blue-100 font-medium truncate opacity-90">Copiloto IA Activo</p>
                                 </div>
                             </div>
                             <div className="flex items-center gap-1">
                                 <button
                                     onClick={onOpenFull}
-                                    className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors"
+                                    className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 border border-white/10 text-white flex items-center justify-center transition-all backdrop-blur-sm"
                                     title="Abrir copiloto completo"
                                 >
                                     <Maximize2 className="w-4 h-4" />
                                 </button>
                                 <button
                                     onClick={() => setOpen(false)}
-                                    className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors"
+                                    className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 border border-white/10 text-white flex items-center justify-center transition-all backdrop-blur-sm"
                                     title="Minimizar"
                                 >
                                     <ChevronDown className="w-4 h-4" />
@@ -131,16 +131,16 @@ export default function FloatingCopilot({ onOpenFull }) {
                         </div>
                     </div>
 
-                    <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.08),transparent_34%),linear-gradient(180deg,rgba(248,250,252,0.9),rgba(255,255,255,0.9))] dark:bg-none dark:bg-gray-950">
+                    <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-transparent z-10">
                         {messages.map((message, index) => {
                             const isUser = message.role === 'user';
                             return (
                                 <div key={`${message.role}-${index}`} className={`flex gap-2 ${isUser ? 'justify-end' : 'justify-start'}`}>
                                     {!isUser && <BrendaAvatar size="sm" />}
-                                    <div className={`max-w-[78%] rounded-2xl px-3.5 py-2.5 text-[13px] leading-relaxed whitespace-pre-wrap shadow-sm ${
+                                    <div className={`max-w-[82%] rounded-2xl px-4 py-2.5 text-[13px] leading-relaxed whitespace-pre-wrap shadow-sm backdrop-blur-md border ${
                                         isUser
-                                            ? 'bg-blue-600 text-white rounded-br-md'
-                                            : 'bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-100 border border-gray-100 dark:border-gray-800 rounded-bl-md'
+                                            ? 'bg-blue-600/80 text-white border-blue-400/30 rounded-br-md shadow-[0_4px_12px_rgba(37,99,235,0.2)]'
+                                            : 'bg-white/60 dark:bg-gray-900/60 text-gray-800 dark:text-gray-100 border-white/50 dark:border-white/10 rounded-bl-md shadow-[0_4px_12px_rgba(0,0,0,0.05)]'
                                     }`}>
                                         {message.content}
                                     </div>
@@ -151,16 +151,21 @@ export default function FloatingCopilot({ onOpenFull }) {
                         {loading && (
                             <div className="flex gap-2 justify-start">
                                 <BrendaAvatar size="sm" active />
-                                <div className="bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl rounded-bl-md px-3.5 py-2.5 text-[13px] text-gray-500 dark:text-gray-400 shadow-sm">
-                                    Pensando...
+                                <div className="bg-white/60 dark:bg-gray-900/60 border border-white/50 dark:border-white/10 backdrop-blur-md rounded-2xl rounded-bl-md px-4 py-2.5 text-[13px] text-gray-600 dark:text-gray-300 shadow-sm flex items-center gap-2">
+                                    <span className="animate-pulse">Procesando</span>
+                                    <span className="flex gap-0.5">
+                                        <span className="w-1 h-1 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                                        <span className="w-1 h-1 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                                        <span className="w-1 h-1 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                                    </span>
                                 </div>
                             </div>
                         )}
                         <div ref={bottomRef} />
                     </div>
 
-                    <form onSubmit={handleSubmit} className="p-3 bg-white/90 dark:bg-gray-950 border-t border-gray-100 dark:border-gray-800">
-                        <div className="flex items-end gap-2 rounded-2xl bg-gray-100 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 p-2">
+                    <form onSubmit={handleSubmit} className="p-3 bg-white/30 dark:bg-black/30 backdrop-blur-xl border-t border-white/40 dark:border-white/10 z-10">
+                        <div className="flex items-end gap-2 rounded-[20px] bg-white/50 dark:bg-gray-900/50 border border-white/60 dark:border-white/10 shadow-inner p-2 backdrop-blur-md transition-all focus-within:bg-white/70 focus-within:shadow-[0_0_15px_rgba(255,255,255,0.5)]">
                             <textarea
                                 value={input}
                                 onChange={(event) => setInput(event.target.value)}
@@ -171,15 +176,15 @@ export default function FloatingCopilot({ onOpenFull }) {
                                     }
                                 }}
                                 rows={1}
-                                placeholder="Pidele ayuda a Brenda..."
-                                className="min-h-9 max-h-24 flex-1 resize-none bg-transparent px-2 py-2 text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 outline-none"
+                                placeholder="Escríbele a Brenda..."
+                                className="min-h-9 max-h-24 flex-1 resize-none bg-transparent px-3 py-2 text-[13.5px] text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 outline-none"
                             />
                             <Button
                                 type="submit"
                                 icon={Send}
                                 disabled={!canSend}
                                 loading={loading}
-                                className="rounded-xl !px-3 !py-2"
+                                className="rounded-xl !px-3 !py-2 bg-gradient-to-r from-blue-600 to-indigo-600 border-none shadow-md hover:shadow-lg hover:from-blue-500 hover:to-indigo-500 transition-all text-white"
                             >
                                 <span className="sr-only">Enviar</span>
                             </Button>
