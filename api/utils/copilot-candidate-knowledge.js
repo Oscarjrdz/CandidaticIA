@@ -487,7 +487,7 @@ export async function getQuickCandidateStats() {
 /**
  * Converts the heavy JSON snapshot into compact text (~500-800 tokens).
  */
-function formatCompactSnapshot(snapshot) {
+export function formatCompactSnapshot(snapshot) {
     const t = snapshot.totals;
     const nc = snapshot.newCandidates;
     const lines = [];
@@ -682,7 +682,7 @@ export async function searchCandidateRoster(roster, searchContext) {
 /**
  * Format search results as compact text for GPT.
  */
-function formatSearchResults(searchData) {
+export function formatSearchResults(searchData) {
     if (!searchData || !searchData.candidates || searchData.candidates.length === 0) return '';
     const { totalMatches, candidates } = searchData;
     
