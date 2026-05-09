@@ -166,7 +166,11 @@ export function isCandidateKnowledgeQuestion(message = '') {
     const text = normalizeText(message);
     const mentionsCandidates = (
         text.includes('candidato') ||
+        text.includes('candidata') ||
         text.includes('candidatos') ||
+        text.includes('candidatas') ||
+        text.includes('persona') ||
+        text.includes('personas') ||
         text.includes('base de datos') ||
         text.includes('base de candidatos') ||
         text.includes('leads') ||
@@ -185,7 +189,9 @@ export function isCandidateKnowledgeQuestion(message = '') {
         text.includes('cuantas') ||
         text.includes('mas candidatos') ||
         text.includes('estadistica') ||
-        text.includes('conocimiento')
+        text.includes('conocimiento') ||
+        text.includes('hora') ||
+        text.includes('horario')
     );
 
     const asksDatabaseDimension = (
@@ -196,6 +202,8 @@ export function isCandidateKnowledgeQuestion(message = '') {
         text.includes('genero') ||
         text.includes('edad') ||
         text.includes('edades') ||
+        text.includes('año') ||
+        text.includes('años') ||
         text.includes('municipio') ||
         text.includes('ciudad') ||
         text.includes('escolaridad') ||
