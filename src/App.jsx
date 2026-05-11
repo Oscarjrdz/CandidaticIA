@@ -309,7 +309,7 @@ function AppShell() {
         </main>
 
         <InternalChat onlineUsers={onlineUsers} />
-        <FloatingCopilot />
+        {(user?.role === 'SuperAdmin' || rolePermissions?.brenda_copilot) && <FloatingCopilot />}
 
         {/* Footer */}
         <footer className="py-3 sm:py-4 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shrink-0 sticky bottom-0 z-10" style={{ WebkitBackdropFilter: 'blur(12px)', backdropFilter: 'blur(12px)', backgroundColor: 'rgba(255,255,255,0.9)' }}>

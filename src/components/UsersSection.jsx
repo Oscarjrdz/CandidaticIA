@@ -32,7 +32,8 @@ const AVAILABLE_CHAT_FILTERS = [
 ];
 
 const AVAILABLE_EXTRA_PERMS = [
-    { id: 'can_manage_tags', name: 'Crear / Editar Etiquetas' }
+    { id: 'can_manage_tags', name: 'Crear / Editar Etiquetas' },
+    { id: 'brenda_copilot', name: 'Brenda Copiloto (Chat IA)' }
 ];
 
 const UsersSection = () => {
