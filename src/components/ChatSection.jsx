@@ -905,6 +905,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
 
     // New Chat creation
     const [showNewChat, setShowNewChat] = useState(false);
+    const [filtersHidden, setFiltersHidden] = useState(() => localStorage.getItem('chat_filters_hidden') === 'true');
     const [newChatPhone, setNewChatPhone] = useState('');
     const [newChatName, setNewChatName] = useState('');
     const [newChatLoading, setNewChatLoading] = useState(false);
@@ -2264,7 +2265,13 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                     </div>
 
                     {/* Filter Chips */}
-                    <div className="flex flex-col gap-2 pb-2 min-h-[105px]">
+                    <button
+                        onClick={() => setFiltersHidden(h => { const next = !h; localStorage.setItem('chat_filters_hidden', next); return next; })}
+                        className="w-full text-center text-[10px] font-medium text-gray-400 dark:text-gray-500 hover:text-gray-500 dark:hover:text-gray-400 py-1 transition-colors select-none cursor-pointer"
+                    >
+                        {filtersHidden ? 'Mostrar filtros' : 'Ocultar filtros'}
+                    </button>
+                    {!filtersHidden && <div className="flex flex-col gap-2 pb-2 min-h-[105px]">
                         {/* Renglón 1: Estados */}
                         <div 
                             className="w-full flex flex-nowrap items-center justify-between gap-1 pb-1 overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
@@ -2648,6 +2655,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                         </div>
 
                     </div> {/* Cierra outer flex-col */}
+                    }
                 </div> {/* Cierra header container */}
 
                 {/* Lista de Contactos — VIRTUALIZADA */}
