@@ -2271,10 +2271,10 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                     >
                         {filtersHidden ? 'Mostrar filtros' : 'Ocultar filtros'}
                     </button>
-                    {!filtersHidden && <div className="flex flex-col gap-2 pb-2 min-h-[105px]">
+                    {!filtersHidden && <div className="flex flex-col gap-1.5 pb-1">
                         {/* Renglón 1: Estados */}
                         <div 
-                            className="w-full flex flex-nowrap items-center justify-between gap-1 pb-1 overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
+                            className="w-full flex flex-nowrap items-center justify-between gap-1 overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
                             style={{ containerType: 'inline-size' }}
                         >
                         {canSeeFilter('filter_todos') && (
@@ -2345,7 +2345,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                         </div>
 
                         {/* Renglón 2: Etiquetas */}
-                        <div className="w-full mt-2 mb-1">
+                        <div className="w-full">
                             {/* Etiquetas Dropdown */}
                             {canSeeFilter('filter_labels') && (
                                 <div className="relative w-full">
@@ -2426,10 +2426,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                         </div>
 
                         {/* Renglón 3: Proyectos y CRM Manual */}
-                        <div className="flex flex-col gap-2 w-full">
-
-                            {/* Filtros Multiples (Edad, Genero, Municipio) */}
-                            <div className="flex flex-col gap-2 w-full">
+                        <div className="flex flex-col gap-1.5 w-full">
                                 <MultiSelectDropdown 
                                     label="Edad" 
                                     options={filterOptions.ages} 
@@ -2448,7 +2445,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                                     selected={selectedMunicipalities} 
                                     onChange={setSelectedMunicipalities} 
                                 />
-                            </div>
+
 
                             {/* Riel B: CRM Manual */}
                             {canSeeFilter('filter_crm') && (
