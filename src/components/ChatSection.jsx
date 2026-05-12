@@ -2654,9 +2654,8 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                             )}
                         </div>
 
-                    </div> {/* Cierra outer flex-col */}
-                    }
-                </div> {/* Cierra header container */}
+                    </div>}
+                </div>
 
                 {/* Lista de Contactos — VIRTUALIZADA */}
                 <div className="flex-1 overflow-hidden bg-white dark:bg-[#111b21]">
