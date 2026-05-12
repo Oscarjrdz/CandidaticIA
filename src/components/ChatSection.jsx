@@ -860,6 +860,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
     // Filter Chips State
     const [activeFilter, setActiveFilter] = useState('unread'); // 'all', 'unread', 'label', 'profile'
     const [filterValue, setFilterValue] = useState(null);
+    const [profileUnreadOnly, setProfileUnreadOnly] = useState(false);
     const activeFilterRef = useRef('unread');
     const hasSetInitialFilter = useRef(false);
     const filterValueRef = useRef(null);
@@ -1195,6 +1196,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                 const isComplete = isProfileComplete(c);
                 if (filterValue === 'complete' && !isComplete) return false;
                 if (filterValue === 'incomplete' && isComplete) return false;
+                if (profileUnreadOnly && !checkIfUnread(c)) return false;
             }
 
             // --- Filtros Múltiples (Edad, Género, Municipio) ---
@@ -1231,7 +1233,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
         });
     }, [
         candidates, deferredSearch, user,
-        activeFilter, filterValue,
+        activeFilter, filterValue, profileUnreadOnly,
         manualPipelineFilter, manualStepFilter,
         pinnedChats,
         selectedAges, selectedGenders, selectedMunicipalities
@@ -2308,7 +2310,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                         </button>
                         {canSeeFilter('filter_complete') && (
                             <button 
-                                onClick={() => { setActiveFilter('profile'); setFilterValue('complete'); setShowDropdown(null); }}
+                                onClick={() => { setActiveFilter('profile'); setFilterValue('complete'); setProfileUnreadOnly(false); setShowDropdown(null); }}
                                 className={`flex-[1.5] flex justify-center px-1.5 py-1.5 rounded-full font-medium whitespace-nowrap transition-colors border border-transparent items-center gap-1 min-w-[90px] ${
                                     activeFilter === 'profile' && filterValue === 'complete' 
                                     ? 'bg-[#d9fdd3] text-[#111b21] dark:bg-[#0a332c] dark:text-[#25d366]' 
@@ -2318,7 +2320,11 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                             >
                                 Completos ({badgeCounts.complete})
                                 {unreadCounts.complete > 0 && (
-                                    <div className="min-w-[18px] h-[18px] px-1 rounded-full bg-[#25d366] dark:bg-[#00a884] flex items-center justify-center shrink-0 text-white text-[9px] font-bold shadow-sm -ml-0.5">
+                                    <div
+                                        onClick={(e) => { e.stopPropagation(); setActiveFilter('profile'); setFilterValue('complete'); setProfileUnreadOnly(true); setShowDropdown(null); }}
+                                        className={`min-w-[18px] h-[18px] px-1 rounded-full flex items-center justify-center shrink-0 text-white text-[9px] font-bold shadow-sm -ml-0.5 cursor-pointer transition-all ${activeFilter === 'profile' && filterValue === 'complete' && profileUnreadOnly ? 'bg-[#128c7e] ring-2 ring-white/50 scale-110' : 'bg-[#25d366] dark:bg-[#00a884] hover:scale-110'}`}
+                                        title="Ver solo no leídos completos"
+                                    >
                                         {unreadCounts.complete}
                                     </div>
                                 )}
@@ -2326,7 +2332,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                         )}
                         {canSeeFilter('filter_incomplete') && (
                             <button 
-                                onClick={() => { setActiveFilter('profile'); setFilterValue('incomplete'); setShowDropdown(null); }}
+                                onClick={() => { setActiveFilter('profile'); setFilterValue('incomplete'); setProfileUnreadOnly(false); setShowDropdown(null); }}
                                 className={`flex-[1.5] flex justify-center px-1.5 py-1.5 rounded-full font-medium whitespace-nowrap transition-colors border border-transparent items-center gap-1 min-w-[90px] ${
                                     activeFilter === 'profile' && filterValue === 'incomplete' 
                                     ? 'bg-[#d9fdd3] text-[#111b21] dark:bg-[#0a332c] dark:text-[#25d366]' 
@@ -2336,7 +2342,11 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                             >
                                 Incompletos ({badgeCounts.incomplete})
                                 {unreadCounts.incomplete > 0 && (
-                                    <div className="min-w-[18px] h-[18px] px-1 rounded-full bg-[#25d366] dark:bg-[#00a884] flex items-center justify-center shrink-0 text-white text-[9px] font-bold shadow-sm -ml-0.5">
+                                    <div
+                                        onClick={(e) => { e.stopPropagation(); setActiveFilter('profile'); setFilterValue('incomplete'); setProfileUnreadOnly(true); setShowDropdown(null); }}
+                                        className={`min-w-[18px] h-[18px] px-1 rounded-full flex items-center justify-center shrink-0 text-white text-[9px] font-bold shadow-sm -ml-0.5 cursor-pointer transition-all ${activeFilter === 'profile' && filterValue === 'incomplete' && profileUnreadOnly ? 'bg-[#128c7e] ring-2 ring-white/50 scale-110' : 'bg-[#25d366] dark:bg-[#00a884] hover:scale-110'}`}
+                                        title="Ver solo no leídos incompletos"
+                                    >
                                         {unreadCounts.incomplete}
                                     </div>
                                 )}

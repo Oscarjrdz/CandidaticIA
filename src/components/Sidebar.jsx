@@ -170,20 +170,23 @@ const Sidebar = ({ activeSection, onSectionChange, onLogout, isMobileOpen, onClo
 
     // Unread count logic:
     // 1. When ChatSection is mounted → use its RBAC-accurate broadcast (source of truth)
-    // 2. When ChatSection is unmounted → use globalStats.unread from SSE (refreshed every 30s) + optimistic delta
-    // 3. First load fallback → use localStorage-seeded rbacUnread
+    // 2. When ChatSection is unmounted → use last known RBAC count + optimistic SSE delta
+    // 3. First load fallback (no RBAC ever recorded) → use globalStats.unread from SSE
     const unreadCount = (() => {
         if (chatMounted && rbacUnread !== null) {
             // ChatSection is live and broadcasting accurate counts
             return rbacUnread;
         }
-        // ChatSection is unmounted — use SSE global stats as live baseline
+        // ChatSection is unmounted — prefer last known RBAC count (it IS RBAC-filtered)
+        if (rbacUnread !== null) {
+            return rbacUnread + sseDelta;
+        }
+        // No RBAC count ever recorded — fall back to SSE global (not RBAC-filtered but better than 0)
         const sseBaseline = globalStats?.unread;
         if (sseBaseline !== undefined && sseBaseline !== null) {
             return sseBaseline + sseDelta;
         }
-        // Fallback: use last known RBAC count + any SSE increments
-        return (rbacUnread ?? 0) + sseDelta;
+        return sseDelta;
     })();
 
     const toggleCollapse = () => {
