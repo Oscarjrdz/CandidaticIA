@@ -399,7 +399,7 @@ const AdsStatisticsSection = () => {
 
     const todayLeadsTotal = stats.ads.reduce((a, ad) => a + (ad.todayLeads || 0), 0);
     const totalSpend = stats.ads.reduce((a, ad) => a + (parseFloat(ad.spend) || 0), 0);
-    const fId = (id) => !id ? '' : `${id.slice(0,5)}…${id.slice(-4)}`;
+    const fId = (id) => id || '';
     const cp = (t) => { navigator.clipboard.writeText(t); showToast?.('Copiado', 'success'); };
     const fD = (d) => !d ? '-' : new Date(d).toLocaleDateString('es-MX', { day:'2-digit', month:'short', timeZone:'America/Monterrey' });
     const f$ = (v) => v ? `$${Number(v).toFixed(2)}` : '-';
@@ -462,7 +462,7 @@ const AdsStatisticsSection = () => {
                 </div>
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                    {stats.ads.map((ad, i) => {
+                    {stats.ads.filter(ad => ad.adId || ad.adHeadline !== 'Anuncio sin título' || ad.adBody || ad.adImageUrl).map((ad, i) => {
                         const has = ad.impressions || ad.spend;
                         return (
                             <div key={i} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-sm overflow-hidden hover:shadow-lg transition-shadow group/card relative"
@@ -480,8 +480,8 @@ const AdsStatisticsSection = () => {
                                                 <span>{ad.adSource === 'ad' ? '📣' : '📝'}</span>
                                                 {ad.effectiveStatus && <StatusBadge status={ad.effectiveStatus} />}
                                                 {ad.adId && (
-                                                    <span className="font-mono bg-gray-100 dark:bg-gray-700 px-1 rounded cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600"
-                                                        onClick={() => cp(ad.adId)}>{fId(ad.adId)}<Copy className="w-2 h-2 inline ml-0.5 opacity-40" /></span>
+                                                <span className="font-mono text-[8px] bg-gray-100 dark:bg-gray-700 px-1 rounded cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 select-all"
+                                                        onClick={() => cp(ad.adId)}>{ad.adId}<Copy className="w-2 h-2 inline ml-0.5 opacity-40" /></span>
                                                 )}
                                             </div>
                                         </div>
