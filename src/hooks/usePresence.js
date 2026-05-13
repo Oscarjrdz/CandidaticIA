@@ -68,8 +68,8 @@ export function usePresence(user, activeSection) {
         // Initial heartbeat
         sendHeartbeat();
 
-        // Heartbeat every 3s for real-time presence indicator
-        const id = setInterval(sendHeartbeat, 3000);
+        // Heartbeat every 8s for real-time presence indicator (bandwidth-optimized)
+        const id = setInterval(sendHeartbeat, 8000);
         return () => clearInterval(id);
     }, [user]);
 

@@ -159,8 +159,11 @@ const Sidebar = ({ activeSection, onSectionChange, onLogout, isMobileOpen, onClo
     useEffect(() => {
         const handler = (e) => {
             const data = e.detail;
+            // SSE payload structure: { candidateId, updates: { newMessage, messageFrom, ... }, timestamp }
+            // Check both root level (legacy) and nested updates (current sse-notify.js format)
+            const updates = data?.updates || data;
             // Only increment for actual new incoming messages from candidates (not bot replies, tag changes, etc.)
-            if (data?.newMessage && data?.messageFrom === 'user') {
+            if (updates?.newMessage && updates?.messageFrom === 'user') {
                 setSseDelta(prev => prev + 1);
             }
         };

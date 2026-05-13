@@ -1909,6 +1909,14 @@ export const getAdsStatistics = async () => {
     const client = getClient();
     if (!client) return { ads: [], totalAdsLeads: 0 };
 
+    // 🏎️ BANDWIDTH SAVER: Cache ads stats for 10 min to avoid full DB scan on every page visit
+    const ADS_CACHE_KEY = 'stats:ads:cached';
+    const ADS_CACHE_TTL = 10 * 60; // 10 min
+    try {
+        const cached = await client.get(ADS_CACHE_KEY);
+        if (cached) return JSON.parse(cached);
+    } catch { /* cache miss — rebuild */ }
+
     const totalDbCount = async () => (await client.scard(KEYS.LIST_COMPLETE)) + (await client.scard(KEYS.LIST_PENDING));
     const dbSize = await totalDbCount();
 
@@ -2007,5 +2015,10 @@ export const getAdsStatistics = async () => {
 
     const ads = Array.from(adsMap.values()).sort((a, b) => b.totalLeads - a.totalLeads);
     
-    return { ads, totalAdsLeads };
+    const result = { ads, totalAdsLeads };
+
+    // Cache for 10 min (fire-and-forget)
+    try { await client.set(ADS_CACHE_KEY, JSON.stringify(result), 'EX', ADS_CACHE_TTL); } catch { /* ignore */ }
+
+    return result;
 };

@@ -155,6 +155,8 @@ const BulksSection = () => {
 
     // Guard para evitar polls concurrentes (race condition)
     const isFetchingRef = useRef(false);
+    const fastPollStartRef = useRef(null);
+    const fastPollStopRef = useRef(null);
 
     // Load Candidates & Persistence
     // Load tags
@@ -176,7 +178,8 @@ const BulksSection = () => {
     useEffect(() => {
         loadCandidates();
         
-        // Web Worker inline — inmune a background tab throttling del navegador
+        // 🏎️ BANDWIDTH SAVER: Fast polling (600ms via Worker) ONLY when a campaign is active.
+        // When idle, slow poll every 10s to detect if a campaign starts.
         const workerCode = `
             self.onmessage = function(e) {
                 if (e.data === 'start') {
@@ -186,14 +189,32 @@ const BulksSection = () => {
         `;
         const blob = new Blob([workerCode], { type: 'application/javascript' });
         const workerUrl = URL.createObjectURL(blob);
-        const worker = new Worker(workerUrl);
+        let worker = null;
 
-        worker.onmessage = () => {
-            if (!isFetchingRef.current) {
-                fetchEngineStatus();
-            }
+        const startFastPoll = () => {
+            if (worker) return; // Already running
+            worker = new Worker(workerUrl);
+            worker.onmessage = () => {
+                if (!isFetchingRef.current) fetchEngineStatus();
+            };
+            worker.postMessage('start');
         };
-        worker.postMessage('start');
+
+        const stopFastPoll = () => {
+            if (worker) { worker.terminate(); worker = null; }
+        };
+
+        // Expose to outer scope via refs
+        fastPollStartRef.current = startFastPoll;
+        fastPollStopRef.current = stopFastPoll;
+
+        // Slow poll when idle — checks every 10s if a campaign started
+        const slowPoll = setInterval(() => {
+            if (!isFetchingRef.current) fetchEngineStatus();
+        }, 10000);
+
+        // Initial status check
+        fetchEngineStatus();
 
         // Recover draft from redis
         fetch('/api/bulks?action=get_draft')
@@ -214,7 +235,8 @@ const BulksSection = () => {
             .catch(() => {});
 
         return () => {
-            worker.terminate();
+            stopFastPoll();
+            clearInterval(slowPoll);
             URL.revokeObjectURL(workerUrl);
         };
     }, []);
@@ -235,6 +257,15 @@ const BulksSection = () => {
         
         return () => clearTimeout(timer);
     }, [messageText, selectedCandIds]);
+
+    // 🏎️ BANDWIDTH SAVER: Toggle fast Worker polling based on campaign state
+    useEffect(() => {
+        if (engineState?.isRunning) {
+            fastPollStartRef.current?.();
+        } else {
+            fastPollStopRef.current?.();
+        }
+    }, [engineState?.isRunning]);
 
     // Auto-alert on campaign complete
     const prevEngineStateRef = useRef(null);
