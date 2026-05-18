@@ -3392,10 +3392,11 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                             ref={virtuosoRef}
                             style={{ height: '100%' }}
                             data={displayMessages}
-                            followOutput={(isAtBottom) => isAtBottom ? 'smooth' : false}
+                            followOutput={'smooth'}
                             computeItemKey={(index, msg) => String(msg.id) + '-' + index}
                             overscan={400}
-                            components={{ Header: MessagesEncryptionHeader, Footer: () => <div style={{ height: 16 }} /> }}
+                            atBottomThreshold={150}
+                            components={{ Header: MessagesEncryptionHeader }}
                             atBottomStateChange={(isAtBottom) => setShowScrollBtn(!isAtBottom)}
                             itemContent={(index, msg) => {
                             if (!msg) return <div style={{ height: 0 }} />;
@@ -3418,8 +3419,10 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
 
                             // Prevenir renderizado de burbujas fantasma (eventos de sistema sin texto ni multimedia)
                             if (!msg.content && !msg.mediaUrl) return <div style={{ height: 0 }} />;
+                            const isLast = index === displayMessages.length - 1;
 
                             return (
+                                <div style={isLast ? { paddingBottom: 16 } : undefined}>
                                 <MessageBubble
                                     msg={msg}
                                     chatWhatsapp={selectedChat?.whatsapp}
@@ -3431,6 +3434,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                                     onSendReaction={handleSendReaction}
                                     allMessages={messages}
                                 />
+                                </div>
                             );
                         }}
                         />
