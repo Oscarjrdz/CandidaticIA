@@ -814,8 +814,8 @@ const MessageBubble = React.memo(function MessageBubble({
                         </div>
                     )}
 
-                    {/* Text Rendering */}
-                    {msg.content && (
+                    {/* Text Rendering (skip for stickers — only show image) */}
+                    {msg.content && msg.type !== 'sticker' && (
                         <div className="whitespace-pre-wrap leading-[1.35] inline-block break-words" style={{ paddingBottom: '16px', paddingRight: '80px', paddingTop: msg.mediaUrl ? '2px' : '0' }}>
                             {(() => {
                                 const rawHtml = msg._formattedHtml || msg.content;
