@@ -794,8 +794,11 @@ const MessageBubble = React.memo(function MessageBubble({
                     {/* Media Rendering */}
                     {msg.mediaUrl && (
                         <div className="mb-0.5 rounded overflow-hidden mt-1 cursor-pointer">
-                            {(msg.type === 'image' || msg.type === 'sticker') && (
+                            {msg.type === 'image' && (
                                 <img src={msg.mediaUrl} alt="media" loading="lazy" width="260" height="260" className="max-w-[260px] aspect-square object-cover rounded shadow-sm bg-gray-100 dark:bg-gray-800 animate-pulse" onLoad={(e) => e.target.classList.remove('animate-pulse')} />
+                            )}
+                            {msg.type === 'sticker' && (
+                                <img src={msg.mediaUrl} alt="sticker" loading="lazy" width="100" height="100" className="max-w-[100px] max-h-[100px] object-contain" onLoad={(e) => e.target.classList.remove('animate-pulse')} />
                             )}
                             {msg.type === 'video' && (
                                 <video src={msg.mediaUrl} controls width="260" className="w-[260px] aspect-video rounded shadow-sm bg-black" />
