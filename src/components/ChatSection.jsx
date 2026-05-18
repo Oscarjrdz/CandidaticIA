@@ -1615,15 +1615,25 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
         return map;
     }, [onlineUsers]);
 
-    // Scroll to bottom — Virtuoso handles this via followOutput; this covers
-    // the initial load and cases where we need to force-scroll on new messages.
+    // Scroll to bottom — covers initial load, chat switches, and new messages.
     const prevMessagesLength = useRef(0);
+    const prevChatId = useRef(null);
     useEffect(() => {
+        const chatSwitched = selectedChat?.id !== prevChatId.current;
+        if (chatSwitched) {
+            // Chat switch: wait for Virtuoso to render then force scroll
+            prevChatId.current = selectedChat?.id;
+            prevMessagesLength.current = messages.length;
+            setTimeout(() => {
+                virtuosoRef.current?.scrollToIndex({ index: 'LAST', align: 'end' });
+            }, 80);
+            return;
+        }
         if (messages.length > prevMessagesLength.current) {
             virtuosoRef.current?.scrollToIndex({ index: 'LAST', behavior: 'smooth' });
         }
         prevMessagesLength.current = messages.length;
-    }, [messages]);
+    }, [messages, selectedChat?.id]);
 
     // 🚀 SSE-DRIVEN: Surgical state updates (zero re-fetch architecture)
     // Uses DOM CustomEvent subscription to guarantee EVERY SSE event fires,
@@ -3392,6 +3402,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                             ref={virtuosoRef}
                             style={{ height: '100%' }}
                             data={displayMessages}
+                            initialTopMostItemIndex={displayMessages.length > 0 ? displayMessages.length - 1 : 0}
                             followOutput={'smooth'}
                             computeItemKey={(index, msg) => String(msg.id) + '-' + index}
                             overscan={400}
