@@ -919,7 +919,7 @@ const MessageBubble = React.memo(function MessageBubble({
                             })()}
                         </div>
                     )}
-                    {(!msg.content || msg.type === 'sticker') && <div style={{ paddingBottom: '16px', paddingRight: '80px' }}></div>}
+
 
                     {/* Reaction Badges */}
                     {msg.reactions && msg.reactions.length > 0 && (
@@ -945,14 +945,23 @@ const MessageBubble = React.memo(function MessageBubble({
                     </div>
                 )}
 
-                <div className="flex items-center space-x-1 select-none pr-1 absolute bottom-[3px] right-2">
-                    <p className="text-[10px] text-[#667781] dark:text-[#8696a0] font-medium leading-none">
-                        {safeFormatTime(msg.timestamp)}
-                    </p>
-                    {isMe && (
-                        <MessageStatusTicks status={msg.status} />
-                    )}
-                </div>
+                {(() => {
+                    const hasVisibleText = msg.content && msg.type !== 'sticker';
+                    return (
+                        <div className={`flex items-center space-x-1 select-none pr-1 ${
+                            hasVisibleText
+                                ? 'absolute bottom-[3px] right-2'
+                                : 'justify-end mt-1 pb-0.5'
+                        }`}>
+                            <p className="text-[10px] text-[#667781] dark:text-[#8696a0] font-medium leading-none whitespace-nowrap">
+                                {safeFormatTime(msg.timestamp)}
+                            </p>
+                            {isMe && (
+                                <MessageStatusTicks status={msg.status} />
+                            )}
+                        </div>
+                    );
+                })()}
             </div>
 
             {/* Error display */}
