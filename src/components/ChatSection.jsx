@@ -748,7 +748,7 @@ const MessageBubble = React.memo(function MessageBubble({
     const isFirstInSeries = msg._isFirstInSeries;
 
     return (
-        <div className={`px-[5%] flex ${isMe ? 'justify-end' : 'justify-start'} group max-w-full relative ${!isFirstInSeries ? '-mt-1.5' : 'mt-1'} ${(msg.reactions && msg.reactions.length > 0) ? 'pb-5' : ''}`}>
+        <div className={`px-[5%] flex ${isMe ? 'justify-end' : 'justify-start'} group max-w-full relative ${!isFirstInSeries ? 'mt-0.5' : 'mt-2'} ${(msg.reactions && msg.reactions.length > 0) ? 'pb-5' : ''}`}>
             <div className={`
                 max-w-[75%] rounded-[7.5px] px-2 pt-1.5 pb-1 shadow-[0_1px_0.5px_rgba(11,20,26,.13)] relative text-[14.2px] z-10
                 ${isMe
