@@ -3399,6 +3399,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                     {/* Mensajes — Virtualized (react-virtuoso: solo renderiza items visibles) */}
                     <div className="flex-1 overflow-hidden z-10" onClick={() => setShowDropdown(null)}>
                         <Virtuoso
+                            key={selectedChat?.id || 'none'}
                             ref={virtuosoRef}
                             style={{ height: '100%' }}
                             data={displayMessages}
