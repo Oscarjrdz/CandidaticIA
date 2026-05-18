@@ -919,7 +919,7 @@ const MessageBubble = React.memo(function MessageBubble({
                             })()}
                         </div>
                     )}
-                    {!msg.content && <div style={{ paddingBottom: '16px', paddingRight: '80px' }}></div>}
+                    {(!msg.content || msg.type === 'sticker') && <div style={{ paddingBottom: '16px', paddingRight: '80px' }}></div>}
 
                     {/* Reaction Badges */}
                     {msg.reactions && msg.reactions.length > 0 && (
