@@ -2,7 +2,9 @@
   "permissions": {
     "allow": [
       "Bash(git commit -m ' *)",
-      "Bash(git push *)"
+      "Bash(git push *)",
+      "Bash(npx vite *)",
+      "Bash(python3 -)"
     ]
   }
 }

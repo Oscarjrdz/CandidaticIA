@@ -2509,6 +2509,21 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
             lastMsgFrom = isMe;
         }
 
+        // Propagar status 'read'/'seen' hacia atrás: si un mensaje mío posterior
+        // fue leído, todos los anteriores también lo fueron (comportamiento WhatsApp)
+        let highestStatus = null;
+        for (let i = result.length - 1; i >= 0; i--) {
+            const item = result[i];
+            if (item.type === 'date-separator' || item.type === 'unread-separator') continue;
+            const isMe = item.from === 'me' || item.from === 'bot';
+            if (!isMe) continue;
+            if (item.status === 'seen' || item.status === 'read') {
+                highestStatus = item.status;
+            } else if (highestStatus && item.status !== 'seen' && item.status !== 'read') {
+                item.status = highestStatus;
+            }
+        }
+
         return result;
     }, [messages, selectedChat?.unreadMsgCount]);
 
@@ -3380,7 +3395,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                             followOutput={(isAtBottom) => isAtBottom ? 'smooth' : false}
                             computeItemKey={(index, msg) => String(msg.id) + '-' + index}
                             overscan={400}
-                            components={{ Header: MessagesEncryptionHeader }}
+                            components={{ Header: MessagesEncryptionHeader, Footer: () => <div style={{ height: 16 }} /> }}
                             atBottomStateChange={(isAtBottom) => setShowScrollBtn(!isAtBottom)}
                             itemContent={(index, msg) => {
                             if (!msg) return <div style={{ height: 0 }} />;
