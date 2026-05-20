@@ -596,15 +596,6 @@ const ChatRow = React.memo(({ chat, isSelected, isPinned, onSelect, onBlock, onD
                 <div className="flex flex-row justify-between items-center mb-1 w-full min-w-0">
                     <div className="flex items-center gap-1.5 flex-1 min-w-0">
                         {isPinned && <Pin className="w-3 h-3 text-[#25d366] dark:text-[#00a884] shrink-0 fill-current" />}
-                        {chat.platform === 'messenger' ? (
-                            <span className="shrink-0 w-4 h-4 rounded-full bg-[#0084ff] flex items-center justify-center" title="Messenger">
-                                <svg viewBox="0 0 24 24" className="w-2.5 h-2.5 text-white fill-current"><path d="M12 2C6.36 2 2 6.13 2 11.7c0 2.91 1.2 5.42 3.15 7.15.16.15.26.36.27.58l.05 1.81c.02.56.6.93 1.11.7l2.02-.9c.17-.08.36-.09.54-.05.92.25 1.9.39 2.92.39 5.64 0 10-4.13 10-9.7S17.64 2 12 2z"/></svg>
-                            </span>
-                        ) : (
-                            <span className="shrink-0 w-4 h-4 rounded-full bg-[#25d366] flex items-center justify-center" title="WhatsApp">
-                                <svg viewBox="0 0 24 24" className="w-2.5 h-2.5 text-white fill-current"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/></svg>
-                            </span>
-                        )}
                         <h3 className={`text-[17px] truncate flex-1 min-w-0 transition-colors ${isUnread ? 'text-[#111b21] dark:text-[#e9edef] font-bold' : 'text-[#111b21] dark:text-[#e9edef]'}`}>
                             {toTitleCase(chat.nombreReal || chat.nombre) || chat.whatsapp}
                         </h3>
