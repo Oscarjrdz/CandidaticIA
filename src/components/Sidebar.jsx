@@ -130,15 +130,15 @@ const Sidebar = ({ activeSection, onSectionChange, onLogout, isMobileOpen, onClo
         return v !== null ? Number(v) : null;
     });
 
-    // SSE-based optimistic delta: tracks increments from new messages while Chat is unmounted
-    const [sseDelta, setSseDelta] = useState(0);
+    // SSE-based optimistic delta: tracks NEW candidate IDs that messaged while Chat is unmounted.
+    // Uses a Set so multiple messages from the same candidate only count once.
+    const [newUnreadIds, setNewUnreadIds] = useState(new Set());
 
     // Listen for ChatSection mount/unmount lifecycle
     useEffect(() => {
         const mountHandler = (e) => {
             setChatMounted(e.detail?.mounted ?? false);
-            // Reset SSE delta when ChatSection mounts (it will broadcast accurate count)
-            if (e.detail?.mounted) setSseDelta(0);
+            if (e.detail?.mounted) setNewUnreadIds(new Set());
         };
         window.addEventListener('chat_section_mounted', mountHandler);
         return () => window.removeEventListener('chat_section_mounted', mountHandler);
@@ -148,23 +148,27 @@ const Sidebar = ({ activeSection, onSectionChange, onLogout, isMobileOpen, onClo
     useEffect(() => {
         const handler = (e) => {
             setRbacUnread(e.detail);
-            setSseDelta(0); // Reset delta — RBAC is the source of truth
+            setNewUnreadIds(new Set()); // Reset — RBAC is the source of truth
             localStorage.setItem('chat_unread_rbac', String(e.detail));
         };
         window.addEventListener('chat_unread_rbac', handler);
         return () => window.removeEventListener('chat_unread_rbac', handler);
     }, []);
 
-    // Listen for new incoming messages via SSE to increment badge when not on Chat
+    // Listen for new incoming messages via SSE to update badge when not on Chat.
+    // We track unique candidate IDs, not raw message count, to avoid overcounting
+    // multiple messages from the same candidate.
     useEffect(() => {
         const handler = (e) => {
             const data = e.detail;
-            // SSE payload structure: { candidateId, updates: { newMessage, messageFrom, ... }, timestamp }
-            // Check both root level (legacy) and nested updates (current sse-notify.js format)
             const updates = data?.updates || data;
-            // Only increment for actual new incoming messages from candidates (not bot replies, tag changes, etc.)
-            if (updates?.newMessage && updates?.messageFrom === 'user') {
-                setSseDelta(prev => prev + 1);
+            if (updates?.newMessage && updates?.messageFrom === 'user' && data?.candidateId) {
+                setNewUnreadIds(prev => {
+                    if (prev.has(data.candidateId)) return prev;
+                    const next = new Set(prev);
+                    next.add(data.candidateId);
+                    return next;
+                });
             }
         };
         window.addEventListener('sse:candidate:update', handler);
@@ -173,18 +177,16 @@ const Sidebar = ({ activeSection, onSectionChange, onLogout, isMobileOpen, onClo
 
     // Unread count logic:
     // 1. When ChatSection is mounted → use its RBAC-accurate broadcast (source of truth)
-    // 2. When ChatSection is unmounted → use last known RBAC count + optimistic SSE delta
+    // 2. When ChatSection is unmounted → use last known RBAC count + unique new candidates seen via SSE
     // 3. First load fallback (no RBAC ever recorded) → use globalStats.unread from SSE
+    const sseDelta = newUnreadIds.size;
     const unreadCount = (() => {
         if (chatMounted && rbacUnread !== null) {
-            // ChatSection is live and broadcasting accurate counts
             return rbacUnread;
         }
-        // ChatSection is unmounted — prefer last known RBAC count (it IS RBAC-filtered)
         if (rbacUnread !== null) {
             return rbacUnread + sseDelta;
         }
-        // No RBAC count ever recorded — fall back to SSE global (not RBAC-filtered but better than 0)
         const sseBaseline = globalStats?.unread;
         if (sseBaseline !== undefined && sseBaseline !== null) {
             return sseBaseline + sseDelta;

@@ -233,7 +233,7 @@ function AppShell() {
                       : activeSection === 'post-maker' ? 'Creación de posts para Facebook'
                       : activeSection === 'media-library' ? 'Biblioteca de archivos y recursos del Bot'
                       : activeSection === 'projects' ? 'Kanban de reclutamiento'
-                      : 'Credenciales y configuración del sistema'}}
+                      : 'Credenciales y configuración del sistema'}
                   </p>
                 </div>
               </div>
