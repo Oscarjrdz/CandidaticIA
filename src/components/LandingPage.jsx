@@ -194,6 +194,10 @@ const LandingPage = ({ onLoginSuccess }) => {
 
     useEffect(() => {
         const handleClickOutside = (event) => {
+            // Exclude clicks inside the mobile login portal so it doesn't close on touch/clicks
+            if (event.target.closest('.mobile-login-portal')) {
+                return;
+            }
             if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
                 setIsLoginOpen(false);
             }
@@ -485,7 +489,7 @@ const LandingPage = ({ onLoginSuccess }) => {
 
             {/* ═══ MOBILE LOGIN PORTAL — rendered outside header to bypass backdrop-filter stacking context ═══ */}
             {isLoginOpen && createPortal(
-                <div className="sm:hidden fixed inset-0 z-[9999] bg-white overflow-y-auto flex flex-col justify-center p-6">
+                <div className="sm:hidden mobile-login-portal fixed inset-0 z-[9999] bg-white overflow-y-auto flex flex-col justify-center p-6">
                     <button onClick={() => setIsLoginOpen(false)} className="absolute top-4 right-4 p-2 rounded-full bg-gray-100 hover:bg-gray-200 transition-colors z-20">
                         <X className="w-5 h-5 text-gray-600" />
                     </button>
