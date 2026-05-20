@@ -579,7 +579,7 @@ const ChatRow = React.memo(({ chat, isSelected, isPinned, onSelect, onBlock, onD
     return (
         <div 
             onClick={() => onSelect(chat)}
-            className={`group flex items-center px-3 py-3 cursor-pointer hover:bg-[#f5f6f6] dark:hover:bg-[#202c33] transition-all duration-200 border-l-4 ${isSelected ? 'bg-[#f0f2f5] dark:bg-[#2a3942] border-[#25d366] dark:border-[#00a884] shadow-sm relative z-10' : 'border-transparent'}`}
+            className={`group flex items-center px-3 py-3 cursor-pointer hover:bg-[#f5f6f6] dark:hover:bg-[#202c33] transition-all duration-200 border-l-0 md:border-l-4 ${isSelected ? 'bg-[#f0f2f5] dark:bg-[#2a3942] border-[#25d366] dark:border-[#00a884] md:shadow-sm md:relative md:z-10' : 'border-transparent'}`}
         >
             <div className={`w-12 h-12 rounded-full flex-shrink-0 flex items-center justify-center mr-3 relative overflow-hidden ${isEmptyChat ? 'ring-2 ring-blue-500 ring-offset-2 ring-offset-[#ffffff] dark:ring-offset-[#111b21]' : ''}`}>
                 {chat.profilePic && !imgError ? (
@@ -599,7 +599,7 @@ const ChatRow = React.memo(({ chat, isSelected, isPinned, onSelect, onBlock, onD
                         <h3 className={`text-[17px] truncate flex-1 min-w-0 transition-colors ${isUnread ? 'text-[#111b21] dark:text-[#e9edef] font-bold' : 'text-[#111b21] dark:text-[#e9edef]'}`}>
                             {toTitleCase(chat.nombreReal || chat.nombre) || chat.whatsapp}
                         </h3>
-                        {chat.whatsapp && chat.platform !== 'messenger' && <span className="text-[10px] text-[#8696a0] dark:text-[#697882] shrink-0 ml-1">{chat.whatsapp}</span>}
+                        {chat.whatsapp && chat.platform !== 'messenger' && <span className="hidden lg:inline text-[10px] text-[#8696a0] dark:text-[#697882] shrink-0 ml-1">{chat.whatsapp}</span>}
                     </div>
                     <div className="flex flex-col items-end shrink-0 ml-2 gap-0.5">
                         <div className="flex items-center gap-1">
@@ -612,14 +612,20 @@ const ChatRow = React.memo(({ chat, isSelected, isPinned, onSelect, onBlock, onD
                         </div>
                     </div>
                 </div>
-                <div className="flex justify-between items-center mt-0.5">
-                    <div className="flex items-center gap-1.5 truncate">
-                        {chat.currentVacancyName && <p className={`text-[13px] truncate ${isUnread ? 'text-[#111b21] dark:text-[#e9edef] font-medium' : 'text-[#667781] dark:text-[#8696a0]'}`}>
-                            {chat.currentVacancyName}
-                        </p>}
+                <div className="flex justify-between items-center mt-0.5 min-h-[20px]">
+                    <div className="flex items-center gap-1.5 truncate flex-1 min-w-0">
+                        {chat.currentVacancyName ? (
+                            <p className={`text-[14px] truncate flex-1 min-w-0 ${isUnread ? 'text-[#111b21] dark:text-[#e9edef] font-medium' : 'text-[#667781] dark:text-[#8696a0]'}`}>
+                                {chat.currentVacancyName}
+                            </p>
+                        ) : (
+                            <p className="text-[13px] text-[#8696a0] dark:text-[#697882] italic truncate flex-1 min-w-0">
+                                Sin vacante activa
+                            </p>
+                        )}
                         <span 
                             onClick={(e) => { e.stopPropagation(); onOpenProfileModal && onOpenProfileModal(chat); }}
-                            className={`text-[11px] font-light tracking-wide shrink-0 font-sans cursor-pointer hover:underline ${profileComplete ? 'text-green-500/90 dark:text-green-400/80' : 'text-red-400/90 dark:text-red-400/70'}`}
+                            className={`hidden lg:inline text-[11px] font-light tracking-wide shrink-0 font-sans cursor-pointer hover:underline ${profileComplete ? 'text-green-500/90 dark:text-green-400/80' : 'text-red-400/90 dark:text-red-400/70'}`}
                             title="Haz clic para ver/editar el perfil extraído por Brenda"
                         >
                             • {profileComplete ? 'Perfil completo' : 'Perfil incompleto'}
@@ -630,7 +636,7 @@ const ChatRow = React.memo(({ chat, isSelected, isPinned, onSelect, onBlock, onD
                             <>
                                 <button 
                                     onClick={(e) => onMarkAsRead(chat, e)}
-                                    className="px-1.5 py-0.5 mr-1 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-[10px] font-medium text-gray-600 dark:text-gray-300 rounded shadow-sm transition-colors shrink-0"
+                                    className="hidden lg:block px-1.5 py-0.5 mr-1 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-[10px] font-medium text-gray-600 dark:text-gray-300 rounded shadow-sm transition-colors shrink-0"
                                     title="Quitar notificación"
                                 >
                                     Marcar leído
@@ -642,7 +648,7 @@ const ChatRow = React.memo(({ chat, isSelected, isPinned, onSelect, onBlock, onD
                         ) : (
                             <button 
                                 onClick={(e) => onMarkAsUnread(chat, e)}
-                                className="px-1.5 py-0.5 mr-1 text-[10px] font-normal text-gray-400 dark:text-gray-500 hover:text-gray-500 dark:hover:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-colors shrink-0 opacity-0 group-hover:opacity-100"
+                                className="hidden lg:block px-1.5 py-0.5 mr-1 text-[10px] font-normal text-gray-400 dark:text-gray-500 hover:text-gray-500 dark:hover:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-colors shrink-0 opacity-0 group-hover:opacity-100"
                                 title="Marcar como no leído"
                             >
                                 No leído
@@ -651,14 +657,14 @@ const ChatRow = React.memo(({ chat, isSelected, isPinned, onSelect, onBlock, onD
                         
                         <button
                             onClick={(e) => { e.stopPropagation(); onScheduleReminder && onScheduleReminder(chat); }}
-                            className="p-1 rounded text-gray-400 hover:text-amber-500 dark:hover:text-amber-400 opacity-0 group-hover:opacity-100 transition-colors"
+                            className="hidden lg:block p-1 rounded text-gray-400 hover:text-amber-500 dark:hover:text-amber-400 opacity-0 group-hover:opacity-100 transition-colors"
                             title="Programar mensaje"
                         >
                             <Bell className="w-3.5 h-3.5" />
                         </button>
                         <button
                             onClick={(e) => { e.stopPropagation(); onTogglePin(chat.id); }}
-                            className={`p-1 rounded transition-colors ${isPinned ? 'text-[#25d366] dark:text-[#00a884]' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 opacity-0 group-hover:opacity-100'}`}
+                            className={`hidden lg:block p-1 rounded transition-colors ${isPinned ? 'text-[#25d366] dark:text-[#00a884]' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 opacity-0 group-hover:opacity-100'}`}
                             title={isPinned ? 'Desfijar chat' : 'Fijar chat (máx 3)'}
                         >
                             <Pin className={`w-3.5 h-3.5 ${isPinned ? 'fill-current' : ''}`} />
@@ -666,21 +672,21 @@ const ChatRow = React.memo(({ chat, isSelected, isPinned, onSelect, onBlock, onD
                         <button
                             onClick={(e) => onBlock(chat, e)}
                             disabled={blockLoading}
-                            className={`w-7 h-3.5 rounded-full relative transition-colors duration-200 focus:outline-none flex items-center shadow-inner ${chat.blocked ? 'bg-red-500' : 'bg-gray-300 dark:bg-gray-600'}`}
+                            className={`hidden lg:flex w-7 h-3.5 rounded-full relative transition-colors duration-200 focus:outline-none flex items-center shadow-inner ${chat.blocked ? 'bg-red-500' : 'bg-gray-300 dark:bg-gray-600'}`}
                             title={chat.blocked ? 'Reactivar Chat IA' : 'Silenciar Chat IA'}
                         >
                             <div className={`absolute w-2.5 h-2.5 rounded-full bg-white shadow transition-transform duration-200 ${chat.blocked ? 'translate-x-[16px]' : 'translate-x-0.5'}`}></div>
                         </button>
                         <button
                             onClick={(e) => onDelete(chat, e)}
-                            className="ml-2 text-gray-400 hover:text-red-500 dark:hover:text-red-400 transition-colors"
+                            className="hidden lg:block ml-2 text-gray-400 hover:text-red-500 dark:hover:text-red-400 transition-colors"
                             title="Eliminar chat"
                         >
                             <Trash2 className="w-4 h-4" />
                         </button>
                     </div>
                 </div>
-                <div className="flex items-center gap-2 mt-1 text-[10px] text-[#8696a0] dark:text-[#697882] truncate">
+                <div className="hidden lg:flex items-center gap-2 mt-1 text-[10px] text-[#8696a0] dark:text-[#697882] truncate">
                     {chat.edad && <span className="shrink-0">{chat.edad} años</span>}
                     {chat.edad && chat.escolaridad && <span className="shrink-0">•</span>}
                     {chat.escolaridad && <span className="truncate shrink-0">{chat.escolaridad}</span>}
@@ -690,7 +696,7 @@ const ChatRow = React.memo(({ chat, isSelected, isPinned, onSelect, onBlock, onD
                     {chat.categoria && <span className="truncate shrink-0">{toTitleCase(chat.categoria)}</span>}
                 </div>
                 {(chat.adId || onlineReaders.length > 0) && (
-                    <div className="flex items-center justify-between mt-0.5 text-[10px] text-[#8696a0] dark:text-[#697882]">
+                    <div className="hidden lg:flex items-center justify-between mt-0.5 text-[10px] text-[#8696a0] dark:text-[#697882]">
                         <span className="truncate">{chat.adId ? `Ad id: ${chat.adId}` : ''}</span>
                         {onlineReaders.length > 0 && (
                             <div className="flex gap-1 shrink-0 ml-2">
@@ -989,6 +995,17 @@ const MessagesEncryptionHeader = () => (
 export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
     const { showToast } = useToastContext();
     const { user } = useAuthContext();
+
+    const [isMobile, setIsMobile] = useState(false);
+    useEffect(() => {
+        const checkMobile = () => {
+            setIsMobile(window.innerWidth < 1024);
+        };
+        checkMobile();
+        window.addEventListener('resize', checkMobile);
+        return () => window.removeEventListener('resize', checkMobile);
+    }, []);
+
     const canManageTags = user?.role === 'SuperAdmin' || user?.can_manage_tags === true;
     const { newCandidate: sseNewCandidate } = useCandidatesSSE();
     const [candidates, setCandidates] = useState([]);
@@ -2546,6 +2563,12 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
             {/* LADO IZQUIERDO: LISTA DE CHATS */}
             <div className={`w-full md:w-[30%] lg:w-[35%] xl:w-[500px] flex-col border-r border-[#d1d7db] dark:border-[#222e35] bg-white dark:bg-[#111b21] ${selectedChat ? 'hidden md:flex' : 'flex'}`}>
                 
+                {isMobile && (
+                    <div className="h-[60px] bg-[#008069] dark:bg-[#202c33] flex items-center px-5 text-white shrink-0 shadow-md">
+                        <span className="text-xl font-semibold tracking-wide">Candidatic</span>
+                    </div>
+                )}
+
                 {/* Eliminada la barra Header Izquierdo a petición del usuario */}
 
                 {/* Barra de Búsqueda y Filtros Rápidos */}
@@ -2589,14 +2612,66 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                     </div>
 
                     {/* Filter Chips */}
-                    <button
-                        onClick={() => setFiltersHidden(h => { const next = !h; localStorage.setItem('chat_filters_hidden', next); return next; })}
-                        className="w-full text-center text-[10px] font-medium text-gray-400 dark:text-gray-500 hover:text-gray-500 dark:hover:text-gray-400 py-1 transition-colors select-none cursor-pointer"
-                    >
-                        {filtersHidden ? 'Mostrar filtros' : 'Ocultar filtros'}
-                    </button>
-                    {!filtersHidden && <div className="flex flex-col gap-1.5 pb-1">
-                        {/* Renglón 1: Estados */}
+                    {isMobile && (
+                        <div className="flex gap-2 overflow-x-auto py-2.5 px-4 scrollbar-none select-none border-b border-[#f0f2f5] dark:border-[#222e35] mb-1">
+                            <button 
+                                onClick={() => { setActiveFilter('all'); setFilterValue(null); setManualPipelineFilter(null); setManualStepFilter(null); setShowDropdown(null); }}
+                                className={`px-4 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-colors flex items-center gap-1 shrink-0 ${
+                                    activeFilter === 'all' 
+                                    ? 'bg-[#d9fdd3] text-[#128c7e] dark:bg-[#0a332c] dark:text-[#25d366]' 
+                                    : 'bg-[#f0f2f5] text-[#54656f] hover:bg-[#e9edef] dark:bg-[#202c33] dark:text-[#aebac1] dark:hover:bg-[#2a3942]'
+                                }`}
+                            >
+                                Todos
+                            </button>
+                            <button 
+                                onClick={() => { setActiveFilter('unread'); setFilterValue(null); setShowDropdown(null); }}
+                                className={`px-4 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-colors flex items-center gap-1.5 shrink-0 ${
+                                    activeFilter === 'unread' 
+                                    ? 'bg-[#d9fdd3] text-[#128c7e] dark:bg-[#0a332c] dark:text-[#25d366]' 
+                                    : 'bg-[#f0f2f5] text-[#54656f] hover:bg-[#e9edef] dark:bg-[#202c33] dark:text-[#aebac1] dark:hover:bg-[#2a3942]'
+                                }`}
+                            >
+                                No leídos
+                                {unreadCounts.all > 0 && (
+                                    <div className="min-w-[16px] h-[16px] px-1 rounded-full bg-[#25d366] dark:bg-[#00a884] flex items-center justify-center shrink-0 text-white text-[9px] font-bold shadow-sm">
+                                        {unreadCounts.all}
+                                    </div>
+                                )}
+                            </button>
+                            <button 
+                                onClick={() => { setActiveFilter('profile'); setFilterValue('complete'); setProfileUnreadOnly(false); setShowDropdown(null); }}
+                                className={`px-4 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-colors flex items-center gap-1 shrink-0 ${
+                                    activeFilter === 'profile' && filterValue === 'complete' 
+                                    ? 'bg-[#d9fdd3] text-[#128c7e] dark:bg-[#0a332c] dark:text-[#25d366]' 
+                                    : 'bg-[#f0f2f5] text-[#54656f] hover:bg-[#e9edef] dark:bg-[#202c33] dark:text-[#aebac1] dark:hover:bg-[#2a3942]'
+                                }`}
+                            >
+                                Completos
+                            </button>
+                            <button 
+                                onClick={() => { setActiveFilter('profile'); setFilterValue('incomplete'); setProfileUnreadOnly(false); setShowDropdown(null); }}
+                                className={`px-4 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-colors flex items-center gap-1 shrink-0 ${
+                                    activeFilter === 'profile' && filterValue === 'incomplete' 
+                                    ? 'bg-[#d9fdd3] text-[#128c7e] dark:bg-[#0a332c] dark:text-[#25d366]' 
+                                    : 'bg-[#f0f2f5] text-[#54656f] hover:bg-[#e9edef] dark:bg-[#202c33] dark:text-[#aebac1] dark:hover:bg-[#2a3942]'
+                                }`}
+                            >
+                                Incompletos
+                            </button>
+                        </div>
+                    )}
+
+                    {!isMobile && (
+                        <>
+                            <button
+                                onClick={() => setFiltersHidden(h => { const next = !h; localStorage.setItem('chat_filters_hidden', next); return next; })}
+                                className="w-full text-center text-[10px] font-medium text-gray-400 dark:text-gray-500 hover:text-gray-500 dark:hover:text-gray-400 py-1 transition-colors select-none cursor-pointer"
+                            >
+                                {filtersHidden ? 'Mostrar filtros' : 'Ocultar filtros'}
+                            </button>
+                            {!filtersHidden && <div className="flex flex-col gap-1.5 pb-1">
+                                {/* Renglón 1: Estados */}
                         <div 
                             className="w-full flex flex-nowrap items-center justify-between gap-1 overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
                             style={{ containerType: 'inline-size' }}
@@ -2984,6 +3059,8 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                         </div>
 
                     </div>}
+                        </>
+                    )}
                 </div>
 
                 {/* Lista de Contactos — VIRTUALIZADA */}
@@ -3046,24 +3123,26 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                                     <h2 className="text-[17px] font-medium text-[#111b21] dark:text-[#e9edef] truncate shrink whitespace-nowrap">
                                         {toTitleCase(selectedChat.nombreReal || selectedChat.nombre) || selectedChat.whatsapp}
                                     </h2>
-                                    <div className="flex items-center shrink-0 ml-1.5 overflow-visible pt-1 pb-1 pr-1">
-                                    {selectedChat.tags && (Array.isArray(selectedChat.tags) ? selectedChat.tags : []).map(t => {
-                                        const tObj = availableTags.find(at => (typeof at === 'string' ? at : at.name) === t);
-                                        const tColor = tObj ? (tObj.color || '#3b82f6') : '#3b82f6';
-                                        return (
-                                            <span key={t} className="group/tag relative inline-flex items-center text-xs px-2.5 py-0.5 rounded-full text-white font-medium whitespace-nowrap opacity-90 shadow-sm cursor-default ml-1.5 align-middle" style={{ backgroundColor: tColor }}>
-                                                {t}
-                                                <button
-                                                    onClick={(e) => { e.stopPropagation(); handleToggleTag(t); }}
-                                                    className="absolute -top-1 -right-1.5 w-4 h-4 rounded-full bg-gray-800/80 hover:bg-red-600 text-white flex items-center justify-center opacity-0 group-hover/tag:opacity-100 transition-opacity duration-150 shadow z-10"
-                                                    title={`Desvincular "${t}"`}
-                                                >
-                                                    <X className="w-2.5 h-2.5" />
-                                                </button>
-                                            </span>
-                                        );
-                                    })}
-                                    </div>
+                                    {!isMobile && (
+                                        <div className="flex items-center shrink-0 ml-1.5 overflow-visible pt-1 pb-1 pr-1">
+                                        {selectedChat.tags && (Array.isArray(selectedChat.tags) ? selectedChat.tags : []).map(t => {
+                                            const tObj = availableTags.find(at => (typeof at === 'string' ? at : at.name) === t);
+                                            const tColor = tObj ? (tObj.color || '#3b82f6') : '#3b82f6';
+                                            return (
+                                                <span key={t} className="group/tag relative inline-flex items-center text-xs px-2.5 py-0.5 rounded-full text-white font-medium whitespace-nowrap opacity-90 shadow-sm cursor-default ml-1.5 align-middle" style={{ backgroundColor: tColor }}>
+                                                    {t}
+                                                    <button
+                                                        onClick={(e) => { e.stopPropagation(); handleToggleTag(t); }}
+                                                        className="absolute -top-1 -right-1.5 w-4 h-4 rounded-full bg-gray-800/80 hover:bg-red-600 text-white flex items-center justify-center opacity-0 group-hover/tag:opacity-100 transition-opacity duration-150 shadow z-10"
+                                                        title={`Desvincular "${t}"`}
+                                                    >
+                                                        <X className="w-2.5 h-2.5" />
+                                                    </button>
+                                                </span>
+                                            );
+                                        })}
+                                        </div>
+                                    )}
                                 </div>
                                 <p className="text-xs text-[#667781] dark:text-[#8696a0] truncate mt-0.5">
                                     {selectedChat.whatsapp} • últ. msj {formatRelativeDate(selectedChat.ultimoMensaje)}
@@ -3072,23 +3151,25 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                         </div>
                         <div className="flex space-x-3 text-[#54656f] dark:text-[#aebac1] items-center">
                             {/* Silenciar IA Toggle */}
-                            <div className="flex items-center gap-2 mr-2">
-                                <span className={`text-xs font-medium ${selectedChat.blocked ? 'text-red-500' : 'text-gray-400 dark:text-gray-500'} select-none`}>
-                                    {selectedChat.blocked ? 'IA Silenciada' : 'IA Dinámica'}
-                                </span>
-                                <button
-                                    onClick={(e) => handleBlockToggle(selectedChat, e)}
-                                    disabled={blockLoading}
-                                    className={`w-8 h-4 rounded-full relative transition-colors duration-200 focus:outline-none flex items-center ${selectedChat.blocked ? 'bg-red-500' : 'bg-gray-300 dark:bg-gray-600'}`}
-                                    title={selectedChat.blocked ? 'Reactivar Chat IA' : 'Silenciar Chat IA'}
-                                >
-                                    <div className={`absolute w-3 h-3 rounded-full bg-white shadow-sm transition-transform duration-200 ${selectedChat.blocked ? 'translate-x-4' : 'translate-x-0.5'}`}>
-                                    </div>
-                                </button>
-                            </div>
+                            {!isMobile && (
+                                <div className="flex items-center gap-2 mr-2">
+                                    <span className={`text-xs font-medium ${selectedChat.blocked ? 'text-red-500' : 'text-gray-400 dark:text-gray-500'} select-none`}>
+                                        {selectedChat.blocked ? 'IA Silenciada' : 'IA Dinámica'}
+                                    </span>
+                                    <button
+                                        onClick={(e) => handleBlockToggle(selectedChat, e)}
+                                        disabled={blockLoading}
+                                        className={`w-8 h-4 rounded-full relative transition-colors duration-200 focus:outline-none flex items-center ${selectedChat.blocked ? 'bg-red-500' : 'bg-gray-300 dark:bg-gray-600'}`}
+                                        title={selectedChat.blocked ? 'Reactivar Chat IA' : 'Silenciar Chat IA'}
+                                    >
+                                        <div className={`absolute w-3 h-3 rounded-full bg-white shadow-sm transition-transform duration-200 ${selectedChat.blocked ? 'translate-x-4' : 'translate-x-0.5'}`}>
+                                        </div>
+                                    </button>
+                                </div>
+                            )}
 
                             {/* Draggable Icon Toolbar */}
-                            {toolbarOrder.map((iconId) => {
+                            {!isMobile && toolbarOrder.map((iconId) => {
                                 const dragProps = {
                                     draggable: true,
                                     onDragStart: (e) => handleToolbarDragStart(iconId, e),
@@ -3526,7 +3607,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
 
             {/* QUICK REPLIES PANEL */}
             {showQuickRepliesPanel && (
-                <div className="w-[340px] border-l border-[#d1d7db] dark:border-[#222e35] bg-white dark:bg-[#111b21] flex flex-col h-full">
+                <div className="absolute md:relative inset-y-0 right-0 z-30 w-full md:w-[340px] border-l border-[#d1d7db] dark:border-[#222e35] bg-white dark:bg-[#111b21] flex flex-col h-full shadow-2xl md:shadow-none">
                     {/* Header */}
                     <div className="px-4 py-3 bg-[#f0f2f5] dark:bg-[#202c33] border-b border-[#d1d7db] dark:border-[#222e35] flex items-center justify-between">
                         <div className="flex items-center gap-2">

@@ -59,6 +59,18 @@ function AppShell() {
   const [theme, setTheme] = useState('light');
   const [activeSection, setActiveSection] = useState('candidates');
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+
+  // Resize listener for mobile viewport detection
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 1024);
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
   const { onlineUsers } = usePresence(user, activeSection);
 
   // Cargar tema al iniciar
@@ -73,6 +85,11 @@ function AppShell() {
   // Permission-based initial section routing
   const isViewer = user?.role === 'Viewer';
   useEffect(() => {
+    // Force chat on mobile regardless of other rules
+    if (isMobile) {
+      setActiveSection('chat');
+      return;
+    }
     // Viewer role: force chat-only access
     if (isViewer) { setActiveSection('chat'); return; }
     if (!user || user.role === 'SuperAdmin' || !rolePermissions) return;
@@ -81,7 +98,7 @@ function AppShell() {
       const fallback = fallbackKeys.find(k => rolePermissions[k] === true);
       if (fallback) setActiveSection(fallback);
     }
-  }, [user, rolePermissions, isViewer]);
+  }, [user, rolePermissions, isViewer, isMobile]);
 
   // Global heartbeat — Web Worker impulsado para que NO se congele al cambiar de pestaña
   useEffect(() => {
@@ -145,6 +162,20 @@ function AppShell() {
   // PREVENT GHOSTING: wait until permissions apply routing fix
   if (!isAppReady) {
     return <LoadingOverlay />;
+  }
+
+  if (isMobile) {
+    return (
+      <div className="h-screen w-screen bg-[#f0f2f5] dark:bg-[#111b21] flex overflow-hidden">
+        <main className="flex-1 h-full w-full p-0 overflow-hidden">
+          <ErrorBoundary>
+            <Suspense fallback={<SectionSkeleton />}>
+              <ChatSection rolePermissions={rolePermissions} onlineUsers={onlineUsers} />
+            </Suspense>
+          </ErrorBoundary>
+        </main>
+      </div>
+    );
   }
 
   return (
