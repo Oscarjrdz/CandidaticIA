@@ -406,16 +406,31 @@ const LandingPage = ({ onLoginSuccess }) => {
                                             <form onSubmit={handlePhoneSubmit} className="space-y-6">
                                                 <div className="space-y-3 text-center">
                                                     <label className="text-sm font-bold text-gray-400 uppercase tracking-widest">WhatsApp (10 dígitos)</label>
-                                                    <div className="flex justify-center gap-1 overflow-x-auto px-2 py-1">
-                                                        {Array(10).fill(0).map((_, i) => (
-                                                            <input key={i} id={`phone-${i}`} type="text" inputMode="numeric" maxLength={1} value={phone[i] || ''}
-                                                                onChange={(e) => { const val = e.target.value.replace(/\D/g, ''); if (!val && !e.target.value) { const np = phone.split(''); np[i] = ''; setPhone(np.join('')); return; } if (val) { const np = phone.split(''); np[i] = val; setPhone(np.join('')); if (i < 9) document.getElementById(`phone-${i + 1}`).focus(); } }}
-                                                                onKeyDown={(e) => { if (e.key === 'Backspace' && !phone[i] && i > 0) document.getElementById(`phone-${i - 1}`).focus(); }}
-                                                                onFocus={(e) => e.target.select()}
-                                                                className={`w-8 h-10 shrink-0 text-center text-lg font-bold rounded-lg border-2 outline-none transition-all duration-300 shadow-sm ${phone[i] ? 'border-green-500 text-green-600 bg-green-50/50 shadow-[0_0_8px_rgba(34,197,94,0.2)] transform scale-105' : 'border-gray-200 text-gray-400 bg-white/50 focus:border-violet-400 focus:bg-white'}`}
-                                                            />
-                                                        ))}
-                                                    </div>
+                                                    <div className="relative flex items-center bg-gray-50 border-2 rounded-2xl transition-all duration-300 shadow-inner group focus-within:border-violet-500 focus-within:ring-4 focus-within:ring-violet-100 overflow-hidden max-w-sm mx-auto w-full">
+                                                         <div className="flex items-center gap-1.5 px-4 py-3 bg-gray-100/80 border-r border-gray-200 text-gray-500 font-bold select-none text-sm shrink-0">
+                                                             <span>🇲🇽</span>
+                                                             <span className="text-gray-700">+52</span>
+                                                         </div>
+                                                         <input 
+                                                             type="tel"
+                                                             inputMode="numeric"
+                                                             pattern="[0-9]*"
+                                                             maxLength={10}
+                                                             value={phone}
+                                                             onChange={(e) => {
+                                                                 const val = e.target.value.replace(/\D/g, '').slice(0, 10);
+                                                                 setPhone(val);
+                                                             }}
+                                                             placeholder="10 dígitos"
+                                                             className="w-full px-4 py-3 text-base sm:text-lg font-bold tracking-wider text-gray-800 bg-transparent outline-none placeholder:text-gray-300 placeholder:font-normal placeholder:tracking-normal focus:outline-none"
+                                                             autoFocus
+                                                         />
+                                                         {phone.length === 10 && (
+                                                             <div className="absolute right-4 text-green-500 flex items-center justify-center animate-in zoom-in-75 duration-300">
+                                                                 <CheckCircle className="w-5 h-5 fill-green-50" />
+                                                             </div>
+                                                         )}
+                                                     </div>
                                                 </div>
                                                 <button type="submit" className={`w-full h-12 text-base font-bold shadow-lg rounded-xl transition-all transform hover:scale-[1.02] active:scale-[0.98] inline-flex items-center justify-center text-white ${phone.length === 10 ? 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 shadow-green-500/25 cursor-pointer' : 'bg-gray-400 cursor-not-allowed'}`} disabled={loginLoading || phone.length < 10}>
                                                     {loginLoading ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : 'Enviar Código'}
@@ -487,16 +502,31 @@ const LandingPage = ({ onLoginSuccess }) => {
                             <form onSubmit={handlePhoneSubmit} className="space-y-6">
                                 <div className="space-y-3 text-center">
                                     <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">WhatsApp (10 dígitos)</label>
-                                    <div className="flex justify-center gap-1 px-2 py-1">
-                                        {Array(10).fill(0).map((_, i) => (
-                                            <input key={i} id={`mphone-${i}`} type="text" inputMode="numeric" maxLength={1} value={phone[i] || ''}
-                                                onChange={(e) => { const val = e.target.value.replace(/\D/g, ''); if (!val && !e.target.value) { const np = phone.split(''); np[i] = ''; setPhone(np.join('')); return; } if (val) { const np = phone.split(''); np[i] = val; setPhone(np.join('')); if (i < 9) document.getElementById(`mphone-${i + 1}`).focus(); } }}
-                                                onKeyDown={(e) => { if (e.key === 'Backspace' && !phone[i] && i > 0) document.getElementById(`mphone-${i - 1}`).focus(); }}
-                                                onFocus={(e) => e.target.select()}
-                                                className={`w-[28px] h-10 shrink-0 text-center text-base font-bold rounded-lg border-2 outline-none transition-all duration-300 shadow-sm ${phone[i] ? 'border-green-500 text-green-600 bg-green-50/50' : 'border-gray-200 text-gray-400 bg-white/50 focus:border-violet-400'}`}
-                                            />
-                                        ))}
-                                    </div>
+                                       <div className="relative flex items-center bg-gray-50 border-2 rounded-2xl transition-all duration-300 shadow-inner group focus-within:border-violet-500 focus-within:ring-4 focus-within:ring-violet-100 overflow-hidden max-w-sm mx-auto w-full">
+                                         <div className="flex items-center gap-1.5 px-4 py-3 bg-gray-100/80 border-r border-gray-200 text-gray-500 font-bold select-none text-sm shrink-0">
+                                             <span>🇲🇽</span>
+                                             <span className="text-gray-700">+52</span>
+                                         </div>
+                                         <input 
+                                             type="tel"
+                                             inputMode="numeric"
+                                             pattern="[0-9]*"
+                                             maxLength={10}
+                                             value={phone}
+                                             onChange={(e) => {
+                                                 const val = e.target.value.replace(/\D/g, '').slice(0, 10);
+                                                 setPhone(val);
+                                             }}
+                                             placeholder="10 dígitos"
+                                             className="w-full px-4 py-3 text-base sm:text-lg font-bold tracking-wider text-gray-800 bg-transparent outline-none placeholder:text-gray-300 placeholder:font-normal placeholder:tracking-normal focus:outline-none"
+                                             autoFocus
+                                         />
+                                         {phone.length === 10 && (
+                                             <div className="absolute right-4 text-green-500 flex items-center justify-center animate-in zoom-in-75 duration-300">
+                                                 <CheckCircle className="w-5 h-5 fill-green-50" />
+                                             </div>
+                                         )}
+                                     </div>
                                 </div>
                                 <button type="submit" className={`w-full h-12 text-base font-bold shadow-lg rounded-xl transition-all inline-flex items-center justify-center text-white ${phone.length === 10 ? 'bg-gradient-to-r from-green-500 to-emerald-600 cursor-pointer' : 'bg-gray-400 cursor-not-allowed'}`} disabled={loginLoading || phone.length < 10}>
                                     {loginLoading ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : 'Enviar Código'}
