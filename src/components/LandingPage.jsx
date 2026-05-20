@@ -90,7 +90,10 @@ const LandingPage = ({ onLoginSuccess }) => {
     // Focus chat input for blinking cursor effect
     useEffect(() => {
         const focusTimer = setTimeout(() => {
-            chatInputRef.current?.focus({ preventScroll: true });
+            // Focus chat input for blinking cursor effect - desktop only to avoid keyboard jumps on mobile
+            if (window.innerWidth >= 640) {
+                chatInputRef.current?.focus({ preventScroll: true });
+            }
         }, 2000);
         return () => clearTimeout(focusTimer);
     }, []);
