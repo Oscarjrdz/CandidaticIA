@@ -1817,7 +1817,9 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
             return;
         }
         if (messages.length > prevMessagesLength.current) {
-            virtuosoRef.current?.scrollToIndex({ index: 'LAST', behavior: 'smooth' });
+            setTimeout(() => {
+                virtuosoRef.current?.scrollToIndex({ index: 'LAST', align: 'end', behavior: 'smooth' });
+            }, 100);
         }
         prevMessagesLength.current = messages.length;
     }, [messages, selectedChat?.id]);
@@ -1890,12 +1892,12 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                             if (pendingIndex !== -1) {
                                 const newArr = [...prev];
                                 newArr[pendingIndex] = newMsg;
-                                setTimeout(() => { virtuosoRef.current?.scrollToIndex({ index: 'LAST', behavior: 'smooth' }); }, 100);
+                                setTimeout(() => { virtuosoRef.current?.scrollToIndex({ index: 'LAST', align: 'end', behavior: 'smooth' }); }, 100);
                                 return newArr;
                             }
                         }
 
-                        setTimeout(() => { virtuosoRef.current?.scrollToIndex({ index: 'LAST', behavior: 'smooth' }); }, 100);
+                        setTimeout(() => { virtuosoRef.current?.scrollToIndex({ index: 'LAST', align: 'end', behavior: 'smooth' }); }, 100);
                         return [...prev, newMsg];
                     });
                 } else {
@@ -3719,7 +3721,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                     {/* Scroll-to-bottom button */}
                     {showScrollBtn && (
                         <button
-                            onClick={() => virtuosoRef.current?.scrollToIndex({ index: 'LAST', behavior: 'smooth' })}
+                            onClick={() => virtuosoRef.current?.scrollToIndex({ index: 'LAST', align: 'end', behavior: 'smooth' })}
                             className="absolute bottom-[72px] right-5 z-30 w-10 h-10 rounded-full bg-white dark:bg-[#202c33] shadow-lg flex items-center justify-center border border-black/10 dark:border-white/10 hover:bg-gray-50 dark:hover:bg-[#2a3942] transition-colors"
                             title="Ir al final"
                         >
