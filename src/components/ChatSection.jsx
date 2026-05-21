@@ -2260,6 +2260,11 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
             filename: file.name
         };
         setMessages(prev => [...prev, tempMsg]);
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                virtuosoRef.current?.scrollToIndex({ index: 'LAST', align: 'end', behavior: 'smooth' });
+            });
+        });
         setSending(true);
         isSendingMediaRef.current = true; // Mute polling during upload
 
@@ -2387,6 +2392,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
             status: 'pending',
             fecha: new Date().toISOString()
         }]);
+        requestAnimationFrame(() => { requestAnimationFrame(() => { virtuosoRef.current?.scrollToIndex({ index: 'LAST', align: 'end', behavior: 'smooth' }); }); });
 
         fetch('/api/chat', {
             method: 'POST',
@@ -2418,6 +2424,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
         setMessages(prev => [...(prev || []), {
             id: optimisticId, content: `[Ubicación: ${name || 'Mapa'}]`, tipo: 'location', from: 'me', enviado_por_agente: 1, status: 'pending', fecha: new Date().toISOString()
         }]);
+        requestAnimationFrame(() => { requestAnimationFrame(() => { virtuosoRef.current?.scrollToIndex({ index: 'LAST', align: 'end', behavior: 'smooth' }); }); });
         fetch('/api/chat', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ candidateId: selectedChat.id, message: '', type: 'location', extraParams: { name, address, lat, lng }, senderId: user?.id || user?.whatsapp, senderName: user?.name || user?.nombre })
@@ -2436,6 +2443,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
         setMessages(prev => [...(prev || []), {
             id: optimisticId, content: `${bodyTxt}\n\n[Lista: ${items.map(i=>i.title).join(', ')}]`, tipo: 'interactive', from: 'me', enviado_por_agente: 1, status: 'pending', fecha: new Date().toISOString()
         }]);
+        requestAnimationFrame(() => { requestAnimationFrame(() => { virtuosoRef.current?.scrollToIndex({ index: 'LAST', align: 'end', behavior: 'smooth' }); }); });
         fetch('/api/chat', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ candidateId: selectedChat.id, message: bodyTxt, type: 'interactive', extraParams: { interactiveType: 'list', listButtonText: btnText, listSectionTitle: section, listItems: items }, senderId: user?.id || user?.whatsapp, senderName: user?.name || user?.nombre })
@@ -2454,6 +2462,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
         setMessages(prev => [...(prev || []), {
             id: optimisticId, content: `[Producto del Catálogo: ${productSku}]`, tipo: 'interactive', from: 'me', enviado_por_agente: 1, status: 'pending', fecha: new Date().toISOString()
         }]);
+        requestAnimationFrame(() => { requestAnimationFrame(() => { virtuosoRef.current?.scrollToIndex({ index: 'LAST', align: 'end', behavior: 'smooth' }); }); });
         fetch('/api/chat', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ candidateId: selectedChat.id, message: bodyTxt, type: 'interactive', extraParams: { interactiveType: 'product', catalogId, productSku }, senderId: user?.id || user?.whatsapp, senderName: user?.name || user?.nombre })
@@ -2479,6 +2488,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
             status: 'pending',
             fecha: new Date().toISOString()
         }]);
+        requestAnimationFrame(() => { requestAnimationFrame(() => { virtuosoRef.current?.scrollToIndex({ index: 'LAST', align: 'end', behavior: 'smooth' }); }); });
 
         fetch('/api/chat', {
             method: 'POST',
@@ -2547,6 +2557,13 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
             ...contextInfoParams
         }]);
 
+        // Scroll al mensaje enviado sin importar si el usuario estaba arriba
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                virtuosoRef.current?.scrollToIndex({ index: 'LAST', align: 'end', behavior: 'smooth' });
+            });
+        });
+
         // Fire and forget (No blocking 'await')
         fetch('/api/chat', {
             method: 'POST',
@@ -2605,6 +2622,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
             status: 'pending',
             fecha: new Date().toISOString()
         }]);
+        requestAnimationFrame(() => { requestAnimationFrame(() => { virtuosoRef.current?.scrollToIndex({ index: 'LAST', align: 'end', behavior: 'smooth' }); }); });
 
         fetch('/api/chat', {
             method: 'POST',
