@@ -258,7 +258,7 @@ const MessageInputBox = React.forwardRef(({ onSend, onTyping, fileInputRef, hand
                     </button>
                 </div>
             )}
-            <form onSubmit={handleSubmit} className="px-4 py-[10px] bg-[#f0f2f5] dark:bg-[#202c33] flex flex-col gap-2 relative">
+            <form onSubmit={handleSubmit} className="px-3 py-2 bg-[#f0f2f5] dark:bg-[#202c33] flex items-end gap-2 relative">
                 {/* Emojis Menu — Lazy loaded */}
                 {showEmojis && (
                     <div className="absolute bottom-full left-2 mb-2 shadow-2xl z-[100] rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700">
@@ -276,111 +276,104 @@ const MessageInputBox = React.forwardRef(({ onSend, onTyping, fileInputRef, hand
                     </div>
                 )}
 
-                {/* TOP ROW: Tools Row on Desktop */}
-                <div className="flex items-center gap-4 w-full bg-white/40 dark:bg-black/10 rounded-lg py-2 px-4 border border-gray-200/50 dark:border-gray-800/50 text-[#54656f] dark:text-[#8696a0]">
-                    <button type="button" title="Emojis" onClick={() => {setShowEmojis(!showEmojis); setShowTemplates(false);}} className={`hover:text-[#111b21] dark:hover:text-[#d1d7db] transition-colors shrink-0 ${showEmojis ? 'text-blue-500' : ''}`}><Smile className="w-[24px] h-[24px] stroke-[1.5]" /></button>
-                    <button type="button" title="Adjuntar Documento" onClick={() => fileInputRef.current?.click()} className="hover:text-[#111b21] dark:hover:text-[#d1d7db] transition-colors shrink-0"><Plus className="w-[24px] h-[24px] stroke-[1.5]" /></button>
-                    <button type="button" title="Enviar Tarjeta de Contacto (vCard)" onClick={onSendVCard} className="hover:text-[#111b21] dark:hover:text-[#d1d7db] transition-colors shrink-0"><UserSquare className="w-[22px] h-[22px] stroke-[1.5]" /></button>
-                    <button type="button" title="Enviar Botones Interactivos" onClick={onSendInteractive} className="hover:text-[#111b21] dark:hover:text-[#d1d7db] transition-colors shrink-0"><MousePointerClick className="w-[22px] h-[22px] stroke-[1.5]" /></button>
-                    <button type="button" title="Enviar Ubicación" onClick={onSendLocation} className="hover:text-[#111b21] dark:hover:text-[#d1d7db] transition-colors shrink-0"><MapPin className="w-[22px] h-[22px] stroke-[1.5]" /></button>
-                    <button type="button" title="Enviar Lista Interactiva" onClick={onSendList} className="hover:text-[#111b21] dark:hover:text-[#d1d7db] transition-colors shrink-0"><ListIcon className="w-[22px] h-[22px] stroke-[1.5]" /></button>
-                    <button type="button" title="Enviar Producto (Catálogo)" onClick={onSendProduct} className="hover:text-[#111b21] dark:hover:text-[#d1d7db] transition-colors shrink-0"><ShoppingBag className="w-[22px] h-[22px] stroke-[1.5]" /></button>
-
-                    {/* Template Button */}
-                    <div className="relative shrink-0">
-                        <button type="button" title="Enviar Plantilla Oficial" onClick={() => {setShowTemplates(!showTemplates); setShowEmojis(false);}} className={`hover:text-[#111b21] dark:hover:text-[#d1d7db] transition-colors ${showTemplates ? 'text-green-500' : ''}`}>
-                            <Zap className="w-[22px] h-[22px] stroke-[1.5]" />
-                        </button>
-                        {showTemplates && (
-                            <div className="absolute bottom-full left-0 mb-2 w-64 bg-white dark:bg-[#111b21] rounded-lg shadow-xl border border-gray-200 dark:border-gray-800 z-[100] max-h-[300px] flex flex-col overflow-hidden">
-                                <div className="px-3 py-2 bg-green-50 dark:bg-green-900/20 text-xs text-green-700 dark:text-green-400 font-bold border-b border-green-100 dark:border-green-800">
-                                    Plantillas Meta
-                                </div>
-                                <div className="overflow-y-auto w-full font-sans">
-                                    {metaTemplates.length === 0 ? (
-                                        <div className="p-3 text-xs text-gray-400 text-center">Buscando plantillas...</div>
-                                    ) : (
-                                        metaTemplates.map(t => {
-                                            const bodyComp = (t.components || []).find(c => (c.type || '').toUpperCase() === 'BODY');
-                                            const bodyText = bodyComp?.text || '';
-                                            return (
-                                                <button 
-                                                    key={t.id} 
-                                                    type="button" 
-                                                    className="w-full text-left p-3 hover:bg-gray-50 dark:hover:bg-[#202c33] border-b border-gray-100 dark:border-gray-800 transition-colors"
-                                                    onClick={(e) => {
-                                                        e.preventDefault();
-                                                        onSendTemplate(t);
-                                                        setShowTemplates(false);
-                                                    }}
-                                                >
-                                                    <div className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">{t.name}</div>
-                                                    {bodyText && <div className="text-[11px] text-gray-500 dark:text-gray-400 truncate mt-0.5" title={bodyText}>{bodyText}</div>}
-                                                    <div className="text-[10px] text-gray-400 dark:text-gray-500 uppercase tracking-widest mt-1">{t.category}</div>
-                                                </button>
-                                            );
-                                        })
-                                    )}
-                                </div>
-                            </div>
-                        )}
+                {/* Template dropdown — absolute, anchored to the template button */}
+                {showTemplates && (
+                    <div className="absolute bottom-full left-2 mb-2 w-64 bg-white dark:bg-[#111b21] rounded-lg shadow-xl border border-gray-200 dark:border-gray-800 z-[100] max-h-[300px] flex flex-col overflow-hidden">
+                        <div className="px-3 py-2 bg-green-50 dark:bg-green-900/20 text-xs text-green-700 dark:text-green-400 font-bold border-b border-green-100 dark:border-green-800">
+                            Plantillas Meta
+                        </div>
+                        <div className="overflow-y-auto w-full font-sans">
+                            {metaTemplates.length === 0 ? (
+                                <div className="p-3 text-xs text-gray-400 text-center">Buscando plantillas...</div>
+                            ) : (
+                                metaTemplates.map(t => {
+                                    const bodyComp = (t.components || []).find(c => (c.type || '').toUpperCase() === 'BODY');
+                                    const bodyText = bodyComp?.text || '';
+                                    return (
+                                        <button 
+                                            key={t.id} 
+                                            type="button" 
+                                            className="w-full text-left p-3 hover:bg-gray-50 dark:hover:bg-[#202c33] border-b border-gray-100 dark:border-gray-800 transition-colors"
+                                            onClick={(e) => {
+                                                e.preventDefault();
+                                                onSendTemplate(t);
+                                                setShowTemplates(false);
+                                            }}
+                                        >
+                                            <div className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">{t.name}</div>
+                                            {bodyText && <div className="text-[11px] text-gray-500 dark:text-gray-400 truncate mt-0.5" title={bodyText}>{bodyText}</div>}
+                                            <div className="text-[10px] text-gray-400 dark:text-gray-500 uppercase tracking-widest mt-1">{t.category}</div>
+                                        </button>
+                                    );
+                                })
+                            )}
+                        </div>
                     </div>
+                )}
 
-                    <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileUpload} />
+                {/* SINGLE ROW: Tools + Input + Send */}
+                <div className="flex items-center gap-2 text-[#54656f] dark:text-[#8696a0] shrink-0">
+                    <button type="button" title="Emojis" onClick={() => {setShowEmojis(!showEmojis); setShowTemplates(false);}} className={`hover:text-[#111b21] dark:hover:text-[#d1d7db] transition-colors shrink-0 ${showEmojis ? 'text-blue-500' : ''}`}><Smile className="w-[22px] h-[22px] stroke-[1.5]" /></button>
+                    <button type="button" title="Adjuntar Documento" onClick={() => fileInputRef.current?.click()} className="hover:text-[#111b21] dark:hover:text-[#d1d7db] transition-colors shrink-0"><Plus className="w-[22px] h-[22px] stroke-[1.5]" /></button>
+                    <button type="button" title="Enviar Tarjeta de Contacto (vCard)" onClick={onSendVCard} className="hover:text-[#111b21] dark:hover:text-[#d1d7db] transition-colors shrink-0"><UserSquare className="w-[20px] h-[20px] stroke-[1.5]" /></button>
+                    <button type="button" title="Enviar Botones Interactivos" onClick={onSendInteractive} className="hover:text-[#111b21] dark:hover:text-[#d1d7db] transition-colors shrink-0"><MousePointerClick className="w-[20px] h-[20px] stroke-[1.5]" /></button>
+                    <button type="button" title="Enviar Ubicación" onClick={onSendLocation} className="hover:text-[#111b21] dark:hover:text-[#d1d7db] transition-colors shrink-0"><MapPin className="w-[20px] h-[20px] stroke-[1.5]" /></button>
+                    <button type="button" title="Enviar Lista Interactiva" onClick={onSendList} className="hover:text-[#111b21] dark:hover:text-[#d1d7db] transition-colors shrink-0"><ListIcon className="w-[20px] h-[20px] stroke-[1.5]" /></button>
+                    <button type="button" title="Enviar Producto (Catálogo)" onClick={onSendProduct} className="hover:text-[#111b21] dark:hover:text-[#d1d7db] transition-colors shrink-0"><ShoppingBag className="w-[20px] h-[20px] stroke-[1.5]" /></button>
+                    <button type="button" title="Enviar Plantilla Oficial" onClick={() => {setShowTemplates(!showTemplates); setShowEmojis(false);}} className={`hover:text-[#111b21] dark:hover:text-[#d1d7db] transition-colors shrink-0 ${showTemplates ? 'text-green-500' : ''}`}><Zap className="w-[20px] h-[20px] stroke-[1.5]" /></button>
                 </div>
 
-                {/* BOTTOM ROW: Message Input + Send */}
-                <div className="flex items-end w-full gap-3">
-                    <div className="flex-1 bg-white dark:bg-[#2a3942] rounded-lg border-none shadow-[0_1px_0_rgba(11,20,26,.05)] focus-within:shadow-[0_1px_2px_rgba(11,20,26,.1)] transition-shadow flex items-center pr-2">
-                        <textarea 
-                            id="chat-msg-input"
-                            autoComplete="off"
-                            rows={1}
-                            className="w-full bg-transparent border-none outline-none py-3 px-4 text-[#111b21] dark:text-[#d1d7db] placeholder-[#8696a0] resize-none text-[15px] max-h-36 overflow-y-auto min-h-[44px]" 
-                            placeholder="Escribe un mensaje"
-                            value={localMessage}
-                            onChange={(e) => {
-                                setLocalMessage(e.target.value);
-                                onTyping();
-                            }}
-                            onKeyDown={(e) => {
-                                if (e.key === 'Enter' && !e.shiftKey) {
-                                    e.preventDefault();
-                                    handleSubmit(e);
-                                }
-                            }}
-                            onInput={(e) => {
-                                e.target.style.height = 'auto';
-                                e.target.style.height = e.target.scrollHeight + 'px';
-                            }}
-                        />
-                        {localMessage && (
-                            <button 
-                                type="button" 
-                                title="Limpiar texto"
-                                onClick={() => {
-                                    setLocalMessage('');
-                                    const inputEl = document.getElementById('chat-msg-input');
-                                    if (inputEl) inputEl.style.height = 'auto';
-                                }}
-                                className="p-1.5 text-gray-400 hover:text-red-500 dark:hover:text-red-400 transition-colors rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 shrink-0"
-                            >
-                                <X className="w-4 h-4" />
-                            </button>
-                        )}
-                    </div>
+                <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileUpload} />
 
-                    <div className="mb-[6px] text-[#54656f] dark:text-[#8696a0] shrink-0">
-                        {localMessage.trim() ? (
-                            <button type="submit" disabled={sending} className="p-1 text-[#54656f] dark:text-[#8696a0] hover:text-[#111b21] dark:hover:text-[#d1d7db] transition-colors">
-                                <Send className="w-6 h-6" />
-                            </button>
-                        ) : (
-                            <button type="button" className="p-1 hover:text-[#111b21] dark:hover:text-[#d1d7db] transition-colors">
-                                <Mic className="w-6 h-6" />
-                            </button>
-                        )}
-                    </div>
+                <div className="flex-1 bg-white dark:bg-[#2a3942] rounded-lg shadow-[0_1px_0_rgba(11,20,26,.05)] focus-within:shadow-[0_1px_2px_rgba(11,20,26,.1)] transition-shadow flex items-center pr-2 min-w-0">
+                    <textarea 
+                        id="chat-msg-input"
+                        autoComplete="off"
+                        rows={1}
+                        className="w-full bg-transparent border-none outline-none py-2 px-3 text-[#111b21] dark:text-[#d1d7db] placeholder-[#8696a0] resize-none text-[15px] max-h-36 overflow-y-auto min-h-[36px]" 
+                        placeholder="Escribe un mensaje"
+                        value={localMessage}
+                        onChange={(e) => {
+                            setLocalMessage(e.target.value);
+                            onTyping();
+                        }}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter' && !e.shiftKey) {
+                                e.preventDefault();
+                                handleSubmit(e);
+                            }
+                        }}
+                        onInput={(e) => {
+                            e.target.style.height = 'auto';
+                            e.target.style.height = e.target.scrollHeight + 'px';
+                        }}
+                    />
+                    {localMessage && (
+                        <button 
+                            type="button" 
+                            title="Limpiar texto"
+                            onClick={() => {
+                                setLocalMessage('');
+                                const inputEl = document.getElementById('chat-msg-input');
+                                if (inputEl) inputEl.style.height = 'auto';
+                            }}
+                            className="p-1 text-gray-400 hover:text-red-500 dark:hover:text-red-400 transition-colors rounded-full shrink-0"
+                        >
+                            <X className="w-3.5 h-3.5" />
+                        </button>
+                    )}
+                </div>
+
+                <div className="text-[#54656f] dark:text-[#8696a0] shrink-0">
+                    {localMessage.trim() ? (
+                        <button type="submit" disabled={sending} className="p-1.5 text-[#54656f] dark:text-[#8696a0] hover:text-[#111b21] dark:hover:text-[#d1d7db] transition-colors">
+                            <Send className="w-[22px] h-[22px]" />
+                        </button>
+                    ) : (
+                        <button type="button" className="p-1.5 hover:text-[#111b21] dark:hover:text-[#d1d7db] transition-colors">
+                            <Mic className="w-[22px] h-[22px]" />
+                        </button>
+                    )}
                 </div>
             </form>
         </div>
