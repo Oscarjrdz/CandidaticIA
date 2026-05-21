@@ -1242,6 +1242,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
     const messagesEndRef = useRef(null);
     const messagesContainerRef = useRef(null);
     const virtuosoRef = useRef(null);
+    const isSendingRef = useRef(false);
     const fileInputRef = useRef(null);
     const lastPresenceTimeRef = useRef(0);
     const [showScrollBtn, setShowScrollBtn] = useState(false);
@@ -1804,15 +1805,15 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
             // Chat switch: wait for Virtuoso to render then force scroll
             prevChatId.current = selectedChat?.id;
             prevMessagesLength.current = messages.length;
-            setTimeout(() => {
+            requestAnimationFrame(() => {
                 virtuosoRef.current?.scrollToIndex({ index: 'LAST', align: 'end' });
-            }, 80);
+            });
             return;
         }
         if (messages.length > prevMessagesLength.current) {
-            setTimeout(() => {
+            requestAnimationFrame(() => {
                 virtuosoRef.current?.scrollToIndex({ index: 'LAST', align: 'end', behavior: 'smooth' });
-            }, 100);
+            });
         }
         prevMessagesLength.current = messages.length;
     }, [messages, selectedChat?.id]);
@@ -2259,12 +2260,8 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
             timestamp: new Date().toISOString(),
             filename: file.name
         };
+        isSendingRef.current = true;
         setMessages(prev => [...prev, tempMsg]);
-        requestAnimationFrame(() => {
-            requestAnimationFrame(() => {
-                virtuosoRef.current?.scrollToIndex({ index: 'LAST', align: 'end', behavior: 'smooth' });
-            });
-        });
         setSending(true);
         isSendingMediaRef.current = true; // Mute polling during upload
 
@@ -2383,6 +2380,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
         autoSilenceBot(selectedChat);
         
         const optimisticId = 'temp-' + Date.now();
+        isSendingRef.current = true;
         setMessages(prev => [...(prev || []), {
             id: optimisticId,
             content: `[Tarjeta de Contacto: ${name}]`,
@@ -2392,7 +2390,6 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
             status: 'pending',
             fecha: new Date().toISOString()
         }]);
-        requestAnimationFrame(() => { requestAnimationFrame(() => { virtuosoRef.current?.scrollToIndex({ index: 'LAST', align: 'end', behavior: 'smooth' }); }); });
 
         fetch('/api/chat', {
             method: 'POST',
@@ -2421,10 +2418,10 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
         if (!lat || !lng || !selectedChat) return;
         autoSilenceBot(selectedChat);
         const optimisticId = 'temp-' + Date.now();
+        isSendingRef.current = true;
         setMessages(prev => [...(prev || []), {
             id: optimisticId, content: `[Ubicación: ${name || 'Mapa'}]`, tipo: 'location', from: 'me', enviado_por_agente: 1, status: 'pending', fecha: new Date().toISOString()
         }]);
-        requestAnimationFrame(() => { requestAnimationFrame(() => { virtuosoRef.current?.scrollToIndex({ index: 'LAST', align: 'end', behavior: 'smooth' }); }); });
         fetch('/api/chat', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ candidateId: selectedChat.id, message: '', type: 'location', extraParams: { name, address, lat, lng }, senderId: user?.id || user?.whatsapp, senderName: user?.name || user?.nombre })
@@ -2440,10 +2437,10 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
         if (!bodyTxt || items.length === 0 || !selectedChat) return;
         autoSilenceBot(selectedChat);
         const optimisticId = 'temp-' + Date.now();
+        isSendingRef.current = true;
         setMessages(prev => [...(prev || []), {
             id: optimisticId, content: `${bodyTxt}\n\n[Lista: ${items.map(i=>i.title).join(', ')}]`, tipo: 'interactive', from: 'me', enviado_por_agente: 1, status: 'pending', fecha: new Date().toISOString()
         }]);
-        requestAnimationFrame(() => { requestAnimationFrame(() => { virtuosoRef.current?.scrollToIndex({ index: 'LAST', align: 'end', behavior: 'smooth' }); }); });
         fetch('/api/chat', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ candidateId: selectedChat.id, message: bodyTxt, type: 'interactive', extraParams: { interactiveType: 'list', listButtonText: btnText, listSectionTitle: section, listItems: items }, senderId: user?.id || user?.whatsapp, senderName: user?.name || user?.nombre })
@@ -2459,10 +2456,10 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
         if (!catalogId || !productSku || !selectedChat) return;
         autoSilenceBot(selectedChat);
         const optimisticId = 'temp-' + Date.now();
+        isSendingRef.current = true;
         setMessages(prev => [...(prev || []), {
             id: optimisticId, content: `[Producto del Catálogo: ${productSku}]`, tipo: 'interactive', from: 'me', enviado_por_agente: 1, status: 'pending', fecha: new Date().toISOString()
         }]);
-        requestAnimationFrame(() => { requestAnimationFrame(() => { virtuosoRef.current?.scrollToIndex({ index: 'LAST', align: 'end', behavior: 'smooth' }); }); });
         fetch('/api/chat', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ candidateId: selectedChat.id, message: bodyTxt, type: 'interactive', extraParams: { interactiveType: 'product', catalogId, productSku }, senderId: user?.id || user?.whatsapp, senderName: user?.name || user?.nombre })
@@ -2479,6 +2476,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
         autoSilenceBot(selectedChat);
         
         const optimisticId = 'temp-' + Date.now();
+        isSendingRef.current = true;
         setMessages(prev => [...(prev || []), {
             id: optimisticId,
             content: `${bodyTxt}\n\n[Botones: ${buttons.join(' | ')}]`,
@@ -2488,7 +2486,6 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
             status: 'pending',
             fecha: new Date().toISOString()
         }]);
-        requestAnimationFrame(() => { requestAnimationFrame(() => { virtuosoRef.current?.scrollToIndex({ index: 'LAST', align: 'end', behavior: 'smooth' }); }); });
 
         fetch('/api/chat', {
             method: 'POST',
@@ -2546,6 +2543,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
         setReplyingToMsg(null);
         
         const optimisticId = 'temp-' + Date.now();
+        isSendingRef.current = true;
         setMessages(prev => [...(prev || []), {
             id: optimisticId,
             content: msg,
@@ -2556,13 +2554,6 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
             fecha: new Date().toISOString(),
             ...contextInfoParams
         }]);
-
-        // Scroll al mensaje enviado sin importar si el usuario estaba arriba
-        requestAnimationFrame(() => {
-            requestAnimationFrame(() => {
-                virtuosoRef.current?.scrollToIndex({ index: 'LAST', align: 'end', behavior: 'smooth' });
-            });
-        });
 
         // Fire and forget (No blocking 'await')
         fetch('/api/chat', {
@@ -2613,6 +2604,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
         const optimisticId = 'temp-' + Date.now();
 
         // Optimistic append
+        isSendingRef.current = true;
         setMessages(prev => [...(prev || []), {
             id: optimisticId,
             content: `[Plantilla: ${templateObj.name}]`,
@@ -2622,7 +2614,6 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
             status: 'pending',
             fecha: new Date().toISOString()
         }]);
-        requestAnimationFrame(() => { requestAnimationFrame(() => { virtuosoRef.current?.scrollToIndex({ index: 'LAST', align: 'end', behavior: 'smooth' }); }); });
 
         fetch('/api/chat', {
             method: 'POST',
@@ -3668,12 +3659,18 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                             style={{ height: '100%' }}
                             data={displayMessages}
                             initialTopMostItemIndex={displayMessages.length > 0 ? displayMessages.length - 1 : 0}
-                            followOutput={'smooth'}
+                            followOutput={(isAtBottom) => {
+                                if (isSendingRef.current) return 'smooth';
+                                return isAtBottom ? 'smooth' : false;
+                            }}
                             computeItemKey={(index, msg) => String(msg.id) + '-' + index}
                             overscan={400}
                             atBottomThreshold={150}
                             components={{ Header: MessagesEncryptionHeader }}
-                            atBottomStateChange={(isAtBottom) => setShowScrollBtn(!isAtBottom)}
+                            atBottomStateChange={(isAtBottom) => {
+                                setShowScrollBtn(!isAtBottom);
+                                if (isAtBottom) isSendingRef.current = false;
+                            }}
                             itemContent={(index, msg) => {
                             if (!msg) return <div style={{ height: 0 }} />;
 
