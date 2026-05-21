@@ -785,13 +785,9 @@ const ChatRow = React.memo(({ chat, isSelected, isPinned, onSelect, onBlock, onD
                 </div>
                 <div className="flex justify-between items-center mt-0.5 min-h-[20px]">
                     <div className="flex items-center gap-1.5 truncate flex-1 min-w-0">
-                        {chat.currentVacancyName ? (
+                        {chat.currentVacancyName && (
                             <p className={`text-[14px] truncate flex-1 min-w-0 ${isUnread ? 'text-[#111b21] dark:text-[#e9edef] font-medium' : 'text-[#667781] dark:text-[#8696a0]'}`}>
                                 {chat.currentVacancyName}
-                            </p>
-                        ) : (
-                            <p className="text-[13px] text-[#8696a0] dark:text-[#697882] italic truncate flex-1 min-w-0">
-                                Sin vacante activa
                             </p>
                         )}
                         <span 
@@ -799,7 +795,7 @@ const ChatRow = React.memo(({ chat, isSelected, isPinned, onSelect, onBlock, onD
                             className={`hidden lg:inline text-[11px] font-light tracking-wide shrink-0 font-sans cursor-pointer hover:underline ${profileComplete ? 'text-green-500/90 dark:text-green-400/80' : 'text-red-400/90 dark:text-red-400/70'}`}
                             title="Haz clic para ver/editar el perfil extraído por Brenda"
                         >
-                            • {profileComplete ? 'Perfil completo' : 'Perfil incompleto'}
+                            {chat.currentVacancyName ? '• ' : ''}{profileComplete ? 'Perfil completo' : 'Perfil incompleto'}
                         </span>
                     </div>
                     <div className="flex items-center shrink-0 ml-1 gap-1">
