@@ -105,7 +105,7 @@ const MessageInputBox = React.forwardRef(({ onSend, onTyping, fileInputRef, hand
 
     if (isMobile) {
         return (
-            <div className="w-full flex flex-col shadow-[0_-2px_10px_rgba(0,0,0,0.02)] z-20">
+            <div className="w-full flex flex-col shadow-[0_-2px_10px_rgba(0,0,0,0.02)] z-20 shrink-0">
                 {replyingToMsg && (
                     <div className="px-4 py-2 bg-[#f0f2f5] dark:bg-[#202c33] border-b border-gray-200 dark:border-gray-800 flex justify-between items-center slide-in-from-bottom-2 duration-200">
                         <div className="flex-1 flex flex-col pl-3 border-l-4 border-blue-500 bg-black/5 dark:bg-white/5 py-1 px-3 rounded-r-lg max-w-[80%]">
@@ -246,7 +246,7 @@ const MessageInputBox = React.forwardRef(({ onSend, onTyping, fileInputRef, hand
     }
 
     return (
-        <div className="w-full flex flex-col shadow-[0_-2px_10px_rgba(0,0,0,0.02)] z-20">
+        <div className="w-full flex flex-col shadow-[0_-2px_10px_rgba(0,0,0,0.02)] z-20 shrink-0">
             {replyingToMsg && (
                 <div className="px-4 py-2 bg-[#f0f2f5] dark:bg-[#202c33] border-b border-gray-200 dark:border-gray-800 flex justify-between items-center slide-in-from-bottom-2 duration-200">
                     <div className="flex-1 flex flex-col pl-3 border-l-4 border-blue-500 bg-black/5 dark:bg-white/5 py-1 px-3 rounded-r-lg max-w-[80%]">
@@ -3650,7 +3650,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                     ></div>
 
                     {/* Mensajes — Virtualized (react-virtuoso: solo renderiza items visibles) */}
-                    <div className="flex-1 overflow-hidden z-10" onClick={() => setShowDropdown(null)}>
+                    <div className="flex-1 overflow-hidden z-10 min-h-0" onClick={() => setShowDropdown(null)}>
                         <Virtuoso
                             key={selectedChat?.id || 'none'}
                             ref={virtuosoRef}
@@ -3707,7 +3707,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
 
                     {/* Typing Indicator — fuera de Virtuoso, siempre visible sobre el input */}
                     {candidateTyping && (
-                        <div className="flex justify-start px-[5%] py-1 z-10">
+                        <div className="flex justify-start px-[5%] py-1 z-10 shrink-0">
                             <div className="bg-white dark:bg-[#202c33] rounded-[7.5px] rounded-tl-none px-3 py-2.5 shadow-[0_1px_0.5px_rgba(11,20,26,.13)]">
                                 <div className="flex items-center gap-1 h-4">
                                     <span className="w-1.5 h-1.5 rounded-full bg-[#8696a0] animate-bounce" style={{ animationDelay: '0ms' }} />
