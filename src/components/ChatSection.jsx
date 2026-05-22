@@ -1243,6 +1243,12 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
     const messagesContainerRef = useRef(null);
     const virtuosoRef = useRef(null);
     const isSendingRef = useRef(false);
+    const virtuosoScrollerRef = useRef(null);
+
+    const scrollToBottom = (behavior = 'smooth') => {
+        const el = virtuosoScrollerRef.current;
+        if (el) el.scrollTo({ top: el.scrollHeight, behavior });
+    };
     const fileInputRef = useRef(null);
     const lastPresenceTimeRef = useRef(0);
     const [showScrollBtn, setShowScrollBtn] = useState(false);
@@ -1805,15 +1811,12 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
             // Chat switch: wait for Virtuoso to render then force scroll
             prevChatId.current = selectedChat?.id;
             prevMessagesLength.current = messages.length;
-            requestAnimationFrame(() => {
-                virtuosoRef.current?.scrollToIndex({ index: 'LAST', align: 'end' });
-            });
+            setTimeout(() => scrollToBottom('auto'), 80);
             return;
         }
         if (messages.length > prevMessagesLength.current) {
-            requestAnimationFrame(() => {
-                virtuosoRef.current?.scrollToIndex({ index: 'LAST', align: 'end', behavior: 'smooth' });
-            });
+            // DOM directo: scrollTop = scrollHeight, siempre funciona
+            setTimeout(() => scrollToBottom(), 80);
         }
         prevMessagesLength.current = messages.length;
     }, [messages, selectedChat?.id]);
@@ -1886,12 +1889,12 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                             if (pendingIndex !== -1) {
                                 const newArr = [...prev];
                                 newArr[pendingIndex] = newMsg;
-                                setTimeout(() => { virtuosoRef.current?.scrollToIndex({ index: 'LAST', align: 'end', behavior: 'smooth' }); }, 100);
+                                setTimeout(() => scrollToBottom(), 100);
                                 return newArr;
                             }
                         }
 
-                        setTimeout(() => { virtuosoRef.current?.scrollToIndex({ index: 'LAST', align: 'end', behavior: 'smooth' }); }, 100);
+                        setTimeout(() => scrollToBottom(), 100);
                         return [...prev, newMsg];
                     });
                 } else {
@@ -3656,6 +3659,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                         <Virtuoso
                             key={selectedChat?.id || 'none'}
                             ref={virtuosoRef}
+                            scrollerRef={(el) => { virtuosoScrollerRef.current = el; }}
                             style={{ height: '100%' }}
                             data={displayMessages}
                             initialTopMostItemIndex={displayMessages.length > 0 ? displayMessages.length - 1 : 0}
@@ -3729,7 +3733,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                     {/* Scroll-to-bottom button */}
                     {showScrollBtn && (
                         <button
-                            onClick={() => virtuosoRef.current?.scrollToIndex({ index: 'LAST', align: 'end', behavior: 'smooth' })}
+                            onClick={() => scrollToBottom()}
                             className="absolute bottom-[72px] right-5 z-30 w-10 h-10 rounded-full bg-white dark:bg-[#202c33] shadow-lg flex items-center justify-center border border-black/10 dark:border-white/10 hover:bg-gray-50 dark:hover:bg-[#2a3942] transition-colors"
                             title="Ir al final"
                         >
