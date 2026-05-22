@@ -75,10 +75,12 @@ export default function InternalChat({ onlineUsers = [] }) {
     // Stable refs so SSE handler never has stale closures
     const myIdRef = useRef(null);
     const openRef = useRef(false);
-    const clearedAtRef = useRef(null);
+    const clearedAtRef = useRef(localStorage.getItem('internalChatClearedAt') || null);
 
     const clearChat = useCallback(() => {
-        clearedAtRef.current = new Date().toISOString();
+        const ts = new Date().toISOString();
+        clearedAtRef.current = ts;
+        localStorage.setItem('internalChatClearedAt', ts);
         setMessages([]);
     }, []);
 
