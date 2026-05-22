@@ -1817,6 +1817,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
         if (messages.length > prevMessagesLength.current) {
             // DOM directo: scrollTop = scrollHeight, siempre funciona
             setTimeout(() => scrollToBottom(), 80);
+            setTimeout(() => scrollToBottom('auto'), 400);
         }
         prevMessagesLength.current = messages.length;
     }, [messages, selectedChat?.id]);
@@ -3699,7 +3700,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                             const isLast = index === displayMessages.length - 1;
 
                             return (
-                                <div style={isLast ? { paddingBottom: 16 } : undefined}>
+                                <div style={isLast ? { paddingBottom: 40 } : undefined}>
                                 <MessageBubble
                                     msg={msg}
                                     chatWhatsapp={selectedChat?.whatsapp}
