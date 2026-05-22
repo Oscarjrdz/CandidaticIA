@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { MessageSquare, Send, ChevronDown, Users, Lock } from 'lucide-react';
+import { MessageSquare, Send, ChevronDown, Users, Lock, Trash2 } from 'lucide-react';
 import { useAuthContext } from '../contexts/AuthContext';
 
 function playNotificationSound() {
@@ -75,6 +75,12 @@ export default function InternalChat({ onlineUsers = [] }) {
     // Stable refs so SSE handler never has stale closures
     const myIdRef = useRef(null);
     const openRef = useRef(false);
+    const clearedAtRef = useRef(null);
+
+    const clearChat = useCallback(() => {
+        clearedAtRef.current = new Date().toISOString();
+        setMessages([]);
+    }, []);
 
     const myId = user?.whatsapp;
     myIdRef.current = myId;
@@ -104,7 +110,10 @@ export default function InternalChat({ onlineUsers = [] }) {
             .then(r => r.json())
             .then(d => {
                 if (d.success && Array.isArray(d.messages)) {
-                    setMessages(d.messages);
+                    const msgs = clearedAtRef.current
+                        ? d.messages.filter(m => (m.timestamp || '') > clearedAtRef.current)
+                        : d.messages;
+                    setMessages(msgs);
                     setLoaded(true);
                 }
             })
@@ -169,6 +178,7 @@ export default function InternalChat({ onlineUsers = [] }) {
 
             const relevant = msg.to === 'all' || msg.from === me || msg.to === me;
             if (!relevant) return;
+            if (clearedAtRef.current && (msg.timestamp || '') < clearedAtRef.current) return;
 
             setMessages(prev => mergeMessages(prev, msg));
 
@@ -256,9 +266,21 @@ export default function InternalChat({ onlineUsers = [] }) {
                                 </span>
                             )}
                         </div>
-                        <button onClick={() => setOpen(false)} className="text-white/80 hover:text-white transition-colors">
-                            <ChevronDown className="w-4 h-4" />
-                        </button>
+                        <div className="flex items-center gap-2">
+                            {messages.length >= 20 && (
+                                <button
+                                    onClick={clearChat}
+                                    title="Limpiar chat"
+                                    className="text-white/60 hover:text-white transition-colors flex items-center gap-1"
+                                >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                    <span className="text-[10px]">Limpiar</span>
+                                </button>
+                            )}
+                            <button onClick={() => setOpen(false)} className="text-white/80 hover:text-white transition-colors">
+                                <ChevronDown className="w-4 h-4" />
+                            </button>
+                        </div>
                     </div>
 
                     {/* Online users strip */}
