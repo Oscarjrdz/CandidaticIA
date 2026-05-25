@@ -635,24 +635,24 @@ const LandingPage = ({ onLoginSuccess }) => {
                             WebkitMaskImage: 'radial-gradient(ellipse 80% 80% at 50% 50%, black 40%, transparent 100%)',
                         }}
                     />
-                    {/* Gradient orbs — all purple palette, behind everything */}
-                    <div className="absolute inset-0 pointer-events-none overflow-hidden">
-                        {/* Orb 1 — grande, violeta suave, top-left */}
+                    {/* Gradient orbs — encima del dot grid (z-1), debajo del contenido (z-10) */}
+                    <div className="absolute inset-0 pointer-events-none overflow-hidden" style={{ zIndex: 1 }}>
+                        {/* Orb 1 — violeta, top-left */}
                         <div className="orb-1 absolute rounded-full"
-                            style={{ top: '-20%', left: '-15%', width: '70%', height: '90%', filter: 'blur(90px)',
-                                background: 'radial-gradient(circle, rgba(139,92,246,0.18) 0%, rgba(109,40,217,0.08) 55%, transparent 100%)' }} />
-                        {/* Orb 2 — grande, uva oscuro, bottom-right */}
+                            style={{ top: '-10%', left: '-10%', width: '60%', height: '75%', filter: 'blur(80px)',
+                                background: 'radial-gradient(circle, rgba(139,92,246,0.45) 0%, rgba(109,40,217,0.20) 50%, transparent 100%)' }} />
+                        {/* Orb 2 — uva, bottom-right */}
                         <div className="orb-2 absolute rounded-full"
-                            style={{ bottom: '-20%', right: '-15%', width: '65%', height: '85%', filter: 'blur(100px)',
-                                background: 'radial-gradient(circle, rgba(124,58,237,0.20) 0%, rgba(91,33,182,0.08) 55%, transparent 100%)' }} />
-                        {/* Orb 3 — centro-derecha, lavanda, llena el gap */}
+                            style={{ bottom: '-15%', right: '-10%', width: '60%', height: '80%', filter: 'blur(90px)',
+                                background: 'radial-gradient(circle, rgba(124,58,237,0.40) 0%, rgba(91,33,182,0.18) 50%, transparent 100%)' }} />
+                        {/* Orb 3 — lavanda, centro del gap */}
                         <div className="orb-3 absolute rounded-full"
-                            style={{ top: '10%', left: '45%', width: '55%', height: '80%', filter: 'blur(110px)',
-                                background: 'radial-gradient(circle, rgba(167,139,250,0.16) 0%, rgba(139,92,246,0.07) 50%, transparent 100%)' }} />
-                        {/* Orb 4 — pequeño acento, índigo top-center */}
+                            style={{ top: '5%', left: '40%', width: '55%', height: '85%', filter: 'blur(100px)',
+                                background: 'radial-gradient(circle, rgba(167,139,250,0.35) 0%, rgba(139,92,246,0.15) 50%, transparent 100%)' }} />
+                        {/* Orb 4 — índigo, top-center */}
                         <div className="orb-4 absolute rounded-full"
-                            style={{ top: '-10%', left: '30%', width: '40%', height: '50%', filter: 'blur(80px)',
-                                background: 'radial-gradient(circle, rgba(99,102,241,0.14) 0%, rgba(79,70,229,0.04) 60%, transparent 100%)' }} />
+                            style={{ top: '-15%', left: '25%', width: '45%', height: '55%', filter: 'blur(75px)',
+                                background: 'radial-gradient(circle, rgba(99,102,241,0.35) 0%, rgba(79,70,229,0.12) 55%, transparent 100%)' }} />
                     </div>
 
                     <div className="max-w-7xl mx-auto w-full relative z-10">
