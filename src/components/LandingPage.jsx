@@ -717,24 +717,6 @@ const LandingPage = ({ onLoginSuccess }) => {
                                 )}
                             </div>
 
-                            {/* ── CENTER: QR Code ── */}
-                            <div className="hidden lg:flex flex-col items-center justify-center self-center" style={{ transform: 'translateX(60px)' }}>
-                                <a href="https://wa.me/528120622870?text=Hola%20Brenda" target="_blank" rel="noopener noreferrer"
-                                   className="group flex flex-col items-center gap-3 bg-white/80 backdrop-blur rounded-2xl px-6 py-6 border border-gray-100 hover:border-green-300 hover:shadow-xl hover:shadow-green-100/30 transition-all cursor-pointer">
-                                    <img
-                                        src="https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=https%3A%2F%2Fwa.me%2F528120622870%3Ftext%3DHola%2520Brenda&color=25D366&bgcolor=FFFFFF&format=svg"
-                                        alt="QR WhatsApp Brenda"
-                                        className="w-32 h-32 rounded-lg"
-                                    />
-                                    <div className="text-center">
-                                        <p className="font-bold text-gray-800 text-sm group-hover:text-green-700 transition-colors">Escanea y habla<br/>con Brenda</p>
-                                        <p className="text-[10px] text-gray-400 flex items-center justify-center gap-1 mt-1">
-                                            <WhatsAppIcon className="w-3 h-3 text-green-500" />
-                                            WhatsApp
-                                        </p>
-                                    </div>
-                                </a>
-                            </div>
 
                             {/* ── RIGHT: iPhone 17 Pro Max Mockup ── */}
                             <div className="flex justify-center lg:justify-end mt-8 lg:mt-0" style={{ perspective: '1200px' }}>
