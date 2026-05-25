@@ -654,13 +654,13 @@ const LandingPage = ({ onLoginSuccess }) => {
                     <div className="max-w-7xl mx-auto w-full relative z-10">
 
                         {/* ── Super headline ── */}
-                        <div className="mb-3 sm:mb-5 px-4 sm:px-6 text-center">
-                            <p className="text-[11px] sm:text-xs font-bold uppercase tracking-[0.2em] text-violet-500 mb-2">
+                        <div className="mb-2 sm:mb-3 px-4 sm:px-6 text-center">
+                            <p className="text-[11px] sm:text-xs font-bold uppercase tracking-[0.2em] text-violet-500 mb-1.5">
                                 #1 en México
                             </p>
                             <h2
                                 className="font-black tracking-tight leading-[1.08] whitespace-nowrap w-full text-center"
-                                style={{ fontSize: 'clamp(1.2rem, 4.5vw, 3.65rem)' }}
+                                style={{ fontSize: 'clamp(1.2rem, 4vw, 3.25rem)' }}
                             >
                                 <span className="text-gray-900">Especialistas en </span>
                                 <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 via-violet-600 to-purple-600">
@@ -682,7 +682,7 @@ const LandingPage = ({ onLoginSuccess }) => {
                             </h2>
                         </div>
 
-                        <div className="grid lg:grid-cols-[2fr_1fr] gap-8 lg:gap-12 items-center pt-4 sm:pt-8 px-4 sm:px-6">
+                        <div className="grid lg:grid-cols-[2fr_1fr] gap-8 lg:gap-12 items-start pt-2 sm:pt-4 px-4 sm:px-6">
 
                             {/* ── LEFT: Hero Text ── */}
                             <div className="text-center lg:text-left lg:pr-8">
