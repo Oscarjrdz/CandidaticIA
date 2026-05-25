@@ -603,15 +603,52 @@ const LandingPage = ({ onLoginSuccess }) => {
                     }
                     .marquee-track { animation: marquee 35s linear infinite; }
                     .marquee-track:hover { animation-play-state: paused; }
+                    @keyframes orbFloat1 {
+                        0%, 100% { transform: translate(0px, 0px) scale(1); }
+                        33% { transform: translate(40px, -30px) scale(1.05); }
+                        66% { transform: translate(-20px, 20px) scale(0.97); }
+                    }
+                    @keyframes orbFloat2 {
+                        0%, 100% { transform: translate(0px, 0px) scale(1); }
+                        33% { transform: translate(-35px, 25px) scale(1.08); }
+                        66% { transform: translate(30px, -20px) scale(0.95); }
+                    }
+                    @keyframes orbFloat3 {
+                        0%, 100% { transform: translate(0px, 0px) scale(1); }
+                        50% { transform: translate(20px, 35px) scale(1.06); }
+                    }
+                    .orb-1 { animation: orbFloat1 18s ease-in-out infinite; }
+                    .orb-2 { animation: orbFloat2 22s ease-in-out infinite; }
+                    .orb-3 { animation: orbFloat3 16s ease-in-out infinite; }
+                    .orb-4 { animation: orbFloat1 26s ease-in-out infinite reverse; }
                 `}</style>
 
                 {/* ═══ HERO SECTION ═══ */}
                 <section className="pt-24 sm:pt-32 pb-12 sm:pb-16 px-4 sm:px-6 relative overflow-hidden">
-                    {/* Background gradient blobs */}
+                    {/* Dot grid pattern */}
+                    <div className="absolute inset-0 pointer-events-none"
+                        style={{
+                            backgroundImage: 'radial-gradient(circle, #c4b5fd 1px, transparent 1px)',
+                            backgroundSize: '28px 28px',
+                            opacity: 0.35,
+                            maskImage: 'radial-gradient(ellipse 80% 80% at 50% 50%, black 40%, transparent 100%)',
+                            WebkitMaskImage: 'radial-gradient(ellipse 80% 80% at 50% 50%, black 40%, transparent 100%)',
+                        }}
+                    />
+                    {/* Gradient orbs */}
                     <div className="absolute inset-0 pointer-events-none overflow-hidden">
-                        <div className="absolute top-[-20%] left-[-15%] w-[60%] h-[60%] bg-blue-400/8 rounded-full blur-3xl animate-float"></div>
-                        <div className="absolute bottom-[-20%] right-[-15%] w-[55%] h-[55%] bg-violet-400/10 rounded-full blur-3xl animate-float" style={{ animationDelay: '3s' }}></div>
-                        <div className="absolute top-[40%] left-[50%] w-[30%] h-[30%] bg-pink-300/8 rounded-full blur-3xl"></div>
+                        {/* Orb 1 — violeta, top-left */}
+                        <div className="orb-1 absolute top-[-10%] left-[-8%] w-[55%] h-[70%] rounded-full blur-[80px]"
+                            style={{ background: 'radial-gradient(circle, rgba(139,92,246,0.22) 0%, rgba(139,92,246,0.06) 60%, transparent 100%)' }} />
+                        {/* Orb 2 — azul, bottom-right */}
+                        <div className="orb-2 absolute bottom-[-15%] right-[-10%] w-[50%] h-[65%] rounded-full blur-[80px]"
+                            style={{ background: 'radial-gradient(circle, rgba(59,130,246,0.20) 0%, rgba(59,130,246,0.06) 60%, transparent 100%)' }} />
+                        {/* Orb 3 — rosa/pink, center */}
+                        <div className="orb-3 absolute top-[30%] left-[38%] w-[35%] h-[45%] rounded-full blur-[70px]"
+                            style={{ background: 'radial-gradient(circle, rgba(236,72,153,0.12) 0%, rgba(236,72,153,0.03) 60%, transparent 100%)' }} />
+                        {/* Orb 4 — índigo, top-right */}
+                        <div className="orb-4 absolute top-[-5%] right-[5%] w-[30%] h-[40%] rounded-full blur-[60px]"
+                            style={{ background: 'radial-gradient(circle, rgba(99,102,241,0.18) 0%, rgba(99,102,241,0.04) 60%, transparent 100%)' }} />
                     </div>
 
                     <div className="max-w-7xl mx-auto w-full relative z-10">
