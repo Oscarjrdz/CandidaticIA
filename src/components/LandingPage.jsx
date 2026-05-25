@@ -712,7 +712,7 @@ const LandingPage = ({ onLoginSuccess }) => {
                 `}</style>
 
                 {/* ═══ HERO SECTION ═══ */}
-                <section className="pt-20 sm:pt-24 pb-8 sm:pb-12 relative overflow-hidden">
+                <section className="pt-28 sm:pt-32 pb-8 sm:pb-12 relative overflow-hidden">
                     {/* Dot grid pattern */}
                     <div className="absolute inset-0 pointer-events-none"
                         style={{
