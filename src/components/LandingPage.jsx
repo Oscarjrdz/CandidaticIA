@@ -658,13 +658,12 @@ const LandingPage = ({ onLoginSuccess }) => {
                             <p className="text-[11px] sm:text-xs font-bold uppercase tracking-[0.2em] text-violet-500 mb-3">
                                 #1 en México
                             </p>
-                            <h2 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-black tracking-tight leading-[1.05]">
+                            <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl xl:text-6xl font-black tracking-tight leading-[1.05] whitespace-nowrap">
                                 <span className="text-gray-900">Especialistas en </span>
                                 <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 via-violet-600 to-purple-600">
                                     Reclutamiento
                                 </span>
-                                <br />
-                                <span className="text-gray-900">Masivo </span>
+                                <span className="text-gray-900"> Masivo </span>
                                 <span className="relative inline-block">
                                     <span className="text-transparent bg-clip-text bg-gradient-to-r from-violet-600 to-pink-500">Operativo</span>
                                     <svg className="absolute -bottom-1 left-0 w-full" viewBox="0 0 300 12" fill="none" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none">
