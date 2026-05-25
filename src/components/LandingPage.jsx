@@ -794,19 +794,6 @@ const LandingPage = ({ onLoginSuccess }) => {
                                     Somos tu agencia de reclutamiento con inteligencia artificial. Brenda, nuestra reclutadora IA, contacta candidatos por WhatsApp, los filtra y te agenda entrevistas. ¡Pruébala! →
                                 </p>
 
-                                {/* ── CTA WhatsApp ── */}
-                                <div className="hero-text-4 mb-6">
-                                    <a
-                                        href="https://wa.me/528116038195"
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="inline-flex items-center gap-3 bg-green-500 hover:bg-green-600 text-white font-bold px-6 py-3.5 rounded-2xl shadow-lg shadow-green-400/30 hover:shadow-green-500/40 transition-all duration-300 hover:-translate-y-0.5 text-sm sm:text-base"
-                                    >
-                                        <WhatsAppIcon className="w-5 h-5" />
-                                        ¿Te interesa? Escríbenos · 81 1603 8195
-                                    </a>
-                                </div>
-
                                 {/* ── QR + Formulario ── */}
                                 <div className="hero-text-4 grid grid-cols-1 sm:grid-cols-[auto_1fr] gap-4 sm:gap-6 items-start bg-white/70 backdrop-blur-md border border-violet-100 rounded-3xl p-5 shadow-xl shadow-violet-100/30">
 
@@ -875,8 +862,9 @@ const LandingPage = ({ onLoginSuccess }) => {
                             </div>
 
 
-                            {/* ── RIGHT: iPhone 17 Pro Max Mockup ── */}
-                            <div className="flex justify-center mt-8 lg:mt-0" style={{ perspective: '1200px' }}>
+                            {/* ── RIGHT: iPhone + WhatsApp CTA ── */}
+                            <div className="flex flex-col items-center gap-5 mt-8 lg:mt-0">
+                            <div className="flex justify-center w-full" style={{ perspective: '1200px' }}>
                                 <div className="relative" style={{ animation: 'iphoneFloat 6s ease-in-out infinite' }}>
                                     {/* Glow behind phone */}
                                     <div className="absolute -inset-6 sm:-inset-8 bg-gradient-to-br from-violet-400/20 via-blue-400/15 to-pink-400/10 rounded-[4rem] blur-2xl iphone-glow"></div>
@@ -980,6 +968,19 @@ const LandingPage = ({ onLoginSuccess }) => {
                                         </div>
                                     </div>
                                 </div>
+                            </div>
+
+                            {/* ── CTA WhatsApp — debajo del teléfono ── */}
+                            <a
+                                href="https://wa.me/528116038195"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center justify-center gap-3 w-full bg-green-500 hover:bg-green-600 text-white font-bold px-6 py-3.5 rounded-2xl shadow-lg shadow-green-400/30 hover:shadow-green-500/40 transition-all duration-300 hover:-translate-y-0.5 text-sm"
+                            >
+                                <WhatsAppIcon className="w-5 h-5" />
+                                ¿Te interesa? Escríbenos · 81 1603 8195
+                            </a>
+
                             </div>
                         </div>
                     </div>
