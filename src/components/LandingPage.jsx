@@ -456,9 +456,12 @@ const LandingPage = ({ onLoginSuccess }) => {
                         <div className="w-8 h-8 sm:w-9 sm:h-9 bg-gradient-to-br from-blue-600 to-violet-700 rounded-xl flex items-center justify-center shadow-lg shadow-violet-200">
                             <BrainCircuit className="w-4 h-4 sm:w-5 sm:h-5 text-white stroke-[1.5] rotate-90" />
                         </div>
-                        <span className="text-lg sm:text-xl font-extrabold tracking-tight text-gray-900 flex items-center">
-                            CANDIDATIC&nbsp;<span className="tracking-tighter bg-gradient-to-r from-blue-600 to-violet-600 bg-clip-text text-transparent">IΛ</span>
-                        </span>
+                        <div className="flex flex-col leading-none">
+                            <span className="text-lg sm:text-xl font-extrabold tracking-tight text-gray-900 flex items-center">
+                                CANDIDATIC&nbsp;<span className="tracking-tighter bg-gradient-to-r from-blue-600 to-violet-600 bg-clip-text text-transparent">IΛ</span>
+                            </span>
+                            <span className="text-[9px] sm:text-[10px] font-semibold tracking-[0.15em] text-gray-400 uppercase mt-0.5">Reclutamiento Masivo</span>
+                        </div>
                     </div>
 
                     <nav className="hidden md:flex items-center space-x-8 text-sm font-medium text-gray-600">
