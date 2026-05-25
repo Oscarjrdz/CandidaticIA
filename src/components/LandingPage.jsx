@@ -503,8 +503,8 @@ const LandingPage = ({ onLoginSuccess }) => {
 
                             {/* LOGIN DROPDOWN — desktop only */}
                             {isLoginOpen && (
-                                <div className="hidden sm:block absolute right-0 top-full mt-3 w-80 rounded-2xl shadow-2xl shadow-violet-200/50 border border-violet-100/60 p-5 z-[9999]" style={{ backgroundColor: 'rgba(255,255,255,0.93)', backdropFilter: 'blur(32px) saturate(180%)', WebkitBackdropFilter: 'blur(32px) saturate(180%)' }}>
-                                    <div className="absolute -top-2 right-6 w-4 h-4 transform rotate-45 border-t border-l border-violet-100/60" style={{ backgroundColor: 'rgba(255,255,255,0.93)' }}></div>
+                                <div className="hidden sm:block absolute right-0 top-full mt-3 w-80 rounded-2xl shadow-2xl shadow-violet-400/30 border-2 border-violet-400 p-5 z-[9999]" style={{ backgroundColor: 'rgba(255,255,255,0.88)', backdropFilter: 'blur(40px) saturate(180%)', WebkitBackdropFilter: 'blur(40px) saturate(180%)' }}>
+                                    <div className="absolute -top-[9px] right-6 w-4 h-4 transform rotate-45 border-t-2 border-l-2 border-violet-400" style={{ backgroundColor: 'rgba(255,255,255,0.88)' }}></div>
 
                                     {/* Header compact */}
                                     <div className="flex items-center gap-3 mb-4">
@@ -522,14 +522,14 @@ const LandingPage = ({ onLoginSuccess }) => {
                                     {(loginStep === 'phone' || loginStep === 'pin') ? (
                                         <div className="space-y-3">
                                             {/* Phone input */}
-                                            <div className="flex items-center rounded-xl overflow-hidden transition-all">
-                                                <div className="flex items-center gap-1 px-3 py-2.5 text-xs font-bold text-gray-500 shrink-0">🇲🇽 +52</div>
+                                            <div className="flex items-center border-2 border-violet-400 rounded-xl overflow-hidden bg-white/60 focus-within:border-violet-600 transition-all">
+                                                <div className="flex items-center gap-1 px-3 py-2.5 text-xs font-bold text-violet-500 shrink-0 border-r border-violet-200">🇲🇽 +52</div>
                                                 <input
                                                     type="tel" inputMode="numeric" pattern="[0-9]*" maxLength={10} value={phone}
                                                     onChange={e => { if (loginStep === 'phone') { const v = e.target.value.replace(/\D/g,'').slice(0,10); setPhone(v); } }}
                                                     placeholder="10 dígitos"
                                                     readOnly={loginStep === 'pin'}
-                                                    className="flex-1 px-3 py-2.5 text-[15px] font-semibold text-gray-800 bg-transparent outline-none border-0 placeholder:text-gray-300 placeholder:font-normal text-center"
+                                                    className="flex-1 px-3 py-2.5 text-[15px] font-semibold text-gray-800 bg-transparent outline-none border-0 appearance-none placeholder:text-gray-300 placeholder:font-normal text-center"
                                                     autoFocus={loginStep === 'phone'}
                                                 />
                                                 {loginStep === 'phone' && phone.length === 10 && <CheckCircle className="w-4 h-4 text-green-500 mr-3 shrink-0" />}
@@ -619,14 +619,14 @@ const LandingPage = ({ onLoginSuccess }) => {
                         {(loginStep === 'phone' || loginStep === 'pin') ? (
                             <div className="space-y-3">
                                 {/* Phone input */}
-                                <div className="flex items-center rounded-xl overflow-hidden transition-all">
-                                    <div className="flex items-center gap-1 px-3 py-3 text-xs font-bold text-gray-600 shrink-0">🇲🇽 +52</div>
+                                <div className="flex items-center border-2 border-violet-400 rounded-xl overflow-hidden bg-white/60 focus-within:border-violet-600 transition-all">
+                                    <div className="flex items-center gap-1 px-3 py-3 text-xs font-bold text-violet-500 shrink-0 border-r border-violet-200">🇲🇽 +52</div>
                                     <input
                                         type="tel" inputMode="numeric" pattern="[0-9]*" maxLength={10} value={phone}
                                         onChange={e => { if (loginStep === 'phone') { const v = e.target.value.replace(/\D/g,'').slice(0,10); setPhone(v); } }}
                                         placeholder="10 dígitos"
                                         readOnly={loginStep === 'pin'}
-                                        className="flex-1 px-3 py-3 text-[15px] font-semibold text-gray-800 bg-transparent outline-none border-0 placeholder:text-gray-300 placeholder:font-normal"
+                                        className="flex-1 px-3 py-3 text-[15px] font-semibold text-gray-800 bg-transparent outline-none border-0 appearance-none placeholder:text-gray-300 placeholder:font-normal"
                                         autoFocus={loginStep === 'phone'}
                                     />
                                     {loginStep === 'phone' && phone.length === 10 && <CheckCircle className="w-4 h-4 text-green-500 mr-3 shrink-0" />}
