@@ -621,6 +621,21 @@ const LandingPage = ({ onLoginSuccess }) => {
                     .orb-2 { animation: orbFloat2 22s ease-in-out infinite; }
                     .orb-3 { animation: orbFloat3 16s ease-in-out infinite; }
                     .orb-4 { animation: orbFloat1 26s ease-in-out infinite reverse; }
+                    @keyframes cardFloat1 {
+                        0%, 100% { transform: translateY(0px) rotate(-1deg); }
+                        50% { transform: translateY(-8px) rotate(-1deg); }
+                    }
+                    @keyframes cardFloat2 {
+                        0%, 100% { transform: translateY(0px) rotate(1.5deg); }
+                        50% { transform: translateY(-10px) rotate(1.5deg); }
+                    }
+                    @keyframes cardFloat3 {
+                        0%, 100% { transform: translateY(0px) rotate(-0.8deg); }
+                        50% { transform: translateY(-7px) rotate(-0.8deg); }
+                    }
+                    .card-float-1 { animation: cardFloat1 4s ease-in-out infinite; }
+                    .card-float-2 { animation: cardFloat2 5.5s ease-in-out infinite 1.2s; }
+                    .card-float-3 { animation: cardFloat3 4.8s ease-in-out infinite 2.5s; }
                 `}</style>
 
                 {/* ═══ HERO SECTION ═══ */}
@@ -680,6 +695,40 @@ const LandingPage = ({ onLoginSuccess }) => {
                                     </svg>
                                 </span>
                             </h2>
+                        </div>
+
+                        {/* ── Floating activity cards (desktop only) ── */}
+                        <div className="hidden lg:block">
+                            {/* Card 1 — entrevista agendada */}
+                            <div className="card-float-1 absolute z-30 pointer-events-none" style={{ top: '90px', right: '36%' }}>
+                                <div className="bg-white/90 backdrop-blur-xl border border-gray-100 rounded-2xl px-4 py-3 shadow-2xl shadow-violet-500/10 flex items-center gap-3 min-w-[215px]">
+                                    <div className="w-9 h-9 rounded-xl bg-green-50 flex items-center justify-center flex-shrink-0 text-lg">✅</div>
+                                    <div>
+                                        <p className="text-[11px] font-bold text-gray-800 leading-tight">Entrevista agendada</p>
+                                        <p className="text-[10px] text-gray-400 mt-0.5">Ana García · hace 3 min</p>
+                                    </div>
+                                </div>
+                            </div>
+                            {/* Card 2 — candidatos contactados */}
+                            <div className="card-float-2 absolute z-30 pointer-events-none" style={{ top: '270px', right: '29%' }}>
+                                <div className="bg-white/90 backdrop-blur-xl border border-gray-100 rounded-2xl px-4 py-3 shadow-2xl shadow-blue-500/10 flex items-center gap-3 min-w-[230px]">
+                                    <div className="w-9 h-9 rounded-xl bg-violet-50 flex items-center justify-center flex-shrink-0 text-lg">📱</div>
+                                    <div>
+                                        <p className="text-[11px] font-bold text-gray-800 leading-tight">47 candidatos contactados</p>
+                                        <p className="text-[10px] text-gray-400 mt-0.5">Hoy · Brenda IA</p>
+                                    </div>
+                                </div>
+                            </div>
+                            {/* Card 3 — tiempo de respuesta */}
+                            <div className="card-float-3 absolute z-30 pointer-events-none" style={{ top: '450px', right: '34%' }}>
+                                <div className="bg-white/90 backdrop-blur-xl border border-gray-100 rounded-2xl px-4 py-3 shadow-2xl shadow-amber-500/10 flex items-center gap-3 min-w-[205px]">
+                                    <div className="w-9 h-9 rounded-xl bg-amber-50 flex items-center justify-center flex-shrink-0 text-lg">⚡</div>
+                                    <div>
+                                        <p className="text-[11px] font-bold text-gray-800 leading-tight">Respuesta en 2 min</p>
+                                        <p className="text-[10px] text-gray-400 mt-0.5">Tiempo promedio de Brenda</p>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
 
                         <div className="grid lg:grid-cols-[2fr_1fr] gap-8 lg:gap-12 items-start pt-2 sm:pt-4 px-4 sm:px-6">
