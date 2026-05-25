@@ -149,6 +149,8 @@ const LandingPage = ({ onLoginSuccess }) => {
     const [contactLoading, setContactLoading] = useState(false);
     const [contactStatus, setContactStatus] = useState(''); // 'success' | 'error' | ''
     const [contactError, setContactError] = useState('');
+    const [infoForm, setInfoForm] = useState({ nombre: '', wapp: '', correo: '' });
+    const [infoFormStatus, setInfoFormStatus] = useState(''); // '' | 'loading' | 'success' | 'error'
 
     const sendWhatsAppContact = async (e) => {
         e?.preventDefault();
@@ -178,6 +180,23 @@ const LandingPage = ({ onLoginSuccess }) => {
             setContactError(err.message || 'Error al enviar. Intenta de nuevo.');
         } finally {
             setContactLoading(false);
+        }
+    };
+
+    const handleInfoForm = async (e) => {
+        e.preventDefault();
+        if (!infoForm.nombre || !infoForm.wapp) return;
+        setInfoFormStatus('loading');
+        try {
+            await fetch('/api/public/info-request', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(infoForm),
+            });
+            setInfoFormStatus('success');
+            setInfoForm({ nombre: '', wapp: '', correo: '' });
+        } catch {
+            setInfoFormStatus('error');
         }
     };
 
@@ -775,87 +794,84 @@ const LandingPage = ({ onLoginSuccess }) => {
                                     Somos tu agencia de reclutamiento con inteligencia artificial. Brenda, nuestra reclutadora IA, contacta candidatos por WhatsApp, los filtra y te agenda entrevistas. ¡Pruébala! →
                                 </p>
 
-                                {/* CTA Buttons */}
-                                <div className="hero-text-4 flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center lg:justify-start">
-                                    <button
-                                        onClick={() => setIsLoginOpen(true)}
-                                        className="group inline-flex items-center justify-center px-6 sm:px-8 py-3.5 sm:py-4 bg-gradient-to-r from-blue-600 to-violet-600 hover:from-blue-700 hover:to-violet-700 text-white font-bold rounded-2xl shadow-xl shadow-violet-300/30 hover:shadow-violet-400/40 transition-all duration-300 transform hover:-translate-y-0.5 text-sm sm:text-base"
+                                {/* ── CTA WhatsApp ── */}
+                                <div className="hero-text-4 mb-6">
+                                    <a
+                                        href="https://wa.me/528116038195"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="inline-flex items-center gap-3 bg-green-500 hover:bg-green-600 text-white font-bold px-6 py-3.5 rounded-2xl shadow-lg shadow-green-400/30 hover:shadow-green-500/40 transition-all duration-300 hover:-translate-y-0.5 text-sm sm:text-base"
                                     >
-                                        Empezar gratis
-                                        <ArrowRight className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform" />
-                                    </button>
-                                    <button
-                                        onClick={() => { setShowWhatsAppInput(!showWhatsAppInput); setContactStatus(''); setContactError(''); }}
-                                        className="group inline-flex items-center justify-center px-6 sm:px-8 py-3.5 sm:py-4 bg-white hover:bg-gray-50 border-2 border-gray-200 hover:border-green-400 text-gray-800 font-bold rounded-2xl transition-all duration-300 text-sm sm:text-base"
-                                    >
-                                        <WhatsAppIcon className="w-5 h-5 text-green-600 mr-2" />
-                                        Hablar con Brenda
-                                    </button>
+                                        <WhatsAppIcon className="w-5 h-5" />
+                                        ¿Te interesa? Escríbenos · 81 1603 8195
+                                    </a>
                                 </div>
 
-                                {/* Trust badges — below buttons */}
-                                <div className="hero-text-4 mt-4 flex flex-wrap items-center justify-center lg:justify-start gap-4 sm:gap-5 text-xs text-gray-400">
-                                    <div className="flex items-center space-x-1.5">
-                                        <Shield className="w-3.5 h-3.5 text-green-500" />
-                                        <span>Conexión segura</span>
-                                    </div>
-                                    <div className="flex items-center space-x-1.5">
-                                        <Clock className="w-3.5 h-3.5 text-blue-500" />
-                                        <span>Setup en 5 min</span>
-                                    </div>
-                                    <div className="flex items-center space-x-1.5">
-                                        <Zap className="w-3.5 h-3.5 text-amber-500" />
-                                        <span>Sin tarjeta de crédito</span>
-                                    </div>
-                                </div>
+                                {/* ── QR + Formulario ── */}
+                                <div className="hero-text-4 grid grid-cols-1 sm:grid-cols-[auto_1fr] gap-4 sm:gap-6 items-start bg-white/70 backdrop-blur-md border border-violet-100 rounded-3xl p-5 shadow-xl shadow-violet-100/30">
 
-                                {/* WhatsApp Phone Input */}
-                                {showWhatsAppInput && (
-                                    <div className="hero-text-4 mt-4 msg-appear">
-                                        {contactStatus === 'success' ? (
-                                            <div className="flex items-center gap-3 bg-green-50 border border-green-200 rounded-2xl px-4 sm:px-5 py-3 sm:py-4">
-                                                <CheckCircle className="w-6 h-6 text-green-500 shrink-0" />
-                                                <div>
-                                                    <p className="font-bold text-green-800 text-sm">¡Listo! Revisa tu WhatsApp 📱</p>
-                                                    <p className="text-green-600 text-xs mt-0.5">Brenda te está escribiendo en este momento.</p>
-                                                </div>
+                                    {/* QR */}
+                                    <div className="flex flex-col items-center gap-2 sm:border-r sm:border-violet-100 sm:pr-6">
+                                        <img
+                                            src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=https%3A%2F%2Fwa.me%2F528116038195%3Ftext%3DHola%2C%20me%20interesa%20saber%20m%C3%A1s%20sobre%20Candidatic&color=7c3aed&bgcolor=FFFFFF&format=svg"
+                                            alt="QR WhatsApp"
+                                            className="w-24 h-24 rounded-xl"
+                                        />
+                                        <p className="text-[10px] text-gray-400 text-center font-medium leading-tight">Escanea y<br/>escríbenos</p>
+                                    </div>
+
+                                    {/* Formulario */}
+                                    <div>
+                                        <p className="text-xs font-bold text-violet-600 uppercase tracking-wider mb-3">¿Quieres más información?</p>
+                                        {infoFormStatus === 'success' ? (
+                                            <div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-xl px-4 py-3">
+                                                <CheckCircle className="w-5 h-5 text-green-500 shrink-0" />
+                                                <p className="text-sm font-semibold text-green-800">¡Recibido! Te contactamos pronto.</p>
                                             </div>
                                         ) : (
-                                            <form onSubmit={sendWhatsAppContact} className="relative">
-                                                <div className="flex items-center bg-white rounded-2xl shadow-lg shadow-green-100/40 border-2 border-green-200 p-1.5 gap-1 sm:gap-2">
-                                                    <div className="pl-2 sm:pl-3 text-gray-400 flex items-center gap-1 sm:gap-1.5 shrink-0">
-                                                        <span className="text-xs sm:text-sm font-bold text-gray-500">🇲🇽 +52</span>
-                                                    </div>
-                                                    <input
-                                                        type="tel"
-                                                        value={contactPhone}
-                                                        onChange={(e) => { setContactPhone(e.target.value); setContactError(''); }}
-                                                        placeholder="Tu número a 10 dígitos"
-                                                        className="flex-1 bg-transparent border-none text-gray-800 placeholder-gray-400 text-sm outline-none min-w-0 py-2"
-                                                        maxLength={10}
-                                                    />
-                                                    <button
-                                                        type="submit"
-                                                        disabled={contactLoading || contactPhone.replace(/\D/g, '').length < 10}
-                                                        className="bg-green-500 hover:bg-green-600 text-white rounded-xl px-3 sm:px-5 py-2.5 font-bold text-xs sm:text-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5 sm:gap-2 shrink-0"
-                                                    >
-                                                        {contactLoading ? (
-                                                            <Loader2 className="w-4 h-4 animate-spin" />
-                                                        ) : (
-                                                            <>
-                                                                <Send className="w-4 h-4" />
-                                                                <span className="hidden sm:inline">Enviar</span>
-                                                            </>
-                                                        )}
-                                                    </button>
-                                                </div>
-                                                {contactError && (
-                                                    <p className="text-red-500 text-xs mt-2 pl-2">{contactError}</p>
+                                            <form onSubmit={handleInfoForm} className="flex flex-col gap-2.5">
+                                                <input
+                                                    type="text"
+                                                    placeholder="Nombre"
+                                                    value={infoForm.nombre}
+                                                    onChange={e => setInfoForm(f => ({ ...f, nombre: e.target.value }))}
+                                                    required
+                                                    className="w-full bg-white border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm text-gray-800 placeholder-gray-400 outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100 transition"
+                                                />
+                                                <input
+                                                    type="tel"
+                                                    placeholder="WhatsApp (10 dígitos)"
+                                                    value={infoForm.wapp}
+                                                    onChange={e => setInfoForm(f => ({ ...f, wapp: e.target.value }))}
+                                                    required
+                                                    maxLength={10}
+                                                    className="w-full bg-white border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm text-gray-800 placeholder-gray-400 outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100 transition"
+                                                />
+                                                <input
+                                                    type="email"
+                                                    placeholder="Correo electrónico"
+                                                    value={infoForm.correo}
+                                                    onChange={e => setInfoForm(f => ({ ...f, correo: e.target.value }))}
+                                                    className="w-full bg-white border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm text-gray-800 placeholder-gray-400 outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100 transition"
+                                                />
+                                                <button
+                                                    type="submit"
+                                                    disabled={infoFormStatus === 'loading'}
+                                                    className="w-full bg-gradient-to-r from-blue-600 to-violet-600 hover:from-blue-700 hover:to-violet-700 text-white font-bold py-2.5 rounded-xl text-sm transition-all shadow-md shadow-violet-300/30 disabled:opacity-60 flex items-center justify-center gap-2"
+                                                >
+                                                    {infoFormStatus === 'loading' ? (
+                                                        <Loader2 className="w-4 h-4 animate-spin" />
+                                                    ) : (
+                                                        <><Send className="w-4 h-4" /> Enviar</>
+                                                    )}
+                                                </button>
+                                                {infoFormStatus === 'error' && (
+                                                    <p className="text-red-500 text-xs text-center">Error al enviar. Intenta de nuevo.</p>
                                                 )}
                                             </form>
                                         )}
                                     </div>
-                                )}
+                                </div>
                             </div>
 
 
