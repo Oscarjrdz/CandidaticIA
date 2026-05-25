@@ -652,6 +652,34 @@ const LandingPage = ({ onLoginSuccess }) => {
                     </div>
 
                     <div className="max-w-7xl mx-auto w-full relative z-10">
+
+                        {/* ── Super headline ── */}
+                        <div className="text-center mb-6 sm:mb-10">
+                            <p className="text-[11px] sm:text-xs font-bold uppercase tracking-[0.2em] text-violet-500 mb-3">
+                                #1 en México
+                            </p>
+                            <h2 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-black tracking-tight leading-[1.05]">
+                                <span className="text-gray-900">Especialistas en </span>
+                                <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 via-violet-600 to-purple-600">
+                                    Reclutamiento
+                                </span>
+                                <br />
+                                <span className="text-gray-900">Masivo </span>
+                                <span className="relative inline-block">
+                                    <span className="text-transparent bg-clip-text bg-gradient-to-r from-violet-600 to-pink-500">Operativo</span>
+                                    <svg className="absolute -bottom-1 left-0 w-full" viewBox="0 0 300 12" fill="none" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none">
+                                        <path d="M2 9 Q75 3 150 7 Q225 11 298 5" stroke="url(#ul)" strokeWidth="3" strokeLinecap="round"/>
+                                        <defs>
+                                            <linearGradient id="ul" x1="0" y1="0" x2="1" y2="0">
+                                                <stop offset="0%" stopColor="#7c3aed"/>
+                                                <stop offset="100%" stopColor="#ec4899"/>
+                                            </linearGradient>
+                                        </defs>
+                                    </svg>
+                                </span>
+                            </h2>
+                        </div>
+
                         <div className="grid lg:grid-cols-[2fr_1fr] gap-8 lg:gap-12 items-center pt-4 sm:pt-8">
 
                             {/* ── LEFT: Hero Text ── */}
