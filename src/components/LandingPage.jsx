@@ -480,79 +480,79 @@ const LandingPage = ({ onLoginSuccess }) => {
                                 Ingresar
                             </Button>
 
-                            {/* LOGIN DROPDOWN — desktop only (inside header) */}
+                            {/* LOGIN DROPDOWN — desktop only */}
                             {isLoginOpen && (
-                                <div className="hidden sm:block absolute right-0 top-full mt-6 w-[38rem] bg-white/95 backdrop-blur-3xl rounded-3xl shadow-[0_20px_50px_rgb(109_40_217_/_0.2)] border border-white/50 p-8 z-[9999] animate-in zoom-in-95 slide-in-from-top-4 ease-out origin-top-right ring-1 ring-violet-100/60">
-                                    <div className="absolute -top-3 right-8 w-6 h-6 bg-white/95 backdrop-blur-3xl transform rotate-45 border-t border-l border-violet-100/50"></div>
-                                    <div className="absolute inset-0 rounded-3xl bg-gradient-to-b from-violet-50/30 to-transparent pointer-events-none"></div>
-                                    <div className="relative z-10 max-w-md mx-auto w-full">
-                                        <div className="mb-8 text-center">
-                                            <div className="relative inline-block mb-4">
-                                                <div className="absolute inset-0 bg-violet-500 blur-xl opacity-20 rounded-full animate-pulse"></div>
-                                                <div className="relative w-16 h-16 bg-gradient-to-tr from-blue-600 to-violet-800 rounded-2xl flex items-center justify-center shadow-lg transform rotate-3 hover:rotate-6 transition-transform ring-4 ring-violet-50">
-                                                    <BrainCircuit className="w-10 h-10 text-white stroke-[1.5] rotate-90" />
-                                                </div>
-                                            </div>
-                                            <h3 className="text-3xl font-extrabold text-gray-900 tracking-tight mb-1">Bienvenido</h3>
-                                            <p className="text-base text-gray-500 font-medium">Accede a tu cuenta</p>
+                                <div className="hidden sm:block absolute right-0 top-full mt-3 w-80 bg-white/98 backdrop-blur-2xl rounded-2xl shadow-2xl shadow-violet-200/30 border border-violet-100 p-5 z-[9999]">
+                                    <div className="absolute -top-2 right-6 w-4 h-4 bg-white transform rotate-45 border-t border-l border-violet-100"></div>
+
+                                    {/* Header compact */}
+                                    <div className="flex items-center gap-3 mb-4">
+                                        <div className="w-9 h-9 bg-gradient-to-tr from-blue-600 to-violet-700 rounded-xl flex items-center justify-center shadow-md shrink-0">
+                                            <BrainCircuit className="w-5 h-5 text-white stroke-[1.5] rotate-90" />
                                         </div>
-                                        {loginError && (<div className="mb-4 p-3 bg-red-50/50 border border-red-100 text-red-600 text-xs rounded-xl text-center font-semibold shadow-sm">{loginError}</div>)}
-                                        {loginStep === 'phone' ? (
-                                            <form onSubmit={handlePhoneSubmit} className="space-y-6">
-                                                <div className="space-y-3 text-center">
-                                                    <label className="text-sm font-bold text-gray-400 uppercase tracking-widest">WhatsApp (10 dígitos)</label>
-                                                    <div className="relative flex items-center bg-gray-50 border-2 rounded-2xl transition-all duration-300 shadow-inner group focus-within:border-violet-500 focus-within:ring-4 focus-within:ring-violet-100 overflow-hidden max-w-sm mx-auto w-full">
-                                                         <div className="flex items-center gap-1.5 px-4 py-3 bg-gray-100/80 border-r border-gray-200 text-gray-500 font-bold select-none text-sm shrink-0">
-                                                             <span>🇲🇽</span>
-                                                             <span className="text-gray-700">+52</span>
-                                                         </div>
-                                                         <input 
-                                                             type="tel"
-                                                             inputMode="numeric"
-                                                             pattern="[0-9]*"
-                                                             maxLength={10}
-                                                             value={phone}
-                                                             onChange={(e) => {
-                                                                 const val = e.target.value.replace(/\D/g, '').slice(0, 10);
-                                                                 setPhone(val);
-                                                             }}
-                                                             placeholder="10 dígitos"
-                                                             className="w-full px-4 py-3 text-base sm:text-lg font-bold tracking-wider text-gray-800 bg-transparent outline-none placeholder:text-gray-300 placeholder:font-normal placeholder:tracking-normal focus:outline-none"
-                                                             autoFocus
-                                                         />
-                                                         {phone.length === 10 && (
-                                                             <div className="absolute right-4 text-green-500 flex items-center justify-center animate-in zoom-in-75 duration-300">
-                                                                 <CheckCircle className="w-5 h-5 fill-green-50" />
-                                                             </div>
-                                                         )}
-                                                     </div>
-                                                </div>
-                                                <button type="submit" className={`w-full h-12 text-base font-bold shadow-lg rounded-xl transition-all transform hover:scale-[1.02] active:scale-[0.98] inline-flex items-center justify-center text-white ${phone.length === 10 ? 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 shadow-green-500/25 cursor-pointer' : 'bg-gray-400 cursor-not-allowed'}`} disabled={loginLoading || phone.length < 10}>
-                                                    {loginLoading ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : 'Enviar Código'}
-                                                </button>
-                                            </form>
-                                        ) : loginStep === 'pin' ? (
-                                            <div className="space-y-6">
-                                                <div className="text-center"><p className="text-sm text-gray-500 font-medium bg-gray-50 inline-block px-3 py-1 rounded-full border border-gray-100">Código enviado a <b className="text-gray-800">{phone}</b></p></div>
-                                                <div className="flex justify-center gap-3">
-                                                    {pinDigits.map((d, i) => (<input key={i} ref={el => pinRefs.current[i] = el} type="tel" inputMode="numeric" pattern="[0-9]*" value={d} maxLength={1} onChange={(e) => handlePinChange(i, e.target.value)} onKeyDown={(e) => handleKeyDown(i, e)} className={`w-12 h-14 text-center text-2xl font-bold border-2 rounded-xl outline-none transition-all duration-300 shadow-sm ${d ? 'border-green-500 text-green-600 bg-green-50/50 shadow-[0_0_10px_rgba(34,197,94,0.2)] transform scale-105' : 'border-gray-100 text-gray-400 bg-white/50 focus:border-violet-500 focus:ring-4 focus:ring-violet-100 focus:bg-white'}`} autoFocus={i === 0} />))}
-                                                </div>
-                                                <button onClick={() => setLoginStep('phone')} className="block w-full text-xs text-violet-600 hover:text-violet-700 font-semibold hover:underline text-center">¿Número incorrecto? Volver</button>
-                                            </div>
-                                        ) : loginStep === 'register' ? (
-                                            <form onSubmit={handleRegisterSubmit} className="space-y-6">
-                                                <div className="text-center"><div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4"><Users className="w-8 h-8 text-green-600" /></div><h4 className="text-xl font-bold">Crea tu Perfil</h4><p className="text-sm text-gray-500">Solo necesitamos tu nombre completo.</p></div>
-                                                <Input placeholder="Ej. Ana García" value={name} onChange={(e) => setName(e.target.value)} className="h-12 text-lg text-center" required autoFocus />
-                                                <button type="submit" className="w-full h-12 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl shadow-lg transition-all transform hover:scale-[1.02]" disabled={loginLoading}>{loginLoading ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : 'Solicitar Acceso'}</button>
-                                            </form>
-                                        ) : (
-                                            <div className="text-center space-y-6">
-                                                <div className="w-20 h-20 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse"><Zap className="w-10 h-10 text-yellow-600" /></div>
-                                                <div><h4 className="text-2xl font-bold">Solicitud Enviada</h4><p className="text-sm text-gray-600 mt-2">Tu cuenta está en revisión. Te avisaremos por WhatsApp ({phone}) cuando esté activa.</p></div>
-                                                <button onClick={() => setIsLoginOpen(false)} className="w-full h-12 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold rounded-xl active:scale-95 transition-all">Cerrar</button>
-                                            </div>
-                                        )}
+                                        <div>
+                                            <p className="text-sm font-extrabold text-gray-900 leading-tight">Bienvenido</p>
+                                            <p className="text-xs text-gray-400">Accede a tu cuenta</p>
+                                        </div>
                                     </div>
+
+                                    {loginError && <div className="mb-3 p-2 bg-red-50 border border-red-100 text-red-600 text-xs rounded-lg text-center font-medium">{loginError}</div>}
+
+                                    {(loginStep === 'phone' || loginStep === 'pin') ? (
+                                        <div className="space-y-3">
+                                            {/* Phone input */}
+                                            <div className="flex items-center bg-gray-50 border border-gray-200 rounded-xl overflow-hidden focus-within:border-violet-400 focus-within:ring-2 focus-within:ring-violet-100 transition-all">
+                                                <div className="flex items-center gap-1 px-3 py-2.5 bg-gray-100 border-r border-gray-200 text-xs font-bold text-gray-600 shrink-0">🇲🇽 +52</div>
+                                                <input
+                                                    type="tel" inputMode="numeric" pattern="[0-9]*" maxLength={10} value={phone}
+                                                    onChange={e => { if (loginStep === 'phone') { const v = e.target.value.replace(/\D/g,'').slice(0,10); setPhone(v); } }}
+                                                    placeholder="10 dígitos"
+                                                    readOnly={loginStep === 'pin'}
+                                                    className="flex-1 px-3 py-2.5 text-sm font-semibold text-gray-800 bg-transparent outline-none placeholder:text-gray-300 placeholder:font-normal"
+                                                    autoFocus={loginStep === 'phone'}
+                                                />
+                                                {loginStep === 'phone' && phone.length === 10 && <CheckCircle className="w-4 h-4 text-green-500 mr-3 shrink-0" />}
+                                                {loginStep === 'pin' && <button type="button" onClick={() => { setLoginStep('phone'); setPinDigits(['','','','']); }} className="text-xs text-violet-500 font-semibold mr-3 shrink-0 hover:underline">Cambiar</button>}
+                                            </div>
+
+                                            {/* PIN inline — aparece debajo sin cambiar pantalla */}
+                                            {loginStep === 'pin' && (
+                                                <div>
+                                                    <p className="text-xs text-gray-400 text-center mb-2">Código enviado por WhatsApp</p>
+                                                    <div className="flex justify-center gap-2">
+                                                        {pinDigits.map((d, i) => (
+                                                            <input key={i} ref={el => pinRefs.current[i] = el}
+                                                                type="tel" inputMode="numeric" pattern="[0-9]*" value={d} maxLength={1}
+                                                                onChange={e => handlePinChange(i, e.target.value)}
+                                                                onKeyDown={e => handleKeyDown(i, e)}
+                                                                className={`w-12 h-12 text-center text-xl font-bold border-2 rounded-xl outline-none transition-all ${d ? 'border-violet-500 text-violet-700 bg-violet-50' : 'border-gray-200 bg-white focus:border-violet-400 focus:ring-2 focus:ring-violet-100'}`}
+                                                                autoFocus={i === 0}
+                                                            />
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {loginStep === 'phone' && (
+                                                <button onClick={handlePhoneSubmit} disabled={loginLoading || phone.length < 10}
+                                                    className={`w-full py-2.5 text-sm font-bold rounded-xl transition-all text-white flex items-center justify-center ${phone.length === 10 ? 'bg-gradient-to-r from-blue-600 to-violet-600 hover:from-blue-700 hover:to-violet-700 shadow-md shadow-violet-200/50' : 'bg-gray-300 cursor-not-allowed'}`}>
+                                                    {loginLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Enviar Código →'}
+                                                </button>
+                                            )}
+                                        </div>
+                                    ) : loginStep === 'register' ? (
+                                        <form onSubmit={handleRegisterSubmit} className="space-y-3">
+                                            <div className="text-center"><div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-2"><Users className="w-6 h-6 text-green-600" /></div><h4 className="text-sm font-bold">Crea tu Perfil</h4><p className="text-xs text-gray-400 mt-1">Solo necesitamos tu nombre completo.</p></div>
+                                            <Input placeholder="Ej. Ana García" value={name} onChange={e => setName(e.target.value)} className="h-10 text-sm text-center" required autoFocus />
+                                            <button type="submit" className="w-full py-2.5 text-sm bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl shadow-md transition-all" disabled={loginLoading}>{loginLoading ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : 'Solicitar Acceso'}</button>
+                                        </form>
+                                    ) : (
+                                        <div className="text-center space-y-3">
+                                            <div className="w-14 h-14 bg-yellow-100 rounded-full flex items-center justify-center mx-auto animate-pulse"><Zap className="w-7 h-7 text-yellow-600" /></div>
+                                            <div><h4 className="text-base font-bold">Solicitud Enviada</h4><p className="text-xs text-gray-500 mt-1">Te avisaremos por WhatsApp ({phone}) cuando esté activa.</p></div>
+                                            <button onClick={() => setIsLoginOpen(false)} className="w-full py-2.5 text-sm bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold rounded-xl transition-all">Cerrar</button>
+                                        </div>
+                                    )}
                                 </div>
                             )}
                         </div>
@@ -577,75 +577,77 @@ const LandingPage = ({ onLoginSuccess }) => {
 
             {/* ═══ MOBILE LOGIN PORTAL — rendered outside header to bypass backdrop-filter stacking context ═══ */}
             {isLoginOpen && createPortal(
-                <div className="sm:hidden mobile-login-portal fixed inset-0 z-[9999] bg-white overflow-y-auto flex flex-col justify-center p-6">
+                <div className="sm:hidden mobile-login-portal fixed inset-0 z-[9999] bg-white/95 backdrop-blur-xl overflow-y-auto flex flex-col justify-center p-6">
                     <button onClick={() => setIsLoginOpen(false)} className="absolute top-4 right-4 p-2 rounded-full bg-gray-100 hover:bg-gray-200 transition-colors z-20">
                         <X className="w-5 h-5 text-gray-600" />
                     </button>
-                    <div className="max-w-md mx-auto w-full">
-                        <div className="mb-6 text-center">
-                            <div className="relative inline-block mb-4">
-                                <div className="absolute inset-0 bg-violet-500 blur-xl opacity-20 rounded-full animate-pulse"></div>
-                                <div className="relative w-14 h-14 bg-gradient-to-tr from-blue-600 to-violet-800 rounded-2xl flex items-center justify-center shadow-lg transform rotate-3 ring-4 ring-violet-50">
-                                    <BrainCircuit className="w-8 h-8 text-white stroke-[1.5] rotate-90" />
-                                </div>
+                    <div className="max-w-xs mx-auto w-full">
+                        {/* Header compact */}
+                        <div className="flex items-center gap-3 mb-5">
+                            <div className="w-10 h-10 bg-gradient-to-tr from-blue-600 to-violet-700 rounded-xl flex items-center justify-center shadow-md shrink-0">
+                                <BrainCircuit className="w-6 h-6 text-white stroke-[1.5] rotate-90" />
                             </div>
-                            <h3 className="text-2xl font-extrabold text-gray-900 tracking-tight mb-1">Bienvenido</h3>
-                            <p className="text-sm text-gray-500 font-medium">Accede a tu cuenta</p>
+                            <div>
+                                <p className="text-base font-extrabold text-gray-900 leading-tight">Bienvenido</p>
+                                <p className="text-xs text-gray-400">Accede a tu cuenta</p>
+                            </div>
                         </div>
-                        {loginError && (<div className="mb-4 p-3 bg-red-50/50 border border-red-100 text-red-600 text-xs rounded-xl text-center font-semibold shadow-sm">{loginError}</div>)}
-                        {loginStep === 'phone' ? (
-                            <form onSubmit={handlePhoneSubmit} className="space-y-6">
-                                <div className="space-y-3 text-center">
-                                    <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">WhatsApp (10 dígitos)</label>
-                                       <div className="relative flex items-center bg-gray-50 border-2 rounded-2xl transition-all duration-300 shadow-inner group focus-within:border-violet-500 focus-within:ring-4 focus-within:ring-violet-100 overflow-hidden max-w-sm mx-auto w-full">
-                                         <div className="flex items-center gap-1.5 px-4 py-3 bg-gray-100/80 border-r border-gray-200 text-gray-500 font-bold select-none text-sm shrink-0">
-                                             <span>🇲🇽</span>
-                                             <span className="text-gray-700">+52</span>
-                                         </div>
-                                         <input 
-                                             type="tel"
-                                             inputMode="numeric"
-                                             pattern="[0-9]*"
-                                             maxLength={10}
-                                             value={phone}
-                                             onChange={(e) => {
-                                                 const val = e.target.value.replace(/\D/g, '').slice(0, 10);
-                                                 setPhone(val);
-                                             }}
-                                             placeholder="10 dígitos"
-                                             className="w-full px-4 py-3 text-base sm:text-lg font-bold tracking-wider text-gray-800 bg-transparent outline-none placeholder:text-gray-300 placeholder:font-normal placeholder:tracking-normal focus:outline-none"
-                                             autoFocus
-                                         />
-                                         {phone.length === 10 && (
-                                             <div className="absolute right-4 text-green-500 flex items-center justify-center animate-in zoom-in-75 duration-300">
-                                                 <CheckCircle className="w-5 h-5 fill-green-50" />
-                                             </div>
-                                         )}
-                                     </div>
+
+                        {loginError && <div className="mb-3 p-2.5 bg-red-50 border border-red-100 text-red-600 text-xs rounded-xl text-center font-medium">{loginError}</div>}
+
+                        {(loginStep === 'phone' || loginStep === 'pin') ? (
+                            <div className="space-y-3">
+                                {/* Phone input */}
+                                <div className="flex items-center bg-gray-50 border border-gray-200 rounded-xl overflow-hidden focus-within:border-violet-400 focus-within:ring-2 focus-within:ring-violet-100 transition-all">
+                                    <div className="flex items-center gap-1 px-3 py-3 bg-gray-100 border-r border-gray-200 text-xs font-bold text-gray-600 shrink-0">🇲🇽 +52</div>
+                                    <input
+                                        type="tel" inputMode="numeric" pattern="[0-9]*" maxLength={10} value={phone}
+                                        onChange={e => { if (loginStep === 'phone') { const v = e.target.value.replace(/\D/g,'').slice(0,10); setPhone(v); } }}
+                                        placeholder="10 dígitos"
+                                        readOnly={loginStep === 'pin'}
+                                        className="flex-1 px-3 py-3 text-sm font-semibold text-gray-800 bg-transparent outline-none placeholder:text-gray-300 placeholder:font-normal"
+                                        autoFocus={loginStep === 'phone'}
+                                    />
+                                    {loginStep === 'phone' && phone.length === 10 && <CheckCircle className="w-4 h-4 text-green-500 mr-3 shrink-0" />}
+                                    {loginStep === 'pin' && <button type="button" onClick={() => { setLoginStep('phone'); setPinDigits(['','','','']); }} className="text-xs text-violet-500 font-semibold mr-3 shrink-0">Cambiar</button>}
                                 </div>
-                                <button type="submit" className={`w-full h-12 text-base font-bold shadow-lg rounded-xl transition-all inline-flex items-center justify-center text-white ${phone.length === 10 ? 'bg-gradient-to-r from-green-500 to-emerald-600 cursor-pointer' : 'bg-gray-400 cursor-not-allowed'}`} disabled={loginLoading || phone.length < 10}>
-                                    {loginLoading ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : 'Enviar Código'}
-                                </button>
-                            </form>
-                        ) : loginStep === 'pin' ? (
-                            <div className="space-y-6">
-                                <div className="text-center"><p className="text-sm text-gray-500 font-medium bg-gray-50 inline-block px-3 py-1 rounded-full border border-gray-100">Código enviado a <b className="text-gray-800">{phone}</b></p></div>
-                                <div className="flex justify-center gap-2">
-                                    {pinDigits.map((d, i) => (<input key={i} ref={el => pinRefs.current[i] = el} type="tel" inputMode="numeric" pattern="[0-9]*" value={d} maxLength={1} onChange={(e) => handlePinChange(i, e.target.value)} onKeyDown={(e) => handleKeyDown(i, e)} className={`w-14 h-16 text-center text-2xl font-bold border-2 rounded-xl outline-none transition-all ${d ? 'border-green-500 text-green-600 bg-green-50/50' : 'border-gray-100 text-gray-400 bg-white/50 focus:border-violet-500'}`} autoFocus={i === 0} />))}
-                                </div>
-                                <button onClick={() => setLoginStep('phone')} className="block w-full text-xs text-violet-600 font-semibold hover:underline text-center">¿Número incorrecto? Volver</button>
+
+                                {/* PIN inline */}
+                                {loginStep === 'pin' && (
+                                    <div>
+                                        <p className="text-xs text-gray-400 text-center mb-2">Código enviado por WhatsApp</p>
+                                        <div className="flex justify-center gap-2.5">
+                                            {pinDigits.map((d, i) => (
+                                                <input key={i} ref={el => pinRefs.current[i] = el}
+                                                    type="tel" inputMode="numeric" pattern="[0-9]*" value={d} maxLength={1}
+                                                    onChange={e => handlePinChange(i, e.target.value)}
+                                                    onKeyDown={e => handleKeyDown(i, e)}
+                                                    className={`w-14 h-14 text-center text-2xl font-bold border-2 rounded-xl outline-none transition-all ${d ? 'border-violet-500 text-violet-700 bg-violet-50' : 'border-gray-200 bg-white focus:border-violet-400 focus:ring-2 focus:ring-violet-100'}`}
+                                                    autoFocus={i === 0}
+                                                />
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {loginStep === 'phone' && (
+                                    <button onClick={handlePhoneSubmit} disabled={loginLoading || phone.length < 10}
+                                        className={`w-full py-3 text-sm font-bold rounded-xl transition-all text-white flex items-center justify-center ${phone.length === 10 ? 'bg-gradient-to-r from-blue-600 to-violet-600 shadow-md shadow-violet-200/50' : 'bg-gray-300 cursor-not-allowed'}`}>
+                                        {loginLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Enviar Código →'}
+                                    </button>
+                                )}
                             </div>
                         ) : loginStep === 'register' ? (
-                            <form onSubmit={handleRegisterSubmit} className="space-y-6">
-                                <div className="text-center"><div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4"><Users className="w-8 h-8 text-green-600" /></div><h4 className="text-xl font-bold">Crea tu Perfil</h4><p className="text-sm text-gray-500">Solo necesitamos tu nombre completo.</p></div>
-                                <Input placeholder="Ej. Ana García" value={name} onChange={(e) => setName(e.target.value)} className="h-12 text-lg text-center" required autoFocus />
-                                <button type="submit" className="w-full h-12 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl shadow-lg transition-all" disabled={loginLoading}>{loginLoading ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : 'Solicitar Acceso'}</button>
+                            <form onSubmit={handleRegisterSubmit} className="space-y-3">
+                                <div className="text-center"><div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-2"><Users className="w-6 h-6 text-green-600" /></div><h4 className="text-sm font-bold">Crea tu Perfil</h4><p className="text-xs text-gray-400 mt-1">Solo necesitamos tu nombre completo.</p></div>
+                                <Input placeholder="Ej. Ana García" value={name} onChange={e => setName(e.target.value)} className="h-10 text-sm text-center" required autoFocus />
+                                <button type="submit" className="w-full py-3 text-sm bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl shadow-md transition-all" disabled={loginLoading}>{loginLoading ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : 'Solicitar Acceso'}</button>
                             </form>
                         ) : (
-                            <div className="text-center space-y-6">
-                                <div className="w-20 h-20 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse"><Zap className="w-10 h-10 text-yellow-600" /></div>
-                                <div><h4 className="text-2xl font-bold">Solicitud Enviada</h4><p className="text-sm text-gray-600 mt-2">Tu cuenta está en revisión. Te avisaremos por WhatsApp ({phone}) cuando esté activa.</p></div>
-                                <button onClick={() => setIsLoginOpen(false)} className="w-full h-12 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold rounded-xl active:scale-95 transition-all">Cerrar</button>
+                            <div className="text-center space-y-4">
+                                <div className="w-14 h-14 bg-yellow-100 rounded-full flex items-center justify-center mx-auto animate-pulse"><Zap className="w-7 h-7 text-yellow-600" /></div>
+                                <div><h4 className="text-base font-bold">Solicitud Enviada</h4><p className="text-xs text-gray-500 mt-1">Te avisaremos por WhatsApp ({phone}) cuando esté activa.</p></div>
+                                <button onClick={() => setIsLoginOpen(false)} className="w-full py-3 text-sm bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold rounded-xl transition-all">Cerrar</button>
                             </div>
                         )}
                     </div>
