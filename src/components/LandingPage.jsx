@@ -324,14 +324,14 @@ const LandingPage = ({ onLoginSuccess }) => {
     };
 
     const handlePinChange = (index, value) => {
-        const digit = value.replace(/\D/g, '').slice(-1); // solo el último dígito
+        const digit = value.replace(/\D/g, '').slice(-1);
         const newPin = [...pinDigits];
         newPin[index] = digit;
         setPinDigits(newPin);
         if (digit && index < 3) {
-            pinRefs.current[index + 1]?.focus();
+            setTimeout(() => pinRefs.current[index + 1]?.focus(), 0);
         }
-        if (digit && index === 3) submitPin(newPin.slice(0, 3).join('') + digit);
+        if (digit && index === 3) submitPin(newPin.join(''));
     };
 
     const handleKeyDown = (index, e) => {
@@ -522,19 +522,23 @@ const LandingPage = ({ onLoginSuccess }) => {
                                     {(loginStep === 'phone' || loginStep === 'pin') ? (
                                         <div className="space-y-3">
                                             {/* Phone input */}
-                                            <div className="flex items-center border-2 border-violet-400 rounded-xl bg-white pr-3">
+                                            <div className="flex items-center border-2 border-violet-400 rounded-xl bg-white">
                                                 <div className="flex items-center gap-1 px-3 py-2.5 text-xs font-bold text-violet-500 shrink-0 border-r-2 border-violet-400">🇲🇽 +52</div>
                                                 <input
                                                     type="tel" inputMode="numeric" pattern="[0-9]*" maxLength={10} value={phone}
                                                     onChange={e => { if (loginStep === 'phone') { const v = e.target.value.replace(/\D/g,'').slice(0,10); setPhone(v); } }}
                                                     placeholder="10 dígitos"
                                                     readOnly={loginStep === 'pin'}
-                                                    className="flex-1 px-3 py-2.5 text-[15px] font-semibold text-gray-800 bg-transparent border-0 appearance-none placeholder:text-gray-300 placeholder:font-normal text-center"
+                                                    className="min-w-0 flex-1 px-3 py-2.5 text-[15px] font-semibold text-gray-800 bg-transparent border-0 appearance-none placeholder:text-gray-300 placeholder:font-normal text-center"
                                                     style={{ outline: 'none', boxShadow: 'none' }}
                                                     autoFocus={loginStep === 'phone'}
                                                 />
-                                                {loginStep === 'phone' && phone.length === 10 && <CheckCircle className="w-4 h-4 text-green-500 shrink-0 flex-none" />}
-                                                {loginStep === 'pin' && <button type="button" onClick={() => { setLoginStep('phone'); setPinDigits(['','','','']); }} className="text-xs text-violet-500 font-semibold shrink-0 hover:underline">Cambiar</button>}
+                                                {loginStep === 'phone' && phone.length === 10 && (
+                                                    <span className="pr-3 shrink-0"><CheckCircle className="w-4 h-4 text-green-500" /></span>
+                                                )}
+                                                {loginStep === 'pin' && (
+                                                    <button type="button" onClick={() => { setLoginStep('phone'); setPinDigits(['','','','']); }} className="text-xs text-violet-500 font-semibold pr-3 shrink-0 hover:underline">Cambiar</button>
+                                                )}
                                             </div>
 
                                             {/* PIN inline — aparece debajo sin cambiar pantalla */}
@@ -627,12 +631,16 @@ const LandingPage = ({ onLoginSuccess }) => {
                                         onChange={e => { if (loginStep === 'phone') { const v = e.target.value.replace(/\D/g,'').slice(0,10); setPhone(v); } }}
                                         placeholder="10 dígitos"
                                         readOnly={loginStep === 'pin'}
-                                        className="flex-1 px-3 py-3 text-[15px] font-semibold text-gray-800 bg-transparent border-0 appearance-none placeholder:text-gray-300 placeholder:font-normal"
+                                        className="min-w-0 flex-1 px-3 py-3 text-[15px] font-semibold text-gray-800 bg-transparent border-0 appearance-none placeholder:text-gray-300 placeholder:font-normal"
                                         style={{ outline: 'none', boxShadow: 'none' }}
                                         autoFocus={loginStep === 'phone'}
                                     />
-                                    {loginStep === 'phone' && phone.length === 10 && <CheckCircle className="w-4 h-4 text-green-500 mr-3 shrink-0" />}
-                                    {loginStep === 'pin' && <button type="button" onClick={() => { setLoginStep('phone'); setPinDigits(['','','','']); }} className="text-xs text-violet-500 font-semibold mr-3 shrink-0">Cambiar</button>}
+                                    {loginStep === 'phone' && phone.length === 10 && (
+                                        <span className="pr-3 shrink-0"><CheckCircle className="w-4 h-4 text-green-500" /></span>
+                                    )}
+                                    {loginStep === 'pin' && (
+                                        <button type="button" onClick={() => { setLoginStep('phone'); setPinDigits(['','','','']); }} className="text-xs text-violet-500 font-semibold pr-3 shrink-0">Cambiar</button>
+                                    )}
                                 </div>
 
                                 {/* PIN inline */}
