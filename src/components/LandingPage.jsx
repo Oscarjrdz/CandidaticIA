@@ -522,14 +522,15 @@ const LandingPage = ({ onLoginSuccess }) => {
                                     {(loginStep === 'phone' || loginStep === 'pin') ? (
                                         <div className="space-y-3">
                                             {/* Phone input */}
-                                            <div className="flex items-center border-2 border-violet-400 rounded-xl bg-white focus-within:border-violet-600 transition-all">
+                                            <div className="flex items-center border-2 border-violet-400 rounded-xl bg-white">
                                                 <div className="flex items-center gap-1 px-3 py-2.5 text-xs font-bold text-violet-500 shrink-0 border-r-2 border-violet-400">🇲🇽 +52</div>
                                                 <input
                                                     type="tel" inputMode="numeric" pattern="[0-9]*" maxLength={10} value={phone}
                                                     onChange={e => { if (loginStep === 'phone') { const v = e.target.value.replace(/\D/g,'').slice(0,10); setPhone(v); } }}
                                                     placeholder="10 dígitos"
                                                     readOnly={loginStep === 'pin'}
-                                                    className="flex-1 px-3 py-2.5 text-[15px] font-semibold text-gray-800 bg-transparent outline-none border-0 appearance-none placeholder:text-gray-300 placeholder:font-normal text-center"
+                                                    className="flex-1 px-3 py-2.5 text-[15px] font-semibold text-gray-800 bg-transparent border-0 appearance-none placeholder:text-gray-300 placeholder:font-normal text-center"
+                                                    style={{ outline: 'none', boxShadow: 'none' }}
                                                     autoFocus={loginStep === 'phone'}
                                                 />
                                                 {loginStep === 'phone' && phone.length === 10 && <CheckCircle className="w-4 h-4 text-green-500 mr-3 shrink-0 flex-none" />}
@@ -619,14 +620,15 @@ const LandingPage = ({ onLoginSuccess }) => {
                         {(loginStep === 'phone' || loginStep === 'pin') ? (
                             <div className="space-y-3">
                                 {/* Phone input */}
-                                <div className="flex items-center border-2 border-violet-400 rounded-xl bg-white focus-within:border-violet-600 transition-all">
+                                <div className="flex items-center border-2 border-violet-400 rounded-xl bg-white">
                                     <div className="flex items-center gap-1 px-3 py-3 text-xs font-bold text-violet-500 shrink-0 border-r-2 border-violet-400">🇲🇽 +52</div>
                                     <input
                                         type="tel" inputMode="numeric" pattern="[0-9]*" maxLength={10} value={phone}
                                         onChange={e => { if (loginStep === 'phone') { const v = e.target.value.replace(/\D/g,'').slice(0,10); setPhone(v); } }}
                                         placeholder="10 dígitos"
                                         readOnly={loginStep === 'pin'}
-                                        className="flex-1 px-3 py-3 text-[15px] font-semibold text-gray-800 bg-transparent outline-none border-0 appearance-none placeholder:text-gray-300 placeholder:font-normal"
+                                        className="flex-1 px-3 py-3 text-[15px] font-semibold text-gray-800 bg-transparent border-0 appearance-none placeholder:text-gray-300 placeholder:font-normal"
+                                        style={{ outline: 'none', boxShadow: 'none' }}
                                         autoFocus={loginStep === 'phone'}
                                     />
                                     {loginStep === 'phone' && phone.length === 10 && <CheckCircle className="w-4 h-4 text-green-500 mr-3 shrink-0" />}
