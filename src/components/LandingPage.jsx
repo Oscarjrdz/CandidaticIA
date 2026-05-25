@@ -305,12 +305,14 @@ const LandingPage = ({ onLoginSuccess }) => {
     };
 
     const handlePinChange = (index, value) => {
-        if (!/^\d*$/.test(value)) return;
+        const digit = value.replace(/\D/g, '').slice(-1); // solo el último dígito
         const newPin = [...pinDigits];
-        newPin[index] = value;
+        newPin[index] = digit;
         setPinDigits(newPin);
-        if (value && index < 3) pinRefs.current[index + 1]?.focus();
-        if (index === 3 && value) submitPin(newPin.slice(0, 3).join('') + value);
+        if (digit && index < 3) {
+            pinRefs.current[index + 1]?.focus();
+        }
+        if (digit && index === 3) submitPin(newPin.slice(0, 3).join('') + digit);
     };
 
     const handleKeyDown = (index, e) => {
@@ -482,7 +484,7 @@ const LandingPage = ({ onLoginSuccess }) => {
 
                             {/* LOGIN DROPDOWN — desktop only */}
                             {isLoginOpen && (
-                                <div className="hidden sm:block absolute right-0 top-full mt-3 w-80 bg-white/98 backdrop-blur-2xl rounded-2xl shadow-2xl shadow-violet-200/30 border border-violet-100 p-5 z-[9999]">
+                                <div className="hidden sm:block absolute right-0 top-full mt-3 w-80 bg-white backdrop-blur-xl rounded-2xl shadow-2xl shadow-violet-300/40 border border-violet-100 p-5 z-[9999]" style={{ backgroundColor: 'rgba(255,255,255,0.97)' }}>
                                     <div className="absolute -top-2 right-6 w-4 h-4 bg-white transform rotate-45 border-t border-l border-violet-100"></div>
 
                                     {/* Header compact */}
