@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { createPortal } from 'react-dom';
+import { createPortal, flushSync } from 'react-dom';
 import {
     ArrowRight, CheckCircle, Users, Zap, Loader2, MessageSquare, BrainCircuit,
     Bot, Search, Send, BarChart3, Workflow, FileText, Shield, Clock,
@@ -327,9 +327,9 @@ const LandingPage = ({ onLoginSuccess }) => {
         const digit = value.replace(/\D/g, '').slice(-1);
         const newPin = [...pinDigits];
         newPin[index] = digit;
-        setPinDigits(newPin);
+        flushSync(() => setPinDigits(newPin));
         if (digit && index < 3) {
-            setTimeout(() => pinRefs.current[index + 1]?.focus(), 0);
+            pinRefs.current[index + 1]?.focus();
         }
         if (digit && index === 3) submitPin(newPin.join(''));
     };
