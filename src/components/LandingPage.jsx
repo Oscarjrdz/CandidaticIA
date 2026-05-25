@@ -621,21 +621,16 @@ const LandingPage = ({ onLoginSuccess }) => {
                     .orb-2 { animation: orbFloat2 22s ease-in-out infinite; }
                     .orb-3 { animation: orbFloat3 16s ease-in-out infinite; }
                     .orb-4 { animation: orbFloat1 26s ease-in-out infinite reverse; }
-                    @keyframes cardFloat1 {
-                        0%, 100% { transform: translateY(0px) rotate(-1deg); }
-                        50% { transform: translateY(-8px) rotate(-1deg); }
+                    @keyframes ringRotate {
+                        from { transform: rotate(0deg); }
+                        to   { transform: rotate(360deg); }
                     }
-                    @keyframes cardFloat2 {
-                        0%, 100% { transform: translateY(0px) rotate(1.5deg); }
-                        50% { transform: translateY(-10px) rotate(1.5deg); }
+                    @keyframes ringRotateRev {
+                        from { transform: rotate(0deg); }
+                        to   { transform: rotate(-360deg); }
                     }
-                    @keyframes cardFloat3 {
-                        0%, 100% { transform: translateY(0px) rotate(-0.8deg); }
-                        50% { transform: translateY(-7px) rotate(-0.8deg); }
-                    }
-                    .card-float-1 { animation: cardFloat1 4s ease-in-out infinite; }
-                    .card-float-2 { animation: cardFloat2 5.5s ease-in-out infinite 1.2s; }
-                    .card-float-3 { animation: cardFloat3 4.8s ease-in-out infinite 2.5s; }
+                    .ring-spin    { animation: ringRotate    40s linear infinite; transform-origin: 260px 260px; }
+                    .ring-spin-r  { animation: ringRotateRev 60s linear infinite; transform-origin: 260px 260px; }
                 `}</style>
 
                 {/* ═══ HERO SECTION ═══ */}
@@ -697,38 +692,36 @@ const LandingPage = ({ onLoginSuccess }) => {
                             </h2>
                         </div>
 
-                        {/* ── Floating activity cards (desktop only) ── */}
-                        <div className="hidden lg:block">
-                            {/* Card 1 — entrevista agendada */}
-                            <div className="card-float-1 absolute z-30 pointer-events-none" style={{ top: '90px', right: '36%' }}>
-                                <div className="bg-white/90 backdrop-blur-xl border border-gray-100 rounded-2xl px-4 py-3 shadow-2xl shadow-violet-500/10 flex items-center gap-3 min-w-[215px]">
-                                    <div className="w-9 h-9 rounded-xl bg-green-50 flex items-center justify-center flex-shrink-0 text-lg">✅</div>
-                                    <div>
-                                        <p className="text-[11px] font-bold text-gray-800 leading-tight">Entrevista agendada</p>
-                                        <p className="text-[10px] text-gray-400 mt-0.5">Ana García · hace 3 min</p>
-                                    </div>
-                                </div>
-                            </div>
-                            {/* Card 2 — candidatos contactados */}
-                            <div className="card-float-2 absolute z-30 pointer-events-none" style={{ top: '270px', right: '29%' }}>
-                                <div className="bg-white/90 backdrop-blur-xl border border-gray-100 rounded-2xl px-4 py-3 shadow-2xl shadow-blue-500/10 flex items-center gap-3 min-w-[230px]">
-                                    <div className="w-9 h-9 rounded-xl bg-violet-50 flex items-center justify-center flex-shrink-0 text-lg">📱</div>
-                                    <div>
-                                        <p className="text-[11px] font-bold text-gray-800 leading-tight">47 candidatos contactados</p>
-                                        <p className="text-[10px] text-gray-400 mt-0.5">Hoy · Brenda IA</p>
-                                    </div>
-                                </div>
-                            </div>
-                            {/* Card 3 — tiempo de respuesta */}
-                            <div className="card-float-3 absolute z-30 pointer-events-none" style={{ top: '450px', right: '34%' }}>
-                                <div className="bg-white/90 backdrop-blur-xl border border-gray-100 rounded-2xl px-4 py-3 shadow-2xl shadow-amber-500/10 flex items-center gap-3 min-w-[205px]">
-                                    <div className="w-9 h-9 rounded-xl bg-amber-50 flex items-center justify-center flex-shrink-0 text-lg">⚡</div>
-                                    <div>
-                                        <p className="text-[11px] font-bold text-gray-800 leading-tight">Respuesta en 2 min</p>
-                                        <p className="text-[10px] text-gray-400 mt-0.5">Tiempo promedio de Brenda</p>
-                                    </div>
-                                </div>
-                            </div>
+                        {/* ── Decorative center: concentric rings + orb (desktop only) ── */}
+                        <div className="hidden lg:block absolute z-[5] pointer-events-none" style={{ top: '50%', left: '62%', transform: 'translate(-50%, -50%)' }}>
+                            {/* Orb central */}
+                            <div className="orb-3 absolute rounded-full blur-[90px]" style={{
+                                width: '420px', height: '420px',
+                                top: '50%', left: '50%', transform: 'translate(-50%,-50%)',
+                                background: 'radial-gradient(circle, rgba(139,92,246,0.28) 0%, rgba(59,130,246,0.18) 45%, transparent 70%)'
+                            }} />
+                            {/* Concentric rings SVG */}
+                            <svg width="520" height="520" viewBox="0 0 520 520" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ display: 'block' }}>
+                                <defs>
+                                    <linearGradient id="rg1" x1="0" y1="0" x2="1" y2="1">
+                                        <stop offset="0%" stopColor="#7c3aed" stopOpacity="0.25"/>
+                                        <stop offset="100%" stopColor="#3b82f6" stopOpacity="0.08"/>
+                                    </linearGradient>
+                                    <linearGradient id="rg2" x1="0" y1="1" x2="1" y2="0">
+                                        <stop offset="0%" stopColor="#6366f1" stopOpacity="0.18"/>
+                                        <stop offset="100%" stopColor="#ec4899" stopOpacity="0.06"/>
+                                    </linearGradient>
+                                    <linearGradient id="rg3" x1="1" y1="0" x2="0" y2="1">
+                                        <stop offset="0%" stopColor="#8b5cf6" stopOpacity="0.12"/>
+                                        <stop offset="100%" stopColor="#3b82f6" stopOpacity="0.04"/>
+                                    </linearGradient>
+                                </defs>
+                                <circle cx="260" cy="260" r="80"  stroke="url(#rg1)" strokeWidth="1.5" fill="none" className="ring-spin"/>
+                                <circle cx="260" cy="260" r="130" stroke="url(#rg2)" strokeWidth="1.2" fill="none"/>
+                                <circle cx="260" cy="260" r="185" stroke="url(#rg1)" strokeWidth="1"   fill="none" className="ring-spin-r"/>
+                                <circle cx="260" cy="260" r="240" stroke="url(#rg3)" strokeWidth="0.8" fill="none"/>
+                                <circle cx="260" cy="260" r="255" stroke="url(#rg2)" strokeWidth="0.5" fill="none" strokeDasharray="6 10" className="ring-spin"/>
+                            </svg>
                         </div>
 
                         <div className="grid lg:grid-cols-[2fr_1fr] gap-8 lg:gap-12 items-start pt-2 sm:pt-4 px-4 sm:px-6">
