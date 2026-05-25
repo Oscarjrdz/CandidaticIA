@@ -621,16 +621,6 @@ const LandingPage = ({ onLoginSuccess }) => {
                     .orb-2 { animation: orbFloat2 22s ease-in-out infinite; }
                     .orb-3 { animation: orbFloat3 16s ease-in-out infinite; }
                     .orb-4 { animation: orbFloat1 26s ease-in-out infinite reverse; }
-                    @keyframes ringRotate {
-                        from { transform: rotate(0deg); }
-                        to   { transform: rotate(360deg); }
-                    }
-                    @keyframes ringRotateRev {
-                        from { transform: rotate(0deg); }
-                        to   { transform: rotate(-360deg); }
-                    }
-                    .ring-spin    { animation: ringRotate    40s linear infinite; transform-origin: 260px 260px; }
-                    .ring-spin-r  { animation: ringRotateRev 60s linear infinite; transform-origin: 260px 260px; }
                 `}</style>
 
                 {/* ═══ HERO SECTION ═══ */}
@@ -645,20 +635,24 @@ const LandingPage = ({ onLoginSuccess }) => {
                             WebkitMaskImage: 'radial-gradient(ellipse 80% 80% at 50% 50%, black 40%, transparent 100%)',
                         }}
                     />
-                    {/* Gradient orbs */}
+                    {/* Gradient orbs — all purple palette, behind everything */}
                     <div className="absolute inset-0 pointer-events-none overflow-hidden">
-                        {/* Orb 1 — violeta, top-left */}
-                        <div className="orb-1 absolute top-[-10%] left-[-8%] w-[55%] h-[70%] rounded-full blur-[80px]"
-                            style={{ background: 'radial-gradient(circle, rgba(139,92,246,0.22) 0%, rgba(139,92,246,0.06) 60%, transparent 100%)' }} />
-                        {/* Orb 2 — azul, bottom-right */}
-                        <div className="orb-2 absolute bottom-[-15%] right-[-10%] w-[50%] h-[65%] rounded-full blur-[80px]"
-                            style={{ background: 'radial-gradient(circle, rgba(59,130,246,0.20) 0%, rgba(59,130,246,0.06) 60%, transparent 100%)' }} />
-                        {/* Orb 3 — rosa/pink, center */}
-                        <div className="orb-3 absolute top-[30%] left-[38%] w-[35%] h-[45%] rounded-full blur-[70px]"
-                            style={{ background: 'radial-gradient(circle, rgba(236,72,153,0.12) 0%, rgba(236,72,153,0.03) 60%, transparent 100%)' }} />
-                        {/* Orb 4 — índigo, top-right */}
-                        <div className="orb-4 absolute top-[-5%] right-[5%] w-[30%] h-[40%] rounded-full blur-[60px]"
-                            style={{ background: 'radial-gradient(circle, rgba(99,102,241,0.18) 0%, rgba(99,102,241,0.04) 60%, transparent 100%)' }} />
+                        {/* Orb 1 — grande, violeta suave, top-left */}
+                        <div className="orb-1 absolute rounded-full"
+                            style={{ top: '-20%', left: '-15%', width: '70%', height: '90%', filter: 'blur(90px)',
+                                background: 'radial-gradient(circle, rgba(139,92,246,0.18) 0%, rgba(109,40,217,0.08) 55%, transparent 100%)' }} />
+                        {/* Orb 2 — grande, uva oscuro, bottom-right */}
+                        <div className="orb-2 absolute rounded-full"
+                            style={{ bottom: '-20%', right: '-15%', width: '65%', height: '85%', filter: 'blur(100px)',
+                                background: 'radial-gradient(circle, rgba(124,58,237,0.20) 0%, rgba(91,33,182,0.08) 55%, transparent 100%)' }} />
+                        {/* Orb 3 — centro-derecha, lavanda, llena el gap */}
+                        <div className="orb-3 absolute rounded-full"
+                            style={{ top: '10%', left: '45%', width: '55%', height: '80%', filter: 'blur(110px)',
+                                background: 'radial-gradient(circle, rgba(167,139,250,0.16) 0%, rgba(139,92,246,0.07) 50%, transparent 100%)' }} />
+                        {/* Orb 4 — pequeño acento, índigo top-center */}
+                        <div className="orb-4 absolute rounded-full"
+                            style={{ top: '-10%', left: '30%', width: '40%', height: '50%', filter: 'blur(80px)',
+                                background: 'radial-gradient(circle, rgba(99,102,241,0.14) 0%, rgba(79,70,229,0.04) 60%, transparent 100%)' }} />
                     </div>
 
                     <div className="max-w-7xl mx-auto w-full relative z-10">
@@ -692,37 +686,6 @@ const LandingPage = ({ onLoginSuccess }) => {
                             </h2>
                         </div>
 
-                        {/* ── Decorative center: concentric rings + orb (desktop only) ── */}
-                        <div className="hidden lg:block absolute z-[5] pointer-events-none" style={{ top: '50%', left: '62%', transform: 'translate(-50%, -50%)' }}>
-                            {/* Orb central */}
-                            <div className="orb-3 absolute rounded-full blur-[90px]" style={{
-                                width: '420px', height: '420px',
-                                top: '50%', left: '50%', transform: 'translate(-50%,-50%)',
-                                background: 'radial-gradient(circle, rgba(139,92,246,0.28) 0%, rgba(59,130,246,0.18) 45%, transparent 70%)'
-                            }} />
-                            {/* Concentric rings SVG */}
-                            <svg width="520" height="520" viewBox="0 0 520 520" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ display: 'block' }}>
-                                <defs>
-                                    <linearGradient id="rg1" x1="0" y1="0" x2="1" y2="1">
-                                        <stop offset="0%" stopColor="#7c3aed" stopOpacity="0.25"/>
-                                        <stop offset="100%" stopColor="#3b82f6" stopOpacity="0.08"/>
-                                    </linearGradient>
-                                    <linearGradient id="rg2" x1="0" y1="1" x2="1" y2="0">
-                                        <stop offset="0%" stopColor="#6366f1" stopOpacity="0.18"/>
-                                        <stop offset="100%" stopColor="#ec4899" stopOpacity="0.06"/>
-                                    </linearGradient>
-                                    <linearGradient id="rg3" x1="1" y1="0" x2="0" y2="1">
-                                        <stop offset="0%" stopColor="#8b5cf6" stopOpacity="0.12"/>
-                                        <stop offset="100%" stopColor="#3b82f6" stopOpacity="0.04"/>
-                                    </linearGradient>
-                                </defs>
-                                <circle cx="260" cy="260" r="80"  stroke="url(#rg1)" strokeWidth="1.5" fill="none" className="ring-spin"/>
-                                <circle cx="260" cy="260" r="130" stroke="url(#rg2)" strokeWidth="1.2" fill="none"/>
-                                <circle cx="260" cy="260" r="185" stroke="url(#rg1)" strokeWidth="1"   fill="none" className="ring-spin-r"/>
-                                <circle cx="260" cy="260" r="240" stroke="url(#rg3)" strokeWidth="0.8" fill="none"/>
-                                <circle cx="260" cy="260" r="255" stroke="url(#rg2)" strokeWidth="0.5" fill="none" strokeDasharray="6 10" className="ring-spin"/>
-                            </svg>
-                        </div>
 
                         <div className="grid lg:grid-cols-[2fr_1fr] gap-8 lg:gap-12 items-start pt-2 sm:pt-4 px-4 sm:px-6">
 
