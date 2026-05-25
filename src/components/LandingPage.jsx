@@ -804,7 +804,7 @@ const LandingPage = ({ onLoginSuccess }) => {
                                 </p>
 
                                 {/* ── QR + Formulario ── */}
-                                <div className="hero-text-4 grid grid-cols-1 sm:grid-cols-[auto_1fr] gap-4 sm:gap-6 items-start bg-white/70 backdrop-blur-md border border-violet-100 rounded-3xl p-5 shadow-xl shadow-violet-100/30 mt-[5px]">
+                                <div className="hero-text-4 grid grid-cols-1 sm:grid-cols-[auto_1fr] gap-4 sm:gap-6 items-start bg-white/70 backdrop-blur-md border border-violet-100 rounded-3xl p-5 shadow-xl shadow-violet-100/30 mt-[10px]">
 
                                     {/* QR */}
                                     <div className="flex flex-col items-center gap-2 sm:border-r sm:border-violet-100 sm:pr-6">
