@@ -503,8 +503,8 @@ const LandingPage = ({ onLoginSuccess }) => {
 
                             {/* LOGIN DROPDOWN — desktop only */}
                             {isLoginOpen && (
-                                <div className="hidden sm:block absolute right-0 top-full mt-3 w-80 rounded-2xl shadow-2xl shadow-violet-300/40 border border-white/40 p-5 z-[9999]" style={{ backgroundColor: 'rgba(255,255,255,0.65)', backdropFilter: 'blur(48px) saturate(200%)', WebkitBackdropFilter: 'blur(48px) saturate(200%)' }}>
-                                    <div className="absolute -top-2 right-6 w-4 h-4 transform rotate-45 border-t border-l border-white/40" style={{ backgroundColor: 'rgba(255,255,255,0.65)' }}></div>
+                                <div className="hidden sm:block absolute right-0 top-full mt-3 w-80 rounded-2xl shadow-2xl shadow-violet-200/50 border border-violet-100/60 p-5 z-[9999]" style={{ backgroundColor: 'rgba(255,255,255,0.93)', backdropFilter: 'blur(32px) saturate(180%)', WebkitBackdropFilter: 'blur(32px) saturate(180%)' }}>
+                                    <div className="absolute -top-2 right-6 w-4 h-4 transform rotate-45 border-t border-l border-violet-100/60" style={{ backgroundColor: 'rgba(255,255,255,0.93)' }}></div>
 
                                     {/* Header compact */}
                                     <div className="flex items-center gap-3 mb-4">
@@ -529,7 +529,7 @@ const LandingPage = ({ onLoginSuccess }) => {
                                                     onChange={e => { if (loginStep === 'phone') { const v = e.target.value.replace(/\D/g,'').slice(0,10); setPhone(v); } }}
                                                     placeholder="10 dígitos"
                                                     readOnly={loginStep === 'pin'}
-                                                    className="flex-1 px-3 py-2.5 text-[15px] font-semibold text-gray-800 bg-transparent outline-none placeholder:text-gray-300 placeholder:font-normal text-center"
+                                                    className="flex-1 px-3 py-2.5 text-[15px] font-semibold text-gray-800 bg-transparent outline-none border-0 placeholder:text-gray-300 placeholder:font-normal text-center"
                                                     autoFocus={loginStep === 'phone'}
                                                 />
                                                 {loginStep === 'phone' && phone.length === 10 && <CheckCircle className="w-4 h-4 text-green-500 mr-3 shrink-0" />}
@@ -598,7 +598,7 @@ const LandingPage = ({ onLoginSuccess }) => {
 
             {/* ═══ MOBILE LOGIN PORTAL — rendered outside header to bypass backdrop-filter stacking context ═══ */}
             {isLoginOpen && createPortal(
-                <div className="sm:hidden mobile-login-portal fixed inset-0 z-[9999] overflow-y-auto flex flex-col justify-center p-6" style={{ backgroundColor: 'rgba(255,255,255,0.72)', backdropFilter: 'blur(48px) saturate(200%)', WebkitBackdropFilter: 'blur(48px) saturate(200%)' }}>
+                <div className="sm:hidden mobile-login-portal fixed inset-0 z-[9999] overflow-y-auto flex flex-col justify-center p-6" style={{ backgroundColor: 'rgba(255,255,255,0.93)', backdropFilter: 'blur(32px) saturate(180%)', WebkitBackdropFilter: 'blur(32px) saturate(180%)' }}>
                     <button onClick={() => setIsLoginOpen(false)} className="absolute top-4 right-4 p-2 rounded-full bg-gray-100 hover:bg-gray-200 transition-colors z-20">
                         <X className="w-5 h-5 text-gray-600" />
                     </button>
@@ -626,7 +626,7 @@ const LandingPage = ({ onLoginSuccess }) => {
                                         onChange={e => { if (loginStep === 'phone') { const v = e.target.value.replace(/\D/g,'').slice(0,10); setPhone(v); } }}
                                         placeholder="10 dígitos"
                                         readOnly={loginStep === 'pin'}
-                                        className="flex-1 px-3 py-3 text-[15px] font-semibold text-gray-800 bg-transparent outline-none placeholder:text-gray-300 placeholder:font-normal"
+                                        className="flex-1 px-3 py-3 text-[15px] font-semibold text-gray-800 bg-transparent outline-none border-0 placeholder:text-gray-300 placeholder:font-normal"
                                         autoFocus={loginStep === 'phone'}
                                     />
                                     {loginStep === 'phone' && phone.length === 10 && <CheckCircle className="w-4 h-4 text-green-500 mr-3 shrink-0" />}
