@@ -192,6 +192,66 @@ const LandingPage = ({ onLoginSuccess }) => {
     const pinRefs = useRef([]);
     const dropdownRef = useRef(null);
 
+    // Hero particle network canvas
+    const heroCanvasRef = useRef(null);
+    useEffect(() => {
+        const canvas = heroCanvasRef.current;
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        let animId;
+
+        const resize = () => {
+            canvas.width = canvas.offsetWidth;
+            canvas.height = canvas.offsetHeight;
+        };
+        resize();
+        window.addEventListener('resize', resize);
+
+        const COUNT = 60;
+        const MAX_DIST = 150;
+        const particles = Array.from({ length: COUNT }, () => ({
+            x: Math.random() * canvas.width,
+            y: Math.random() * canvas.height,
+            vx: (Math.random() - 0.5) * 0.35,
+            vy: (Math.random() - 0.5) * 0.35,
+            r: Math.random() * 1.8 + 0.8,
+        }));
+
+        const draw = () => {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            particles.forEach(p => {
+                p.x += p.vx;
+                p.y += p.vy;
+                if (p.x < 0 || p.x > canvas.width) p.vx *= -1;
+                if (p.y < 0 || p.y > canvas.height) p.vy *= -1;
+            });
+            for (let i = 0; i < particles.length; i++) {
+                for (let j = i + 1; j < particles.length; j++) {
+                    const dx = particles[i].x - particles[j].x;
+                    const dy = particles[i].y - particles[j].y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    if (dist < MAX_DIST) {
+                        ctx.strokeStyle = `rgba(139,92,246,${(1 - dist / MAX_DIST) * 0.2})`;
+                        ctx.lineWidth = 0.7;
+                        ctx.beginPath();
+                        ctx.moveTo(particles[i].x, particles[i].y);
+                        ctx.lineTo(particles[j].x, particles[j].y);
+                        ctx.stroke();
+                    }
+                }
+            }
+            particles.forEach(p => {
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+                ctx.fillStyle = 'rgba(139,92,246,0.45)';
+                ctx.fill();
+            });
+            animId = requestAnimationFrame(draw);
+        };
+        draw();
+        return () => { cancelAnimationFrame(animId); window.removeEventListener('resize', resize); };
+    }, []);
+
     useEffect(() => {
         const handleClickOutside = (event) => {
             // Exclude clicks inside the mobile login portal so it doesn't close on touch/clicks
@@ -635,8 +695,11 @@ const LandingPage = ({ onLoginSuccess }) => {
                             WebkitMaskImage: 'radial-gradient(ellipse 80% 80% at 50% 50%, black 40%, transparent 100%)',
                         }}
                     />
+                    {/* Particle network canvas */}
+                    <canvas ref={heroCanvasRef} className="absolute inset-0 w-full h-full pointer-events-none" style={{ zIndex: 1 }} />
+
                     {/* Gradient orbs — encima del dot grid (z-1), debajo del contenido (z-10) */}
-                    <div className="absolute inset-0 pointer-events-none overflow-hidden" style={{ zIndex: 1 }}>
+                    <div className="absolute inset-0 pointer-events-none overflow-hidden" style={{ zIndex: 2 }}>
                         {/* Orb 1 — violeta, top-left */}
                         <div className="orb-1 absolute rounded-full"
                             style={{ top: '-5%', left: '-8%', width: '45%', height: '55%', filter: 'blur(50px)',
