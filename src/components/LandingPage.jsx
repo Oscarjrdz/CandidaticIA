@@ -503,14 +503,14 @@ const LandingPage = ({ onLoginSuccess }) => {
                                     {(loginStep === 'phone' || loginStep === 'pin') ? (
                                         <div className="space-y-3">
                                             {/* Phone input */}
-                                            <div className="flex items-center bg-gray-50 border border-gray-200 rounded-xl overflow-hidden focus-within:border-violet-400 focus-within:ring-2 focus-within:ring-violet-100 transition-all">
-                                                <div className="flex items-center gap-1 px-3 py-2.5 bg-gray-100 border-r border-gray-200 text-xs font-bold text-gray-600 shrink-0">🇲🇽 +52</div>
+                                            <div className="flex items-center bg-white border border-gray-200 rounded-xl overflow-hidden focus-within:border-violet-400 focus-within:ring-2 focus-within:ring-violet-100 transition-all">
+                                                <div className="flex items-center gap-1 px-3 py-2.5 border-r border-gray-100 text-xs font-bold text-gray-500 shrink-0">🇲🇽 +52</div>
                                                 <input
                                                     type="tel" inputMode="numeric" pattern="[0-9]*" maxLength={10} value={phone}
                                                     onChange={e => { if (loginStep === 'phone') { const v = e.target.value.replace(/\D/g,'').slice(0,10); setPhone(v); } }}
                                                     placeholder="10 dígitos"
                                                     readOnly={loginStep === 'pin'}
-                                                    className="flex-1 px-3 py-2.5 text-sm font-semibold text-gray-800 bg-transparent outline-none placeholder:text-gray-300 placeholder:font-normal"
+                                                    className="flex-1 px-3 py-2.5 text-sm font-semibold text-gray-800 bg-transparent outline-none placeholder:text-gray-300 placeholder:font-normal text-center"
                                                     autoFocus={loginStep === 'phone'}
                                                 />
                                                 {loginStep === 'phone' && phone.length === 10 && <CheckCircle className="w-4 h-4 text-green-500 mr-3 shrink-0" />}
@@ -600,7 +600,7 @@ const LandingPage = ({ onLoginSuccess }) => {
                         {(loginStep === 'phone' || loginStep === 'pin') ? (
                             <div className="space-y-3">
                                 {/* Phone input */}
-                                <div className="flex items-center bg-gray-50 border border-gray-200 rounded-xl overflow-hidden focus-within:border-violet-400 focus-within:ring-2 focus-within:ring-violet-100 transition-all">
+                                <div className="flex items-center bg-white border border-gray-200 rounded-xl overflow-hidden focus-within:border-violet-400 focus-within:ring-2 focus-within:ring-violet-100 transition-all">
                                     <div className="flex items-center gap-1 px-3 py-3 bg-gray-100 border-r border-gray-200 text-xs font-bold text-gray-600 shrink-0">🇲🇽 +52</div>
                                     <input
                                         type="tel" inputMode="numeric" pattern="[0-9]*" maxLength={10} value={phone}
