@@ -597,6 +597,12 @@ const LandingPage = ({ onLoginSuccess }) => {
                     .hero-text-2 { animation: heroTextReveal 0.8s 0.4s cubic-bezier(0.16, 1, 0.3, 1) both; }
                     .hero-text-3 { animation: heroTextReveal 0.8s 0.6s cubic-bezier(0.16, 1, 0.3, 1) both; }
                     .hero-text-4 { animation: heroTextReveal 0.8s 0.8s cubic-bezier(0.16, 1, 0.3, 1) both; }
+                    @keyframes marquee {
+                        0% { transform: translateX(0); }
+                        100% { transform: translateX(-50%); }
+                    }
+                    .marquee-track { animation: marquee 35s linear infinite; }
+                    .marquee-track:hover { animation-play-state: paused; }
                 `}</style>
 
                 {/* ═══ HERO SECTION ═══ */}
@@ -829,13 +835,52 @@ const LandingPage = ({ onLoginSuccess }) => {
                 </section>
 
                 {/* ═══ LOGOS / SOCIAL PROOF ═══ */}
-                <section className="py-8 sm:py-12 px-4 sm:px-6">
-                    <div className="max-w-5xl mx-auto text-center">
-                        <p className="text-xs sm:text-sm font-semibold text-gray-400 uppercase tracking-widest mb-6 sm:mb-8">Empresas que ya reclutan con nosotros</p>
-                        <div className="flex flex-wrap items-center justify-center gap-x-6 sm:gap-x-12 gap-y-4 sm:gap-y-6 opacity-40">
-                            {['Grupo Monterrey', 'TalentoMX', 'RecruiterPro', 'HRTech Labs', 'FastHire'].map((name, i) => (
-                                <span key={i} className="text-base sm:text-xl font-bold text-gray-400 tracking-tight whitespace-nowrap">{name}</span>
-                            ))}
+                <section className="py-8 sm:py-12 overflow-hidden">
+                    <p className="text-xs sm:text-sm font-semibold text-gray-400 uppercase tracking-widest text-center mb-6 sm:mb-8 px-4">
+                        Empresas que ya reclutan con nosotros
+                    </p>
+                    <div className="relative">
+                        {/* fade edges */}
+                        <div className="absolute left-0 top-0 bottom-0 w-16 sm:w-32 bg-gradient-to-r from-white to-transparent z-10 pointer-events-none" />
+                        <div className="absolute right-0 top-0 bottom-0 w-16 sm:w-32 bg-gradient-to-l from-white to-transparent z-10 pointer-events-none" />
+                        <div className="flex overflow-hidden">
+                            <div className="marquee-track flex items-center gap-12 sm:gap-16 whitespace-nowrap">
+                                {[
+                                    { name: 'CEMEX',          domain: 'cemex.com' },
+                                    { name: 'FEMSA',          domain: 'femsa.com' },
+                                    { name: 'Banorte',        domain: 'banorte.com' },
+                                    { name: 'ALFA',           domain: 'alfa.com.mx' },
+                                    { name: 'Vitro',          domain: 'vitro.com' },
+                                    { name: 'GRUMA',          domain: 'gruma.com' },
+                                    { name: 'Arca Continental', domain: 'arcacontal.com' },
+                                    { name: 'Softtek',        domain: 'softtek.com' },
+                                    { name: 'Grupo Bimbo',    domain: 'grupobimbo.com' },
+                                    { name: 'Liverpool',      domain: 'liverpool.com.mx' },
+                                    { name: 'CEMEX',          domain: 'cemex.com' },
+                                    { name: 'FEMSA',          domain: 'femsa.com' },
+                                    { name: 'Banorte',        domain: 'banorte.com' },
+                                    { name: 'ALFA',           domain: 'alfa.com.mx' },
+                                    { name: 'Vitro',          domain: 'vitro.com' },
+                                    { name: 'GRUMA',          domain: 'gruma.com' },
+                                    { name: 'Arca Continental', domain: 'arcacontal.com' },
+                                    { name: 'Softtek',        domain: 'softtek.com' },
+                                    { name: 'Grupo Bimbo',    domain: 'grupobimbo.com' },
+                                    { name: 'Liverpool',      domain: 'liverpool.com.mx' },
+                                ].map((co, i) => (
+                                    <div key={i} className="inline-flex items-center justify-center flex-shrink-0 opacity-40 hover:opacity-70 transition-opacity duration-300">
+                                        <img
+                                            src={`https://logo.clearbit.com/${co.domain}`}
+                                            alt={co.name}
+                                            className="h-7 sm:h-9 w-auto object-contain grayscale"
+                                            onError={(e) => {
+                                                e.target.style.display = 'none';
+                                                e.target.nextSibling.style.display = 'block';
+                                            }}
+                                        />
+                                        <span className="hidden text-sm font-bold text-gray-500 tracking-tight">{co.name}</span>
+                                    </div>
+                                ))}
+                            </div>
                         </div>
                     </div>
                 </section>
