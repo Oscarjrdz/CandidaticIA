@@ -228,6 +228,7 @@ const LandingPage = ({ onLoginSuccess }) => {
     const [name, setName] = useState('');
     const [pinDigits, setPinDigits] = useState(['', '', '', '']);
     const pinRefs = useRef([]);
+    const mobilePinRefs = useRef([]);
     const dropdownRef = useRef(null);
 
     // Hero particle network canvas
@@ -323,19 +324,25 @@ const LandingPage = ({ onLoginSuccess }) => {
         finally { setLoginLoading(false); }
     };
 
+    const getActivePinRef = (i) => {
+        const desk = pinRefs.current[i];
+        if (desk && desk.getBoundingClientRect().width > 0) return desk;
+        return mobilePinRefs.current[i];
+    };
+
     const handlePinChange = (index, value) => {
         const digit = value.replace(/\D/g, '').slice(-1);
         const newPin = [...pinDigits];
         newPin[index] = digit;
         flushSync(() => setPinDigits(newPin));
         if (digit && index < 3) {
-            pinRefs.current[index + 1]?.focus();
+            getActivePinRef(index + 1)?.focus();
         }
         if (digit && index === 3) submitPin(newPin.join(''));
     };
 
     const handleKeyDown = (index, e) => {
-        if (e.key === 'Backspace' && !pinDigits[index] && index > 0) pinRefs.current[index - 1]?.focus();
+        if (e.key === 'Backspace' && !pinDigits[index] && index > 0) getActivePinRef(index - 1)?.focus();
     };
 
     const submitPin = async (fullPin) => {
@@ -649,7 +656,7 @@ const LandingPage = ({ onLoginSuccess }) => {
                                         <p className="text-xs text-gray-400 text-center mb-2">Código enviado por WhatsApp</p>
                                         <div className="flex justify-center gap-2.5">
                                             {pinDigits.map((d, i) => (
-                                                <input key={i} ref={el => pinRefs.current[i] = el}
+                                                <input key={i} ref={el => mobilePinRefs.current[i] = el}
                                                     type="tel" inputMode="numeric" pattern="[0-9]*" value={d} maxLength={1}
                                                     onChange={e => handlePinChange(i, e.target.value)}
                                                     onKeyDown={e => handleKeyDown(i, e)}
