@@ -624,7 +624,7 @@ const LandingPage = ({ onLoginSuccess }) => {
                 `}</style>
 
                 {/* ═══ HERO SECTION ═══ */}
-                <section className="pt-24 sm:pt-32 pb-12 sm:pb-16 relative overflow-hidden">
+                <section className="pt-20 sm:pt-24 pb-8 sm:pb-12 relative overflow-hidden">
                     {/* Dot grid pattern */}
                     <div className="absolute inset-0 pointer-events-none"
                         style={{
@@ -654,13 +654,13 @@ const LandingPage = ({ onLoginSuccess }) => {
                     <div className="max-w-7xl mx-auto w-full relative z-10">
 
                         {/* ── Super headline ── */}
-                        <div className="mb-6 sm:mb-10 px-4 sm:px-6">
-                            <p className="text-[11px] sm:text-xs font-bold uppercase tracking-[0.2em] text-violet-500 mb-3">
+                        <div className="mb-3 sm:mb-5 px-4 sm:px-6 text-center">
+                            <p className="text-[11px] sm:text-xs font-bold uppercase tracking-[0.2em] text-violet-500 mb-2">
                                 #1 en México
                             </p>
                             <h2
-                                className="font-black tracking-tight leading-[1.08] whitespace-nowrap w-full"
-                                style={{ fontSize: 'clamp(1.2rem, 3.38vw, 2.72rem)' }}
+                                className="font-black tracking-tight leading-[1.08] whitespace-nowrap w-full text-center"
+                                style={{ fontSize: 'clamp(1.2rem, 4.5vw, 3.65rem)' }}
                             >
                                 <span className="text-gray-900">Especialistas en </span>
                                 <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 via-violet-600 to-purple-600">
