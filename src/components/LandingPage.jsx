@@ -445,7 +445,13 @@ const LandingPage = ({ onLoginSuccess }) => {
 
             {/* ═══ HEADER ═══ */}
             <header className="fixed top-0 w-full z-50 bg-white/80 backdrop-blur-xl border-b border-gray-100/80">
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 sm:h-20 flex items-center justify-between relative">
+                {/* Tagline bar — full width */}
+                <div className="w-full bg-gradient-to-r from-blue-600 via-violet-600 to-purple-600 py-1 text-center">
+                    <span className="text-[10px] sm:text-xs font-bold tracking-[0.18em] text-white/90 uppercase">
+                        Reclutamiento Masivo
+                    </span>
+                </div>
+                <div className="max-w-7xl mx-auto px-4 sm:px-6 h-14 sm:h-16 flex items-center justify-between relative">
                     <div className="flex items-center space-x-2">
                         <div className="w-8 h-8 sm:w-9 sm:h-9 bg-gradient-to-br from-blue-600 to-violet-700 rounded-xl flex items-center justify-center shadow-lg shadow-violet-200">
                             <BrainCircuit className="w-4 h-4 sm:w-5 sm:h-5 text-white stroke-[1.5] rotate-90" />
@@ -791,7 +797,7 @@ const LandingPage = ({ onLoginSuccess }) => {
                                 </h1>
 
                                 <p className="hero-text-3 text-sm sm:text-base lg:text-lg text-gray-500 max-w-lg mx-auto lg:mx-0 mb-6 sm:mb-8 leading-relaxed">
-                                    Somos tu agencia de reclutamiento con inteligencia artificial. Brenda, nuestra reclutadora IA, contacta candidatos por WhatsApp, los filtra y te agenda entrevistas. ¡Pruébala! →
+                                    Somos tu agencia de reclutamiento con inteligencia artificial. Brenda, nuestra reclutadora IA, contacta candidatos por WhatsApp, los filtra y te agenda entrevistas.
                                 </p>
 
                                 {/* ── QR + Formulario ── */}
