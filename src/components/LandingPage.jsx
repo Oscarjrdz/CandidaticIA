@@ -609,7 +609,7 @@ const LandingPage = ({ onLoginSuccess }) => {
                     </div>
 
                     <div className="max-w-7xl mx-auto w-full relative z-10">
-                        <div className="grid lg:grid-cols-[1fr_auto_1fr] gap-8 lg:gap-6 items-center pt-4 sm:pt-8">
+                        <div className="grid lg:grid-cols-[2fr_1fr] gap-8 lg:gap-12 items-center pt-4 sm:pt-8">
 
                             {/* ── LEFT: Hero Text ── */}
                             <div className="text-center lg:text-left lg:pr-8">
@@ -719,7 +719,7 @@ const LandingPage = ({ onLoginSuccess }) => {
 
 
                             {/* ── RIGHT: iPhone 17 Pro Max Mockup ── */}
-                            <div className="flex justify-center lg:justify-end mt-8 lg:mt-0" style={{ perspective: '1200px' }}>
+                            <div className="flex justify-center mt-8 lg:mt-0" style={{ perspective: '1200px' }}>
                                 <div className="relative" style={{ animation: 'iphoneFloat 6s ease-in-out infinite' }}>
                                     {/* Glow behind phone */}
                                     <div className="absolute -inset-6 sm:-inset-8 bg-gradient-to-br from-violet-400/20 via-blue-400/15 to-pink-400/10 rounded-[4rem] blur-2xl iphone-glow"></div>
