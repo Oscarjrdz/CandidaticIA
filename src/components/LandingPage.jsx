@@ -1271,8 +1271,8 @@ const LandingPage = ({ onLoginSuccess }) => {
                     </div>
                 </section>
 
-                {/* ═══ PRICING SECTION ═══ */}
-                <section id="pricing" className="py-12 sm:py-20 px-4 sm:px-6" ref={pricingRef}>
+                {/* ═══ PRICING SECTION — hidden ═══ */}
+                <section id="pricing" className="hidden" ref={pricingRef}>
                     <div className="max-w-7xl mx-auto">
                         <div className={`text-center mb-10 sm:mb-16 transition-all duration-700 ${pricingVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
                             <div className="inline-flex items-center space-x-2 bg-amber-50 px-4 py-1.5 rounded-full text-xs sm:text-sm font-semibold text-amber-700 mb-4 border border-amber-100">
