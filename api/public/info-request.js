@@ -10,7 +10,7 @@ export default async function handler(req, res) {
             try { body = JSON.parse(body); } catch {}
         }
 
-        const { nombre, wapp, correo } = body || {};
+        const { nombre, empresa, wapp, correo } = body || {};
         if (!nombre || !wapp) {
             return res.status(400).json({ error: 'Faltan campos requeridos' });
         }
@@ -26,6 +26,7 @@ export default async function handler(req, res) {
                     <h2 style="color:#7c3aed;margin:0 0 16px">Nueva solicitud de info</h2>
                     <table style="width:100%;border-collapse:collapse;font-size:14px;">
                         <tr><td style="padding:8px 0;color:#6b7280;width:110px">Nombre</td><td style="padding:8px 0;font-weight:600;color:#111827">${nombre}</td></tr>
+                        <tr><td style="padding:8px 0;color:#6b7280">Empresa</td><td style="padding:8px 0;font-weight:600;color:#111827">${empresa || '—'}</td></tr>
                         <tr><td style="padding:8px 0;color:#6b7280">WhatsApp</td><td style="padding:8px 0;font-weight:600;color:#111827">${wapp}</td></tr>
                         <tr><td style="padding:8px 0;color:#6b7280">Correo</td><td style="padding:8px 0;font-weight:600;color:#111827">${correo || '—'}</td></tr>
                     </table>

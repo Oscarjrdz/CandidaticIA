@@ -149,7 +149,7 @@ const LandingPage = ({ onLoginSuccess }) => {
     const [contactLoading, setContactLoading] = useState(false);
     const [contactStatus, setContactStatus] = useState(''); // 'success' | 'error' | ''
     const [contactError, setContactError] = useState('');
-    const [infoForm, setInfoForm] = useState({ nombre: '', wapp: '', correo: '' });
+    const [infoForm, setInfoForm] = useState({ nombre: '', empresa: '', wapp: '', correo: '' });
     const [infoFormStatus, setInfoFormStatus] = useState(''); // '' | 'loading' | 'success' | 'error'
 
     const sendWhatsAppContact = async (e) => {
@@ -832,6 +832,13 @@ const LandingPage = ({ onLoginSuccess }) => {
                                                     onChange={e => setInfoForm(f => ({ ...f, wapp: e.target.value }))}
                                                     required
                                                     maxLength={10}
+                                                    className="w-full bg-white border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm text-gray-800 placeholder-gray-400 outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100 transition"
+                                                />
+                                                <input
+                                                    type="text"
+                                                    placeholder="Empresa"
+                                                    value={infoForm.empresa}
+                                                    onChange={e => setInfoForm(f => ({ ...f, empresa: e.target.value }))}
                                                     className="w-full bg-white border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm text-gray-800 placeholder-gray-400 outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100 transition"
                                                 />
                                                 <input
