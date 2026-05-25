@@ -522,7 +522,7 @@ const LandingPage = ({ onLoginSuccess }) => {
                                     {(loginStep === 'phone' || loginStep === 'pin') ? (
                                         <div className="space-y-3">
                                             {/* Phone input */}
-                                            <div className="flex items-center border-2 border-violet-400 rounded-xl bg-white">
+                                            <div className="flex items-center border-2 border-violet-400 rounded-xl bg-white pr-3">
                                                 <div className="flex items-center gap-1 px-3 py-2.5 text-xs font-bold text-violet-500 shrink-0 border-r-2 border-violet-400">🇲🇽 +52</div>
                                                 <input
                                                     type="tel" inputMode="numeric" pattern="[0-9]*" maxLength={10} value={phone}
@@ -533,8 +533,8 @@ const LandingPage = ({ onLoginSuccess }) => {
                                                     style={{ outline: 'none', boxShadow: 'none' }}
                                                     autoFocus={loginStep === 'phone'}
                                                 />
-                                                {loginStep === 'phone' && phone.length === 10 && <CheckCircle className="w-4 h-4 text-green-500 mr-3 shrink-0 flex-none" />}
-                                                {loginStep === 'pin' && <button type="button" onClick={() => { setLoginStep('phone'); setPinDigits(['','','','']); }} className="text-xs text-violet-500 font-semibold mr-3 shrink-0 hover:underline">Cambiar</button>}
+                                                {loginStep === 'phone' && phone.length === 10 && <CheckCircle className="w-4 h-4 text-green-500 shrink-0 flex-none" />}
+                                                {loginStep === 'pin' && <button type="button" onClick={() => { setLoginStep('phone'); setPinDigits(['','','','']); }} className="text-xs text-violet-500 font-semibold shrink-0 hover:underline">Cambiar</button>}
                                             </div>
 
                                             {/* PIN inline — aparece debajo sin cambiar pantalla */}
@@ -620,7 +620,7 @@ const LandingPage = ({ onLoginSuccess }) => {
                         {(loginStep === 'phone' || loginStep === 'pin') ? (
                             <div className="space-y-3">
                                 {/* Phone input */}
-                                <div className="flex items-center border-2 border-violet-400 rounded-xl bg-white">
+                                <div className="flex items-center border-2 border-violet-400 rounded-xl bg-white pr-3">
                                     <div className="flex items-center gap-1 px-3 py-3 text-xs font-bold text-violet-500 shrink-0 border-r-2 border-violet-400">🇲🇽 +52</div>
                                     <input
                                         type="tel" inputMode="numeric" pattern="[0-9]*" maxLength={10} value={phone}
