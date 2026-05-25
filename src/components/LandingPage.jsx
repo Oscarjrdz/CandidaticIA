@@ -151,6 +151,8 @@ const LandingPage = ({ onLoginSuccess }) => {
     const [contactError, setContactError] = useState('');
     const [infoForm, setInfoForm] = useState({ nombre: '', empresa: '', wapp: '', correo: '' });
     const [infoFormStatus, setInfoFormStatus] = useState(''); // '' | 'loading' | 'success' | 'error'
+    const [ctaForm, setCtaForm] = useState({ nombre: '', empresa: '', wapp: '', correo: '' });
+    const [ctaFormStatus, setCtaFormStatus] = useState(''); // '' | 'loading' | 'success' | 'error'
 
     const sendWhatsAppContact = async (e) => {
         e?.preventDefault();
@@ -197,6 +199,23 @@ const LandingPage = ({ onLoginSuccess }) => {
             setInfoForm({ nombre: '', wapp: '', correo: '' });
         } catch {
             setInfoFormStatus('error');
+        }
+    };
+
+    const handleCtaForm = async (e) => {
+        e.preventDefault();
+        if (!ctaForm.nombre || !ctaForm.wapp) return;
+        setCtaFormStatus('loading');
+        try {
+            await fetch('/api/public/info-request', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(ctaForm),
+            });
+            setCtaFormStatus('success');
+            setCtaForm({ nombre: '', empresa: '', wapp: '', correo: '' });
+        } catch {
+            setCtaFormStatus('error');
         }
     };
 
@@ -484,8 +503,8 @@ const LandingPage = ({ onLoginSuccess }) => {
 
                             {/* LOGIN DROPDOWN — desktop only */}
                             {isLoginOpen && (
-                                <div className="hidden sm:block absolute right-0 top-full mt-3 w-80 bg-white backdrop-blur-xl rounded-2xl shadow-2xl shadow-violet-300/40 border border-violet-100 p-5 z-[9999]" style={{ backgroundColor: 'rgba(255,255,255,0.97)' }}>
-                                    <div className="absolute -top-2 right-6 w-4 h-4 bg-white transform rotate-45 border-t border-l border-violet-100"></div>
+                                <div className="hidden sm:block absolute right-0 top-full mt-3 w-80 rounded-2xl shadow-2xl shadow-violet-300/40 border border-white/40 p-5 z-[9999]" style={{ backgroundColor: 'rgba(255,255,255,0.65)', backdropFilter: 'blur(48px) saturate(200%)', WebkitBackdropFilter: 'blur(48px) saturate(200%)' }}>
+                                    <div className="absolute -top-2 right-6 w-4 h-4 transform rotate-45 border-t border-l border-white/40" style={{ backgroundColor: 'rgba(255,255,255,0.65)' }}></div>
 
                                     {/* Header compact */}
                                     <div className="flex items-center gap-3 mb-4">
@@ -503,14 +522,14 @@ const LandingPage = ({ onLoginSuccess }) => {
                                     {(loginStep === 'phone' || loginStep === 'pin') ? (
                                         <div className="space-y-3">
                                             {/* Phone input */}
-                                            <div className="flex items-center bg-white border border-gray-200 rounded-xl overflow-hidden focus-within:border-violet-400 focus-within:ring-2 focus-within:ring-violet-100 transition-all">
-                                                <div className="flex items-center gap-1 px-3 py-2.5 border-r border-gray-100 text-xs font-bold text-gray-500 shrink-0">🇲🇽 +52</div>
+                                            <div className="flex items-center rounded-xl overflow-hidden transition-all">
+                                                <div className="flex items-center gap-1 px-3 py-2.5 text-xs font-bold text-gray-500 shrink-0">🇲🇽 +52</div>
                                                 <input
                                                     type="tel" inputMode="numeric" pattern="[0-9]*" maxLength={10} value={phone}
                                                     onChange={e => { if (loginStep === 'phone') { const v = e.target.value.replace(/\D/g,'').slice(0,10); setPhone(v); } }}
                                                     placeholder="10 dígitos"
                                                     readOnly={loginStep === 'pin'}
-                                                    className="flex-1 px-3 py-2.5 text-sm font-semibold text-gray-800 bg-transparent outline-none placeholder:text-gray-300 placeholder:font-normal text-center"
+                                                    className="flex-1 px-3 py-2.5 text-[15px] font-semibold text-gray-800 bg-transparent outline-none placeholder:text-gray-300 placeholder:font-normal text-center"
                                                     autoFocus={loginStep === 'phone'}
                                                 />
                                                 {loginStep === 'phone' && phone.length === 10 && <CheckCircle className="w-4 h-4 text-green-500 mr-3 shrink-0" />}
@@ -579,7 +598,7 @@ const LandingPage = ({ onLoginSuccess }) => {
 
             {/* ═══ MOBILE LOGIN PORTAL — rendered outside header to bypass backdrop-filter stacking context ═══ */}
             {isLoginOpen && createPortal(
-                <div className="sm:hidden mobile-login-portal fixed inset-0 z-[9999] bg-white/95 backdrop-blur-xl overflow-y-auto flex flex-col justify-center p-6">
+                <div className="sm:hidden mobile-login-portal fixed inset-0 z-[9999] overflow-y-auto flex flex-col justify-center p-6" style={{ backgroundColor: 'rgba(255,255,255,0.72)', backdropFilter: 'blur(48px) saturate(200%)', WebkitBackdropFilter: 'blur(48px) saturate(200%)' }}>
                     <button onClick={() => setIsLoginOpen(false)} className="absolute top-4 right-4 p-2 rounded-full bg-gray-100 hover:bg-gray-200 transition-colors z-20">
                         <X className="w-5 h-5 text-gray-600" />
                     </button>
@@ -600,14 +619,14 @@ const LandingPage = ({ onLoginSuccess }) => {
                         {(loginStep === 'phone' || loginStep === 'pin') ? (
                             <div className="space-y-3">
                                 {/* Phone input */}
-                                <div className="flex items-center bg-white border border-gray-200 rounded-xl overflow-hidden focus-within:border-violet-400 focus-within:ring-2 focus-within:ring-violet-100 transition-all">
-                                    <div className="flex items-center gap-1 px-3 py-3 bg-gray-100 border-r border-gray-200 text-xs font-bold text-gray-600 shrink-0">🇲🇽 +52</div>
+                                <div className="flex items-center rounded-xl overflow-hidden transition-all">
+                                    <div className="flex items-center gap-1 px-3 py-3 text-xs font-bold text-gray-600 shrink-0">🇲🇽 +52</div>
                                     <input
                                         type="tel" inputMode="numeric" pattern="[0-9]*" maxLength={10} value={phone}
                                         onChange={e => { if (loginStep === 'phone') { const v = e.target.value.replace(/\D/g,'').slice(0,10); setPhone(v); } }}
                                         placeholder="10 dígitos"
                                         readOnly={loginStep === 'pin'}
-                                        className="flex-1 px-3 py-3 text-sm font-semibold text-gray-800 bg-transparent outline-none placeholder:text-gray-300 placeholder:font-normal"
+                                        className="flex-1 px-3 py-3 text-[15px] font-semibold text-gray-800 bg-transparent outline-none placeholder:text-gray-300 placeholder:font-normal"
                                         autoFocus={loginStep === 'phone'}
                                     />
                                     {loginStep === 'phone' && phone.length === 10 && <CheckCircle className="w-4 h-4 text-green-500 mr-3 shrink-0" />}
@@ -1399,7 +1418,7 @@ const LandingPage = ({ onLoginSuccess }) => {
                 {/* ═══ CTA SECTION ═══ */}
                 <section className="py-12 sm:py-20 px-4 sm:px-6">
                     <div className="max-w-7xl mx-auto">
-                        <div className="relative rounded-2xl sm:rounded-[2rem] overflow-hidden p-8 sm:p-12 md:p-16 text-center" style={{
+                        <div className="relative rounded-2xl sm:rounded-[2rem] overflow-hidden p-8 sm:p-12 md:p-16" style={{
                             background: 'linear-gradient(135deg, #EDE9FE 0%, #E0F2FE 50%, #F3E8FF 100%)'
                         }}>
                             <div className="absolute inset-0 overflow-hidden pointer-events-none">
@@ -1407,29 +1426,93 @@ const LandingPage = ({ onLoginSuccess }) => {
                                 <div className="absolute bottom-[-10%] right-[20%] w-[30%] h-[30%] bg-blue-400/10 rounded-full blur-3xl"></div>
                             </div>
 
-                            <div className="relative z-10 max-w-2xl mx-auto">
-                                <h2 className="text-2xl sm:text-3xl md:text-5xl font-extrabold text-gray-900 tracking-tight mb-4">
-                                    ¿Listo para que reclutemos por ti?
-                                </h2>
-                                <p className="text-sm sm:text-lg text-gray-600 mb-6 sm:mb-8 px-2">
-                                    Únete a las empresas que ya encontraron al candidato ideal con nuestra agencia de reclutamiento con IA.
-                                </p>
-                                <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4">
-                                    <button
-                                        onClick={() => setIsLoginOpen(true)}
-                                        className="w-full sm:w-auto px-8 py-3.5 bg-gradient-to-r from-blue-600 to-violet-600 hover:from-blue-700 hover:to-violet-700 text-white font-bold rounded-full shadow-lg shadow-violet-300/40 hover:shadow-violet-400/50 transition-all duration-300 transform hover:-translate-y-0.5 flex items-center justify-center space-x-2"
-                                    >
-                                        <span>Empezar ahora</span>
-                                        <ArrowRight className="w-4 h-4" />
-                                    </button>
+                            <div className="relative z-10 max-w-5xl mx-auto">
+                                {/* Header */}
+                                <div className="text-center mb-8 sm:mb-10">
+                                    <h2 className="text-2xl sm:text-3xl md:text-5xl font-extrabold text-gray-900 tracking-tight mb-4">
+                                        ¿Listo para que reclutemos por ti?
+                                    </h2>
+                                    <p className="text-sm sm:text-lg text-gray-600 px-2">
+                                        Únete a las empresas que ya encontraron al candidato ideal con nuestra agencia de reclutamiento con IA.
+                                    </p>
+                                </div>
+
+                                {/* Form + WhatsApp */}
+                                <div className="grid sm:grid-cols-[1fr_auto] gap-6 items-start">
+                                    {/* Form */}
+                                    <div className="bg-white/70 backdrop-blur-md border border-violet-100 rounded-3xl p-6 shadow-xl shadow-violet-100/30">
+                                        <p className="text-xs font-bold text-violet-600 uppercase tracking-wider mb-4">Cuéntanos sobre tu empresa</p>
+                                        {ctaFormStatus === 'success' ? (
+                                            <div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-xl px-4 py-4">
+                                                <CheckCircle className="w-5 h-5 text-green-500 shrink-0" />
+                                                <p className="text-sm font-semibold text-green-800">¡Recibido! Te contactamos pronto.</p>
+                                            </div>
+                                        ) : (
+                                            <form onSubmit={handleCtaForm} className="flex flex-col gap-2.5">
+                                                <div className="grid sm:grid-cols-2 gap-2.5">
+                                                    <input
+                                                        type="text"
+                                                        placeholder="Nombre"
+                                                        value={ctaForm.nombre}
+                                                        onChange={e => setCtaForm(f => ({ ...f, nombre: e.target.value }))}
+                                                        required
+                                                        className="w-full bg-white border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm text-gray-800 placeholder-gray-400 outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100 transition"
+                                                    />
+                                                    <input
+                                                        type="text"
+                                                        placeholder="Empresa"
+                                                        value={ctaForm.empresa}
+                                                        onChange={e => setCtaForm(f => ({ ...f, empresa: e.target.value }))}
+                                                        className="w-full bg-white border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm text-gray-800 placeholder-gray-400 outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100 transition"
+                                                    />
+                                                </div>
+                                                <div className="grid sm:grid-cols-2 gap-2.5">
+                                                    <input
+                                                        type="tel"
+                                                        placeholder="WhatsApp (10 dígitos)"
+                                                        value={ctaForm.wapp}
+                                                        onChange={e => setCtaForm(f => ({ ...f, wapp: e.target.value }))}
+                                                        required
+                                                        maxLength={10}
+                                                        className="w-full bg-white border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm text-gray-800 placeholder-gray-400 outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100 transition"
+                                                    />
+                                                    <input
+                                                        type="email"
+                                                        placeholder="Correo electrónico"
+                                                        value={ctaForm.correo}
+                                                        onChange={e => setCtaForm(f => ({ ...f, correo: e.target.value }))}
+                                                        className="w-full bg-white border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm text-gray-800 placeholder-gray-400 outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100 transition"
+                                                    />
+                                                </div>
+                                                <button
+                                                    type="submit"
+                                                    disabled={ctaFormStatus === 'loading'}
+                                                    className="w-full bg-gradient-to-r from-blue-600 to-violet-600 hover:from-blue-700 hover:to-violet-700 text-white font-bold py-2.5 rounded-xl text-sm transition-all shadow-md shadow-violet-300/30 disabled:opacity-60 flex items-center justify-center gap-2"
+                                                >
+                                                    {ctaFormStatus === 'loading' ? (
+                                                        <Loader2 className="w-4 h-4 animate-spin" />
+                                                    ) : (
+                                                        <><Send className="w-4 h-4" /> Enviar</>
+                                                    )}
+                                                </button>
+                                            </form>
+                                        )}
+                                    </div>
+
+                                    {/* WhatsApp Ventas */}
                                     <a
-                                        href="https://wa.me/528112345678"
+                                        href="https://wa.me/528116038195"
                                         target="_blank"
                                         rel="noopener noreferrer"
-                                        className="w-full sm:w-auto px-8 py-3.5 bg-white/80 backdrop-blur-sm border border-gray-200 text-gray-700 font-semibold rounded-full hover:bg-white hover:border-gray-300 transition-all duration-300 flex items-center justify-center space-x-2"
+                                        className="flex flex-col items-center justify-center gap-3 bg-white/70 backdrop-blur-md border border-green-200/60 rounded-3xl p-6 shadow-xl shadow-green-100/30 hover:bg-white/90 transition-all duration-300 group min-w-[160px]"
                                     >
-                                        <WhatsAppIcon className="w-4 h-4 text-green-600" />
-                                        <span>Hablar con ventas</span>
+                                        <div className="w-12 h-12 bg-green-500 rounded-2xl flex items-center justify-center shadow-md shadow-green-300/40 group-hover:scale-105 transition-transform">
+                                            <WhatsAppIcon className="w-6 h-6 text-white" />
+                                        </div>
+                                        <div className="text-center">
+                                            <p className="text-sm font-bold text-gray-900">Hablar con ventas</p>
+                                            <p className="text-xs text-gray-500 mt-0.5">811 603 8195</p>
+                                        </div>
                                     </a>
                                 </div>
                             </div>
