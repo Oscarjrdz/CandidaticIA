@@ -271,8 +271,8 @@ const MobileLandingPage = ({ onLoginSuccess }) => {
                         </div>
 
                         <h1 className="text-3xl font-extrabold tracking-tight text-gray-900 mb-3 leading-[1.15]">
-                            Reclutamos por ti<br />
-                            <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 via-violet-600 to-purple-600">con IA y WhatsApp</span>
+                            Agencia de Reclutamiento<br />
+                            <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 via-violet-600 to-purple-600">en Monterrey con IA</span>
                         </h1>
 
                         <p className="text-sm text-gray-500 leading-relaxed mb-6 max-w-xs mx-auto">
@@ -327,7 +327,7 @@ const MobileLandingPage = ({ onLoginSuccess }) => {
 
                 {/* ── FEATURES ── */}
                 <section className="px-5 py-10">
-                    <h2 className="text-xl font-extrabold text-gray-900 text-center mb-6">¿Por qué Candidatic?</h2>
+                    <h2 className="text-xl font-extrabold text-gray-900 text-center mb-6">¿Por qué somos la mejor agencia de reclutamiento en Monterrey?</h2>
                     <div className="grid grid-cols-2 gap-3">
                         {features.map((f, i) => (
                             <div key={i} className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
@@ -343,7 +343,7 @@ const MobileLandingPage = ({ onLoginSuccess }) => {
 
                 {/* ── HOW IT WORKS ── */}
                 <section className="px-5 py-10 bg-gray-50">
-                    <h2 className="text-xl font-extrabold text-gray-900 text-center mb-6">¿Cómo funciona?</h2>
+                    <h2 className="text-xl font-extrabold text-gray-900 text-center mb-6">Cómo funciona nuestro reclutamiento masivo</h2>
                     <div className="space-y-4">
                         {steps.map((s, i) => (
                             <div key={i} className="flex items-start gap-4 bg-white rounded-2xl p-4 shadow-sm border border-gray-100">

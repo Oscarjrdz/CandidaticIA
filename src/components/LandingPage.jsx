@@ -833,9 +833,9 @@ const LandingPage = ({ onLoginSuccess }) => {
 
                                 {/* Headline */}
                                 <h1 className="hero-text-2 text-3xl sm:text-4xl md:text-5xl lg:text-[3.5rem] xl:text-6xl font-extrabold tracking-tight text-gray-900 mb-4 sm:mb-6 leading-[1.1]">
-                                    Reclutamos por ti{' '}<br className="hidden sm:inline" />
+                                    Agencia de Reclutamiento<br className="hidden sm:inline" />
                                     <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 via-violet-600 to-purple-600">
-                                        con IA y WhatsApp
+                                        en Monterrey con IA
                                     </span>
                                 </h1>
 
@@ -1098,8 +1098,8 @@ const LandingPage = ({ onLoginSuccess }) => {
                                 <span>Funcionalidades</span>
                             </div>
                             <h2 className="text-2xl sm:text-3xl md:text-5xl font-extrabold text-gray-900 tracking-tight mb-4">
-                                ¿Por qué elegirnos como tu<br />
-                                <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-violet-600">agencia de reclutamiento?</span>
+                                ¿Por qué somos la mejor<br />
+                                <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-violet-600">agencia de reclutamiento en Monterrey?</span>
                             </h2>
                             <p className="text-sm sm:text-lg text-gray-500 max-w-2xl mx-auto px-2">
                                 Combinamos inteligencia artificial, WhatsApp y un equipo experto para encontrar al talento ideal para tu empresa.
@@ -1139,10 +1139,10 @@ const LandingPage = ({ onLoginSuccess }) => {
                                 <span>Proceso</span>
                             </div>
                             <h2 className="text-2xl sm:text-3xl md:text-5xl font-extrabold text-gray-900 tracking-tight mb-4">
-                                ¿Cómo trabajamos?
+                                Cómo funciona nuestro reclutamiento masivo
                             </h2>
                             <p className="text-sm sm:text-lg text-gray-500 max-w-2xl mx-auto px-2">
-                                En solo 4 pasos te entregamos candidatos listos para entrevista.
+                                En solo 4 pasos te entregamos candidatos listos para entrevista en Monterrey y área metropolitana.
                             </p>
                         </div>
 
@@ -1187,7 +1187,7 @@ const LandingPage = ({ onLoginSuccess }) => {
 
                             <div className="relative z-10">
                                 <h2 className="text-2xl sm:text-3xl md:text-4xl font-extrabold text-white text-center mb-3 sm:mb-4 tracking-tight">
-                                    Números que hablan por sí solos
+                                    Resultados de reclutamiento masivo en Monterrey
                                 </h2>
                                 <p className="text-violet-200 text-center mb-8 sm:mb-12 text-sm sm:text-lg">
                                     Resultados reales de empresas que reclutan con Candidatic IA
@@ -1405,7 +1405,7 @@ const LandingPage = ({ onLoginSuccess }) => {
                     <div className="max-w-3xl mx-auto">
                         <div className="text-center mb-8 sm:mb-12">
                             <h2 className="text-2xl sm:text-3xl md:text-4xl font-extrabold text-gray-900 tracking-tight mb-4">
-                                Preguntas frecuentes
+                                Preguntas frecuentes sobre reclutamiento masivo en Monterrey
                             </h2>
                             <p className="text-gray-500 text-sm sm:text-lg px-2">Todo lo que necesitas saber sobre nuestro servicio de reclutamiento.</p>
                         </div>
