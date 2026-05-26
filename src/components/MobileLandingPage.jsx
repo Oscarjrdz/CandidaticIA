@@ -275,8 +275,8 @@ const MobileLandingPage = ({ onLoginSuccess }) => {
                             <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 via-violet-600 to-purple-600">en Monterrey con IA</span>
                         </h1>
 
-                        <p className="text-sm text-gray-500 leading-relaxed mb-6 max-w-xs mx-auto">
-                            Brenda, nuestra reclutadora IA, contacta candidatos por WhatsApp, los filtra automáticamente y te agenda entrevistas.
+                        <p className="text-sm text-gray-600 leading-relaxed mb-6 max-w-sm mx-auto">
+                            Somos tu agencia de reclutamiento masivo con inteligencia artificial. Brenda, nuestra reclutadora IA, contacta candidatos por WhatsApp, gestiona grandes volúmenes de postulantes y te agenda entrevistas con IA.
                         </p>
 
                         {/* Form */}
@@ -306,6 +306,52 @@ const MobileLandingPage = ({ onLoginSuccess }) => {
                             )}
                         </div>
 
+                    </div>
+                </section>
+
+                {/* ── CLIENTES MARQUEE ── */}
+                <section className="py-6 bg-white overflow-hidden">
+                    <style>{`
+                        @keyframes marquee-mobile { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
+                        .marquee-mobile { animation: marquee-mobile 28s linear infinite; }
+                        .marquee-mobile:hover { animation-play-state: paused; }
+                    `}</style>
+                    <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest text-center mb-4">
+                        Empresas que ya reclutan con nosotros
+                    </p>
+                    <div className="relative overflow-hidden">
+                        <div className="absolute left-0 top-0 bottom-0 w-8 bg-gradient-to-r from-white to-transparent z-10 pointer-events-none" />
+                        <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-white to-transparent z-10 pointer-events-none" />
+                        <div className="flex">
+                            <div className="marquee-mobile flex items-center gap-8">
+                                {[
+                                    { name: 'CEMEX',            logo: 'https://upload.wikimedia.org/wikipedia/commons/8/85/Cemex_logo_2023.png' },
+                                    { name: 'FEMSA',            logo: 'https://upload.wikimedia.org/wikipedia/commons/8/85/FEMSA_Logo.svg' },
+                                    { name: 'Banorte',          logo: 'https://upload.wikimedia.org/wikipedia/en/1/13/Banorte_%28banking_and_financial_services_holding_company%29_logo.svg' },
+                                    { name: 'ALFA',             logo: 'https://upload.wikimedia.org/wikipedia/commons/f/f5/ALFA_logo.svg' },
+                                    { name: 'Vitro',            logo: 'https://upload.wikimedia.org/wikipedia/commons/0/0d/Logo_Vitro.jpg' },
+                                    { name: 'GRUMA',            logo: 'https://upload.wikimedia.org/wikipedia/en/9/97/Gruma_logo-en.svg' },
+                                    { name: 'Arca Continental', logo: 'https://upload.wikimedia.org/wikipedia/commons/f/ff/Arca_Continental_logo.svg' },
+                                    { name: 'Softtek',          logo: 'https://upload.wikimedia.org/wikipedia/en/b/b7/Softtek_Logo.svg' },
+                                    { name: 'Grupo Bimbo',      logo: 'https://upload.wikimedia.org/wikipedia/commons/d/dd/Logo_Grupo_BIMBO.svg' },
+                                    { name: 'Liverpool',        logo: 'https://upload.wikimedia.org/wikipedia/commons/f/fb/Liverpool_logo_2023.png' },
+                                    { name: 'CEMEX',            logo: 'https://upload.wikimedia.org/wikipedia/commons/8/85/Cemex_logo_2023.png' },
+                                    { name: 'FEMSA',            logo: 'https://upload.wikimedia.org/wikipedia/commons/8/85/FEMSA_Logo.svg' },
+                                    { name: 'Banorte',          logo: 'https://upload.wikimedia.org/wikipedia/en/1/13/Banorte_%28banking_and_financial_services_holding_company%29_logo.svg' },
+                                    { name: 'ALFA',             logo: 'https://upload.wikimedia.org/wikipedia/commons/f/f5/ALFA_logo.svg' },
+                                    { name: 'Vitro',            logo: 'https://upload.wikimedia.org/wikipedia/commons/0/0d/Logo_Vitro.jpg' },
+                                    { name: 'GRUMA',            logo: 'https://upload.wikimedia.org/wikipedia/en/9/97/Gruma_logo-en.svg' },
+                                    { name: 'Arca Continental', logo: 'https://upload.wikimedia.org/wikipedia/commons/f/ff/Arca_Continental_logo.svg' },
+                                    { name: 'Softtek',          logo: 'https://upload.wikimedia.org/wikipedia/en/b/b7/Softtek_Logo.svg' },
+                                    { name: 'Grupo Bimbo',      logo: 'https://upload.wikimedia.org/wikipedia/commons/d/dd/Logo_Grupo_BIMBO.svg' },
+                                    { name: 'Liverpool',        logo: 'https://upload.wikimedia.org/wikipedia/commons/f/fb/Liverpool_logo_2023.png' },
+                                ].map((co, i) => (
+                                    <div key={i} className="flex-shrink-0 opacity-40">
+                                        <img src={co.logo} alt={co.name} className="h-7 w-auto max-w-[90px] object-contain grayscale" />
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
                     </div>
                 </section>
 
