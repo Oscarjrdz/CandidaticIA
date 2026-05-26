@@ -307,7 +307,7 @@ const MobileLandingPage = ({ onLoginSuccess }) => {
                         </div>
 
                         {/* WhatsApp directo */}
-                        <a href="https://wa.me/528116038195" target="_blank" rel="noopener noreferrer"
+                        <a href="https://wa.me/5218116038195" target="_blank" rel="noopener noreferrer"
                             className="mt-3 flex items-center justify-center gap-2 text-green-600 text-sm font-semibold py-2">
                             <WhatsAppIcon className="w-4 h-4" />
                             Hablar directo con ventas · 811 603 8195
@@ -392,7 +392,7 @@ const MobileLandingPage = ({ onLoginSuccess }) => {
                         <h2 className="text-2xl font-extrabold text-gray-900 mb-2">¿Listo para que reclutemos por ti?</h2>
                         <p className="text-sm text-gray-600">Únete a las empresas que ya encontraron al candidato ideal.</p>
                     </div>
-                    <a href="https://wa.me/528116038195" target="_blank" rel="noopener noreferrer"
+                    <a href="https://wa.me/5218116038195" target="_blank" rel="noopener noreferrer"
                         className="flex items-center justify-center gap-3 w-full bg-green-500 hover:bg-green-600 text-white font-bold py-4 rounded-2xl shadow-lg shadow-green-300/40 mb-3 transition-all">
                         <WhatsAppIcon className="w-5 h-5" />
                         Hablar con ventas · 811 603 8195
