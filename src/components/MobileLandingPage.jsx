@@ -306,12 +306,6 @@ const MobileLandingPage = ({ onLoginSuccess }) => {
                             )}
                         </div>
 
-                        {/* WhatsApp directo */}
-                        <a href="https://wa.me/5218116038195" target="_blank" rel="noopener noreferrer"
-                            className="mt-3 flex items-center justify-center gap-2 text-green-600 text-sm font-semibold py-2">
-                            <WhatsAppIcon className="w-4 h-4" />
-                            Hablar directo con ventas · 811 603 8195
-                        </a>
                     </div>
                 </section>
 
@@ -423,10 +417,11 @@ const MobileLandingPage = ({ onLoginSuccess }) => {
 
             {/* ── STICKY BOTTOM CTA ── */}
             <div className="fixed bottom-0 left-0 right-0 z-40 p-4 bg-white/90 backdrop-blur-md border-t border-gray-100">
-                <button onClick={() => setIsLoginOpen(true)}
-                    className="w-full bg-gradient-to-r from-blue-600 to-violet-600 text-white font-bold py-3.5 rounded-2xl shadow-lg shadow-violet-300/40 flex items-center justify-center gap-2 text-sm">
-                    Ingresar a mi cuenta <ArrowRight className="w-4 h-4" />
-                </button>
+                <a href="https://wa.me/5218116038195" target="_blank" rel="noopener noreferrer"
+                    className="w-full bg-green-500 text-white font-bold py-3.5 rounded-2xl shadow-lg shadow-green-300/40 flex items-center justify-center gap-2 text-sm">
+                    <WhatsAppIcon className="w-5 h-5" />
+                    Mandar WhatsApp
+                </a>
             </div>
         </div>
     );
