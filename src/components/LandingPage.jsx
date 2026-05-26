@@ -1539,60 +1539,15 @@ const LandingPage = ({ onLoginSuccess }) => {
             </main>
 
             {/* ═══ FOOTER ═══ */}
-            <footer className="bg-gray-950 text-gray-400 py-10 sm:py-16 px-4 sm:px-6">
-                <div className="max-w-7xl mx-auto">
-                    <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-8 sm:gap-12 mb-8 sm:mb-12">
-                        {/* Brand */}
-                        <div className="col-span-2 sm:col-span-2 md:col-span-1">
-                            <div className="flex items-center space-x-2.5 mb-4">
-                                <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-violet-600 rounded-lg flex items-center justify-center">
-                                    <BrainCircuit className="w-4.5 h-4.5 text-white stroke-[1.5] rotate-90" />
-                                </div>
-                                <span className="text-lg font-extrabold text-white tracking-tight flex items-center">
-                                    CANDIDATIC&nbsp;<span className="tracking-tighter text-violet-400">IΛ</span>
-                                </span>
-                            </div>
-                            <p className="text-sm text-gray-500 leading-relaxed">
-                                Agencia de reclutamiento potenciada por inteligencia artificial y WhatsApp para el mercado latinoamericano.
-                            </p>
-                        </div>
-
-                        {/* Links */}
-                        <div>
-                            <h4 className="text-white font-semibold mb-3 sm:mb-4 text-sm">Servicios</h4>
-                            <div className="space-y-2 sm:space-y-2.5">
-                                {['Características', 'Precios', 'Integraciones', 'Changelog'].map((l, i) => (
-                                    <a key={i} href="#" className="block text-sm text-gray-500 hover:text-violet-400 transition-colors">{l}</a>
-                                ))}
-                            </div>
-                        </div>
-                        <div>
-                            <h4 className="text-white font-semibold mb-3 sm:mb-4 text-sm">Recursos</h4>
-                            <div className="space-y-2 sm:space-y-2.5">
-                                {['Documentación', 'API', 'Guías', 'Blog'].map((l, i) => (
-                                    <a key={i} href="#" className="block text-sm text-gray-500 hover:text-violet-400 transition-colors">{l}</a>
-                                ))}
-                            </div>
-                        </div>
-                        <div className="col-span-2 sm:col-span-1">
-                            <h4 className="text-white font-semibold mb-3 sm:mb-4 text-sm">Compañía</h4>
-                            <div className="space-y-2 sm:space-y-2.5">
-                                {['Nosotros', 'Contacto', 'Privacidad', 'Términos'].map((l, i) => (
-                                    <a key={i} href="#" className="block text-sm text-gray-500 hover:text-violet-400 transition-colors">{l}</a>
-                                ))}
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="border-t border-gray-800 pt-6 sm:pt-8 flex flex-col md:flex-row items-center justify-between gap-4">
-                        <p className="text-xs sm:text-sm text-gray-600 text-center md:text-left">
-                            © {new Date().getFullYear()} Candidatic IA. Todos los derechos reservados.
-                        </p>
-                        <div className="flex items-center space-x-6">
-                            <a href="#" className="text-gray-600 hover:text-violet-400 transition-colors text-xs sm:text-sm">Privacidad</a>
-                            <a href="#" className="text-gray-600 hover:text-violet-400 transition-colors text-xs sm:text-sm">Términos</a>
-                            <a href="#" className="text-gray-600 hover:text-violet-400 transition-colors text-xs sm:text-sm">Cookies</a>
-                        </div>
+            <footer className="bg-gray-950 text-gray-400 py-6 px-4 sm:px-6">
+                <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
+                    <p className="text-xs sm:text-sm text-gray-600 text-center md:text-left">
+                        © {new Date().getFullYear()} Candidatic IA. Todos los derechos reservados.
+                    </p>
+                    <div className="flex items-center space-x-6">
+                        <a href="#" className="text-gray-600 hover:text-violet-400 transition-colors text-xs sm:text-sm">Privacidad</a>
+                        <a href="#" className="text-gray-600 hover:text-violet-400 transition-colors text-xs sm:text-sm">Términos</a>
+                        <a href="#" className="text-gray-600 hover:text-violet-400 transition-colors text-xs sm:text-sm">Cookies</a>
                     </div>
                 </div>
             </footer>
