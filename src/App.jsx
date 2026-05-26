@@ -5,6 +5,7 @@ import LoadingOverlay from './components/ui/LoadingOverlay';
 import ErrorBoundary from './components/ui/ErrorBoundary';
 import SectionSkeleton from './components/ui/SectionSkeleton';
 import LandingPage from './components/LandingPage';
+import MobileLandingPage from './components/MobileLandingPage';
 import { ToastProvider, useToastContext } from './contexts/ToastContext';
 import { AuthProvider, useAuthContext } from './contexts/AuthContext';
 import { getTheme, saveTheme } from './utils/storage';
@@ -151,12 +152,14 @@ function AppShell() {
   }
 
   if (!user) {
-    return (
-      <LandingPage onLoginSuccess={(userData) => {
-        login(userData);
-        showToast(`Bienvenido, ${userData.name}`, 'success');
-      }} />
-    );
+    const isMobileLanding = window.innerWidth < 768;
+    const loginSuccess = (userData) => {
+      login(userData);
+      showToast(`Bienvenido, ${userData.name}`, 'success');
+    };
+    return isMobileLanding
+      ? <MobileLandingPage onLoginSuccess={loginSuccess} />
+      : <LandingPage onLoginSuccess={loginSuccess} />;
   }
 
   // PREVENT GHOSTING: wait until permissions apply routing fix
