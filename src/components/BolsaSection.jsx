@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Briefcase, Plus, Building2, Tag, Loader2, Save, Trash2, Pencil, Power, Smartphone, Image as ImageIcon, MessageSquare, Heart, Users, Clock, Phone, ChevronDown, ChevronUp, X } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Briefcase, Plus, Building2, Tag, Loader2, Trash2, Pencil, Power, Smartphone, Image as ImageIcon, MessageSquare, Heart, Users, Clock, Phone, X, Eye } from 'lucide-react';
 import Card from './ui/Card';
 import Button from './ui/Button';
 import Input from './ui/Input';
@@ -7,14 +7,19 @@ import Modal from './ui/Modal';
 import { useConfirmModal } from './ui/ConfirmModal';
 import { useToastContext } from '../contexts/ToastContext';
 
+const PAGE_SIZE = 12;
+
 const BolsaSection = () => {
     const [jobs, setJobs] = useState([]);
     const [loading, setLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [saving, setSaving] = useState(false);
     const [editingJob, setEditingJob] = useState(null);
-    const [expandedJob, setExpandedJob] = useState(null);
+    const [detailJob, setDetailJob] = useState(null);
+    const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+    const sentinelRef = useRef(null);
     const { confirmModalJSX, showConfirm } = useConfirmModal();
+    const { showToast } = useToastContext();
 
     const defaultForm = {
         title: '', company: '', location: '', salary: '',
@@ -25,11 +30,27 @@ const BolsaSection = () => {
 
     useEffect(() => { loadJobs(); }, []);
 
+    // Infinite scroll — carga más tarjetas al llegar al centinela
+    useEffect(() => {
+        const el = sentinelRef.current;
+        if (!el) return;
+        const observer = new IntersectionObserver((entries) => {
+            if (entries[0].isIntersecting) {
+                setVisibleCount(prev => Math.min(prev + PAGE_SIZE, jobs.length));
+            }
+        }, { threshold: 0.1 });
+        observer.observe(el);
+        return () => observer.disconnect();
+    }, [jobs.length]);
+
     const loadJobs = async () => {
         try {
             const res = await fetch('/api/bolsa');
             const data = await res.json();
-            if (data.success) setJobs(data.data || []);
+            if (data.success) {
+                setJobs(data.data || []);
+                setVisibleCount(PAGE_SIZE);
+            }
         } catch (error) {
             console.error('Error loading bolsa jobs:', error);
             showToast('Error al cargar la bolsa de empleo', 'error');
@@ -39,7 +60,6 @@ const BolsaSection = () => {
     };
 
     const handleOpenCreate = () => {
-    const { showToast } = useToastContext();
         setEditingJob(null);
         setFormData(defaultForm);
         setIsModalOpen(true);
@@ -138,6 +158,8 @@ const BolsaSection = () => {
         return new Date(d).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
     };
 
+    const visibleJobs = jobs.slice(0, visibleCount);
+
     return (
         <div className="space-y-4 w-full pb-8">
             {/* Header Banner */}
@@ -148,7 +170,9 @@ const BolsaSection = () => {
                     </div>
                     <div>
                         <h2 className="text-xl font-bold uppercase tracking-tight">Bolsa de Empleo (APP)</h2>
-                        <p className="text-blue-100 text-sm mt-1">Administra vacantes, comentarios, postulaciones y solicitudes.</p>
+                        <p className="text-blue-100 text-sm mt-1">
+                            {jobs.length > 0 ? `${jobs.length} vacantes · mostrando ${visibleJobs.length}` : 'Administra vacantes, comentarios, postulaciones y solicitudes.'}
+                        </p>
                     </div>
                 </div>
                 <button onClick={handleOpenCreate} className="flex items-center gap-2 px-4 py-2 bg-white text-blue-600 rounded-xl font-bold shadow-sm hover:scale-105 transition-all">
@@ -156,7 +180,7 @@ const BolsaSection = () => {
                 </button>
             </div>
 
-            {/* Jobs List */}
+            {/* Grid de vacantes */}
             {loading ? (
                 <div className="flex justify-center py-12"><Loader2 className="w-8 h-8 animate-spin text-blue-500" /></div>
             ) : jobs.length === 0 ? (
@@ -171,183 +195,260 @@ const BolsaSection = () => {
                     </div>
                 </Card>
             ) : (
-                <div className="space-y-4">
-                    {jobs.map((job) => {
-                        const isExpanded = expandedJob === job.id;
-                        const appCount = (job.applications || []).length;
-                        const commCount = (job.comments || []).length;
-                        const reqCount = (job.requests || []).length;
+                <>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                        {visibleJobs.map((job) => {
+                            const appCount = (job.applications || []).length;
+                            const commCount = (job.comments || []).length;
+                            const reqCount = (job.requests || []).length;
+                            const isActive = job.active !== false;
 
-                        return (
-                            <Card key={job.id} className="relative overflow-hidden group hover:shadow-lg transition-all border border-gray-100 dark:border-gray-800">
-                                {/* Top Row */}
-                                <div className="flex flex-col md:flex-row md:items-start gap-4">
-                                    {/* Logo Preview */}
-                                    <div className="flex-shrink-0">
-                                        {job.companyLogo ? (
-                                            <img src={job.companyLogo} alt="" className="w-16 h-16 rounded-xl object-cover border border-gray-200 dark:border-gray-700" />
-                                        ) : (
-                                            <div className="w-16 h-16 rounded-xl bg-blue-50 dark:bg-blue-900/30 flex items-center justify-center">
-                                                <Building2 className="w-7 h-7 text-blue-500" />
-                                            </div>
-                                        )}
-                                    </div>
+                            return (
+                                <div key={job.id} className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 flex flex-col overflow-hidden hover:shadow-lg transition-all group">
+                                    {/* Imagen de vacante */}
+                                    {job.mediaUrl ? (
+                                        <div className="relative h-32 flex-shrink-0">
+                                            <img src={job.mediaUrl} alt="" className="w-full h-full object-cover" />
+                                            <span className={`absolute top-2 right-2 px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest ${isActive ? 'bg-green-500 text-white' : 'bg-red-500 text-white'}`}>
+                                                {isActive ? 'Pública' : 'Oculta'}
+                                            </span>
+                                        </div>
+                                    ) : (
+                                        <div className="h-20 bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-blue-900/20 dark:to-indigo-900/20 flex items-center justify-center flex-shrink-0 relative">
+                                            <Briefcase className="w-8 h-8 text-blue-300" />
+                                            <span className={`absolute top-2 right-2 px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest ${isActive ? 'bg-green-500 text-white' : 'bg-red-500 text-white'}`}>
+                                                {isActive ? 'Pública' : 'Oculta'}
+                                            </span>
+                                        </div>
+                                    )}
 
-                                    {/* Info */}
-                                    <div className="flex-1 min-w-0">
-                                        <div className="flex items-start justify-between gap-2">
-                                            <div>
-                                                <h3 className="text-lg font-bold text-gray-900 dark:text-white leading-tight">{job.title}</h3>
-                                                <p className="text-gray-500 dark:text-gray-400 text-sm mt-0.5">{job.company}</p>
+                                    <div className="p-3 flex flex-col flex-1 gap-2">
+                                        {/* Logo + título */}
+                                        <div className="flex items-start gap-2">
+                                            {job.companyLogo ? (
+                                                <img src={job.companyLogo} alt="" className="w-8 h-8 rounded-lg object-cover border border-gray-200 dark:border-gray-600 flex-shrink-0" />
+                                            ) : (
+                                                <div className="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-900/30 flex items-center justify-center flex-shrink-0">
+                                                    <Building2 className="w-4 h-4 text-blue-500" />
+                                                </div>
+                                            )}
+                                            <div className="min-w-0">
+                                                <h3 className="text-sm font-bold text-gray-900 dark:text-white leading-tight line-clamp-1">{job.title}</h3>
+                                                <p className="text-[11px] text-gray-500 dark:text-gray-400 truncate">{job.company}</p>
                                             </div>
-                                            <span className={`px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-widest flex-shrink-0 ${job.active !== false
-                                                ? 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-400'
-                                                : 'bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-400'}`}>
-                                                {job.active !== false ? 'Pública' : 'Oculta'}
+                                        </div>
+
+                                        {/* Tags */}
+                                        <div className="flex flex-wrap gap-1">
+                                            {job.location && (
+                                                <span className="text-[10px] bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 px-1.5 py-0.5 rounded-md truncate max-w-full">
+                                                    📍 {job.location}
+                                                </span>
+                                            )}
+                                            {job.salary && (
+                                                <span className="text-[10px] bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 px-1.5 py-0.5 rounded-md">
+                                                    💰 {job.salary}
+                                                </span>
+                                            )}
+                                            <span className="text-[10px] bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-1.5 py-0.5 rounded-md">
+                                                {job.type}
                                             </span>
                                         </div>
 
-                                        {/* Tags Row */}
-                                        <div className="flex flex-wrap gap-2 mt-3">
-                                            {job.location && <span className="inline-flex items-center gap-1 text-xs bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 px-2 py-1 rounded-lg"><Tag className="w-3 h-3" />{job.location}</span>}
-                                            {job.salary && <span className="inline-flex items-center gap-1 text-xs bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 px-2 py-1 rounded-lg">💰 {job.salary}</span>}
-                                            <span className="inline-flex items-center gap-1 text-xs bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 px-2 py-1 rounded-lg"><Briefcase className="w-3 h-3" />{job.type}</span>
+                                        {/* Stats */}
+                                        <div className="flex items-center justify-between text-[10px] text-gray-400 dark:text-gray-500 mt-auto pt-1">
+                                            <span className="flex items-center gap-0.5"><Heart className="w-3 h-3 text-red-400" />{job.likes || 0}</span>
+                                            <span className="flex items-center gap-0.5"><MessageSquare className="w-3 h-3 text-blue-400" />{commCount}</span>
+                                            <span className="flex items-center gap-0.5"><Users className="w-3 h-3 text-green-500" />{appCount}</span>
+                                            <span className="flex items-center gap-0.5"><Phone className="w-3 h-3 text-purple-400" />{reqCount}</span>
                                         </div>
 
-                                        {/* Stats Row */}
-                                        <div className="flex items-center gap-4 mt-3 text-xs text-gray-500 dark:text-gray-400">
-                                            <span className="inline-flex items-center gap-1"><Heart className="w-3.5 h-3.5 text-red-400" />{job.likes || 0} likes</span>
-                                            <span className="inline-flex items-center gap-1"><MessageSquare className="w-3.5 h-3.5 text-blue-400" />{commCount} comentarios</span>
-                                            <span className="inline-flex items-center gap-1"><Users className="w-3.5 h-3.5 text-green-500" />{appCount} postulaciones</span>
-                                            <span className="inline-flex items-center gap-1"><Phone className="w-3.5 h-3.5 text-purple-400" />{reqCount} solicitudes</span>
-                                        </div>
-
-                                        {/* Media Preview */}
-                                        {job.mediaUrl && (
-                                            <div className="mt-3">
-                                                <img src={job.mediaUrl} alt="" className="w-full max-h-32 object-cover rounded-xl border border-gray-200 dark:border-gray-700" />
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-
-                                {/* Actions Bar */}
-                                <div className="flex items-center gap-2 mt-4 pt-4 border-t border-gray-100 dark:border-gray-800">
-                                    <button onClick={() => setExpandedJob(isExpanded ? null : job.id)} className="flex-1 py-2 rounded-lg flex items-center justify-center transition-all bg-blue-50 text-blue-600 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400 text-xs font-bold">
-                                        {isExpanded ? <ChevronUp className="w-4 h-4 mr-1" /> : <ChevronDown className="w-4 h-4 mr-1" />}
-                                        {isExpanded ? 'Cerrar' : 'Ver Todo'}
-                                    </button>
-                                    <button onClick={() => handleToggleActive(job)} className={`flex-1 py-2 rounded-lg flex items-center justify-center transition-all ${job.active !== false ? 'bg-gray-100 text-gray-600 hover:bg-red-50 hover:text-red-600' : 'bg-green-50 text-green-600 hover:bg-green-100'}`}>
-                                        <Power className="w-4 h-4 mr-1.5" />
-                                        <span className="text-xs font-bold">{job.active !== false ? 'Pausar' : 'Publicar'}</span>
-                                    </button>
-                                    <button onClick={() => handleEdit(job)} className="p-2 bg-gray-100 text-gray-600 hover:bg-blue-50 hover:text-blue-600 rounded-lg transition-all"><Pencil className="w-4 h-4" /></button>
-                                    <button onClick={() => handleDelete(job.id)} className="p-2 bg-gray-100 text-gray-600 hover:bg-red-50 hover:text-red-600 rounded-lg transition-all"><Trash2 className="w-4 h-4" /></button>
-                                </div>
-
-                                {/* Expanded Detail */}
-                                {isExpanded && (
-                                    <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-800 space-y-6 animate-in fade-in duration-300">
-                                        {/* Description */}
-                                        {job.description && (
-                                            <div>
-                                                <h4 className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">📝 Descripción</h4>
-                                                <p className="text-sm text-gray-600 dark:text-gray-400 whitespace-pre-wrap leading-relaxed">{job.description}</p>
-                                            </div>
-                                        )}
-
-                                        {/* Applications */}
-                                        <div>
-                                            <h4 className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-2">
-                                                <Users className="w-4 h-4 text-green-500" /> Postulaciones ({appCount})
-                                            </h4>
-                                            {appCount === 0 ? (
-                                                <p className="text-xs text-gray-400 italic">Sin postulaciones aún</p>
-                                            ) : (
-                                                <div className="space-y-2 max-h-48 overflow-y-auto">
-                                                    {(job.applications || []).map(app => (
-                                                        <div key={app.id} className="flex items-center justify-between bg-green-50 dark:bg-green-900/20 rounded-lg px-3 py-2 text-sm">
-                                                            <div>
-                                                                <span className="font-bold text-gray-900 dark:text-white">{app.candidateName}</span>
-                                                                <span className="text-gray-500 ml-2">{app.candidatePhone}</span>
-                                                            </div>
-                                                            <span className="text-xs text-gray-400">{fmtDate(app.createdAt)}</span>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            )}
-                                        </div>
-
-                                        {/* Contact Requests */}
-                                        <div>
-                                            <h4 className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-2">
-                                                <Phone className="w-4 h-4 text-purple-500" /> Solicitudes de Contacto ({reqCount})
-                                            </h4>
-                                            {reqCount === 0 ? (
-                                                <p className="text-xs text-gray-400 italic">Sin solicitudes aún</p>
-                                            ) : (
-                                                <div className="space-y-2 max-h-48 overflow-y-auto">
-                                                    {(job.requests || []).map(r => (
-                                                        <div key={r.id} className="flex items-center justify-between bg-purple-50 dark:bg-purple-900/20 rounded-lg px-3 py-2 text-sm">
-                                                            <div className="flex items-center gap-2">
-                                                                <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${r.requestType === 'call' ? 'bg-purple-200 text-purple-700' : 'bg-cyan-200 text-cyan-700'}`}>
-                                                                    {r.requestType === 'call' ? '📞 Llamar' : '💬 WhatsApp'}
-                                                                </span>
-                                                                <span className="font-bold text-gray-900 dark:text-white">{r.candidateName}</span>
-                                                                <span className="text-gray-500">{r.candidatePhone}</span>
-                                                            </div>
-                                                            <div className="text-right">
-                                                                <span className="text-xs text-orange-600 font-medium">⏰ {r.timePreference}</span>
-                                                                <span className="text-xs text-gray-400 ml-2">{fmtDate(r.createdAt)}</span>
-                                                            </div>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            )}
-                                        </div>
-
-                                        {/* Comments */}
-                                        <div>
-                                            <h4 className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-2">
-                                                <MessageSquare className="w-4 h-4 text-blue-500" /> Comentarios ({commCount})
-                                            </h4>
-                                            {commCount === 0 ? (
-                                                <p className="text-xs text-gray-400 italic">Sin comentarios aún</p>
-                                            ) : (
-                                                <div className="space-y-2 max-h-60 overflow-y-auto">
-                                                    {(job.comments || []).map(c => (
-                                                        <div key={c.id} className="bg-gray-50 dark:bg-gray-800 rounded-lg px-3 py-2 text-sm group/comment">
-                                                            <div className="flex items-center justify-between">
-                                                                <div className="flex items-center gap-2">
-                                                                    <span className="font-bold text-gray-900 dark:text-white">{c.user}</span>
-                                                                    <span className="text-xs text-gray-400">{fmtDate(c.createdAt)}</span>
-                                                                </div>
-                                                                <button onClick={() => handleDeleteComment(job.id, c.id)} className="opacity-0 group-hover/comment:opacity-100 p-1 hover:bg-red-50 rounded transition-all">
-                                                                    <X className="w-3.5 h-3.5 text-red-500" />
-                                                                </button>
-                                                            </div>
-                                                            <p className="text-gray-600 dark:text-gray-400 mt-1">{c.text}</p>
-                                                            <span className="text-xs text-gray-400 mt-1 inline-flex items-center gap-1"><Heart className="w-3 h-3" />{c.likes || 0}</span>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            )}
-                                        </div>
-
-                                        {/* Meta Info */}
-                                        <div className="text-xs text-gray-400 flex items-center gap-4 pt-2 border-t border-gray-100 dark:border-gray-800">
-                                            <span><Clock className="w-3 h-3 inline mr-1" />Creada: {fmtDate(job.createdAt)}</span>
-                                            <span>ID: {job.id?.slice(0, 8)}...</span>
+                                        {/* Acciones */}
+                                        <div className="flex items-center gap-1 pt-2 border-t border-gray-100 dark:border-gray-700">
+                                            <button
+                                                onClick={() => setDetailJob(job)}
+                                                className="flex-1 py-1.5 rounded-lg text-[11px] font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400 dark:hover:bg-blue-900/50 transition-all flex items-center justify-center gap-1"
+                                            >
+                                                <Eye className="w-3 h-3" /> Ver
+                                            </button>
+                                            <button
+                                                onClick={() => handleToggleActive(job)}
+                                                className={`flex-1 py-1.5 rounded-lg text-[11px] font-bold transition-all ${isActive ? 'text-gray-600 bg-gray-100 hover:bg-red-50 hover:text-red-600 dark:bg-gray-700 dark:text-gray-300' : 'text-green-600 bg-green-50 hover:bg-green-100 dark:bg-green-900/30 dark:text-green-400'}`}
+                                            >
+                                                {isActive ? 'Pausar' : 'Activar'}
+                                            </button>
+                                            <button
+                                                onClick={() => handleEdit(job)}
+                                                className="p-1.5 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-blue-50 hover:text-blue-600 rounded-lg transition-all"
+                                            >
+                                                <Pencil className="w-3.5 h-3.5" />
+                                            </button>
+                                            <button
+                                                onClick={() => handleDelete(job.id)}
+                                                className="p-1.5 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-red-50 hover:text-red-600 rounded-lg transition-all"
+                                            >
+                                                <Trash2 className="w-3.5 h-3.5" />
+                                            </button>
                                         </div>
                                     </div>
-                                )}
-                            </Card>
-                        );
-                    })}
-                </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+
+                    {/* Centinela de infinite scroll */}
+                    {visibleCount < jobs.length && (
+                        <div ref={sentinelRef} className="flex justify-center py-6">
+                            <Loader2 className="w-5 h-5 animate-spin text-blue-400" />
+                        </div>
+                    )}
+                </>
             )}
 
-            {/* Create/Edit Modal */}
+            {/* Modal Detalle de Vacante */}
+            <Modal isOpen={!!detailJob} onClose={() => setDetailJob(null)} title={detailJob?.title || 'Detalle'}>
+                {detailJob && (() => {
+                    const appCount = (detailJob.applications || []).length;
+                    const commCount = (detailJob.comments || []).length;
+                    const reqCount = (detailJob.requests || []).length;
+                    return (
+                        <div className="space-y-6">
+                            {/* Info básica */}
+                            <div className="flex items-start gap-4">
+                                {detailJob.companyLogo ? (
+                                    <img src={detailJob.companyLogo} alt="" className="w-14 h-14 rounded-xl object-cover border border-gray-200 dark:border-gray-700 flex-shrink-0" />
+                                ) : (
+                                    <div className="w-14 h-14 rounded-xl bg-blue-50 dark:bg-blue-900/30 flex items-center justify-center flex-shrink-0">
+                                        <Building2 className="w-7 h-7 text-blue-500" />
+                                    </div>
+                                )}
+                                <div className="flex-1 min-w-0">
+                                    <p className="text-gray-500 dark:text-gray-400 text-sm">{detailJob.company}</p>
+                                    <div className="flex flex-wrap gap-1.5 mt-2">
+                                        {detailJob.location && <span className="text-xs bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 px-2 py-1 rounded-lg">📍 {detailJob.location}</span>}
+                                        {detailJob.salary && <span className="text-xs bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 px-2 py-1 rounded-lg">💰 {detailJob.salary}</span>}
+                                        <span className="text-xs bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-2 py-1 rounded-lg">{detailJob.type}</span>
+                                    </div>
+                                </div>
+                                <span className={`px-2 py-1 rounded-md text-[10px] font-black uppercase flex-shrink-0 ${detailJob.active !== false ? 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-400' : 'bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-400'}`}>
+                                    {detailJob.active !== false ? 'Pública' : 'Oculta'}
+                                </span>
+                            </div>
+
+                            {detailJob.mediaUrl && (
+                                <img src={detailJob.mediaUrl} alt="" className="w-full max-h-48 object-cover rounded-xl border border-gray-200 dark:border-gray-700" />
+                            )}
+
+                            {/* Descripción */}
+                            {detailJob.description && (
+                                <div>
+                                    <h4 className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">📝 Descripción</h4>
+                                    <p className="text-sm text-gray-600 dark:text-gray-400 whitespace-pre-wrap leading-relaxed">{detailJob.description}</p>
+                                </div>
+                            )}
+
+                            {/* Postulaciones */}
+                            <div>
+                                <h4 className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-2">
+                                    <Users className="w-4 h-4 text-green-500" /> Postulaciones ({appCount})
+                                </h4>
+                                {appCount === 0 ? (
+                                    <p className="text-xs text-gray-400 italic">Sin postulaciones aún</p>
+                                ) : (
+                                    <div className="space-y-2 max-h-48 overflow-y-auto">
+                                        {(detailJob.applications || []).map(app => (
+                                            <div key={app.id} className="flex items-center justify-between bg-green-50 dark:bg-green-900/20 rounded-lg px-3 py-2 text-sm">
+                                                <div>
+                                                    <span className="font-bold text-gray-900 dark:text-white">{app.candidateName}</span>
+                                                    <span className="text-gray-500 ml-2">{app.candidatePhone}</span>
+                                                </div>
+                                                <span className="text-xs text-gray-400">{fmtDate(app.createdAt)}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Solicitudes de Contacto */}
+                            <div>
+                                <h4 className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-2">
+                                    <Phone className="w-4 h-4 text-purple-500" /> Solicitudes de Contacto ({reqCount})
+                                </h4>
+                                {reqCount === 0 ? (
+                                    <p className="text-xs text-gray-400 italic">Sin solicitudes aún</p>
+                                ) : (
+                                    <div className="space-y-2 max-h-48 overflow-y-auto">
+                                        {(detailJob.requests || []).map(r => (
+                                            <div key={r.id} className="flex items-center justify-between bg-purple-50 dark:bg-purple-900/20 rounded-lg px-3 py-2 text-sm">
+                                                <div className="flex items-center gap-2">
+                                                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${r.requestType === 'call' ? 'bg-purple-200 text-purple-700' : 'bg-cyan-200 text-cyan-700'}`}>
+                                                        {r.requestType === 'call' ? '📞 Llamar' : '💬 WhatsApp'}
+                                                    </span>
+                                                    <span className="font-bold text-gray-900 dark:text-white">{r.candidateName}</span>
+                                                    <span className="text-gray-500">{r.candidatePhone}</span>
+                                                </div>
+                                                <div className="text-right">
+                                                    <span className="text-xs text-orange-600 font-medium">⏰ {r.timePreference}</span>
+                                                    <span className="text-xs text-gray-400 ml-2">{fmtDate(r.createdAt)}</span>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Comentarios */}
+                            <div>
+                                <h4 className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-2">
+                                    <MessageSquare className="w-4 h-4 text-blue-500" /> Comentarios ({commCount})
+                                </h4>
+                                {commCount === 0 ? (
+                                    <p className="text-xs text-gray-400 italic">Sin comentarios aún</p>
+                                ) : (
+                                    <div className="space-y-2 max-h-60 overflow-y-auto">
+                                        {(detailJob.comments || []).map(c => (
+                                            <div key={c.id} className="bg-gray-50 dark:bg-gray-800 rounded-lg px-3 py-2 text-sm group/comment">
+                                                <div className="flex items-center justify-between">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="font-bold text-gray-900 dark:text-white">{c.user}</span>
+                                                        <span className="text-xs text-gray-400">{fmtDate(c.createdAt)}</span>
+                                                    </div>
+                                                    <button onClick={() => handleDeleteComment(detailJob.id, c.id)} className="opacity-0 group-hover/comment:opacity-100 p-1 hover:bg-red-50 rounded transition-all">
+                                                        <X className="w-3.5 h-3.5 text-red-500" />
+                                                    </button>
+                                                </div>
+                                                <p className="text-gray-600 dark:text-gray-400 mt-1">{c.text}</p>
+                                                <span className="text-xs text-gray-400 mt-1 inline-flex items-center gap-1"><Heart className="w-3 h-3" />{c.likes || 0}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Meta */}
+                            <div className="text-xs text-gray-400 flex items-center gap-4 pt-2 border-t border-gray-100 dark:border-gray-800">
+                                <span><Clock className="w-3 h-3 inline mr-1" />Creada: {fmtDate(detailJob.createdAt)}</span>
+                                <span>ID: {detailJob.id?.slice(0, 8)}...</span>
+                            </div>
+
+                            {/* Acciones rápidas desde el detalle */}
+                            <div className="flex gap-3 pt-2 border-t border-gray-100 dark:border-gray-700">
+                                <Button variant="outline" onClick={() => { setDetailJob(null); handleEdit(detailJob); }}>
+                                    <Pencil className="w-4 h-4 mr-1" /> Editar
+                                </Button>
+                                <button
+                                    onClick={() => handleToggleActive(detailJob)}
+                                    className={`flex-1 py-2 rounded-xl text-sm font-bold transition-all ${detailJob.active !== false ? 'bg-gray-100 text-gray-600 hover:bg-red-50 hover:text-red-600' : 'bg-green-50 text-green-600 hover:bg-green-100'}`}
+                                >
+                                    {detailJob.active !== false ? 'Pausar' : 'Publicar'}
+                                </button>
+                            </div>
+                        </div>
+                    );
+                })()}
+            </Modal>
+
+            {/* Modal Crear/Editar */}
             <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingJob ? "Editar Vacante" : "Nueva Vacante App"}>
                 <div className="space-y-4">
                     <Input label="Título del Puesto *" value={formData.title} onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))} placeholder="Ej. Gerente de Ventas" />
@@ -369,7 +470,6 @@ const BolsaSection = () => {
                         <Input label="WhatsApp del Reclutador *" value={formData.recruiterPhone} onChange={(e) => setFormData(prev => ({ ...prev, recruiterPhone: e.target.value }))} placeholder="Ej. 8112345678" />
                     </div>
 
-                    {/* NEW: Image fields */}
                     <div className="pt-2 border-t border-gray-100 dark:border-gray-700">
                         <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3 flex items-center gap-1"><ImageIcon className="w-3.5 h-3.5" /> Imágenes (URLs)</p>
                         <div className="grid grid-cols-2 gap-4">
