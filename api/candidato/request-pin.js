@@ -27,21 +27,23 @@ export default async function handler(req, res) {
     const last10 = digits.slice(-10);
     const waPhone = '521' + last10; // formato para gateway (521XXXXXXXXXX)
 
-    // Generar PIN aleatorio de 4 dígitos
-    const pin = Math.floor(1000 + Math.random() * 9000).toString();
+    // Si el cliente ya generó y mandó el PIN por su cuenta, solo lo guardamos en Redis
+    // Si no, lo generamos aquí y lo mandamos por WhatsApp
+    const clientPin = req.body.clientPin ? String(req.body.clientPin) : null;
+    const pin = clientPin || Math.floor(1000 + Math.random() * 9000).toString();
 
     // Guardar en Redis con expiración de 10 minutos
     await redis.set(`app_login_pin:${last10}`, pin, 'EX', 600);
 
-    // Enviar por WhatsApp
-    const msgResult = await sendMessage(
-      waPhone,
-      `Tu código de acceso a *Candidatic* es:\n\n*${pin}*\n\nEste código expira en 10 minutos. 🔐`
-    );
-
-    if (!msgResult?.success) {
-      console.warn('[request-pin] WhatsApp send error:', msgResult);
-      // No bloqueamos el flujo — el PIN ya está en Redis
+    if (!clientPin) {
+      // Solo mandamos WhatsApp si el frontend no lo hizo ya
+      const msgResult = await sendMessage(
+        waPhone,
+        `Tu código de acceso a *Candidatic* es:\n\n*${pin}*\n\nEste código expira en 10 minutos. 🔐`
+      );
+      if (!msgResult?.success) {
+        console.warn('[request-pin] WhatsApp send error:', msgResult);
+      }
     }
 
     // Buscar candidato existente
