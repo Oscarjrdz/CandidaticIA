@@ -16,12 +16,22 @@ const PAGE_SIZE = 12;
 function ApplicantCard({ app }) {
     const p = app.profile || {};
     const initials = (app.candidateName || 'C').slice(0, 2).toUpperCase();
+    const [photoOk, setPhotoOk] = React.useState(!!p.foto);
+
+    // La foto puede ser un URI local del teléfono — no accesible desde el dashboard
+    const isLocalUri = p.foto && (p.foto.startsWith('file://') || p.foto.startsWith('content://') || p.foto.startsWith('ph://'));
+
     return (
         <div className="flex items-start gap-3 bg-green-50 dark:bg-green-900/20 rounded-xl px-3 py-2.5">
-            {p.foto ? (
-                <img src={p.foto} alt="" className="w-10 h-10 rounded-full object-cover flex-shrink-0 border-2 border-green-200" />
+            {p.foto && photoOk && !isLocalUri ? (
+                <img
+                    src={p.foto}
+                    alt=""
+                    className="w-10 h-10 rounded-full object-cover flex-shrink-0 border-2 border-green-200"
+                    onError={() => setPhotoOk(false)}
+                />
             ) : (
-                <div className="w-10 h-10 rounded-full bg-green-200 dark:bg-green-800 flex items-center justify-center flex-shrink-0 text-green-800 dark:text-green-200 font-bold text-sm">
+                <div className="w-10 h-10 rounded-full bg-green-200 dark:bg-green-800 flex items-center justify-center flex-shrink-0 text-green-800 dark:text-green-200 font-bold text-sm flex-shrink-0">
                     {initials}
                 </div>
             )}
@@ -31,11 +41,12 @@ function ApplicantCard({ app }) {
                     <span className="text-xs text-gray-400 flex-shrink-0">{fmtDate(app.createdAt)}</span>
                 </div>
                 <span className="text-xs text-gray-500">{app.candidatePhone}</span>
-                <div className="flex flex-wrap gap-1 mt-1">
-                    {p.municipio  && <span className="text-[10px] bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 px-1.5 py-0.5 rounded-md text-gray-600 dark:text-gray-300">📍 {p.municipio}</span>}
-                    {p.categoria  && <span className="text-[10px] bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 px-1.5 py-0.5 rounded-md text-gray-600 dark:text-gray-300">💼 {p.categoria}</span>}
+                <div className="flex flex-wrap gap-1 mt-1.5">
+                    {p.municipio   && <span className="text-[10px] bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 px-1.5 py-0.5 rounded-md text-gray-600 dark:text-gray-300">📍 {p.municipio}</span>}
+                    {p.categoria   && <span className="text-[10px] bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 px-1.5 py-0.5 rounded-md text-gray-600 dark:text-gray-300">💼 {p.categoria}</span>}
                     {p.escolaridad && <span className="text-[10px] bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 px-1.5 py-0.5 rounded-md text-gray-600 dark:text-gray-300">🎓 {p.escolaridad}</span>}
-                    {p.genero     && <span className="text-[10px] bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 px-1.5 py-0.5 rounded-md text-gray-600 dark:text-gray-300">{p.genero}</span>}
+                    {p.genero      && <span className="text-[10px] bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 px-1.5 py-0.5 rounded-md text-gray-600 dark:text-gray-300">{p.genero}</span>}
+                    {p.cvNombre    && <span className="text-[10px] bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-700 px-1.5 py-0.5 rounded-md text-orange-600 dark:text-orange-400">📄 {p.cvNombre}</span>}
                 </div>
             </div>
         </div>
