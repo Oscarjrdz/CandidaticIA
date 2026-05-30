@@ -19,7 +19,7 @@ export default async function handler(req, res) {
             return res.status(400).json({ error: 'Faltan datos (phone, pin)' });
         }
 
-        const { getRedisClient, getCandidateIdByPhone, getCandidateById } = await import('../utils/storage.js');
+        const { getRedisClient, getCandidateByPhone } = await import('../utils/storage.js');
         const redis = getRedisClient();
 
         if (!redis) {
@@ -44,19 +44,17 @@ export default async function handler(req, res) {
             await redis.del(`app_login_pin:${cleanPhone}`);
         }
 
-        // Fetch candidate and update app tracking fields
+        // Fetch candidate using getCandidateByPhone (handles all phone format variations)
         let candidateData = null;
         try {
             const { updateCandidate } = await import('../utils/storage.js');
-            const candidateId = await getCandidateIdByPhone(cleanPhone);
-            if (candidateId) {
-                candidateData = await getCandidateById(candidateId);
-                // Registrar login desde la app
+            candidateData = await getCandidateByPhone(cleanPhone);
+            if (candidateData) {
                 const now = new Date().toISOString();
-                updateCandidate(candidateId, {
+                updateCandidate(candidateData.id, {
                     appRegistered: true,
                     appLastLogin: now,
-                    ...(!candidateData?.appRegisteredAt && { appRegisteredAt: now }),
+                    ...(!candidateData.appRegisteredAt && { appRegisteredAt: now }),
                 }).catch(() => {});
             }
         } catch (e) {
