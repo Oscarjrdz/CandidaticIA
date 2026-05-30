@@ -42,24 +42,30 @@ export default async function handler(req, res) {
 
     const existing = await getCandidateByPhone(last10);
 
+    const now = new Date().toISOString();
+
     if (existing) {
-      // Actualizar candidato existente
+      // Candidato existente (vino de WhatsApp o ya estaba en el sistema)
       const updated = await updateCandidate(existing.id, {
-        ...(nombre    && { nombreReal: nombre }),
-        ...(genero    && { genero }),
-        ...(municipio && { municipio }),
-        ...(categoria && { categoria }),
+        ...(nombre      && { nombreReal: nombre }),
+        ...(genero      && { genero }),
+        ...(municipio   && { municipio }),
+        ...(categoria   && { categoria }),
         ...(escolaridad && { escolaridad }),
         ...(nacimiento  && { fechaNacimiento: nacimiento }),
         ...(edad        && { edad }),
         ...(foto        && { foto }),
         ...(cvNombre    && { cvNombre }),
         ...(experiencia && { experiencia }),
+        // Trazabilidad: confirmar que tiene la app y cuándo actualizó por última vez
+        appRegistered: true,
+        appLastProfileUpdate: now,
+        ...(!existing.appRegisteredAt && { appRegisteredAt: now }),
       });
 
       return res.status(200).json({ success: true, profile: updated });
     } else {
-      // Crear nuevo candidato con datos del app
+      // Candidato nuevo — llegó por la app, no por WhatsApp
       const newCandidate = {
         whatsapp: '521' + last10,
         nombreReal: nombre || null,
@@ -72,8 +78,11 @@ export default async function handler(req, res) {
         foto: foto || null,
         cvNombre: cvNombre || null,
         experiencia: experiencia || [],
-        primerContacto: new Date().toISOString(),
+        primerContacto: now,
         origen: 'app',
+        appRegistered: true,
+        appRegisteredAt: now,
+        appLastProfileUpdate: now,
       };
 
       const saved = await saveCandidate(newCandidate);

@@ -44,19 +44,25 @@ export default async function handler(req, res) {
             await redis.del(`app_login_pin:${cleanPhone}`);
         }
 
-        // Try to fetch existing candidate data
+        // Fetch candidate and update app tracking fields
         let candidateData = null;
         try {
+            const { updateCandidate } = await import('../utils/storage.js');
             const candidateId = await getCandidateIdByPhone(cleanPhone);
             if (candidateId) {
                 candidateData = await getCandidateById(candidateId);
+                // Registrar login desde la app
+                const now = new Date().toISOString();
+                updateCandidate(candidateId, {
+                    appRegistered: true,
+                    appLastLogin: now,
+                    ...(!candidateData?.appRegisteredAt && { appRegisteredAt: now }),
+                }).catch(() => {});
             }
         } catch (e) {
             console.error('Error fetching candidate for login:', e);
         }
 
-        // Simular un token JWT o devolver datos directos
-        // En un entorno real se usaría jsonwebtoken para firmar la sesión
         const sessionToken = Buffer.from(`${cleanPhone}:${Date.now()}`).toString('base64');
 
         return res.status(200).json({
@@ -64,8 +70,18 @@ export default async function handler(req, res) {
             token: sessionToken,
             user: {
                 phone: cleanPhone,
-                profile: candidateData || null,
-                isNew: !candidateData
+                profile: candidateData ? {
+                    nombre: candidateData.nombreReal || candidateData.nombre || null,
+                    genero: candidateData.genero || null,
+                    municipio: candidateData.municipio || null,
+                    categoria: candidateData.categoria || null,
+                    escolaridad: candidateData.escolaridad || null,
+                    nacimiento: candidateData.fechaNacimiento || null,
+                    edad: candidateData.edad || null,
+                    foto: candidateData.foto || null,
+                } : null,
+                isNew: !candidateData,
+                origen: candidateData ? (candidateData.origen || 'whatsapp') : 'app',
             }
         });
 

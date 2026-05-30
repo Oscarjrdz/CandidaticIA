@@ -16,7 +16,7 @@ export default async function handler(req, res) {
     const { phone } = req.body;
     if (!phone) return res.status(400).json({ error: 'Falta el número de teléfono.' });
 
-    const { getRedisClient, getCandidateByPhone } = await import('../utils/storage.js');
+    const { getRedisClient, getCandidateByPhone, updateCandidate } = await import('../utils/storage.js');
     const { sendMessage } = await import('../utils/messenger.js');
 
     const redis = getRedisClient();
@@ -45,7 +45,18 @@ export default async function handler(req, res) {
     }
 
     // Buscar candidato existente
+    const { getCandidateByPhone, updateCandidate } = await import('../utils/storage.js');
     const candidate = await getCandidateByPhone(last10);
+
+    // Marcar que el candidato existente tiene la app instalada (no bloquea el flujo)
+    if (candidate) {
+      const now = new Date().toISOString();
+      updateCandidate(candidate.id, {
+        appRegistered: true,
+        appLastSeen: now,
+        ...(!candidate.appRegisteredAt && { appRegisteredAt: now }),
+      }).catch(() => {});
+    }
 
     const profile = candidate ? {
       nombre: candidate.nombreReal || candidate.nombre || null,
@@ -60,6 +71,7 @@ export default async function handler(req, res) {
     return res.status(200).json({
       success: true,
       isNew: !candidate,
+      origen: candidate ? (candidate.origen || 'whatsapp') : 'app',
       profile,
     });
 
