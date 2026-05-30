@@ -47,7 +47,6 @@ export default async function handler(req, res) {
     }
 
     // Buscar candidato existente
-    const { getCandidateByPhone, updateCandidate } = await import('../utils/storage.js');
     const candidate = await getCandidateByPhone(last10);
 
     // Marcar que el candidato existente tiene la app instalada (no bloquea el flujo)
