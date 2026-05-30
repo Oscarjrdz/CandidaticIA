@@ -44,21 +44,41 @@ export default async function handler(req, res) {
             await redis.del(`app_login_pin:${cleanPhone}`);
         }
 
-        // Fetch candidate using getCandidateByPhone (handles all phone format variations)
+        // Fetch or create candidate (igual que WhatsApp: primer contacto = ya queda en el sistema)
         let candidateData = null;
         try {
-            const { updateCandidate } = await import('../utils/storage.js');
+            const { updateCandidate, saveCandidate } = await import('../utils/storage.js');
             candidateData = await getCandidateByPhone(cleanPhone);
+            const now = new Date().toISOString();
             if (candidateData) {
-                const now = new Date().toISOString();
                 updateCandidate(candidateData.id, {
                     appRegistered: true,
                     appLastLogin: now,
                     ...(!candidateData.appRegisteredAt && { appRegisteredAt: now }),
                 }).catch(() => {});
+            } else {
+                // Candidato nuevo — créalo al instante, como WhatsApp crea al recibir el primer mensaje
+                candidateData = await saveCandidate({
+                    whatsapp: '521' + cleanPhone,
+                    nombreReal: null,
+                    genero: null,
+                    municipio: null,
+                    categoria: null,
+                    escolaridad: null,
+                    fechaNacimiento: null,
+                    edad: null,
+                    foto: null,
+                    cvNombre: null,
+                    experiencia: [],
+                    primerContacto: now,
+                    origen: 'app',
+                    appRegistered: true,
+                    appRegisteredAt: now,
+                    appLastLogin: now,
+                });
             }
         } catch (e) {
-            console.error('Error fetching candidate for login:', e);
+            console.error('Error fetching/creating candidate for login:', e);
         }
 
         const sessionToken = Buffer.from(`${cleanPhone}:${Date.now()}`).toString('base64');
