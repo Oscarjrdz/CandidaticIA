@@ -120,11 +120,13 @@ export default async function handler(req, res) {
                     return res.status(200).json({ success: true, alreadyApplied: true, data: already });
                 }
 
+                const { candidateProfile } = req.body;
                 const application = {
                     id: randomUUID(),
                     candidateName: candidateName || 'Candidato',
                     candidatePhone: String(candidatePhone).replace(/\D/g, ''),
                     message: message || '',
+                    profile: candidateProfile || {},
                     createdAt: new Date().toISOString()
                 };
                 job.applications.push(application);
