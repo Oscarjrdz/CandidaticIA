@@ -1,5 +1,5 @@
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { createPortal, flushSync } from 'react-dom';
 import {
     BrainCircuit, CheckCircle, Loader2, Send, ArrowRight,
@@ -29,6 +29,18 @@ const MobileLandingPage = ({ onLoginSuccess }) => {
 
     /* ── FAQ STATE ── */
     const [openFaq, setOpenFaq] = useState(null);
+
+    /* ── HIDE STICKY BUTTON AT BOTTOM ── */
+    const [showSticky, setShowSticky] = useState(true);
+    const footerRef = useRef(null);
+    useEffect(() => {
+        const observer = new IntersectionObserver(
+            ([entry]) => setShowSticky(!entry.isIntersecting),
+            { threshold: 0.1 }
+        );
+        if (footerRef.current) observer.observe(footerRef.current);
+        return () => observer.disconnect();
+    }, []);
 
     const handlePhoneSubmit = async () => {
         if (phone.length < 10) { setLoginError('Número inválido (10 dígitos).'); return; }
@@ -133,21 +145,18 @@ const MobileLandingPage = ({ onLoginSuccess }) => {
                 <div className="w-full bg-gradient-to-r from-blue-600 via-violet-600 to-purple-600 py-1 text-center">
                     <span className="text-[10px] font-bold tracking-[0.18em] text-white/90 uppercase">Reclutamiento Masivo con IA</span>
                 </div>
-                <div className="px-4 h-14 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-violet-700 rounded-xl flex items-center justify-center shadow-md">
+                <div className="px-4 h-14 flex items-center justify-center">
+                    <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-violet-700 rounded-xl flex items-center justify-center shadow-md shrink-0">
                             <BrainCircuit className="w-4 h-4 text-white stroke-[1.5] rotate-90" />
                         </div>
-                        <span className="text-base font-extrabold tracking-tight text-gray-900">
-                            CANDIDATIC&nbsp;<span className="bg-gradient-to-r from-blue-600 to-violet-600 bg-clip-text text-transparent">IΛ</span>
-                        </span>
+                        <div className="flex flex-col leading-none">
+                            <span className="text-base font-extrabold tracking-tight text-gray-900">
+                                CANDIDATIC&nbsp;<span className="bg-gradient-to-r from-blue-600 to-violet-600 bg-clip-text text-transparent">IΛ</span>
+                            </span>
+                            <span className="text-[9px] font-semibold tracking-[0.15em] text-gray-400 uppercase mt-0.5">Reclutamiento Masivo</span>
+                        </div>
                     </div>
-                    <button
-                        onClick={() => setIsLoginOpen(true)}
-                        className="px-4 py-2 bg-gradient-to-r from-blue-600 to-violet-600 text-white text-sm font-bold rounded-full shadow-md shadow-violet-200/50"
-                    >
-                        Ingresar
-                    </button>
                 </div>
             </header>
 
@@ -440,7 +449,7 @@ const MobileLandingPage = ({ onLoginSuccess }) => {
                 </section>
 
                 {/* ── FOOTER ── */}
-                <footer className="bg-gray-950 text-gray-400 px-5 py-8">
+                <footer ref={footerRef} className="bg-gray-950 text-gray-400 px-5 py-8">
                     <div className="flex items-center gap-2 mb-4">
                         <div className="w-7 h-7 bg-gradient-to-br from-blue-500 to-violet-600 rounded-lg flex items-center justify-center">
                             <BrainCircuit className="w-4 h-4 text-white stroke-[1.5] rotate-90" />
@@ -456,13 +465,14 @@ const MobileLandingPage = ({ onLoginSuccess }) => {
                         <a href="#" className="hover:text-violet-400">Privacidad</a>
                         <a href="#" className="hover:text-violet-400">Términos</a>
                         <a href="#" className="hover:text-violet-400">Contacto</a>
+                        <button onClick={() => setIsLoginOpen(true)} className="hover:text-violet-400">Ingresar</button>
                     </div>
                     <p className="text-xs text-gray-600">© {new Date().getFullYear()} Candidatic IA. Todos los derechos reservados.</p>
                 </footer>
             </main>
 
             {/* ── STICKY BOTTOM CTA ── */}
-            <div className="fixed bottom-0 left-0 right-0 z-40 p-4 bg-white/90 backdrop-blur-md border-t border-gray-100">
+            <div className={`fixed bottom-0 left-0 right-0 z-40 p-4 bg-white/90 backdrop-blur-md border-t border-gray-100 transition-all duration-300 ${showSticky ? 'translate-y-0 opacity-100' : 'translate-y-full opacity-0'}`}>
                 <a href="https://wa.me/5218116038195" target="_blank" rel="noopener noreferrer"
                     className="w-full bg-green-500 text-white font-bold py-3.5 rounded-2xl shadow-lg shadow-green-300/40 flex items-center justify-center gap-2 text-sm">
                     <WhatsAppIcon className="w-5 h-5" />
