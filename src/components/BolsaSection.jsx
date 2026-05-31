@@ -2,12 +2,82 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
     Briefcase, Plus, Building2, Tag, Loader2, Trash2, Pencil, Power,
     Smartphone, Image as ImageIcon, MessageSquare, Heart, Users, Clock,
-    Phone, X, Eye, ChevronDown, Building, PhoneCall, MessagesSquare,
+    Phone, X, Eye, ChevronDown, Building, PhoneCall, MessagesSquare, Upload,
 } from 'lucide-react';
 import Button from './ui/Button';
 import Input from './ui/Input';
 import Modal from './ui/Modal';
 import { useConfirmModal } from './ui/ConfirmModal';
+
+// ── Subidor de imagen ────────────────────────────────────────────────────────
+function ImageUploader({ label, value, onChange }) {
+    const inputRef = useRef(null);
+    const [uploading, setUploading] = useState(false);
+    const [error, setError] = useState('');
+
+    const handleFile = async (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        if (!file.type.startsWith('image/')) { setError('Solo se aceptan imágenes'); return; }
+        if (file.size > 4 * 1024 * 1024) { setError('Máximo 4 MB'); return; }
+        setError('');
+        setUploading(true);
+        try {
+            const fd = new FormData();
+            fd.append('file', file);
+            const res = await fetch('/api/bolsa-upload', { method: 'POST', body: fd });
+            const data = await res.json();
+            if (data.success) {
+                onChange(data.url);
+            } else {
+                setError(data.error || 'Error al subir');
+            }
+        } catch {
+            setError('Error de conexión');
+        } finally {
+            setUploading(false);
+            e.target.value = '';
+        }
+    };
+
+    return (
+        <div className="space-y-2">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">{label}</label>
+            <div className="flex items-center gap-3">
+                {value ? (
+                    <div className="relative flex-shrink-0">
+                        <img src={value} alt="" className="w-16 h-16 rounded-xl object-cover border border-gray-200 dark:border-gray-600" />
+                        <button
+                            type="button"
+                            onClick={() => onChange('')}
+                            className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center hover:bg-red-600 transition-colors"
+                        >
+                            <X className="w-3 h-3" />
+                        </button>
+                    </div>
+                ) : (
+                    <div className="w-16 h-16 rounded-xl bg-gray-100 dark:bg-gray-700 border-2 border-dashed border-gray-300 dark:border-gray-600 flex items-center justify-center flex-shrink-0">
+                        <ImageIcon className="w-6 h-6 text-gray-400" />
+                    </div>
+                )}
+                <div className="flex-1">
+                    <input ref={inputRef} type="file" accept="image/*" className="hidden" onChange={handleFile} />
+                    <button
+                        type="button"
+                        onClick={() => inputRef.current?.click()}
+                        disabled={uploading}
+                        className="flex items-center gap-2 px-4 py-2 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-700 rounded-xl text-sm font-semibold hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-all disabled:opacity-50"
+                    >
+                        {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                        {uploading ? 'Subiendo...' : value ? 'Cambiar imagen' : 'Subir imagen'}
+                    </button>
+                    {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
+                    {!error && <p className="text-xs text-gray-400 mt-1">JPG, PNG, GIF · máx 4 MB</p>}
+                </div>
+            </div>
+        </div>
+    );
+}
 import { useToastContext } from '../contexts/ToastContext';
 
 const PAGE_SIZE = 12;
@@ -469,18 +539,17 @@ function TabVacantes({ empresas }) {
                         </div>
                         <Input label="WhatsApp Reclutador *" value={formData.recruiterPhone} onChange={e => setFormData(p => ({ ...p, recruiterPhone: e.target.value }))} placeholder="Ej. 8112345678" />
                     </div>
-                    <div className="pt-2 border-t border-gray-100 dark:border-gray-700">
-                        <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3 flex items-center gap-1"><ImageIcon className="w-3.5 h-3.5" /> Imágenes (URLs)</p>
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-1">
-                                <Input label="Logo de Empresa" value={formData.companyLogo} onChange={e => setFormData(p => ({ ...p, companyLogo: e.target.value }))} placeholder="https://..." />
-                                {formData.companyLogo && <img src={formData.companyLogo} alt="" className="w-12 h-12 rounded-lg object-cover border mt-1" />}
-                            </div>
-                            <div className="space-y-1">
-                                <Input label="Imagen de Vacante" value={formData.mediaUrl} onChange={e => setFormData(p => ({ ...p, mediaUrl: e.target.value }))} placeholder="https://..." />
-                                {formData.mediaUrl && <img src={formData.mediaUrl} alt="" className="w-full h-16 rounded-lg object-cover border mt-1" />}
-                            </div>
-                        </div>
+                    <div className="pt-2 border-t border-gray-100 dark:border-gray-700 space-y-4">
+                        <ImageUploader
+                            label="Logo de Empresa"
+                            value={formData.companyLogo}
+                            onChange={v => setFormData(p => ({ ...p, companyLogo: v }))}
+                        />
+                        <ImageUploader
+                            label="Imagen de Vacante"
+                            value={formData.mediaUrl}
+                            onChange={v => setFormData(p => ({ ...p, mediaUrl: v }))}
+                        />
                     </div>
                     <div className="space-y-1">
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Descripción</label>
@@ -605,10 +674,11 @@ function TabEmpresas({ onEmpresasChange }) {
                 <div className="space-y-4">
                     <Input label="Nombre de la empresa *" value={form.nombre} onChange={e => setForm(p => ({ ...p, nombre: e.target.value }))} placeholder="Ej. TechCorp SA de CV" />
                     <Input label="Teléfono de contacto *" value={form.telefono} onChange={e => setForm(p => ({ ...p, telefono: e.target.value }))} placeholder="Ej. 8112345678" />
-                    <div className="space-y-1">
-                        <Input label="URL del Logo" value={form.logo} onChange={e => setForm(p => ({ ...p, logo: e.target.value }))} placeholder="https://..." />
-                        {form.logo && <img src={form.logo} alt="" className="w-16 h-16 rounded-xl object-cover border mt-2" />}
-                    </div>
+                    <ImageUploader
+                        label="Logo de la Empresa"
+                        value={form.logo}
+                        onChange={v => setForm(p => ({ ...p, logo: v }))}
+                    />
                     <div className="flex justify-end gap-3 pt-4 border-t border-gray-100 dark:border-gray-700">
                         <Button variant="outline" onClick={() => setIsModalOpen(false)}>Cancelar</Button>
                         <Button onClick={handleSave} loading={saving}>{saving ? 'Guardando...' : 'Guardar Empresa'}</Button>
