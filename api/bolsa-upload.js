@@ -51,7 +51,7 @@ export default async function handler(req, res) {
             name: uploaded.originalFilename || 'imagen',
         }));
 
-        const url = `/api/bolsa-image?id=${id}`;
+        const url = `https://www.candidatic.com/api/bolsa-image?id=${id}`;
         return res.status(200).json({ success: true, url });
 
     } catch (err) {
