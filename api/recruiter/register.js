@@ -20,7 +20,7 @@ export default async function handler(req, res) {
   try { phone = Buffer.from(token, 'base64').toString().split(':')[0]; } catch { return res.status(401).json({ error: 'Token inválido' }); }
   if (!phone) return res.status(401).json({ error: 'Token inválido' });
 
-  const { nombre, logo, telefono } = req.body;
+  const { nombre, logo, telefono, wapp } = req.body;
   if (!nombre || !telefono) return res.status(400).json({ error: 'nombre y telefono son requeridos' });
 
   try {
@@ -34,6 +34,7 @@ export default async function handler(req, res) {
       nombre,
       logo: logo || '',
       telefono: String(telefono).replace(/\D/g, ''),
+      wapp: String(wapp || telefono).replace(/\D/g, ''),
     };
 
     const recruiterData = {
