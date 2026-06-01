@@ -30,13 +30,31 @@ export default async function handler(req, res) {
     }
 
     const token = Buffer.from(`${cleanPhone}:${Date.now()}`).toString('base64');
+    const now = new Date().toISOString();
 
-    // Buscar si ya tiene empresa registrada
+    // 1. Buscar registro de reclutador directo
     const raw = await redis.get(`recruiter:${cleanPhone}`);
     if (raw) {
       const recruiter = JSON.parse(raw);
-      await redis.set(`recruiter:${cleanPhone}`, JSON.stringify({ ...recruiter, lastLogin: new Date().toISOString() }));
+      await redis.set(`recruiter:${cleanPhone}`, JSON.stringify({ ...recruiter, lastLogin: now }));
       return res.status(200).json({ success: true, token, recruiter: { phone: cleanPhone, empresa: recruiter.empresa }, isNew: false });
+    }
+
+    // 2. Buscar en el catálogo de empresas por teléfono o wapp
+    const empRaw = await redis.get('candidatic_empresas');
+    if (empRaw) {
+      const empresas = JSON.parse(empRaw);
+      const match = empresas.find(e => {
+        const tel = String(e.telefono || '').replace(/\D/g, '').slice(-10);
+        const wap = String(e.wapp || '').replace(/\D/g, '').slice(-10);
+        return tel === cleanPhone.slice(-10) || wap === cleanPhone.slice(-10);
+      });
+      if (match) {
+        // Crear registro de reclutador automáticamente y dar bienvenida
+        const recruiterData = { phone: cleanPhone, empresa: match, createdAt: now, lastLogin: now };
+        await redis.set(`recruiter:${cleanPhone}`, JSON.stringify(recruiterData));
+        return res.status(200).json({ success: true, token, recruiter: { phone: cleanPhone, empresa: match }, isNew: false });
+      }
     }
 
     return res.status(200).json({ success: true, token, recruiter: { phone: cleanPhone }, isNew: true });
