@@ -55,6 +55,20 @@ export default async function handler(req, res) {
       return res.status(200).json({ success: true, recruiter: { phone, empresa: updatedEmpresa } });
     }
 
+    if (req.method === 'DELETE') {
+      const raw = await redis.get(`recruiter:${phone}`);
+      const empresaId = raw ? JSON.parse(raw).empresa?.id : null;
+      await redis.del(`recruiter:${phone}`);
+      if (empresaId) {
+        const empRaw = await redis.get('candidatic_empresas');
+        if (empRaw) {
+          const empresas = JSON.parse(empRaw);
+          await redis.set('candidatic_empresas', JSON.stringify(empresas.filter(e => e.id !== empresaId)));
+        }
+      }
+      return res.status(200).json({ success: true });
+    }
+
     return res.status(405).json({ error: 'Método no permitido' });
   } catch (err) {
     console.error('[recruiter/profile]', err);
