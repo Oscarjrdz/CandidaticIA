@@ -212,6 +212,34 @@ export default async function handler(req, res) {
                 return res.status(200).json({ success: true });
             }
 
+            // ─── Sub-action: Delete Applicant ───
+            if (action === 'deleteApplicant') {
+                const { jobId, applicationId } = req.body;
+                if (!jobId || !applicationId) return res.status(400).json({ error: 'Missing jobId or applicationId' });
+
+                const jobs = await getJobs();
+                const job = jobs.find(j => j.id === jobId);
+                if (!job) return res.status(404).json({ error: 'Job not found' });
+
+                job.applications = (job.applications || []).filter(a => a.id !== applicationId);
+                await saveJobs(jobs);
+                return res.status(200).json({ success: true });
+            }
+
+            // ─── Sub-action: Delete Request (me llamen / me escriban) ───
+            if (action === 'deleteRequest') {
+                const { jobId, requestId } = req.body;
+                if (!jobId || !requestId) return res.status(400).json({ error: 'Missing jobId or requestId' });
+
+                const jobs = await getJobs();
+                const job = jobs.find(j => j.id === jobId);
+                if (!job) return res.status(404).json({ error: 'Job not found' });
+
+                job.requests = (job.requests || []).filter(r => r.id !== requestId);
+                await saveJobs(jobs);
+                return res.status(200).json({ success: true });
+            }
+
             // ─── Default: Create Job ───
             const { title, company, location, salary, type, recruiterPhone, description, mediaUrl, companyLogo } = req.body;
 
