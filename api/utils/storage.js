@@ -9,6 +9,7 @@
  * Deployment Trigger: 2026-02-20T18:48:00
  */
 import Redis from 'ioredis';
+import { sendConversionEvent } from './metaConversions.js';
 
 // Initialize Redis client
 let redis;
@@ -538,7 +539,23 @@ export const syncCandidateStats = async (id, candidateData = null, pipeline = nu
         const { isComplete } = auditProfile(c, customFields);
 
         // 2. Denormalize status inside the object
+        const wasIncomplete = c.statusAudit !== 'complete';
         c.statusAudit = isComplete ? 'complete' : 'pending';
+
+        // 📊 Meta Conversions API — fire once when profile first becomes complete
+        if (isComplete && wasIncomplete && c.adClickId) {
+            sendConversionEvent({
+                eventName: 'CompleteRegistration',
+                phone: c.whatsapp,
+                ctwaClid: c.adClickId,
+                customData: {
+                    ...(c.adId && { ad_id: c.adId }),
+                    ...(c.adHeadline && { ad_title: c.adHeadline }),
+                    ...(c.categoria && { vacancy: c.categoria }),
+                    ...(c.municipio && { city: c.municipio }),
+                }
+            }).catch(() => {});
+        }
 
         // 3. Update Sets Atomically
         if (pipeline) {
@@ -1055,7 +1072,6 @@ export const getRoles = async () => {
                     vacancies: true,
                     history: true,
                     users: true,
-                    "post-maker": true,
                     "media-library": true,
                     projects: true,
                     bypass: true,
@@ -1077,7 +1093,6 @@ export const getRoles = async () => {
                     vacancies: true,
                     history: true,
                     users: true,
-                    "post-maker": true,
                     "media-library": true,
                     projects: true,
                     bypass: true,
@@ -1099,7 +1114,6 @@ export const getRoles = async () => {
                     vacancies: true,
                     history: true,
                     users: false,
-                    "post-maker": true,
                     "media-library": true,
                     projects: true,
                     bypass: false,

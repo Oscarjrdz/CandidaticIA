@@ -102,3 +102,13 @@ export const formatWhatsAppText = (text) => {
 };
 
 export const TAG_COLORS = ["#ef4444", "#f97316", "#eab308", "#22c55e", "#3b82f6", "#a855f7", "#ec4899", "#8b5cf6", "#64748b"];
+
+export const AVATAR_COLORS = ['#f9a8d4','#a5b4fc','#86efac','#fcd34d','#fdba74','#c4b5fd','#67e8f9','#f0abfc','#fca5a5','#bef264'];
+
+export const checkIfUnread = (chat) => {
+    if (!chat) return false;
+    if (Number(chat.unreadMsgCount) > 0) return true;
+    const userTime = chat.lastUserMessageAt ? new Date(chat.lastUserMessageAt).getTime() : 0;
+    if (userTime > 0 && !chat.lastHumanMessageAt) return true;
+    return false;
+};

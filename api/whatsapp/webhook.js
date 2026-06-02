@@ -34,6 +34,7 @@ import { FEATURES } from '../utils/feature-flags.js';
 import { sendMessage } from '../utils/messenger.js';
 import { notifyNewCandidate } from '../utils/sse-notify.js';
 import { logTelemetry } from '../utils/telemetry.js';
+import { sendConversionEvent } from '../utils/metaConversions.js';
 
 export const maxDuration = 60;
 
@@ -417,6 +418,44 @@ export default async function handler(req, res) {
                 candidateId = candidate.id;
                 isNewCandidate = true;
                 notifyNewCandidate(candidate).catch(() => {});
+
+                // 🏷️ Auto-apply Ad Labels to new CTWA candidates
+                if (candidate.adId) {
+                    (async () => {
+                        try {
+                            const redis = getRedisClient();
+                            const rawLabels = redis ? await redis.get('candidatic:ad_labels') : null;
+                            const adLabels = rawLabels ? JSON.parse(rawLabels) : [];
+                            const candAdId = String(candidate.adId);
+                            const matching = adLabels.filter(l => {
+                                const ids = l.adIds || (l.adId ? [l.adId] : []);
+                                return ids.includes(candAdId);
+                            });
+                            if (matching.length > 0) {
+                                const existingTags = Array.isArray(candidate.tags) ? candidate.tags : [];
+                                const newTags = [...existingTags];
+                                let changed = false;
+                                for (const l of matching) {
+                                    if (!newTags.includes(l.tagName)) { newTags.push(l.tagName); changed = true; }
+                                }
+                                if (changed) await saveCandidate({ ...candidate, tags: newTags });
+                            }
+                        } catch(e) { /* silent */ }
+                    })();
+                }
+
+                // 📊 Meta Conversions API — Lead event for CTWA ad candidates
+                if (candidate.adClickId) {
+                    sendConversionEvent({
+                        eventName: 'Lead',
+                        phone,
+                        ctwaClid: candidate.adClickId,
+                        customData: {
+                            ...(candidate.adId && { ad_id: candidate.adId }),
+                            ...(candidate.adHeadline && { ad_title: candidate.adHeadline }),
+                        }
+                    }).catch(() => {});
+                }
             }
 
             // ═══════════════════════════════════════════════════════════

@@ -55,21 +55,23 @@ export default async function handler(req, res) {
             }
             actPipe.exec().catch(() => {});
 
-            // Fetch all currently online users
-            const allKeys = await redis.keys('presence:online:*');
-            
+            // Fetch all currently online users — SCAN no bloquea Redis (vs KEYS que es O(N) blocking)
+            const allKeys = [];
+            let cursor = '0';
+            do {
+                const [nextCursor, keys] = await redis.scan(cursor, 'MATCH', 'presence:online:*', 'COUNT', 100);
+                cursor = nextCursor;
+                allKeys.push(...keys);
+            } while (cursor !== '0');
+
             let onlineUsers = [];
             if (allKeys.length > 0) {
-                // Redis pipeline to fetch all quickly
                 const pipeline = redis.pipeline();
                 allKeys.forEach(k => pipeline.get(k));
                 const results = await pipeline.exec();
-                
                 results.forEach(val => {
                     if (val[1]) {
-                        try {
-                            onlineUsers.push(JSON.parse(val[1]));
-                        } catch {}
+                        try { onlineUsers.push(JSON.parse(val[1])); } catch {}
                     }
                 });
             }

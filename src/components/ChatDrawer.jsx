@@ -20,8 +20,8 @@ const ChatDrawer = ({ isOpen, onClose, candidate, credentials }) => {
     useEffect(() => {
         if (isOpen && candidate) {
             loadMessages();
-            // Polling simple para refrescar chat abierto
-            const interval = setInterval(loadMessages, 3000);
+            // 8s — balance entre bandwidth y responsividad en vista secundaria
+            const interval = setInterval(loadMessages, 8000);
             return () => clearInterval(interval);
         }
     }, [isOpen, candidate]);

@@ -178,12 +178,11 @@ const BulksSection = () => {
     useEffect(() => {
         loadCandidates();
         
-        // 🏎️ BANDWIDTH SAVER: Fast polling (600ms via Worker) ONLY when a campaign is active.
-        // When idle, slow poll every 10s to detect if a campaign starts.
+        // Fast polling ONLY when campaign is active (2s = responsive + bandwidth-friendly)
         const workerCode = `
             self.onmessage = function(e) {
                 if (e.data === 'start') {
-                    setInterval(() => self.postMessage('tick'), 600);
+                    setInterval(() => self.postMessage('tick'), 2000);
                 }
             };
         `;
@@ -208,10 +207,10 @@ const BulksSection = () => {
         fastPollStartRef.current = startFastPoll;
         fastPollStopRef.current = stopFastPoll;
 
-        // Slow poll when idle — checks every 10s if a campaign started
+        // Slow poll when idle — 30s (App.jsx ya hace polling adaptativo)
         const slowPoll = setInterval(() => {
             if (!isFetchingRef.current) fetchEngineStatus();
-        }, 10000);
+        }, 30000);
 
         // Initial status check
         fetchEngineStatus();

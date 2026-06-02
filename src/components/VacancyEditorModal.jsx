@@ -87,7 +87,7 @@ const VacancyEditorModal = ({ isOpen, onClose, vacancyId, onSaveSuccess }) => {
         let interval;
         if (isOpen && vacancyId) {
             interval = setInterval(() => {
-                fetch(`/api/vacancies/faq?vacancyId=${vacancyId}`)
+                fetch(`/api/vacancies/faq?vacancyId=${vacancyId}`) // 60s — FAQ radar no necesita tiempo real
                     .then(res => res.json())
                     .then(data => {
                         if (data.success) {
@@ -108,7 +108,7 @@ const VacancyEditorModal = ({ isOpen, onClose, vacancyId, onSaveSuccess }) => {
                         }
                     })
                     .catch(e => console.error('Silent FAQ poll error:', e));
-            }, 10000);
+            }, 60000);
         }
         return () => clearInterval(interval);
     }, [isOpen, vacancyId]);

@@ -1,7 +1,6 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback, useTransition, useDeferredValue } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback, useDeferredValue } from 'react';
 import ConfirmModal from './ui/ConfirmModal';
 import { MapPin, List as ListIcon, ShoppingBag, UserSquare, MousePointerClick, Search, MessageSquare, Plus, Smile, Paperclip, Mic, ArrowLeft, Send, Tag, Pencil, Check, X, Trash2, Briefcase, Kanban, BookOpen, Keyboard, Loader2, Edit2, Reply, Zap, Pin, MessageCirclePlus, Phone, User, Bell } from 'lucide-react';
-import EmojiPicker from 'emoji-picker-react';
 import { getCandidates, blockCandidate, deleteCandidate } from '../services/candidatesService';
 import ManualProjectsSidepanel from './ManualProjectsSidepanel';
 import { formatRelativeDate } from '../utils/formatters';
@@ -10,400 +9,17 @@ import { Virtuoso } from 'react-virtuoso';
 import { isProfileComplete } from '../utils/profileUtils';
 import { useToastContext } from '../contexts/ToastContext';
 import { useAuthContext } from '../contexts/AuthContext';
-import { safeFormatTime, toTitleCase, formatWhatsAppText, TAG_COLORS } from './chat/chatUtils';
+import { safeFormatTime, toTitleCase, formatWhatsAppText, TAG_COLORS, checkIfUnread } from './chat/chatUtils';
 import CandidateReminderModal from './CandidateReminderModal';
+import MessageStatusTicks from './chat/MessageStatusTicks';
+import MessageInputBox from './chat/MessageInputBox';
+import AudioPlayer from './chat/AudioPlayer';
+import DateSeparator from './chat/DateSeparator';
+import ChatRow from './chat/ChatRow';
+import MessageBubble from './chat/MessageBubble';
 
 
-// ─── Componente de Palomitas WhatsApp ────────────────────────────────────────
-const MessageStatusTicks = React.memo(({ status, size = 'md' }) => {
-    const isRead = status === 'seen' || status === 'read';
-    const isDelivered = isRead || status === 'delivered';
-    const isSent = isDelivered || status === 'sent';
-
-    const color = isRead ? '#53bdeb' : '#8696a0';
-
-    if (status === 'failed') {
-        return (
-            <span className="inline-flex items-center self-end mb-[1px] ml-1 text-red-500" title="Error de envío">
-                <svg viewBox="0 0 24 24" width={14} height={14} stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
-            </span>
-        );
-    }
-
-    if (!isSent) {
-        // Reloj / en cola
-        return (
-            <span className="inline-flex items-center self-end mb-[1px] ml-1">
-                <svg viewBox="0 0 12 12" width={12} height={12} fill="none" className="animate-[spin_2s_linear_infinite] origin-center">
-                    <path d="M6 1a5 5 0 100 10A5 5 0 006 1zm.5 5.5H4V5.25h1.25V3h1.25v3.5z" fill="#8696a0" opacity="0.55" />
-                </svg>
-            </span>
-        );
-    }
-
-    if (!isDelivered) {
-        // Un solo check (enviado)
-        return (
-            <span className="inline-flex items-center self-end mb-[1px] ml-1">
-                <svg viewBox="0 0 12 11" width={14} height={13} fill="none">
-                    <path d="M11.155 1.34l1.345 1.32L5.3 9.858 1.5 6.058l1.345-1.32L5.3 7.193z" fill="#8696a0" />
-                </svg>
-            </span>
-        );
-    }
-
-    // Doble palomita (entregado o leído) — checks superpuestos estilo WhatsApp nativo
-    return (
-        <span className="inline-flex items-center self-end mb-[1px] ml-1">
-            <svg viewBox="0 0 16 11" width={18} height={13} fill="none">
-                <path d="M11.071 0l-5.45 6.546-1.84-2.21L2.2 5.664 5.619 9.68 12.65 1.328z" fill={color} />
-                <path d="M14.871 0l-5.45 6.546-0.635-.762L7.205 7.112l2.217 2.568L16.451 1.328z" fill={color} />
-            </svg>
-        </span>
-    );
-});
-// ─── Componente Input (Memoizado) ──────────────────────────────────────────────
-const MessageInputBox = React.forwardRef(({ onSend, onTyping, fileInputRef, handleFileUpload, replyingToMsg, onCancelReply, metaTemplates = [], onSendTemplate, onSendVCard, onSendInteractive, onSendLocation, onSendList, onSendProduct, isMobile }, ref) => {
-    const [localMessage, setLocalMessage] = useState("");
-    const [sending, setSending] = useState(false);
-    const [showEmojis, setShowEmojis] = useState(false);
-    const [showTemplates, setShowTemplates] = useState(false);
-
-    React.useImperativeHandle(ref, () => ({
-        injectText: (newText) => {
-            setLocalMessage(prev => {
-                const baseStr = prev ? prev.trim() + '\n\n' : '';
-                return baseStr + newText;
-            });
-            setTimeout(() => {
-                const input = document.getElementById('chat-msg-input');
-                if (input) {
-                    input.focus();
-                    input.style.height = 'auto';
-                    input.style.height = input.scrollHeight + 'px';
-                }
-            }, 50);
-        },
-        clearText: () => {
-            setLocalMessage('');
-            const input = document.getElementById('chat-msg-input');
-            if (input) input.style.height = 'auto';
-        },
-        setSendingState: (state) => setSending(state)
-    }));
-
-    const handleSubmit = (e) => {
-        if (e) e.preventDefault();
-        const msg = localMessage.trim();
-        if (!msg || sending) return;
-        onSend(msg);
-        setTimeout(() => {
-            const input = document.getElementById('chat-msg-input');
-            if (input) input.style.height = 'auto';
-        }, 50);
-    };
-
-    if (isMobile) {
-        return (
-            <div className="w-full flex flex-col shadow-[0_-2px_10px_rgba(0,0,0,0.02)] z-20 shrink-0">
-                {replyingToMsg && (
-                    <div className="px-4 py-2 bg-[#f0f2f5] dark:bg-[#202c33] border-b border-gray-200 dark:border-gray-800 flex justify-between items-center slide-in-from-bottom-2 duration-200">
-                        <div className="flex-1 flex flex-col pl-3 border-l-4 border-blue-500 bg-black/5 dark:bg-white/5 py-1 px-3 rounded-r-lg max-w-[80%]">
-                            <span className="text-[11px] font-bold text-blue-500 mb-0.5">Respondiendo a {(replyingToMsg.from === 'me' || replyingToMsg.from === 'bot') ? 'Ti' : 'Candidato'}</span>
-                            <span className="text-xs text-gray-500 dark:text-gray-400 truncate">{replyingToMsg.content || '📄 Mensaje multimedia'}</span>
-                        </div>
-                        <button onClick={onCancelReply} className="ml-4 p-2 bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 transition-colors rounded-full text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
-                            <X className="w-4 h-4" />
-                        </button>
-                    </div>
-                )}
-                <form onSubmit={handleSubmit} className="px-4 py-[10px] bg-[#f0f2f5] dark:bg-[#202c33] flex flex-col gap-2 relative">
-                    {/* Emojis Menu — Lazy loaded */}
-                    {showEmojis && (
-                        <div className="absolute bottom-full left-2 mb-2 shadow-2xl z-[100] rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700">
-                            <EmojiPicker 
-                                onEmojiClick={(eData) => {
-                                    setLocalMessage(prev => prev + eData.emoji);
-                                }}
-                                theme="auto"
-                                width={320}
-                                height={400}
-                                searchPlaceholder="Buscar emojis..."
-                                lazyLoadEmojis={true}
-                                skinTonesDisabled={true}
-                            />
-                        </div>
-                    )}
-
-                    {/* TOP ROW: Tools Row on Mobile */}
-                    <div className="flex items-center gap-4 w-full bg-white/50 dark:bg-black/20 rounded-lg py-2 px-3.5 border border-gray-200/50 dark:border-gray-800/50 overflow-x-auto scrollbar-none shrink-0 text-[#54656f] dark:text-[#8696a0]">
-                        <button type="button" title="Emojis" onClick={() => {setShowEmojis(!showEmojis); setShowTemplates(false);}} className={`hover:text-[#111b21] dark:hover:text-[#d1d7db] transition-colors shrink-0 ${showEmojis ? 'text-blue-500' : ''}`}><Smile className="w-[22px] h-[22px] stroke-[1.5]" /></button>
-                        <button type="button" title="Adjuntar Documento" onClick={() => fileInputRef.current?.click()} className="hover:text-[#111b21] dark:hover:text-[#d1d7db] transition-colors shrink-0"><Plus className="w-[22px] h-[22px] stroke-[1.5]" /></button>
-                        <button type="button" title="Enviar Tarjeta de Contacto (vCard)" onClick={onSendVCard} className="hover:text-[#111b21] dark:hover:text-[#d1d7db] transition-colors shrink-0"><UserSquare className="w-[21px] h-[21px] stroke-[1.5]" /></button>
-                        <button type="button" title="Enviar Botones Interactivos" onClick={onSendInteractive} className="hover:text-[#111b21] dark:hover:text-[#d1d7db] transition-colors shrink-0"><MousePointerClick className="w-[21px] h-[21px] stroke-[1.5]" /></button>
-                        <button type="button" title="Enviar Ubicación" onClick={onSendLocation} className="hover:text-[#111b21] dark:hover:text-[#d1d7db] transition-colors shrink-0"><MapPin className="w-[21px] h-[21px] stroke-[1.5]" /></button>
-                        <button type="button" title="Enviar Lista Interactiva" onClick={onSendList} className="hover:text-[#111b21] dark:hover:text-[#d1d7db] transition-colors shrink-0"><ListIcon className="w-[21px] h-[21px] stroke-[1.5]" /></button>
-                        <button type="button" title="Enviar Producto (Catálogo)" onClick={onSendProduct} className="hover:text-[#111b21] dark:hover:text-[#d1d7db] transition-colors shrink-0"><ShoppingBag className="w-[21px] h-[21px] stroke-[1.5]" /></button>
-
-                        {/* Template Button */}
-                        <div className="relative shrink-0">
-                            <button type="button" title="Enviar Plantilla Oficial" onClick={() => {setShowTemplates(!showTemplates); setShowEmojis(false);}} className={`hover:text-[#111b21] dark:hover:text-[#d1d7db] transition-colors ${showTemplates ? 'text-green-500' : ''}`}>
-                                <Zap className="w-[21px] h-[21px] stroke-[1.5]" />
-                            </button>
-                            {showTemplates && (
-                                <div className="absolute bottom-full left-0 mb-2 w-64 bg-white dark:bg-[#111b21] rounded-lg shadow-xl border border-gray-200 dark:border-gray-800 z-[100] max-h-[250px] flex flex-col overflow-hidden">
-                                    <div className="px-3 py-2 bg-green-50 dark:bg-green-900/20 text-xs text-green-700 dark:text-green-400 font-bold border-b border-green-100 dark:border-green-800">
-                                        Plantillas Meta
-                                    </div>
-                                    <div className="overflow-y-auto w-full">
-                                        {metaTemplates.length === 0 ? (
-                                            <div className="p-3 text-xs text-gray-400 text-center">Buscando plantillas...</div>
-                                        ) : (
-                                            metaTemplates.map(t => {
-                                                const bodyComp = (t.components || []).find(c => (c.type || '').toUpperCase() === 'BODY');
-                                                const bodyText = bodyComp?.text || '';
-                                                return (
-                                                    <button 
-                                                        key={t.id} 
-                                                        type="button" 
-                                                        className="w-full text-left p-2.5 hover:bg-gray-50 dark:hover:bg-[#202c33] border-b border-gray-100 dark:border-gray-800 transition-colors"
-                                                        onClick={(e) => {
-                                                            e.preventDefault();
-                                                            onSendTemplate(t);
-                                                            setShowTemplates(false);
-                                                        }}
-                                                    >
-                                                        <div className="text-xs font-semibold text-gray-800 dark:text-gray-200 truncate">{t.name}</div>
-                                                        {bodyText && <div className="text-[10px] text-gray-500 dark:text-gray-400 truncate mt-0.5" title={bodyText}>{bodyText}</div>}
-                                                    </button>
-                                                );
-                                            })
-                                        )}
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-
-                        <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileUpload} />
-                    </div>
-
-                    {/* BOTTOM ROW: Message Input + Send */}
-                    <div className="flex items-end w-full gap-2">
-                        <div className="flex-1 bg-white dark:bg-[#2a3942] rounded-lg border-none shadow-[0_1px_0_rgba(11,20,26,.05)] focus-within:shadow-[0_1px_2px_rgba(11,20,26,.1)] transition-shadow flex items-center pr-1">
-                            <textarea 
-                                id="chat-msg-input"
-                                autoComplete="off"
-                                rows={1}
-                                className="w-full bg-transparent border-none outline-none py-2.5 px-3 text-[#111b21] dark:text-[#d1d7db] placeholder-[#8696a0] resize-none text-[14px] max-h-24 overflow-y-auto min-h-[36px]" 
-                                placeholder="Escribe un mensaje"
-                                value={localMessage}
-                                onChange={(e) => {
-                                    setLocalMessage(e.target.value);
-                                    onTyping();
-                                }}
-                                onKeyDown={(e) => {
-                                    if (e.key === 'Enter' && !e.shiftKey) {
-                                        e.preventDefault();
-                                        handleSubmit(e);
-                                    }
-                                }}
-                                onInput={(e) => {
-                                    e.target.style.height = 'auto';
-                                    e.target.style.height = e.target.scrollHeight + 'px';
-                                }}
-                            />
-                            {localMessage && (
-                                <button 
-                                    type="button" 
-                                    title="Limpiar texto"
-                                    onClick={() => {
-                                        setLocalMessage('');
-                                        const inputEl = document.getElementById('chat-msg-input');
-                                        if (inputEl) inputEl.style.height = 'auto';
-                                    }}
-                                    className="p-1 text-gray-400 hover:text-red-500 dark:hover:text-red-400 transition-colors rounded-full mr-1 shrink-0"
-                                >
-                                    <X className="w-3.5 h-3.5" />
-                                </button>
-                            )}
-                        </div>
-
-                        <div className="mb-[4px] text-[#54656f] dark:text-[#8696a0] shrink-0">
-                            {localMessage.trim() ? (
-                                <button type="submit" disabled={sending} className="p-1.5 text-[#54656f] dark:text-[#8696a0] hover:text-[#111b21] dark:hover:text-[#d1d7db] transition-colors">
-                                    <Send className="w-[22px] h-[22px]" />
-                                </button>
-                            ) : (
-                                <button type="button" className="p-1.5 hover:text-[#111b21] dark:hover:text-[#d1d7db] transition-colors">
-                                    <Mic className="w-[22px] h-[22px]" />
-                                </button>
-                            )}
-                        </div>
-                    </div>
-                </form>
-            </div>
-        );
-    }
-
-    return (
-        <div className="w-full flex flex-col shadow-[0_-2px_10px_rgba(0,0,0,0.02)] z-20 shrink-0">
-            {replyingToMsg && (
-                <div className="px-4 py-2 bg-[#f0f2f5] dark:bg-[#202c33] border-b border-gray-200 dark:border-gray-800 flex justify-between items-center slide-in-from-bottom-2 duration-200">
-                    <div className="flex-1 flex flex-col pl-3 border-l-4 border-blue-500 bg-black/5 dark:bg-white/5 py-1 px-3 rounded-r-lg max-w-[80%]">
-                        <span className="text-[11px] font-bold text-blue-500 mb-0.5">Respondiendo a {(replyingToMsg.from === 'me' || replyingToMsg.from === 'bot') ? 'Ti' : 'Candidato'}</span>
-                        <span className="text-xs text-gray-500 dark:text-gray-400 truncate">{replyingToMsg.content || '📄 Mensaje multimedia'}</span>
-                    </div>
-                    <button onClick={onCancelReply} className="ml-4 p-2 bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 transition-colors rounded-full text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
-                        <X className="w-4 h-4" />
-                    </button>
-                </div>
-            )}
-            <form onSubmit={handleSubmit} className="px-3 py-2 bg-[#f0f2f5] dark:bg-[#202c33] flex items-end gap-2 relative">
-                {/* Emojis Menu — Lazy loaded */}
-                {showEmojis && (
-                    <div className="absolute bottom-full left-2 mb-2 shadow-2xl z-[100] rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700">
-                        <EmojiPicker 
-                            onEmojiClick={(eData) => {
-                                setLocalMessage(prev => prev + eData.emoji);
-                            }}
-                            theme="auto"
-                            width={320}
-                            height={400}
-                            searchPlaceholder="Buscar emojis..."
-                            lazyLoadEmojis={true}
-                            skinTonesDisabled={true}
-                        />
-                    </div>
-                )}
-
-                {/* Template dropdown — absolute, anchored to the template button */}
-                {showTemplates && (
-                    <div className="absolute bottom-full left-2 mb-2 w-64 bg-white dark:bg-[#111b21] rounded-lg shadow-xl border border-gray-200 dark:border-gray-800 z-[100] max-h-[300px] flex flex-col overflow-hidden">
-                        <div className="px-3 py-2 bg-green-50 dark:bg-green-900/20 text-xs text-green-700 dark:text-green-400 font-bold border-b border-green-100 dark:border-green-800">
-                            Plantillas Meta
-                        </div>
-                        <div className="overflow-y-auto w-full font-sans">
-                            {metaTemplates.length === 0 ? (
-                                <div className="p-3 text-xs text-gray-400 text-center">Buscando plantillas...</div>
-                            ) : (
-                                metaTemplates.map(t => {
-                                    const bodyComp = (t.components || []).find(c => (c.type || '').toUpperCase() === 'BODY');
-                                    const bodyText = bodyComp?.text || '';
-                                    return (
-                                        <button 
-                                            key={t.id} 
-                                            type="button" 
-                                            className="w-full text-left p-3 hover:bg-gray-50 dark:hover:bg-[#202c33] border-b border-gray-100 dark:border-gray-800 transition-colors"
-                                            onClick={(e) => {
-                                                e.preventDefault();
-                                                onSendTemplate(t);
-                                                setShowTemplates(false);
-                                            }}
-                                        >
-                                            <div className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">{t.name}</div>
-                                            {bodyText && <div className="text-[11px] text-gray-500 dark:text-gray-400 truncate mt-0.5" title={bodyText}>{bodyText}</div>}
-                                            <div className="text-[10px] text-gray-400 dark:text-gray-500 uppercase tracking-widest mt-1">{t.category}</div>
-                                        </button>
-                                    );
-                                })
-                            )}
-                        </div>
-                    </div>
-                )}
-
-                {/* SINGLE ROW: Tools + Input + Send */}
-                <div className="flex items-center text-[#54656f] dark:text-[#8696a0] shrink-0">
-                    <button type="button" title="Emojis" onClick={() => {setShowEmojis(!showEmojis); setShowTemplates(false);}} className={`w-9 h-9 flex items-center justify-center rounded-lg hover:bg-black/5 dark:hover:bg-white/5 transition-colors ${showEmojis ? 'text-blue-500' : ''}`}><Smile className="w-[22px] h-[22px] stroke-[1.5]" /></button>
-                    <button type="button" title="Adjuntar Documento" onClick={() => fileInputRef.current?.click()} className="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-black/5 dark:hover:bg-white/5 transition-colors"><Plus className="w-[22px] h-[22px] stroke-[1.5]" /></button>
-                    <button type="button" title="Enviar Tarjeta de Contacto (vCard)" onClick={onSendVCard} className="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-black/5 dark:hover:bg-white/5 transition-colors"><UserSquare className="w-[22px] h-[22px] stroke-[1.5]" /></button>
-                    <button type="button" title="Enviar Botones Interactivos" onClick={onSendInteractive} className="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-black/5 dark:hover:bg-white/5 transition-colors"><MousePointerClick className="w-[22px] h-[22px] stroke-[1.5]" /></button>
-                    <button type="button" title="Enviar Ubicación" onClick={onSendLocation} className="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-black/5 dark:hover:bg-white/5 transition-colors"><MapPin className="w-[22px] h-[22px] stroke-[1.5]" /></button>
-                    <button type="button" title="Enviar Lista Interactiva" onClick={onSendList} className="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-black/5 dark:hover:bg-white/5 transition-colors"><ListIcon className="w-[22px] h-[22px] stroke-[1.5]" /></button>
-                    <button type="button" title="Enviar Producto (Catálogo)" onClick={onSendProduct} className="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-black/5 dark:hover:bg-white/5 transition-colors"><ShoppingBag className="w-[22px] h-[22px] stroke-[1.5]" /></button>
-                    <button type="button" title="Enviar Plantilla Oficial" onClick={() => {setShowTemplates(!showTemplates); setShowEmojis(false);}} className={`w-9 h-9 flex items-center justify-center rounded-lg hover:bg-black/5 dark:hover:bg-white/5 transition-colors ${showTemplates ? 'text-green-500' : ''}`}><Zap className="w-[22px] h-[22px] stroke-[1.5]" /></button>
-                </div>
-
-                <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileUpload} />
-
-                <div className="flex-1 bg-white dark:bg-[#2a3942] rounded-lg shadow-[0_1px_0_rgba(11,20,26,.05)] focus-within:shadow-[0_1px_2px_rgba(11,20,26,.1)] transition-shadow flex items-center pr-2 min-w-0">
-                    <textarea 
-                        id="chat-msg-input"
-                        autoComplete="off"
-                        rows={1}
-                        className="w-full bg-transparent border-none outline-none py-2 px-3 text-[#111b21] dark:text-[#d1d7db] placeholder-[#8696a0] resize-none text-[15px] max-h-36 overflow-y-auto min-h-[36px]" 
-                        placeholder="Escribe un mensaje"
-                        value={localMessage}
-                        onChange={(e) => {
-                            setLocalMessage(e.target.value);
-                            onTyping();
-                        }}
-                        onKeyDown={(e) => {
-                            if (e.key === 'Enter' && !e.shiftKey) {
-                                e.preventDefault();
-                                handleSubmit(e);
-                            }
-                        }}
-                        onInput={(e) => {
-                            e.target.style.height = 'auto';
-                            e.target.style.height = e.target.scrollHeight + 'px';
-                        }}
-                    />
-                    {localMessage && (
-                        <button 
-                            type="button" 
-                            title="Limpiar texto"
-                            onClick={() => {
-                                setLocalMessage('');
-                                const inputEl = document.getElementById('chat-msg-input');
-                                if (inputEl) inputEl.style.height = 'auto';
-                            }}
-                            className="p-1 text-gray-400 hover:text-red-500 dark:hover:text-red-400 transition-colors rounded-full shrink-0"
-                        >
-                            <X className="w-3.5 h-3.5" />
-                        </button>
-                    )}
-                </div>
-
-                <div className="text-[#54656f] dark:text-[#8696a0] shrink-0">
-                    {localMessage.trim() ? (
-                        <button type="submit" disabled={sending} className="p-1.5 text-[#54656f] dark:text-[#8696a0] hover:text-[#111b21] dark:hover:text-[#d1d7db] transition-colors">
-                            <Send className="w-[22px] h-[22px]" />
-                        </button>
-                    ) : (
-                        <button type="button" className="p-1.5 hover:text-[#111b21] dark:hover:text-[#d1d7db] transition-colors">
-                            <Mic className="w-[22px] h-[22px]" />
-                        </button>
-                    )}
-                </div>
-            </form>
-        </div>
-    );
-});
 // ─────────────────────────────────────────────────────────────────────────────
-
-// 🧱 STANDALONE HELPERS (outside component to avoid re-creation on every render)
-const checkIfUnreadStandalone = (chat) => {
-    if (!chat) return false;
-
-    // Primary rule: unreadMsgCount is the single source of truth.
-    // Incremented by webhook on every incoming user message.
-    // Decremented ONLY by explicit recruiter action: writing a reply, 
-    // clicking "Mark as Read", or clicking "Mark as Handled".
-    if (Number(chat.unreadMsgCount) > 0) return true;
-
-    // Secondary safety net: if the candidate has had activity but NO
-    // recruiter has EVER interacted (lastHumanMessageAt is null), 
-    // treat as unread so new chats always surface.
-    const userTime = chat.lastUserMessageAt ? new Date(chat.lastUserMessageAt).getTime() : 0;
-    if (userTime > 0 && !chat.lastHumanMessageAt) return true;
-
-    return false;
-};
-
-// ✅ META AUDIT: isProfileComplete imported from shared utils/profileUtils.js
-const isProfileCompleteStandalone = isProfileComplete;
-
-const AVATAR_COLORS = ['#f9a8d4','#a5b4fc','#86efac','#fcd34d','#fdba74','#c4b5fd','#67e8f9','#f0abfc','#fca5a5','#bef264'];
 
 // HIGH-1: Shared RBAC filter (eliminates duplication between filteredCandidates & baseCandidates)
 const passesRBACFilter = (c, user) => {
@@ -435,93 +51,6 @@ const ChevronIcon = () => (
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
     </div>
 );
-
-// ─── Audio Player personalizado (WhatsApp-style) ─────────────────────────────
-const AudioPlayer = React.memo(({ src }) => {
-    const audioRef = useRef(null);
-    const [playing, setPlaying] = useState(false);
-    const [progress, setProgress] = useState(0);
-    const [duration, setDuration] = useState(0);
-    const [currentTime, setCurrentTime] = useState(0);
-    const [speed, setSpeed] = useState(1);
-
-    const toggle = () => {
-        const a = audioRef.current;
-        if (!a) return;
-        if (playing) { a.pause(); setPlaying(false); }
-        else { a.play(); setPlaying(true); }
-    };
-    const handleTimeUpdate = () => {
-        const a = audioRef.current;
-        if (!a || !a.duration) return;
-        setCurrentTime(a.currentTime);
-        setProgress((a.currentTime / a.duration) * 100);
-    };
-    const handleLoaded = () => setDuration(audioRef.current?.duration || 0);
-    const handleEnded = () => { setPlaying(false); setProgress(0); setCurrentTime(0); };
-    const handleSeek = (e) => {
-        const a = audioRef.current;
-        if (!a || !a.duration) return;
-        const rect = e.currentTarget.getBoundingClientRect();
-        a.currentTime = ((e.clientX - rect.left) / rect.width) * a.duration;
-    };
-    const cycleSpeed = () => {
-        const next = speed === 1 ? 1.5 : speed === 1.5 ? 2 : 1;
-        setSpeed(next);
-        if (audioRef.current) audioRef.current.playbackRate = next;
-    };
-    const fmt = (s) => {
-        if (!s || isNaN(s)) return '0:00';
-        return `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
-    };
-
-    return (
-        <div className="flex items-center gap-2 py-1 px-1 min-w-[210px] max-w-[240px]">
-            <audio ref={audioRef} src={src} onTimeUpdate={handleTimeUpdate} onLoadedMetadata={handleLoaded} onEnded={handleEnded} />
-            <button onClick={toggle} className="w-9 h-9 rounded-full bg-[#00a884] flex items-center justify-center shrink-0 hover:bg-[#008f72] transition-colors shadow-sm">
-                {playing
-                    ? <svg viewBox="0 0 24 24" width="14" height="14" fill="white"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>
-                    : <svg viewBox="0 0 24 24" width="14" height="14" fill="white"><polygon points="6 3 20 12 6 21 6 3"/></svg>
-                }
-            </button>
-            <div className="flex-1 flex flex-col gap-1">
-                <div className="w-full h-[3px] bg-black/10 dark:bg-white/15 rounded-full cursor-pointer relative" onClick={handleSeek}>
-                    <div className="h-full bg-[#00a884] rounded-full" style={{ width: `${progress}%` }} />
-                    <div className="absolute top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full bg-[#00a884] shadow" style={{ left: `calc(${progress}% - 5px)` }} />
-                </div>
-                <div className="flex justify-between text-[9px] text-[#8696a0] font-medium">
-                    <span>{fmt(currentTime)}</span>
-                    <span>{fmt(duration)}</span>
-                </div>
-            </div>
-            <button onClick={cycleSpeed} className="text-[9px] font-bold text-[#8696a0] hover:text-[#54656f] dark:hover:text-white transition-colors shrink-0 bg-black/5 dark:bg-white/5 rounded px-1.5 py-0.5 min-w-[28px] text-center">
-                {speed}x
-            </button>
-        </div>
-    );
-});
-
-// ─── Separador de Fecha WhatsApp-style ───────────────────────────────────────
-const DateSeparator = React.memo(({ date }) => {
-    const label = (() => {
-        if (!date) return '';
-        const d = new Date(date);
-        if (isNaN(d)) return '';
-        const today = new Date(); today.setHours(0,0,0,0);
-        const yesterday = new Date(today); yesterday.setDate(today.getDate() - 1);
-        const msgDay = new Date(d); msgDay.setHours(0,0,0,0);
-        if (msgDay.getTime() === today.getTime()) return 'HOY';
-        if (msgDay.getTime() === yesterday.getTime()) return 'AYER';
-        return new Intl.DateTimeFormat('es-MX', { day: '2-digit', month: 'long', year: 'numeric', timeZone: 'America/Monterrey' }).format(d).toUpperCase();
-    })();
-    return (
-        <div className="flex items-center justify-center my-3 select-none">
-            <div className="bg-[#fff8dc] dark:bg-[#1f2c34] text-[#54656f] dark:text-[#8696a0] text-[11px] font-medium px-3 py-1 rounded-full shadow-sm border border-black/5 dark:border-white/5 tracking-wide">
-                {label}
-            </div>
-        </div>
-    );
-});
 
 const CustomSelect = React.memo(({ name, value, options, onChange, placeholder, disabled = false }) => {
     const [isOpen, setIsOpen] = useState(false);
@@ -732,417 +261,6 @@ const ProfileModal = React.memo(({ candidate, onClose, onSave }) => {
     );
 });
 
-// 🏎️ MEMOIZED ChatRow — only re-renders when THIS chat's data changes (not the whole list)
-const ChatRow = React.memo(({ chat, isSelected, isPinned, onSelect, onBlock, onDelete, onTogglePin, onlineReaders, blockLoading, userId, onOpenProfileModal, onMarkAsRead, onMarkAsUnread, onScheduleReminder }) => {
-    const isUnread = checkIfUnreadStandalone(chat);
-    const profileComplete = isProfileCompleteStandalone(chat);
-    const avatarColor = AVATAR_COLORS[((chat.nombre||'C').charCodeAt(0)*7)%10];
-    const isEmptyChat = chat.mensajesTotales === 0 || !chat.ultimoMensaje;
-    const [imgError, setImgError] = React.useState(false);
-
-    return (
-        <div 
-            onClick={() => onSelect(chat)}
-            className={`group flex items-center px-3 py-3 cursor-pointer hover:bg-[#f5f6f6] dark:hover:bg-[#202c33] transition-all duration-200 border-l-0 md:border-l-4 ${isSelected ? 'bg-[#f0f2f5] dark:bg-[#2a3942] border-[#25d366] dark:border-[#00a884] md:shadow-sm md:relative md:z-10' : 'border-transparent'}`}
-        >
-            <div className={`w-12 h-12 rounded-full flex-shrink-0 flex items-center justify-center mr-3 relative overflow-hidden ${isEmptyChat ? 'ring-2 ring-blue-500 ring-offset-2 ring-offset-[#ffffff] dark:ring-offset-[#111b21]' : ''}`}>
-                {chat.profilePic && !imgError ? (
-                    <img src={chat.profilePic} className="w-full h-full object-cover" alt="profile" loading="lazy"
-                        onError={() => setImgError(true)} />
-                ) : (
-                    <span className="flex items-center justify-center w-full h-full text-lg font-bold text-white rounded-full"
-                        style={{ background: avatarColor }}>
-                        {(chat.nombre || 'C')[0].toUpperCase()}
-                    </span>
-                )}
-            </div>
-            <div className="flex-1 min-w-0 border-b border-[#f0f2f5] dark:border-[#222e35] pb-3 pt-1">
-                <div className="flex flex-row justify-between items-center mb-1 w-full min-w-0">
-                    <div className="flex items-center gap-1.5 flex-1 min-w-0">
-                        {isPinned && <Pin className="w-3 h-3 text-[#25d366] dark:text-[#00a884] shrink-0 fill-current" />}
-                        <h3 className={`text-[17px] truncate flex-1 min-w-0 transition-colors ${isUnread ? 'text-[#111b21] dark:text-[#e9edef] font-bold' : 'text-[#111b21] dark:text-[#e9edef]'}`}>
-                            {toTitleCase(chat.nombreReal || chat.nombre) || chat.whatsapp}
-                        </h3>
-                        {chat.whatsapp && chat.platform !== 'messenger' && <span className="hidden lg:inline text-[10px] text-[#8696a0] dark:text-[#697882] shrink-0 ml-1">{chat.whatsapp}</span>}
-                    </div>
-                    <div className="flex flex-col items-end shrink-0 ml-2 gap-0.5">
-                        <div className="flex items-center gap-1">
-                            {chat.lastMessageFrom === 'me' || chat.lastMessageFrom === 'bot' ? (
-                                <MessageStatusTicks status={chat.lastMessageStatus} size="sm" />
-                            ) : null}
-                            <span className={`text-xs whitespace-nowrap ${isUnread ? 'text-[#25d366] dark:text-[#00a884] font-medium' : 'text-[#667781] dark:text-[#8696a0]'}`}>
-                                {formatRelativeDate(chat.ultimoMensaje)}
-                            </span>
-                        </div>
-                    </div>
-                </div>
-                <div className="flex justify-between items-center mt-0.5 min-h-[20px]">
-                    <div className="flex items-center gap-1.5 truncate flex-1 min-w-0">
-                        {chat.currentVacancyName && (
-                            <p className={`text-[14px] truncate flex-1 min-w-0 ${isUnread ? 'text-[#111b21] dark:text-[#e9edef] font-medium' : 'text-[#667781] dark:text-[#8696a0]'}`}>
-                                {chat.currentVacancyName}
-                            </p>
-                        )}
-                        <span 
-                            onClick={(e) => { e.stopPropagation(); onOpenProfileModal && onOpenProfileModal(chat); }}
-                            className={`hidden lg:inline text-[11px] font-light tracking-wide shrink-0 font-sans cursor-pointer hover:underline ${profileComplete ? 'text-green-500/90 dark:text-green-400/80' : 'text-red-400/90 dark:text-red-400/70'}`}
-                            title="Haz clic para ver/editar el perfil extraído por Brenda"
-                        >
-                            {chat.currentVacancyName ? '• ' : ''}{profileComplete ? 'Perfil completo' : 'Perfil incompleto'}
-                        </span>
-                    </div>
-                    <div className="flex items-center shrink-0 ml-1 gap-1">
-                        {isUnread ? (
-                            <>
-                                <button 
-                                    onClick={(e) => onMarkAsRead(chat, e)}
-                                    className="hidden lg:block px-1.5 py-0.5 mr-1 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-[10px] font-medium text-gray-600 dark:text-gray-300 rounded shadow-sm transition-colors shrink-0"
-                                    title="Quitar notificación"
-                                >
-                                    Marcar leído
-                                </button>
-                                <div className="min-w-[20px] h-[20px] px-1.5 rounded-full bg-[#25d366] dark:bg-[#00a884] flex items-center justify-center mr-1 shadow-sm shrink-0 text-white text-[11px] font-bold">
-                                    {chat.unreadMsgCount || 1}
-                                </div>
-                            </>
-                        ) : (
-                            <button 
-                                onClick={(e) => onMarkAsUnread(chat, e)}
-                                className="hidden lg:block px-1.5 py-0.5 mr-1 text-[10px] font-normal text-gray-400 dark:text-gray-500 hover:text-gray-500 dark:hover:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-colors shrink-0 opacity-0 group-hover:opacity-100"
-                                title="Marcar como no leído"
-                            >
-                                No leído
-                            </button>
-                        )}
-                        
-                        <button
-                            onClick={(e) => { e.stopPropagation(); onScheduleReminder && onScheduleReminder(chat); }}
-                            className="hidden lg:block p-1 rounded text-gray-400 hover:text-amber-500 dark:hover:text-amber-400 opacity-0 group-hover:opacity-100 transition-colors"
-                            title="Programar mensaje"
-                        >
-                            <Bell className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                            onClick={(e) => { e.stopPropagation(); onTogglePin(chat.id); }}
-                            className={`hidden lg:block p-1 rounded transition-colors ${isPinned ? 'text-[#25d366] dark:text-[#00a884]' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 opacity-0 group-hover:opacity-100'}`}
-                            title={isPinned ? 'Desfijar chat' : 'Fijar chat (máx 3)'}
-                        >
-                            <Pin className={`w-3.5 h-3.5 ${isPinned ? 'fill-current' : ''}`} />
-                        </button>
-                        <button
-                            onClick={(e) => onBlock(chat, e)}
-                            disabled={blockLoading}
-                            className={`hidden lg:flex w-7 h-3.5 rounded-full relative transition-colors duration-200 focus:outline-none flex items-center shadow-inner ${chat.blocked ? 'bg-red-500' : 'bg-gray-300 dark:bg-gray-600'}`}
-                            title={chat.blocked ? 'Reactivar Chat IA' : 'Silenciar Chat IA'}
-                        >
-                            <div className={`absolute w-2.5 h-2.5 rounded-full bg-white shadow transition-transform duration-200 ${chat.blocked ? 'translate-x-[16px]' : 'translate-x-0.5'}`}></div>
-                        </button>
-                        <button
-                            onClick={(e) => onDelete(chat, e)}
-                            className="hidden lg:block ml-2 text-gray-400 hover:text-red-500 dark:hover:text-red-400 transition-colors"
-                            title="Eliminar chat"
-                        >
-                            <Trash2 className="w-4 h-4" />
-                        </button>
-                    </div>
-                </div>
-                <div className="hidden lg:flex items-center gap-2 mt-1 text-[10px] text-[#8696a0] dark:text-[#697882] truncate">
-                    {chat.edad && <span className="shrink-0">{chat.edad} años</span>}
-                    {chat.edad && chat.escolaridad && <span className="shrink-0">•</span>}
-                    {chat.escolaridad && <span className="truncate shrink-0">{chat.escolaridad}</span>}
-                    {(chat.edad || chat.escolaridad) && chat.municipio && <span className="shrink-0">•</span>}
-                    {chat.municipio && <span className="truncate shrink-0">{chat.municipio}</span>}
-                    {(chat.edad || chat.escolaridad || chat.municipio) && chat.categoria && <span className="shrink-0">•</span>}
-                    {chat.categoria && <span className="truncate shrink-0">{toTitleCase(chat.categoria)}</span>}
-                </div>
-                {(chat.adId || onlineReaders.length > 0) && (
-                    <div className="hidden lg:flex items-center justify-between mt-0.5 text-[10px] text-[#8696a0] dark:text-[#697882]">
-                        <span className="truncate">{chat.adId ? `Ad id: ${chat.adId}` : ''}</span>
-                        {onlineReaders.length > 0 && (
-                            <div className="flex gap-1 shrink-0 ml-2">
-                                {onlineReaders.map((r, idx) => (
-                                    <span key={idx} className="text-[10px] text-blue-600 dark:text-blue-400 font-medium whitespace-nowrap">
-                                        {r.userId === userId ? 'Tú' : (r.userName || '?')}
-                                    </span>
-                                ))}
-                            </div>
-                        )}
-                    </div>
-                )}
-            </div>
-        </div>
-    );
-}, (prevProps, nextProps) => {
-    // Custom comparator: only re-render if visual data changed
-    // This prevents re-renders caused by function reference changes (handleBlockToggle etc.)
-    return (
-        prevProps.chat === nextProps.chat &&
-        prevProps.isSelected === nextProps.isSelected &&
-        prevProps.isPinned === nextProps.isPinned &&
-        prevProps.blockLoading === nextProps.blockLoading &&
-        prevProps.onlineReaders.length === nextProps.onlineReaders.length &&
-        prevProps.userId === nextProps.userId
-    );
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
-
-// Defined outside ChatSection — React.memo prevents re-renders when unrelated ChatSection state
-// changes (typing indicators, scroll button, dropdowns, etc.). Only re-renders when the message
-// itself, the reaction popup for this specific message, or the active chat changes.
-const MessageBubble = React.memo(function MessageBubble({
-    msg,
-    chatWhatsapp,
-    chatNombre,
-    chatId,
-    reactionPopupId,
-    onReaction,
-    onReply,
-    onSendReaction,
-    allMessages,
-}) {
-    const isMe = msg.from === 'me' || msg.from === 'bot';
-    const isFirstInSeries = msg._isFirstInSeries;
-
-    return (
-        <div className={`px-[5%] flex ${isMe ? 'justify-end' : 'justify-start'} group max-w-full relative ${!isFirstInSeries ? 'mt-0.5' : 'mt-2'} ${(msg.reactions && msg.reactions.length > 0) ? 'pb-5' : ''}`}>
-            <div className={`
-                max-w-[75%] rounded-[7.5px] px-2 pt-1.5 pb-1 shadow-[0_1px_0.5px_rgba(11,20,26,.13)] relative text-[14.2px] z-10
-                ${isMe
-                    ? `bg-[#d9fdd3] dark:bg-[#005c4b] text-[#111b21] dark:text-[#e9edef] ${isFirstInSeries ? 'rounded-tr-none' : ''}`
-                    : `bg-white dark:bg-[#202c33] text-[#111b21] dark:text-[#e9edef] ${isFirstInSeries ? 'rounded-tl-none' : ''}`}
-            `}>
-                {/* Tail */}
-                {isFirstInSeries && (
-                    <div className={`absolute top-0 w-[11px] h-[13px] overflow-hidden ${isMe ? '-right-[11px] text-[#d9fdd3] dark:text-[#005c4b]' : '-left-[11px] text-white dark:text-[#202c33]'}`}>
-                        <svg viewBox="0 0 8 13" width="8" height="13" className={`fill-current ${isMe ? 'float-left' : 'float-right scale-x-[-1]'}`}><path d="M5.188 1H0v11.193l6.467-8.625C7.526 2.156 6.958 1 5.188 1z"></path></svg>
-                    </div>
-                )}
-
-                <div className="relative inline-block min-w-[110px] max-w-full group/msgbody">
-                    {/* Quoted Message Rendering */}
-                    {msg.contextInfo?.quotedMessage && (
-                        <div
-                            className="mb-1.5 mt-0.5 rounded px-2 py-1.5 border-l-4 text-[12.5px] cursor-default bg-black/5 dark:bg-white/5"
-                            style={{
-                                borderColor: (msg.contextInfo.quotedMessage.participant && msg.contextInfo.quotedMessage.participant.includes(chatWhatsapp)) ? '#eb5398' : (isMe ? '#027a61' : '#53bdeb')
-                            }}
-                        >
-                            <div
-                                className="font-bold mb-0.5 capitalize truncate"
-                                style={{ color: (msg.contextInfo.quotedMessage.participant && msg.contextInfo.quotedMessage.participant.includes(chatWhatsapp)) ? '#eb5398' : (isMe ? '#027a61' : '#53bdeb') }}
-                            >
-                                {(msg.contextInfo.quotedMessage.participant && msg.contextInfo.quotedMessage.participant.includes(chatWhatsapp)) ? (chatNombre?.split(' ')[0] || 'Candidato') : 'Tú'}
-                            </div>
-                            <div className="line-clamp-3 text-[#111b21]/80 dark:text-[#e9edef]/80 break-words leading-tight">
-                                {(() => {
-                                    const qText = msg.contextInfo.quotedMessage.text;
-                                    if (qText) return qText;
-                                    const quotedMsg = allMessages.find(m => m.id === msg.contextInfo.quotedMessage.stanzaId || m.ultraMsgId === msg.contextInfo.quotedMessage.stanzaId);
-                                    if (quotedMsg && quotedMsg.content) {
-                                        return quotedMsg.content.replace(/<[^>]*>?/gm, '').substring(0, 100);
-                                    }
-                                    return '📄 Mensaje multimedia';
-                                })()}
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Media Rendering */}
-                    {msg.mediaUrl && (
-                        <div className="mb-0.5 rounded overflow-hidden mt-1 cursor-pointer">
-                            {msg.type === 'image' && (
-                                <img src={msg.mediaUrl} alt="media" loading="lazy" width="260" height="260" className="max-w-[260px] aspect-square object-cover rounded shadow-sm bg-gray-100 dark:bg-gray-800 animate-pulse" onLoad={(e) => e.target.classList.remove('animate-pulse')} />
-                            )}
-                            {msg.type === 'sticker' && (
-                                <img src={msg.mediaUrl} alt="sticker" loading="lazy" width="100" height="100" className="max-w-[100px] max-h-[100px] object-contain" onLoad={(e) => e.target.classList.remove('animate-pulse')} />
-                            )}
-                            {msg.type === 'video' && (
-                                <video src={msg.mediaUrl} controls width="260" className="w-[260px] aspect-video rounded shadow-sm bg-black" />
-                            )}
-                            {(msg.type === 'audio' || msg.type === 'ptt' || msg.type === 'voice') && (
-                                <AudioPlayer src={msg.mediaUrl} />
-                            )}
-                            {msg.type === 'document' && (
-                                <a href={msg.mediaUrl} target="_blank" rel="noreferrer" className="flex items-center gap-2 px-3 py-2 bg-black/5 dark:bg-white/5 rounded text-blue-500 hover:text-blue-600 font-medium break-all">
-                                    <Paperclip className="w-4 h-4 shrink-0" /> {msg.filename || 'DOCUMENTO ADJUNTO'}
-                                </a>
-                            )}
-                        </div>
-                    )}
-
-                    {/* Text Rendering (skip for stickers — only show image) */}
-                    {msg.content && msg.type !== 'sticker' && (
-                        <div className="whitespace-pre-wrap leading-[1.35] inline-block break-words" style={{ paddingBottom: '16px', paddingRight: '80px', paddingTop: msg.mediaUrl ? '2px' : '0' }}>
-                            {(() => {
-                                const rawHtml = msg._formattedHtml || msg.content;
-
-                                const isContact = typeof msg.content === 'string' && msg.content.startsWith('[Tarjeta de Contacto:');
-                                if (isContact) {
-                                    const nameMatch = msg.content.match(/\[Tarjeta de Contacto:\s*(.+)\]/i);
-                                    const name = nameMatch ? nameMatch[1] : 'Contacto';
-                                    return (
-                                        <div className="flex flex-col">
-                                            <div className="flex items-center gap-3 bg-black/5 dark:bg-white/5 p-3 rounded-lg border border-black/10 dark:border-white/10 my-1 min-w-[200px] mb-2">
-                                                <div className="w-10 h-10 rounded-full bg-[#00a884]/20 flex items-center justify-center shrink-0">
-                                                    <UserSquare className="w-6 h-6 text-[#00a884] dark:text-[#00a884]" />
-                                                </div>
-                                                <div className="flex flex-col">
-                                                    <span className="text-sm font-bold text-gray-800 dark:text-gray-200">{name}</span>
-                                                    <span className="text-[11px] text-gray-500 dark:text-gray-400">Tarjeta de Contacto</span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    );
-                                }
-
-                                const isInteractive = typeof msg.content === 'string' && msg.content.includes('[Botones:');
-                                if (isInteractive) {
-                                    const parts = msg.content.split('\n\n[Botones:');
-                                    const mainText = parts[0];
-                                    const btnsStr = parts[1]?.replace(']', '') || '';
-                                    const btns = btnsStr.split(' | ').filter(b => b.trim());
-                                    return (
-                                        <div className="flex flex-col w-full min-w-[220px]">
-                                            <div dangerouslySetInnerHTML={{ __html: mainText.replace(/\n/g, '<br/>') }} className="mb-2" />
-                                            <div className="flex flex-col gap-1 w-full mt-1">
-                                                {btns.map((b, i) => (
-                                                    <div key={i} className="w-full text-center py-2 px-3 bg-black/5 dark:bg-white/5 text-blue-500 dark:text-blue-400 text-sm rounded-lg border border-black/10 dark:border-white/10 transition-colors font-medium">
-                                                        {b}
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    );
-                                }
-
-                                const isList = typeof msg.content === 'string' && msg.content.includes('[Lista:');
-                                if (isList) {
-                                    const parts = msg.content.split('\n\n[Lista:');
-                                    const mainText = parts[0];
-                                    const itemsStr = parts[1]?.replace(']', '') || '';
-                                    const items = itemsStr.split(', ');
-                                    return (
-                                        <div className="flex flex-col w-full min-w-[220px]">
-                                            <div dangerouslySetInnerHTML={{ __html: mainText.replace(/\n/g, '<br/>') }} className="mb-2" />
-                                            <div className="flex flex-col border border-indigo-100 dark:border-indigo-900/30 rounded-lg overflow-hidden mt-1">
-                                                <div className="bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-400 text-xs font-bold py-1.5 px-3 flex justify-between items-center"><ListIcon className="w-3 h-3" /> VER OPCIONES</div>
-                                                {items.map((it, i) => (
-                                                    <div key={i} className="py-2 px-3 bg-white dark:bg-[#111b21] text-sm border-t border-indigo-50 dark:border-indigo-900/10 font-medium">{it}</div>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    );
-                                }
-
-                                const isLocation = typeof msg.content === 'string' && msg.content.startsWith('[Ubicación:');
-                                if (isLocation) {
-                                    const nameMatch = msg.content.match(/\[Ubicación:\s*(.+)\]/i);
-                                    const name = nameMatch ? nameMatch[1] : 'Mapa';
-                                    return (
-                                        <div className="flex flex-col w-full min-w-[200px]">
-                                            <div className="h-[100px] bg-slate-100 dark:bg-slate-800 w-full rounded-t-lg flex items-center justify-center overflow-hidden relative border border-slate-200 dark:border-slate-700 border-b-0">
-                                                <div className="absolute inset-0 opacity-20 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-blue-400 to-transparent"></div>
-                                                <MapPin className="w-8 h-8 text-red-500 relative z-10" />
-                                            </div>
-                                            <div className="bg-white dark:bg-[#111b21] p-3 rounded-b-lg border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col">
-                                                <span className="font-bold text-sm text-slate-800 dark:text-slate-200">{name}</span>
-                                                <span className="text-xs text-blue-500 mt-1 cursor-pointer hover:underline">Ver en el mapa</span>
-                                            </div>
-                                        </div>
-                                    );
-                                }
-
-                                const isProduct = typeof msg.content === 'string' && msg.content.startsWith('[Producto del Catálogo:');
-                                if (isProduct) {
-                                    const skuMatch = msg.content.match(/\[Producto del Catálogo:\s*(.+)\]/i);
-                                    const sku = skuMatch ? skuMatch[1] : 'SKU';
-                                    return (
-                                        <div className="flex flex-col w-full min-w-[200px]">
-                                            <div className="flex items-center gap-3 bg-emerald-50 dark:bg-emerald-900/20 p-3 rounded-lg border border-emerald-100 dark:border-emerald-800/30">
-                                                <div className="w-10 h-10 rounded bg-white dark:bg-slate-800 flex items-center justify-center shadow-sm">
-                                                    <ShoppingBag className="w-6 h-6 text-emerald-500" />
-                                                </div>
-                                                <div className="flex flex-col">
-                                                    <span className="font-bold text-sm text-emerald-800 dark:text-emerald-400">Producto</span>
-                                                    <span className="text-xs text-emerald-600 dark:text-emerald-500">Ref: {sku}</span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    );
-                                }
-
-                                return <div dangerouslySetInnerHTML={{ __html: rawHtml }} />;
-                            })()}
-                        </div>
-                    )}
-
-
-                    {/* Reaction Badges */}
-                    {msg.reactions && msg.reactions.length > 0 && (
-                        <div className="absolute -bottom-2.5 right-0 bg-white dark:bg-[#202c33] shadow-md rounded-full px-1.5 py-0.5 text-[11px] z-20 flex gap-0.5 border border-gray-100 dark:border-gray-800">
-                            {Array.isArray(msg.reactions) ? msg.reactions.map((r, rIdx) => <span key={rIdx}>{r.emoji || r}</span>) : <span>{msg.reactions}</span>}
-                        </div>
-                    )}
-                </div>
-
-                {/* Quick Actions (Hover) */}
-                <div className={`absolute top-1 ${isMe ? '-left-[72px]' : '-right-[72px]'} opacity-0 group-hover:opacity-100 flex gap-1 z-30 transition-opacity`}>
-                    <button onClick={() => onReaction(msg.id)} title="Reaccionar" className="p-1.5 bg-white dark:bg-[#202c33] hover:bg-gray-50 dark:hover:bg-gray-800 shadow-sm border border-black/5 dark:border-white/5 rounded-[10px]"><Smile className="w-[18px] h-[18px] text-[#54656f] dark:text-[#8696a0]" /></button>
-                    <button onClick={() => onReply(msg)} title="Responder" className="p-1.5 bg-white dark:bg-[#202c33] hover:bg-gray-50 dark:hover:bg-gray-800 shadow-sm border border-black/5 dark:border-white/5 rounded-[10px]"><Reply className="w-[18px] h-[18px] text-[#54656f] dark:text-[#8696a0]" /></button>
-                </div>
-
-                {/* Reaction Emoji Picker Popup */}
-                {reactionPopupId === msg.id && (
-                    <div className={`absolute -top-[44px] ${isMe ? 'right-0' : 'left-0'} bg-white dark:bg-[#202c33] shadow-lg rounded-full px-3 py-2 flex items-center gap-3 z-50 border border-gray-200 dark:border-gray-800 slide-in-from-bottom-2`}>
-                        {['👍', '❤️', '😂', '😮', '😢', '🙏'].map(emoji => (
-                            <button key={emoji} onClick={() => onSendReaction(msg, emoji)} className="text-xl hover:scale-150 transition-transform origin-bottom">{emoji}</button>
-                        ))}
-                        <button onClick={() => onReaction(null)} className="ml-1 p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full"><X className="w-3.5 h-3.5 text-gray-400" /></button>
-                    </div>
-                )}
-
-                {(() => {
-                    const hasVisibleText = msg.content && msg.type !== 'sticker';
-                    return (
-                        <div className={`flex items-center space-x-1 select-none pr-1 ${
-                            hasVisibleText
-                                ? 'absolute bottom-[3px] right-2'
-                                : 'justify-end mt-1 pb-0.5'
-                        }`}>
-                            <p className="text-[10px] text-[#667781] dark:text-[#8696a0] font-medium leading-none whitespace-nowrap">
-                                {safeFormatTime(msg.timestamp)}
-                            </p>
-                            {isMe && (
-                                <MessageStatusTicks status={msg.status} />
-                            )}
-                        </div>
-                    );
-                })()}
-            </div>
-
-            {/* Error display */}
-            {msg.status === 'failed' && msg.error && (() => {
-                const errStr = String(msg.error).toLowerCase();
-                const is24h = msg.metaCode === 131047 || String(msg.metaCode) === '131047'
-                    || errStr.includes('131047') || errStr.includes('24 hour') || errStr.includes('re-engagement');
-                return (
-                    <div className={`text-[10px] text-red-500 font-medium mt-1 ${isMe ? 'text-right' : 'text-left'}`}>
-                        {is24h
-                            ? '⛔ Ventana de 24 hrs cerrada. Usa el Rayito Verde ⚡ para enviar plantilla.'
-                            : `⚠️ Meta: ${msg.error}`}
-                    </div>
-                );
-            })()}
-        </div>
-    );
-}, (prev, next) =>
-    prev.msg === next.msg &&
-    prev.reactionPopupId === next.reactionPopupId &&
-    prev.chatWhatsapp === next.chatWhatsapp &&
-    prev.chatId === next.chatId
-);
-
 // Defined outside ChatSection so Virtuoso doesn't remount it on every render
 const MessagesEncryptionHeader = () => (
     <div className="px-[5%] pt-[5%] pb-1">
@@ -1243,6 +361,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
     const messagesContainerRef = useRef(null);
     const virtuosoRef = useRef(null);
     const isSendingRef = useRef(false);
+    const isAtBottomRef = useRef(true);
     const virtuosoScrollerRef = useRef(null);
 
     const scrollToBottom = (behavior = 'smooth') => {
@@ -1252,12 +371,14 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
     const fileInputRef = useRef(null);
     const lastPresenceTimeRef = useRef(0);
     const [showScrollBtn, setShowScrollBtn] = useState(false);
+    const [unseenCount, setUnseenCount] = useState(0);
     const [chatSearch, setChatSearch] = useState('');
     const [showChatSearch, setShowChatSearch] = useState(false);
     const [chatSearchIdx, setChatSearchIdx] = useState(0);
     const chatSearchInputRef = useRef(null);
     // ✅ META AUDIT: Ghost guard — prevents SSE re-insertion after delete (same pattern as CandidatesSection)
     const recentlyDeletedRef = useRef(new Set());
+    const draftsRef = useRef(new Map());
 
     const handleTyping = () => {
         if (!selectedChat) return;
@@ -1393,12 +514,12 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
 
     // No AI projects
 
-    const filteredManualProjects = (() => {
+    const filteredManualProjects = useMemo(() => {
         if (!user || user.role === 'SuperAdmin' || user.role === 'Admin') return manualProjects;
         const allowed = user?.allowed_crm_projects;
         if (!Array.isArray(allowed) || allowed.length === 0) return manualProjects;
         return manualProjects.filter(p => allowed.includes(p.id));
-    })();
+    }, [manualProjects, user]);
 
 
 
@@ -1415,6 +536,50 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
         };
         window.addEventListener('candidate_replied', handleReply);
         return () => window.removeEventListener('candidate_replied', handleReply);
+    }, []);
+
+    // 🏷️ Ad Label events → actualizar estado de candidatos al instante
+    useEffect(() => {
+        const onCreate = (e) => {
+            const { adId, tagName } = e.detail || {};
+            if (!adId || !tagName) return;
+            setCandidates(prev => prev.map(c => {
+                if (String(c.adId) !== String(adId)) return c;
+                const existing = Array.isArray(c.tags) ? c.tags : [];
+                if (existing.includes(tagName)) return c;
+                return { ...c, tags: [...existing, tagName] };
+            }));
+        };
+        const onRename = (e) => {
+            const { oldTagName, newTagName } = e.detail || {};
+            if (!oldTagName || !newTagName) return;
+            setCandidates(prev => prev.map(c => {
+                if (!Array.isArray(c.tags) || !c.tags.includes(oldTagName)) return c;
+                return { ...c, tags: c.tags.map(t => t === oldTagName ? newTagName : t) };
+            }));
+            setAvailableTags(prev => prev.map(t => {
+                const name = typeof t === 'string' ? t : t.name;
+                if (name !== oldTagName) return t;
+                return typeof t === 'string' ? newTagName : { ...t, name: newTagName };
+            }));
+        };
+        const onDelete = (e) => {
+            const { tagName } = e.detail || {};
+            if (!tagName) return;
+            setCandidates(prev => prev.map(c => {
+                if (!Array.isArray(c.tags) || !c.tags.includes(tagName)) return c;
+                return { ...c, tags: c.tags.filter(t => t !== tagName) };
+            }));
+            setAvailableTags(prev => prev.filter(t => (typeof t === 'string' ? t : t.name) !== tagName));
+        };
+        window.addEventListener('ad_label_created', onCreate);
+        window.addEventListener('ad_label_renamed', onRename);
+        window.addEventListener('ad_label_deleted', onDelete);
+        return () => {
+            window.removeEventListener('ad_label_created', onCreate);
+            window.removeEventListener('ad_label_renamed', onRename);
+            window.removeEventListener('ad_label_deleted', onDelete);
+        };
     }, []);
 
     // 📡 Broadcast mount/unmount lifecycle to Sidebar so it knows when to trust
@@ -1630,10 +795,6 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
         }
     };
 
-    // Delegate to standalone versions (defined outside component for React.memo compatibility)
-    const isProfileComplete = isProfileCompleteStandalone;
-    const checkIfUnread = checkIfUnreadStandalone;
-
     // Fast search filter for the list with robust safety checks
     const filteredCandidates = useMemo(() => {
         const result = (candidates || []).filter(c => {
@@ -1792,6 +953,14 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
 
     // 🏎️ Online readers por chat — evita recalcular dentro de cada ChatRow
     const EMPTY_READERS = [];
+    const tagColorMap = useMemo(() => {
+        const map = new Map();
+        availableTags.forEach(t => {
+            if (typeof t === 'object' && t.name) map.set(t.name, t.color || '#64748b');
+        });
+        return map;
+    }, [availableTags]);
+
     const onlineReadersByChat = useMemo(() => {
         const map = new Map();
         for (const u of onlineUsers) {
@@ -1811,13 +980,19 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
             // Chat switch: wait for Virtuoso to render then force scroll
             prevChatId.current = selectedChat?.id;
             prevMessagesLength.current = messages.length;
+            setUnseenCount(0);
             setTimeout(() => scrollToBottom('auto'), 80);
             return;
         }
         if (messages.length > prevMessagesLength.current) {
-            // DOM directo: scrollTop = scrollHeight, siempre funciona
-            setTimeout(() => scrollToBottom(), 80);
-            setTimeout(() => scrollToBottom('auto'), 400);
+            if (isAtBottomRef.current || isSendingRef.current) {
+                setTimeout(() => scrollToBottom('smooth'), 80);
+            } else {
+                // Count only real incoming messages (not our own optimistic ones)
+                const newMsgs = messages.slice(prevMessagesLength.current);
+                const incoming = newMsgs.filter(m => m.from !== 'me' && m.from !== 'bot' && !String(m.id).startsWith('temp'));
+                if (incoming.length > 0) setUnseenCount(prev => prev + incoming.length);
+            }
         }
         prevMessagesLength.current = messages.length;
     }, [messages, selectedChat?.id]);
@@ -2068,22 +1243,27 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
 
     // Debounce state to avoid collision between optimistic messages and SSE/interval redraws
     const isSendingMediaRef = useRef(false);
+    const loadMessagesAbortRef = useRef(null);
 
     const loadMessages = async () => {
-        // BUG-4: Capture chat ID at call time to prevent stale closure injection
         const chatId = selectedChatRef.current?.id;
         if (!chatId) return;
-        if (isSendingMediaRef.current) return; // Mute polling/SSE while an optimistic upload is in flight
+        if (isSendingMediaRef.current) return;
+
+        // Cancel any in-flight load from a previous chat switch
+        if (loadMessagesAbortRef.current) loadMessagesAbortRef.current.abort();
+        loadMessagesAbortRef.current = new AbortController();
+        const { signal } = loadMessagesAbortRef.current;
 
         try {
-            const res = await fetch(`/api/chat?candidateId=${chatId}`);
+            const res = await fetch(`/api/chat?candidateId=${chatId}`, { signal });
             const data = await res.json();
-            // Guard: only inject if we're still viewing the same chat
             if (data.success && !isSendingMediaRef.current && selectedChatRef.current?.id === chatId) {
                 setMessages(data.messages || []);
             }
         } catch (e) {
-            console.error('Failed to poll chat', e);
+            if (e.name === 'AbortError') return;
+            console.error('Failed to load chat', e);
         }
     };
 
@@ -2225,8 +1405,21 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
     }, []);
 
     const handleSelectChat = useCallback((chat) => {
+        // Save draft of current chat before switching
+        const currentText = messageInputRef.current?.getText?.();
+        const currentId = selectedChatRef.current?.id;
+        if (currentId) {
+            if (currentText?.trim()) {
+                draftsRef.current.set(currentId, currentText);
+            } else {
+                draftsRef.current.delete(currentId);
+            }
+        }
         setSelectedChat(chat);
         setHeaderImgError(false);
+        // Restore draft for the new chat (or clear)
+        const draft = draftsRef.current.get(chat.id) || '';
+        setTimeout(() => messageInputRef.current?.setText?.(draft), 80);
     }, []);
 
     const handleFileUpload = async (e) => {
@@ -2336,28 +1529,28 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
         setShowDropdown(null);
     };
 
-    const sendReactionToApi = async (candidateId, msg, emoji, showToast, setReactionPopupId, loadMessages) => {
+    const sendReactionToApi = async (candidateId, msg, emoji, showToast, setReactionPopupId) => {
         setReactionPopupId(null);
         if (!msg || !emoji) return;
 
         const replyToId = msg.ultraMsgId || msg.id;
+        const targetId = msg.id;
+
+        // Optimistic update — inject emoji immediately without re-fetching
+        setMessages(prev => prev.map(m => {
+            if (m.id !== targetId && m.ultraMsgId !== targetId) return m;
+            const existing = Array.isArray(m.reactions) ? m.reactions : [];
+            return { ...m, reactions: [...existing.filter(r => (r.emoji || r) !== emoji), { emoji }] };
+        }));
 
         try {
             const res = await fetch('/api/chat', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    candidateId,
-                    message: emoji,
-                    type: 'reaction',
-                    replyToId: replyToId
-                })
+                body: JSON.stringify({ candidateId, message: emoji, type: 'reaction', replyToId })
             });
             const data = await res.json();
-            if (data.success) {
-                // Optimistically load immediately
-                setTimeout(()=> loadMessages(), 100);
-            } else {
+            if (!data.success) {
                 showToast && showToast('Error al enviar reacción', 'error');
             }
         } catch (err) {
@@ -2366,13 +1559,10 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
         }
     };
 
-    // Stable callback for MessageBubble — uses refs so it doesn't recreate on chat change
-    const loadMessagesRef = useRef(loadMessages);
-    useEffect(() => { loadMessagesRef.current = loadMessages; });
     const handleSendReaction = useCallback((msg, emoji) => {
         const chatId = selectedChatRef.current?.id;
         if (!chatId) return;
-        sendReactionToApi(chatId, msg, emoji, showToast, setReactionPopupId, () => loadMessagesRef.current());
+        sendReactionToApi(chatId, msg, emoji, showToast, setReactionPopupId);
     }, [showToast]);
 
     // MED-6: Debounce ref to prevent double-send on rapid clicks
@@ -2589,6 +1779,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
             }
         }).catch(error => {
             setMessages(prev => prev.map(m => m.id === optimisticId ? { ...m, status: 'failed', error: 'Red desconectada' } : m));
+            isSendingRef.current = false;
             console.error(error);
             showToast && showToast('Error de red al enviar', 'error');
         });
@@ -3261,6 +2452,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                                     onMarkAsRead={handleMarkAsRead}
                                     onMarkAsUnread={handleMarkAsUnread}
                                     onScheduleReminder={setReminderModalCandidate}
+                                    tagColorMap={tagColorMap}
                                 />
                             )}
                         />
@@ -3319,9 +2511,16 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                                         </div>
                                     )}
                                 </div>
-                                <p className="text-xs text-[#667781] dark:text-[#8696a0] truncate mt-0.5">
-                                    {selectedChat.whatsapp} • últ. msj {formatRelativeDate(selectedChat.ultimoMensaje)}
-                                </p>
+                                <div className="flex items-center gap-2 mt-0.5 min-w-0">
+                                    <p className="text-xs text-[#667781] dark:text-[#8696a0] truncate shrink">
+                                        {selectedChat.whatsapp} • últ. msj {formatRelativeDate(selectedChat.ultimoMensaje)}
+                                    </p>
+                                    {(selectedChat.adHeadline || selectedChat.adId) && (
+                                        <span className="hidden lg:inline-flex items-center gap-1 shrink-0 text-[10px] font-medium text-violet-500 dark:text-violet-400 bg-violet-50 dark:bg-violet-500/10 px-2 py-0.5 rounded-full border border-violet-200/60 dark:border-violet-500/20 truncate max-w-[180px]" title={selectedChat.adHeadline || selectedChat.adId}>
+                                            📢 {selectedChat.adHeadline || `Ad ${selectedChat.adId}`}
+                                        </span>
+                                    )}
+                                </div>
                             </div>
                         </div>
                         <div className="flex space-x-3 text-[#54656f] dark:text-[#aebac1] items-center">
@@ -3674,7 +2873,11 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                             components={{ Header: MessagesEncryptionHeader }}
                             atBottomStateChange={(isAtBottom) => {
                                 setShowScrollBtn(!isAtBottom);
-                                if (isAtBottom) isSendingRef.current = false;
+                                isAtBottomRef.current = isAtBottom;
+                                if (isAtBottom) {
+                                    isSendingRef.current = false;
+                                    setUnseenCount(0);
+                                }
                             }}
                             itemContent={(index, msg) => {
                             if (!msg) return <div style={{ height: 0 }} />;
@@ -3734,10 +2937,15 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                     {/* Scroll-to-bottom button */}
                     {showScrollBtn && (
                         <button
-                            onClick={() => scrollToBottom()}
+                            onClick={() => { scrollToBottom(); setUnseenCount(0); }}
                             className="absolute bottom-[72px] right-5 z-30 w-10 h-10 rounded-full bg-white dark:bg-[#202c33] shadow-lg flex items-center justify-center border border-black/10 dark:border-white/10 hover:bg-gray-50 dark:hover:bg-[#2a3942] transition-colors"
                             title="Ir al final"
                         >
+                            {unseenCount > 0 && (
+                                <span className="absolute -top-2 left-1/2 -translate-x-1/2 bg-[#25d366] text-white text-[10px] font-bold rounded-full min-w-[20px] h-5 flex items-center justify-center px-1 shadow-sm pointer-events-none">
+                                    {unseenCount > 99 ? '99+' : unseenCount}
+                                </span>
+                            )}
                             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-[#54656f] dark:text-[#aebac1]"><polyline points="6 9 12 15 18 9"></polyline></svg>
                         </button>
                     )}

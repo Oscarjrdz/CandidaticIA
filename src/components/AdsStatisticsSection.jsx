@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Target, TrendingUp, Users, Calendar, Megaphone, Loader2, Clock, Copy, ExternalLink, RefreshCw, Video, DollarSign, Eye, MousePointerClick, Percent, MessageCircle, Heart, ArrowUpRight, Trash2, X, Send, MessageSquare, ChevronDown, ChevronUp, CornerDownRight } from 'lucide-react';
+import { Target, TrendingUp, Users, Calendar, Megaphone, Loader2, Clock, Copy, ExternalLink, RefreshCw, Video, DollarSign, Eye, MousePointerClick, Percent, MessageCircle, Heart, ArrowUpRight, Trash2, X, Send, MessageSquare, ChevronDown, ChevronUp, CornerDownRight, Tag, Plus, Check } from 'lucide-react';
 import { useConfirmModal } from './ui/ConfirmModal';
 import { getAdsStats } from '../services/adsService';
 import { useToastContext } from '../contexts/ToastContext';
@@ -345,12 +345,111 @@ const CommentsModal = ({ ad, onClose, showToast }) => {
 };
 
 /* ─── Main Component ──────────────────────────────────────────────────── */
+const PRESET_COLORS = ['#a855f7','#3b82f6','#22c55e','#f97316','#ef4444','#eab308','#06b6d4','#ec4899','#64748b','#10b981'];
+
 const AdsStatisticsSection = () => {
     const { showToast } = useToastContext();
     const [stats, setStats] = useState({ ads: [], totalAdsLeads: 0 });
     const [loading, setLoading] = useState(true);
     const [commentsAd, setCommentsAd] = useState(null);
     const { confirmModalJSX, showConfirm } = useConfirmModal();
+
+    /* ── Ad Labels state ── */
+    const [adLabels, setAdLabels] = useState([]);
+    const [showLabelForm, setShowLabelForm] = useState(false);
+    const [editingLabel, setEditingLabel] = useState(null); // null = crear, object = editar
+    const [labelForm, setLabelForm] = useState({ adIds: '', name: '', emoji: '', color: '#a855f7' });
+    const [labelSaving, setLabelSaving] = useState(false);
+
+    const loadAdLabels = async () => {
+        try {
+            const res = await fetch('/api/ad-labels');
+            const data = await res.json();
+            if (data.success) setAdLabels(data.labels || []);
+        } catch { /* silent */ }
+    };
+
+    const resetForm = () => {
+        setLabelForm({ adIds: '', name: '', emoji: '', color: '#a855f7' });
+        setEditingLabel(null);
+        setShowLabelForm(false);
+    };
+
+    const handleOpenEdit = (label) => {
+        const nameOnly = label.emoji ? label.tagName.replace(label.emoji + ' ', '') : label.tagName;
+        const ids = label.adIds || (label.adId ? [label.adId] : []);
+        setLabelForm({ adIds: ids.join(', '), name: nameOnly, emoji: label.emoji || '', color: label.color });
+        setEditingLabel(label);
+        setShowLabelForm(true);
+    };
+
+    const handleSubmitLabel = async (e) => {
+        e.preventDefault();
+        if (!labelForm.adIds.trim() || !labelForm.name.trim()) return;
+        setLabelSaving(true);
+        try {
+            const isEdit = !!editingLabel;
+            const res = await fetch('/api/ad-labels', {
+                method: isEdit ? 'PUT' : 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(isEdit ? { id: editingLabel.id, ...labelForm } : labelForm),
+            });
+            // body already has adIds as comma-string; backend parses it
+            const data = await res.json();
+            if (data.success) {
+                if (isEdit) {
+                    setAdLabels(prev => prev.map(l => l.id === editingLabel.id ? data.label : l));
+                    showToast?.(`Etiqueta actualizada${data.renamed > 0 ? ` en ${data.renamed} candidatos` : ''}`, 'success');
+                    // Notificar rename al instante en ChatSection
+                    if (data.oldTagName !== data.label.tagName) {
+                        window.dispatchEvent(new CustomEvent('ad_label_renamed', {
+                            detail: { oldTagName: data.oldTagName, newTagName: data.label.tagName, color: data.label.color }
+                        }));
+                    } else {
+                        // Solo cambio de color — recargar tags
+                        window.dispatchEvent(new CustomEvent('ad_label_color_changed', {
+                            detail: { tagName: data.label.tagName, color: data.label.color }
+                        }));
+                    }
+                } else {
+                    setAdLabels(prev => [...prev, data.label]);
+                    showToast?.(`Etiqueta creada y aplicada a ${data.applied} candidatos`, 'success');
+                    window.dispatchEvent(new CustomEvent('ad_label_created', {
+                        detail: { adId: data.label.adId, tagName: data.label.tagName, color: data.label.color }
+                    }));
+                }
+                resetForm();
+            } else {
+                showToast?.(data.error || 'Error', 'error');
+            }
+        } catch {
+            showToast?.('Error de red', 'error');
+        } finally {
+            setLabelSaving(false);
+        }
+    };
+
+    const handleDeleteLabel = async (label) => {
+        const ok = await showConfirm({
+            title: 'Eliminar Etiqueta Ad',
+            message: `¿Eliminar "${label.tagName}" en profundidad? Se quitará de la lista global de etiquetas y de TODOS los candidatos que la tengan. Esta acción no se puede deshacer.`,
+            confirmText: 'Eliminar todo',
+            variant: 'danger'
+        });
+        if (!ok) return;
+        try {
+            const res = await fetch(`/api/ad-labels?id=${label.id}`, { method: 'DELETE' });
+            const data = await res.json();
+            if (data.success) {
+                setAdLabels(prev => prev.filter(l => l.id !== label.id));
+                showToast?.(`Etiqueta eliminada de ${data.removedFrom} candidatos y de la lista global`, 'success');
+                // Quitar etiqueta del estado local de ChatSection al instante
+                window.dispatchEvent(new CustomEvent('ad_label_deleted', {
+                    detail: { tagName: label.tagName }
+                }));
+            }
+        } catch { showToast?.('Error de red', 'error'); }
+    };
 
     const loadStats = async () => {
         setLoading(true);
@@ -360,7 +459,7 @@ const AdsStatisticsSection = () => {
         setLoading(false);
     };
 
-    useEffect(() => { loadStats(); }, []);
+    useEffect(() => { loadStats(); loadAdLabels(); }, []);
 
     const handleHideAd = async (ad) => {
         const adKey = ad.adId || ad.adHeadline || 'unknown';
@@ -420,6 +519,148 @@ const AdsStatisticsSection = () => {
                     className="flex items-center px-3 py-1.5 text-xs bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors shadow-sm disabled:opacity-50">
                     <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${loading ? 'animate-spin' : ''}`} /> Actualizar
                 </button>
+            </div>
+
+            {/* ── ETIQUETAS ADS ──────────────────────────────────────────────── */}
+            <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-sm overflow-hidden">
+                <div className="px-5 py-3.5 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                        <Tag className="w-4 h-4 text-violet-500" />
+                        <h2 className="font-bold text-sm text-gray-900 dark:text-white">Etiquetas de Anuncios</h2>
+                        {adLabels.length > 0 && <span className="text-[10px] font-bold text-violet-600 bg-violet-50 dark:bg-violet-500/10 px-2 py-0.5 rounded-full">{adLabels.length}</span>}
+                    </div>
+                    <button onClick={() => { if (editingLabel) resetForm(); else setShowLabelForm(v => !v); }}
+                        className="flex items-center gap-1.5 text-xs font-semibold text-violet-600 hover:text-violet-700 dark:text-violet-400 bg-violet-50 dark:bg-violet-500/10 hover:bg-violet-100 dark:hover:bg-violet-500/20 px-3 py-1.5 rounded-lg transition-colors">
+                        <Plus className="w-3.5 h-3.5" /> Nueva Etiqueta
+                    </button>
+                </div>
+
+                {/* Form */}
+                {showLabelForm && (
+                    <form onSubmit={handleSubmitLabel} className="px-5 py-4 bg-violet-50/50 dark:bg-violet-500/5 border-b border-violet-100 dark:border-violet-500/20">
+                        <p className="text-xs font-semibold text-violet-700 dark:text-violet-400 mb-3">
+                            {editingLabel ? `Editar: ${editingLabel.tagName}` : 'Nueva Etiqueta Ad'}
+                        </p>
+                        <div className="flex flex-col gap-3 mb-3">
+                            <div>
+                                <label className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase mb-1 block">
+                                    Ad IDs * <span className="font-normal normal-case text-gray-400">— separa varios con coma</span>
+                                </label>
+                                <input
+                                    type="text"
+                                    placeholder="ej: 120245715187570620, 120245715187570621"
+                                    value={labelForm.adIds}
+                                    onChange={e => setLabelForm(f => ({ ...f, adIds: e.target.value }))}
+                                    className="w-full text-xs px-3 py-2 rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white outline-none focus:border-violet-400 dark:focus:border-violet-500 transition-colors font-mono"
+                                    required
+                                />
+                                {labelForm.adIds && (
+                                    <div className="flex flex-wrap gap-1 mt-1.5">
+                                        {labelForm.adIds.split(',').map(s => s.trim()).filter(Boolean).map((id, i) => (
+                                            <span key={i} className="text-[9px] font-mono bg-violet-100 dark:bg-violet-500/20 text-violet-700 dark:text-violet-300 px-2 py-0.5 rounded-full">
+                                                {id}
+                                            </span>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                            <div>
+                                <label className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase mb-1 block">Nombre *</label>
+                                <input
+                                    type="text"
+                                    placeholder="ej: Metálsa Apodaca"
+                                    value={labelForm.name}
+                                    onChange={e => setLabelForm(f => ({ ...f, name: e.target.value }))}
+                                    className="w-full text-xs px-3 py-2 rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white outline-none focus:border-violet-400 transition-colors"
+                                    required
+                                />
+                            </div>
+                        </div>
+                        <div className="flex items-end gap-3 mb-3">
+                            <div className="w-24">
+                                <label className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase mb-1 block">Emoji</label>
+                                <input
+                                    type="text"
+                                    placeholder="🏭"
+                                    value={labelForm.emoji}
+                                    onChange={e => setLabelForm(f => ({ ...f, emoji: e.target.value }))}
+                                    className="w-full text-center text-lg px-2 py-1.5 rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 outline-none focus:border-violet-400 transition-colors"
+                                    maxLength={4}
+                                />
+                            </div>
+                            <div className="flex-1">
+                                <label className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase mb-1 block">Color</label>
+                                <div className="flex items-center gap-2 flex-wrap">
+                                    {PRESET_COLORS.map(c => (
+                                        <button key={c} type="button" onClick={() => setLabelForm(f => ({ ...f, color: c }))}
+                                            className="w-6 h-6 rounded-full border-2 transition-transform hover:scale-110 flex-shrink-0"
+                                            style={{ backgroundColor: c, borderColor: labelForm.color === c ? 'white' : 'transparent', outline: labelForm.color === c ? `2px solid ${c}` : 'none' }}
+                                        />
+                                    ))}
+                                    <input type="color" value={labelForm.color} onChange={e => setLabelForm(f => ({ ...f, color: e.target.value }))}
+                                        className="w-6 h-6 rounded cursor-pointer border-0 p-0 bg-transparent" title="Color personalizado" />
+                                </div>
+                            </div>
+                            <div className="shrink-0">
+                                <label className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase mb-1 block">Preview</label>
+                                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-white px-3 py-1 rounded-full"
+                                    style={{ backgroundColor: labelForm.color }}>
+                                    {labelForm.emoji && <span>{labelForm.emoji}</span>}
+                                    {labelForm.name || 'Etiqueta'}
+                                </span>
+                            </div>
+                        </div>
+                        <div className="flex gap-2">
+                            <button type="submit" disabled={labelSaving || !labelForm.adIds.trim() || !labelForm.name.trim()}
+                                className="flex items-center gap-1.5 text-xs font-bold text-white bg-violet-600 hover:bg-violet-700 disabled:opacity-50 disabled:cursor-not-allowed px-4 py-2 rounded-lg transition-colors">
+                                {labelSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                                {labelSaving ? (editingLabel ? 'Guardando...' : 'Aplicando...') : (editingLabel ? 'Guardar cambios' : 'Crear y aplicar')}
+                            </button>
+                            <button type="button" onClick={resetForm}
+                                className="text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                                Cancelar
+                            </button>
+                        </div>
+                    </form>
+                )}
+
+                {/* Label list */}
+                <div className="divide-y divide-gray-100 dark:divide-gray-700">
+                    {adLabels.length === 0 ? (
+                        <div className="px-5 py-6 text-center text-xs text-gray-400 dark:text-gray-500">
+                            No hay etiquetas creadas. Crea una para vincular un Ad ID a una etiqueta automática.
+                        </div>
+                    ) : (
+                        adLabels.map(label => (
+                            <div key={label.id} className={`px-5 py-3 flex items-center justify-between gap-4 transition-colors ${editingLabel?.id === label.id ? 'bg-violet-50/60 dark:bg-violet-500/5' : ''}`}>
+                                <div className="flex items-center gap-3 min-w-0">
+                                    <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-white px-3 py-1 rounded-full shrink-0"
+                                        style={{ backgroundColor: label.color }}>
+                                        {label.emoji && <span>{label.emoji}</span>}
+                                        {label.tagName.replace(label.emoji ? label.emoji + ' ' : '', '')}
+                                    </span>
+                                    <div className="flex flex-wrap gap-1 min-w-0">
+                                        {(label.adIds || (label.adId ? [label.adId] : [])).map(id => (
+                                            <span key={id} className="text-[9px] font-mono text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-700 px-1.5 py-0.5 rounded truncate max-w-[160px]">{id}</span>
+                                        ))}
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-1 shrink-0">
+                                    <button onClick={() => handleOpenEdit(label)}
+                                        title="Editar etiqueta"
+                                        className="p-1.5 text-gray-400 hover:text-violet-500 dark:hover:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-900/20 rounded-lg transition-colors">
+                                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                                    </button>
+                                    <button onClick={() => handleDeleteLabel(label)}
+                                        title="Eliminar etiqueta (en profundidad)"
+                                        className="p-1.5 text-gray-400 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors">
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                </div>
+                            </div>
+                        ))
+                    )}
+                </div>
             </div>
 
             {/* KPI Row */}

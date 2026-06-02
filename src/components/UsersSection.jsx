@@ -18,8 +18,7 @@ const AVAILABLE_SECTIONS = [
     { id: 'vacancies', name: 'Vacantes' },
     { id: 'history', name: 'Historial' },
     { id: 'users', name: 'Usuarios' },
-    { id: 'post-maker', name: 'Post Maker' },
-    { id: 'media-library', name: 'Biblioteca' },
+{ id: 'media-library', name: 'Biblioteca' },
     { id: 'projects', name: 'Proyectos' }
 ];
 

@@ -26,6 +26,7 @@ const SSE_EVENTS = {
 let _singletonES = null;
 let _singletonReconnectTimer = null;
 let _subscriberCount = 0;
+let _reconnectAttempts = 0;
 let _globalState = {
     newCandidate: null,
     updatedCandidate: null,
@@ -67,6 +68,7 @@ function _connectSingleton() {
 
         eventSource.onopen = () => {
             console.log('✅ SSE connected (singleton)');
+            _reconnectAttempts = 0;
             _updateState({ connected: true, error: null });
         };
 
@@ -109,12 +111,12 @@ function _connectSingleton() {
             _singletonES = null;
 
             if (_subscriberCount > 0) {
+                const delay = Math.min(500 * Math.pow(2, _reconnectAttempts) + Math.random() * 1000, 30000);
+                _reconnectAttempts++;
+                console.log(`🔄 SSE reconnecting in ${Math.round(delay)}ms (attempt ${_reconnectAttempts})...`);
                 _singletonReconnectTimer = setTimeout(() => {
-                    if (_subscriberCount > 0) {
-                        console.log('🔄 Reconnecting SSE (singleton)...');
-                        _connectSingleton();
-                    }
-                }, 5000);
+                    if (_subscriberCount > 0) _connectSingleton();
+                }, delay);
             }
         };
     } catch (err) {

@@ -131,12 +131,7 @@ export default function InternalChat({ onlineUsers = [] }) {
         if (open) setUnread(0);
     }, [open, loaded, fetchHistory]);
 
-    // Polling safety-net when open: syncs any missed SSE events every 4s
-    useEffect(() => {
-        if (!open || !loaded) return;
-        const id = setInterval(fetchHistory, 4000);
-        return () => clearInterval(id);
-    }, [open, loaded, fetchHistory]);
+    // SSE maneja tiempo real — no polling. Carga una vez al abrir el drawer.
 
     const containerRef = useRef(null);
     const isNearBottomRef = useRef(true);

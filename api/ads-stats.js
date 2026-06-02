@@ -70,28 +70,39 @@ export default async function handler(req, res) {
             // Enrich with Meta Marketing API insights if token is available
             const adsToken = process.env.META_ADS_TOKEN;
             if (adsToken && data.ads && data.ads.length > 0) {
-                const adIds = data.ads
-                    .map(a => a.adId)
-                    .filter(Boolean);
-                
+                const adIds = data.ads.map(a => a.adId).filter(Boolean);
+
                 if (adIds.length > 0) {
                     try {
-                        // Fetch insights for each ad in parallel
+                        const { getRedisClient } = await import('./utils/storage.js');
+                        const redis = getRedisClient();
+                        const INSIGHTS_TTL = 3600; // 1 hora
+                        const STATUS_TTL   = 3600;
+
+                        // Fetch insights — con cache Redis 1h por ad
                         const insightResults = await Promise.allSettled(
-                            adIds.map(adId =>
-                                fetch(`https://graph.facebook.com/v21.0/${adId}/insights?fields=impressions,clicks,spend,cpc,cpm,ctr,reach,frequency,actions,cost_per_action_type&date_preset=maximum&access_token=${adsToken}`)
-                                    .then(r => r.json())
-                                    .then(json => ({ adId, data: json.data?.[0] || null, error: json.error || null }))
-                            )
+                            adIds.map(async adId => {
+                                const cacheKey = `ads:insights:${adId}`;
+                                const cached = redis ? await redis.get(cacheKey) : null;
+                                if (cached) return { adId, data: JSON.parse(cached) };
+                                const json = await fetch(`https://graph.facebook.com/v21.0/${adId}/insights?fields=impressions,clicks,spend,cpc,cpm,ctr,reach,frequency,actions,cost_per_action_type&date_preset=maximum&access_token=${adsToken}`).then(r => r.json());
+                                const result = json.data?.[0] || null;
+                                if (redis && result) await redis.set(cacheKey, JSON.stringify(result), 'EX', INSIGHTS_TTL);
+                                return { adId, data: result, error: json.error || null };
+                            })
                         );
 
-                        // Also fetch ad status in parallel
+                        // Fetch status — con cache Redis 1h por ad
                         const statusResults = await Promise.allSettled(
-                            adIds.map(adId =>
-                                fetch(`https://graph.facebook.com/v21.0/${adId}?fields=effective_status,name&access_token=${adsToken}`)
-                                    .then(r => r.json())
-                                    .then(json => ({ adId, status: json.effective_status || null, name: json.name || null }))
-                            )
+                            adIds.map(async adId => {
+                                const cacheKey = `ads:status:${adId}`;
+                                const cached = redis ? await redis.get(cacheKey) : null;
+                                if (cached) return { adId, ...JSON.parse(cached) };
+                                const json = await fetch(`https://graph.facebook.com/v21.0/${adId}?fields=effective_status,name&access_token=${adsToken}`).then(r => r.json());
+                                const result = { status: json.effective_status || null, name: json.name || null };
+                                if (redis && result.status) await redis.set(cacheKey, JSON.stringify(result), 'EX', STATUS_TTL);
+                                return { adId, ...result };
+                            })
                         );
 
                         // Build status map
