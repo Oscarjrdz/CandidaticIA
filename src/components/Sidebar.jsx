@@ -3,7 +3,7 @@ import { useAuthContext } from '../contexts/AuthContext';
 import { useCandidatesSSE } from '../hooks/useCandidatesSSE';
 import {
     Users, Settings, Bot, History, Zap, Briefcase, Send, User, LogOut, BarChart3,
-    MessageSquare, Layout, Smartphone, Folder, FolderKanban, GripVertical, Wifi, BrainCircuit, X, ChevronLeft, ChevronRight
+    MessageSquare, Smartphone, Folder, FolderKanban, GripVertical, Wifi, BrainCircuit, X, ChevronLeft, ChevronRight, Bell
 } from 'lucide-react';
 import {
     DndContext,
@@ -37,10 +37,10 @@ const DEFAULT_MENU_ITEMS = [
     { id: 'automations', label: 'Automatizaciones', icon: Zap, position: 'top' },
     { id: 'vacancies', label: 'Vacantes', icon: Briefcase, position: 'top' },
     { id: 'bolsa', label: 'Bolsa (App)', icon: Smartphone, position: 'top' },
+    { id: 'notificaciones', label: 'Notificaciones', icon: Bell, position: 'top' },
     // { id: 'media-library', label: 'Biblioteca Multimedia', icon: Folder, position: 'top' },
     { id: 'projects', label: 'Proyectos', icon: FolderKanban, position: 'top' },
-    { id: 'post-maker', label: 'Post Maker', icon: Layout, position: 'top' },
-    { id: 'users', label: 'Usuarios', icon: User, position: 'top' },
+{ id: 'users', label: 'Usuarios', icon: User, position: 'top' },
     { id: 'settings', label: 'Settings', icon: Settings, position: 'bottom' }
 ];
 

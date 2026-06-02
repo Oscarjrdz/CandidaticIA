@@ -42,8 +42,8 @@ const SettingsSection = lazyWithRetry(() => import('./components/SettingsSection
 const AutomationsSection = lazyWithRetry(() => import('./components/AutomationsSection'), 'AutomationsSection');
 const VacanciesSection = lazyWithRetry(() => import('./components/VacanciesSection'), 'VacanciesSection');
 const BolsaSection = lazyWithRetry(() => import('./components/BolsaSection'), 'BolsaSection');
+const NotificacionesSection = lazyWithRetry(() => import('./components/NotificacionesSection'), 'NotificacionesSection');
 const UsersSection = lazyWithRetry(() => import('./components/UsersSection'), 'UsersSection');
-const PostMakerSection = lazyWithRetry(() => import('./components/PostMakerSection'), 'PostMakerSection');
 const BotIASection = lazyWithRetry(() => import('./components/BotIASection'), 'BotIASection');
 const MediaLibrarySection = lazyWithRetry(() => import('./components/MediaLibrarySection'), 'MediaLibrarySection');
 const CRMProjectsSection = lazyWithRetry(() => import('./components/CRMProjectsSection'), 'CRMProjectsSection');
@@ -95,33 +95,27 @@ function AppShell() {
     if (isViewer) { setActiveSection('chat'); return; }
     if (!user || user.role === 'SuperAdmin' || !rolePermissions) return;
     if (rolePermissions['candidates'] !== true) {
-      const fallbackKeys = ['chat', 'bot-ia', 'automations', 'vacancies', 'projects', 'post-maker', 'users', 'settings'];
+      const fallbackKeys = ['chat', 'bot-ia', 'automations', 'vacancies', 'projects', 'users', 'settings'];
       const fallback = fallbackKeys.find(k => rolePermissions[k] === true);
       if (fallback) setActiveSection(fallback);
     }
   }, [user, rolePermissions, isViewer, isMobile]);
 
-  // Global heartbeat — Web Worker impulsado para que NO se congele al cambiar de pestaña
+  // Bulk engine heartbeat — adaptive interval: 5s while running, 30s idle
   useEffect(() => {
     if (!user) return;
-    const workerCode = `
-      self.onmessage = function(e) {
-        if (e.data === 'start') {
-          setInterval(() => self.postMessage('tick'), 2000);
-        }
-      };
-    `;
-    const blob = new Blob([workerCode], { type: 'application/javascript' });
-    const url = URL.createObjectURL(blob);
-    const worker = new Worker(url);
-    worker.onmessage = () => {
-        fetch('/api/bulks?action=status').catch(() => {});
+    let timer;
+    const poll = () => {
+        fetch('/api/bulks?action=status')
+            .then(r => r.json())
+            .then(d => {
+                const isRunning = d?.state?.isRunning === true;
+                timer = setTimeout(poll, isRunning ? 5000 : 30000);
+            })
+            .catch(() => { timer = setTimeout(poll, 30000); });
     };
-    worker.postMessage('start');
-    return () => {
-        worker.terminate();
-        URL.revokeObjectURL(url);
-    };
+    timer = setTimeout(poll, 5000); // first check after 5s
+    return () => clearTimeout(timer);
   }, [user]);
 
   // Toggle tema
@@ -219,7 +213,6 @@ function AppShell() {
                       : activeSection === 'bolsa' ? 'Bolsa de Empleo (App)'
                       : activeSection === 'history' ? 'Historial'
                       : activeSection === 'users' ? 'Usuarios'
-                      : activeSection === 'post-maker' ? 'Post Maker'
                       : activeSection === 'media-library' ? 'Biblioteca'
                       : activeSection === 'projects' ? 'Proyectos'
                       : 'Configuración'}
@@ -264,7 +257,6 @@ function AppShell() {
                       : activeSection === 'vacancies' ? 'Gestión y publicación de vacantes'
                       : activeSection === 'history' ? 'Historial de conversaciones'
                       : activeSection === 'users' ? 'Gestión de equipo y permisos'
-                      : activeSection === 'post-maker' ? 'Creación de posts para Facebook'
                       : activeSection === 'media-library' ? 'Biblioteca de archivos y recursos del Bot'
                       : activeSection === 'projects' ? 'Kanban de reclutamiento'
                       : 'Credenciales y configuración del sistema'}
@@ -327,10 +319,10 @@ function AppShell() {
             <VacanciesSection />
           ) : activeSection === 'bolsa' ? (
             <BolsaSection />
+          ) : activeSection === 'notificaciones' ? (
+            <NotificacionesSection />
           ) : activeSection === 'users' ? (
             <UsersSection />
-          ) : activeSection === 'post-maker' ? (
-            <PostMakerSection />
           ) : activeSection === 'media-library' ? (
             <MediaLibrarySection />
           ) : activeSection === 'projects' ? (
