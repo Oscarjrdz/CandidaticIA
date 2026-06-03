@@ -37,7 +37,7 @@ export default async function handler(req, res) {
 
     const {
       nombre, genero, municipio, categoria, escolaridad,
-      nacimiento, edad, foto, cvNombre, experiencia,
+      nacimiento, edad, foto, cvNombre, cvUrl, experiencia,
     } = req.body;
 
     const existing = await getCandidateByPhone(last10);
@@ -56,6 +56,7 @@ export default async function handler(req, res) {
         ...(edad        && { edad }),
         ...(foto        && { foto }),
         ...(cvNombre    && { cvNombre }),
+        ...(cvUrl       && { cvUrl }),
         ...(experiencia && { experiencia }),
         // Trazabilidad: confirmar que tiene la app y cuándo actualizó por última vez
         appRegistered: true,
@@ -77,6 +78,7 @@ export default async function handler(req, res) {
         edad: edad || null,
         foto: foto || null,
         cvNombre: cvNombre || null,
+        cvUrl: cvUrl || null,
         experiencia: experiencia || [],
         primerContacto: now,
         origen: 'app',

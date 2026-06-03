@@ -38,7 +38,7 @@ export default async function handler(req, res) {
         if (!uploaded) return res.status(400).json({ error: 'No se recibió ningún archivo (campo: file)' });
 
         const mime = uploaded.mimetype || 'image/jpeg';
-        if (!mime.startsWith('image/')) return res.status(400).json({ error: 'Solo se aceptan imágenes' });
+        if (!mime.startsWith('image/') && mime !== 'application/pdf') return res.status(400).json({ error: 'Solo se aceptan imágenes o PDF' });
 
         const buffer = readFileSync(uploaded.filepath);
         if (buffer.length > MAX_BYTES) return res.status(413).json({ error: 'Imagen demasiado grande (máx 4 MB)' });

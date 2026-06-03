@@ -4,6 +4,10 @@
     "framework": "vite",
     "rewrites": [
         {
+            "source": "/support",
+            "destination": "/api/support"
+        },
+        {
             "source": "/s/:id",
             "destination": "/api/share?id=:id"
         },
