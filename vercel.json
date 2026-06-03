@@ -8,6 +8,10 @@
             "destination": "/api/support"
         },
         {
+            "source": "/privacy",
+            "destination": "/api/public/privacy"
+        },
+        {
             "source": "/s/:id",
             "destination": "/api/share?id=:id"
         },
