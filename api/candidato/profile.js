@@ -11,6 +11,23 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization');
 
   if (req.method === 'OPTIONS') return res.status(200).end();
+
+  // DELETE — eliminar cuenta
+  if (req.method === 'DELETE') {
+    try {
+      const token2 = (req.headers.authorization || '').replace('Bearer ', '').trim();
+      const phone2 = Buffer.from(token2, 'base64').toString().split(':')[0];
+      const digits2 = String(phone2).replace(/\D/g, '').slice(-10);
+      const { getCandidateByPhone, deleteCandidate } = await import('./utils/storage.js');
+      const candidate = await getCandidateByPhone(digits2);
+      if (candidate) await deleteCandidate(candidate.id);
+      return res.status(200).json({ success: true });
+    } catch (err) {
+      console.error('[candidato/profile DELETE]', err);
+      return res.status(500).json({ error: 'Error interno' });
+    }
+  }
+
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   try {
