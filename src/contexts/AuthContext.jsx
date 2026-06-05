@@ -23,7 +23,13 @@ export const AuthProvider = ({ children }) => {
         const savedUser = localStorage.getItem('candidatic_user_session');
         if (savedUser) {
             try {
-                setUser(JSON.parse(savedUser));
+                const parsed = JSON.parse(savedUser);
+                if (!parsed?.sessionToken) {
+                    // Legacy session without token — force re-login
+                    localStorage.removeItem('candidatic_user_session');
+                } else {
+                    setUser(parsed);
+                }
             } catch (e) {
                 console.error('Invalid session', e);
                 localStorage.removeItem('candidatic_user_session');
