@@ -22,7 +22,7 @@ const parseAdIds = (raw = '') =>
 
 export default async function handler(req, res) {
     try {
-        const { getRedisClient, getCandidates, saveCandidate } = await import('./utils/storage.js');
+        const { getRedisClient, getCandidates, updateCandidate } = await import('./utils/storage.js');
         const redis = getRedisClient();
         if (!redis) return res.status(500).json({ error: 'Redis no disponible' });
 
@@ -71,7 +71,7 @@ export default async function handler(req, res) {
                 if (!adIds.includes(String(c.adId))) continue;
                 const existing = Array.isArray(c.tags) ? c.tags : [];
                 if (!existing.includes(tagName)) {
-                    updates.push(saveCandidate({ ...c, tags: [...existing, tagName] }));
+                    updates.push(updateCandidate(c.id, { tags: [...existing, tagName] }));
                     applied++;
                 }
             }
@@ -132,7 +132,7 @@ export default async function handler(req, res) {
                     renamed++;
                 }
                 if (newTags.join(',') !== (c.tags || []).join(',')) {
-                    updates.push(saveCandidate({ ...c, tags: newTags }));
+                    updates.push(updateCandidate(c.id, { tags: newTags }));
                 }
             }
             if (updates.length) await Promise.all(updates);
@@ -166,7 +166,7 @@ export default async function handler(req, res) {
             let removedFrom = 0;
             for (const c of candidates) {
                 if (Array.isArray(c.tags) && c.tags.includes(removed.tagName)) {
-                    updates.push(saveCandidate({ ...c, tags: c.tags.filter(t => t !== removed.tagName) }));
+                    updates.push(updateCandidate(c.id, { tags: c.tags.filter(t => t !== removed.tagName) }));
                     removedFrom++;
                 }
             }

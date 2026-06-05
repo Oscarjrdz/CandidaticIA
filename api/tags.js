@@ -56,13 +56,12 @@ export default async function handler(req, res) {
             await redis.set('candidatic:chat_tags', JSON.stringify(newTags));
             await redis.del(TAG_COUNTS_CACHE_KEY); // invalidar cache
 
-            const { getCandidates, saveCandidate } = await import('./utils/storage.js');
+            const { getCandidates, updateCandidate } = await import('./utils/storage.js');
             const { candidates } = await getCandidates(20000, 0, '');
             const promises = [];
-            for (let c of candidates) {
+            for (const c of candidates) {
                 if (c.tags && Array.isArray(c.tags) && c.tags.includes(tagName)) {
-                    c.tags = c.tags.filter(t => t !== tagName);
-                    promises.push(saveCandidate(c));
+                    promises.push(updateCandidate(c.id, { tags: c.tags.filter(t => t !== tagName) }));
                 }
             }
             if (promises.length > 0) await Promise.all(promises);
