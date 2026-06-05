@@ -602,8 +602,21 @@ export const saveCandidate = async (candidate) => {
         candidate.id = `cand_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     }
 
-    // Indexing for O(1) Lookups
+    // 🛡️ CRITICAL FIELD GUARD: Protect fields that should never be erased once set.
+    // If the incoming object is missing these fields but Redis already has them,
+    // the Redis value wins — prevents any race condition from silently wiping them.
     const client = getRedisClient();
+    if (client && candidate.id && (!candidate.lastUserMessageAt || !candidate.primerContacto || !candidate.mensajesTotales)) {
+        try {
+            const existing = await client.get(`${KEYS.CANDIDATE_PREFIX}${candidate.id}`);
+            if (existing) {
+                const ex = JSON.parse(existing);
+                if (!candidate.lastUserMessageAt && ex.lastUserMessageAt) candidate = { ...candidate, lastUserMessageAt: ex.lastUserMessageAt };
+                if (!candidate.primerContacto && ex.primerContacto) candidate = { ...candidate, primerContacto: ex.primerContacto };
+                if (!candidate.mensajesTotales && ex.mensajesTotales) candidate = { ...candidate, mensajesTotales: ex.mensajesTotales };
+            }
+        } catch { }
+    }
     if (client && candidate.whatsapp) {
         const cleanPhone = candidate.whatsapp.replace(/\D/g, '');
         // Store in centralized Hash for atomic O(1) lookups across all instances
