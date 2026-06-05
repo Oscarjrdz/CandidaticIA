@@ -438,7 +438,7 @@ export default async function handler(req, res) {
                                 for (const l of matching) {
                                     if (!newTags.includes(l.tagName)) { newTags.push(l.tagName); changed = true; }
                                 }
-                                if (changed) await saveCandidate({ ...candidate, tags: newTags });
+                                if (changed) await updateCandidate(candidate.id, { tags: newTags });
                             }
                         } catch(e) { /* silent */ }
                     })();
