@@ -106,7 +106,13 @@ export default async function handler(req, res) {
                 if (user.status !== 'Active') {
                     return res.status(403).json({ error: 'Cuenta pendiente de activación.' });
                 }
-                return res.status(200).json({ success: true, user });
+                // Generar sesión firmada en Redis (24h TTL)
+                const { randomBytes } = await import('crypto');
+                const { getRedisClient } = await import('./utils/storage.js');
+                const sessionToken = randomBytes(32).toString('hex');
+                const redisCli = getRedisClient();
+                if (redisCli) await redisCli.set(`session:admin:${sessionToken}`, user.id, 'EX', 86400);
+                return res.status(200).json({ success: true, user: { ...user, sessionToken } });
             }
 
             // If user does NOT exist, signal frontend to proceed to Registration

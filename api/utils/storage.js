@@ -23,7 +23,7 @@ const getClient = () => {
             console.log(`🔌 Connecting to Redis: ${redisUrl.split('@').pop()} (TLS: ${isTLS})`);
             redis = new Redis(redisUrl, {
                 retryStrategy: (times) => Math.min(times * 50, 2000),
-                tls: isTLS ? { rejectUnauthorized: false } : undefined
+                tls: isTLS ? { rejectUnauthorized: true } : undefined
             });
             redis.on('error', (err) => console.error('❌ Redis Connection Error:', err));
         } catch (e) {
@@ -709,6 +709,19 @@ export const deleteCandidate = async (id) => {
     }
 
     return await deleteDistributedItem(KEYS.CANDIDATES_LIST, KEYS.CANDIDATE_PREFIX, id);
+};
+
+/**
+ * Valida un sessionToken de admin contra Redis.
+ * Retorna el userId si es válido, null si no.
+ */
+export const validateAdminSession = async (req) => {
+    const authHeader = req.headers?.authorization || req.headers?.Authorization || '';
+    const token = authHeader.replace('Bearer ', '').trim();
+    if (!token) return null;
+    const client = getClient();
+    if (!client) return null;
+    return await client.get(`session:admin:${token}`);
 };
 
 export const getCandidateById = async (id) => {

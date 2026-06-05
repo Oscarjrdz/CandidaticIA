@@ -54,7 +54,8 @@ export default async function handler(req, res) {
         const mode = req.query['hub.mode'];
         const token = req.query['hub.verify_token'];
         const challenge = req.query['hub.challenge'];
-        const VERIFY_TOKEN = process.env.META_VERIFY_TOKEN || 'candidatic_webhook_2026';
+        const VERIFY_TOKEN = process.env.META_VERIFY_TOKEN;
+        if (!VERIFY_TOKEN) return res.status(500).send('META_VERIFY_TOKEN no configurado');
 
         if (mode === 'subscribe' && token === VERIFY_TOKEN) {
             console.log('[META WEBHOOK] ✅ Verification successful');
@@ -115,10 +116,14 @@ export default async function handler(req, res) {
         }
 
         if (!signatureValid) {
-            // Instead of rejecting, log and allow through — JSON.stringify
-            // re-serialization is unreliable for UTF-8 payloads on Vercel.
-            // The webhook-viewer and dedup layers provide secondary security.
-            console.warn(`[META WEBHOOK] ⚠️ HMAC mismatch (likely UTF-8 re-serialization). Allowing through.`);
+            const hadRawBody = typeof req.rawBody === 'string' || Buffer.isBuffer(req.rawBody);
+            if (hadRawBody) {
+                // rawBody disponible y firma incorrecta — rechazar
+                return res.status(401).json({ error: 'Invalid webhook signature' });
+            }
+            // rawBody no disponible (limitación de Vercel sin bodyParser desactivado).
+            // TODO: exportar config = { api: { bodyParser: false } } y parsear manualmente.
+            console.warn('[META WEBHOOK] ⚠️ HMAC no validado — rawBody no disponible. Configura bodyParser: false en Vercel.');
         }
     } else {
         // Log once per cold start to remind ops team to configure the secret

@@ -16,11 +16,14 @@ export default async function handler(req, res) {
   if (req.method === 'DELETE') {
     try {
       const token2 = (req.headers.authorization || '').replace('Bearer ', '').trim();
-      const phone2 = Buffer.from(token2, 'base64').toString().split(':')[0];
+      const { getRedisClient, getCandidateByPhone, deleteCandidate } = await import('../utils/storage.js');
+      const redis2 = getRedisClient();
+      const phone2 = redis2 ? await redis2.get(`session:cand:${token2}`) : null;
+      if (!phone2) return res.status(401).json({ error: 'Sesión inválida o expirada' });
       const digits2 = String(phone2).replace(/\D/g, '').slice(-10);
-      const { getCandidateByPhone, deleteCandidate } = await import('./utils/storage.js');
       const candidate = await getCandidateByPhone(digits2);
       if (candidate) await deleteCandidate(candidate.id);
+      if (redis2) await redis2.del(`session:cand:${token2}`);
       return res.status(200).json({ success: true });
     } catch (err) {
       console.error('[candidato/profile DELETE]', err);
@@ -37,17 +40,10 @@ export default async function handler(req, res) {
 
     if (!token) return res.status(401).json({ error: 'Token requerido.' });
 
-    let phone;
-    try {
-      const decoded = Buffer.from(token, 'base64').toString();
-      phone = decoded.split(':')[0];
-    } catch {
-      return res.status(401).json({ error: 'Token inválido.' });
-    }
-
-    if (!phone) return res.status(401).json({ error: 'Token inválido (sin teléfono).' });
-
-    const { getCandidateByPhone, saveCandidate, updateCandidate } = await import('../utils/storage.js');
+    const { getRedisClient, getCandidateByPhone, saveCandidate, updateCandidate } = await import('../utils/storage.js');
+    const redis = getRedisClient();
+    const phone = redis ? await redis.get(`session:cand:${token}`) : null;
+    if (!phone) return res.status(401).json({ error: 'Sesión inválida o expirada.' });
 
     const digits = String(phone).replace(/\D/g, '');
     const last10 = digits.slice(-10);

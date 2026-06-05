@@ -2,7 +2,9 @@
  * POST /api/recruiter/verify
  * Verifica el PIN del reclutador y devuelve su empresa si ya existe.
  */
-import { randomUUID } from 'crypto';
+import { randomBytes } from 'crypto';
+
+const SESSION_TTL = 86400; // 24 horas
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -29,7 +31,8 @@ export default async function handler(req, res) {
       await redis.del(`app_login_pin:${cleanPhone}`);
     }
 
-    const token = Buffer.from(`${cleanPhone}:${Date.now()}`).toString('base64');
+    const token = randomBytes(32).toString('hex');
+    await redis.set(`session:rec:${token}`, cleanPhone, 'EX', SESSION_TTL);
     const now = new Date().toISOString();
 
     // 1. Buscar registro de reclutador directo

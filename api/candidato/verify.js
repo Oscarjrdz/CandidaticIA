@@ -81,7 +81,9 @@ export default async function handler(req, res) {
             console.error('Error fetching/creating candidate for login:', e);
         }
 
-        const sessionToken = Buffer.from(`${cleanPhone}:${Date.now()}`).toString('base64');
+        const { randomBytes } = await import('crypto');
+        const sessionToken = randomBytes(32).toString('hex');
+        await redis.set(`session:cand:${sessionToken}`, cleanPhone, 'EX', 86400);
 
         return res.status(200).json({
             success: true,

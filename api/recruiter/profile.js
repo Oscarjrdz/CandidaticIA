@@ -12,13 +12,13 @@ export default async function handler(req, res) {
   const token = (req.headers.authorization || '').replace('Bearer ', '').trim();
   if (!token) return res.status(401).json({ error: 'Token requerido' });
 
-  let phone;
-  try { phone = Buffer.from(token, 'base64').toString().split(':')[0]; } catch { return res.status(401).json({ error: 'Token inválido' }); }
-
   try {
     const { getRedisClient } = await import('../utils/storage.js');
     const redis = getRedisClient();
     if (!redis) return res.status(503).json({ error: 'Storage no disponible' });
+
+    const phone = await redis.get(`session:rec:${token}`);
+    if (!phone) return res.status(401).json({ error: 'Sesión inválida o expirada' });
 
     if (req.method === 'GET') {
       const raw = await redis.get(`recruiter:${phone}`);

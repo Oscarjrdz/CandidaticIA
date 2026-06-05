@@ -15,7 +15,11 @@ export default async function handler(req, res) {
 
     try {
         // DYNAMIC IMPORTS
-        const { getCandidates, getCandidateById, deleteCandidate } = await import('./utils/storage.js');
+        const { getCandidates, getCandidateById, deleteCandidate, validateAdminSession } = await import('./utils/storage.js');
+
+        // Validar sesión admin
+        const userId = await validateAdminSession(req);
+        if (!userId) return res.status(401).json({ error: 'No autorizado' });
 
         // GET /api/candidates - Obtener lista o estadísticas
         if (req.method === 'GET') {

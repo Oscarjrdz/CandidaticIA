@@ -10,7 +10,7 @@ const INBOX_DIR = path.join(__dirname, '../../dev_inbox');
 
 async function main() {
     console.log("Connecting to Redis...");
-    const redis = new Redis('redis://default:8XMrmngeeqQ0p7MZRRBXycnhMG8WD5wt@redis-10341.c258.us-east-1-4.ec2.cloud.redislabs.com:10341');
+    const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
 
     try {
         let mediaUrl = await redis.get('dev_last_screenshot');

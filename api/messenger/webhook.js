@@ -13,6 +13,7 @@
  *   { object: "page", entry: [{ messaging: [{ sender, recipient, message, ... }] }] }
  * ═══════════════════════════════════════════════════════════════════
  */
+import crypto from 'crypto';
 import {
     saveMessage,
     getCandidateById,
@@ -73,7 +74,8 @@ export default async function handler(req, res) {
         const mode = req.query['hub.mode'];
         const token = req.query['hub.verify_token'];
         const challenge = req.query['hub.challenge'];
-        const VERIFY_TOKEN = process.env.META_VERIFY_TOKEN || 'candidatic_webhook_2026';
+        const VERIFY_TOKEN = process.env.META_VERIFY_TOKEN;
+        if (!VERIFY_TOKEN) return res.status(500).send('META_VERIFY_TOKEN no configurado');
 
         if (mode === 'subscribe' && token === VERIFY_TOKEN) {
             console.log('[MESSENGER WEBHOOK] ✅ Verification successful');
@@ -84,6 +86,24 @@ export default async function handler(req, res) {
 
     if (req.method !== 'POST') {
         return res.status(405).json({ error: 'Method not allowed' });
+    }
+
+    // ═══ HMAC Signature Validation ═══
+    const appSecret = process.env.META_APP_SECRET;
+    if (appSecret) {
+        const signature = req.headers['x-hub-signature-256'];
+        if (!signature) return res.status(401).json({ error: 'Missing signature' });
+        const rawBody = typeof req.rawBody === 'string' ? req.rawBody
+            : Buffer.isBuffer(req.rawBody) ? req.rawBody.toString('utf-8')
+            : JSON.stringify(req.body);
+        const expected = 'sha256=' + crypto.createHmac('sha256', appSecret).update(rawBody, 'utf-8').digest('hex');
+        let valid = false;
+        try { valid = crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected)); } catch { valid = false; }
+        if (!valid) {
+            const hadRawBody = typeof req.rawBody === 'string' || Buffer.isBuffer(req.rawBody);
+            if (hadRawBody) return res.status(401).json({ error: 'Invalid webhook signature' });
+            console.warn('[MESSENGER WEBHOOK] ⚠️ HMAC no validado — rawBody no disponible.');
+        }
     }
 
     const payload = req.body;

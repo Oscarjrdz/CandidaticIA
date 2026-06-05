@@ -1,6 +1,6 @@
 import Redis from 'ioredis';
 
-const redis = new Redis(process.env.REDIS_URL || 'redis://default:7af276c7c00e4cdab4dd595d73af4d3d@us1-modest-possum-42211.upstash.io:42211');
+const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
 
 export default async function handler(req, res) {
     // Only allow specific origins (CORS)
