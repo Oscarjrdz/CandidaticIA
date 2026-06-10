@@ -459,14 +459,18 @@ const SEARCH_CONTEXT_TTL = 600; // 10 minutos
 
 const ASSIGN_TAG_TRIGGERS = [
     'asígnale la etiqueta', 'asignale la etiqueta',
+    'asígnales la etiqueta', 'asignales la etiqueta',
     'ponle la etiqueta', 'ponles la etiqueta',
     'aplica la etiqueta', 'aplícale la etiqueta', 'aplicale la etiqueta',
-    'etiquétalos', 'etiquetalos', 'etiquétalas', 'etiquétalas',
+    'aplícales la etiqueta', 'aplicales la etiqueta',
+    'etiquétalos', 'etiquetalos', 'etiquétalas', 'etiquelalas',
     'asigna la etiqueta', 'asignar la etiqueta',
     'agrega la etiqueta a esos', 'agrega esa etiqueta',
     'dale la etiqueta', 'dales la etiqueta',
     'ponles esa etiqueta', 'ponle esa etiqueta', 'asigna esa etiqueta',
     'a todos ponle', 'a esos ponle', 'ponle a todos la etiqueta',
+    'asignale esa etiqueta', 'asígnale esa etiqueta',
+    'asignales esa etiqueta', 'asígnales esa etiqueta',
 ];
 
 function isAssignTagMessage(text) {
