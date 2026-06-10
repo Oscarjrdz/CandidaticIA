@@ -1,5 +1,6 @@
 import { getOpenAIResponse } from '../utils/openai.js';
 import { getRedisClient } from '../utils/storage.js';
+import { sendMessage as sendWhatsAppMessage } from '../utils/messenger.js';
 import { 
     getCandidateKnowledgeSnapshot, 
     formatCompactSnapshot, 
@@ -42,7 +43,8 @@ Estado actual del copiloto:
 - Puede crear, editar y eliminar etiquetas directamente (di "crea la etiqueta X", "cambia el nombre de la etiqueta X a Y", "elimina la etiqueta X", "qué etiquetas hay").
 - Puede asignar etiquetas a grupos de candidatos directamente — muestra confirmación antes de ejecutar (di "asígnales la etiqueta X", "agrégalas a la etiqueta X", "ponles la etiqueta X").
 - IMPORTANTE: Cuando el usuario pida asignar etiquetas, NO respondas conversacionalmente. El sistema lo maneja automáticamente con confirmación real. Si ves este tipo de petición en el historial, es porque el handler ya se activó.
-- No debe afirmar que ejecutó cambios de otra naturaleza (mensajes, candidatos, reglas) sin confirmación.
+- Puede enviar mensajes de WhatsApp a números específicos con confirmación previa (di "mándale un hola a 8116038195", "envíale [mensaje] a [número]").
+- No debe afirmar que ejecutó cambios de otra naturaleza (candidatos, reglas) sin confirmación.
 `;
 
 const FALLBACK_BRENDA_PERSONALITY = `
@@ -528,6 +530,59 @@ Responde SOLO JSON válido, sin markdown.`;
     }
 }
 
+// ─── Send WhatsApp Message Engine ────────────────────────────────────────────
+
+const SEND_MSG_TRIGGERS = [
+    'mandale', 'mándale', 'enviale', 'envíale',
+    'mandalé', 'manda un mensaje', 'envía un mensaje', 'envia un mensaje',
+    'manda el mensaje', 'envia el mensaje', 'envía el mensaje',
+    'mandale un', 'enviale un', 'mándale un', 'envíale un',
+    'manda un wapp', 'manda un whatsapp', 'envía un wapp',
+    'mandale un wapp', 'mándale un wapp', 'enviale un wapp',
+    'mandame un mensaje a', 'manda mensaje a', 'envía mensaje a',
+];
+
+function isSendMessageTrigger(text) {
+    const n = normalizeText(text);
+    return SEND_MSG_TRIGGERS.some(t => n.includes(normalizeText(t)));
+}
+
+// Normaliza número mexicano a formato WhatsApp (521XXXXXXXXXX)
+function normalizeMexPhone(raw) {
+    const digits = String(raw).replace(/\D/g, '');
+    if (digits.length === 10) return `521${digits}`;
+    if (digits.length === 12 && digits.startsWith('52')) return `521${digits.slice(2)}`;
+    if (digits.length === 13 && digits.startsWith('521')) return digits;
+    return digits; // deja pasar tal cual si no encaja
+}
+
+async function parseSendMessageIntent(userMessage, model) {
+    const prompt = `El usuario quiere enviar un mensaje de WhatsApp.
+
+Su mensaje: "${userMessage}"
+
+Extrae los parámetros. Responde SOLO con JSON válido:
+{
+  "phone": "número de teléfono (solo dígitos, sin espacios ni guiones)",
+  "message": "texto del mensaje a enviar"
+}
+
+Si no hay número de teléfono claro, devuelve phone: null.
+Si no hay texto de mensaje claro, devuelve message: null.
+Responde SOLO JSON válido, sin markdown.`;
+
+    try {
+        const result = await getOpenAIResponse(
+            [{ role: 'user', content: prompt }],
+            'Eres un extractor de intenciones. Responde solo JSON válido.',
+            model, null, { type: 'json_object' }, null, 150
+        );
+        return JSON.parse(result.content);
+    } catch {
+        return null;
+    }
+}
+
 const PENDING_CONFIRM_KEY = 'copilot:pending_confirm';
 const PENDING_CONFIRM_TTL = 300; // 5 minutos
 
@@ -657,6 +712,18 @@ export default async function handler(req, res) {
                 const reply = await executeAssignTagByIds(redis, pending.tagName, pending.targetIds, pending.targetDescription);
                 return res.status(200).json({ success: true, reply, model: 'system', skill: 'tag_assignment' });
             }
+            if (pending.type === 'send_whatsapp') {
+                try {
+                    const result = await sendWhatsAppMessage(pending.phone, pending.message);
+                    if (result.success) {
+                        return res.status(200).json({ success: true, reply: `✅ Mensaje enviado a *${pending.displayPhone}*: _"${pending.message}"_`, model: 'system', skill: 'send_message' });
+                    } else {
+                        return res.status(200).json({ success: true, reply: `❌ No pude enviar el mensaje: ${result.error}`, model: 'system', skill: 'send_message' });
+                    }
+                } catch (e) {
+                    return res.status(200).json({ success: true, reply: `❌ Error al enviar: ${e.message}`, model: 'system', skill: 'send_message' });
+                }
+            }
         }
 
         if (question === '__CANCEL__') {
@@ -782,6 +849,35 @@ export default async function handler(req, res) {
             }
             // Si llegamos aquí, no se pudo extraer el nombre de la etiqueta
             return res.status(200).json({ success: true, reply: '❌ No entendí qué etiqueta asignar. Di: *"asígnales la etiqueta [nombre]"*', model: 'system', skill: 'tag_assignment' });
+        }
+
+        // ─── Handle send WhatsApp message ─────────────────────────────────
+        if (isSendMessageTrigger(question)) {
+            const intent = await parseSendMessageIntent(question, model);
+            if (!intent?.phone) {
+                return res.status(200).json({ success: true, reply: '❌ No encontré un número de teléfono. Di algo como: *"mándale un hola a 8116038195"*', model: 'system', skill: 'send_message' });
+            }
+            if (!intent?.message) {
+                return res.status(200).json({ success: true, reply: '❌ No entendí qué mensaje enviar. Di algo como: *"mándale un hola a 8116038195"*', model: 'system', skill: 'send_message' });
+            }
+            const phone = normalizeMexPhone(intent.phone);
+            const displayPhone = intent.phone.replace(/\D/g, '');
+            if (redis) {
+                await redis.set(PENDING_CONFIRM_KEY, JSON.stringify({
+                    type: 'send_whatsapp',
+                    phone,
+                    displayPhone,
+                    message: intent.message,
+                    savedAt: new Date().toISOString()
+                }), 'EX', PENDING_CONFIRM_TTL);
+            }
+            return res.status(200).json({
+                success: true,
+                reply: `📱 Vas a enviar por WhatsApp a *${displayPhone}*:\n_"${intent.message}"_\n\n¿Confirmas?`,
+                model: 'system',
+                skill: 'send_message',
+                confirmation: true
+            });
         }
 
         // ─── Match learned skills ─────────────────────────────────────────
