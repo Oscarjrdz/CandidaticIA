@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Bot, ChevronDown, Maximize2, Send, Sparkles, X } from 'lucide-react';
 import Button from './ui/Button';
 
@@ -75,15 +75,55 @@ function BrendaAvatar({ size = 'md', active = false }) {
     );
 }
 
+const POSITION_KEY = 'copilot_position';
+
+function loadPosition() {
+    try {
+        const saved = localStorage.getItem(POSITION_KEY);
+        if (saved) return JSON.parse(saved);
+    } catch {}
+    return null;
+}
+
 export default function FloatingCopilot({ onOpenFull }) {
     const [open, setOpen] = useState(false);
     const [messages, setMessages] = useState(INITIAL_MESSAGES);
     const [input, setInput] = useState('');
     const [loading, setLoading] = useState(false);
     const bottomRef = useRef(null);
+    const containerRef = useRef(null);
+    const dragState = useRef(null); // { startX, startY, origLeft, origTop }
+    const [position, setPosition] = useState(() => loadPosition());
 
     const history = useMemo(() => messages.map(({ role, content }) => ({ role, content })), [messages]);
     const canSend = input.trim().length > 0 && !loading;
+
+    const onDragStart = useCallback((e) => {
+        if (e.button !== 0) return;
+        const el = containerRef.current;
+        if (!el) return;
+        const rect = el.getBoundingClientRect();
+        dragState.current = { startX: e.clientX, startY: e.clientY, origLeft: rect.left, origTop: rect.top };
+        e.preventDefault();
+
+        const onMove = (ev) => {
+            if (!dragState.current) return;
+            const dx = ev.clientX - dragState.current.startX;
+            const dy = ev.clientY - dragState.current.startY;
+            const newLeft = Math.max(0, Math.min(window.innerWidth - rect.width, dragState.current.origLeft + dx));
+            const newTop = Math.max(0, Math.min(window.innerHeight - rect.height, dragState.current.origTop + dy));
+            const pos = { left: newLeft, top: newTop };
+            setPosition(pos);
+            try { localStorage.setItem(POSITION_KEY, JSON.stringify(pos)); } catch {}
+        };
+        const onUp = () => {
+            dragState.current = null;
+            window.removeEventListener('mousemove', onMove);
+            window.removeEventListener('mouseup', onUp);
+        };
+        window.addEventListener('mousemove', onMove);
+        window.addEventListener('mouseup', onUp);
+    }, []);
 
     const scrollToBottom = () => {
         setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' }), 50);
@@ -121,7 +161,7 @@ export default function FloatingCopilot({ onOpenFull }) {
                 throw new Error(data.error || 'No pude consultar a Brenda');
             }
 
-            setMessages(prev => [...prev, { role: 'assistant', content: data.reply || 'No recibi respuesta.' }]);
+            setMessages(prev => [...prev, { role: 'assistant', content: data.reply || 'No recibi respuesta.', isConfirmation: data.confirmation === true }]);
         } catch (error) {
             setMessages(prev => [
                 ...prev,
@@ -141,11 +181,15 @@ export default function FloatingCopilot({ onOpenFull }) {
         sendMessage();
     };
 
+    const positionStyle = position
+        ? { left: position.left, top: position.top, bottom: 'auto', right: 'auto' }
+        : { bottom: '1.5rem', right: '6rem' };
+
     return (
-        <div className="fixed bottom-6 right-24 z-40 flex flex-col items-end gap-3 pointer-events-none">
+        <div ref={containerRef} className="fixed z-40 flex flex-col items-end gap-3 pointer-events-none" style={positionStyle}>
             {open && (
                 <div className="pointer-events-auto w-[calc(100vw-2.5rem)] max-w-[360px] h-[520px] rounded-[32px] overflow-hidden shadow-[0_8px_32px_rgba(0,0,0,0.15)] border-[1px] border-white/40 dark:border-white/10 bg-white/5 dark:bg-black/10 backdrop-blur-md flex flex-col relative before:absolute before:inset-0 before:bg-gradient-to-br before:from-white/10 before:to-transparent before:pointer-events-none">
-                    <div className="relative px-4 py-4 bg-gradient-to-br from-blue-500/10 via-indigo-500/8 to-purple-500/10 backdrop-blur-xl border-b border-white/10 z-10">
+                    <div className="relative px-4 py-4 bg-gradient-to-br from-blue-500/10 via-indigo-500/8 to-purple-500/10 backdrop-blur-xl border-b border-white/10 z-10 cursor-grab active:cursor-grabbing select-none" onMouseDown={onDragStart}>
                         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-white/10 via-transparent to-transparent opacity-30" />
                         <div className="relative flex items-center justify-between gap-3">
                             <div className="flex items-center gap-3 min-w-0">
@@ -177,15 +221,39 @@ export default function FloatingCopilot({ onOpenFull }) {
                             return (
                                 <div key={`${message.role}-${index}`} className={`flex gap-2 ${isUser ? 'justify-end' : 'justify-start'}`}>
                                     {!isUser && <BrendaAvatar size="sm" />}
-                                    <div className={`max-w-[82%] rounded-2xl px-4 py-2.5 text-[13px] leading-relaxed whitespace-pre-wrap shadow-sm backdrop-blur-md border ${
-                                        isUser
-                                            ? 'bg-blue-600/60 text-white border-blue-400/20 rounded-br-md shadow-[0_4px_12px_rgba(37,99,235,0.1)]'
-                                            : 'bg-white/30 dark:bg-gray-900/30 text-gray-800 dark:text-gray-100 border-white/40 dark:border-white/10 rounded-bl-md shadow-[0_4px_12px_rgba(0,0,0,0.05)]'
-                                    }`}>
-                                        {message.isWelcome && index === 0
-                                            ? <TypewriterText text={message.content} speed={45} />
-                                            : message.content
-                                        }
+                                    <div className="max-w-[82%] flex flex-col gap-2">
+                                        <div className={`rounded-2xl px-4 py-2.5 text-[13px] leading-relaxed whitespace-pre-wrap shadow-sm backdrop-blur-md border ${
+                                            isUser
+                                                ? 'bg-blue-600/60 text-white border-blue-400/20 rounded-br-md shadow-[0_4px_12px_rgba(37,99,235,0.1)]'
+                                                : 'bg-white/30 dark:bg-gray-900/30 text-gray-800 dark:text-gray-100 border-white/40 dark:border-white/10 rounded-bl-md shadow-[0_4px_12px_rgba(0,0,0,0.05)]'
+                                        }`}>
+                                            {message.isWelcome && index === 0
+                                                ? <TypewriterText text={message.content} speed={45} />
+                                                : message.content
+                                            }
+                                        </div>
+                                        {message.isConfirmation && (
+                                            <div className="flex gap-2 pl-1">
+                                                <button
+                                                    onClick={() => {
+                                                        setMessages(prev => prev.map((m, i) => i === index ? { ...m, isConfirmation: false } : m));
+                                                        sendMessage('__CONFIRM__');
+                                                    }}
+                                                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/80 hover:bg-emerald-500 text-white text-[12px] font-semibold shadow-sm backdrop-blur-md border border-emerald-400/30 transition-all"
+                                                >
+                                                    ✅ Confirmar
+                                                </button>
+                                                <button
+                                                    onClick={() => {
+                                                        setMessages(prev => prev.map((m, i) => i === index ? { ...m, isConfirmation: false } : m));
+                                                        sendMessage('__CANCEL__');
+                                                    }}
+                                                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-500/70 hover:bg-red-500 text-white text-[12px] font-semibold shadow-sm backdrop-blur-md border border-red-400/30 transition-all"
+                                                >
+                                                    ❌ Cancelar
+                                                </button>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             );

@@ -503,9 +503,13 @@ Responde SOLO JSON válido, sin markdown.`;
     }
 }
 
-async function executeAssignTag(redis, intent, roster) {
+const PENDING_CONFIRM_KEY = 'copilot:pending_confirm';
+const PENDING_CONFIRM_TTL = 300; // 5 minutos
+
+// Resuelve quiénes son los targets y devuelve la acción pendiente (sin ejecutar)
+async function buildAssignTagConfirmation(redis, intent, roster) {
     const tagName = intent.tagName?.trim();
-    if (!tagName) return '❌ No entendí el nombre de la etiqueta. ¿Cuál quieres asignar?';
+    if (!tagName) return { error: '❌ No entendí el nombre de la etiqueta. ¿Cuál quieres asignar?' };
 
     let targetIds = [];
     let targetDescription = '';
@@ -513,33 +517,37 @@ async function executeAssignTag(redis, intent, roster) {
     if (intent.targetType === 'named' && intent.targetName) {
         const nameNorm = normalizeText(intent.targetName);
         const matches = (roster || []).filter(c => normalizeText(c.nombre).includes(nameNorm));
-        if (!matches.length) return `❌ No encontré candidatos con el nombre **"${intent.targetName}"**.`;
+        if (!matches.length) return { error: `❌ No encontré candidatos con el nombre **"${intent.targetName}"**.` };
         targetIds = matches.map(c => c.id);
         targetDescription = matches.length === 1
             ? `**${matches[0].nombre}**`
-            : `${matches.length} candidatos que coinciden con "${intent.targetName}"`;
+            : `**${matches.length} candidatos** que coinciden con "${intent.targetName}"`;
     } else {
-        if (!redis) return '⚠️ No hay conexión a la base de datos.';
+        if (!redis) return { error: '⚠️ No hay conexión a la base de datos.' };
         const raw = await redis.get(SEARCH_CONTEXT_KEY);
-        if (!raw) return '⚠️ No tengo una búsqueda reciente guardada.\n\nPrimero hazme una pregunta como *"¿cuántos candidatos viven en Santa Catarina?"* y luego pídeme asignar la etiqueta.';
+        if (!raw) return { error: '⚠️ No tengo una búsqueda reciente guardada.\n\nPrimero hazme una pregunta como *"¿cuántos candidatos viven en Santa Catarina?"* y luego pídeme asignar la etiqueta.' };
         const ctx = JSON.parse(raw);
-        if (!ctx.ids?.length) return '⚠️ La última búsqueda no tuvo resultados para etiquetar.';
+        if (!ctx.ids?.length) return { error: '⚠️ La última búsqueda no tuvo resultados para etiquetar.' };
         targetIds = ctx.ids;
-        targetDescription = `**${ctx.total}** candidatos de la búsqueda *"${ctx.query}"*`;
+        targetDescription = `**${ctx.total} candidatos** de la búsqueda *"${ctx.query}"*`;
     }
 
-    if (!targetIds.length) return '❌ No hay candidatos para etiquetar.';
+    if (!targetIds.length) return { error: '❌ No hay candidatos para etiquetar.' };
 
-    // Auto-crear la etiqueta si no existe
+    return { tagName, targetIds, targetDescription };
+}
+
+// Ejecuta la asignación real (se llama solo después de confirmación)
+async function executeAssignTagByIds(redis, tagName, targetIds, targetDescription) {
     const tags = await getTagsFromRedis(redis);
-    if (!tags.some(t => normalizeText(t.name) === normalizeText(tagName))) {
+    const tagCreated = !tags.some(t => normalizeText(t.name) === normalizeText(tagName));
+    if (tagCreated) {
         const usedColors = new Set(tags.map(t => t.color));
         const color = DEFAULT_TAG_COLORS.find(c => !usedColors.has(c)) || DEFAULT_TAG_COLORS[tags.length % DEFAULT_TAG_COLORS.length];
         tags.push({ name: tagName, color });
         await saveTagsToRedis(redis, tags);
     }
 
-    // Aplicar etiqueta (misma lógica que bulk-tag.js)
     const { getCandidateById, updateCandidate } = await import('../utils/storage.js');
     let updated = 0;
     let skipped = 0;
@@ -562,7 +570,7 @@ async function executeAssignTag(redis, intent, roster) {
     let reply = `✅ Etiqueta **"${tagName}"** asignada a ${targetDescription}.`;
     if (updated > 0) reply += `\n• ${updated} candidatos actualizados`;
     if (skipped > 0) reply += `\n• ${skipped} ya la tenían o no se encontraron`;
-    if (!tags.some(t => t.name === tagName)) reply += `\n\n_(La etiqueta fue creada automáticamente)_`;
+    if (tagCreated) reply += `\n\n_(La etiqueta fue creada automáticamente)_`;
     return reply;
 }
 
@@ -593,6 +601,26 @@ export default async function handler(req, res) {
             } catch (error) {
                 console.warn('[Copilot] No se pudo leer configuración:', error.message);
             }
+        }
+
+        // ─── Handle pending confirmations ─────────────────────────────────
+
+        if (question === '__CONFIRM__') {
+            const raw = redis ? await redis.get(PENDING_CONFIRM_KEY) : null;
+            if (!raw) {
+                return res.status(200).json({ success: true, reply: '⏰ La acción ya expiró o fue cancelada.', model: 'system', skill: 'confirmation' });
+            }
+            const pending = JSON.parse(raw);
+            await redis.del(PENDING_CONFIRM_KEY);
+            if (pending.type === 'assign_tag') {
+                const reply = await executeAssignTagByIds(redis, pending.tagName, pending.targetIds, pending.targetDescription);
+                return res.status(200).json({ success: true, reply, model: 'system', skill: 'tag_assignment' });
+            }
+        }
+
+        if (question === '__CANCEL__') {
+            if (redis) await redis.del(PENDING_CONFIRM_KEY).catch(() => {});
+            return res.status(200).json({ success: true, reply: '❌ Acción cancelada.', model: 'system', skill: 'confirmation' });
         }
 
         // ─── Handle custom rules commands ─────────────────────────────────
@@ -688,8 +716,22 @@ export default async function handler(req, res) {
             const intent = await parseAssignTagIntent(question, model);
             if (intent?.tagName) {
                 const snapshot = await getCandidateKnowledgeSnapshot();
-                const reply = await executeAssignTag(redis, intent, snapshot.allCandidatesSummary);
-                return res.status(200).json({ success: true, reply, model: 'system', skill: 'tag_assignment' });
+                const result = await buildAssignTagConfirmation(redis, intent, snapshot.allCandidatesSummary);
+                if (result.error) {
+                    return res.status(200).json({ success: true, reply: result.error, model: 'system', skill: 'tag_assignment' });
+                }
+                // Guardar acción pendiente y pedir confirmación
+                if (redis) {
+                    await redis.set(PENDING_CONFIRM_KEY, JSON.stringify({
+                        type: 'assign_tag',
+                        tagName: result.tagName,
+                        targetIds: result.targetIds,
+                        targetDescription: result.targetDescription,
+                        savedAt: new Date().toISOString()
+                    }), 'EX', PENDING_CONFIRM_TTL);
+                }
+                const reply = `⚠️ Vas a asignar la etiqueta **"${result.tagName}"** a ${result.targetDescription}.\n\n¿Confirmas?`;
+                return res.status(200).json({ success: true, reply, model: 'system', skill: 'tag_assignment', confirmation: true });
             }
         }
 
