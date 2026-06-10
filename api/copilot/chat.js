@@ -533,13 +533,24 @@ Responde SOLO JSON válido, sin markdown.`;
 // ─── Send WhatsApp Message Engine ────────────────────────────────────────────
 
 const SEND_MSG_TRIGGERS = [
-    'mandale', 'mándale', 'enviale', 'envíale',
-    'mandalé', 'manda un mensaje', 'envía un mensaje', 'envia un mensaje',
-    'manda el mensaje', 'envia el mensaje', 'envía el mensaje',
+    // imperativo directo
+    'mandale', 'mándale', 'enviale', 'envíale', 'mandalé',
     'mandale un', 'enviale un', 'mándale un', 'envíale un',
+    'manda un mensaje', 'envía un mensaje', 'envia un mensaje',
+    'manda el mensaje', 'envia el mensaje', 'envía el mensaje',
     'manda un wapp', 'manda un whatsapp', 'envía un wapp',
     'mandale un wapp', 'mándale un wapp', 'enviale un wapp',
     'mandame un mensaje a', 'manda mensaje a', 'envía mensaje a',
+    // subjuntivo / "quiero que"
+    'mandes un', 'mandes el', 'mandes un wapp', 'mandes un whatsapp',
+    'mandes un mensaje', 'mandes mensaje',
+    'quiero que mandes', 'quiero que envies', 'quiero que envíes',
+    'que le mandes', 'que mandes', 'que le envies', 'que le envíes',
+    'que envies un', 'que envíes un',
+    // otras variantes naturales
+    'envia un wapp', 'envía un whatsapp', 'envia un whatsapp',
+    'mandar un mensaje a', 'enviar un mensaje a',
+    'mandar un wapp', 'enviar un wapp', 'enviar un whatsapp',
 ];
 
 function isSendMessageTrigger(text) {
