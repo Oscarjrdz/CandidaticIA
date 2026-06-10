@@ -794,14 +794,20 @@ export async function searchCandidateRoster(roster, searchContext) {
     // --- Municipality filter ---
     if (filter.municipality) {
         const searchMuni = normalizeText(filter.municipality);
-        results = results.filter(c => normalizeText(c.municipality || c.municipio || '').includes(searchMuni));
+        results = results.filter(c => normalizeText(c.municipality || c.municipio || c.ciudad || '').includes(searchMuni));
     }
 
     // --- Keyword search ---
     if (filter.keywords && filter.keywords.length > 0) {
         const stopWords = new Set(['como', 'dime', 'lista', 'candidatos', 'base', 'datos', 'perfiles', 'tiene', 'donde', 'brenda']);
-        const terms = filter.keywords.map(k => normalizeText(k)).filter(w => w.length > 2 && !stopWords.has(w));
-        
+        // Remove words that are already handled by the municipality filter to avoid false positives
+        // (e.g. "Santa Catarina" split into ["santa","catarina"] matching "Santa Elena", "Santa Maria", etc.)
+        const muniWords = filter.municipality
+            ? new Set(normalizeText(filter.municipality).split(' ').filter(w => w.length > 2))
+            : new Set();
+        const terms = filter.keywords.map(k => normalizeText(k))
+            .filter(w => w.length > 2 && !stopWords.has(w) && !muniWords.has(w));
+
         if (terms.length > 0) {
             results = results.filter(c => {
                 const text = normalizeText(Object.values(c).filter(v => typeof v === 'string').join(' '));
