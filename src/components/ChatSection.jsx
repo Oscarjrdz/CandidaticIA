@@ -617,8 +617,12 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
         };
         fetchStats(); // Single hydration fetch at mount
 
-        window.addEventListener('copilot:tags_changed', loadTags);
-        return () => window.removeEventListener('copilot:tags_changed', loadTags);
+        const onTagsChanged = (event) => {
+            loadTags();
+            if (event?.detail?.type === 'tag_assignment') loadCandidates();
+        };
+        window.addEventListener('copilot:tags_changed', onTagsChanged);
+        return () => window.removeEventListener('copilot:tags_changed', onTagsChanged);
     }, []);
 
     // RBAC effect removed (handled inline)
