@@ -189,7 +189,7 @@ export default function FloatingCopilot({ onOpenFull }) {
         : { bottom: '1.5rem', right: '6rem' };
 
     return (
-        <div ref={containerRef} className="fixed z-40 flex flex-col items-end gap-3 pointer-events-none" style={positionStyle}>
+        <div ref={containerRef} className="fixed z-[9999] flex flex-col items-end gap-3 pointer-events-none" style={positionStyle}>
             {open && (
                 <div className="pointer-events-auto w-[calc(100vw-2.5rem)] max-w-[360px] h-[520px] rounded-[32px] overflow-hidden shadow-[0_8px_32px_rgba(0,0,0,0.15)] border-[1px] border-white/40 dark:border-white/10 bg-white/5 dark:bg-black/10 backdrop-blur-md flex flex-col relative before:absolute before:inset-0 before:bg-gradient-to-br before:from-white/10 before:to-transparent before:pointer-events-none">
                     <div className="relative px-4 py-4 bg-gradient-to-br from-blue-500/10 via-indigo-500/8 to-purple-500/10 backdrop-blur-xl border-b border-white/10 z-10 cursor-grab active:cursor-grabbing select-none" onMouseDown={onDragStart}>
