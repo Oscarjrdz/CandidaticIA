@@ -483,8 +483,20 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
     useEffect(() => {
         activeFilterRef.current = activeFilter;
         filterValueRef.current = filterValue;
-        // ✅ META AUDIT: Label filter is now 100% client-side — tags already exist in each candidate object.
-        // No server re-fetch needed. filteredCandidates useMemo handles the filtering.
+    }, [activeFilter, filterValue]);
+
+    const prevActiveFilterRef = useRef(null);
+    // When label filter changes, reload from server so we scan ALL candidates (not just the first 5000 in memory)
+    useEffect(() => {
+        const prev = prevActiveFilterRef.current;
+        prevActiveFilterRef.current = activeFilter;
+        if (prev === null) return; // skip mount — loadCandidates already called in mount effect
+
+        if (activeFilter === 'label' && filterValue) {
+            loadCandidates(); // server scans ALL candidates for this tag
+        } else if (prev === 'label' && activeFilter !== 'label') {
+            loadCandidates(); // back to full list after leaving label filter
+        }
     }, [activeFilter, filterValue]);
     
 
