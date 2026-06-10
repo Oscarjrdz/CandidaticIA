@@ -817,8 +817,18 @@ export async function searchCandidateRoster(roster, searchContext) {
         results.sort((a, b) => (a.fecha || '').localeCompare(b.fecha || ''));
     }
 
+    // Calcular desglose de género sobre el conjunto COMPLETO (no solo los 15 mostrados)
+    let mujeres = 0, hombres = 0, sinGenero = 0;
+    for (const c of results) {
+        const g = normalizeText(c.genero || '');
+        if (g.includes('mujer') || g.includes('femenin') || g === 'f') mujeres++;
+        else if (g.includes('hombre') || g.includes('masculin') || g === 'm') hombres++;
+        else sinGenero++;
+    }
+    const genderBreakdown = { mujeres, hombres, sinGenero };
+
     const limit = filter.limit && filter.limit > 0 ? Math.min(filter.limit, 15) : 15;
-    return { totalMatches: results.length, candidates: results.slice(0, limit), allMatchingIds: results.map(c => c.id) };
+    return { totalMatches: results.length, candidates: results.slice(0, limit), allMatchingIds: results.map(c => c.id), genderBreakdown };
 }
 
 /**
@@ -826,10 +836,13 @@ export async function searchCandidateRoster(roster, searchContext) {
  */
 export function formatSearchResults(searchData) {
     if (!searchData || !searchData.candidates || searchData.candidates.length === 0) return '';
-    const { totalMatches, candidates } = searchData;
-    
+    const { totalMatches, candidates, genderBreakdown } = searchData;
+
     const lines = [`\n=== BÚSQUEDA ESPECÍFICA (Total coincidencias: ${totalMatches}. Mostrando ${candidates.length}) ===`];
     lines.push(`NOTA PARA BRENDA: Si te preguntan "cuántos" y la búsqueda específica tiene resultados, usa el "Total coincidencias: ${totalMatches}" como tu respuesta oficial.`);
+    if (genderBreakdown && totalMatches > 0) {
+        lines.push(`DESGLOSE REAL DEL TOTAL (${totalMatches}): Mujeres: ${genderBreakdown.mujeres} | Hombres: ${genderBreakdown.hombres} | Sin género registrado: ${genderBreakdown.sinGenero}. USA ESTOS NÚMEROS EXACTOS para preguntas de género.`);
+    }
     
     for (const c of candidates) {
         const parts = [c.nombre];
