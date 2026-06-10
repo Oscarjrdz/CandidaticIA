@@ -161,7 +161,7 @@ const BulksSection = () => {
     // Load Candidates & Persistence
     // Load tags
     useEffect(() => {
-        fetch('/api/tags')
+        const loadTags = () => fetch('/api/tags')
             .then(res => res.json())
             .then(data => {
                 if (data.success && data.tags) {
@@ -172,7 +172,9 @@ const BulksSection = () => {
                     setAvailableTags(migrated);
                 }
             })
-            .catch(e => console.error('Error fetching tags', e));
+        loadTags().catch(e => console.error('Error fetching tags', e));
+        window.addEventListener('copilot:tags_changed', loadTags);
+        return () => window.removeEventListener('copilot:tags_changed', loadTags);
     }, []);
 
     useEffect(() => {
