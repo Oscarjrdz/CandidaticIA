@@ -300,16 +300,26 @@ const DEFAULT_TAG_COLORS = [
 ];
 
 const TAG_MGMT_TRIGGERS = [
-    'crea la etiqueta', 'crea etiqueta', 'nueva etiqueta', 'agrega la etiqueta',
-    'agrega etiqueta', 'añade etiqueta', 'añade la etiqueta',
+    // Crear
+    'crea la etiqueta', 'crea etiqueta', 'crea una etiqueta', 'nueva etiqueta',
+    'agrega la etiqueta', 'agrega etiqueta', 'agrega una etiqueta',
+    'añade etiqueta', 'añade la etiqueta', 'añade una etiqueta',
+    'quiero una etiqueta', 'quiero la etiqueta', 'necesito una etiqueta',
+    // Eliminar
     'elimina la etiqueta', 'elimina etiqueta', 'borra la etiqueta', 'borra etiqueta',
     'quita la etiqueta', 'quita etiqueta', 'borrar etiqueta', 'eliminar etiqueta',
+    'elimina esa etiqueta', 'borra esa etiqueta',
+    // Editar
     'edita la etiqueta', 'edita etiqueta', 'cambia la etiqueta', 'modifica la etiqueta',
     'modifica etiqueta', 'renombra la etiqueta', 'renombra etiqueta',
     'cambia el nombre de la etiqueta', 'cambia el color de la etiqueta',
+    'cambia el nombre de esa etiqueta', 'cambia el color de esa etiqueta',
+    // Listar
     'que etiquetas hay', 'que etiquetas existen', 'lista etiquetas', 'lista de etiquetas',
+    'listado de etiquetas', 'dame las etiquetas', 'dame el listado de etiquetas',
     'muéstrame las etiquetas', 'muestrame las etiquetas', 'ver etiquetas', 'etiquetas disponibles',
-    'cuantas etiquetas', 'cuántas etiquetas'
+    'cuantas etiquetas', 'cuántas etiquetas', 'muestra las etiquetas', 'muestra etiquetas',
+    'listado completo de etiquetas', 'dame un listado', 'todas las etiquetas',
 ];
 
 function isTagManagementMessage(text) {
