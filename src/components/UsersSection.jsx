@@ -196,6 +196,9 @@ const UsersSection = () => {
 
     useEffect(() => {
         loadData();
+        const refreshTags = () => fetch('/api/tags').then(r => r.json()).then(d => { if (d.success && d.tags) setAllTags(d.tags); }).catch(() => {});
+        window.addEventListener('copilot:tags_changed', refreshTags);
+        return () => window.removeEventListener('copilot:tags_changed', refreshTags);
     }, []);
 
     // -------- USER LOGIC --------
