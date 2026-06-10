@@ -39,8 +39,8 @@ Estado actual del copiloto:
 - Puede orientar al usuario sobre cómo funciona la plataforma.
 - Puede explicar módulos, flujos y buenas prácticas.
 - Puede proponer pasos, prompts y automatizaciones.
-- No debe afirmar que ejecutó cambios, envió mensajes, editó candidatos o creó reglas.
-- Si el usuario pide una acción que modifique datos, debe explicar que puede prepararla/proponerla y pedir confirmación.
+- Puede crear, editar y eliminar etiquetas directamente (di "crea la etiqueta X", "cambia el nombre de la etiqueta X a Y", "elimina la etiqueta X", "qué etiquetas hay").
+- No debe afirmar que ejecutó cambios de otra naturaleza (mensajes, candidatos, reglas) sin confirmación.
 `;
 
 const FALLBACK_BRENDA_PERSONALITY = `
@@ -289,6 +289,283 @@ function formatSkillsListForReply(skills) {
     return `🧠 Mis skills aprendidas:\n${lines.join('\n')}\n\nPara borrar: "borra la skill #N"\nPara enseñarme más: "aprende a..."`;
 }
 
+// ─── Tag Management Engine ───────────────────────────────────────────────────
+
+const TAG_REDIS_KEY = 'candidatic:chat_tags';
+const TAG_COUNTS_CACHE_KEY = 'candidatic:tag_counts_cache';
+
+const DEFAULT_TAG_COLORS = [
+    '#3b82f6', '#ef4444', '#f97316', '#eab308', '#22c55e',
+    '#a855f7', '#ec4899', '#8b5cf6', '#64748b'
+];
+
+const TAG_MGMT_TRIGGERS = [
+    'crea la etiqueta', 'crea etiqueta', 'nueva etiqueta', 'agrega la etiqueta',
+    'agrega etiqueta', 'añade etiqueta', 'añade la etiqueta',
+    'elimina la etiqueta', 'elimina etiqueta', 'borra la etiqueta', 'borra etiqueta',
+    'quita la etiqueta', 'quita etiqueta', 'borrar etiqueta', 'eliminar etiqueta',
+    'edita la etiqueta', 'edita etiqueta', 'cambia la etiqueta', 'modifica la etiqueta',
+    'modifica etiqueta', 'renombra la etiqueta', 'renombra etiqueta',
+    'cambia el nombre de la etiqueta', 'cambia el color de la etiqueta',
+    'que etiquetas hay', 'que etiquetas existen', 'lista etiquetas', 'lista de etiquetas',
+    'muéstrame las etiquetas', 'muestrame las etiquetas', 'ver etiquetas', 'etiquetas disponibles',
+    'cuantas etiquetas', 'cuántas etiquetas'
+];
+
+function isTagManagementMessage(text) {
+    const n = normalizeText(text);
+    return TAG_MGMT_TRIGGERS.some(t => n.includes(normalizeText(t)));
+}
+
+async function parseTagIntent(userMessage, model) {
+    const prompt = `El usuario quiere hacer una operación con etiquetas (tags) en un sistema de reclutamiento.
+
+Su mensaje: "${userMessage}"
+
+Extrae la intención y los parámetros. Responde SOLO con JSON válido:
+{
+  "action": "create|edit|delete|list",
+  "name": "nombre de la etiqueta (para create/edit/delete, null para list)",
+  "newName": "nuevo nombre (solo para edit si cambia nombre, null si no cambia)",
+  "color": "color en hex (solo si el usuario especificó un color, null si no)"
+}
+
+Mapeo de colores del español al hex:
+rojo → #ef4444, naranja → #f97316, amarillo → #eab308, verde → #22c55e,
+azul → #3b82f6, morado/purpura → #a855f7, rosa/pink → #ec4899,
+violeta → #8b5cf6, gris/plomo/slate → #64748b
+
+Responde SOLO JSON válido, sin markdown.`;
+
+    try {
+        const result = await getOpenAIResponse(
+            [{ role: 'user', content: prompt }],
+            'Eres un extractor de intenciones. Responde solo JSON válido.',
+            model, null, { type: 'json_object' }, null, 200
+        );
+        return JSON.parse(result.content);
+    } catch {
+        return null;
+    }
+}
+
+async function getTagsFromRedis(redis) {
+    const raw = await redis.get(TAG_REDIS_KEY);
+    if (!raw) return [
+        { name: 'Urgente', color: '#64748b' },
+        { name: 'Entrevista', color: '#f97316' },
+        { name: 'Contratado', color: '#eab308' },
+        { name: 'Rechazado', color: '#22c55e' },
+        { name: 'Duda', color: '#3b82f6' }
+    ];
+    const tags = JSON.parse(raw);
+    return tags.map(t => typeof t === 'string' ? { name: t, color: '#3b82f6' } : t);
+}
+
+async function saveTagsToRedis(redis, tags) {
+    await redis.set(TAG_REDIS_KEY, JSON.stringify(tags));
+    await redis.del(TAG_COUNTS_CACHE_KEY);
+}
+
+async function removeTagFromAllCandidates(tagName) {
+    const { getCandidates, updateCandidate } = await import('../utils/storage.js');
+    const { candidates } = await getCandidates(20000, 0, '');
+    const promises = candidates
+        .filter(c => Array.isArray(c.tags) && c.tags.includes(tagName))
+        .map(c => updateCandidate(c.id, { tags: c.tags.filter(t => t !== tagName) }));
+    if (promises.length > 0) await Promise.all(promises);
+}
+
+async function renameTagInAllCandidates(oldName, newName) {
+    const { getCandidates, updateCandidate } = await import('../utils/storage.js');
+    const { candidates } = await getCandidates(20000, 0, '');
+    const promises = candidates
+        .filter(c => Array.isArray(c.tags) && c.tags.includes(oldName))
+        .map(c => updateCandidate(c.id, { tags: c.tags.map(t => t === oldName ? newName : t) }));
+    if (promises.length > 0) await Promise.all(promises);
+}
+
+async function executeTagOperation(redis, intent) {
+    const tags = await getTagsFromRedis(redis);
+
+    if (intent.action === 'list') {
+        if (!tags.length) return '📋 No hay etiquetas configuradas aún.';
+        const lines = tags.map((t, i) => `${i + 1}. **${t.name}**`);
+        return `🏷️ Etiquetas disponibles (${tags.length}):\n${lines.join('\n')}\n\nPuedes pedirme crear, editar o eliminar cualquiera.`;
+    }
+
+    if (intent.action === 'create') {
+        if (!intent.name?.trim()) return '❌ No entendí el nombre. ¿Cómo quieres llamarla?';
+        const name = intent.name.trim();
+        if (tags.some(t => normalizeText(t.name) === normalizeText(name))) {
+            return `⚠️ Ya existe una etiqueta llamada **"${name}"**.`;
+        }
+        const usedColors = new Set(tags.map(t => t.color));
+        const color = intent.color || DEFAULT_TAG_COLORS.find(c => !usedColors.has(c)) || DEFAULT_TAG_COLORS[tags.length % DEFAULT_TAG_COLORS.length];
+        tags.push({ name, color });
+        await saveTagsToRedis(redis, tags);
+        return `✅ Etiqueta **"${name}"** creada correctamente.`;
+    }
+
+    if (intent.action === 'delete') {
+        if (!intent.name?.trim()) return '❌ No entendí qué etiqueta eliminar. ¿Puedes especificarla?';
+        const name = intent.name.trim();
+        const idx = tags.findIndex(t => normalizeText(t.name) === normalizeText(name));
+        if (idx === -1) {
+            const list = tags.map(t => `"${t.name}"`).join(', ');
+            return `❌ No encontré la etiqueta **"${name}"**.\nEtiquetas disponibles: ${list || 'ninguna'}`;
+        }
+        tags.splice(idx, 1);
+        await saveTagsToRedis(redis, tags);
+        // Quitar de candidatos en background
+        removeTagFromAllCandidates(name).catch(() => {});
+        return `🗑️ Etiqueta **"${name}"** eliminada. Se está quitando de los candidatos que la tenían.`;
+    }
+
+    if (intent.action === 'edit') {
+        if (!intent.name?.trim()) return '❌ No entendí qué etiqueta editar.';
+        const name = intent.name.trim();
+        const idx = tags.findIndex(t => normalizeText(t.name) === normalizeText(name));
+        if (idx === -1) {
+            const list = tags.map(t => `"${t.name}"`).join(', ');
+            return `❌ No encontré la etiqueta **"${name}"**.\nEtiquetas disponibles: ${list || 'ninguna'}`;
+        }
+        const changes = [];
+        if (intent.newName?.trim() && normalizeText(intent.newName) !== normalizeText(tags[idx].name)) {
+            const newName = intent.newName.trim();
+            if (tags.some((t, i) => i !== idx && normalizeText(t.name) === normalizeText(newName))) {
+                return `⚠️ Ya existe una etiqueta llamada **"${newName}"**.`;
+            }
+            changes.push(`nombre: "${tags[idx].name}" → "${newName}"`);
+            renameTagInAllCandidates(tags[idx].name, newName).catch(() => {});
+            tags[idx].name = newName;
+        }
+        if (intent.color) {
+            changes.push(`color: ${tags[idx].color} → ${intent.color}`);
+            tags[idx].color = intent.color;
+        }
+        if (!changes.length) return '🤔 No detecté ningún cambio. ¿Qué quieres modificar: nombre, color, o ambos?';
+        await saveTagsToRedis(redis, tags);
+        return `✅ Etiqueta actualizada:\n${changes.map(c => `• ${c}`).join('\n')}`;
+    }
+
+    return '🤔 No entendí la operación. Puedo crear, editar, eliminar o listar etiquetas.';
+}
+
+// ─── Assign Tag to Candidates Engine ─────────────────────────────────────────
+
+const SEARCH_CONTEXT_KEY = 'copilot:last_search';
+const SEARCH_CONTEXT_TTL = 600; // 10 minutos
+
+const ASSIGN_TAG_TRIGGERS = [
+    'asígnale la etiqueta', 'asignale la etiqueta',
+    'ponle la etiqueta', 'ponles la etiqueta',
+    'aplica la etiqueta', 'aplícale la etiqueta', 'aplicale la etiqueta',
+    'etiquétalos', 'etiquetalos', 'etiquétalas', 'etiquétalas',
+    'asigna la etiqueta', 'asignar la etiqueta',
+    'agrega la etiqueta a esos', 'agrega esa etiqueta',
+    'dale la etiqueta', 'dales la etiqueta',
+    'ponles esa etiqueta', 'ponle esa etiqueta', 'asigna esa etiqueta',
+    'a todos ponle', 'a esos ponle', 'ponle a todos la etiqueta',
+];
+
+function isAssignTagMessage(text) {
+    const n = normalizeText(text);
+    return ASSIGN_TAG_TRIGGERS.some(t => n.includes(normalizeText(t)));
+}
+
+async function parseAssignTagIntent(userMessage, model) {
+    const prompt = `El usuario quiere asignar una etiqueta a candidatos.
+
+Su mensaje: "${userMessage}"
+
+Extrae los parámetros. Responde SOLO con JSON válido:
+{
+  "tagName": "nombre de la etiqueta a asignar",
+  "targetType": "search_context|named",
+  "targetName": "nombre del candidato (solo si targetType es 'named', null si no)"
+}
+
+- "search_context": El usuario se refiere a resultados de una búsqueda anterior ("a esos", "a ellos", "a los de santa catarina", sin mencionar un nombre específico)
+- "named": El usuario menciona un candidato específico por nombre ("a Juan García", "al candidato X")
+
+Responde SOLO JSON válido, sin markdown.`;
+
+    try {
+        const result = await getOpenAIResponse(
+            [{ role: 'user', content: prompt }],
+            'Eres un extractor de intenciones. Responde solo JSON válido.',
+            model, null, { type: 'json_object' }, null, 200
+        );
+        return JSON.parse(result.content);
+    } catch {
+        return null;
+    }
+}
+
+async function executeAssignTag(redis, intent, roster) {
+    const tagName = intent.tagName?.trim();
+    if (!tagName) return '❌ No entendí el nombre de la etiqueta. ¿Cuál quieres asignar?';
+
+    let targetIds = [];
+    let targetDescription = '';
+
+    if (intent.targetType === 'named' && intent.targetName) {
+        const nameNorm = normalizeText(intent.targetName);
+        const matches = (roster || []).filter(c => normalizeText(c.nombre).includes(nameNorm));
+        if (!matches.length) return `❌ No encontré candidatos con el nombre **"${intent.targetName}"**.`;
+        targetIds = matches.map(c => c.id);
+        targetDescription = matches.length === 1
+            ? `**${matches[0].nombre}**`
+            : `${matches.length} candidatos que coinciden con "${intent.targetName}"`;
+    } else {
+        if (!redis) return '⚠️ No hay conexión a la base de datos.';
+        const raw = await redis.get(SEARCH_CONTEXT_KEY);
+        if (!raw) return '⚠️ No tengo una búsqueda reciente guardada.\n\nPrimero hazme una pregunta como *"¿cuántos candidatos viven en Santa Catarina?"* y luego pídeme asignar la etiqueta.';
+        const ctx = JSON.parse(raw);
+        if (!ctx.ids?.length) return '⚠️ La última búsqueda no tuvo resultados para etiquetar.';
+        targetIds = ctx.ids;
+        targetDescription = `**${ctx.total}** candidatos de la búsqueda *"${ctx.query}"*`;
+    }
+
+    if (!targetIds.length) return '❌ No hay candidatos para etiquetar.';
+
+    // Auto-crear la etiqueta si no existe
+    const tags = await getTagsFromRedis(redis);
+    if (!tags.some(t => normalizeText(t.name) === normalizeText(tagName))) {
+        const usedColors = new Set(tags.map(t => t.color));
+        const color = DEFAULT_TAG_COLORS.find(c => !usedColors.has(c)) || DEFAULT_TAG_COLORS[tags.length % DEFAULT_TAG_COLORS.length];
+        tags.push({ name: tagName, color });
+        await saveTagsToRedis(redis, tags);
+    }
+
+    // Aplicar etiqueta (misma lógica que bulk-tag.js)
+    const { getCandidateById, updateCandidate } = await import('../utils/storage.js');
+    let updated = 0;
+    let skipped = 0;
+    for (const id of targetIds) {
+        try {
+            const cand = await getCandidateById(id);
+            if (!cand) { skipped++; continue; }
+            const existingTags = Array.isArray(cand.tags) ? cand.tags : [];
+            if (!existingTags.includes(tagName)) {
+                await updateCandidate(id, { tags: [...existingTags, tagName] });
+                updated++;
+            } else {
+                skipped++;
+            }
+        } catch { skipped++; }
+    }
+
+    await redis?.del(TAG_COUNTS_CACHE_KEY);
+
+    let reply = `✅ Etiqueta **"${tagName}"** asignada a ${targetDescription}.`;
+    if (updated > 0) reply += `\n• ${updated} candidatos actualizados`;
+    if (skipped > 0) reply += `\n• ${skipped} ya la tenían o no se encontraron`;
+    if (!tags.some(t => t.name === tagName)) reply += `\n\n_(La etiqueta fue creada automáticamente)_`;
+    return reply;
+}
+
 // ─── Main Handler ────────────────────────────────────────────────────────────
 
 export default async function handler(req, res) {
@@ -397,6 +674,25 @@ export default async function handler(req, res) {
             }
         }
 
+        // ─── Handle tag management ────────────────────────────────────────
+        if (isTagManagementMessage(question)) {
+            const intent = await parseTagIntent(question, model);
+            if (intent) {
+                const reply = await executeTagOperation(redis, intent);
+                return res.status(200).json({ success: true, reply, model: 'system', skill: 'tag_management' });
+            }
+        }
+
+        // ─── Handle assign tag to candidates ──────────────────────────────
+        if (isAssignTagMessage(question)) {
+            const intent = await parseAssignTagIntent(question, model);
+            if (intent?.tagName) {
+                const snapshot = await getCandidateKnowledgeSnapshot();
+                const reply = await executeAssignTag(redis, intent, snapshot.allCandidatesSummary);
+                return res.status(200).json({ success: true, reply, model: 'system', skill: 'tag_assignment' });
+            }
+        }
+
         // ─── Match learned skills ─────────────────────────────────────────
 
         const allSkills = await getLearnedSkills(redis);
@@ -439,6 +735,16 @@ export default async function handler(req, res) {
         const searchContext = history.slice(-2).map(m => m.content).join(' ') + ' ' + question;
         const searchResults = await searchCandidateRoster(snapshot.allCandidatesSummary, searchContext);
         const searchText = formatSearchResults(searchResults);
+
+        // Guardar contexto de búsqueda en Redis para asignación posterior de etiquetas
+        if (redis && searchResults?.allMatchingIds?.length > 0) {
+            redis.set(SEARCH_CONTEXT_KEY, JSON.stringify({
+                ids: searchResults.allMatchingIds,
+                total: searchResults.totalMatches,
+                query: question,
+                savedAt: new Date().toISOString()
+            }), 'EX', SEARCH_CONTEXT_TTL).catch(() => {});
+        }
 
         const systemPrompt = `
 Eres Brenda Rodríguez, copiloto interno de Candidatic IA.

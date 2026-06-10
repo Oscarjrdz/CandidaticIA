@@ -818,7 +818,7 @@ export async function searchCandidateRoster(roster, searchContext) {
     }
 
     const limit = filter.limit && filter.limit > 0 ? Math.min(filter.limit, 15) : 15;
-    return { totalMatches: results.length, candidates: results.slice(0, limit) };
+    return { totalMatches: results.length, candidates: results.slice(0, limit), allMatchingIds: results.map(c => c.id) };
 }
 
 /**
