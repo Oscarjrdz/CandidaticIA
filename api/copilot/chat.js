@@ -40,6 +40,8 @@ Estado actual del copiloto:
 - Puede explicar módulos, flujos y buenas prácticas.
 - Puede proponer pasos, prompts y automatizaciones.
 - Puede crear, editar y eliminar etiquetas directamente (di "crea la etiqueta X", "cambia el nombre de la etiqueta X a Y", "elimina la etiqueta X", "qué etiquetas hay").
+- Puede asignar etiquetas a grupos de candidatos directamente — muestra confirmación antes de ejecutar (di "asígnales la etiqueta X", "agrégalas a la etiqueta X", "ponles la etiqueta X").
+- IMPORTANTE: Cuando el usuario pida asignar etiquetas, NO respondas conversacionalmente. El sistema lo maneja automáticamente con confirmación real. Si ves este tipo de petición en el historial, es porque el handler ya se activó.
 - No debe afirmar que ejecutó cambios de otra naturaleza (mensajes, candidatos, reglas) sin confirmación.
 `;
 
@@ -752,14 +754,20 @@ export default async function handler(req, res) {
 
         // ─── Handle assign tag to candidates ──────────────────────────────
         if (isAssignTagMessage(question)) {
-            const intent = await parseAssignTagIntent(question, model);
+            let intent = await parseAssignTagIntent(question, model);
+            // Fallback: extraer tag name con regex si la IA no lo devolvió
+            if (!intent?.tagName) {
+                const tagMatch = question.match(/etiqueta\s+[""]?([^"""]+?)[""]?\s*$/i);
+                if (tagMatch) {
+                    intent = { tagName: tagMatch[1].trim(), targetType: 'search_context', targetName: null, inlineSearchQuery: null };
+                }
+            }
             if (intent?.tagName) {
                 const snapshot = await getCandidateKnowledgeSnapshot();
                 const result = await buildAssignTagConfirmation(redis, intent, snapshot.allCandidatesSummary);
                 if (result.error) {
                     return res.status(200).json({ success: true, reply: result.error, model: 'system', skill: 'tag_assignment' });
                 }
-                // Guardar acción pendiente y pedir confirmación
                 if (redis) {
                     await redis.set(PENDING_CONFIRM_KEY, JSON.stringify({
                         type: 'assign_tag',
@@ -772,6 +780,8 @@ export default async function handler(req, res) {
                 const reply = `⚠️ Vas a asignar la etiqueta **"${result.tagName}"** a ${result.targetDescription}.\n\n¿Confirmas?`;
                 return res.status(200).json({ success: true, reply, model: 'system', skill: 'tag_assignment', confirmation: true });
             }
+            // Si llegamos aquí, no se pudo extraer el nombre de la etiqueta
+            return res.status(200).json({ success: true, reply: '❌ No entendí qué etiqueta asignar. Di: *"asígnales la etiqueta [nombre]"*', model: 'system', skill: 'tag_assignment' });
         }
 
         // ─── Match learned skills ─────────────────────────────────────────
