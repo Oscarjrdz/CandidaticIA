@@ -481,6 +481,10 @@ const ASSIGN_TAG_TRIGGERS = [
     'a todos ponle', 'a esos ponle', 'ponle a todos la etiqueta',
     'asignale esa etiqueta', 'asígnale esa etiqueta',
     'asignales esa etiqueta', 'asígnales esa etiqueta',
+    'agregalas', 'agrégalas', 'agregalos', 'agrégalos',
+    'agrégales', 'agregales', 'agregalas a', 'agrégalas a',
+    'agregalos a', 'agrégalos a', 'y agregalas', 'y agrégalas',
+    'y asignales', 'y asígnales', 'y ponles la etiqueta',
 ];
 
 function isAssignTagMessage(text) {
@@ -489,19 +493,24 @@ function isAssignTagMessage(text) {
 }
 
 async function parseAssignTagIntent(userMessage, model) {
-    const prompt = `El usuario quiere asignar una etiqueta a candidatos.
+    const prompt = `El usuario quiere asignar una etiqueta a candidatos en un sistema de reclutamiento.
 
 Su mensaje: "${userMessage}"
 
 Extrae los parámetros. Responde SOLO con JSON válido:
 {
-  "tagName": "nombre de la etiqueta a asignar",
-  "targetType": "search_context|named",
-  "targetName": "nombre del candidato (solo si targetType es 'named', null si no)"
+  "tagName": "nombre de la etiqueta a asignar (puede estar entre comillas o mencionada como 'esta etiqueta' — infiere del contexto)",
+  "targetType": "search_context|named|inline_search",
+  "targetName": "nombre del candidato (solo si targetType es 'named', null si no)",
+  "inlineSearchQuery": "descripción del grupo a buscar (solo si targetType es 'inline_search', null si no)"
 }
 
-- "search_context": El usuario se refiere a resultados de una búsqueda anterior ("a esos", "a ellos", "a los de santa catarina", sin mencionar un nombre específico)
-- "named": El usuario menciona un candidato específico por nombre ("a Juan García", "al candidato X")
+Tipos:
+- "search_context": el usuario se refiere a una búsqueda anterior ("a esos", "a ellos", sin describir quiénes son)
+- "named": menciona un candidato por nombre específico ("a Juan García")
+- "inline_search": el mensaje incluye en UNA SOLA frase tanto la descripción del grupo a buscar como la asignación ("las mujeres de santa catarina agrégalas", "todos los de monterrey asígnales", "busca X y agrégalos a Y")
+
+Si es "inline_search", en inlineSearchQuery pon solo la descripción del grupo (ej: "mujeres que viven en Santa Catarina").
 
 Responde SOLO JSON válido, sin markdown.`;
 
@@ -536,10 +545,26 @@ async function buildAssignTagConfirmation(redis, intent, roster) {
         targetDescription = matches.length === 1
             ? `**${matches[0].nombre}**`
             : `**${matches.length} candidatos** que coinciden con "${intent.targetName}"`;
+
+    } else if (intent.targetType === 'inline_search' && intent.inlineSearchQuery) {
+        // Búsqueda inline: el usuario combinó búsqueda + asignación en un solo mensaje
+        const { searchCandidateRoster } = await import('../utils/copilot-candidate-knowledge.js');
+        const searchResults = await searchCandidateRoster(roster || [], intent.inlineSearchQuery);
+        if (!searchResults.totalMatches) return { error: `❌ No encontré candidatos que coincidan con "${intent.inlineSearchQuery}".` };
+        targetIds = searchResults.allMatchingIds;
+        targetDescription = `**${searchResults.totalMatches} candidatos** que coinciden con *"${intent.inlineSearchQuery}"*`;
+        // Guardar en contexto para futuros usos
+        if (redis) {
+            redis.set(SEARCH_CONTEXT_KEY, JSON.stringify({
+                ids: targetIds, total: searchResults.totalMatches,
+                query: intent.inlineSearchQuery, savedAt: new Date().toISOString()
+            }), 'EX', SEARCH_CONTEXT_TTL).catch(() => {});
+        }
+
     } else {
         if (!redis) return { error: '⚠️ No hay conexión a la base de datos.' };
         const raw = await redis.get(SEARCH_CONTEXT_KEY);
-        if (!raw) return { error: '⚠️ No tengo una búsqueda reciente guardada.\n\nPrimero hazme una pregunta como *"¿cuántos candidatos viven en Santa Catarina?"* y luego pídeme asignar la etiqueta.' };
+        if (!raw) return { error: '⚠️ No tengo una búsqueda reciente guardada.\n\nPrimero hazme una pregunta como *"¿cuántas mujeres viven en Santa Catarina?"* y luego pídeme asignar la etiqueta.' };
         const ctx = JSON.parse(raw);
         if (!ctx.ids?.length) return { error: '⚠️ La última búsqueda no tuvo resultados para etiquetar.' };
         targetIds = ctx.ids;
