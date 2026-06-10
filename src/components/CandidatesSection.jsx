@@ -287,6 +287,8 @@ const CandidatesSection = () => {
             }
         };
         loadTags();
+        window.addEventListener('copilot:tags_changed', loadTags);
+        return () => window.removeEventListener('copilot:tags_changed', loadTags);
     }, []);
 
     const saveTagsGlobal = async (newGlobalTags) => {

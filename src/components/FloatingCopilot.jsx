@@ -162,6 +162,9 @@ export default function FloatingCopilot({ onOpenFull }) {
             }
 
             setMessages(prev => [...prev, { role: 'assistant', content: data.reply || 'No recibi respuesta.', isConfirmation: data.confirmation === true }]);
+            if (data.skill === 'tag_management' || data.skill === 'tag_assignment') {
+                window.dispatchEvent(new CustomEvent('copilot:tags_changed'));
+            }
         } catch (error) {
             setMessages(prev => [
                 ...prev,
