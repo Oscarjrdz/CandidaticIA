@@ -833,7 +833,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
             // --- Permiso: ocultar candidatos incompletos si el rol no lo permite ---
             if (user?.role !== 'SuperAdmin' &&
                 rolePermissions && Object.keys(rolePermissions).length > 0 &&
-                rolePermissions.view_incomplete_candidates === false &&
+                rolePermissions.view_incomplete_candidates !== true &&
                 !isProfileComplete(c)) return false;
 
             // --- Viewer Role: Only show Messenger chats (for Meta reviewer account) ---
@@ -2041,7 +2041,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                             >
                                 Completos
                             </button>
-                            {(user?.role === 'SuperAdmin' || !rolePermissions || Object.keys(rolePermissions).length === 0 || rolePermissions.view_incomplete_candidates !== false) && (
+                            {(user?.role === 'SuperAdmin' || !rolePermissions || Object.keys(rolePermissions).length === 0 || rolePermissions.view_incomplete_candidates === true) && (
                                 <button
                                     onClick={() => { setActiveFilter('profile'); setFilterValue('incomplete'); setProfileUnreadOnly(false); setShowDropdown(null); }}
                                     className={`px-4 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-colors flex items-center gap-1 shrink-0 ${
@@ -2121,7 +2121,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                                 )}
                             </button>
                         )}
-                        {canSeeFilter('filter_incomplete') && (user?.role === 'SuperAdmin' || !rolePermissions || Object.keys(rolePermissions).length === 0 || rolePermissions.view_incomplete_candidates !== false) && (
+                        {canSeeFilter('filter_incomplete') && (user?.role === 'SuperAdmin' || !rolePermissions || Object.keys(rolePermissions).length === 0 || rolePermissions.view_incomplete_candidates === true) && (
                             <button 
                                 onClick={() => { setActiveFilter('profile'); setFilterValue('incomplete'); setProfileUnreadOnly(false); setShowDropdown(null); }}
                                 className={`flex-[1.5] flex justify-center px-1.5 py-1.5 rounded-full font-medium whitespace-nowrap transition-colors border border-transparent items-center gap-1 min-w-[90px] ${
