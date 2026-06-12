@@ -56,14 +56,12 @@ export default async function handler(req, res) {
             await redis.set('candidatic:chat_tags', JSON.stringify(newTags));
             await redis.del(TAG_COUNTS_CACHE_KEY); // invalidar cache
 
+            // Use tagFilter to scan ONLY candidates that have this tag (avoids loading all 20k)
             const { getCandidates, updateCandidate } = await import('./utils/storage.js');
-            const { candidates } = await getCandidates(20000, 0, '');
-            const promises = [];
-            for (const c of candidates) {
-                if (c.tags && Array.isArray(c.tags) && c.tags.includes(tagName)) {
-                    promises.push(updateCandidate(c.id, { tags: c.tags.filter(t => t !== tagName) }));
-                }
-            }
+            const { candidates } = await getCandidates(20000, 0, '', false, tagName);
+            const promises = candidates.map(c =>
+                updateCandidate(c.id, { tags: c.tags.filter(t => t !== tagName) })
+            );
             if (promises.length > 0) await Promise.all(promises);
 
             return res.status(200).json({ success: true, message: `Etiqueta '${tagName}' eliminada globalmente`, tags: newTags });

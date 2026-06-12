@@ -383,19 +383,21 @@ async function saveTagsToRedis(redis, tags) {
 
 async function removeTagFromAllCandidates(tagName) {
     const { getCandidates, updateCandidate } = await import('../utils/storage.js');
-    const { candidates } = await getCandidates(20000, 0, '');
-    const promises = candidates
-        .filter(c => Array.isArray(c.tags) && c.tags.includes(tagName))
-        .map(c => updateCandidate(c.id, { tags: c.tags.filter(t => t !== tagName) }));
+    // tagFilter scans only candidates that have this tag — avoids loading all 20k
+    const { candidates } = await getCandidates(20000, 0, '', false, tagName);
+    const promises = candidates.map(c =>
+        updateCandidate(c.id, { tags: c.tags.filter(t => t !== tagName) })
+    );
     if (promises.length > 0) await Promise.all(promises);
 }
 
 async function renameTagInAllCandidates(oldName, newName) {
     const { getCandidates, updateCandidate } = await import('../utils/storage.js');
-    const { candidates } = await getCandidates(20000, 0, '');
-    const promises = candidates
-        .filter(c => Array.isArray(c.tags) && c.tags.includes(oldName))
-        .map(c => updateCandidate(c.id, { tags: c.tags.map(t => t === oldName ? newName : t) }));
+    // tagFilter scans only candidates that have this tag — avoids loading all 20k
+    const { candidates } = await getCandidates(20000, 0, '', false, oldName);
+    const promises = candidates.map(c =>
+        updateCandidate(c.id, { tags: c.tags.map(t => t === oldName ? newName : t) })
+    );
     if (promises.length > 0) await Promise.all(promises);
 }
 

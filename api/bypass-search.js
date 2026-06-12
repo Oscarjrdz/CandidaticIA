@@ -18,8 +18,8 @@ export default async function handler(req, res) {
 
         const { minAge, maxAge, municipios, escolaridades, categories, gender, excludedTags } = req.body;
 
-        // 1. Fetch ALL candidates (no limit) — server-side, no 200 cap
-        const { candidates: allCandidates } = await getCandidates(50000, 0, '', false, '');
+        // 1. Fetch ALL candidates — use realistic ceiling to avoid over-fetching
+        const { candidates: allCandidates } = await getCandidates(10000, 0, '', false, '');
 
         const client = getRedisClient();
 
