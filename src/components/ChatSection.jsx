@@ -633,9 +633,8 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
         };
         fetchStats(); // Single hydration fetch at mount
 
-        const onTagsChanged = (event) => {
+        const onTagsChanged = () => {
             loadTags();
-            if (event?.detail?.type === 'tag_assignment') loadCandidates();
         };
         window.addEventListener('copilot:tags_changed', onTagsChanged);
         return () => window.removeEventListener('copilot:tags_changed', onTagsChanged);
