@@ -831,7 +831,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
             if (!passesRBACFilter(c, user)) return false;
 
             // --- Permiso: ocultar candidatos incompletos si el rol no lo permite ---
-            if (user?.role !== 'SuperAdmin' && user?.role !== 'Admin' &&
+            if (user?.role !== 'SuperAdmin' &&
                 rolePermissions && Object.keys(rolePermissions).length > 0 &&
                 rolePermissions.view_incomplete_candidates === false &&
                 !isProfileComplete(c)) return false;

@@ -176,7 +176,7 @@ const CandidatesSection = () => {
     const { showToast } = useToastContext();
     const { user, rolePermissions } = useAuthContext();
     const canManageTags = user?.role === 'SuperAdmin' || user?.can_manage_tags === true;
-    const canViewIncomplete = !user || user.role === 'SuperAdmin' || user.role === 'Admin' ||
+    const canViewIncomplete = !user || user.role === 'SuperAdmin' ||
         !rolePermissions || Object.keys(rolePermissions).length === 0 ||
         rolePermissions.view_incomplete_candidates === true;
     const { confirmModalJSX, showConfirm } = useConfirmModal();
