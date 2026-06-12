@@ -37,6 +37,11 @@ export default async function handler(req, res) {
             }
         }
 
+        // Invalidar caché de conteos de etiquetas para que el conteo sea real-time
+        const { getRedisClient } = await import('../utils/storage.js');
+        const redis = getRedisClient();
+        if (redis) redis.del('candidatic:tag_counts_cache').catch(() => {});
+
         // Trigger stats refresh in background
         import('../utils/bot-stats.js').then(m => m.calculateBotStats()).catch(() => { });
 

@@ -76,6 +76,7 @@ export default async function handler(req, res) {
                 }
             }
             if (updates.length) await Promise.all(updates);
+            redis.del('candidatic:tag_counts_cache').catch(() => {});
 
             return res.status(200).json({ success: true, label: newLabel, applied });
         }
@@ -136,6 +137,7 @@ export default async function handler(req, res) {
                 }
             }
             if (updates.length) await Promise.all(updates);
+            redis.del('candidatic:tag_counts_cache').catch(() => {});
 
             return res.status(200).json({ success: true, label: labels[idx], oldTagName, renamed });
         }
@@ -171,6 +173,7 @@ export default async function handler(req, res) {
                 }
             }
             if (updates.length) await Promise.all(updates);
+            redis.del('candidatic:tag_counts_cache').catch(() => {});
 
             return res.status(200).json({ success: true, removed, removedFrom });
         }

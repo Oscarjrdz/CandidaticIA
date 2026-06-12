@@ -2,9 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { Activity, Server, ArrowUpRight, AlertTriangle, ShieldCheck } from 'lucide-react';
 
 const RedisMonitorSettings = () => {
-    const [data, setData] = useState({ usedBytes: 0, limitBytes: 107374182400, percentage: 0 });
+    const [data, setData] = useState({ usedBytes: 0, limitBytes: 107374182400, percentage: 0, daily: [] });
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(false);
+    const [tooltip, setTooltip] = useState(null); // { day, bytes, x, y }
 
     useEffect(() => {
         const fetchBandwidth = async () => {
@@ -16,7 +17,8 @@ const RedisMonitorSettings = () => {
                     setData({
                         usedBytes: result.usedBytes || 0,
                         limitBytes: result.limitBytes || 107374182400,
-                        percentage: result.percentage || 0
+                        percentage: result.percentage || 0,
+                        daily: result.daily || []
                     });
                 } else {
                     throw new Error('API reported failure');
@@ -31,17 +33,20 @@ const RedisMonitorSettings = () => {
         fetchBandwidth();
     }, []);
 
-    const formatGB = (bytes) => {
-        return (bytes / (1024 * 1024 * 1024)).toFixed(2);
+    const formatGB = (bytes) => (bytes / (1024 * 1024 * 1024)).toFixed(2);
+    const formatMB = (bytes) => {
+        const mb = bytes / (1024 * 1024);
+        if (mb >= 1000) return `${(mb / 1024).toFixed(2)} GB`;
+        return `${mb.toFixed(0)} MB`;
     };
 
     const usedGB = formatGB(data.usedBytes);
     const limitGB = formatGB(data.limitBytes);
-    
-    // Aesthetic logic
+
     let statusColor = 'bg-emerald-500';
     let statusText = 'text-emerald-500';
     let statusBg = 'bg-emerald-50';
+    let statusBarColor = 'bg-emerald-500';
     let statusIcon = <ShieldCheck className="w-5 h-5 text-emerald-500" />;
     let statusMessage = "Sistema Operando Óptimamente";
 
@@ -49,25 +54,31 @@ const RedisMonitorSettings = () => {
         statusColor = 'bg-red-500';
         statusText = 'text-red-600';
         statusBg = 'bg-red-50';
+        statusBarColor = 'bg-red-500';
         statusIcon = <AlertTriangle className="w-5 h-5 text-red-500" />;
         statusMessage = "Peligro: Límite de Ancho de Banda Cercano";
     } else if (data.percentage > 60) {
         statusColor = 'bg-amber-400';
         statusText = 'text-amber-600';
         statusBg = 'bg-amber-50';
+        statusBarColor = 'bg-amber-400';
         statusIcon = <Activity className="w-5 h-5 text-amber-500" />;
         statusMessage = "Advertencia: Consumo Elevado";
     }
 
+    // Bar chart helpers
+    const maxDayBytes = data.daily.length > 0 ? Math.max(...data.daily.map(d => d.bytes), 1) : 1;
+    const today = new Date().getUTCDate();
+
     if (loading) {
         return (
-            <div className="bg-white dark:bg-gray-800 rounded-3xl p-6 border border-gray-100 dark:border-gray-700 shadow-sm animate-pulse h-48">
+            <div className="bg-white dark:bg-gray-800 rounded-3xl p-6 border border-gray-100 dark:border-gray-700 shadow-sm animate-pulse h-64">
                 <div className="flex items-center space-x-3 mb-6">
                     <div className="w-10 h-10 bg-gray-200 dark:bg-gray-700 rounded-xl"></div>
                     <div className="h-6 w-48 bg-gray-200 dark:bg-gray-700 rounded-md"></div>
                 </div>
                 <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded-full mb-3"></div>
-                <div className="h-3 w-1/3 bg-gray-200 dark:bg-gray-700 rounded-md"></div>
+                <div className="h-24 bg-gray-200 dark:bg-gray-700 rounded-2xl mt-4"></div>
             </div>
         );
     }
@@ -76,7 +87,7 @@ const RedisMonitorSettings = () => {
         <div className="bg-white dark:bg-gray-800 rounded-3xl p-6 border border-gray-100 dark:border-gray-700 shadow-sm relative overflow-hidden group">
             {/* Background Glow */}
             <div className={`absolute top-0 right-0 -mr-16 -mt-16 w-48 h-48 rounded-full ${statusBg} blur-3xl opacity-50 dark:opacity-20 transition-all duration-700 ease-in-out`}></div>
-            
+
             <div className="relative z-10">
                 <div className="flex justify-between items-start mb-6">
                     <div className="flex items-center space-x-4">
@@ -108,6 +119,7 @@ const RedisMonitorSettings = () => {
                     </div>
                 ) : (
                     <div>
+                        {/* Monthly total + progress bar */}
                         <div className="flex justify-between items-end mb-2">
                             <div className="flex items-baseline space-x-1">
                                 <span className="text-3xl font-black text-gray-900 dark:text-white tracking-tight">
@@ -122,26 +134,89 @@ const RedisMonitorSettings = () => {
                             </div>
                         </div>
 
-                        {/* Progress Bar Container */}
-                        <div className="relative w-full h-3 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden shadow-inner">
-                            {/* Animated Fill */}
-                            <div 
+                        <div className="relative w-full h-3 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden shadow-inner mb-4">
+                            <div
                                 className={`absolute top-0 left-0 h-full ${statusColor} rounded-full transition-all duration-1000 ease-out`}
                                 style={{ width: `${Math.min(Math.max(data.percentage, 1), 100)}%` }}
                             >
-                                {/* Shine Effect */}
                                 <div className="absolute top-0 left-0 w-full h-full bg-white/20 animate-[shimmer_2s_infinite]"></div>
                             </div>
                         </div>
 
+                        {/* Daily bar chart */}
+                        {data.daily.length > 0 && (
+                            <div className="mt-5">
+                                <p className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-3">
+                                    Consumo Diario — Día por Día
+                                </p>
+                                <div className="relative">
+                                    {/* Tooltip */}
+                                    {tooltip && (
+                                        <div
+                                            className="absolute z-20 pointer-events-none bg-gray-900 text-white text-xs font-bold px-2.5 py-1.5 rounded-xl shadow-lg whitespace-nowrap"
+                                            style={{ left: tooltip.x, top: tooltip.y, transform: 'translate(-50%, -110%)' }}
+                                        >
+                                            Día {tooltip.day}: {formatMB(tooltip.bytes)}
+                                        </div>
+                                    )}
+                                    <div className="flex items-end gap-[2px] h-20 w-full">
+                                        {data.daily.map(({ day, bytes }) => {
+                                            const heightPct = bytes > 0 ? Math.max((bytes / maxDayBytes) * 100, 4) : 2;
+                                            const isToday = day === today;
+                                            const barColor = isToday
+                                                ? statusBarColor
+                                                : bytes > maxDayBytes * 0.7
+                                                    ? 'bg-amber-400'
+                                                    : 'bg-blue-400/60 dark:bg-blue-500/50';
+
+                                            return (
+                                                <div
+                                                    key={day}
+                                                    className="flex-1 flex flex-col items-center justify-end group/bar cursor-default"
+                                                    onMouseEnter={(e) => {
+                                                        const rect = e.currentTarget.getBoundingClientRect();
+                                                        const parentRect = e.currentTarget.closest('.relative').getBoundingClientRect();
+                                                        setTooltip({
+                                                            day,
+                                                            bytes,
+                                                            x: rect.left - parentRect.left + rect.width / 2,
+                                                            y: rect.top - parentRect.top
+                                                        });
+                                                    }}
+                                                    onMouseLeave={() => setTooltip(null)}
+                                                >
+                                                    <div
+                                                        className={`w-full rounded-t-sm ${barColor} transition-all duration-300 group-hover/bar:opacity-100 ${!isToday ? 'opacity-70' : ''}`}
+                                                        style={{ height: `${heightPct}%` }}
+                                                    />
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                    {/* Day labels — show every 5 days */}
+                                    <div className="flex items-start gap-[2px] mt-1">
+                                        {data.daily.map(({ day }) => (
+                                            <div key={day} className="flex-1 flex justify-center">
+                                                {(day === 1 || day % 5 === 0 || day === today) ? (
+                                                    <span className={`text-[9px] font-bold ${day === today ? statusText : 'text-gray-400'}`}>
+                                                        {day}
+                                                    </span>
+                                                ) : null}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
                         <p className="mt-4 text-xs font-medium text-gray-500 dark:text-gray-400 flex justify-between">
                             <span>{statusMessage}</span>
-                            <span className="text-gray-400">Se actualiza cada 60 mins</span>
+                            <span className="text-gray-400">Cron cada hora</span>
                         </p>
                     </div>
                 )}
             </div>
-            
+
             <style jsx>{`
                 @keyframes shimmer {
                     0% { transform: translateX(-100%); }
