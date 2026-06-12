@@ -725,7 +725,15 @@ export default async function handler(req, res) {
             }
             if (pending.type === 'send_whatsapp') {
                 try {
-                    const result = await sendWhatsAppMessage(pending.phone, pending.message);
+                    // Auto-retry up to 3 times for transient Meta errors (is_transient: true, code 2)
+                    let result;
+                    for (let attempt = 1; attempt <= 3; attempt++) {
+                        result = await sendWhatsAppMessage(pending.phone, pending.message);
+                        if (result.success) break;
+                        const isTransient = result.data?.error?.is_transient === true || result.data?.error?.code === 2;
+                        if (!isTransient || attempt === 3) break;
+                        await new Promise(r => setTimeout(r, attempt * 1000)); // 1s, 2s
+                    }
                     if (result.success) {
                         return res.status(200).json({ success: true, reply: `✅ Mensaje enviado a *${pending.displayPhone}*: _"${pending.message}"_`, model: 'system', skill: 'send_message' });
                     } else {

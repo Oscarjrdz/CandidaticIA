@@ -1,5 +1,5 @@
 const TAG_COUNTS_CACHE_KEY = 'candidatic:tag_counts_cache';
-const CACHE_TTL = 120; // 2 minutos
+const CACHE_TTL = 900; // 15 minutos
 
 export default async function handler(req, res) {
     try {

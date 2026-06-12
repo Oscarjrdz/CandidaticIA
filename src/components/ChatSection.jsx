@@ -486,17 +486,21 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
     }, [activeFilter, filterValue]);
 
     const prevActiveFilterRef = useRef(null);
-    // When label filter changes, reload from server so we scan ALL candidates (not just the first 5000 in memory)
+    // When label filter changes, reload from server so we scan ALL candidates (not just the first 5000 in memory).
+    // Debounced 400ms so rapid filter clicks don't each trigger a full Redis scan.
     useEffect(() => {
         const prev = prevActiveFilterRef.current;
         prevActiveFilterRef.current = activeFilter;
         if (prev === null) return; // skip mount — loadCandidates already called in mount effect
 
-        if (activeFilter === 'label' && filterValue) {
-            loadCandidates(); // server scans ALL candidates for this tag
-        } else if (prev === 'label' && activeFilter !== 'label') {
-            loadCandidates(); // back to full list after leaving label filter
-        }
+        const needsReload =
+            (activeFilter === 'label' && filterValue) ||
+            (prev === 'label' && activeFilter !== 'label');
+
+        if (!needsReload) return;
+
+        const timer = setTimeout(() => { loadCandidates(); }, 400);
+        return () => clearTimeout(timer);
     }, [activeFilter, filterValue]);
     
 
