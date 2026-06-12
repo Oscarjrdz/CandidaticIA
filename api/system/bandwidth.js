@@ -29,21 +29,17 @@ export default async function handler(req, res) {
             dayKeys.push(`stats:bandwidth:${year}-${mm}-${dd}:total`);
         }
 
-        // Fetch monthly total and all daily keys in one pipeline
-        const pipeline = redis.pipeline();
-        pipeline.get(monthKey);
-        dayKeys.forEach(k => pipeline.get(k));
-        const results = await pipeline.exec();
+        // Fetch monthly total and all daily keys in one mget
+        const allKeys = [monthKey, ...dayKeys];
+        const values = await redis.mget(...allKeys);
 
-        const usedBytesStr = results[0][1];
-        const usedBytes = usedBytesStr ? parseInt(usedBytesStr, 10) : 0;
+        const usedBytes = values[0] ? parseInt(values[0], 10) : 0;
 
         const daily = [];
         for (let i = 0; i < totalDays; i++) {
-            const raw = results[i + 1][1];
             daily.push({
                 day: i + 1,
-                bytes: raw ? parseInt(raw, 10) : 0
+                bytes: values[i + 1] ? parseInt(values[i + 1], 10) : 0
             });
         }
 
