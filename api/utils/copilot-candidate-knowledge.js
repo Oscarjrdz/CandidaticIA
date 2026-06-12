@@ -217,7 +217,7 @@ export function isCandidateKnowledgeQuestion(message = '') {
 }
 
 const SNAPSHOT_CACHE_KEY = 'copilot:snapshot:cache';
-const SNAPSHOT_CACHE_TTL = 20 * 60; // 20 min en segundos
+const SNAPSHOT_CACHE_TTL = 6 * 60 * 60; // 6 horas en segundos
 
 export async function getCandidateKnowledgeSnapshot() {
     const redis = getRedisClient();
