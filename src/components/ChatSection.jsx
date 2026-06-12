@@ -2041,16 +2041,18 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                             >
                                 Completos
                             </button>
-                            <button 
-                                onClick={() => { setActiveFilter('profile'); setFilterValue('incomplete'); setProfileUnreadOnly(false); setShowDropdown(null); }}
-                                className={`px-4 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-colors flex items-center gap-1 shrink-0 ${
-                                    activeFilter === 'profile' && filterValue === 'incomplete' 
-                                    ? 'bg-[#d9fdd3] text-[#128c7e] dark:bg-[#0a332c] dark:text-[#25d366]' 
-                                    : 'bg-[#f0f2f5] text-[#54656f] hover:bg-[#e9edef] dark:bg-[#202c33] dark:text-[#aebac1] dark:hover:bg-[#2a3942]'
-                                }`}
-                            >
-                                Incompletos
-                            </button>
+                            {(user?.role === 'SuperAdmin' || !rolePermissions || Object.keys(rolePermissions).length === 0 || rolePermissions.view_incomplete_candidates !== false) && (
+                                <button
+                                    onClick={() => { setActiveFilter('profile'); setFilterValue('incomplete'); setProfileUnreadOnly(false); setShowDropdown(null); }}
+                                    className={`px-4 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-colors flex items-center gap-1 shrink-0 ${
+                                        activeFilter === 'profile' && filterValue === 'incomplete'
+                                        ? 'bg-[#d9fdd3] text-[#128c7e] dark:bg-[#0a332c] dark:text-[#25d366]'
+                                        : 'bg-[#f0f2f5] text-[#54656f] hover:bg-[#e9edef] dark:bg-[#202c33] dark:text-[#aebac1] dark:hover:bg-[#2a3942]'
+                                    }`}
+                                >
+                                    Incompletos
+                                </button>
+                            )}
                         </div>
                     )}
 
@@ -2119,7 +2121,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                                 )}
                             </button>
                         )}
-                        {canSeeFilter('filter_incomplete') && (
+                        {canSeeFilter('filter_incomplete') && (user?.role === 'SuperAdmin' || !rolePermissions || Object.keys(rolePermissions).length === 0 || rolePermissions.view_incomplete_candidates !== false) && (
                             <button 
                                 onClick={() => { setActiveFilter('profile'); setFilterValue('incomplete'); setProfileUnreadOnly(false); setShowDropdown(null); }}
                                 className={`flex-[1.5] flex justify-center px-1.5 py-1.5 rounded-full font-medium whitespace-nowrap transition-colors border border-transparent items-center gap-1 min-w-[90px] ${
