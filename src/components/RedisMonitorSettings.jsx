@@ -159,9 +159,10 @@ const RedisMonitorSettings = () => {
                                             Día {tooltip.day}: {formatMB(tooltip.bytes)}
                                         </div>
                                     )}
-                                    <div className="flex items-end gap-[2px] h-20 w-full">
+                                    <div className="flex items-end gap-[2px] w-full" style={{ height: 80 }}>
                                         {data.daily.map(({ day, bytes }) => {
-                                            const heightPct = bytes > 0 ? Math.max((bytes / maxDayBytes) * 100, 4) : 2;
+                                            const CHART_H = 80;
+                                            const barH = bytes > 0 ? Math.max((bytes / maxDayBytes) * CHART_H, 4) : 2;
                                             const isToday = day === today;
                                             const barColor = isToday
                                                 ? statusBarColor
@@ -172,7 +173,8 @@ const RedisMonitorSettings = () => {
                                             return (
                                                 <div
                                                     key={day}
-                                                    className="flex-1 flex flex-col items-center justify-end group/bar cursor-default"
+                                                    className="flex-1 cursor-default group/bar"
+                                                    style={{ height: barH }}
                                                     onMouseEnter={(e) => {
                                                         const rect = e.currentTarget.getBoundingClientRect();
                                                         const parentRect = e.currentTarget.closest('.relative').getBoundingClientRect();
@@ -186,8 +188,7 @@ const RedisMonitorSettings = () => {
                                                     onMouseLeave={() => setTooltip(null)}
                                                 >
                                                     <div
-                                                        className={`w-full rounded-t-sm ${barColor} transition-all duration-300 group-hover/bar:opacity-100 ${!isToday ? 'opacity-70' : ''}`}
-                                                        style={{ height: `${heightPct}%` }}
+                                                        className={`w-full h-full rounded-t-sm ${barColor} transition-all duration-300 group-hover/bar:brightness-110 opacity-80`}
                                                     />
                                                 </div>
                                             );
