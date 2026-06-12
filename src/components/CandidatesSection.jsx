@@ -174,8 +174,11 @@ const CandidateRow = React.memo(({ candidate, columnOrder, fieldsMap, magicLoadi
 
 const CandidatesSection = () => {
     const { showToast } = useToastContext();
-    const { user } = useAuthContext();
+    const { user, rolePermissions } = useAuthContext();
     const canManageTags = user?.role === 'SuperAdmin' || user?.can_manage_tags === true;
+    const canViewIncomplete = !user || user.role === 'SuperAdmin' || user.role === 'Admin' ||
+        !rolePermissions || Object.keys(rolePermissions).length === 0 ||
+        rolePermissions.view_incomplete_candidates === true;
     const { confirmModalJSX, showConfirm } = useConfirmModal();
     const [candidates, setCandidates] = useState([]);
     const [stats, setStats] = useState(null); // Live dashboard stats
@@ -680,7 +683,7 @@ const CandidatesSection = () => {
     const displayedCandidates = React.useMemo(() => {
         let result = aiFilteredCandidates || candidates;
 
-        if (hideIncomplete) {
+        if (!canViewIncomplete || hideIncomplete) {
             result = result.filter(c => isProfileComplete(c));
         }
         if (showOnlyEmpty) {
@@ -794,8 +797,8 @@ const CandidatesSection = () => {
                         showToast={showToast}
                     />
 
-                    {/* Hide Incomplete Master Switch */}
-                    <div className="flex items-center gap-2 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 px-3 py-1.5 rounded-xl shadow-sm cursor-pointer" onClick={() => setHideIncomplete(!hideIncomplete)}>
+                    {/* Hide Incomplete Master Switch — only visible if role allows viewing incomplete */}
+                    {canViewIncomplete && <div className="flex items-center gap-2 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 px-3 py-1.5 rounded-xl shadow-sm cursor-pointer" onClick={() => setHideIncomplete(!hideIncomplete)}>
                         <div className="flex flex-col">
                             <span className="text-[8px] font-black uppercase tracking-widest text-gray-400 leading-none">Incompletos</span>
                             <span className={`text-[10px] font-bold ${!hideIncomplete ? 'text-blue-600' : 'text-gray-400'}`}>
@@ -817,7 +820,7 @@ const CandidatesSection = () => {
                                 `}
                             />
                         </button>
-                    </div>
+                    </div>}
 
                     {/* Show Only Empty Chats Toggle */}
                     <div className="flex items-center gap-2 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 px-3 py-1.5 rounded-xl shadow-sm cursor-pointer" onClick={() => setShowOnlyEmpty(!showOnlyEmpty)}>

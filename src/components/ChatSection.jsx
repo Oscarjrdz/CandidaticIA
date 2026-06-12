@@ -830,6 +830,12 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
             // --- RBAC Base Filter: Only show candidates from allowed projects or tags ---
             if (!passesRBACFilter(c, user)) return false;
 
+            // --- Permiso: ocultar candidatos incompletos si el rol no lo permite ---
+            if (user?.role !== 'SuperAdmin' && user?.role !== 'Admin' &&
+                rolePermissions && Object.keys(rolePermissions).length > 0 &&
+                rolePermissions.view_incomplete_candidates === false &&
+                !isProfileComplete(c)) return false;
+
             // --- Viewer Role: Only show Messenger chats (for Meta reviewer account) ---
             if (user?.role === 'Viewer' && c?.platform !== 'messenger') return false;
 
