@@ -19,7 +19,14 @@ export default async function handler(req, res) {
             const customFieldsJson = await redis.get('custom_fields');
             let customFields = [];
             if (customFieldsJson) {
-                customFields = JSON.parse(customFieldsJson).filter(f => f.value !== 'empleo');
+                const parsed = JSON.parse(customFieldsJson);
+                const BLOCKED = new Set(['empleo', 'colonia']);
+                customFields = parsed.filter(f => !BLOCKED.has(f.value));
+                if (parsed.some(f => f.value === 'colonia')) {
+                    await redis.set('custom_fields', JSON.stringify(customFields));
+                    const dirKeys = await redis.keys('colonia_dir:*');
+                    if (dirKeys.length > 0) await redis.del(...dirKeys);
+                }
             }
 
             // Merge default and custom fields
@@ -49,12 +56,8 @@ export default async function handler(req, res) {
             const value = label
                 .toLowerCase()
                 .trim()
-                .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // remove accents
+                .normalize("NFD").replace(/[̀-ͯ]/g, "") // remove accents
                 .replace(/[^a-z0-9]/g, '') // remove non-alphanumeric
-            // ensure camelCase-ish output? or just flat
-            // Let's keep it simple: "nivel ingles" -> "nivelingles"
-            // or improve camelCase generation if needed. 
-            // Simple is better for keys.
 
             if (!value) {
                 return res.status(400).json({ success: false, error: 'Invalid field label' });
