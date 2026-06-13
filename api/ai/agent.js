@@ -4226,7 +4226,7 @@ ${safeDnaLines}
                     candidateUpdates.paso2Estado = 'completo';
                     await redis?.srem('paso2_waiting', candidateId);
                     const p2CloseName = p2FirstName ? `, ${p2FirstName}` : '';
-                    responseTextVal = `¡Listo${p2CloseName}! 🌟 Ya tengo todo lo que necesitaba.[MSG_SPLIT]Pronto te contactaré con la mejor opción para ti. ¡Muchas gracias! 🌸✨`;
+                    responseTextVal = `¡Listo${p2CloseName}! 🌟 Ya tengo todo lo que necesitaba.[MSG_SPLIT]Deja termino de subir tu información al sistema y te contacto para darte más info de la vacante 🌸✨[MSG_SPLIT]🙏 porfi no desesperes si tardo un poquito en contactarte, ok cuídate y platicamos pronto 😊`;
                     await MediaEngine.sendCongratsPack(config, candidateData.whatsapp, 'bot_celebration_sticker', candidateId);
                 } else {
                     // Evasion — persuade
