@@ -172,8 +172,12 @@ export default async function handler(req, res) {
 
                 if (!msgId || !statusStr) continue;
 
+                // Skip 'sent' and 'delivered' — each lrange reads 250KB for cosmetic checkmarks.
+                // Only persist 'read' (double blue checks) and 'failed' (actionable).
+                const shouldPersistStatus = statusStr === 'read' || statusStr === 'failed';
+
                 try {
-                    if (recipientPhone.length >= 10) {
+                    if (shouldPersistStatus && recipientPhone.length >= 10) {
                         const candidateId = await getCandidateIdByPhone(recipientPhone);
                         if (candidateId) {
                             // For failed messages, include the Meta error details
