@@ -68,9 +68,6 @@
         }
     ],
     "functions": {
-        "api/**/*.js": {
-            "maxDuration": 15
-        },
         "api/sse/candidates.js": {
             "maxDuration": 60
         },
