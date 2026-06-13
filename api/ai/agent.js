@@ -462,11 +462,11 @@ function formatRecruiterMessage(text, candidateData = null, stepContext = {}) {
             .replace(/\s*📚\s*Licenciatura/gi,   '\n📚 Licenciatura')
             .replace(/\s*🛠️?\s*T[eé]cnica/gi,   '\n🛠️ Técnica')
             .replace(/\s*🧠\s*Posgrado/gi,       '\n🧠 Posgrado')
-            .replace(/\n{3,}/g, '\n')
+            .replace(/\n{2,}/g, '\n')
             .trim();
 
-        // Double newline before the FIRST escolaridad emoji (space between header and list)
-        text = text.replace(/([^\n])\n(🎒|🏫|🎓|📚|🛠|🧠)/, '$1\n\n$2');
+        // Single newline before the FIRST escolaridad emoji (header already ends with ":")
+        text = text.replace(/([^\n])\n(🎒|🏫|🎓|📚|🛠|🧠)/, '$1\n$2');
 
         // Detach any question stuck to the last escolaridad item on the same line
         // e.g. "🧠 Posgrado ¿Cuál es tu escolaridad?" → "🧠 Posgrado\n¿Cuál es tu escolaridad?"
@@ -847,7 +847,7 @@ Tu objetivo técnico es obtener: {{faltantes}}.
      {{categorias}}
 
      ¿Cuál de estas opciones te interesa?"
- 4. FORMATO ESCOLARIDAD: Cuando preguntes por el nivel de escolaridad, es ESTRICTAMENTE OBLIGATORIO que muestres las opciones en una lista VERTICAL con un emoji diferente y un DOBLE salto de línea (\n\n) entre cada opción (ej: 🎒 Primaria \n\n 🏫 Secundaria \n\n ...). ¡PROHIBIDO ponerlas en el mismo renglón separadas por comas!
+ 4. FORMATO ESCOLARIDAD: Cuando preguntes por el nivel de escolaridad usa EXACTAMENTE 3 burbujas separadas por [MSG_SPLIT]. Burbuja 1: confirma la categoría elegida por el candidato y anuncia que necesitas su escolaridad (ej: "¡Perfecto, [Nombre]! Elegiste [Categoría]. Ahora solo me falta saber tu nivel de escolaridad. Mira las opciones:"). Burbuja 2: la lista vertical con UN solo salto de línea entre cada opción, PROHIBIDO doble salto (\n\n) entre opciones. Burbuja 3: una pregunta corta de cierre (ej: "¿Cuál es la tuya? 🌟"). PROHIBIDO poner las opciones en el mismo renglón separadas por comas.
  5. FECHA DE NACIMIENTO: Pídela SIEMPRE dando el ejemplo exacto: "(ejemplo 19 de mayo de 1988)". No lo olvides.
  5. DINÁMICA: Si responde algo que no sea el dato (ej: "No vivo ahí", "No sé"), SIEMPRE sé empática primero ("Entiendo perfectamente") y luego re-enfoca pidiendo el dato que falta o el siguiente.
  6. PERSUASIÓN (PREGUNTAS DE VACANTES/SUELDO/LUGAR/ENTREVISTAS): Cuando el candidato pregunta algo sobre vacantes, entrevistas o sueldos, DEBES: (a) Responder BREVEMENTE explicando que necesitas sus datos completos para darle la mejor opción. ESTRICTAMENTE PROHIBIDO inventar respuestas de la vacante, y (b) Redirigir amablemente preguntando el dato faltante: {{faltantes}}. Ejemplo: "😊 Tengo opciones, pero para darte la mejor necesito conocerte primero. ¿Me apoyas con el dato que falta?"
