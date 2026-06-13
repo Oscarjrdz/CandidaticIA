@@ -4150,9 +4150,11 @@ ${safeDnaLines}
                 // Candidate messaged during the 1-min window — cancel cron trigger and go inline
                 await redis?.del(`paso2_pendiente:${candidateId}`);
                 responseTextVal = p2FirstName
-                    ? `Oye ${p2FirstName}, estoy revisando mi sistema y creo encontré algo para ti 👀[MSG_SPLIT]Compárteme tu colonia para validar si te queda una ruta de transporte 🚌🏘️`
-                    : `Oye, estoy revisando mi sistema y creo encontré algo para ti 👀[MSG_SPLIT]Compárteme tu colonia para validar si te queda una ruta de transporte 🚌🏘️`;
+                    ? `Oye ${p2FirstName}, estoy revisando mi sistema y encontré algo para ti 👀[MSG_SPLIT]Compárteme porfi 🥺 ¿cómo se llama tu colonia? Es para validar si te queda una ruta de transporte 🚌🏘️`
+                    : `Oye, estoy revisando mi sistema y encontré algo para ti 👀[MSG_SPLIT]Compárteme porfi 🥺 ¿cómo se llama tu colonia? Es para validar si te queda una ruta de transporte 🚌🏘️`;
                 candidateUpdates.paso2Estado = 'esperando_colonia';
+                // Persist state immediately so the next message sees 'esperando_colonia'
+                await updateCandidate(candidateId, { paso2Estado: 'esperando_colonia' });
                 await redis?.sadd('paso2_waiting', candidateId);
                 isHostMode = true;
 
@@ -4172,7 +4174,8 @@ ${safeDnaLines}
                         // Colonia captured — save and ask experiencia
                         candidateUpdates.colonia = coloniaRaw;
                         candidateUpdates.paso2Estado = 'esperando_experiencia';
-                        responseTextVal = `Perfecto, anotado 🏘️✅[MSG_SPLIT]Última pregunta: ¿tienes experiencia trabajando en fábrica o maquiladora? 🏭`;
+                        const _expName = p2FirstName ? `Oye ${p2FirstName}, ya` : 'Ya';
+                        responseTextVal = `A sí 😊, colonia ${coloniaRaw} la conozco bien 😊[MSG_SPLIT]${_expName} solo me faltaría saber si tienes experiencia en fábrica o maquiladora 🏭 ¿sí o no?`;
                     } else {
                         // Evasion — persuade using promptAvanzado + ADN
                         const evasionSys = `${promptAvanzado ? promptAvanzado + '\n\n' : ''}Eres Brenda Rodríguez, reclutadora de Candidatic. El candidato NO quiso dar su colonia. Tu misión es convencerlo de compartirla de manera cálida, persistente y con personalidad. Genera 2 burbujas separadas con [MSG_SPLIT]: la primera reconoce lo que dijo con calidez, la segunda pide la colonia con una razón concreta (validar transporte). Máximo 2 líneas cada una. Sin markdown.\n[ADN]: ${JSON.stringify(cleanAdnBase)}`;
@@ -4692,7 +4695,7 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
                     await redis?.set(
                         `paso2_pendiente:${candidateId}`,
                         JSON.stringify({ phone: _p2Phone, instanceId: _p2InstanceId, nombre: _p2Nombre, candidateId }),
-                        'EX', 90
+                        'EX', 120
                     );
                 }
 

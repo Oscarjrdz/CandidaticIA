@@ -45,8 +45,10 @@ export default async function handler(req, res) {
 
                 const firstName = (nombre || '').split(' ')[0] || '';
 
-                const burbuja1 = `Oye ${firstName}, estoy revisando mi sistema y creo encontré algo para ti 👀`;
-                const burbuja2 = `Compárteme tu colonia para validar si te queda una ruta de transporte 🚌🏘️`;
+                const burbuja1 = firstName
+                    ? `Oye ${firstName}, estoy revisando mi sistema y encontré algo para ti 👀`
+                    : `Oye, estoy revisando mi sistema y encontré algo para ti 👀`;
+                const burbuja2 = `Compárteme porfi 🥺 ¿cómo se llama tu colonia? Es para validar si te queda una ruta de transporte 🚌🏘️`;
 
                 await sendUltraMsgMessage(config.instanceId, config.token, phone, burbuja1, 'chat', { priority: 0 });
                 await sendUltraMsgMessage(config.instanceId, config.token, phone, burbuja2, 'chat', { priority: 1 });
@@ -56,8 +58,11 @@ export default async function handler(req, res) {
                 await saveMessage(candidateId, { from: 'bot', text: burbuja1, timestamp: ts });
                 await saveMessage(candidateId, { from: 'bot', text: burbuja2, timestamp: ts });
 
-                // Advance state
-                await updateCandidate(candidateId, { paso2Estado: 'esperando_colonia' });
+                // Advance state — must persist before candidate replies
+                const stateResult = await updateCandidate(candidateId, { paso2Estado: 'esperando_colonia' });
+                if (!stateResult) {
+                    console.error(`[paso2-trigger] updateCandidate returned null for ${candidateId} — state NOT persisted, colonia flow will break`);
+                }
 
                 // Delete the trigger key so cron doesn't fire again
                 await redis.del(key);
