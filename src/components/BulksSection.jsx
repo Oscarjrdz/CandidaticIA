@@ -173,8 +173,6 @@ const BulksSection = () => {
                 }
             })
         loadTags().catch(e => console.error('Error fetching tags', e));
-        window.addEventListener('copilot:tags_changed', loadTags);
-        return () => window.removeEventListener('copilot:tags_changed', loadTags);
     }, []);
 
     useEffect(() => {

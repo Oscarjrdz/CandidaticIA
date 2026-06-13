@@ -636,8 +636,6 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
         const onTagsChanged = () => {
             loadTags();
         };
-        window.addEventListener('copilot:tags_changed', onTagsChanged);
-        return () => window.removeEventListener('copilot:tags_changed', onTagsChanged);
     }, []);
 
     // RBAC effect removed (handled inline)

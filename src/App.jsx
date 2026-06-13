@@ -11,7 +11,6 @@ import { AuthProvider, useAuthContext } from './contexts/AuthContext';
 import { getTheme, saveTheme } from './utils/storage';
 import { usePresence } from './hooks/usePresence';
 import InternalChat from './components/InternalChat';
-import FloatingCopilot from './components/FloatingCopilot';
 
 // ⚡ React.lazy with auto-retry on stale chunk errors (post-deploy cache mismatch)
 // If a dynamic import fails (e.g. old chunk hash no longer exists), reload the page ONCE
@@ -335,8 +334,6 @@ function AppShell() {
         </main>
 
         <InternalChat onlineUsers={onlineUsers} />
-        {(user?.role === 'SuperAdmin' || rolePermissions?.brenda_copilot) && <FloatingCopilot />}
-
         {/* Footer */}
         <footer className="py-3 sm:py-4 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shrink-0 sticky bottom-0 z-10" style={{ WebkitBackdropFilter: 'blur(12px)', backdropFilter: 'blur(12px)', backgroundColor: 'rgba(255,255,255,0.9)' }}>
           <div className="px-4 sm:px-8">

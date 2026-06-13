@@ -32,7 +32,6 @@ const AVAILABLE_CHAT_FILTERS = [
 
 const AVAILABLE_EXTRA_PERMS = [
     { id: 'can_manage_tags', name: 'Crear / Editar Etiquetas' },
-    { id: 'brenda_copilot', name: 'Brenda Copiloto (Chat IA)' },
     { id: 'view_incomplete_candidates', name: 'Ver candidatos incompletos' }
 ];
 
@@ -198,8 +197,6 @@ const UsersSection = () => {
     useEffect(() => {
         loadData();
         const refreshTags = () => fetch('/api/tags').then(r => r.json()).then(d => { if (d.success && d.tags) setAllTags(d.tags); }).catch(() => {});
-        window.addEventListener('copilot:tags_changed', refreshTags);
-        return () => window.removeEventListener('copilot:tags_changed', refreshTags);
     }, []);
 
     // -------- USER LOGIC --------
