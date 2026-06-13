@@ -270,8 +270,8 @@ export const deleteAuthToken = async (phone) => {
 export const CORE_REQUIRED_FIELDS = [
     { value: 'nombreReal', label: 'Nombre completo', invalidValue: 'proporcionado' },
     { value: 'genero', label: 'Género', invalidValue: 'desconocido' },
-    { value: 'municipio', label: 'Municipio', invalidValue: 'proporcionado' },
     { value: 'fechaNacimiento', label: 'Fecha de Nacimiento', invalidValue: 'proporcionada' },
+    { value: 'municipio', label: 'Municipio', invalidValue: 'proporcionado' },
     { value: 'categoria', label: 'Categoría', invalidValue: 'proporcionas' },
     { value: 'escolaridad', label: 'Escolaridad', invalidValue: 'proporcionado' }
 ];
