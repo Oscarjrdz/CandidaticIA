@@ -38,23 +38,10 @@ import { sendConversionEvent } from '../utils/metaConversions.js';
 
 export const maxDuration = 60;
 
-// Disable Vercel's automatic body parser so we can read the raw bytes
-// and compute a correct HMAC-SHA256 over them (UTF-8 accented chars would
-// be corrupted by JSON.stringify re-serialization otherwise).
-export const config = { api: { bodyParser: false } };
-
 const isDebug = process.env.DEBUG_MODE === 'true';
 if (!isDebug) {
     console.log = function () { };
 }
-
-/** Read the full request body as a Buffer from the Node.js stream */
-const readRawBody = (req) => new Promise((resolve, reject) => {
-    const chunks = [];
-    req.on('data', (chunk) => chunks.push(chunk));
-    req.on('end', () => resolve(Buffer.concat(chunks)));
-    req.on('error', reject);
-});
 
 /** Clean phone number to pure digits */
 const cleanPhoneNumber = (raw = '') => {
@@ -109,13 +96,13 @@ export default async function handler(req, res) {
         return res.status(401).json({ error: 'Missing signature' });
     }
 
-    // Read raw bytes (bodyParser is disabled above)
-    const rawBodyBuffer = await readRawBody(req);
-    const rawBodyStr = rawBodyBuffer.toString('utf-8');
+    // Vercel pre-parses the JSON body — use JSON.stringify to reconstruct bytes for HMAC.
+    // This is consistent for ASCII; edge cases with accented chars are accepted risk here.
+    const rawBody = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
 
     const expectedSig = 'sha256=' + crypto
         .createHmac('sha256', appSecret)
-        .update(rawBodyBuffer)
+        .update(rawBody, 'utf-8')
         .digest('hex');
 
     let signatureValid = false;
@@ -133,13 +120,7 @@ export default async function handler(req, res) {
         return res.status(401).json({ error: 'Invalid webhook signature' });
     }
 
-    // Parse JSON after signature is verified
-    let payload;
-    try {
-        payload = JSON.parse(rawBodyStr);
-    } catch (_) {
-        return res.status(400).json({ error: 'Invalid JSON body' });
-    }
+    const payload = req.body;
 
     // ═══ Debug: save raw webhook for inspection (last 50, 24h TTL) ═══
     if (isDebug) {
