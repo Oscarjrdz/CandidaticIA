@@ -268,6 +268,115 @@ export default async function handler(req, res) {
         }
     }
 
+    // ── PASO 2 RE-ENGAGEMENT ──────────────────────────────────────────────────
+    // Finds candidates stuck in esperando_colonia / esperando_experiencia and nudges them
+    let paso2Sent = 0, paso2Skipped = 0, paso2Errors = 0;
+    const paso2Log = [];
+
+    try {
+        const paso2Ids = await redis.smembers('paso2_waiting');
+        if (paso2Ids.length > 0) {
+            const p2Pipeline = redis.pipeline();
+            paso2Ids.forEach(id => p2Pipeline.get(`candidate:${id}`));
+            const p2Results = await p2Pipeline.exec();
+            const paso2Candidates = p2Results
+                .map(([_err, raw]) => { try { return raw ? JSON.parse(raw) : null; } catch { return null; } })
+                .filter(Boolean);
+
+            for (const candidate of paso2Candidates) {
+                try {
+                    const p2Estado = candidate.paso2Estado;
+                    if (!p2Estado || !['esperando_colonia', 'esperando_experiencia'].includes(p2Estado)) {
+                        await redis.srem('paso2_waiting', candidate.id);
+                        paso2Skipped++;
+                        continue;
+                    }
+
+                    if (candidate.blocked) { paso2Skipped++; continue; }
+
+                    const lastMsgTs = candidate.lastUserMessageAt
+                        ? new Date(candidate.lastUserMessageAt).getTime()
+                        : 0;
+
+                    const p2LastSentTs = candidate.paso2_reengagement_last_sent
+                        ? new Date(candidate.paso2_reengagement_last_sent).getTime()
+                        : 0;
+
+                    const p2Attempts = Number(candidate.paso2_reengagement_attempts) || 0;
+                    const silenceElapsed = now - (lastMsgTs || now);
+
+                    if (!forceCandidateId) {
+                        if (p2Attempts >= 3) { paso2Skipped++; continue; }
+                        if (silenceElapsed > maxSilenceMs) {
+                            await redis.srem('paso2_waiting', candidate.id);
+                            paso2Skipped++;
+                            continue;
+                        }
+                        if (p2LastSentTs === 0) {
+                            if (silenceElapsed < silenceMs) { paso2Skipped++; continue; }
+                        } else {
+                            if ((now - p2LastSentTs) < intervalMs) { paso2Skipped++; continue; }
+                        }
+                    }
+
+                    const rawName = candidate.nombreReal || '';
+                    const firstName = rawName.split(' ')[0] || '';
+                    const nombre = firstName
+                        ? firstName.charAt(0).toUpperCase() + firstName.slice(1).toLowerCase()
+                        : '';
+
+                    let p2Message;
+                    if (p2Estado === 'esperando_colonia') {
+                        const opts = [
+                            nombre ? `${nombre}, ¿me puedes decir en qué colonia vives? Lo necesito para validar si te queda la ruta de transporte 🚌🏘️` : `¿Me puedes decir en qué colonia vives? Lo necesito para validar si te queda la ruta de transporte 🚌🏘️`,
+                            nombre ? `Oye ${nombre} 😊 Necesito tu colonia para ver si te conviene la ruta de camión. ¿Cuál es? 🌸` : `Necesito tu colonia para ver si te conviene la ruta de camión. ¿Cuál es? 🌸`,
+                            nombre ? `${nombre}, ¿en qué colonia vives? Con eso valido que te llegue el transporte 🌟` : `¿En qué colonia vives? Con eso valido que te llegue el transporte 🌟`,
+                        ];
+                        p2Message = opts[pickVariant(candidate.id, 3)];
+                    } else {
+                        const opts = [
+                            nombre ? `${nombre}, solo falta una pregunta 😊 ¿Tienes experiencia trabajando en fábrica o maquiladora? 🏭` : `Solo falta una pregunta 😊 ¿Tienes experiencia trabajando en fábrica o maquiladora? 🏭`,
+                            nombre ? `Oye ${nombre} 🌸 ¿Has trabajado antes en fábrica o producción? Sí o no está bien 😊` : `¿Has trabajado antes en fábrica o producción? Sí o no está bien 😊`,
+                            nombre ? `${nombre}, ¿tienes experiencia en fábrica o maquiladora? 🏭 Con eso termino tu perfil ✨` : `¿Tienes experiencia en fábrica o maquiladora? 🏭 Con eso termino tu perfil ✨`,
+                        ];
+                        p2Message = opts[pickVariant(candidate.id, 3)];
+                    }
+
+                    await sendUltraMsgMessage(
+                        waConfig.instanceId,
+                        waConfig.token,
+                        candidate.whatsapp,
+                        p2Message,
+                        'chat',
+                        { priority: 5 }
+                    );
+
+                    await saveMessage(candidate.id, {
+                        from: 'bot',
+                        content: p2Message,
+                        timestamp: new Date().toISOString(),
+                        meta: { reengagement: true, paso2: true, attempt: p2Attempts + 1 }
+                    }).catch(() => {});
+
+                    await updateCandidate(candidate.id, {
+                        paso2_reengagement_attempts: p2Attempts + 1,
+                        paso2_reengagement_last_sent: new Date().toISOString(),
+                    });
+
+                    console.log(`[REENGAGEMENT-P2] ✅ → ${nombre || candidate.whatsapp} (${p2Estado})`);
+                    paso2Log.push({ candidateId: candidate.id, nombre, estado: p2Estado });
+                    paso2Sent++;
+
+                } catch (e) {
+                    console.error(`[REENGAGEMENT-P2] ❌ Error con candidato ${candidate.id}:`, e.message);
+                    paso2Errors++;
+                }
+            }
+        }
+    } catch (e) {
+        console.error('[REENGAGEMENT-P2] Fatal:', e.message);
+    }
+
     return res.json({
         success: true,
         processed: sent + skipped + errors,
@@ -275,6 +384,7 @@ export default async function handler(req, res) {
         skipped,
         errors,
         log,
+        paso2: { sent: paso2Sent, skipped: paso2Skipped, errors: paso2Errors, log: paso2Log },
         timestamp: new Date().toISOString(),
     });
 }

@@ -19,6 +19,7 @@ const BotIASection = () => {
 
     // AI Settings
     const [systemPrompt, setSystemPrompt] = useState('');
+    const [promptAvanzado, setPromptAvanzado] = useState('');
     const [aiModel, setAiModel] = useState('gpt-4o-mini');
     const [gptConfig, setGptConfig] = useState({
         openaiApiKey: '',
@@ -39,6 +40,7 @@ const BotIASection = () => {
                 if (res.ok) {
                     const data = await res.json();
                     setSystemPrompt(data.systemPrompt || '');
+                    setPromptAvanzado(data.promptAvanzado || '');
                     setIsActive(data.isActive);
                     setExtractionRules(data.extractionRules || '');
                     setCerebro1Rules(data.cerebro1Rules || '');
@@ -103,10 +105,11 @@ const BotIASection = () => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     systemPrompt,
+                    promptAvanzado,
                     extractionRules,
                     cerebro1Rules,
                     aiModel,
-                    isActive // Added missing field
+                    isActive
                 })
             });
 
@@ -219,10 +222,10 @@ const BotIASection = () => {
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                {/* 1. Prompt Extracción */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                {/* 1. Prompt Básico — Extracción */}
                 <Card
-                    title={<span className="text-gray-900 dark:text-white font-bold text-sm">Prompt Extracción</span>}
+                    title={<span className="text-gray-900 dark:text-white font-bold text-sm">Prompt Básico</span>}
                     icon={Bot}
                     className="shadow-sm border-gray-100 dark:border-gray-700 rounded-3xl"
                     headerClassName="h-16"
@@ -231,15 +234,15 @@ const BotIASection = () => {
                         <div className="space-y-1.5">
                             <div className="flex items-center justify-between mb-1.5">
                                 <label className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest px-1">
-                                    PROMPT BRENDA EXTRACCIÓN 📑✨
+                                    EXTRACCIÓN PASO 1 📑✨
                                 </label>
                                 <span className="text-[8px] font-bold text-gray-400 uppercase">OpenAI Powered</span>
                             </div>
                             {isInitialLoading ? (
-                                <Skeleton className="w-full h-80 rounded-2xl" />
+                                <Skeleton className="w-full h-72 rounded-2xl" />
                             ) : (
                                 <textarea
-                                    className="w-full h-80 p-4 rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50/30 dark:bg-gray-900/40 text-gray-800 dark:text-gray-200 focus:ring-2 focus:ring-blue-500 text-xs resize-none leading-relaxed font-medium transition-all"
+                                    className="w-full h-72 p-4 rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50/30 dark:bg-gray-900/40 text-gray-800 dark:text-gray-200 focus:ring-2 focus:ring-blue-500 text-xs resize-none leading-relaxed font-medium transition-all"
                                     value={systemPrompt}
                                     onChange={(e) => setSystemPrompt(e.target.value)}
                                     placeholder="Escribe aquí las directivas maestras..."
@@ -261,16 +264,48 @@ const BotIASection = () => {
                     </div>
                 </Card>
 
+                {/* 2. Prompt Avanzado — Paso 2 */}
+                <Card
+                    title={<span className="text-gray-900 dark:text-white font-bold text-sm">Prompt Avanzado</span>}
+                    icon={Bot}
+                    className="shadow-sm border-blue-100 dark:border-blue-900/40 rounded-3xl bg-blue-950/[0.02] dark:bg-blue-950/10"
+                    headerClassName="h-16"
+                >
+                    <div className="space-y-4">
+                        <div className="space-y-1.5">
+                            <div className="flex items-center justify-between mb-1.5">
+                                <label className="text-[10px] font-black text-blue-900/60 dark:text-blue-400 uppercase tracking-widest px-1">
+                                    EXTRACCIÓN PASO 2 🏭🏘️
+                                </label>
+                                <span className="text-[8px] font-bold text-blue-400/70 uppercase">OpenAI Powered</span>
+                            </div>
+                            {isInitialLoading ? (
+                                <Skeleton className="w-full h-72 rounded-2xl" />
+                            ) : (
+                                <textarea
+                                    className="w-full h-72 p-4 rounded-2xl border border-blue-200 dark:border-blue-900/50 bg-blue-50/30 dark:bg-blue-950/20 text-gray-800 dark:text-gray-200 focus:ring-2 focus:ring-blue-600 text-xs resize-none leading-relaxed font-medium transition-all"
+                                    value={promptAvanzado}
+                                    onChange={(e) => setPromptAvanzado(e.target.value)}
+                                    placeholder="Define la personalidad y persuasión de Brenda en el paso avanzado (colonia y experiencia)..."
+                                />
+                            )}
+                        </div>
+                        <p className="text-[9px] text-blue-900/50 dark:text-blue-400/60 px-1 leading-relaxed">
+                            Este prompt se usa cuando el candidato evade preguntas de colonia o experiencia en fábrica. No incluyas los mensajes de apertura — esos son fijos.
+                        </p>
+                    </div>
+                </Card>
+
                 {/* 3. Prompt de Sala de Espera (GPT Host) */}
                 <Card
-                    title={<span className="text-gray-900 dark:text-white font-bold text-sm">Prompt de Sala de Espera</span>}
+                    title={<span className="text-gray-900 dark:text-white font-bold text-sm">Sala de Espera</span>}
                     icon={Bot}
                     className="shadow-sm border-gray-100 dark:border-gray-700 rounded-3xl"
                     headerClassName="h-16"
                     actions={
                         <button
                             type="button"
-                            onClick={toggleGptHost} // ⚡ Auto-Save Bound
+                            onClick={toggleGptHost}
                             className={`
                                 relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none
                                 ${gptConfig.gptHostEnabled ? 'bg-purple-600' : 'bg-gray-300 dark:bg-gray-600'}
@@ -289,10 +324,10 @@ const BotIASection = () => {
                                 <span className="text-[8px] font-bold text-gray-400 uppercase">OpenAI Powered</span>
                             </div>
                             {isInitialLoading ? (
-                                <Skeleton className="w-full h-80 rounded-2xl" />
+                                <Skeleton className="w-full h-72 rounded-2xl" />
                             ) : (
                                 <textarea
-                                    className="w-full h-80 p-4 rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50/30 dark:bg-gray-900/40 text-gray-800 dark:text-gray-200 focus:ring-2 focus:ring-blue-500 text-xs resize-none leading-relaxed font-medium transition-all"
+                                    className="w-full h-72 p-4 rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50/30 dark:bg-gray-900/40 text-gray-800 dark:text-gray-200 focus:ring-2 focus:ring-blue-500 text-xs resize-none leading-relaxed font-medium transition-all"
                                     value={gptConfig.gptHostPrompt}
                                     onChange={(e) => setGptConfig({ ...gptConfig, gptHostPrompt: e.target.value })}
                                     placeholder="Define la actitud social del Host..."
@@ -300,7 +335,6 @@ const BotIASection = () => {
                             )}
                         </div>
 
-                        {/* GPT Model Selector */}
                         <div className="pt-1">
                             <select
                                 value={gptConfig.openaiModel}
@@ -319,7 +353,7 @@ const BotIASection = () => {
                 <Card
                     title={<span className="text-gray-900 dark:text-white font-bold text-sm">Plantillas de Meta</span>}
                     icon={MessageSquare}
-                    className="shadow-sm border-gray-100 dark:border-gray-700 rounded-3xl lg:col-span-2"
+                    className="shadow-sm border-gray-100 dark:border-gray-700 rounded-3xl lg:col-span-3"
                     headerClassName="h-16"
                     actions={
                         <button

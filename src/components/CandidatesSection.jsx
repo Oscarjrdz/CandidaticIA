@@ -25,7 +25,7 @@ import { useAuthContext } from '../contexts/AuthContext';
 /**
  * Sortable Header Sub-component
  */
-function SortableHeaderCell({ id, label }) {
+function SortableHeaderCell({ id, label, advanced }) {
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
 
     const style = {
@@ -39,8 +39,7 @@ function SortableHeaderCell({ id, label }) {
         <th
             ref={setNodeRef}
             style={style}
-            // Increase px padding slighly to fit grip icon gracefully
-            className={`text-left py-1 px-1.5 font-semibold text-gray-700 dark:text-gray-300 relative group select-none ${isDragging ? 'bg-gray-100 dark:bg-gray-700 shadow-md' : ''}`}
+            className={`text-left py-1 px-1.5 font-semibold relative group select-none ${advanced ? 'text-[#1d3a5f] dark:text-blue-300' : 'text-gray-700 dark:text-gray-300'} ${isDragging ? 'bg-gray-100 dark:bg-gray-700 shadow-md' : ''}`}
         >
             <div className="flex items-center space-x-1">
                 <button
@@ -122,7 +121,7 @@ const CandidateRow = React.memo(({ candidate, columnOrder, fieldsMap, magicLoadi
                 const mKey = `${candidate.id}-${field.value}`;
                 const isMLoading = magicLoading[mKey];
                 return (
-                    <td className="py-0.5 px-2.5" key={field.value}>
+                    <td className={`py-0.5 px-2.5 ${field.advanced ? 'bg-[#1d3a5f]/5 dark:bg-[#1d3a5f]/20' : ''}`} key={field.value}>
                         {['escolaridad', 'categoria', 'nombreReal', 'municipio'].includes(field.value) ? (
                             <div onClick={() => onMagicFix(candidate.id, field.value, candidate[field.value])}
                                  className={`inline-flex items-center px-2 py-0.5 rounded-md cursor-pointer smooth-transition text-[10px] font-medium ${isMLoading ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 animate-pulse' : 'hover:bg-blue-50 dark:hover:bg-blue-900/40 hover:text-blue-600 dark:text-white'}`}
@@ -132,7 +131,7 @@ const CandidateRow = React.memo(({ candidate, columnOrder, fieldsMap, magicLoadi
                                 <Sparkles className={`w-2.5 h-2.5 ml-1.5 opacity-0 group-hover:opacity-100 ${isMLoading ? 'hidden' : ''} text-blue-400`} />
                             </div>
                         ) : (
-                            <div className="text-[10px] text-gray-900 dark:text-white font-medium">
+                            <div className={`text-[10px] font-medium ${field.advanced ? 'text-[#1d3a5f] dark:text-blue-300' : 'text-gray-900 dark:text-white'}`}>
                                 {field.value === 'edad' ? calculateAge(candidate.fechaNacimiento, candidate.edad) : formatValue(candidate[field.value])}
                             </div>
                         )}
@@ -225,6 +224,7 @@ const CandidatesSection = () => {
     const [aiExplanation, setAiExplanation] = useState('');
     const [sortWhatsAppByDate, setSortWhatsAppByDate] = useState('desc');
     const [showOnlyEmpty, setShowOnlyEmpty] = useState(false);
+    const [showOnlyAvanzados, setShowOnlyAvanzados] = useState(false);
     const [hideIncomplete, setHideIncomplete] = useState(() => {
         // Load initial state from localStorage if available
         try {
@@ -689,6 +689,9 @@ const CandidatesSection = () => {
         if (showOnlyEmpty) {
             result = result.filter(c => isChatEmpty(c));
         }
+        if (showOnlyAvanzados) {
+            result = result.filter(c => c.paso2Estado === 'completo');
+        }
         if (sortWhatsAppByDate) {
             result = [...result].sort((a, b) => {
                 const dateA = new Date(a.primerContacto || a.createdAt || 0).getTime();
@@ -697,7 +700,7 @@ const CandidatesSection = () => {
             });
         }
         return result;
-    }, [candidates, aiFilteredCandidates, hideIncomplete, showOnlyEmpty, sortWhatsAppByDate]);
+    }, [candidates, aiFilteredCandidates, hideIncomplete, showOnlyEmpty, showOnlyAvanzados, sortWhatsAppByDate]);
 
     const totalPages = Math.ceil(totalItems / LIMIT);
 
@@ -842,6 +845,31 @@ const CandidatesSection = () => {
                                 className={`
                                     inline-block h-4 w-4 transform rounded-full bg-white transition-transform
                                     ${showOnlyEmpty ? 'translate-x-6' : 'translate-x-1'}
+                                `}
+                            />
+                        </button>
+                    </div>
+
+                    {/* Completos Avanzados Toggle */}
+                    <div className="flex items-center gap-2 border px-3 py-1.5 rounded-xl shadow-sm cursor-pointer bg-white dark:bg-gray-800 border-[#1d3a5f]/20 dark:border-blue-900/40" onClick={() => setShowOnlyAvanzados(!showOnlyAvanzados)}>
+                        <div className="flex flex-col">
+                            <span className="text-[8px] font-black uppercase tracking-widest text-[#1d3a5f]/60 dark:text-blue-400/70 leading-none">Avanzados</span>
+                            <span className={`text-[10px] font-bold ${showOnlyAvanzados ? 'text-[#1d3a5f] dark:text-blue-300' : 'text-gray-400'}`}>
+                                {showOnlyAvanzados ? 'FILTRADO' : 'TODOS'}
+                            </span>
+                        </div>
+                        <button
+                            type="button"
+                            className={`
+                                relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none
+                                ${showOnlyAvanzados ? 'bg-[#1d3a5f]' : 'bg-gray-300 dark:bg-gray-600'}
+                            `}
+                            title="Mostrar solo candidatos con paso 2 completo"
+                        >
+                            <span
+                                className={`
+                                    inline-block h-4 w-4 transform rounded-full bg-white transition-transform
+                                    ${showOnlyAvanzados ? 'translate-x-6' : 'translate-x-1'}
                                 `}
                             />
                         </button>
@@ -1145,7 +1173,7 @@ const CandidatesSection = () => {
                                             {columnOrder.map(colId => {
                                                 const field = fields.find(f => f.value === colId);
                                                 if (!field) return null;
-                                                return <SortableHeaderCell key={field.value} id={field.value} label={field.label} />;
+                                                return <SortableHeaderCell key={field.value} id={field.value} label={field.label} advanced={field.advanced} />;
                                             })}
                                         </SortableContext>
 

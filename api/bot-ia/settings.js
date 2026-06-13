@@ -18,12 +18,16 @@ export default async function handler(req, res) {
                 extractionRules,
                 cerebro1Rules,
                 cerebro2Context,
-                aiModel
+                aiModel,
+                promptAvanzado
             } = req.body;
 
             // AI Prompt
             if (systemPrompt !== undefined) {
                 await redis.set('bot_ia_prompt', systemPrompt);
+            }
+            if (promptAvanzado !== undefined) {
+                await redis.set('bot_ia_prompt_avanzado', promptAvanzado);
             }
 
             // Master Bot Switch
@@ -49,12 +53,10 @@ export default async function handler(req, res) {
     // GET - Load settings
     if (req.method === 'GET') {
         try {
-            const systemPrompt = await redis.get('bot_ia_prompt');
-            const isActive = await redis.get('bot_ia_active');
-            const extractionRules = await redis.get('bot_extraction_rules');
-            const cerebro1Rules = await redis.get('bot_cerebro1_rules');
-            const cerebro2Context = await redis.get('bot_cerebro2_context');
-            const aiModel = await redis.get('bot_ia_model');
+            const [systemPrompt, isActive, extractionRules, cerebro1Rules, cerebro2Context, aiModel, promptAvanzado] = await redis.mget([
+                'bot_ia_prompt', 'bot_ia_active', 'bot_extraction_rules',
+                'bot_cerebro1_rules', 'bot_cerebro2_context', 'bot_ia_model', 'bot_ia_prompt_avanzado'
+            ]);
 
             return res.status(200).json({
                 systemPrompt: systemPrompt || '',
@@ -62,7 +64,8 @@ export default async function handler(req, res) {
                 extractionRules: extractionRules || '',
                 cerebro1Rules: cerebro1Rules || '',
                 cerebro2Context: cerebro2Context || '',
-                aiModel: aiModel || 'gpt-4o-mini'
+                aiModel: aiModel || 'gpt-4o-mini',
+                promptAvanzado: promptAvanzado || ''
             });
 
         } catch (error) {

@@ -1157,7 +1157,8 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
             'bot_extraction_rules',
             'bot_cerebro1_rules',
             'bypass_enabled',
-            'bot_ia_model'
+            'bot_ia_model',
+            'bot_ia_prompt_avanzado'
         ];
 
         const [config, allMessages, batchConfig] = await Promise.all([
@@ -4114,7 +4115,7 @@ ${safeDnaLines}
         const activeAiConfig = aiConfigJson ? (typeof aiConfigJson === 'string' ? JSON.parse(aiConfigJson) : aiConfigJson) : {};
 
         // 🧼 Token Saver: Clean ADN to prevent massive JSON stringification of telemetry logs
-        const cleanAdnBase = { 
+        const cleanAdnBase = {
             nombreReal: candidateData.nombreReal || null,
             fechaNacimiento: candidateData.fechaNacimiento || null,
             edad: candidateData.edad || null,
@@ -4125,7 +4126,114 @@ ${safeDnaLines}
             citaHora: candidateData.citaHora || null
         };
 
-        if (!isRecruiterMode && !isBridgeActive && isProfileComplete && activeAiConfig.gptHostEnabled) {
+        // ── PASO 2 AVANZADO ───────────────────────────────────────────────────────
+        // Runs after paso 1 is complete but before sala de espera.
+        // State machine: pendiente → esperando_colonia → esperando_experiencia → completo
+        if (!isRecruiterMode && !isBridgeActive && isProfileComplete) {
+            const p2Estado = candidateData.paso2Estado;
+            const promptAvanzado = batchConfig.bot_ia_prompt_avanzado || '';
+            const p2FirstName = (candidateUpdates.nombreReal || candidateData.nombreReal || '').split(' ')[0] || '';
+
+            if (p2Estado === 'pendiente') {
+                // Candidate messaged during the 1-min window — cancel cron trigger and go inline
+                await redis?.del(`paso2_pendiente:${candidateId}`);
+                responseTextVal = p2FirstName
+                    ? `Oye ${p2FirstName}, estoy revisando mi sistema y creo encontré algo para ti 👀[MSG_SPLIT]Compárteme tu colonia para validar si te queda una ruta de transporte 🚌🏘️`
+                    : `Oye, estoy revisando mi sistema y creo encontré algo para ti 👀[MSG_SPLIT]Compárteme tu colonia para validar si te queda una ruta de transporte 🚌🏘️`;
+                candidateUpdates.paso2Estado = 'esperando_colonia';
+                await redis?.sadd('paso2_waiting', candidateId);
+                isHostMode = true;
+
+            } else if (p2Estado === 'esperando_colonia') {
+                isHostMode = true;
+                // Extract colonia from candidate's message using GPT mini
+                const coloniaExtractionPrompt = `Del siguiente mensaje de WhatsApp de un candidato, extrae el nombre de la colonia donde vive. Devuelve ÚNICAMENTE el nombre de la colonia en formato Title Case (primera letra de cada palabra en mayúscula, las demás en minúscula). Si el candidato evade la pregunta, no quiere dar su colonia, cambia de tema, hace preguntas, manda un coqueteo, o no menciona ninguna colonia concreta, devuelve exactamente la palabra: null`;
+                try {
+                    const coloniaGpt = await getOpenAIResponse(
+                        [{ from: 'user', content: aggregatedText }],
+                        coloniaExtractionPrompt,
+                        'gpt-4o-mini',
+                        activeAiConfig.openaiApiKey
+                    );
+                    const coloniaRaw = (coloniaGpt?.content || '').trim();
+                    if (coloniaRaw && coloniaRaw.toLowerCase() !== 'null') {
+                        // Colonia captured — save and ask experiencia
+                        candidateUpdates.colonia = coloniaRaw;
+                        candidateUpdates.paso2Estado = 'esperando_experiencia';
+                        responseTextVal = `Perfecto, anotado 🏘️✅[MSG_SPLIT]Última pregunta: ¿tienes experiencia trabajando en fábrica o maquiladora? 🏭`;
+                    } else {
+                        // Evasion — persuade using promptAvanzado
+                        const evasionSys = `${promptAvanzado ? promptAvanzado + '\n\n' : ''}Eres Brenda Rodríguez, reclutadora de Candidatic. El candidato NO quiso dar su colonia. Tu misión es convencerlo de compartirla de manera cálida, persistente y con personalidad. Genera 2 burbujas separadas con [MSG_SPLIT]: la primera reconoce lo que dijo con calidez, la segunda pide la colonia con una razón concreta (validar transporte). Máximo 2 líneas cada una. Sin markdown.`;
+                        const evasionGpt = await getOpenAIResponse(
+                            allMessages.slice(-4),
+                            evasionSys,
+                            'gpt-4o-mini',
+                            activeAiConfig.openaiApiKey
+                        );
+                        if (evasionGpt?.content) {
+                            responseTextVal = evasionGpt.content.replace(/\*/g, '');
+                        } else {
+                            responseTextVal = `Entiendo 😊[MSG_SPLIT]¿Me puedes decir en qué colonia vives? Es para validar que te llegue la ruta de transporte 🚌🏘️`;
+                        }
+                    }
+                } catch (_e) {
+                    responseTextVal = `¿Me puedes decir en qué colonia vives? 🏘️`;
+                }
+
+            } else if (p2Estado === 'esperando_experiencia') {
+                isHostMode = true;
+                // Regex-first detection: Sí / No
+                const SI_RE = /\b(s[ií]|claro|sim[oó]n|simons|ya\b|yep|sí\s+tuve|s[ií]\s+tengo|trabaj[eé]\s+(en\s+)?(f[aá]brica|maquila|producci[oó]n|planta|manufactura)|tuve?\s+experiencia|con\s+experiencia|he\s+trabajado\s+en)\b/i;
+                const NO_RE = /\b(no\b|nop|nope|tampoco|nunca|jam[aá]s|sin\s+experiencia|no\s+tengo|no\s+tuve|no\s+he\s+trabajado)\b/i;
+
+                let expResult = null;
+                if (SI_RE.test(aggregatedText)) expResult = 'Sí';
+                else if (NO_RE.test(aggregatedText)) expResult = 'No';
+
+                if (!expResult) {
+                    // Ambiguous — ask GPT mini to interpret
+                    try {
+                        const expGpt = await getOpenAIResponse(
+                            [{ from: 'user', content: aggregatedText }],
+                            `El candidato respondió a la pregunta "¿tienes experiencia en fábrica o maquiladora?". Responde ÚNICAMENTE con: Sí, No, o null (si evade completamente sin responder sobre experiencia laboral).`,
+                            'gpt-4o-mini',
+                            activeAiConfig.openaiApiKey
+                        );
+                        const expRaw = (expGpt?.content || '').trim();
+                        if (expRaw === 'Sí' || expRaw === 'Si') expResult = 'Sí';
+                        else if (expRaw === 'No') expResult = 'No';
+                    } catch (_e) { /* fall through to evasion */ }
+                }
+
+                if (expResult) {
+                    // Captured — complete paso 2
+                    candidateUpdates.experienciaFabrica = expResult;
+                    candidateUpdates.paso2Estado = 'completo';
+                    await redis?.srem('paso2_waiting', candidateId);
+                    const p2CloseName = p2FirstName ? `, ${p2FirstName}` : '';
+                    responseTextVal = `¡Listo${p2CloseName}! 🌟 Ya tengo todo lo que necesitaba.[MSG_SPLIT]Pronto te contactaré con la mejor opción para ti. ¡Muchas gracias! 🌸✨`;
+                    await MediaEngine.sendCongratsPack(config, candidateData.whatsapp, 'bot_celebration_sticker', candidateId);
+                } else {
+                    // Evasion — persuade
+                    const evasionSys = `${promptAvanzado ? promptAvanzado + '\n\n' : ''}Eres Brenda Rodríguez, reclutadora de Candidatic. El candidato evadió la pregunta sobre experiencia en fábrica. Tu misión es reconocer lo que dijo con calidez y redirigirlo con mucha persuasión a responder si tiene o no experiencia en fábrica/maquiladora. Genera 2 burbujas con [MSG_SPLIT]. Sin markdown. Sin inventar datos.`;
+                    try {
+                        const evasionGpt = await getOpenAIResponse(
+                            allMessages.slice(-4),
+                            evasionSys,
+                            'gpt-4o-mini',
+                            activeAiConfig.openaiApiKey
+                        );
+                        responseTextVal = evasionGpt?.content
+                            ? evasionGpt.content.replace(/\*/g, '')
+                            : `Entiendo 😊[MSG_SPLIT]¿Tienes o has tenido experiencia trabajando en fábrica o maquiladora? Solo dime sí o no 🏭`;
+                    } catch (_e) {
+                        responseTextVal = `¿Tienes experiencia en fábrica o maquiladora? 🏭 Solo dime sí o no 😊`;
+                    }
+                }
+            }
+        }
+
+        if (!isRecruiterMode && !isBridgeActive && isProfileComplete && candidateData.paso2Estado === 'completo' && activeAiConfig.gptHostEnabled) {
             isHostMode = true;
             try {
                 const candFirstName = (candidateData.nombreReal || '').split(' ')[0] || 'amig@';
@@ -4173,7 +4281,7 @@ REGLAS DE SALA DE ESPERA (OBLIGATORIAS - NO NEGOCIABLES):
 
         // 🔇 SILENCIO POST-EXTRACCIÓN: Si el perfil está completo pero Sala de Espera está OFF,
         // Brenda NO debe responder. Bloqueamos el Capturista Brain también.
-        if (!isRecruiterMode && !isBridgeActive && isProfileComplete && !activeAiConfig.gptHostEnabled) {
+        if (!isRecruiterMode && !isBridgeActive && isProfileComplete && candidateData.paso2Estado === 'completo' && !activeAiConfig.gptHostEnabled) {
             isHostMode = true; // Block Capturista Brain — total silence
             console.log('[Sala de Espera] Toggle OFF — silencio post-extracción');
         }
@@ -4563,6 +4671,17 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
                         : `¡Listo! 🌟 Ya tengo todos tus datos completos. Pronto te contactaré, voy a buscar la mejor vacante para ti, te pido seas paciente ✨🌸[MSG_SPLIT]¡Muchas gracias y hasta luego! 👋`;
                     candidateUpdates.congratulated = true;
                     await MediaEngine.sendCongratsPack(config, candidateData.whatsapp, 'bot_celebration_sticker', candidateId);
+
+                    // ── Disparar Paso 2 avanzado en 1 minuto ─────────────────
+                    candidateUpdates.paso2Estado = 'pendiente';
+                    const _p2Phone = candidateData.whatsapp || '';
+                    const _p2InstanceId = resolvedInstanceId || candidateData.instanceId || '';
+                    const _p2Nombre = _congratsName || candidateUpdates.nombreReal || candidateData.nombreReal || '';
+                    await redis?.set(
+                        `paso2_pendiente:${candidateId}`,
+                        JSON.stringify({ phone: _p2Phone, instanceId: _p2InstanceId, nombre: _p2Nombre, candidateId }),
+                        'EX', 90
+                    );
                 }
 
             } catch (err) {
