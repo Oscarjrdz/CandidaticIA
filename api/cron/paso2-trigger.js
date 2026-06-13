@@ -34,7 +34,10 @@ export default async function handler(req, res) {
                 const raw = await redis.get(key);
                 if (!raw) continue;
 
-                const { phone, instanceId, nombre, candidateId } = JSON.parse(raw);
+                const { phone, instanceId, nombre, candidateId, fireAfter } = JSON.parse(raw);
+
+                // Respect minimum delay — skip until fireAfter timestamp passes
+                if (fireAfter && Date.now() < fireAfter) continue;
 
                 // Get UltraMsg config for this instance
                 const config = await getUltraMsgConfig(instanceId);

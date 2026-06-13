@@ -4687,15 +4687,15 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
                     candidateUpdates.congratulated = true;
                     await MediaEngine.sendCongratsPack(config, candidateData.whatsapp, 'bot_celebration_sticker', candidateId);
 
-                    // ── Disparar Paso 2 avanzado en 1 minuto ─────────────────
+                    // ── Disparar Paso 2 avanzado — mínimo 90 segundos de espera ──
                     candidateUpdates.paso2Estado = 'pendiente';
                     const _p2Phone = candidateData.whatsapp || '';
                     const _p2InstanceId = resolvedInstanceId || candidateData.instanceId || '';
                     const _p2Nombre = _congratsName || candidateUpdates.nombreReal || candidateData.nombreReal || '';
                     await redis?.set(
                         `paso2_pendiente:${candidateId}`,
-                        JSON.stringify({ phone: _p2Phone, instanceId: _p2InstanceId, nombre: _p2Nombre, candidateId }),
-                        'EX', 120
+                        JSON.stringify({ phone: _p2Phone, instanceId: _p2InstanceId, nombre: _p2Nombre, candidateId, fireAfter: Date.now() + 90000 }),
+                        'EX', 180
                     );
                 }
 
