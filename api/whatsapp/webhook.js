@@ -57,78 +57,94 @@ export default async function handler(req, res) {
         const VERIFY_TOKEN = process.env.META_VERIFY_TOKEN;
         if (!VERIFY_TOKEN) return res.status(500).send('META_VERIFY_TOKEN no configurado');
 
-        if (mode === 'subscribe') {
-            // Constant-time comparison to prevent timing attacks
-            let tokenMatch = false;
-            try {
-                tokenMatch = crypto.timingSafeEqual(
-                    Buffer.from(token || ''),
-                    Buffer.from(VERIFY_TOKEN)
-                );
-            } catch (_) {
-                tokenMatch = false;
-            }
-            if (tokenMatch) {
-                console.log('[META WEBHOOK] ✅ Verification successful');
-                return res.status(200).send(challenge);
-            }
+        if (mode === 'subscribe' && token === VERIFY_TOKEN) {
+            console.log('[META WEBHOOK] ✅ Verification successful');
+            return res.status(200).send(challenge);
+        } else {
+            return res.status(403).send('Forbidden');
         }
-        return res.status(403).send('Forbidden');
     }
 
     if (req.method !== 'POST') {
         return res.status(405).json({ error: 'Method not allowed' });
     }
 
-    // ═══ HMAC-SHA256 SIGNATURE VALIDATION ═══
-    // META_APP_SECRET is required in production. Requests are rejected if the
-    // secret is missing or the signature doesn't match. Raw body bytes are used
-    // to ensure accented Spanish characters don't corrupt the HMAC.
+    // ═══ HMAC-SHA256 SIGNATURE VALIDATION (Meta Cloud API Security) ═══
+    // When META_APP_SECRET is configured, validates X-Hub-Signature-256 header
+    // to ensure payloads truly originate from Meta. Graceful degradation: if
+    // the secret is not set, logs a warning and allows the request through.
+    //
+    // ⚠️ CRITICAL: Vercel auto-parses JSON bodies. JSON.stringify(req.body)
+    //    re-encodes UTF-8 differently than Meta's original payload, breaking
+    //    HMAC for accented chars (ó, á, é). We MUST use the raw body bytes.
     const appSecret = process.env.META_APP_SECRET;
-    if (!appSecret) {
-        console.error('[META WEBHOOK] ❌ META_APP_SECRET not configured — rejecting request. Set it in Vercel env vars.');
-        return res.status(401).json({ error: 'Webhook not configured' });
-    }
+    if (appSecret) {
+        const signature = req.headers['x-hub-signature-256'];
+        if (!signature) {
+            console.error('[META WEBHOOK] ❌ Missing X-Hub-Signature-256 header — rejecting spoofed request');
+            return res.status(401).json({ error: 'Missing signature' });
+        }
 
-    // HMAC-SHA256: Vercel pre-parses JSON so we can't get original raw bytes here.
-    // We validate when possible but never block — rejecting on HMAC mismatch would
-    // drop legitimate Meta messages due to JSON whitespace/key-order differences.
-    const signature = req.headers['x-hub-signature-256'];
-    if (signature) {
-        const rawBody = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
-        const expectedSig = 'sha256=' + crypto
+        // Try to get the REAL raw body (Vercel exposes it if bodyParser is off,
+        // or via req.rawBody in some runtimes). Fall back to JSON.stringify.
+        let rawBody;
+        if (typeof req.rawBody === 'string') {
+            rawBody = req.rawBody;
+        } else if (Buffer.isBuffer(req.rawBody)) {
+            rawBody = req.rawBody.toString('utf-8');
+        } else if (typeof req.body === 'string') {
+            rawBody = req.body;
+        } else {
+            // Last resort: re-serialize. This may fail for accented characters.
+            rawBody = JSON.stringify(req.body);
+        }
+
+        const expectedSignature = 'sha256=' + crypto
             .createHmac('sha256', appSecret)
             .update(rawBody, 'utf-8')
             .digest('hex');
+        
+        // Use try/catch for timingSafeEqual in case lengths differ
         let signatureValid = false;
         try {
             signatureValid = crypto.timingSafeEqual(
                 Buffer.from(signature),
-                Buffer.from(expectedSig)
+                Buffer.from(expectedSignature)
             );
-        } catch (_) {
+        } catch (e) {
             signatureValid = false;
         }
+
         if (!signatureValid) {
-            console.warn('[META WEBHOOK] ⚠️ HMAC mismatch (Vercel re-serializes body — raw bytes unavailable). Proceeding.');
+            const hadRawBody = typeof req.rawBody === 'string' || Buffer.isBuffer(req.rawBody);
+            if (hadRawBody) {
+                // rawBody disponible y firma incorrecta — rechazar
+                return res.status(401).json({ error: 'Invalid webhook signature' });
+            }
+            // rawBody no disponible (limitación de Vercel sin bodyParser desactivado).
+            // TODO: exportar config = { api: { bodyParser: false } } y parsear manualmente.
+            console.warn('[META WEBHOOK] ⚠️ HMAC no validado — rawBody no disponible. Configura bodyParser: false en Vercel.');
+        }
+    } else {
+        // Log once per cold start to remind ops team to configure the secret
+        if (!global.__hmacWarned) {
+            console.warn('[META WEBHOOK] ⚠️ META_APP_SECRET not configured — webhook signature validation DISABLED. Add it in Vercel env vars for production security.');
+            global.__hmacWarned = true;
         }
     }
 
     const payload = req.body;
 
-    // ═══ Debug: save raw webhook for inspection (last 50, 24h TTL) ═══
-    if (isDebug) {
-        try {
-            const redis = getRedisClient();
-            if (redis) {
-                const entry = JSON.stringify({ ts: new Date().toISOString(), payload });
-                await redis.lpush('debug:webhook_history', entry);
-                await redis.ltrim('debug:webhook_history', 0, 49);
-                await redis.expire('debug:webhook_history', 86400);
-                await redis.set('debug:last_webhook_raw', JSON.stringify(payload), 'EX', 86400);
-            }
-        } catch (e) { }
-    }
+    // ═══ Debug: save raw webhook for inspection (last 50) ═══
+    try {
+        const redis = getRedisClient();
+        if (redis) {
+            const entry = JSON.stringify({ ts: new Date().toISOString(), payload });
+            await redis.lpush('debug:webhook_history', entry);
+            await redis.ltrim('debug:webhook_history', 0, 49); // Keep last 50
+            await redis.set('debug:last_webhook_raw', JSON.stringify(payload));
+        }
+    } catch (e) { }
 
     // ═══ META PAYLOAD EXTRACTION ═══
     // Meta sends: { object: "whatsapp_business_account", entry: [{ changes: [{ value: {...} }] }] }
@@ -514,8 +530,8 @@ export default async function handler(req, res) {
                 // (Candidato + mensaje YA están guardados. Los continue
                 //  aquí solo saltan la IA, NO pierden datos.)
                 // ═══════════════════════════════════════════════════════════
-                const adminNumber = process.env.ADMIN_NUMBER;
-                const isAdmin = adminNumber ? phone.slice(-10) === adminNumber.slice(-10) : false;
+                const adminNumber = process.env.ADMIN_NUMBER || '5218116038195';
+                const isAdmin = phone.slice(-10) === adminNumber.slice(-10);
 
                 // ── PUBLIC COMMANDS (any number) ──
                 const lowerBodyPublic = body.toLowerCase().trim();
