@@ -303,9 +303,10 @@ export const sendMetaMessage = async (to, body, type = 'chat', extraParams = {})
             };
         }
 
-        // Handle Meta API errors
+        // Handle Meta API errors — log only code+message, never the full response (may contain tokens)
         const errorMsg = response.data?.error?.message || `HTTP ${response.status}`;
-        console.error(`❌ Meta API [${type}] Error:`, errorMsg, response.data);
+        const errorCode = response.data?.error?.code;
+        console.error(`❌ Meta API [${type}] Error ${errorCode}: ${errorMsg}`);
 
         // Check for invalid number
         if (response.data?.error?.code === 131026) {
