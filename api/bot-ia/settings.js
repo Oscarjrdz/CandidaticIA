@@ -19,7 +19,8 @@ export default async function handler(req, res) {
                 cerebro1Rules,
                 cerebro2Context,
                 aiModel,
-                promptAvanzado
+                promptAvanzado,
+                aiModelAvanzado
             } = req.body;
 
             // AI Prompt
@@ -28,6 +29,9 @@ export default async function handler(req, res) {
             }
             if (promptAvanzado !== undefined) {
                 await redis.set('bot_ia_prompt_avanzado', promptAvanzado);
+            }
+            if (aiModelAvanzado !== undefined) {
+                await redis.set('bot_ia_model_avanzado', aiModelAvanzado);
             }
 
             // Master Bot Switch
@@ -53,9 +57,9 @@ export default async function handler(req, res) {
     // GET - Load settings
     if (req.method === 'GET') {
         try {
-            const [systemPrompt, isActive, extractionRules, cerebro1Rules, cerebro2Context, aiModel, promptAvanzado] = await redis.mget([
+            const [systemPrompt, isActive, extractionRules, cerebro1Rules, cerebro2Context, aiModel, promptAvanzado, aiModelAvanzado] = await redis.mget([
                 'bot_ia_prompt', 'bot_ia_active', 'bot_extraction_rules',
-                'bot_cerebro1_rules', 'bot_cerebro2_context', 'bot_ia_model', 'bot_ia_prompt_avanzado'
+                'bot_cerebro1_rules', 'bot_cerebro2_context', 'bot_ia_model', 'bot_ia_prompt_avanzado', 'bot_ia_model_avanzado'
             ]);
 
             return res.status(200).json({
@@ -65,7 +69,8 @@ export default async function handler(req, res) {
                 cerebro1Rules: cerebro1Rules || '',
                 cerebro2Context: cerebro2Context || '',
                 aiModel: aiModel || 'gpt-4o-mini',
-                promptAvanzado: promptAvanzado || ''
+                promptAvanzado: promptAvanzado || '',
+                aiModelAvanzado: aiModelAvanzado || 'gpt-4o-mini'
             });
 
         } catch (error) {

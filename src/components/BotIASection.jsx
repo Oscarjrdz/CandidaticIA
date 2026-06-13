@@ -20,6 +20,7 @@ const BotIASection = () => {
     // AI Settings
     const [systemPrompt, setSystemPrompt] = useState('');
     const [promptAvanzado, setPromptAvanzado] = useState('');
+    const [aiModelAvanzado, setAiModelAvanzado] = useState('gpt-4o-mini');
     const [aiModel, setAiModel] = useState('gpt-4o-mini');
     const [gptConfig, setGptConfig] = useState({
         openaiApiKey: '',
@@ -41,6 +42,7 @@ const BotIASection = () => {
                     const data = await res.json();
                     setSystemPrompt(data.systemPrompt || '');
                     setPromptAvanzado(data.promptAvanzado || '');
+                    setAiModelAvanzado(data.aiModelAvanzado || 'gpt-4o-mini');
                     setIsActive(data.isActive);
                     setExtractionRules(data.extractionRules || '');
                     setCerebro1Rules(data.cerebro1Rules || '');
@@ -106,6 +108,7 @@ const BotIASection = () => {
                 body: JSON.stringify({
                     systemPrompt,
                     promptAvanzado,
+                    aiModelAvanzado,
                     extractionRules,
                     cerebro1Rules,
                     aiModel,
@@ -289,6 +292,17 @@ const BotIASection = () => {
                                     placeholder="Define la personalidad y persuasión de Brenda en el paso avanzado (colonia y experiencia)..."
                                 />
                             )}
+                        </div>
+                        <div className="pt-1">
+                            <select
+                                value={aiModelAvanzado}
+                                onChange={(e) => setAiModelAvanzado(e.target.value)}
+                                className="w-full p-2.5 rounded-2xl border border-blue-200 dark:border-blue-900/50 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-xs font-bold shadow-sm"
+                            >
+                                <option value="gpt-4o-mini">🚀 GPT-4o Mini (Recomendado)</option>
+                                <option value="gpt-4o">⚡ GPT-4o (Premium)</option>
+                                <option value="gpt-4-turbo">🧠 GPT-4 Turbo</option>
+                            </select>
                         </div>
                         <p className="text-[9px] text-blue-900/50 dark:text-blue-400/60 px-1 leading-relaxed">
                             Este prompt se usa cuando el candidato evade preguntas de colonia o experiencia en fábrica. No incluyas los mensajes de apertura — esos son fijos.

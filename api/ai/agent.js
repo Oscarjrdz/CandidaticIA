@@ -1158,7 +1158,8 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
             'bot_cerebro1_rules',
             'bypass_enabled',
             'bot_ia_model',
-            'bot_ia_prompt_avanzado'
+            'bot_ia_prompt_avanzado',
+            'bot_ia_model_avanzado'
         ];
 
         const [config, allMessages, batchConfig] = await Promise.all([
@@ -4132,6 +4133,7 @@ ${safeDnaLines}
         if (!isRecruiterMode && !isBridgeActive && isProfileComplete) {
             const p2Estado = candidateData.paso2Estado;
             const promptAvanzado = batchConfig.bot_ia_prompt_avanzado || '';
+            const modelAvanzado = batchConfig.bot_ia_model_avanzado || 'gpt-4o-mini';
             const p2FirstName = (candidateUpdates.nombreReal || candidateData.nombreReal || '').split(' ')[0] || '';
 
             if (p2Estado === 'pendiente') {
@@ -4152,7 +4154,7 @@ ${safeDnaLines}
                     const coloniaGpt = await getOpenAIResponse(
                         [{ from: 'user', content: aggregatedText }],
                         coloniaExtractionPrompt,
-                        'gpt-4o-mini',
+                        modelAvanzado,
                         activeAiConfig.openaiApiKey
                     );
                     const coloniaRaw = (coloniaGpt?.content || '').trim();
@@ -4162,12 +4164,12 @@ ${safeDnaLines}
                         candidateUpdates.paso2Estado = 'esperando_experiencia';
                         responseTextVal = `Perfecto, anotado 🏘️✅[MSG_SPLIT]Última pregunta: ¿tienes experiencia trabajando en fábrica o maquiladora? 🏭`;
                     } else {
-                        // Evasion — persuade using promptAvanzado
-                        const evasionSys = `${promptAvanzado ? promptAvanzado + '\n\n' : ''}Eres Brenda Rodríguez, reclutadora de Candidatic. El candidato NO quiso dar su colonia. Tu misión es convencerlo de compartirla de manera cálida, persistente y con personalidad. Genera 2 burbujas separadas con [MSG_SPLIT]: la primera reconoce lo que dijo con calidez, la segunda pide la colonia con una razón concreta (validar transporte). Máximo 2 líneas cada una. Sin markdown.`;
+                        // Evasion — persuade using promptAvanzado + ADN
+                        const evasionSys = `${promptAvanzado ? promptAvanzado + '\n\n' : ''}Eres Brenda Rodríguez, reclutadora de Candidatic. El candidato NO quiso dar su colonia. Tu misión es convencerlo de compartirla de manera cálida, persistente y con personalidad. Genera 2 burbujas separadas con [MSG_SPLIT]: la primera reconoce lo que dijo con calidez, la segunda pide la colonia con una razón concreta (validar transporte). Máximo 2 líneas cada una. Sin markdown.\n[ADN]: ${JSON.stringify(cleanAdnBase)}`;
                         const evasionGpt = await getOpenAIResponse(
                             allMessages.slice(-4),
                             evasionSys,
-                            'gpt-4o-mini',
+                            modelAvanzado,
                             activeAiConfig.openaiApiKey
                         );
                         if (evasionGpt?.content) {
@@ -4196,7 +4198,7 @@ ${safeDnaLines}
                         const expGpt = await getOpenAIResponse(
                             [{ from: 'user', content: aggregatedText }],
                             `El candidato respondió a la pregunta "¿tienes experiencia en fábrica o maquiladora?". Responde ÚNICAMENTE con: Sí, No, o null (si evade completamente sin responder sobre experiencia laboral).`,
-                            'gpt-4o-mini',
+                            modelAvanzado,
                             activeAiConfig.openaiApiKey
                         );
                         const expRaw = (expGpt?.content || '').trim();
@@ -4215,12 +4217,12 @@ ${safeDnaLines}
                     await MediaEngine.sendCongratsPack(config, candidateData.whatsapp, 'bot_celebration_sticker', candidateId);
                 } else {
                     // Evasion — persuade
-                    const evasionSys = `${promptAvanzado ? promptAvanzado + '\n\n' : ''}Eres Brenda Rodríguez, reclutadora de Candidatic. El candidato evadió la pregunta sobre experiencia en fábrica. Tu misión es reconocer lo que dijo con calidez y redirigirlo con mucha persuasión a responder si tiene o no experiencia en fábrica/maquiladora. Genera 2 burbujas con [MSG_SPLIT]. Sin markdown. Sin inventar datos.`;
+                    const evasionSys = `${promptAvanzado ? promptAvanzado + '\n\n' : ''}Eres Brenda Rodríguez, reclutadora de Candidatic. El candidato evadió la pregunta sobre experiencia en fábrica. Tu misión es reconocer lo que dijo con calidez y redirigirlo con mucha persuasión a responder si tiene o no experiencia en fábrica/maquiladora. Genera 2 burbujas con [MSG_SPLIT]. Sin markdown. Sin inventar datos.\n[ADN]: ${JSON.stringify(cleanAdnBase)}`;
                     try {
                         const evasionGpt = await getOpenAIResponse(
                             allMessages.slice(-4),
                             evasionSys,
-                            'gpt-4o-mini',
+                            modelAvanzado,
                             activeAiConfig.openaiApiKey
                         );
                         responseTextVal = evasionGpt?.content
