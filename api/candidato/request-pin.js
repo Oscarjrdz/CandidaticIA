@@ -36,13 +36,26 @@ export default async function handler(req, res) {
     await redis.set(`app_login_pin:${last10}`, pin, 'EX', 600);
 
     if (!clientPin) {
-      // Solo mandamos WhatsApp si el frontend no lo hizo ya
-      const msgResult = await sendMessage(
-        waPhone,
-        `Tu código de acceso a *Candidatic* es:\n\n*${pin}*\n\nEste código expira en 10 minutos. 🔐`
-      );
+      // Enviar PIN via template de Meta WhatsApp Business
+      const { sendMetaMessage } = await import('../whatsapp/utils.js');
+      const msgResult = await sendMetaMessage(waPhone, 'candidatic_pin', 'template', {
+        templateName: 'candidatic_pin',
+        languageCode: 'es_MX',
+        components: [
+          {
+            type: 'body',
+            parameters: [{ type: 'text', text: pin }],
+          },
+          {
+            type: 'button',
+            sub_type: 'copy_code',
+            index: '0',
+            parameters: [{ type: 'coupon_code', coupon_code: pin }],
+          },
+        ],
+      });
       if (!msgResult?.success) {
-        console.warn('[request-pin] WhatsApp send error:', msgResult);
+        console.warn('[request-pin] WhatsApp template send error:', msgResult);
       }
     }
 
