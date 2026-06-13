@@ -71,10 +71,19 @@
         "api/**/*.js": {
             "maxDuration": 15
         },
-        "api/cron/*.js": {
+        "api/cron/send-reminders.js": {
             "maxDuration": 60
         },
-        "api/sse/*.js": {
+        "api/cron/bandwidth-tracker.js": {
+            "maxDuration": 60
+        },
+        "api/cron/reengagement.js": {
+            "maxDuration": 60
+        },
+        "api/cron/paso2-trigger.js": {
+            "maxDuration": 60
+        },
+        "api/sse/candidates.js": {
             "maxDuration": 60
         },
         "api/ai/agent.js": {
