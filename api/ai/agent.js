@@ -4161,7 +4161,14 @@ ${safeDnaLines}
             } else if (p2Estado === 'esperando_colonia') {
                 isHostMode = true;
                 // Extract colonia from candidate's message using GPT mini
-                const coloniaExtractionPrompt = `Del siguiente mensaje de WhatsApp de un candidato, extrae el nombre de la colonia donde vive. Devuelve ÚNICAMENTE el nombre de la colonia en formato Title Case (primera letra de cada palabra en mayúscula, las demás en minúscula). Si el candidato evade la pregunta, no quiere dar su colonia, cambia de tema, hace preguntas, manda un coqueteo, o no menciona ninguna colonia concreta, devuelve exactamente la palabra: null`;
+                const coloniaExtractionPrompt = `Eres un extractor de colonias/barrios/fraccionamientos de México. El candidato acaba de responder a la pregunta "¿cómo se llama tu colonia?". Extrae el nombre de su colonia del mensaje.
+
+REGLAS:
+- Los candidatos frecuentemente responden SÓLO con el nombre sin decir la palabra "colonia" (ej: "Las Nubes", "Valle Verde", "Centro", "La Fe", "Mitras", "Cumbres").
+- Si el mensaje contiene 1 a 4 palabras que suenan como nombre de lugar, barrio o fraccionamiento → extráelo aunque no diga "colonia".
+- Devuelve ÚNICAMENTE el nombre en Title Case (primera letra de cada palabra en mayúscula).
+- Solo devuelve null si el candidato claramente evade, cambia de tema, hace una pregunta sin responder, o manda un mensaje que no tiene nada que ver con un lugar (ej: "jaja", "no sé", "¿por qué?", "ok").`;
+
                 try {
                     const coloniaGpt = await getOpenAIResponse(
                         [{ from: 'user', content: aggregatedText }],
