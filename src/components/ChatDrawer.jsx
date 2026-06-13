@@ -18,12 +18,14 @@ const ChatDrawer = ({ isOpen, onClose, candidate, credentials }) => {
     };
 
     useEffect(() => {
-        if (isOpen && candidate) {
-            loadMessages();
-            // 8s — balance entre bandwidth y responsividad en vista secundaria
-            const interval = setInterval(loadMessages, 8000);
-            return () => clearInterval(interval);
-        }
+        if (!isOpen || !candidate) return;
+
+        loadMessages();
+        const interval = setInterval(() => {
+            // Pausa si la pestaña está oculta — ahorra bandwidth sin perder mensajes
+            if (!document.hidden) loadMessages();
+        }, 30000);
+        return () => clearInterval(interval);
     }, [isOpen, candidate]);
 
     useEffect(() => {

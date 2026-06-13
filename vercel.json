@@ -69,14 +69,19 @@
     ],
     "functions": {
         "api/**/*.js": {
+            "maxDuration": 15
+        },
+        "api/cron/*.js": {
+            "maxDuration": 60
+        },
+        "api/sse/*.js": {
+            "maxDuration": 60
+        },
+        "api/ai/agent.js": {
             "maxDuration": 60
         }
     },
     "crons": [
-        {
-            "path": "/api/cron/export-chats",
-            "schedule": "* * * * *"
-        },
         {
             "path": "/api/cron/send-reminders",
             "schedule": "*/15 * * * *"

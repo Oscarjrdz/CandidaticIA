@@ -16,8 +16,15 @@ export default async function handler(req, res) {
     if (!redis) return res.status(503).json({ error: 'Redis unavailable' });
 
     try {
-        // Scan for all pending paso 2 triggers
-        const keys = await redis.keys('paso2_pendiente:*');
+        // Scan for pending paso 2 triggers — uses SCAN instead of KEYS to avoid blocking Redis
+        const keys = [];
+        let cursor = '0';
+        do {
+            const [nextCursor, batch] = await redis.scan(cursor, 'MATCH', 'paso2_pendiente:*', 'COUNT', 100);
+            cursor = nextCursor;
+            if (batch.length) keys.push(...batch);
+        } while (cursor !== '0');
+
         if (!keys.length) return res.status(200).json({ ok: true, fired: 0 });
 
         let fired = 0;
