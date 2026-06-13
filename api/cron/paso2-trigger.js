@@ -48,7 +48,7 @@ export default async function handler(req, res) {
                 const burbuja1 = firstName
                     ? `Oye ${firstName}, estoy revisando mi sistema y encontré algo para ti 👀`
                     : `Oye, estoy revisando mi sistema y encontré algo para ti 👀`;
-                const burbuja2 = `Compárteme porfi 🥺 ¿cómo se llama tu colonia? Es para validar si te queda una ruta de transporte 🚌🏘️`;
+                const burbuja2 = `Compárteme porfi ¿cómo se llama tu colonia? Es para validar si te queda una ruta de transporte 🚌🏘️`;
 
                 await sendUltraMsgMessage(config.instanceId, config.token, phone, burbuja1, 'chat', { priority: 0 });
                 await sendUltraMsgMessage(config.instanceId, config.token, phone, burbuja2, 'chat', { priority: 1 });

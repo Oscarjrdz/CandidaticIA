@@ -4150,8 +4150,8 @@ ${safeDnaLines}
                 // Candidate messaged during the 1-min window — cancel cron trigger and go inline
                 await redis?.del(`paso2_pendiente:${candidateId}`);
                 responseTextVal = p2FirstName
-                    ? `Oye ${p2FirstName}, estoy revisando mi sistema y encontré algo para ti 👀[MSG_SPLIT]Compárteme porfi 🥺 ¿cómo se llama tu colonia? Es para validar si te queda una ruta de transporte 🚌🏘️`
-                    : `Oye, estoy revisando mi sistema y encontré algo para ti 👀[MSG_SPLIT]Compárteme porfi 🥺 ¿cómo se llama tu colonia? Es para validar si te queda una ruta de transporte 🚌🏘️`;
+                    ? `Oye ${p2FirstName}, estoy revisando mi sistema y encontré algo para ti 👀[MSG_SPLIT]Compárteme porfi ¿cómo se llama tu colonia? Es para validar si te queda una ruta de transporte 🚌🏘️`
+                    : `Oye, estoy revisando mi sistema y encontré algo para ti 👀[MSG_SPLIT]Compárteme porfi ¿cómo se llama tu colonia? Es para validar si te queda una ruta de transporte 🚌🏘️`;
                 candidateUpdates.paso2Estado = 'esperando_colonia';
                 // Persist state immediately so the next message sees 'esperando_colonia'
                 await updateCandidate(candidateId, { paso2Estado: 'esperando_colonia' });
