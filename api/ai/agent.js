@@ -364,6 +364,16 @@ function formatRecruiterMessage(text, candidateData = null, stepContext = {}) {
                     _listEndsWithQ ? _lastLine : '¿Cuál es la tuya? 🌟'
                 );
                 _segs.push(_finalNudge.trim());
+
+                // Step 4: Rewrite Bubble 1 to standardized format
+                const _cat = stepContext?.extractedCategoria || candidateData?.categoria;
+                if (_cat) {
+                    const _firstName = candidateData?.nombreReal ? getFirstName(candidateData.nombreReal) : null;
+                    _segs[0] = _firstName
+                        ? `¡Perfecto, ${_firstName}! Elegiste ${_cat}. Ahora solo me falta saber tu nivel de escolaridad. Mira las opciones:`
+                        : `¡Perfecto! Elegiste ${_cat}. Ahora solo me falta saber tu nivel de escolaridad. Mira las opciones:`;
+                }
+
                 text = _segs.join('[MSG_SPLIT]');
             }
         }
@@ -4472,7 +4482,7 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
                                 tokens: gptResult.usage?.total_tokens || 0
                             });
                         }
-                        responseTextVal = formatRecruiterMessage(aiResult.response_text, candidateData);
+                        responseTextVal = formatRecruiterMessage(aiResult.response_text, candidateData, { extractedCategoria: aiResult.extracted_data?.categoria });
                     } catch (err) {
                         console.error('[GPT BRAIN] JSON Parse Fail:', err.message);
                         throw new Error('GPT returned invalid JSON');
