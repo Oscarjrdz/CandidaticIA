@@ -43,10 +43,6 @@ export default async function handler(req, res) {
         languageCode: 'es_MX',
         components: [
           {
-            type: 'body',
-            parameters: [{ type: 'text', text: pin }],
-          },
-          {
             type: 'button',
             sub_type: 'copy_code',
             index: '0',
