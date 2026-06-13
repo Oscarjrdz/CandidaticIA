@@ -169,7 +169,7 @@ export default async function handler(req, res) {
             candidates = c ? [c] : [];
         } else {
             // Usar el índice de pendientes en lugar de escanear todos
-            const pendingIds = await redis.smembers('stats:list:pending');
+            const pendingIds = await redis.srandmember('stats:list:pending', 500);
             if (!pendingIds.length) { candidates = []; }
             else {
                 const pipeline = redis.pipeline();

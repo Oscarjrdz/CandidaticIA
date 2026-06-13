@@ -333,13 +333,13 @@ export default async function handler(req, res) {
                                 const mimeType = mediaData.mimeType || 'application/octet-stream';
 
                                 await Promise.all([
-                                    redis.set(key, base64Data, 'EX', 172800), // 48 hours TTL
+                                    redis.set(key, base64Data, 'EX', 86400), // 24 hours TTL
                                     redis.set(metaKey, JSON.stringify({
                                         mime: mimeType,
                                         filename: `media_${mediaId}`,
                                         size: mediaData.fileSize || base64Data.length,
                                         createdAt: new Date().toISOString()
-                                    }), 'EX', 172800)
+                                    }), 'EX', 86400)
                                 ]);
                                 
                                 mediaUrl = `/api/image?id=${id}`;

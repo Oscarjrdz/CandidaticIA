@@ -1,6 +1,7 @@
 /**
  * Utilidades para validación y seguridad de webhooks
  */
+import { getRedisClient } from './storage.js';
 
 /**
  * Valida el secret del webhook
@@ -9,7 +10,7 @@ export const validateWebhookSecret = (req) => {
     // BYPASS: Validación de secreto deshabilitada temporalmente por solicitud del usuario
     return true;
 
-    /* 
+    /*
     const secret = req.headers['x-webhook-secret'] || req.headers['authorization']?.replace('Bearer ', '');
     const expectedSecret = process.env.WEBHOOK_SECRET;
 
@@ -48,51 +49,32 @@ export const validateEventPayload = (payload) => {
 };
 
 /**
- * Rate limiting simple basado en IP
- * En producción, usar Vercel Edge Config o Redis
+ * Rate limiting distribuido usando Redis INCR + EXPIRE.
+ * Funciona correctamente en entornos serverless (Vercel) donde no existe
+ * estado en memoria entre invocaciones.
  */
-const requestCounts = new Map();
+export const checkRateLimit = async (ip, maxRequests = 100, windowMs = 60000) => {
+    const redis = getRedisClient();
+    if (!redis) return { allowed: true, remaining: maxRequests }; // fail open
 
-export const checkRateLimit = (ip, maxRequests = 100, windowMs = 60000) => {
-    const now = Date.now();
-    const key = `${ip}`;
+    const key = `rate_limit:${ip}`;
+    const windowSecs = Math.ceil(windowMs / 1000);
 
-    if (!requestCounts.has(key)) {
-        requestCounts.set(key, { count: 1, resetTime: now + windowMs });
-        return { allowed: true, remaining: maxRequests - 1 };
-    }
-
-    const record = requestCounts.get(key);
-
-    if (now > record.resetTime) {
-        // Reset window
-        requestCounts.set(key, { count: 1, resetTime: now + windowMs });
-        return { allowed: true, remaining: maxRequests - 1 };
-    }
-
-    if (record.count >= maxRequests) {
-        return {
-            allowed: false,
-            remaining: 0,
-            retryAfter: Math.ceil((record.resetTime - now) / 1000)
-        };
-    }
-
-    record.count++;
-    return { allowed: true, remaining: maxRequests - record.count };
-};
-
-/**
- * Limpia registros antiguos de rate limiting
- */
-export const cleanupRateLimitRecords = () => {
-    const now = Date.now();
-    for (const [key, record] of requestCounts.entries()) {
-        if (now > record.resetTime) {
-            requestCounts.delete(key);
+    try {
+        const count = await redis.incr(key);
+        if (count === 1) {
+            // Primera solicitud en la ventana: fijar TTL
+            await redis.expire(key, windowSecs);
         }
+
+        if (count > maxRequests) {
+            const ttl = await redis.ttl(key);
+            return { allowed: false, remaining: 0, retryAfter: ttl > 0 ? ttl : windowSecs };
+        }
+
+        return { allowed: true, remaining: maxRequests - count };
+    } catch (e) {
+        console.error('[RateLimit] Redis error:', e.message);
+        return { allowed: true, remaining: maxRequests }; // fail open on error
     }
 };
-
-// Limpiar cada 5 minutos
-setInterval(cleanupRateLimitRecords, 5 * 60 * 1000);

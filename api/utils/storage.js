@@ -188,6 +188,8 @@ export const recordVacancyInteraction = async (candidateId, projectId, vacancyId
         };
         // Use a Sorted Set scored by timestamp to keep history ordered and fast to query
         await client.zadd(historyKey, Date.now(), JSON.stringify(event));
+        // TTL: 90 days — interaction history is transient, not permanent business data
+        await client.expire(historyKey, 90 * 24 * 3600);
         // 🛡️ OOM PREVENTION: Keep only last 100 interactions per candidate
         const count = await client.zcard(historyKey);
         if (count > 100) {
@@ -1900,9 +1902,10 @@ export const recordAITelemetry = async (candidateId, action, extra = {}) => {
 
         const pipeline = client.pipeline();
 
-        // 1. Store the individual event log (Keep last 100 for deep diagnostics)
+        // 1. Store the individual event log (Keep last 100 for deep diagnostics, 30-day TTL)
         pipeline.lpush(KEYS.TELEMETRY_AI_LOGS, JSON.stringify(event));
         pipeline.ltrim(KEYS.TELEMETRY_AI_LOGS, 0, 99);
+        pipeline.expire(KEYS.TELEMETRY_AI_LOGS, 30 * 24 * 3600);
 
         // 2. Global Aggregates (Atomic Increments)
         pipeline.hincrby(KEYS.TELEMETRY_AI_STATS, 'total_calls', 1);
