@@ -4209,7 +4209,7 @@ Responde ÚNICAMENTE con el número entero de meses. Si evade o no menciona ning
                 } catch (_e) { /* fall through to evasion */ }
 
                 if (mesesResult !== null) {
-                    candidateUpdates.mesesExperiencia = mesesResult;
+                    candidateUpdates.meses = mesesResult;
                     candidateUpdates.paso2Estado = 'completo';
                     await redis?.srem('paso2_waiting', candidateId);
                     const p2CloseName = p2FirstName ? `, ${p2FirstName}` : '';
@@ -4248,7 +4248,7 @@ Responde ÚNICAMENTE con el número entero de meses. Si evade o no menciona ning
 
                 if (expResult === 'No') {
                     // Sin experiencia — cerrar paso 2
-                    candidateUpdates.experienciaFabrica = 'No';
+                    candidateUpdates.experiencia = 'No';
                     candidateUpdates.paso2Estado = 'completo';
                     await redis?.srem('paso2_waiting', candidateId);
                     const p2CloseName = p2FirstName ? `, ${p2FirstName}` : '';
@@ -4256,7 +4256,7 @@ Responde ÚNICAMENTE con el número entero de meses. Si evade o no menciona ning
                     await MediaEngine.sendCongratsPack(config, candidateData.whatsapp, 'bot_celebration_sticker', candidateId);
                 } else if (expResult === 'Sí') {
                     // Con experiencia — preguntar cuánto tiempo
-                    candidateUpdates.experienciaFabrica = 'Sí';
+                    candidateUpdates.experiencia = 'Sí';
                     candidateUpdates.paso2Estado = 'esperando_meses_experiencia';
                     const _expQ = p2FirstName
                         ? `Oye ${p2FirstName} 😊 ¿y cuánto tiempo más o menos tienes de experiencia en fábrica? 😮[MSG_SPLIT]Un aproximado ${p2FirstName} no tiene que ser tan exacto 😅`
@@ -4282,7 +4282,8 @@ Responde ÚNICAMENTE con el número entero de meses. Si evade o no menciona ning
             }
         }
 
-        if (!isRecruiterMode && !isBridgeActive && isProfileComplete && candidateData.paso2Estado === 'completo' && activeAiConfig.gptHostEnabled) {
+        const _paso2Listo = !candidateData.paso2Requerido || candidateData.paso2Estado === 'completo';
+        if (!isRecruiterMode && !isBridgeActive && isProfileComplete && _paso2Listo && activeAiConfig.gptHostEnabled) {
             isHostMode = true;
             try {
                 const candFirstName = (candidateData.nombreReal || '').split(' ')[0] || 'amig@';
@@ -4330,7 +4331,7 @@ REGLAS DE SALA DE ESPERA (OBLIGATORIAS - NO NEGOCIABLES):
 
         // 🔇 SILENCIO POST-EXTRACCIÓN: Si el perfil está completo pero Sala de Espera está OFF,
         // Brenda NO debe responder. Bloqueamos el Capturista Brain también.
-        if (!isRecruiterMode && !isBridgeActive && isProfileComplete && candidateData.paso2Estado === 'completo' && !activeAiConfig.gptHostEnabled) {
+        if (!isRecruiterMode && !isBridgeActive && isProfileComplete && _paso2Listo && !activeAiConfig.gptHostEnabled) {
             isHostMode = true; // Block Capturista Brain — total silence
             console.log('[Sala de Espera] Toggle OFF — silencio post-extracción');
         }

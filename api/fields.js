@@ -15,7 +15,8 @@ export default async function handler(req, res) {
                 { value: 'escolaridad', label: 'Escolaridad' },
                 { value: 'foto', label: 'Foto (URL)' },
                 { value: 'colonia', label: 'Colonia', advanced: true },
-                { value: 'experienciaFabrica', label: 'Exp. Fábrica', advanced: true }
+                { value: 'experiencia', label: 'Experiencia', advanced: true },
+                { value: 'meses', label: 'Meses', advanced: true }
             ];
 
             const customFieldsJson = await redis.get('custom_fields');
