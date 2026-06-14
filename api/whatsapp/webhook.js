@@ -761,7 +761,8 @@ export default async function handler(req, res) {
                             }
                         }
                     }
-                    continue; // admin messages no caen a Brenda
+                    // Solo bloquear mensajes de texto — stickers/imágenes siguen al capturador
+                    if (messageType === 'text') continue;
                 }
 
                 // ── GATEKEEPERS ──
