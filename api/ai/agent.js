@@ -4214,7 +4214,7 @@ Responde ÚNICAMENTE con el número entero de meses. Si evade o no menciona ning
                     await redis?.srem('paso2_waiting', candidateId);
                     const p2CloseName = p2FirstName ? `, ${p2FirstName}` : '';
                     responseTextVal = `¡Listo${p2CloseName}! 🌟 Ya tengo todo lo que necesitaba.[MSG_SPLIT]Deja termino de subir tu información al sistema y te contacto para darte más info de la vacante 🌸✨[MSG_SPLIT]🙏 porfi no desesperes si tardo un poquito en contactarte, ok cuídate y platicamos pronto 😊`;
-                    await MediaEngine.sendCongratsPack(config, candidateData.whatsapp, 'bot_celebration_sticker', candidateId);
+                    await MediaEngine.sendCongratsPack(config, candidateData.whatsapp, 'bot_paso2_sticker', candidateId);
                 } else {
                     // Evasión — pedir de nuevo
                     const _mName = p2FirstName ? `${p2FirstName}, ` : '';
@@ -4253,7 +4253,7 @@ Responde ÚNICAMENTE con el número entero de meses. Si evade o no menciona ning
                     await redis?.srem('paso2_waiting', candidateId);
                     const p2CloseName = p2FirstName ? `, ${p2FirstName}` : '';
                     responseTextVal = `¡Listo${p2CloseName}! 🌟 Ya tengo todo lo que necesitaba.[MSG_SPLIT]Deja termino de subir tu información al sistema y te contacto para darte más info de la vacante 🌸✨[MSG_SPLIT]🙏 porfi no desesperes si tardo un poquito en contactarte, ok cuídate y platicamos pronto 😊`;
-                    await MediaEngine.sendCongratsPack(config, candidateData.whatsapp, 'bot_celebration_sticker', candidateId);
+                    await MediaEngine.sendCongratsPack(config, candidateData.whatsapp, 'bot_paso2_sticker', candidateId);
                 } else if (expResult === 'Sí') {
                     // Con experiencia — preguntar cuánto tiempo
                     candidateUpdates.experiencia = 'Sí';

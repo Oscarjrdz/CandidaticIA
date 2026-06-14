@@ -686,6 +686,10 @@ export default async function handler(req, res) {
                         'aprender puente cuando no interesa': {
                             key: 'bot_bridge_exit',
                             label: 'No Interesa (salida del flujo de vacantes)'
+                        },
+                        'aprender puente cierre paso2': {
+                            key: 'bot_paso2_sticker',
+                            label: 'Cierre Paso 2 (cuando el candidato termina colonia + experiencia)'
                         }
                     };
 
@@ -810,7 +814,8 @@ export default async function handler(req, res) {
                             'bot_celebration_sticker': 'Extracción Completa',
                             'bot_step_move_sticker': 'Paso Inicio',
                             'bot_bridge_cita': 'Cita',
-                            'bot_bridge_exit': 'No Interesa'
+                            'bot_bridge_exit': 'No Interesa',
+                            'bot_paso2_sticker': 'Cierre Paso 2'
                         };
                         const label = BRIDGE_LABELS[redisKey] || redisKey;
 
