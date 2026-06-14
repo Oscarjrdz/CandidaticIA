@@ -4170,7 +4170,7 @@ REGLAS:
                         candidateUpdates.colonia = coloniaRaw;
                         candidateUpdates.paso2Estado = 'esperando_experiencia';
                         const _expName = p2FirstName ? `Oye ${p2FirstName}, ya` : 'Ya';
-                        responseTextVal = `A sí 😊, colonia ${coloniaRaw} la conozco bien 😊[MSG_SPLIT]${_expName} solo me faltaría saber si tienes experiencia en fábrica o maquiladora 🏭 ¿sí o no?`;
+                        responseTextVal = `A sí 😊, colonia ${coloniaRaw} la conozco bien 😊[MSG_SPLIT]${_expName} solo me faltaría saber si tienes experiencia en fábrica 🏭 ¿sí o no?`;
                     } else {
                         // Evasion — persuade using promptAvanzado + ADN
                         const evasionSys = `${promptAvanzado ? promptAvanzado + '\n\n' : ''}Eres Brenda Rodríguez, reclutadora de Candidatic. El candidato NO quiso dar su colonia. Tu misión es convencerlo de compartirla de manera cálida, persistente y con personalidad. Genera 2 burbujas separadas con [MSG_SPLIT]: la primera reconoce lo que dijo con calidez, la segunda pide la colonia con una razón concreta (validar transporte). Máximo 2 líneas cada una. Sin markdown.\n[ADN]: ${JSON.stringify(cleanAdnBase)}`;
