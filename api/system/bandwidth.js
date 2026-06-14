@@ -11,14 +11,17 @@ export default async function handler(req, res) {
         const redis = getRedisClient();
         if (!redis) return res.status(500).json({ error: 'Redis client not initialized' });
 
+        // All dates in Monterrey time (America/Monterrey = UTC-6, sin DST desde 2023)
         const now = new Date();
-        const yearMonth = now.toISOString().substring(0, 7); // YYYY-MM
+        const mtyFmt = (opts) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Monterrey', ...opts }).format(now);
+        const yearMonthDay = mtyFmt({ year: 'numeric', month: '2-digit', day: '2-digit' }); // YYYY-MM-DD
+        const yearMonth = yearMonthDay.substring(0, 7); // YYYY-MM
         const monthKey = `stats:bandwidth:${yearMonth}:total`;
 
-        // Build list of days in the current month up to today
-        const year = now.getUTCFullYear();
-        const month = now.getUTCMonth(); // 0-indexed
-        const today = now.getUTCDate();
+        // Build list of days in the current month up to today (Monterrey)
+        const year = parseInt(yearMonthDay.substring(0, 4), 10);
+        const month = parseInt(yearMonthDay.substring(5, 7), 10) - 1; // 0-indexed
+        const today = parseInt(yearMonthDay.substring(8, 10), 10);
         const daysInMonth = new Date(year, month + 1, 0).getDate();
         const totalDays = Math.min(today, daysInMonth);
 
