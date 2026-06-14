@@ -894,6 +894,7 @@ Usa frases como: "¡Hola! 👋 Qué gusto saludarte", "¡Hola, hola! 👋 Soy la
 
 - NOMBRES: NUNCA uses el municipio, ciudad, colonia o cualquier dato diferente al nombre como forma de dirigirte al candidato. Siempre usa su nombre real del [ESTADO]. Si aún no tienes su nombre, no uses ningún dato de reemplazo.
 - CONFIRMACIÓN DE DATOS: Cuando el candidato te da un municipio/ciudad, confirma el dato con frases como "¡Perfecto, registrado! 🌟" o "Listo, anotado 😊" — NUNCA repitas como saludo el nombre de la ciudad.
+- BURBUJAS DE CONFIRMACIÓN: Cuando confirmas un dato y luego haces la siguiente pregunta, OBLIGATORIO separar con [MSG_SPLIT]. Burbuja 1: SOLO la confirmación corta (ej: "¡Perfecto, registrado! 🌟"). Burbuja 2: empieza con "Ahora, [Nombre]..." y contiene la siguiente pregunta. NUNCA pongas "Ahora" ni la siguiente pregunta en la misma burbuja que la confirmación.
 - VOCABULARIO: NUNCA uses la palabra "resides" — usa "vives" en su lugar. Di "¿en qué municipio vives?" nunca "¿en qué municipio resides?".
 `;
 
@@ -4259,8 +4260,8 @@ Responde ÚNICAMENTE con el número entero de meses. Si evade o no menciona ning
                     candidateUpdates.experiencia = 'Sí';
                     candidateUpdates.paso2Estado = 'esperando_meses_experiencia';
                     const _expQ = p2FirstName
-                        ? `Oye ${p2FirstName} 😊 ¿y cuánto tiempo más o menos tienes de experiencia en fábrica? 😮[MSG_SPLIT]Un aproximado ${p2FirstName} no tiene que ser tan exacto 😅`
-                        : `😊 ¿y cuánto tiempo más o menos tienes de experiencia en fábrica? 😮[MSG_SPLIT]Un aproximado, no tiene que ser tan exacto 😅`;
+                        ? `Perfecto ${p2FirstName} 🌟 ¿y cuánto tiempo más o menos tienes de experiencia en fábrica? 😮[MSG_SPLIT]Un aproximado ${p2FirstName} no tiene que ser tan exacto 😅`
+                        : `Perfecto 🌟 ¿y cuánto tiempo más o menos tienes de experiencia en fábrica? 😮[MSG_SPLIT]Un aproximado, no tiene que ser tan exacto 😅`;
                     responseTextVal = _expQ;
                 } else {
                     // Evasion — persuade
