@@ -4721,6 +4721,7 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
 
                     // ── Disparar Paso 2 inmediatamente — sin cron, sin Redis key ──
                     candidateUpdates.paso2Estado = 'esperando_colonia';
+                    candidateUpdates.paso2Requerido = true;
                     await redis?.sadd('paso2_waiting', candidateId);
                     const _p2Phone = candidateData.whatsapp || '';
                     const _p2InstanceId = config?.instanceId || resolvedInstanceId || candidateData.instanceId || '';
