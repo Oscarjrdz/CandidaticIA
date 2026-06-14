@@ -4691,7 +4691,7 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
                     const _p2B1 = _p2Nombre
                         ? `Oye ${_p2Nombre}, estoy revisando mi sistema y encontré algo para ti 👀`
                         : `Oye, estoy revisando mi sistema y encontré algo para ti 👀`;
-                    const _p2B2 = `Compárteme porfi ¿cómo se llama tu colonia? Es para validar si te queda una ruta de transporte 🚌🏘️`;
+                    const _p2B2 = `Compárteme porfi 🙏 el nombre de tu colonia. Es para validar si te queda una ruta de transporte 🚌🏘️`;
                     // priority 10/11 — llegan después de la felicitación (priority 0)
                     Promise.resolve()
                         .then(() => sendUltraMsgMessage(_p2InstanceId, _p2Token, _p2Phone, _p2B1, 'chat', { priority: 10 }))
