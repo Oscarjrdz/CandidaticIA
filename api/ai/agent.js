@@ -4717,6 +4717,7 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
                 if (!handoverTriggered && isNowComplete && !candidateData.congratulated) {
                     const _congratsName = (candidateUpdates.nombreReal || candidateData.nombreReal || '').split(' ')[0];
                     responseTextVal = null;
+                    if (aiResult) aiResult.response_text = null;
                     candidateUpdates.congratulated = true;
                     await MediaEngine.sendCongratsPack(config, candidateData.whatsapp, 'bot_celebration_sticker', candidateId);
 
