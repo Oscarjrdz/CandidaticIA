@@ -223,7 +223,6 @@ const CandidatesSection = () => {
     const [aiFilteredCandidates, setAiFilteredCandidates] = useState(null); // Results from AI
     const [aiExplanation, setAiExplanation] = useState('');
     const [sortWhatsAppByDate, setSortWhatsAppByDate] = useState('desc');
-    const [showOnlyEmpty, setShowOnlyEmpty] = useState(false);
     const [showOnlyAvanzados, setShowOnlyAvanzados] = useState(false);
     const [hideIncomplete, setHideIncomplete] = useState(() => {
         // Load initial state from localStorage if available
@@ -684,9 +683,6 @@ const CandidatesSection = () => {
         if (!canViewIncomplete || hideIncomplete) {
             result = result.filter(c => isProfileComplete(c));
         }
-        if (showOnlyEmpty) {
-            result = result.filter(c => isChatEmpty(c));
-        }
         if (showOnlyAvanzados) {
             result = result.filter(c => c.paso2Estado === 'completo');
         }
@@ -698,7 +694,7 @@ const CandidatesSection = () => {
             });
         }
         return result;
-    }, [candidates, aiFilteredCandidates, hideIncomplete, showOnlyEmpty, showOnlyAvanzados, sortWhatsAppByDate]);
+    }, [candidates, aiFilteredCandidates, hideIncomplete, showOnlyAvanzados, sortWhatsAppByDate]);
 
     const totalPages = Math.ceil(totalItems / LIMIT);
 
@@ -822,31 +818,6 @@ const CandidatesSection = () => {
                             />
                         </button>
                     </div>}
-
-                    {/* Show Only Empty Chats Toggle */}
-                    <div className="flex items-center gap-2 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 px-3 py-1.5 rounded-xl shadow-sm cursor-pointer" onClick={() => setShowOnlyEmpty(!showOnlyEmpty)}>
-                        <div className="flex flex-col">
-                            <span className="text-[8px] font-black uppercase tracking-widest text-gray-400 leading-none">Vacíos</span>
-                            <span className={`text-[10px] font-bold ${showOnlyEmpty ? 'text-blue-600' : 'text-gray-400'}`}>
-                                {showOnlyEmpty ? 'FILTRADO' : 'TODOS'}
-                            </span>
-                        </div>
-                        <button
-                            type="button"
-                            className={`
-                                relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none
-                                ${showOnlyEmpty ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'}
-                            `}
-                            title="Mostrar solo candidatos con chat vacío"
-                        >
-                            <span
-                                className={`
-                                    inline-block h-4 w-4 transform rounded-full bg-white transition-transform
-                                    ${showOnlyEmpty ? 'translate-x-6' : 'translate-x-1'}
-                                `}
-                            />
-                        </button>
-                    </div>
 
                     {/* Completos Avanzados Toggle */}
                     <div className="flex items-center gap-2 border px-3 py-1.5 rounded-xl shadow-sm cursor-pointer bg-white dark:bg-gray-800 border-[#1d3a5f]/20 dark:border-blue-900/40" onClick={() => setShowOnlyAvanzados(!showOnlyAvanzados)}>
