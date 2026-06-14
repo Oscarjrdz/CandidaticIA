@@ -4694,16 +4694,24 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
                     candidateUpdates.congratulated = true;
                     await MediaEngine.sendCongratsPack(config, candidateData.whatsapp, 'bot_celebration_sticker', candidateId);
 
-                    // ── Disparar Paso 2 avanzado — mínimo 90 segundos de espera ──
-                    candidateUpdates.paso2Estado = 'pendiente';
+                    // ── Disparar Paso 2 inmediatamente — sin cron, sin Redis key ──
+                    candidateUpdates.paso2Estado = 'esperando_colonia';
                     const _p2Phone = candidateData.whatsapp || '';
-                    const _p2InstanceId = resolvedInstanceId || candidateData.instanceId || '';
+                    const _p2InstanceId = config?.instanceId || resolvedInstanceId || candidateData.instanceId || '';
+                    const _p2Token = config?.token || '';
                     const _p2Nombre = _congratsName || candidateUpdates.nombreReal || candidateData.nombreReal || '';
-                    await redis?.set(
-                        `paso2_pendiente:${candidateId}`,
-                        JSON.stringify({ phone: _p2Phone, instanceId: _p2InstanceId, nombre: _p2Nombre, candidateId, fireAfter: Date.now() + 90000 }),
-                        'EX', 180
-                    );
+                    const _p2Ts = new Date().toISOString();
+                    const _p2B1 = _p2Nombre
+                        ? `Oye ${_p2Nombre}, estoy revisando mi sistema y encontré algo para ti 👀`
+                        : `Oye, estoy revisando mi sistema y encontré algo para ti 👀`;
+                    const _p2B2 = `Compárteme porfi ¿cómo se llama tu colonia? Es para validar si te queda una ruta de transporte 🚌🏘️`;
+                    // priority 10/11 — llegan después de la felicitación (priority 0)
+                    Promise.resolve()
+                        .then(() => sendUltraMsgMessage(_p2InstanceId, _p2Token, _p2Phone, _p2B1, 'chat', { priority: 10 }))
+                        .then(() => saveMessage(candidateId, { from: 'bot', content: _p2B1, timestamp: _p2Ts }))
+                        .then(() => sendUltraMsgMessage(_p2InstanceId, _p2Token, _p2Phone, _p2B2, 'chat', { priority: 11 }))
+                        .then(() => saveMessage(candidateId, { from: 'bot', content: _p2B2, timestamp: _p2Ts }))
+                        .catch(e => console.error('[paso2] Error:', e.message));
                 }
 
             } catch (err) {

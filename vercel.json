@@ -101,10 +101,6 @@
         {
             "path": "/api/cron/reengagement",
             "schedule": "*/15 * * * *"
-        },
-        {
-            "path": "/api/cron/paso2-trigger",
-            "schedule": "* * * * *"
         }
     ]
 }
