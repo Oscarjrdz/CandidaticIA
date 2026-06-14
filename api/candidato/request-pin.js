@@ -51,7 +51,9 @@ export default async function handler(req, res) {
         ],
       });
       if (!msgResult?.success) {
-        console.warn('[request-pin] WhatsApp template send error:', msgResult);
+        console.error('[request-pin] FULL ERROR:', JSON.stringify(msgResult));
+      } else {
+        console.log('[request-pin] PIN enviado OK:', msgResult?.messageId);
       }
     }
 
