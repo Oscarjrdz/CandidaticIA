@@ -4676,9 +4676,7 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
 
                 if (!handoverTriggered && isNowComplete && !candidateData.congratulated) {
                     const _congratsName = (candidateUpdates.nombreReal || candidateData.nombreReal || '').split(' ')[0];
-                    responseTextVal = _congratsName
-                        ? `¡Listo, ${_congratsName}! 🌟 Ya tengo todos tus datos completos. Pronto te contactaré, voy a buscar la mejor vacante para ti, te pido seas paciente ✨🌸[MSG_SPLIT]¡Muchas gracias y hasta luego, ${_congratsName}! 👋`
-                        : `¡Listo! 🌟 Ya tengo todos tus datos completos. Pronto te contactaré, voy a buscar la mejor vacante para ti, te pido seas paciente ✨🌸[MSG_SPLIT]¡Muchas gracias y hasta luego! 👋`;
+                    responseTextVal = null;
                     candidateUpdates.congratulated = true;
                     await MediaEngine.sendCongratsPack(config, candidateData.whatsapp, 'bot_celebration_sticker', candidateId);
 
