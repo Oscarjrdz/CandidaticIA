@@ -286,7 +286,7 @@ export default async function handler(req, res) {
             for (const candidate of paso2Candidates) {
                 try {
                     const p2Estado = candidate.paso2Estado;
-                    if (!p2Estado || !['esperando_colonia', 'esperando_experiencia'].includes(p2Estado)) {
+                    if (!p2Estado || !['esperando_colonia', 'esperando_experiencia', 'esperando_meses_experiencia'].includes(p2Estado)) {
                         await redis.srem('paso2_waiting', candidate.id);
                         paso2Skipped++;
                         continue;
@@ -333,11 +333,19 @@ export default async function handler(req, res) {
                             nombre ? `${nombre}, ¿en qué colonia vives? Con eso valido que te llegue el transporte 🌟` : `¿En qué colonia vives? Con eso valido que te llegue el transporte 🌟`,
                         ];
                         p2Message = opts[pickVariant(candidate.id, 3)];
-                    } else {
+                    } else if (p2Estado === 'esperando_experiencia') {
                         const opts = [
-                            nombre ? `${nombre}, solo falta una pregunta 😊 ¿Tienes experiencia trabajando en fábrica o maquiladora? 🏭` : `Solo falta una pregunta 😊 ¿Tienes experiencia trabajando en fábrica o maquiladora? 🏭`,
+                            nombre ? `${nombre}, solo falta una pregunta 😊 ¿Tienes experiencia trabajando en fábrica? 🏭` : `Solo falta una pregunta 😊 ¿Tienes experiencia trabajando en fábrica? 🏭`,
                             nombre ? `Oye ${nombre} 🌸 ¿Has trabajado antes en fábrica o producción? Sí o no está bien 😊` : `¿Has trabajado antes en fábrica o producción? Sí o no está bien 😊`,
-                            nombre ? `${nombre}, ¿tienes experiencia en fábrica o maquiladora? 🏭 Con eso termino tu perfil ✨` : `¿Tienes experiencia en fábrica o maquiladora? 🏭 Con eso termino tu perfil ✨`,
+                            nombre ? `${nombre}, ¿tienes experiencia en fábrica? 🏭 Con eso termino tu perfil ✨` : `¿Tienes experiencia en fábrica? 🏭 Con eso termino tu perfil ✨`,
+                        ];
+                        p2Message = opts[pickVariant(candidate.id, 3)];
+                    } else {
+                        // esperando_meses_experiencia
+                        const opts = [
+                            nombre ? `${nombre}, ¿cuánto tiempo llevas trabajando en fábrica? 😊 Un aproximado está bien 🏭` : `¿Cuánto tiempo llevas trabajando en fábrica? Un aproximado está bien 🏭`,
+                            nombre ? `Oye ${nombre} 🌸 Solo dime cuántos meses o años tienes de experiencia en fábrica 😊` : `Solo dime cuántos meses o años tienes de experiencia en fábrica 😊`,
+                            nombre ? `${nombre}, ¿más o menos cuánto tiempo tienes de experiencia en fábrica? 🏭✨` : `¿Más o menos cuánto tiempo tienes de experiencia en fábrica? 🏭✨`,
                         ];
                         p2Message = opts[pickVariant(candidate.id, 3)];
                     }

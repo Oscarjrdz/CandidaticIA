@@ -4190,6 +4190,37 @@ REGLAS:
                     responseTextVal = `¿Me puedes decir en qué colonia vives? 🏘️`;
                 }
 
+            } else if (p2Estado === 'esperando_meses_experiencia') {
+                isHostMode = true;
+                // Extraer duración y convertir a meses con GPT mini
+                let mesesResult = null;
+                try {
+                    const mesesGpt = await getOpenAIResponse(
+                        [{ from: 'user', content: aggregatedText }],
+                        `El candidato respondió cuánto tiempo lleva trabajando en fábrica. Convierte su respuesta a número de meses enteros.
+Ejemplos: "2 años" → 24, "6 meses" → 6, "año y medio" → 18, "3 semanas" → 1, "10 días" → 1, "un año" → 12, "poco más de un año" → 14, "5 años" → 60.
+Responde ÚNICAMENTE con el número entero de meses. Si evade o no menciona ningún tiempo, responde null.`,
+                        modelAvanzado,
+                        activeAiConfig.openaiApiKey
+                    );
+                    const mesesRaw = (mesesGpt?.content || '').trim();
+                    const parsed = parseInt(mesesRaw, 10);
+                    if (!isNaN(parsed) && parsed > 0) mesesResult = parsed;
+                } catch (_e) { /* fall through to evasion */ }
+
+                if (mesesResult !== null) {
+                    candidateUpdates.mesesExperiencia = mesesResult;
+                    candidateUpdates.paso2Estado = 'completo';
+                    await redis?.srem('paso2_waiting', candidateId);
+                    const p2CloseName = p2FirstName ? `, ${p2FirstName}` : '';
+                    responseTextVal = `¡Listo${p2CloseName}! 🌟 Ya tengo todo lo que necesitaba.[MSG_SPLIT]Deja termino de subir tu información al sistema y te contacto para darte más info de la vacante 🌸✨[MSG_SPLIT]🙏 porfi no desesperes si tardo un poquito en contactarte, ok cuídate y platicamos pronto 😊`;
+                    await MediaEngine.sendCongratsPack(config, candidateData.whatsapp, 'bot_celebration_sticker', candidateId);
+                } else {
+                    // Evasión — pedir de nuevo
+                    const _mName = p2FirstName ? `${p2FirstName}, ` : '';
+                    responseTextVal = `${_mName}no te preocupes, solo dime un aproximado 😊[MSG_SPLIT]¿Cuántos meses o años llevas trabajando en fábrica? 🏭`;
+                }
+
             } else if (p2Estado === 'esperando_experiencia') {
                 isHostMode = true;
                 // Regex-first detection: Sí / No
@@ -4215,14 +4246,22 @@ REGLAS:
                     } catch (_e) { /* fall through to evasion */ }
                 }
 
-                if (expResult) {
-                    // Captured — complete paso 2
-                    candidateUpdates.experienciaFabrica = expResult;
+                if (expResult === 'No') {
+                    // Sin experiencia — cerrar paso 2
+                    candidateUpdates.experienciaFabrica = 'No';
                     candidateUpdates.paso2Estado = 'completo';
                     await redis?.srem('paso2_waiting', candidateId);
                     const p2CloseName = p2FirstName ? `, ${p2FirstName}` : '';
                     responseTextVal = `¡Listo${p2CloseName}! 🌟 Ya tengo todo lo que necesitaba.[MSG_SPLIT]Deja termino de subir tu información al sistema y te contacto para darte más info de la vacante 🌸✨[MSG_SPLIT]🙏 porfi no desesperes si tardo un poquito en contactarte, ok cuídate y platicamos pronto 😊`;
                     await MediaEngine.sendCongratsPack(config, candidateData.whatsapp, 'bot_celebration_sticker', candidateId);
+                } else if (expResult === 'Sí') {
+                    // Con experiencia — preguntar cuánto tiempo
+                    candidateUpdates.experienciaFabrica = 'Sí';
+                    candidateUpdates.paso2Estado = 'esperando_meses_experiencia';
+                    const _expQ = p2FirstName
+                        ? `Oye ${p2FirstName} 😊 ¿y cuánto tiempo más o menos tienes de experiencia en fábrica? 😮[MSG_SPLIT]Un aproximado ${p2FirstName} no tiene que ser tan exacto 😅`
+                        : `😊 ¿y cuánto tiempo más o menos tienes de experiencia en fábrica? 😮[MSG_SPLIT]Un aproximado, no tiene que ser tan exacto 😅`;
+                    responseTextVal = _expQ;
                 } else {
                     // Evasion — persuade
                     const evasionSys = `${promptAvanzado ? promptAvanzado + '\n\n' : ''}Eres Brenda Rodríguez, reclutadora de Candidatic. El candidato evadió la pregunta sobre experiencia en fábrica. Tu misión es reconocer lo que dijo con calidez y redirigirlo con mucha persuasión a responder si tiene o no experiencia en fábrica/maquiladora. Genera 2 burbujas con [MSG_SPLIT]. Sin markdown. Sin inventar datos.\n[ADN]: ${JSON.stringify(cleanAdnBase)}`;
