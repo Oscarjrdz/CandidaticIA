@@ -690,6 +690,10 @@ export default async function handler(req, res) {
                         'aprender puente cierre paso2': {
                             key: 'bot_paso2_sticker',
                             label: 'Cierre Paso 2 (cuando el candidato termina colonia + experiencia)'
+                        },
+                        'puente paso2': {
+                            key: 'bot_paso2_sticker',
+                            label: 'Cierre Paso 2 (cuando el candidato termina colonia + experiencia)'
                         }
                     };
 
@@ -757,6 +761,7 @@ export default async function handler(req, res) {
                             }
                         }
                     }
+                    continue; // admin messages no caen a Brenda
                 }
 
                 // ── GATEKEEPERS ──
