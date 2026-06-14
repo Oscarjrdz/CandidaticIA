@@ -191,7 +191,10 @@ const ProfileModal = React.memo(({ candidate, onClose, onSave }) => {
         genero: candidate.genero || '',
         municipio: candidate.municipio || '',
         escolaridad: candidate.escolaridad || '',
-        categoria: candidate.categoria || ''
+        categoria: candidate.categoria || '',
+        colonia: candidate.colonia || '',
+        experiencia: candidate.experiencia || '',
+        meses: candidate.meses || ''
     });
 
     const [botCategories, setBotCategories] = useState([]);
@@ -250,6 +253,25 @@ const ProfileModal = React.memo(({ candidate, onClose, onSave }) => {
                     <div>
                         <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1 uppercase">Categoría</label>
                         <CustomSelect name="categoria" value={formData.categoria} options={botCategories} onChange={handleChange} placeholder={botCategories.length === 0 ? "Cargando..." : "Seleccione..."} disabled={botCategories.length === 0} />
+                    </div>
+                    <div className="pt-2 border-t border-gray-100 dark:border-gray-700">
+                        <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-3">Paso 2</p>
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1 uppercase">Colonia</label>
+                                <input type="text" name="colonia" value={formData.colonia} onChange={handleChange} className="w-full text-sm p-2.5 bg-[#f0f2f5] dark:bg-[#2a3942] rounded-lg outline-none text-[#111b21] dark:text-[#d1d7db] border border-transparent focus:border-blue-500 focus:ring-1 focus:ring-blue-500/50 transition-all" placeholder="Ej. Centro" />
+                            </div>
+                            <div className="flex gap-4">
+                                <div className="flex-1">
+                                    <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1 uppercase">Experiencia</label>
+                                    <CustomSelect name="experiencia" value={formData.experiencia} options={["Sí", "No"]} onChange={handleChange} placeholder="Seleccione..." />
+                                </div>
+                                <div className="flex-1">
+                                    <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1 uppercase">Meses</label>
+                                    <input type="number" name="meses" value={formData.meses} onChange={handleChange} className="w-full text-sm p-2.5 bg-[#f0f2f5] dark:bg-[#2a3942] rounded-lg outline-none text-[#111b21] dark:text-[#d1d7db] border border-transparent focus:border-blue-500 focus:ring-1 focus:ring-blue-500/50 transition-all" placeholder="Ej. 12" min="0" />
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
                 <div className="px-6 py-4 border-t border-gray-100 dark:border-gray-700 flex justify-end gap-3 bg-gray-50 dark:bg-[#111b21] rounded-b-xl">
