@@ -58,9 +58,14 @@ export default async function handler(req, res) {
         await redis.set('stats:bandwidth:last_absolute_bytes', currentAbsoluteBytes);
 
         // 4. Update Daily and Monthly aggregations using atomic INCRBY
+        // Use Monterrey time (America/Monterrey = UTC-6, no DST since 2023)
         const now = new Date();
-        const yearMonth = now.toISOString().substring(0, 7); // YYYY-MM
-        const yearMonthDay = now.toISOString().substring(0, 10); // YYYY-MM-DD
+        const mtyDate = new Intl.DateTimeFormat('en-CA', {
+            timeZone: 'America/Monterrey',
+            year: 'numeric', month: '2-digit', day: '2-digit'
+        }).format(now); // YYYY-MM-DD
+        const yearMonthDay = mtyDate;
+        const yearMonth = mtyDate.substring(0, 7); // YYYY-MM
 
         const monthKey = `stats:bandwidth:${yearMonth}:total`;
         const dayKey = `stats:bandwidth:${yearMonthDay}:total`;
