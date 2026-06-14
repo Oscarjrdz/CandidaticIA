@@ -25,17 +25,26 @@ export default async function handler(req, res) {
 
             // Use whatsapp as the canonical key when available (stable, no prefix ambiguity)
             const stableKey = whatsapp || userId;
-            const activeKey = `presence:online:${stableKey}`;
+            const now = Date.now();
+            const PRESENCE_TTL_MS = 12000; // 12s — same effective TTL as before
+            const expiresAt = now + PRESENCE_TTL_MS;
 
-            // Set data in Redis, expires in 12 seconds if no heartbeat received
-            await redis.set(activeKey, JSON.stringify({
+            // ── Write user state into Hash + Sorted Set (replaces individual SET with EX 12) ──
+            // Hash: presence:hash  → field=stableKey, value=JSON
+            // SortedSet: presence:expiry → member=stableKey, score=expiresAt timestamp
+            const userState = JSON.stringify({
                 userId: stableKey,
                 whatsapp: whatsapp || null,
                 userName,
                 role: role || 'User',
                 currentChatId: currentChatId || null,
-                lastSeen: Date.now()
-            }), 'EX', 12);
+                lastSeen: now
+            });
+
+            const writePipe = redis.pipeline();
+            writePipe.hset('presence:hash', stableKey, userState);
+            writePipe.zadd('presence:expiry', expiresAt, stableKey);
+            await writePipe.exec();
 
             // ── Activity tracking (daily stats) ──────────────────────────────
             const today = new Date().toISOString().split('T')[0];
@@ -55,35 +64,42 @@ export default async function handler(req, res) {
             }
             actPipe.exec().catch(() => {});
 
-            // Fetch all currently online users — SCAN no bloquea Redis (vs KEYS que es O(N) blocking)
-            const allKeys = [];
-            let cursor = '0';
-            do {
-                const [nextCursor, keys] = await redis.scan(cursor, 'MATCH', 'presence:online:*', 'COUNT', 100);
-                cursor = nextCursor;
-                allKeys.push(...keys);
-            } while (cursor !== '0');
+            // ── Build online users list: prune expired, then read all ─────────
+            // Remove members whose expiresAt score < now (they haven't heartbeated in 12s)
+            await redis.zremrangebyscore('presence:expiry', '-inf', now - 1);
+
+            // Get surviving members
+            const activeKeys = await redis.zrange('presence:expiry', 0, -1);
 
             let onlineUsers = [];
-            if (allKeys.length > 0) {
-                const pipeline = redis.pipeline();
-                allKeys.forEach(k => pipeline.get(k));
-                const results = await pipeline.exec();
-                results.forEach(val => {
-                    if (val[1]) {
-                        try { onlineUsers.push(JSON.parse(val[1])); } catch {}
+            if (activeKeys.length > 0) {
+                const rawValues = await redis.hmget('presence:hash', ...activeKeys);
+                rawValues.forEach(val => {
+                    if (val) {
+                        try { onlineUsers.push(JSON.parse(val)); } catch {}
                     }
                 });
             }
 
-            // Flat format so SSE double-wrap resolves correctly in useCandidatesSSE
-            redis.publish('channel:sse:updates', JSON.stringify({
-                type: 'presence:update',
-                onlineUsers,
-            })).catch(() => {});
+            // ── Conditional SSE publish: only when the user list actually changes ──
+            // Compare sorted list of userIds to detect additions/removals
+            const { createHash } = await import('crypto');
+            const listHash = createHash('md5')
+                .update(onlineUsers.map(u => u.userId).sort().join(','))
+                .digest('hex');
+            const prevHash = await redis.get('presence:last_hash');
+
+            if (listHash !== prevHash) {
+                await redis.set('presence:last_hash', listHash, 'EX', 30);
+                redis.publish('channel:sse:updates', JSON.stringify({
+                    type: 'presence:update',
+                    onlineUsers,
+                })).catch(() => {});
+            }
 
             return res.status(200).json({ success: true, onlineUsers });
         }
+
 
         return res.status(405).json({ error: 'Method not allowed' });
     } catch (e) {

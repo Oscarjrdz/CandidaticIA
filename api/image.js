@@ -48,17 +48,18 @@ export default async function handler(req, res) {
             return res.status(404).send('Not Found');
         }
 
-        // TRACKING: Log access to Redis for reachability debugging
-        const accessLog = {
-            timestamp: new Date().toISOString(),
-            id,
-            ext: requestedExt,
-            ua: req.headers['user-agent'] || 'Unknown',
-            ip: req.headers['x-forwarded-for'] || req.socket.remoteAddress
-        };
-        await client.lpush('debug:media_access', JSON.stringify(accessLog));
-        await client.ltrim('debug:media_access', 0, 49); // Keep last 50
-
+        // TRACKING: Only log in debug mode — avoids 2 Redis ops per image request in production
+        if (process.env.DEBUG_MODE === 'true') {
+            const accessLog = {
+                timestamp: new Date().toISOString(),
+                id,
+                ext: requestedExt,
+                ua: req.headers['user-agent'] || 'Unknown',
+                ip: req.headers['x-forwarded-for'] || req.socket.remoteAddress
+            };
+            await client.lpush('debug:media_access', JSON.stringify(accessLog));
+            await client.ltrim('debug:media_access', 0, 49); // Keep last 50
+        }
 
         // MIME Handling
         let finalMime = meta.mime;

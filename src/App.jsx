@@ -101,8 +101,11 @@ function AppShell() {
   }, [user, rolePermissions, isViewer, isMobile]);
 
   // Bulk engine heartbeat — adaptive interval: 5s while running, 30s idle
+  // Only runs for users who have explicit bulk access (avoids polling for every session)
   useEffect(() => {
     if (!user) return;
+    // Skip polling if rolePermissions is loaded and bulks is explicitly disabled for this role
+    if (rolePermissions && rolePermissions['bulks'] === false) return;
     let timer;
     const poll = () => {
         fetch('/api/bulks?action=status')
@@ -115,7 +118,7 @@ function AppShell() {
     };
     timer = setTimeout(poll, 5000); // first check after 5s
     return () => clearTimeout(timer);
-  }, [user]);
+  }, [user, rolePermissions]);
 
   // Toggle tema
   const toggleTheme = useCallback(() => {
