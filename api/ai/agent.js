@@ -4146,19 +4146,7 @@ ${safeDnaLines}
             const modelAvanzado = batchConfig.bot_ia_model_avanzado || 'gpt-4o-mini';
             const p2FirstName = (candidateUpdates.nombreReal || candidateData.nombreReal || '').split(' ')[0] || '';
 
-            if (p2Estado === 'pendiente') {
-                // Candidate messaged during the 1-min window — cancel cron trigger and go inline
-                await redis?.del(`paso2_pendiente:${candidateId}`);
-                responseTextVal = p2FirstName
-                    ? `Oye ${p2FirstName}, estoy revisando mi sistema y encontré algo para ti 👀[MSG_SPLIT]Compárteme porfi ¿cómo se llama tu colonia? Es para validar si te queda una ruta de transporte 🚌🏘️`
-                    : `Oye, estoy revisando mi sistema y encontré algo para ti 👀[MSG_SPLIT]Compárteme porfi ¿cómo se llama tu colonia? Es para validar si te queda una ruta de transporte 🚌🏘️`;
-                candidateUpdates.paso2Estado = 'esperando_colonia';
-                // Persist state immediately so the next message sees 'esperando_colonia'
-                await updateCandidate(candidateId, { paso2Estado: 'esperando_colonia' });
-                await redis?.sadd('paso2_waiting', candidateId);
-                isHostMode = true;
-
-            } else if (p2Estado === 'esperando_colonia') {
+            if (p2Estado === 'esperando_colonia') {
                 isHostMode = true;
                 // Extract colonia from candidate's message using GPT mini
                 const coloniaExtractionPrompt = `Eres un extractor de colonias/barrios/fraccionamientos de México. El candidato acaba de responder a la pregunta "¿cómo se llama tu colonia?". Extrae el nombre de su colonia del mensaje.
@@ -4696,6 +4684,7 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
 
                     // ── Disparar Paso 2 inmediatamente — sin cron, sin Redis key ──
                     candidateUpdates.paso2Estado = 'esperando_colonia';
+                    await redis?.sadd('paso2_waiting', candidateId);
                     const _p2Phone = candidateData.whatsapp || '';
                     const _p2InstanceId = config?.instanceId || resolvedInstanceId || candidateData.instanceId || '';
                     const _p2Token = config?.token || '';
