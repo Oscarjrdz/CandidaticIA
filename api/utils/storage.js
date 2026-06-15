@@ -594,6 +594,23 @@ export const getCandidatesUnreadFirst = async (recentLimit = 50) => {
     return { candidates, total: candidates.length };
 };
 
+const _publishGlobalStats = async (client) => {
+    try {
+        const p = client.pipeline();
+        p.scard(KEYS.LIST_COMPLETE);
+        p.scard(KEYS.LIST_PENDING);
+        p.get('stats:bot:unread_v2');
+        const results = await p.exec();
+        const complete = results[0][1] || 0;
+        const pending  = results[1][1] || 0;
+        const unread   = parseInt(results[2][1]) || 0;
+        await client.publish('channel:sse:updates', JSON.stringify({
+            type: 'stats:global',
+            data: { total: complete + pending, complete, pending, unread }
+        }));
+    } catch (_) {}
+};
+
 /**
  * [SIN TANTO ROLLO] Atomic Statistic Synchronizer
  * Moves candidate ID between 'complete' and 'pending' sets based on audit.
@@ -666,6 +683,10 @@ export const syncCandidateStats = async (id, candidateData = null, pipeline = nu
                     .sadd(KEYS.LIST_PENDING, id)
                     .srem(KEYS.LIST_COMPLETE, id)
                     .exec();
+            }
+            // Publish real-time stats update only when completeness actually changed
+            if (wasIncomplete === isComplete) {
+                _publishGlobalStats(client).catch(() => {});
             }
         }
 
@@ -781,6 +802,7 @@ export const deleteCandidate = async (id) => {
             }
         }
         await multi.exec();
+        _publishGlobalStats(client).catch(() => {});
 
         // 3. Deep clean: all TTL-based state keys tied to candidateId
         const stateKeys = [
