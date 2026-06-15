@@ -445,6 +445,9 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
     const [activeFilter, setActiveFilter] = useState('unread'); // 'all', 'unread', 'label', 'profile'
     const [filterValue, setFilterValue] = useState(null);
     const [profileUnreadOnly, setProfileUnreadOnly] = useState(false);
+    const [hasMore, setHasMore] = useState(false);
+    const [loadingMore, setLoadingMore] = useState(false);
+    const loadingMoreRef = useRef(false);
     const activeFilterRef = useRef('unread');
     const hasSetInitialFilter = useRef(false);
     const filterValueRef = useRef(null);
@@ -831,21 +834,16 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
         try {
             const tagParam = activeFilterRef.current === 'label' ? filterValueRef.current : "";
             const searchParam = searchRef.current || "";
-            // Modo normal: no-leídos + 50 recientes (sin búsqueda ni filtro activo)
-            const useUnreadFirst = !searchParam && !tagParam;
+            const useUnreadFirst = activeFilterRef.current === 'unread' && !searchParam && !tagParam;
             const result = useUnreadFirst
                 ? await getCandidates(50, 0, "", false, "", true)
-                : await getCandidates(300, 0, searchParam, false, tagParam);
+                : await getCandidates(100, 0, searchParam, false, tagParam);
             if (result.success) {
-                let fetchedCandidates = result.candidates || [];
-                console.log(`📊 [ChatSection] loadCandidates: ${fetchedCandidates.length} candidatos (${useUnreadFirst ? 'unreadFirst' : `search="${searchParam}" tag="${tagParam}"`})`);
-
+                const fetchedCandidates = result.candidates || [];
                 setCandidates(fetchedCandidates);
+                setHasMore(!useUnreadFirst && fetchedCandidates.length === 100);
                 if (fetchedCandidates.length > 0) {
-                    setSelectedChat(current => {
-                        if (!current) return fetchedCandidates[0];
-                        return current;
-                    });
+                    setSelectedChat(current => { if (!current) return fetchedCandidates[0]; return current; });
                 }
             }
         } catch (e) {
@@ -854,6 +852,28 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
             setLoadingChats(false);
         }
     };
+
+    const loadMore = useCallback(async () => {
+        if (loadingMoreRef.current || !hasMore) return;
+        const tagParam = activeFilterRef.current === 'label' ? filterValueRef.current : "";
+        const searchParam = searchRef.current || "";
+        loadingMoreRef.current = true;
+        setLoadingMore(true);
+        try {
+            const nextOffset = candidatesRef.current.length;
+            const result = await getCandidates(100, nextOffset, searchParam, false, tagParam);
+            if (result.success) {
+                const newCandidates = result.candidates || [];
+                if (newCandidates.length < 100) setHasMore(false);
+                if (newCandidates.length > 0) {
+                    const existingIds = new Set(candidatesRef.current.map(c => c.id));
+                    const unique = newCandidates.filter(c => !existingIds.has(c.id));
+                    if (unique.length > 0) setCandidates(prev => [...prev, ...unique]);
+                }
+            }
+        } catch (e) { console.error(e); }
+        finally { loadingMoreRef.current = false; setLoadingMore(false); }
+    }, [hasMore]);
 
     // Filter and sort candidates (search is handled server-side via loadCandidates)
     const filteredCandidates = useMemo(() => {
@@ -2534,6 +2554,8 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                             data={filteredCandidates}
                             overscan={10}
                             computeItemKey={(index, chat) => chat.id}
+                            endReached={loadMore}
+                            components={{ Footer: () => loadingMore ? <div className="py-4 text-center text-xs text-gray-400 dark:text-gray-600">Cargando más...</div> : null }}
                             itemContent={(index, chat) => (
                                 <ChatRow
                                     key={chat.id}
