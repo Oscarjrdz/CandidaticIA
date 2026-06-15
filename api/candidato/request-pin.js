@@ -40,7 +40,7 @@ export default async function handler(req, res) {
       const { sendMetaMessage } = await import('../whatsapp/utils.js');
       const msgResult = await sendMetaMessage(waPhone, 'candidatic_pin', 'template', {
         templateName: 'candidatic_pin',
-        languageCode: 'es_MX',
+        languageCode: 'es',
         components: [
           {
             type: 'button',
