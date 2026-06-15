@@ -834,7 +834,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
         try {
             const tagParam = activeFilterRef.current === 'label' ? filterValueRef.current : "";
             const searchParam = searchRef.current || "";
-            const useUnreadFirst = activeFilterRef.current === 'unread' && !searchParam && !tagParam;
+            const useUnreadFirst = (activeFilterRef.current === 'unread' || activeFilterRef.current === 'profile') && !searchParam && !tagParam;
             const result = useUnreadFirst
                 ? await getCandidates(50, 0, "", false, "", true)
                 : await getCandidates(100, 0, searchParam, false, tagParam);
