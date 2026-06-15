@@ -24,6 +24,18 @@ export default async function handler(req, res) {
 
             const messages = await getMessages(candidateId);
 
+            // If no messages exist but candidate is flagged as unread, auto-clear silently
+            if (messages.length === 0) {
+                const candidate = await getCandidateById(candidateId);
+                if (candidate?.lastUserMessageAt) {
+                    const ut = new Date(candidate.lastUserMessageAt).getTime();
+                    const ht = candidate.lastHumanMessageAt ? new Date(candidate.lastHumanMessageAt).getTime() : 0;
+                    if (ut > ht) {
+                        updateCandidate(candidateId, { lastHumanMessageAt: candidate.lastUserMessageAt }).catch(() => {});
+                    }
+                }
+            }
+
             return res.status(200).json({ success: true, messages });
         }
 
