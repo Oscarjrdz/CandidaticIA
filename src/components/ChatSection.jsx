@@ -307,7 +307,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
     }, []);
 
     const canManageTags = user?.role === 'SuperAdmin' || user?.can_manage_tags === true;
-    const { newCandidate: sseNewCandidate } = useCandidatesSSE();
+    const { newCandidate: sseNewCandidate, connected: sseConnected } = useCandidatesSSE();
     const [candidates, setCandidates] = useState([]);
     const [selectedChat, setSelectedChat] = useState(null);
     const [headerImgError, setHeaderImgError] = useState(false);
@@ -452,6 +452,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
     const searchRef = useRef("");
     const candidatesRef = useRef([]);
     const prevSearchRef = useRef(null);
+    const sseWasConnectedOnceRef = useRef(false);
 
     // Multi-select Filters State
     const [selectedAges, setSelectedAges] = useState([]);
@@ -968,7 +969,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
     }, [baseCandidates]);
 
     const unreadCounts = useMemo(() => {
-        const counts = { tags: {}, crmProjects: {}, complete: 0, incomplete: 0, all: 0 };
+        const counts = { tags: {}, crmProjects: {}, complete: 0, incomplete: 0, all: 0, unreadIds: new Set() };
         const canSeeIncomplete = user?.role === 'SuperAdmin' ||
             !rolePermissions || Object.keys(rolePermissions).length === 0 ||
             rolePermissions.view_incomplete_candidates === true;
@@ -982,6 +983,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
 
             if (isUnread) {
                 counts.all++;
+                counts.unreadIds.add(c.id);
                 if (profComplete) {
                     counts.complete++;
                 } else {
@@ -1006,10 +1008,12 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
         return counts;
     }, [baseCandidates, user, rolePermissions]);
 
-    // 📡 Broadcast RBAC-filtered unread count to Sidebar badge (only after candidates are loaded)
+    // 📡 Broadcast RBAC-filtered unread count + IDs to Sidebar badge (only after candidates are loaded)
     useEffect(() => {
         if (loadingChats) return;
-        window.dispatchEvent(new CustomEvent('chat_unread_rbac', { detail: unreadCounts.all }));
+        window.dispatchEvent(new CustomEvent('chat_unread_rbac', {
+            detail: { count: unreadCounts.all, unreadIds: unreadCounts.unreadIds }
+        }));
     }, [unreadCounts.all, loadingChats]);
 
     // 🏎️ Online readers por chat — evita recalcular dentro de cada ChatRow
@@ -1228,6 +1232,16 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
             return [sseNewCandidate, ...prev];
         });
     }, [sseNewCandidate]);
+
+    // 🔄 SSE reconnect: re-sync candidate list to catch messages missed during disconnect
+    useEffect(() => {
+        if (!sseConnected) return;
+        if (!sseWasConnectedOnceRef.current) {
+            sseWasConnectedOnceRef.current = true; // primera conexión — carga ya disparada en mount
+            return;
+        }
+        loadCandidates(); // segunda+ conexión = reconexión tras caída
+    }, [sseConnected]);
 
     // Reset typing when switching chats
     useEffect(() => {

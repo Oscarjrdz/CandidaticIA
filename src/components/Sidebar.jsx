@@ -134,6 +134,11 @@ const Sidebar = ({ activeSection, onSectionChange, onLogout, isMobileOpen, onClo
     // Uses a Set so multiple messages from the same candidate only count once.
     const [newUnreadIds, setNewUnreadIds] = useState(new Set());
 
+    // IDs ya contados en rbacUnread — para no sumar doble si un candidato ya era no-leído
+    const [rbacUnreadIds, setRbacUnreadIds] = useState(new Set());
+    const rbacUnreadIdsRef = React.useRef(new Set());
+    useEffect(() => { rbacUnreadIdsRef.current = rbacUnreadIds; }, [rbacUnreadIds]);
+
     // Listen for ChatSection mount/unmount lifecycle
     useEffect(() => {
         const mountHandler = (e) => {
@@ -144,29 +149,43 @@ const Sidebar = ({ activeSection, onSectionChange, onLogout, isMobileOpen, onClo
         return () => window.removeEventListener('chat_section_mounted', mountHandler);
     }, []);
 
-    // Listen for RBAC-filtered unread count from ChatSection and persist it
+    // Listen for RBAC-filtered unread count + IDs from ChatSection and persist it
     useEffect(() => {
         const handler = (e) => {
-            setRbacUnread(e.detail);
-            setNewUnreadIds(new Set()); // Reset — RBAC is the source of truth
-            localStorage.setItem('chat_unread_rbac', String(e.detail));
+            const detail = e.detail;
+            // Soporte para formato nuevo { count, unreadIds } y legado (número)
+            const count = typeof detail === 'number' ? detail : (detail?.count ?? 0);
+            const ids = detail?.unreadIds instanceof Set ? detail.unreadIds : new Set();
+            setRbacUnread(count);
+            setRbacUnreadIds(ids);
+            setNewUnreadIds(new Set()); // Reset delta — RBAC es la fuente de verdad
+            localStorage.setItem('chat_unread_rbac', String(count));
         };
         window.addEventListener('chat_unread_rbac', handler);
         return () => window.removeEventListener('chat_unread_rbac', handler);
     }, []);
 
     // Listen for new incoming messages via SSE to update badge when not on Chat.
-    // We track unique candidate IDs, not raw message count, to avoid overcounting
-    // multiple messages from the same candidate.
+    // Solo suma candidatos que NO estaban ya en el conteo RBAC (evita doble conteo).
     useEffect(() => {
         const handler = (e) => {
             const data = e.detail;
             const updates = data?.updates || data;
             if (updates?.newMessage && updates?.messageFrom === 'user' && data?.candidateId) {
+                const candidateId = data.candidateId;
+                // Si ya estaba en la lista de no-leídos, no incrementar
+                if (rbacUnreadIdsRef.current.has(candidateId)) return;
                 setNewUnreadIds(prev => {
-                    if (prev.has(data.candidateId)) return prev;
+                    if (prev.has(candidateId)) return prev;
                     const next = new Set(prev);
-                    next.add(data.candidateId);
+                    next.add(candidateId);
+                    return next;
+                });
+                // Agregarlo a rbacUnreadIds para no contarlo de nuevo si manda otro mensaje
+                setRbacUnreadIds(prev => {
+                    if (prev.has(candidateId)) return prev;
+                    const next = new Set(prev);
+                    next.add(candidateId);
                     return next;
                 });
             }
