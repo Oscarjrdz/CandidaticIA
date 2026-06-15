@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback, useDeferredValue } from 'react';
 import ConfirmModal from './ui/ConfirmModal';
 import { MapPin, List as ListIcon, ShoppingBag, UserSquare, MousePointerClick, Search, MessageSquare, Plus, Smile, Paperclip, Mic, ArrowLeft, Send, Tag, Pencil, Check, X, Trash2, Briefcase, Kanban, BookOpen, Keyboard, Loader2, Edit2, Reply, Zap, Pin, MessageCirclePlus, Phone, User, Bell } from 'lucide-react';
-import { getCandidates, blockCandidate, deleteCandidate } from '../services/candidatesService';
+import { getCandidates, getCandidateById, blockCandidate, deleteCandidate } from '../services/candidatesService';
 import ManualProjectsSidepanel from './ManualProjectsSidepanel';
 import { formatRelativeDate } from '../utils/formatters';
 import { useCandidatesSSE, useSSECandidateUpdate } from '../hooks/useCandidatesSSE';
@@ -449,6 +449,9 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
     const hasSetInitialFilter = useRef(false);
     const filterValueRef = useRef(null);
     const selectedChatRef = useRef(null);
+    const searchRef = useRef("");
+    const candidatesRef = useRef([]);
+    const prevSearchRef = useRef(null);
 
     // Multi-select Filters State
     const [selectedAges, setSelectedAges] = useState([]);
@@ -507,6 +510,9 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
         filterValueRef.current = filterValue;
     }, [activeFilter, filterValue]);
 
+    useEffect(() => { searchRef.current = deferredSearch; }, [deferredSearch]);
+    useEffect(() => { candidatesRef.current = candidates; }, [candidates]);
+
     const prevActiveFilterRef = useRef(null);
     // When label filter changes, reload from server so we scan ALL candidates (not just the first 5000 in memory).
     // Debounced 400ms so rapid filter clicks don't each trigger a full Redis scan.
@@ -524,7 +530,15 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
         const timer = setTimeout(() => { loadCandidates(); }, 400);
         return () => clearTimeout(timer);
     }, [activeFilter, filterValue]);
-    
+
+    // Server-side search: reload when search query changes (debounced 250ms)
+    useEffect(() => {
+        if (prevSearchRef.current === null) { prevSearchRef.current = deferredSearch; return; }
+        if (prevSearchRef.current === deferredSearch) return;
+        prevSearchRef.current = deferredSearch;
+        const timer = setTimeout(() => { loadCandidates(); }, 250);
+        return () => clearTimeout(timer);
+    }, [deferredSearch]);
 
 
     // Manual CRM (Kanban) Filters - Route B
@@ -815,16 +829,17 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
     const loadCandidates = async () => {
         try {
             const tagParam = activeFilterRef.current === 'label' ? filterValueRef.current : "";
-            const result = await getCandidates(5000, 0, "", false, tagParam);
+            const searchParam = searchRef.current || "";
+            const result = await getCandidates(300, 0, searchParam, false, tagParam);
             if (result.success) {
                 let fetchedCandidates = result.candidates || [];
-                console.log(`📊 [ChatSection] loadCandidates: fetched ${fetchedCandidates.length} candidates from API (tagParam="${tagParam}")`);
-                
+                console.log(`📊 [ChatSection] loadCandidates: fetched ${fetchedCandidates.length} candidates (search="${searchParam}" tag="${tagParam}")`);
+
                 setCandidates(fetchedCandidates);
                 if (fetchedCandidates.length > 0) {
                     setSelectedChat(current => {
                         if (!current) return fetchedCandidates[0];
-                        return current; // Ya hay uno seleccionado, no forzamos cambio
+                        return current;
                     });
                 }
             }
@@ -835,17 +850,9 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
         }
     };
 
-    // Fast search filter for the list with robust safety checks
+    // Filter and sort candidates (search is handled server-side via loadCandidates)
     const filteredCandidates = useMemo(() => {
         const result = (candidates || []).filter(c => {
-            const searchVal = (deferredSearch || "").toLowerCase();
-            const matchesSearch = 
-                (c?.nombreReal && String(c.nombreReal).toLowerCase().includes(searchVal)) ||
-                (c?.nombre && String(c.nombre).toLowerCase().includes(searchVal)) ||
-                (c?.whatsapp && String(c.whatsapp).includes(searchVal)) ||
-                (c?.adId && String(c.adId).includes(searchVal));
-                
-            if (!matchesSearch && searchVal !== "") return false;
 
             // --- RBAC Base Filter: Only show candidates from allowed projects or tags ---
             if (!passesRBACFilter(c, user)) return false;
@@ -891,7 +898,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
 
         // 🔍 DIAGNOSTIC: Track filter pipeline losses
         if ((candidates || []).length !== result.length) {
-            console.log(`🔍 [ChatSection] Filter Pipeline: ${(candidates || []).length} total → ${result.length} visible | role=${user?.role} filter=${activeFilter} search="${deferredSearch}" crmFilter=${manualPipelineFilter || 'none'}`);
+            console.log(`🔍 [ChatSection] Filter Pipeline: ${(candidates || []).length} total → ${result.length} visible | role=${user?.role} filter=${activeFilter} crmFilter=${manualPipelineFilter || 'none'}`);
         }
 
         // 🏎️ Pre-compute timestamps ONCE (eliminates ~44,000 Date objects per sort)
@@ -909,7 +916,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
             return (tsCache.get(b.id) || 0) - (tsCache.get(a.id) || 0);
         });
     }, [
-        candidates, deferredSearch, user,
+        candidates, user,
         activeFilter, filterValue, profileUnreadOnly,
         manualPipelineFilter, manualStepFilter,
         pinnedChats,
@@ -1149,21 +1156,39 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
         // --- SURGICAL CANDIDATE PATCH (replaces loadCandidates) ---
         if (sseUpdate.candidateId && sseUpdate.updates && !sseUpdate.updates?.recruiterTyping) {
             const patch = sseUpdate.updates;
-            setCandidates(prev => prev.map(c => {
-                if (c.id !== sseUpdate.candidateId) return c;
-                const updated = { ...c };
-                if (patch.ultimoMensaje) updated.ultimoMensaje = patch.ultimoMensaje;
-                if (patch.lastUserMessageAt) {
-                    updated.lastUserMessageAt = patch.lastUserMessageAt;
-                    updated.unreadMsgCount = (c.unreadMsgCount || 0) + 1;
-                }
-                if (patch.lastBotMessageAt) {
-                    updated.lastBotMessageAt = patch.lastBotMessageAt;
-                    updated.ultimoMensajeBot = patch.lastBotMessageAt;
-                }
-                if (patch.unreadMsgCount !== undefined) updated.unreadMsgCount = patch.unreadMsgCount;
-                return updated;
-            }));
+            const isInList = candidatesRef.current.some(c => c.id === sseUpdate.candidateId);
+
+            if (isInList) {
+                setCandidates(prev => prev.map(c => {
+                    if (c.id !== sseUpdate.candidateId) return c;
+                    const updated = { ...c };
+                    if (patch.ultimoMensaje) updated.ultimoMensaje = patch.ultimoMensaje;
+                    if (patch.lastUserMessageAt) {
+                        updated.lastUserMessageAt = patch.lastUserMessageAt;
+                        updated.unreadMsgCount = (c.unreadMsgCount || 0) + 1;
+                    }
+                    if (patch.lastBotMessageAt) {
+                        updated.lastBotMessageAt = patch.lastBotMessageAt;
+                        updated.ultimoMensajeBot = patch.lastBotMessageAt;
+                    }
+                    if (patch.unreadMsgCount !== undefined) updated.unreadMsgCount = patch.unreadMsgCount;
+                    return updated;
+                }));
+            } else if (patch.lastUserMessageAt || patch.ultimoMensaje) {
+                // Candidate not in the loaded 300 — fetch and inject at top (bubble-up)
+                getCandidateById(sseUpdate.candidateId)
+                    .then(res => {
+                        if (res.success && res.candidate) {
+                            if (recentlyDeletedRef.current.has(res.candidate.id)) return;
+                            setCandidates(prev => {
+                                if (prev.some(c => c.id === res.candidate.id)) return prev;
+                                return [res.candidate, ...prev];
+                            });
+                        }
+                    })
+                    .catch(() => {});
+            }
+
             // Also update selectedChat if it's the one that changed
             if (currentChat?.id === sseUpdate.candidateId) {
                 setSelectedChat(prev => {
