@@ -512,13 +512,63 @@ export const getCandidates = async (limit = 100, offset = 0, search = '', exclud
 };
 
 /**
+ * Siembra candidates:unread escaneando todos los candidatos con unreadMsgCount > 0.
+ * Se llama una sola vez en background cuando el Set está vacío (primer deploy).
+ */
+async function _seedUnreadSet(client) {
+    try {
+        const dbSize = (await client.scard(KEYS.LIST_COMPLETE)) + (await client.scard(KEYS.LIST_PENDING));
+        let index = 0;
+        const CHUNK = 500;
+        while (index < dbSize) {
+            const ids = await client.zrevrange(KEYS.CANDIDATES_LIST, index, index + CHUNK - 1);
+            if (!ids || ids.length === 0) break;
+            const pipeline = client.pipeline();
+            ids.forEach(id => pipeline.get(`${KEYS.CANDIDATE_PREFIX}${id}`));
+            const results = await pipeline.exec();
+            const unreadIds = [];
+            for (const [err, res] of results) {
+                if (err || !res) continue;
+                try {
+                    const c = JSON.parse(res);
+                    if (Number(c.unreadMsgCount) > 0) unreadIds.push(c.id);
+                } catch {}
+            }
+            if (unreadIds.length > 0) {
+                await client.sadd(KEYS.CANDIDATES_UNREAD, ...unreadIds);
+            }
+            index += CHUNK;
+            await new Promise(r => setTimeout(r, 5)); // yield event loop
+        }
+        console.log(`✅ [candidates:unread] Set sembrado correctamente`);
+    } catch (err) {
+        console.error('❌ [candidates:unread] Siembra fallida:', err);
+    }
+}
+
+/**
  * Carga todos los candidatos no-leídos (desde el Set candidates:unread)
  * más los `recentLimit` más recientes que no estén ya en esa lista.
  * O(1) para el Set + O(recentLimit) pipeline GET. Sin SCAN.
+ * Si el Set está vacío (primer deploy), siembra en background y devuelve fallback.
  */
 export const getCandidatesUnreadFirst = async (recentLimit = 50) => {
     const client = getClient();
     if (!client) return { candidates: [], total: 0 };
+
+    const setSize = await client.scard(KEYS.CANDIDATES_UNREAD);
+
+    // Set vacío = primer deploy: sembrar en fondo y devolver fallback mientras tanto
+    if (setSize === 0) {
+        _seedUnreadSet(client); // fire-and-forget
+        const fallbackIds = await client.zrevrange(KEYS.CANDIDATES_LIST, 0, 299);
+        if (!fallbackIds.length) return { candidates: [], total: 0 };
+        const fp = client.pipeline();
+        fallbackIds.forEach(id => fp.get(`${KEYS.CANDIDATE_PREFIX}${id}`));
+        const fr = await fp.exec();
+        const candidates = fr.map(([e, r]) => e || !r ? null : JSON.parse(r)).filter(Boolean);
+        return { candidates, total: candidates.length };
+    }
 
     // Todos los IDs no-leídos del Set (O(1))
     const unreadIds = await client.smembers(KEYS.CANDIDATES_UNREAD);
