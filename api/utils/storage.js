@@ -81,6 +81,7 @@ const KEYS = {
     // Optimized Statistics Sets (O(1) scard)
     LIST_COMPLETE: 'stats:list:complete',
     LIST_PENDING: 'stats:list:pending',
+    CANDIDATES_UNREAD: 'candidates:unread',
 
     // ByPass Rules (New)
     BYPASS_LIST: 'bypass:list',
@@ -511,6 +512,39 @@ export const getCandidates = async (limit = 100, offset = 0, search = '', exclud
 };
 
 /**
+ * Carga todos los candidatos no-leídos (desde el Set candidates:unread)
+ * más los `recentLimit` más recientes que no estén ya en esa lista.
+ * O(1) para el Set + O(recentLimit) pipeline GET. Sin SCAN.
+ */
+export const getCandidatesUnreadFirst = async (recentLimit = 50) => {
+    const client = getClient();
+    if (!client) return { candidates: [], total: 0 };
+
+    // Todos los IDs no-leídos del Set (O(1))
+    const unreadIds = await client.smembers(KEYS.CANDIDATES_UNREAD);
+
+    // Los recentLimit más recientes del ZSET ordenado por ultimoMensaje DESC
+    const recentIds = await client.zrevrange(KEYS.CANDIDATES_LIST, 0, recentLimit - 1);
+
+    // Unión sin duplicados: no-leídos primero, luego recientes no repetidos
+    const unreadSet = new Set(unreadIds);
+    const recentOnly = recentIds.filter(id => !unreadSet.has(id));
+    const allIds = [...unreadIds, ...recentOnly];
+
+    if (allIds.length === 0) return { candidates: [], total: 0 };
+
+    const pipeline = client.pipeline();
+    allIds.forEach(id => pipeline.get(`${KEYS.CANDIDATE_PREFIX}${id}`));
+    const results = await pipeline.exec();
+
+    const candidates = results
+        .map(([err, res]) => (err || !res) ? null : JSON.parse(res))
+        .filter(Boolean);
+
+    return { candidates, total: candidates.length };
+};
+
+/**
  * [SIN TANTO ROLLO] Atomic Statistic Synchronizer
  * Moves candidate ID between 'complete' and 'pending' sets based on audit.
  * This makes global counting O(1) via SCARD.
@@ -909,8 +943,10 @@ export const updateCandidate = async (id, data) => {
         if (redisAtomic) {
             if (data.unreadMsgCount === 0 && (Number(candidate.unreadMsgCount) || 0) > 0) {
                 await redisAtomic.decr('stats:bot:unread_v2').catch(() => {});
+                await redisAtomic.srem(KEYS.CANDIDATES_UNREAD, id).catch(() => {});
             } else if (data.unreadMsgCount > 0 && (Number(candidate.unreadMsgCount) || 0) === 0) {
                 await redisAtomic.incr('stats:bot:unread_v2').catch(() => {});
+                await redisAtomic.sadd(KEYS.CANDIDATES_UNREAD, id).catch(() => {});
             }
         }
     }

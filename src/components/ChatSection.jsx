@@ -831,10 +831,14 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
         try {
             const tagParam = activeFilterRef.current === 'label' ? filterValueRef.current : "";
             const searchParam = searchRef.current || "";
-            const result = await getCandidates(300, 0, searchParam, false, tagParam);
+            // Modo normal: no-leídos + 50 recientes (sin búsqueda ni filtro activo)
+            const useUnreadFirst = !searchParam && !tagParam;
+            const result = useUnreadFirst
+                ? await getCandidates(50, 0, "", false, "", true)
+                : await getCandidates(300, 0, searchParam, false, tagParam);
             if (result.success) {
                 let fetchedCandidates = result.candidates || [];
-                console.log(`📊 [ChatSection] loadCandidates: fetched ${fetchedCandidates.length} candidates (search="${searchParam}" tag="${tagParam}")`);
+                console.log(`📊 [ChatSection] loadCandidates: ${fetchedCandidates.length} candidatos (${useUnreadFirst ? 'unreadFirst' : `search="${searchParam}" tag="${tagParam}"`})`);
 
                 setCandidates(fetchedCandidates);
                 if (fetchedCandidates.length > 0) {

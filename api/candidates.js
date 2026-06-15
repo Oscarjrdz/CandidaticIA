@@ -15,7 +15,7 @@ export default async function handler(req, res) {
 
     try {
         // DYNAMIC IMPORTS
-        const { getCandidates, getCandidateById, deleteCandidate, validateAdminSession } = await import('./utils/storage.js');
+        const { getCandidates, getCandidatesUnreadFirst, getCandidateById, deleteCandidate, validateAdminSession } = await import('./utils/storage.js');
 
         // Validar sesión admin
         const userId = await validateAdminSession(req);
@@ -23,7 +23,7 @@ export default async function handler(req, res) {
 
         // GET /api/candidates - Obtener lista o estadísticas
         if (req.method === 'GET') {
-            const { limit = '100', offset = '0', search = '', stats, id, excludeLinked = 'false', tag = '' } = req.query;
+            const { limit = '100', offset = '0', search = '', stats, id, excludeLinked = 'false', tag = '', unreadFirst = 'false' } = req.query;
 
             // Estadísticas (Optional mixed response)
             let statsData = null;
@@ -67,7 +67,19 @@ export default async function handler(req, res) {
                 });
             }
 
-            // Lista de candidatos
+            // Modo unreadFirst: no-leídos + N recientes (sin búsqueda ni filtro)
+            if (unreadFirst === 'true' && !search && !tag && excludeLinked !== 'true') {
+                const { candidates } = await getCandidatesUnreadFirst(parseInt(limit) || 50);
+                return res.status(200).json({
+                    success: true,
+                    count: candidates.length,
+                    total: statsData?.candidates || candidates.length,
+                    candidates,
+                    stats: statsData
+                });
+            }
+
+            // Lista de candidatos (modo normal)
             const { candidates, total } = await getCandidates(
                 parseInt(limit),
                 parseInt(offset),
