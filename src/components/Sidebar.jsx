@@ -202,12 +202,14 @@ const Sidebar = ({ activeSection, onSectionChange, onLogout, isMobileOpen, onClo
         if (chatMounted && rbacUnread !== null) {
             return rbacUnread;
         }
+        // Prefer last RBAC count (accurate, persisted in localStorage) + SSE delta
+        if (rbacUnread !== null) {
+            return Math.max(0, rbacUnread) + sseDelta;
+        }
+        // Never visited Chat Web this session — fall back to SSE global stats
         const sseBaseline = globalStats?.unread;
         if (sseBaseline !== undefined && sseBaseline !== null) {
             return sseBaseline + sseDelta;
-        }
-        if (rbacUnread !== null) {
-            return rbacUnread + sseDelta;
         }
         return sseDelta;
     })();
