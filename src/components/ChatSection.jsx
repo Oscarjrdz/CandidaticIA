@@ -2103,7 +2103,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                                 )}
                             </button>
                             <button 
-                                onClick={() => { setActiveFilter('profile'); setFilterValue('complete'); setProfileUnreadOnly(false); setShowDropdown(null); }}
+                                onClick={() => { setActiveFilter('profile'); setFilterValue('complete'); setProfileUnreadOnly(true); setShowDropdown(null); }}
                                 className={`px-4 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-colors flex items-center gap-1 shrink-0 ${
                                     activeFilter === 'profile' && filterValue === 'complete' 
                                     ? 'bg-[#d9fdd3] text-[#128c7e] dark:bg-[#0a332c] dark:text-[#25d366]' 
@@ -2114,7 +2114,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                             </button>
                             {(user?.role === 'SuperAdmin' || !rolePermissions || Object.keys(rolePermissions).length === 0 || rolePermissions.view_incomplete_candidates === true) && (
                                 <button
-                                    onClick={() => { setActiveFilter('profile'); setFilterValue('incomplete'); setProfileUnreadOnly(false); setShowDropdown(null); }}
+                                    onClick={() => { setActiveFilter('profile'); setFilterValue('incomplete'); setProfileUnreadOnly(true); setShowDropdown(null); }}
                                     className={`px-4 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-colors flex items-center gap-1 shrink-0 ${
                                         activeFilter === 'profile' && filterValue === 'incomplete'
                                         ? 'bg-[#d9fdd3] text-[#128c7e] dark:bg-[#0a332c] dark:text-[#25d366]'
@@ -2172,7 +2172,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                         </button>
                         {canSeeFilter('filter_complete') && (
                             <button 
-                                onClick={() => { setActiveFilter('profile'); setFilterValue('complete'); setProfileUnreadOnly(false); setShowDropdown(null); }}
+                                onClick={() => { setActiveFilter('profile'); setFilterValue('complete'); setProfileUnreadOnly(true); setShowDropdown(null); }}
                                 className={`flex-[1.5] flex justify-center px-1.5 py-1.5 rounded-full font-medium whitespace-nowrap transition-colors border border-transparent items-center gap-1 min-w-[90px] ${
                                     activeFilter === 'profile' && filterValue === 'complete' 
                                     ? 'bg-[#d9fdd3] text-[#111b21] dark:bg-[#0a332c] dark:text-[#25d366]' 
@@ -2194,7 +2194,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                         )}
                         {canSeeFilter('filter_incomplete') && (user?.role === 'SuperAdmin' || !rolePermissions || Object.keys(rolePermissions).length === 0 || rolePermissions.view_incomplete_candidates === true) && (
                             <button 
-                                onClick={() => { setActiveFilter('profile'); setFilterValue('incomplete'); setProfileUnreadOnly(false); setShowDropdown(null); }}
+                                onClick={() => { setActiveFilter('profile'); setFilterValue('incomplete'); setProfileUnreadOnly(true); setShowDropdown(null); }}
                                 className={`flex-[1.5] flex justify-center px-1.5 py-1.5 rounded-full font-medium whitespace-nowrap transition-colors border border-transparent items-center gap-1 min-w-[90px] ${
                                     activeFilter === 'profile' && filterValue === 'incomplete' 
                                     ? 'bg-[#d9fdd3] text-[#111b21] dark:bg-[#0a332c] dark:text-[#25d366]' 
