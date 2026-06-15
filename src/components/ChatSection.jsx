@@ -969,12 +969,20 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
 
     const unreadCounts = useMemo(() => {
         const counts = { tags: {}, crmProjects: {}, complete: 0, incomplete: 0, all: 0 };
+        const canSeeIncomplete = user?.role === 'SuperAdmin' ||
+            !rolePermissions || Object.keys(rolePermissions).length === 0 ||
+            rolePermissions.view_incomplete_candidates === true;
+
         for (const c of baseCandidates) {
+            const profComplete = isProfileComplete(c);
+            // No contar no leídos de incompletos si el rol no tiene permiso de verlos
+            if (!profComplete && !canSeeIncomplete) continue;
+
             const isUnread = checkIfUnread(c);
 
             if (isUnread) {
                 counts.all++;
-                if (isProfileComplete(c)) {
+                if (profComplete) {
                     counts.complete++;
                 } else {
                     counts.incomplete++;
@@ -996,7 +1004,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
             }
         }
         return counts;
-    }, [baseCandidates]);
+    }, [baseCandidates, user, rolePermissions]);
 
     // 📡 Broadcast RBAC-filtered unread count to Sidebar badge (only after candidates are loaded)
     useEffect(() => {
