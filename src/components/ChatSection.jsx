@@ -307,7 +307,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
     }, []);
 
     const canManageTags = user?.role === 'SuperAdmin' || user?.can_manage_tags === true;
-    const { newCandidate: sseNewCandidate, connected: sseConnected } = useCandidatesSSE();
+    const { newCandidate: sseNewCandidate, connected: sseConnected, globalStats } = useCandidatesSSE();
     const [candidates, setCandidates] = useState([]);
     const [selectedChat, setSelectedChat] = useState(null);
     const [headerImgError, setHeaderImgError] = useState(false);
@@ -2085,13 +2085,13 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                                     : 'bg-[#f0f2f5] text-[#54656f] hover:bg-[#e9edef] dark:bg-[#202c33] dark:text-[#aebac1] dark:hover:bg-[#2a3942]'
                                 }`}
                             >
-                                Todos
+                                Todos {globalStats?.total ? `(${globalStats.total})` : ''}
                             </button>
-                            <button 
+                            <button
                                 onClick={() => { setActiveFilter('unread'); setFilterValue(null); setShowDropdown(null); }}
                                 className={`px-4 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-colors flex items-center gap-1.5 shrink-0 ${
-                                    activeFilter === 'unread' 
-                                    ? 'bg-[#d9fdd3] text-[#128c7e] dark:bg-[#0a332c] dark:text-[#25d366]' 
+                                    activeFilter === 'unread'
+                                    ? 'bg-[#d9fdd3] text-[#128c7e] dark:bg-[#0a332c] dark:text-[#25d366]'
                                     : 'bg-[#f0f2f5] text-[#54656f] hover:bg-[#e9edef] dark:bg-[#202c33] dark:text-[#aebac1] dark:hover:bg-[#2a3942]'
                                 }`}
                             >
@@ -2151,14 +2151,14 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                                 }`}
                                 style={{ fontSize: 'clamp(8px, 2.2cqw, 11px)' }}
                             >
-                                Todos
+                                Todos {globalStats?.total ? `(${globalStats.total})` : ''}
                             </button>
                         )}
-                        <button 
+                        <button
                             onClick={() => { setActiveFilter('unread'); setFilterValue(null); setShowDropdown(null); }}
                             className={`flex-[1.2] flex justify-center px-1.5 py-1.5 rounded-full font-medium whitespace-nowrap transition-colors border border-transparent items-center gap-1 min-w-[70px] ${
-                                activeFilter === 'unread' 
-                                ? 'bg-[#d9fdd3] text-[#111b21] dark:bg-[#0a332c] dark:text-[#25d366]' 
+                                activeFilter === 'unread'
+                                ? 'bg-[#d9fdd3] text-[#111b21] dark:bg-[#0a332c] dark:text-[#25d366]'
                                 : 'bg-[#f0f2f5] text-[#54656f] hover:bg-[#e9edef] dark:bg-[#202c33] dark:text-[#aebac1] dark:hover:bg-[#2a3942]'
                             }`}
                             style={{ fontSize: 'clamp(8px, 2.2cqw, 11px)' }}
@@ -2180,7 +2180,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                                 }`}
                                 style={{ fontSize: 'clamp(8px, 2.2cqw, 11px)' }}
                             >
-                                Completos ({badgeCounts.complete})
+                                Completos ({globalStats?.complete ?? badgeCounts.complete})
                                 {unreadCounts.complete > 0 && (
                                     <div
                                         onClick={(e) => { e.stopPropagation(); setActiveFilter('profile'); setFilterValue('complete'); setProfileUnreadOnly(true); setShowDropdown(null); }}
@@ -2202,7 +2202,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                                 }`}
                                 style={{ fontSize: 'clamp(8px, 2.2cqw, 11px)' }}
                             >
-                                Incompletos ({badgeCounts.incomplete})
+                                Incompletos ({globalStats?.pending ?? badgeCounts.incomplete})
                                 {unreadCounts.incomplete > 0 && (
                                     <div
                                         onClick={(e) => { e.stopPropagation(); setActiveFilter('profile'); setFilterValue('incomplete'); setProfileUnreadOnly(true); setShowDropdown(null); }}
