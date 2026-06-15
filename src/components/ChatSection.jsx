@@ -527,7 +527,9 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
 
         const needsReload =
             (activeFilter === 'label' && filterValue) ||
-            (prev === 'label' && activeFilter !== 'label');
+            (prev === 'label' && activeFilter !== 'label') ||
+            activeFilter === 'all' ||
+            (prev === 'all');
 
         if (!needsReload) return;
 
