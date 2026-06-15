@@ -1485,9 +1485,9 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
         if (e) e.stopPropagation();
         if (!chatToMark) return;
 
-        // Optimistic update: set unread state
-        setCandidates(prev => prev.map(c => 
-            c.id === chatToMark.id ? { ...c, unreadMsgCount: 1 } : c
+        // Optimistic update: clear lastHumanMessageAt so checkIfUnread returns true
+        setCandidates(prev => prev.map(c =>
+            c.id === chatToMark.id ? { ...c, lastHumanMessageAt: null } : c
         ));
 
         try {

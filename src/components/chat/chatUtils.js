@@ -107,8 +107,8 @@ export const AVATAR_COLORS = ['#f9a8d4','#a5b4fc','#86efac','#fcd34d','#fdba74',
 
 export const checkIfUnread = (chat) => {
     if (!chat) return false;
-    if (Number(chat.unreadMsgCount) > 0) return true;
     const userTime = chat.lastUserMessageAt ? new Date(chat.lastUserMessageAt).getTime() : 0;
-    if (userTime > 0 && !chat.lastHumanMessageAt) return true;
-    return false;
+    if (!userTime) return false;
+    const humanTime = chat.lastHumanMessageAt ? new Date(chat.lastHumanMessageAt).getTime() : 0;
+    return userTime > humanTime;
 };

@@ -118,10 +118,9 @@ export default async function handler(req, res) {
             }
 
             if (action === 'mark_unread') {
-                // Set unreadMsgCount=1 — this is the only field that matters for unread state
                 try {
-                    await updateCandidate(candidateId, { 
-                        unreadMsgCount: 1
+                    await updateCandidate(candidateId, {
+                        lastHumanMessageAt: null
                     });
                 } catch (e) {}
                 return res.status(200).json({ success: true, marked: 'unread' });
