@@ -196,19 +196,18 @@ const Sidebar = ({ activeSection, onSectionChange, onLogout, isMobileOpen, onClo
 
     // Unread count logic:
     // 1. When ChatSection is mounted → use its RBAC-accurate broadcast (source of truth)
-    // 2. When ChatSection is unmounted → use last known RBAC count + unique new candidates seen via SSE
-    // 3. First load fallback (no RBAC ever recorded) → use globalStats.unread from SSE
+    // 2. When ChatSection is unmounted → use globalStats.unread from SSE (live, updates every 5s + pub/sub)
     const sseDelta = newUnreadIds.size;
     const unreadCount = (() => {
         if (chatMounted && rbacUnread !== null) {
             return rbacUnread;
         }
-        if (rbacUnread !== null) {
-            return rbacUnread + sseDelta;
-        }
         const sseBaseline = globalStats?.unread;
         if (sseBaseline !== undefined && sseBaseline !== null) {
             return sseBaseline + sseDelta;
+        }
+        if (rbacUnread !== null) {
+            return rbacUnread + sseDelta;
         }
         return sseDelta;
     })();
