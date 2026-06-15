@@ -512,7 +512,7 @@ export const getCandidates = async (limit = 100, offset = 0, search = '', exclud
 };
 
 /**
- * Siembra candidates:unread escaneando todos los candidatos con unreadMsgCount > 0.
+ * Siembra candidates:unread escaneando todos los candidatos donde lastUserMessageAt > lastHumanMessageAt.
  * Se llama una sola vez en background cuando el Set está vacío (primer deploy).
  */
 async function _seedUnreadSet(client) {
@@ -520,6 +520,7 @@ async function _seedUnreadSet(client) {
         const dbSize = (await client.scard(KEYS.LIST_COMPLETE)) + (await client.scard(KEYS.LIST_PENDING));
         let index = 0;
         const CHUNK = 500;
+        let totalUnread = 0;
         while (index < dbSize) {
             const ids = await client.zrevrange(KEYS.CANDIDATES_LIST, index, index + CHUNK - 1);
             if (!ids || ids.length === 0) break;
@@ -531,16 +532,20 @@ async function _seedUnreadSet(client) {
                 if (err || !res) continue;
                 try {
                     const c = JSON.parse(res);
-                    if (Number(c.unreadMsgCount) > 0) unreadIds.push(c.id);
+                    const ut = c.lastUserMessageAt ? new Date(c.lastUserMessageAt).getTime() : 0;
+                    const ht = c.lastHumanMessageAt ? new Date(c.lastHumanMessageAt).getTime() : 0;
+                    if (ut > ht) unreadIds.push(c.id);
                 } catch {}
             }
             if (unreadIds.length > 0) {
                 await client.sadd(KEYS.CANDIDATES_UNREAD, ...unreadIds);
+                totalUnread += unreadIds.length;
             }
             index += CHUNK;
-            await new Promise(r => setTimeout(r, 5)); // yield event loop
+            await new Promise(r => setTimeout(r, 5));
         }
-        console.log(`✅ [candidates:unread] Set sembrado correctamente`);
+        await client.set('stats:bot:unread_v2', totalUnread);
+        console.log(`✅ [candidates:unread] Set sembrado: ${totalUnread} no leídos`);
     } catch (err) {
         console.error('❌ [candidates:unread] Siembra fallida:', err);
     }
@@ -1009,16 +1014,26 @@ export const updateCandidate = async (id, data) => {
     if (!candidate) return null;
     const updated = { ...candidate, ...data };
 
-    // 📊 ATOMIC UNREAD: Handle manual read/unread state changes to keep global badge in sync
-    if (data.unreadMsgCount !== undefined && candidate.unreadMsgCount !== data.unreadMsgCount) {
-        const redisAtomic = getRedisClient();
-        if (redisAtomic) {
-            if (data.unreadMsgCount === 0 && (Number(candidate.unreadMsgCount) || 0) > 0) {
-                await redisAtomic.decr('stats:bot:unread_v2').catch(() => {});
-                await redisAtomic.srem(KEYS.CANDIDATES_UNREAD, id).catch(() => {});
-            } else if (data.unreadMsgCount > 0 && (Number(candidate.unreadMsgCount) || 0) === 0) {
-                await redisAtomic.incr('stats:bot:unread_v2').catch(() => {});
-                await redisAtomic.sadd(KEYS.CANDIDATES_UNREAD, id).catch(() => {});
+    // 📊 ATOMIC UNREAD: Track unread state using timestamps (lastUserMessageAt > lastHumanMessageAt)
+    {
+        const _isUnread = (c) => {
+            const ut = c.lastUserMessageAt ? new Date(c.lastUserMessageAt).getTime() : 0;
+            if (!ut) return false;
+            const ht = c.lastHumanMessageAt ? new Date(c.lastHumanMessageAt).getTime() : 0;
+            return ut > ht;
+        };
+        const wasUnread = _isUnread(candidate);
+        const isNowUnread = _isUnread(updated);
+        if (wasUnread !== isNowUnread) {
+            const redisAtomic = getRedisClient();
+            if (redisAtomic) {
+                if (wasUnread && !isNowUnread) {
+                    await redisAtomic.decr('stats:bot:unread_v2').catch(() => {});
+                    await redisAtomic.srem(KEYS.CANDIDATES_UNREAD, id).catch(() => {});
+                } else {
+                    await redisAtomic.incr('stats:bot:unread_v2').catch(() => {});
+                    await redisAtomic.sadd(KEYS.CANDIDATES_UNREAD, id).catch(() => {});
+                }
             }
         }
     }
