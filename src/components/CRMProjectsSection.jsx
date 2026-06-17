@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { FolderPlus, Trash2, Plus, Pencil, Users, User, Search, X, Loader2, MessageCircle, Copy, ChevronRight, GraduationCap, MapPin, Calendar, Palette, GripVertical } from 'lucide-react';
+import { FolderPlus, Trash2, Plus, Pencil, Users, User, Search, X, Loader2, MessageCircle, Copy, ChevronRight, GraduationCap, MapPin, Calendar, Palette, GripVertical, Tag, Check } from 'lucide-react';
 import Card from './ui/Card';
 import Button from './ui/Button';
 import { useConfirmModal } from './ui/ConfirmModal';
@@ -28,11 +28,14 @@ const DroppableStepZone = ({ stepId, isOver, children }) => {
     );
 };
 
-const SortableCandCard = ({ candidate, onRemove, onChat, onCalendar }) => {
+const SortableCandCard = ({ candidate, onRemove, onChat, onCalendar, availableTags = [], onToggleTag }) => {
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
         id: candidate.id, data: { type: 'candidate', candidate }
     });
     const style = { transform: CSS.Translate.toString(transform), transition, opacity: isDragging ? 0.3 : 1 };
+    const [showTagPicker, setShowTagPicker] = useState(false);
+    const [tagSearch, setTagSearch] = useState('');
+
     return (
         <div ref={setNodeRef} style={style} {...attributes} {...listeners}
             className="bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-3 shadow-sm hover:shadow-md transition-all cursor-grab active:cursor-grabbing group">
@@ -62,6 +65,13 @@ const SortableCandCard = ({ candidate, onRemove, onChat, onCalendar }) => {
                     <button onClick={(e) => { e.stopPropagation(); onCalendar && onCalendar(candidate); }}
                         className="p-1 rounded hover:bg-orange-50 dark:hover:bg-orange-900/30 text-orange-400" title="Anotaciones / Calendario">
                         <Calendar className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                        onClick={(e) => { e.stopPropagation(); setShowTagPicker(p => !p); setTagSearch(''); }}
+                        className={`p-1 rounded transition-colors ${showTagPicker ? 'bg-green-50 dark:bg-green-900/30 text-green-500' : 'hover:bg-green-50 dark:hover:bg-green-900/30 text-slate-400 hover:text-green-500'}`}
+                        title="Etiquetar"
+                    >
+                        <Tag className="w-3.5 h-3.5" />
                     </button>
                     <button onClick={(e) => { e.stopPropagation(); onRemove(candidate.id); }}
                         className="p-1 rounded hover:bg-red-50 dark:hover:bg-red-900/30 text-red-400"><X className="w-3.5 h-3.5" /></button>
@@ -101,11 +111,62 @@ const SortableCandCard = ({ candidate, onRemove, onChat, onCalendar }) => {
 
             {candidate.tags?.length > 0 && Array.isArray(candidate.tags) && (
                 <div className="flex flex-wrap gap-1 mt-2">
-                    {candidate.tags.map((t, i) => (
-                        <span key={i} className="text-[9px] px-1.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 font-medium">
-                            {typeof t === 'string' ? t : t.name}
-                        </span>
-                    ))}
+                    {candidate.tags.map((t, i) => {
+                        const tName = typeof t === 'string' ? t : t.name;
+                        const tColor = availableTags.find(at => (typeof at === 'string' ? at : at.name) === tName)?.color || '#64748b';
+                        return (
+                            <span key={i} className="text-[9px] px-1.5 py-0.5 rounded-full font-medium text-white" style={{ backgroundColor: tColor }}>
+                                {tName}
+                            </span>
+                        );
+                    })}
+                </div>
+            )}
+
+            {/* Tag picker inline */}
+            {showTagPicker && (
+                <div className="mt-2 border-t border-slate-100 dark:border-slate-700 pt-2" onClick={e => e.stopPropagation()}>
+                    <div className="relative mb-1.5">
+                        <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400 pointer-events-none" />
+                        <input
+                            type="text"
+                            placeholder="Buscar etiqueta..."
+                            value={tagSearch}
+                            onChange={e => setTagSearch(e.target.value)}
+                            className="w-full text-[10px] pl-6 pr-2 py-1 rounded border border-gray-200 dark:border-gray-600 bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 outline-none focus:border-green-400 transition-colors"
+                            autoFocus
+                        />
+                    </div>
+                    <div className="max-h-32 overflow-y-auto space-y-0.5">
+                        {availableTags
+                            .filter(tagObj => {
+                                const n = typeof tagObj === 'string' ? tagObj : tagObj.name;
+                                return !tagSearch.trim() || n.toLowerCase().includes(tagSearch.toLowerCase());
+                            })
+                            .map(tagObj => {
+                                const tName = typeof tagObj === 'string' ? tagObj : tagObj.name;
+                                const tColor = typeof tagObj === 'object' ? tagObj.color : '#64748b';
+                                const isActive = candidate.tags?.includes(tName);
+                                return (
+                                    <button
+                                        key={tName}
+                                        onClick={e => { e.stopPropagation(); onToggleTag && onToggleTag(candidate.id, tName); }}
+                                        className={`w-full flex items-center gap-2 px-2 py-1 rounded text-[10px] text-left transition-colors ${isActive ? 'bg-green-50 dark:bg-green-900/20' : 'hover:bg-slate-50 dark:hover:bg-slate-700'}`}
+                                    >
+                                        <span className="w-2.5 h-2.5 rounded-full shrink-0 flex items-center justify-center" style={{ backgroundColor: tColor }}>
+                                            {isActive && <Check className="w-2 h-2 text-white" />}
+                                        </span>
+                                        <span className="flex-1 truncate text-slate-700 dark:text-slate-200 font-medium">{tName}</span>
+                                    </button>
+                                );
+                            })}
+                        {availableTags.filter(tagObj => {
+                            const n = typeof tagObj === 'string' ? tagObj : tagObj.name;
+                            return !tagSearch.trim() || n.toLowerCase().includes(tagSearch.toLowerCase());
+                        }).length === 0 && (
+                            <p className="text-[10px] text-slate-400 text-center py-2">Sin resultados</p>
+                        )}
+                    </div>
                 </div>
             )}
         </div>
@@ -227,6 +288,9 @@ const CRMProjectsSection = () => {
     const [stepEditName, setStepEditName] = useState('');
     const [stepEditColor, setStepEditColor] = useState('#3b82f6');
 
+    // Etiquetas globales (compartidas con Chat Web)
+    const [availableTags, setAvailableTags] = useState([]);
+
     const STEP_COLOR_PALETTE = [
         '#3b82f6', // blue
         '#8b5cf6', // violet
@@ -249,6 +313,9 @@ const CRMProjectsSection = () => {
 
     useEffect(() => { fetchProjects(); }, []);
     useEffect(() => { if (activeProject) fetchCandidates(activeProject.id); }, [activeProject?.id]);
+    useEffect(() => {
+        fetch('/api/tags').then(r => r.json()).then(d => { if (d.success) setAvailableTags(d.tags || []); }).catch(() => {});
+    }, []);
 
     const fetchProjects = async () => {
         setLoading(true);
@@ -366,6 +433,29 @@ const CRMProjectsSection = () => {
             await fetch('/api/manual_projects', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'updateSteps', projectId: activeProject.id, steps }) });
             showToast(msg, 'success');
         } catch (e) { showToast('Error', 'error'); }
+    };
+
+    const handleToggleCandidateTag = async (candidateId, tagName) => {
+        setCandidates(prev => prev.map(c => {
+            if (c.id !== candidateId) return c;
+            const currentTags = c.tags || [];
+            const newTags = currentTags.includes(tagName)
+                ? currentTags.filter(t => t !== tagName)
+                : [...currentTags, tagName];
+            return { ...c, tags: newTags };
+        }));
+        try {
+            const candidate = candidates.find(c => c.id === candidateId);
+            const currentTags = candidate?.tags || [];
+            const newTags = currentTags.includes(tagName)
+                ? currentTags.filter(t => t !== tagName)
+                : [...currentTags, tagName];
+            await fetch('/api/candidates', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: candidateId, tags: newTags })
+            });
+        } catch (e) { showToast('Error al actualizar etiqueta', 'error'); }
     };
 
     const handleSearch = async () => {
@@ -623,7 +713,7 @@ const CRMProjectsSection = () => {
                                                                 Arrastra candidatos aquí
                                                             </div>
                                                         ) : stepCands.map(c => (
-                                                            <SortableCandCard key={c.id} candidate={c} onRemove={handleUnlink} onChat={setChatCandidate} onCalendar={(cand) => setCalendarModalConfig({ isOpen: true, projectId: activeProject.id, projectName: activeProject.name, candidateId: cand.id, candidateName: cand.nombreReal || cand.from || cand.nombre })} />
+                                                            <SortableCandCard key={c.id} candidate={c} onRemove={handleUnlink} onChat={setChatCandidate} onCalendar={(cand) => setCalendarModalConfig({ isOpen: true, projectId: activeProject.id, projectName: activeProject.name, candidateId: cand.id, candidateName: cand.nombreReal || cand.from || cand.nombre })} availableTags={availableTags} onToggleTag={handleToggleCandidateTag} />
                                                         ))}
                                                     </DroppableStepZone>
                                                 </SortableContext>
