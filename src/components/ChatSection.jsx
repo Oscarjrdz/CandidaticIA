@@ -440,7 +440,8 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
     const [quickReplies, setQuickReplies] = useState([]);
     const [showQuickRepliesPanel, setShowQuickRepliesPanel] = useState(false);
     const [editingQuickReply, setEditingQuickReply] = useState(null); // null = creating, object = editing
-    const [qrForm, setQrForm] = useState({ name: '', message: '', shortcut: '' });
+    const [qrForm, setQrForm] = useState({ name: '', message: '', shortcut: '', imageUrl: '' });
+    const [qrImageUploading, setQrImageUploading] = useState(false);
     const [qrSaving, setQrSaving] = useState(false);
     const [capturingShortcut, setCapturingShortcut] = useState(false);
 
@@ -749,6 +750,58 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
         } catch (e) { console.error('Error saving quick replies', e); }
     };
 
+    const handleQrImageUpload = async (file) => {
+        if (!file) return;
+        setQrImageUploading(true);
+        try {
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('candidateId', 'quick_reply_asset');
+            const res = await fetch('/api/media/upload', { method: 'POST', body: formData });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Error al subir imagen');
+            setQrForm(prev => ({ ...prev, imageUrl: data.url || data.mediaUrl || '' }));
+        } catch (e) {
+            showToast && showToast('Error al subir imagen: ' + e.message, 'error');
+        } finally {
+            setQrImageUploading(false);
+        }
+    };
+
+    const handleApplyQuickReply = useCallback(async (qr) => {
+        if (qr.imageUrl && selectedChat) {
+            const tempId = `temp_${Date.now()}`;
+            const tempMsg = { id: tempId, from: 'me', content: '', mediaUrl: qr.imageUrl, type: 'image', status: 'queued', timestamp: new Date().toISOString() };
+            isSendingRef.current = true;
+            setSending(true);
+            setMessages(prev => [...prev, tempMsg]);
+            try {
+                const res = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ candidateId: selectedChat.id, message: '', type: 'image', mediaUrl: qr.imageUrl, senderId: user?.id || user?.whatsapp, senderName: user?.name || user?.nombre })
+                });
+                const chatData = await res.json();
+                if (!res.ok) throw new Error(chatData?.error || 'Error al enviar imagen');
+                setMessages(prev => prev.map(m => m.id === tempId
+                    ? { ...m, id: chatData.message?.id || tempId, status: 'sent', ultraMsgId: chatData.message?.ultraMsgId }
+                    : m
+                ));
+                window.dispatchEvent(new CustomEvent('candidate_replied', { detail: { candidateId: selectedChat.id } }));
+            } catch (err) {
+                showToast && showToast('Error al enviar imagen: ' + err.message, 'error');
+                setMessages(prev => prev.map(m => m.id === tempId ? { ...m, status: 'failed' } : m));
+            } finally {
+                setSending(false);
+                isSendingRef.current = false;
+            }
+        }
+        if (qr.message) {
+            messageInputRef.current?.injectText(qr.message);
+        }
+        setShowQuickRepliesPanel(false);
+    }, [selectedChat, user, showToast]);
+
     // Load quick replies on mount
     useEffect(() => { loadQuickReplies(); }, []);
 
@@ -785,14 +838,14 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                 ) {
                     e.preventDefault();
                     e.stopPropagation();
-                    messageInputRef.current?.injectText(qr.message);
+                    handleApplyQuickReply(qr);
                     return;
                 }
             }
         };
         window.addEventListener('keydown', handler, true);
         return () => window.removeEventListener('keydown', handler, true);
-    }, [quickReplies]);
+    }, [quickReplies, handleApplyQuickReply]);
 
     const loadTags = async () => {
         try {
@@ -3172,12 +3225,37 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                             className="w-full text-xs px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#202c33] text-[#111b21] dark:text-[#e9edef] outline-none focus:border-green-500 transition-colors"
                         />
                         <textarea
-                            placeholder="Mensaje..."
+                            placeholder="Mensaje... (opcional si adjuntas imagen)"
                             value={qrForm.message}
                             onChange={(e) => setQrForm({ ...qrForm, message: e.target.value })}
-                            rows={9}
+                            rows={6}
                             className="w-full text-xs px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#202c33] text-[#111b21] dark:text-[#e9edef] outline-none focus:border-green-500 transition-colors resize-y"
                         />
+                        {/* Image upload */}
+                        <div className="relative">
+                            {qrForm.imageUrl ? (
+                                <div className="relative rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700">
+                                    <img src={qrForm.imageUrl} alt="preview" className="w-full max-h-36 object-cover" />
+                                    <button
+                                        type="button"
+                                        onClick={() => setQrForm(prev => ({ ...prev, imageUrl: '' }))}
+                                        className="absolute top-1.5 right-1.5 bg-black/60 hover:bg-black/80 text-white rounded-full p-0.5 transition-colors"
+                                        title="Quitar imagen"
+                                    >
+                                        <X className="w-3.5 h-3.5" />
+                                    </button>
+                                </div>
+                            ) : (
+                                <label className={`flex items-center gap-2 w-full px-3 py-2 rounded-lg border border-dashed border-gray-300 dark:border-gray-600 cursor-pointer hover:border-green-500 transition-colors text-xs text-gray-400 dark:text-gray-500 ${qrImageUploading ? 'opacity-60 pointer-events-none' : ''}`}>
+                                    {qrImageUploading ? (
+                                        <><Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" /><span>Subiendo...</span></>
+                                    ) : (
+                                        <><Paperclip className="w-3.5 h-3.5 shrink-0" /><span>Adjuntar imagen (opcional)</span></>
+                                    )}
+                                    <input type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) handleQrImageUpload(f); e.target.value = ''; }} />
+                                </label>
+                            )}
+                        </div>
                         <div className="flex items-center gap-2">
                             <div className="flex-1 relative">
                                 <Keyboard className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
@@ -3215,7 +3293,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                             {editingQuickReply !== null && (
                                 <button
                                     type="button"
-                                    onClick={() => { setEditingQuickReply(null); setQrForm({ name: '', message: '', shortcut: '' }); }}
+                                    onClick={() => { setEditingQuickReply(null); setQrForm({ name: '', message: '', shortcut: '', imageUrl: '' }); }}
                                     className="flex-1 text-xs py-2 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-[#202c33] transition-colors font-medium"
                                 >
                                     Cancelar
@@ -3223,9 +3301,9 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                             )}
                             <button
                                 type="button"
-                                disabled={!qrForm.name.trim() || !qrForm.message.trim()}
+                                disabled={!qrForm.name.trim() || (!qrForm.message.trim() && !qrForm.imageUrl)}
                                 onClick={async () => {
-                                    const entry = { id: editingQuickReply?.id || `qr_${Date.now()}`, name: qrForm.name.trim(), message: qrForm.message.trim(), shortcut: qrForm.shortcut.trim() };
+                                    const entry = { id: editingQuickReply?.id || `qr_${Date.now()}`, name: qrForm.name.trim(), message: qrForm.message.trim(), shortcut: qrForm.shortcut.trim(), imageUrl: qrForm.imageUrl || '' };
                                     let newList;
                                     if (editingQuickReply) {
                                         newList = quickReplies.map(q => q.id === editingQuickReply.id ? entry : q);
@@ -3233,7 +3311,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                                         newList = [...quickReplies, entry];
                                     }
                                     await saveQuickReplies(newList);
-                                    setQrForm({ name: '', message: '', shortcut: '' });
+                                    setQrForm({ name: '', message: '', shortcut: '', imageUrl: '' });
                                     setEditingQuickReply(null);
                                     showToast && showToast(editingQuickReply ? 'Respuesta actualizada' : 'Respuesta creada', 'success');
                                 }}
@@ -3256,7 +3334,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                                 <div
                                     key={qr.id}
                                     className="px-4 py-3 border-b border-[#f0f2f5] dark:border-[#222e35] hover:bg-[#f0f2f5] dark:hover:bg-[#202c33] transition-colors group cursor-pointer"
-                                    onClick={() => { messageInputRef.current?.injectText(qr.message); setShowQuickRepliesPanel(false); }}
+                                    onClick={() => handleApplyQuickReply(qr)}
                                 >
                                     <div className="flex items-start justify-between gap-2">
                                         <div className="flex-1 min-w-0">
@@ -3268,11 +3346,14 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                                                     </span>
                                                 )}
                                             </div>
-                                            <p className="text-[11px] text-[#667781] dark:text-[#8696a0] line-clamp-2 leading-relaxed">{qr.message}</p>
+                                            {qr.imageUrl && (
+                                                <img src={qr.imageUrl} alt="img" className="mb-1 rounded-md max-h-20 object-cover border border-gray-200 dark:border-gray-700" />
+                                            )}
+                                            {qr.message && <p className="text-[11px] text-[#667781] dark:text-[#8696a0] line-clamp-2 leading-relaxed">{qr.message}</p>}
                                         </div>
                                         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
                                             <button
-                                                onClick={(e) => { e.stopPropagation(); setEditingQuickReply(qr); setQrForm({ name: qr.name, message: qr.message, shortcut: qr.shortcut || '' }); }}
+                                                onClick={(e) => { e.stopPropagation(); setEditingQuickReply(qr); setQrForm({ name: qr.name, message: qr.message, shortcut: qr.shortcut || '', imageUrl: qr.imageUrl || '' }); }}
                                                 className="p-1.5 text-gray-400 hover:text-blue-500 transition-colors rounded-full hover:bg-blue-50 dark:hover:bg-blue-900/20"
                                                 title="Editar"
                                             >
