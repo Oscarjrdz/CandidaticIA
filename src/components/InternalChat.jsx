@@ -245,6 +245,16 @@ export default function InternalChat({ onlineUsers = [] }) {
 
     const isPrivate = recipientId !== 'all';
 
+    const visibleMessages = messages.filter(m => {
+        if (recipientId === 'all') return m.to === 'all';
+        if (!recipientId) return false;
+        return (
+            (m.from === myId && m.to === recipientId) ||
+            (m.from === recipientId && m.to === myId) ||
+            (m._opt && m.from === myId && m.to === recipientId)
+        );
+    });
+
     return (
         <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-3">
             {open && (
@@ -313,12 +323,12 @@ export default function InternalChat({ onlineUsers = [] }) {
 
                     {/* Messages */}
                     <div ref={containerRef} onScroll={handleScroll} className="flex-1 overflow-y-auto px-3 py-3 space-y-2">
-                        {messages.length === 0 && (
+                        {visibleMessages.length === 0 && (
                             <p className="text-center text-xs text-gray-400 dark:text-gray-500 mt-8">
                                 {others.length === 0 ? 'No hay nadie más en línea' : 'Nadie ha escrito aún. ¡Di hola!'}
                             </p>
                         )}
-                        {messages.map((msg, i) => {
+                        {visibleMessages.map((msg, i) => {
                             const isMe = msg.from === myId;
                             const prevMsg = messages[i - 1];
                             const showSender = !isMe && prevMsg?.from !== msg.from;
