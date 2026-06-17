@@ -1,11 +1,22 @@
 /**
- * GET  /api/internal-chat?userId=X  → messages for user X (direct + broadcast)
- * POST /api/internal-chat            → send message (to: userId | 'all')
+ * GET  /api/internal-chat?whatsapp=X  → broadcast + DMs for user X
+ * POST /api/internal-chat              → send message (to: userId | 'all')
+ *
+ * Storage:
+ *   internal:broadcast              → list of broadcast messages (all)
+ *   internal:dm:{canonicalKey}      → list of DM messages per conversation pair
+ *   internal:threads:{userId}       → set of partner IDs for this user
  */
 import { getRedisClient } from './utils/storage.js';
 
-const KEY = 'internal:messages';
-const MAX = 200;
+const BROADCAST_KEY = 'internal:broadcast';
+const MAX_BROADCAST = 100;
+const MAX_DM = 100;
+const THREADS_TTL = 86400 * 30; // 30 days
+
+function canonicalKey(a, b) {
+    return [a, b].sort().join(':');
+}
 
 export default async function handler(req, res) {
     if (req.method === 'OPTIONS') return res.status(200).end();
@@ -14,14 +25,48 @@ export default async function handler(req, res) {
     if (!redis) return res.status(500).json({ error: 'Redis unavailable' });
 
     if (req.method === 'GET') {
-        // Accept whatsapp (preferred stable identity) or legacy userId
         const meId = req.query.whatsapp || req.query.userId;
-        const raw = await redis.lrange(KEY, 0, MAX - 1);
-        const all = raw.map(r => { try { return JSON.parse(r); } catch { return null; } }).filter(Boolean).reverse();
-        // Return only messages relevant to this user: broadcast + DMs to/from them
-        const messages = meId
-            ? all.filter(m => m.to === 'all' || m.from === meId || m.to === meId)
+        if (!meId) return res.status(400).json({ error: 'Missing identity' });
+
+        const pipe = redis.pipeline();
+        pipe.lrange(BROADCAST_KEY, 0, MAX_BROADCAST - 1);
+        pipe.smembers(`internal:threads:${meId}`);
+        const [broadcastRes, threadsRes] = await pipe.exec();
+
+        const broadcastRaw = broadcastRes[1] || [];
+        const partners = threadsRes[1] || [];
+
+        // Fetch all DM threads in one pipeline
+        let dmMessages = [];
+        if (partners.length > 0) {
+            const dmPipe = redis.pipeline();
+            for (const partner of partners) {
+                dmPipe.lrange(`internal:dm:${canonicalKey(meId, partner)}`, 0, MAX_DM - 1);
+            }
+            const dmResults = await dmPipe.exec();
+            for (const result of dmResults) {
+                if (result[1]) dmMessages.push(...result[1]);
+            }
+        }
+
+        const parse = (raw) => {
+            try { return JSON.parse(raw); } catch { return null; }
+        };
+
+        const all = [
+            ...broadcastRaw.map(parse),
+            ...dmMessages.map(parse),
+        ].filter(Boolean);
+
+        // Sort ascending by timestamp
+        all.sort((a, b) => (a.timestamp || '').localeCompare(b.timestamp || ''));
+
+        // Respect per-user clearedAt (sent as query param)
+        const clearedAt = req.query.clearedAt || null;
+        const messages = clearedAt
+            ? all.filter(m => (m.timestamp || '') > clearedAt)
             : all;
+
         return res.json({ success: true, messages });
     }
 
@@ -34,16 +79,31 @@ export default async function handler(req, res) {
             from,
             fromName: fromName || 'Reclutador',
             fromRole: fromRole || 'User',
-            to,           // userId or 'all'
+            to,
             toName: toName || (to === 'all' ? 'Todos' : to),
             content: content.trim(),
             timestamp: new Date().toISOString(),
         };
 
-        await redis.lpush(KEY, JSON.stringify(msg));
-        await redis.ltrim(KEY, 0, MAX - 1);
+        const pipe = redis.pipeline();
 
-        // Flat format (matches candidate:update convention) so SSE double-wrap resolves correctly
+        if (to === 'all') {
+            pipe.lpush(BROADCAST_KEY, JSON.stringify(msg));
+            pipe.ltrim(BROADCAST_KEY, 0, MAX_BROADCAST - 1);
+        } else {
+            const dmKey = `internal:dm:${canonicalKey(from, to)}`;
+            pipe.lpush(dmKey, JSON.stringify(msg));
+            pipe.ltrim(dmKey, 0, MAX_DM - 1);
+            // Update thread index for both participants
+            pipe.sadd(`internal:threads:${from}`, to);
+            pipe.expire(`internal:threads:${from}`, THREADS_TTL);
+            pipe.sadd(`internal:threads:${to}`, from);
+            pipe.expire(`internal:threads:${to}`, THREADS_TTL);
+        }
+
+        await pipe.exec();
+
+        // SSE notify — broadcast to all, clients filter on their end
         redis.publish('channel:sse:updates', JSON.stringify({
             type: 'internal:message',
             ...msg,

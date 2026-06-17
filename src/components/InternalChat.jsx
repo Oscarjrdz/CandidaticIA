@@ -108,14 +108,13 @@ export default function InternalChat({ onlineUsers = [] }) {
     // ── Fetch message history ──────────────────────────────────────────────
     const fetchHistory = useCallback(() => {
         if (!myId) return;
-        fetch(`/api/internal-chat?whatsapp=${encodeURIComponent(myId)}`)
+        const params = new URLSearchParams({ whatsapp: myId });
+        if (clearedAtRef.current) params.set('clearedAt', clearedAtRef.current);
+        fetch(`/api/internal-chat?${params}`)
             .then(r => r.json())
             .then(d => {
                 if (d.success && Array.isArray(d.messages)) {
-                    const msgs = clearedAtRef.current
-                        ? d.messages.filter(m => (m.timestamp || '') > clearedAtRef.current)
-                        : d.messages;
-                    setMessages(msgs);
+                    setMessages(d.messages);
                     setLoaded(true);
                 }
             })
