@@ -1,5 +1,5 @@
 const TAG_COUNTS_CACHE_KEY = 'candidatic:tag_counts_cache';
-const CACHE_TTL = 900; // 15 minutos
+const CACHE_TTL = 7200; // 2 horas (era 15 min — el full-scan de 6k candidatos cada 15 min = ~376 MB/día)
 
 export default async function handler(req, res) {
     try {

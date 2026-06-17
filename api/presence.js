@@ -26,7 +26,7 @@ export default async function handler(req, res) {
             // Use whatsapp as the canonical key when available (stable, no prefix ambiguity)
             const stableKey = whatsapp || userId;
             const now = Date.now();
-            const PRESENCE_TTL_MS = 12000; // 12s — same effective TTL as before
+            const PRESENCE_TTL_MS = 35000; // 35s — heartbeat cada 20s, TTL da margen para lag de red
             const expiresAt = now + PRESENCE_TTL_MS;
 
             // ── Write user state into Hash + Sorted Set (replaces individual SET with EX 12) ──

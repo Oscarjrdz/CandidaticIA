@@ -1537,26 +1537,30 @@ export const updateMessageStatus = async (candidateId, ultraMsgId, status, addit
 
     const key = `messages:${candidateId}`;
     try {
-        const raw = await client.lrange(key, 0, -1);
+        // Leer sólo los últimos 200 mensajes — los status (delivered/read) siempre son recientes.
+        // Antes: lrange(0,-1) cargaba hasta 500 mensajes por cada webhook = ~250 KB por evento.
+        const listLen = await client.llen(key);
+        const start = Math.max(0, listLen - 200);
+        const raw = await client.lrange(key, start, -1);
         const messages = raw.map(r => JSON.parse(r));
 
+        const localIndex = messages.findIndex(m => m.ultraMsgId === ultraMsgId || m.id === ultraMsgId);
+        if (localIndex !== -1) {
+            const absoluteIndex = start + localIndex; // índice real en la lista completa de Redis
+            const oldStatus = messages[localIndex].status;
+            messages[localIndex] = { ...messages[localIndex], status, ...additionalData };
+            await client.lset(key, absoluteIndex, JSON.stringify(messages[localIndex]));
 
-        const index = messages.findIndex(m => m.ultraMsgId === ultraMsgId || m.id === ultraMsgId);
-        if (index !== -1) {
-            const oldStatus = messages[index].status;
-            messages[index] = { ...messages[index], status, ...additionalData };
-            await client.lset(key, index, JSON.stringify(messages[index]));
-            
             // 📊 UPDATE CAMPAIGN STATS
-            if (messages[index].campaignId && oldStatus !== status && ['sent', 'delivered', 'read'].includes(status)) {
-                client.hincrby(`bulk_stats:${messages[index].campaignId}`, status, 1).catch(() => {});
+            if (messages[localIndex].campaignId && oldStatus !== status && ['sent', 'delivered', 'read'].includes(status)) {
+                client.hincrby(`bulk_stats:${messages[localIndex].campaignId}`, status, 1).catch(() => {});
             }
-            
+
             // 🚀 FIRE SSE! Update Chat UI checks in real time
             try {
                 const { notifyCandidateUpdate } = await import('./sse-notify.js');
-                await notifyCandidateUpdate(candidateId, { 
-                    messageStatusUpdate: { id: ultraMsgId, status, additionalData } 
+                await notifyCandidateUpdate(candidateId, {
+                    messageStatusUpdate: { id: ultraMsgId, status, additionalData }
                 });
             } catch (err) {
                 console.error("Could not import sse-notify", err);
@@ -1578,19 +1582,21 @@ export const updateMessageReaction = async (candidateId, messageId, emoji) => {
 
     const key = `messages:${candidateId}`;
     try {
-        const raw = await client.lrange(key, 0, -1);
+        // Leer sólo los últimos 200 mensajes (mismo patrón que updateMessageStatus)
+        const listLen = await client.llen(key);
+        const start = Math.max(0, listLen - 200);
+        const raw = await client.lrange(key, start, -1);
         const messages = raw.map(r => JSON.parse(r));
 
-        const index = messages.findIndex(m => m.ultraMsgId === messageId || m.id === messageId);
-        if (index !== -1) {
-            const msg = messages[index];
+        const localIndex = messages.findIndex(m => m.ultraMsgId === messageId || m.id === messageId);
+        if (localIndex !== -1) {
+            const absoluteIndex = start + localIndex;
+            const msg = messages[localIndex];
             if (!msg.reactions) msg.reactions = [];
-            
-            // Si el emoji viene vacio significa remover la reaccion del candidato
+
             if (!emoji) {
-                msg.reactions = []; // Simplificacion: Asume 1 reaccion
+                msg.reactions = [];
             } else {
-                // Buscamos si ya reaccionó para actualizar o añadir
                 const exists = msg.reactions.find(r => typeof r === 'string' ? true : r.emoji);
                 if (exists) {
                     msg.reactions = [emoji];
@@ -1598,8 +1604,8 @@ export const updateMessageReaction = async (candidateId, messageId, emoji) => {
                     msg.reactions.push(emoji);
                 }
             }
-            
-            await client.lset(key, index, JSON.stringify(msg));
+
+            await client.lset(key, absoluteIndex, JSON.stringify(msg));
             return { updated: true, msg };
         }
     } catch (e) {

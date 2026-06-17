@@ -3,7 +3,7 @@ import { getOpenAIResponse } from '../utils/openai.js';
 // Cache en memoria para la lista completa de candidatos (evita re-leer Redis en cada búsqueda)
 let _candidatesCache = null;
 let _candidatesCacheAt = 0;
-const CANDIDATES_CACHE_TTL = 60_000; // 60 segundos
+const CANDIDATES_CACHE_TTL = 300_000; // 5 minutos (era 60s — con múltiples instancias Vercel cada cold start = 9.4 MB)
 
 async function getCandidatesCached(getCandidates) {
     const now = Date.now();

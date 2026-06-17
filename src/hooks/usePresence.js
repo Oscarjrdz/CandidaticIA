@@ -68,8 +68,9 @@ export function usePresence(user, activeSection) {
         // Initial heartbeat
         sendHeartbeat();
 
-        // Heartbeat every 8s for real-time presence indicator (bandwidth-optimized)
-        const id = setInterval(sendHeartbeat, 8000);
+        // Heartbeat every 20s — presence sigue siendo en tiempo real vía SSE pub/sub.
+        // El intervalo sólo actualiza lastSeen y chat activo (no crítico al segundo).
+        const id = setInterval(sendHeartbeat, 20000);
         return () => clearInterval(id);
     }, [user]);
 
