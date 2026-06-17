@@ -1,3 +1,11 @@
+// Normaliza teléfono al mismo formato que usa auth.js para el lookup
+function normalizePhone(raw = '') {
+    const clean = String(raw).replace(/\D/g, '');
+    if (clean.length === 10) return '521' + clean;
+    if (clean.length === 12 && clean.startsWith('52')) return '521' + clean.substring(2);
+    return clean; // 13 dígitos o formato desconocido: dejar tal cual
+}
+
 export default async function handler(req, res) {
     try {
         // Dynamic import to prevent boot crashes and ensure path resolution
@@ -31,6 +39,7 @@ export default async function handler(req, res) {
             if (!userData.whatsapp || !userData.name) {
                 return res.status(400).json({ success: false, error: 'Name and WhatsApp are required' });
             }
+            userData.whatsapp = normalizePhone(userData.whatsapp);
             const user = await saveUser(userData);
             return res.status(200).json({ success: true, user });
         }
@@ -40,6 +49,7 @@ export default async function handler(req, res) {
             if (!userData.id) {
                 return res.status(400).json({ success: false, error: 'User ID is required for update' });
             }
+            if (userData.whatsapp) userData.whatsapp = normalizePhone(userData.whatsapp);
             const user = await saveUser(userData);
             return res.status(200).json({ success: true, user });
         }
