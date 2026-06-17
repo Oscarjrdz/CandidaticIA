@@ -379,6 +379,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
     const [editingTag, setEditingTag] = useState(null);
     const [editTagName, setEditTagName] = useState("");
     const [editTagColor, setEditTagColor] = useState("#3b82f6");
+    const [tagSearch, setTagSearch] = useState("");
     const [vacancies, setVacancies] = useState([]);
     const [editingVac, setEditingVac] = useState(null);
     const [chatLocks, setChatLocks] = useState({});
@@ -2814,7 +2815,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                                     return (
                                         <div key={iconId} className="relative z-50" {...dragProps}>
                                             <button 
-                                                onClick={(e) => { e.stopPropagation(); setShowDropdown(showDropdown === 'tags' ? null : 'tags'); }}
+                                                onClick={(e) => { e.stopPropagation(); if (showDropdown === 'tags') { setShowDropdown(null); setTagSearch(''); } else { setShowDropdown('tags'); } }}
                                                 className={`${baseClass} hover:bg-black/5 dark:hover:bg-white/5 ${showDropdown === 'tags' ? 'bg-black/5 dark:bg-white/5' : ''}`}>
                                                 <Tag className="w-5 h-5" />
                                             </button>
@@ -2822,8 +2823,25 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                                                 <div className="px-3 py-2 text-xs font-bold text-[#8696a0] border-b border-gray-100 dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-[#111b21]">
                                                     <span>Etiquetar candidato</span>
                                                 </div>
-                                                <div className="max-h-60 overflow-y-auto custom-scrollbar">
-                                                    {availableTags.map(tagObj => {
+                                                <div className="px-2 py-1.5 border-b border-gray-100 dark:border-gray-700">
+                                                    <div className="relative">
+                                                        <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400" />
+                                                        <input
+                                                            type="text"
+                                                            placeholder="Buscar etiqueta..."
+                                                            value={tagSearch}
+                                                            onChange={e => setTagSearch(e.target.value)}
+                                                            onClick={e => e.stopPropagation()}
+                                                            className="w-full text-xs pl-6 pr-2 py-1 rounded border border-gray-200 dark:border-gray-600 bg-white dark:bg-[#111b21] text-[#111b21] dark:text-[#e9edef] outline-none focus:border-green-500 transition-colors"
+                                                        />
+                                                    </div>
+                                                </div>
+                                                <div className="max-h-52 overflow-y-auto custom-scrollbar">
+                                                    {availableTags.filter(tagObj => {
+                                                        if (!tagSearch.trim()) return true;
+                                                        const n = typeof tagObj === 'string' ? tagObj : tagObj.name;
+                                                        return n.toLowerCase().includes(tagSearch.trim().toLowerCase());
+                                                    }).map(tagObj => {
                                                         const tName = typeof tagObj === 'string' ? tagObj : tagObj.name;
                                                         const tColor = typeof tagObj === 'string' ? '#3b82f6' : tagObj.color;
                                                         const display = tagObj.count !== undefined ? `${tName} (${tagObj.count})` : tName;
