@@ -605,13 +605,17 @@ const _publishGlobalStats = async (client) => {
         p.scard(KEYS.LIST_COMPLETE);
         p.scard(KEYS.LIST_PENDING);
         p.get('stats:bot:unread_v2');
+        p.get(KEYS.STATS_INCOMING);
+        p.get(KEYS.STATS_OUTGOING);
         const results = await p.exec();
-        const complete = results[0][1] || 0;
-        const pending  = results[1][1] || 0;
-        const unread   = parseInt(results[2][1]) || 0;
+        const complete  = results[0][1] || 0;
+        const pending   = results[1][1] || 0;
+        const unread    = parseInt(results[2][1]) || 0;
+        const incoming  = parseInt(results[3][1]) || 0;
+        const outgoing  = parseInt(results[4][1]) || 0;
         await client.publish('channel:sse:updates', JSON.stringify({
             type: 'stats:global',
-            data: { total: complete + pending, complete, pending, unread }
+            data: { total: complete + pending, complete, pending, unread, incoming, outgoing }
         }));
     } catch (_) {}
 };
@@ -1432,6 +1436,7 @@ export const incrementMessageStats = async (type = 'incoming') => {
     const key = type === 'incoming' ? KEYS.STATS_INCOMING : KEYS.STATS_OUTGOING;
     try {
         await client.incr(key);
+        _publishGlobalStats(client).catch(() => {});
     } catch (e) {
         console.error('Stats increment error:', e);
     }

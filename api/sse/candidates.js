@@ -93,13 +93,11 @@ export default async function handler(req, res) {
         }
     };
 
-    // Execute once on connection to seed the UI, then every 5s to keep stats fresh
+    // Execute once on connection to seed the UI — pub/sub handles all updates after that
     runPoll();
-    const statsPollInterval = setInterval(runPoll, 5000);
 
     req.on('close', () => {
         clearInterval(keepAliveInterval);
-        clearInterval(statsPollInterval);
         if (subscriber) {
             subscriber.unsubscribe();
             subscriber.quit();
