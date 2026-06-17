@@ -1,5 +1,21 @@
 import { getOpenAIResponse } from '../utils/openai.js';
 
+// Cache en memoria para la lista completa de candidatos (evita re-leer Redis en cada búsqueda)
+let _candidatesCache = null;
+let _candidatesCacheAt = 0;
+const CANDIDATES_CACHE_TTL = 60_000; // 60 segundos
+
+async function getCandidatesCached(getCandidates) {
+    const now = Date.now();
+    if (_candidatesCache && (now - _candidatesCacheAt) < CANDIDATES_CACHE_TTL) {
+        return _candidatesCache;
+    }
+    const { candidates } = await getCandidates(10000, 0, '', false);
+    _candidatesCache = candidates;
+    _candidatesCacheAt = now;
+    return candidates;
+}
+
 // --- HELPERS DE FILTRADO (Global Scope) ---
 const normalize = (str) => String(str || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
 
@@ -253,8 +269,8 @@ IMPORTANTE: Responde SÓLO con el JSON en bruto, sin backticks (\`\`\`) ni marca
         const blacklist = [...genderTerms, ...femaleTerms, ...muniTerms, ...educationTerms, 'completo', 'pendientes', 'listos', 'faltan', 'mayor', 'menor', 'años', 'edad', 'gente', 'personas'];
         aiResponse.keywords = aiResponse.keywords.filter(kw => !blacklist.includes(normalize(kw)));
 
-        // 3. Ejecutar la búsqueda en los datos reales (TODOS)
-        const { candidates } = await getCandidates(10000, 0, '', false);
+        // 3. Ejecutar la búsqueda en los datos reales (TODOS) — con caché 60s
+        const candidates = await getCandidatesCached(getCandidates);
 
         // --- SCORING ENGINE (TITAN v4.0 - Inclusive Edition) ---
         const activeFilterKeys = Object.keys(aiResponse.filters || {});
@@ -346,11 +362,14 @@ IMPORTANTE: Responde SÓLO con el JSON en bruto, sin backticks (\`\`\`) ni marca
 
         const limit = parseInt(req.query.limit || 5000);
 
+        // Strip chat_summary antes de enviar al browser — el scoring ya ocurrió, el frontend no lo renderiza
+        const candidatesForClient = filtered.slice(0, limit).map(({ chat_summary, ...c }) => c);
+
         return res.status(200).json({
             success: true,
             count: filtered.length,
             version: "Titan 8.7 (Zero Leak Pro)",
-            candidates: filtered.slice(0, limit),
+            candidates: candidatesForClient,
             ai: aiResponse
         });
 
