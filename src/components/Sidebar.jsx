@@ -139,11 +139,19 @@ const Sidebar = ({ activeSection, onSectionChange, onLogout, isMobileOpen, onClo
     const rbacUnreadIdsRef = React.useRef(new Set());
     useEffect(() => { rbacUnreadIdsRef.current = rbacUnreadIds; }, [rbacUnreadIds]);
 
+    // true después del primer broadcast RBAC desde que ChatSection montó (cargó candidatos)
+    const [rbacFreshSinceMounted, setRbacFreshSinceMounted] = useState(false);
+
     // Listen for ChatSection mount/unmount lifecycle
     useEffect(() => {
         const mountHandler = (e) => {
             setChatMounted(e.detail?.mounted ?? false);
-            if (e.detail?.mounted) setNewUnreadIds(new Set());
+            if (e.detail?.mounted) {
+                // Marcar RBAC como stale hasta que llegue el primer broadcast post-carga.
+                // NO reseteamos newUnreadIds aquí — el broadcast RBAC lo hará cuando esté listo,
+                // para evitar el flash descendente mientras los candidatos cargan.
+                setRbacFreshSinceMounted(false);
+            }
         };
         window.addEventListener('chat_section_mounted', mountHandler);
         return () => window.removeEventListener('chat_section_mounted', mountHandler);
@@ -159,6 +167,7 @@ const Sidebar = ({ activeSection, onSectionChange, onLogout, isMobileOpen, onClo
             setRbacUnread(count);
             setRbacUnreadIds(ids);
             setNewUnreadIds(new Set()); // Reset delta — RBAC es la fuente de verdad
+            setRbacFreshSinceMounted(true); // RBAC ya está actualizado post-carga
             localStorage.setItem('chat_unread_rbac', String(count));
         };
         window.addEventListener('chat_unread_rbac', handler);
@@ -195,14 +204,15 @@ const Sidebar = ({ activeSection, onSectionChange, onLogout, isMobileOpen, onClo
     }, []);
 
     // Unread count logic:
-    // 1. When ChatSection is mounted → use its RBAC-accurate broadcast (source of truth)
-    // 2. When ChatSection is unmounted → use globalStats.unread from SSE (live, updates every 5s + pub/sub)
+    // 1. Chat montado + RBAC fresco → usar conteo RBAC exacto (fuente de verdad)
+    // 2. Chat montado + RBAC aún cargando → usar rbacUnread + sseDelta (evita flash descendente)
+    // 3. Chat desmontado → usar último RBAC + sseDelta de mensajes nuevos vía SSE
+    // 4. Sin historial RBAC → usar globalStats SSE + sseDelta
     const sseDelta = newUnreadIds.size;
     const unreadCount = (() => {
-        if (chatMounted && rbacUnread !== null) {
+        if (chatMounted && rbacFreshSinceMounted && rbacUnread !== null) {
             return rbacUnread;
         }
-        // Prefer last RBAC count (accurate, persisted in localStorage) + SSE delta
         if (rbacUnread !== null) {
             return Math.max(0, rbacUnread) + sseDelta;
         }
