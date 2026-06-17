@@ -308,6 +308,25 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
 
     const canManageTags = user?.role === 'SuperAdmin' || user?.can_manage_tags === true;
     const { newCandidate: sseNewCandidate, connected: sseConnected, globalStats } = useCandidatesSSE();
+
+    const [stableStats, setStableStats] = useState(() => {
+        try {
+            const saved = sessionStorage.getItem('candidatic_global_stats');
+            return saved ? JSON.parse(saved) : { total: null, complete: null, pending: null };
+        } catch { return { total: null, complete: null, pending: null }; }
+    });
+
+    useEffect(() => {
+        if (!globalStats) return;
+        const next = {
+            total: globalStats.total ?? stableStats.total,
+            complete: globalStats.complete ?? stableStats.complete,
+            pending: globalStats.pending ?? stableStats.pending,
+        };
+        setStableStats(next);
+        try { sessionStorage.setItem('candidatic_global_stats', JSON.stringify(next)); } catch {}
+    }, [globalStats]);
+
     const [candidates, setCandidates] = useState([]);
     const [selectedChat, setSelectedChat] = useState(null);
     const [headerImgError, setHeaderImgError] = useState(false);
@@ -2116,7 +2135,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                                     : 'bg-[#f0f2f5] text-[#54656f] hover:bg-[#e9edef] dark:bg-[#202c33] dark:text-[#aebac1] dark:hover:bg-[#2a3942]'
                                 }`}
                             >
-                                Todos {globalStats?.total ? `(${globalStats.total})` : ''}
+                                Todos {stableStats.total != null ? `(${stableStats.total})` : ''}
                             </button>
                             <button
                                 onClick={() => { setActiveFilter('unread'); setFilterValue(null); setShowDropdown(null); }}
@@ -2182,7 +2201,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                                 }`}
                                 style={{ fontSize: 'clamp(8px, 2.2cqw, 11px)' }}
                             >
-                                Todos {globalStats?.total ? `(${globalStats.total})` : ''}
+                                Todos {stableStats.total != null ? `(${stableStats.total})` : ''}
                             </button>
                         )}
                         <button
@@ -2211,7 +2230,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                                 }`}
                                 style={{ fontSize: 'clamp(8px, 2.2cqw, 11px)' }}
                             >
-                                Completos ({globalStats?.complete ?? badgeCounts.complete})
+                                Completos ({stableStats.complete ?? badgeCounts.complete})
                                 {unreadCounts.complete > 0 && (
                                     <div
                                         onClick={(e) => { e.stopPropagation(); setActiveFilter('profile'); setFilterValue('complete'); setProfileUnreadOnly(true); setShowDropdown(null); }}
@@ -2233,7 +2252,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                                 }`}
                                 style={{ fontSize: 'clamp(8px, 2.2cqw, 11px)' }}
                             >
-                                Incompletos ({globalStats?.pending ?? badgeCounts.incomplete})
+                                Incompletos ({stableStats.pending ?? badgeCounts.incomplete})
                                 {unreadCounts.incomplete > 0 && (
                                     <div
                                         onClick={(e) => { e.stopPropagation(); setActiveFilter('profile'); setFilterValue('incomplete'); setProfileUnreadOnly(true); setShowDropdown(null); }}
