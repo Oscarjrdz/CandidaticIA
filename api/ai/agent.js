@@ -4250,6 +4250,7 @@ Responde ÚNICAMENTE con el número entero de meses. Si evade o no menciona ning
                 if (expResult === 'No') {
                     // Sin experiencia — cerrar paso 2
                     candidateUpdates.experiencia = 'No';
+                    candidateUpdates.meses = 0;
                     candidateUpdates.paso2Estado = 'completo';
                     await redis?.srem('paso2_waiting', candidateId);
                     const p2CloseName = p2FirstName ? `, ${p2FirstName}` : '';

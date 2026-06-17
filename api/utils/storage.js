@@ -644,10 +644,10 @@ export const syncCandidateStats = async (id, candidateData = null, pipeline = nu
             return;
         }
 
-        // 1. Audit
+        // 1. Audit — must check paso2 too, not just paso1
         const customFieldsJson = await client.get('custom_fields');
         const customFields = customFieldsJson ? JSON.parse(customFieldsJson) : [];
-        const { isComplete } = auditProfile(c, customFields);
+        const isComplete = isProfileComplete(c, customFields);
 
         // 2. Denormalize status inside the object
         const wasIncomplete = c.statusAudit !== 'complete';
