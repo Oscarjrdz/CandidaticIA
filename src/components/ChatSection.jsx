@@ -442,6 +442,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
     const [editingQuickReply, setEditingQuickReply] = useState(null); // null = creating, object = editing
     const [qrForm, setQrForm] = useState({ name: '', message: '', shortcut: '', imageUrl: '' });
     const [qrImageUploading, setQrImageUploading] = useState(false);
+    const [pendingQrImage, setPendingQrImage] = useState(''); // imagen de QR en espera de enviar
     const [qrSaving, setQrSaving] = useState(false);
     const [capturingShortcut, setCapturingShortcut] = useState(false);
 
@@ -769,32 +770,9 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
     };
 
     const handleApplyQuickReply = useCallback(async (qr) => {
-        if (qr.imageUrl && selectedChat) {
-            const tempId = `temp_${Date.now()}`;
-            const tempMsg = { id: tempId, from: 'me', content: '', mediaUrl: qr.imageUrl, type: 'image', status: 'queued', timestamp: new Date().toISOString() };
-            isSendingRef.current = true;
-            setSending(true);
-            setMessages(prev => [...prev, tempMsg]);
-            try {
-                const res = await fetch('/api/chat', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ candidateId: selectedChat.id, message: '', type: 'image', mediaUrl: qr.imageUrl, senderId: user?.id || user?.whatsapp, senderName: user?.name || user?.nombre })
-                });
-                const chatData = await res.json();
-                if (!res.ok) throw new Error(chatData?.error || 'Error al enviar imagen');
-                setMessages(prev => prev.map(m => m.id === tempId
-                    ? { ...m, id: chatData.message?.id || tempId, status: 'sent', ultraMsgId: chatData.message?.ultraMsgId }
-                    : m
-                ));
-                window.dispatchEvent(new CustomEvent('candidate_replied', { detail: { candidateId: selectedChat.id } }));
-            } catch (err) {
-                showToast && showToast('Error al enviar imagen: ' + err.message, 'error');
-                setMessages(prev => prev.map(m => m.id === tempId ? { ...m, status: 'failed' } : m));
-            } finally {
-                setSending(false);
-                isSendingRef.current = false;
-            }
+        // Dejar imagen pendiente para enviar junto con el texto al presionar Enviar
+        if (qr.imageUrl) {
+            setPendingQrImage(qr.imageUrl);
         }
         if (qr.message) {
             messageInputRef.current?.injectText(qr.message);
@@ -1617,6 +1595,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
         }
         setSelectedChat(chat);
         setHeaderImgError(false);
+        setPendingQrImage(''); // limpiar imagen pendiente al cambiar de chat
         // Restore draft for the new chat (or clear)
         const draft = draftsRef.current.get(chat.id) || '';
         setTimeout(() => messageInputRef.current?.setText?.(draft), 80);
@@ -1908,7 +1887,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
     };
 
     const handleSend = (msg) => {
-        if (!msg || !selectedChat) return;
+        if ((!msg && !pendingQrImage) || !selectedChat) return;
         // Prevent double-send within 1 second
         const now = Date.now();
         if (now - lastSendTimeRef.current < 1000) return;
@@ -1917,12 +1896,35 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
         // Auto-silence bot on manual intervention
         autoSilenceBot(selectedChat);
 
+        // Si hay imagen pendiente de QR, enviarla primero (fire-and-forget optimista)
+        if (pendingQrImage) {
+            const imgUrl = pendingQrImage;
+            setPendingQrImage('');
+            const tempImgId = `temp_img_${Date.now()}`;
+            setMessages(prev => [...prev, { id: tempImgId, from: 'me', content: '', mediaUrl: imgUrl, type: 'image', status: 'queued', timestamp: new Date().toISOString() }]);
+            fetch('/api/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ candidateId: selectedChat.id, message: '', type: 'image', mediaUrl: imgUrl, senderId: user?.id || user?.whatsapp, senderName: user?.name || user?.nombre })
+            }).then(r => r.json()).then(d => {
+                setMessages(prev => prev.map(m => m.id === tempImgId
+                    ? { ...m, id: d.message?.id || tempImgId, status: d.success ? 'sent' : 'failed', ultraMsgId: d.message?.ultraMsgId }
+                    : m
+                ));
+            }).catch(() => {
+                setMessages(prev => prev.map(m => m.id === tempImgId ? { ...m, status: 'failed' } : m));
+            });
+        }
+
         // Optimistic clear + focus so the user can immediately type again
         messageInputRef.current?.clearText();
 
+        // Si solo había imagen (sin texto), no hay mensaje de texto que enviar
+        if (!msg) return;
+
         const currentCandidateId = selectedChat.id;
         const replyId = replyingToMsg ? (replyingToMsg.ultraMsgId || replyingToMsg.id) : null;
-        
+
         // Optimistic contextualization
         const contextInfoParams = replyId && replyingToMsg ? {
             contextInfo: {
@@ -3154,11 +3156,30 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                         </button>
                     )}
 
+                    {/* Preview imagen pendiente de QR */}
+                    {pendingQrImage && (
+                        <div className="px-3 pt-2 pb-1 bg-[#f0f2f5] dark:bg-[#202c33] border-t border-[#d1d7db] dark:border-[#222e35] flex items-center gap-2">
+                            <div className="relative shrink-0">
+                                <img src={pendingQrImage} alt="preview" className="w-14 h-14 object-cover rounded-lg border border-gray-300 dark:border-gray-600" />
+                                <button
+                                    type="button"
+                                    onClick={() => setPendingQrImage('')}
+                                    className="absolute -top-1.5 -right-1.5 bg-gray-600 hover:bg-red-500 text-white rounded-full p-0.5 transition-colors"
+                                    title="Quitar imagen"
+                                >
+                                    <X className="w-3 h-3" />
+                                </button>
+                            </div>
+                            <span className="text-[11px] text-[#667781] dark:text-[#8696a0]">Imagen adjunta · se enviará junto con el mensaje</span>
+                        </div>
+                    )}
+
                     {/* Input Area */}
                     <MessageInputBox
                         ref={messageInputRef}
                         isMobile={isMobile}
                         onSend={handleSend}
+                        hasPendingMedia={!!pendingQrImage}
                         onTyping={handleTyping}
                         fileInputRef={fileInputRef}
                         handleFileUpload={handleFileUpload}

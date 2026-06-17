@@ -2,7 +2,7 @@ import React, { useState, useRef, lazy, Suspense } from 'react';
 const EmojiPicker = lazy(() => import('emoji-picker-react'));
 import { MapPin, List as ListIcon, ShoppingBag, UserSquare, MousePointerClick, Plus, Smile, Mic, Send, X, Zap } from 'lucide-react';
 
-const MessageInputBox = React.forwardRef(({ onSend, onTyping, fileInputRef, handleFileUpload, replyingToMsg, onCancelReply, metaTemplates = [], onSendTemplate, onSendVCard, onSendInteractive, onSendLocation, onSendList, onSendProduct, isMobile }, ref) => {
+const MessageInputBox = React.forwardRef(({ onSend, onTyping, fileInputRef, handleFileUpload, replyingToMsg, onCancelReply, metaTemplates = [], onSendTemplate, onSendVCard, onSendInteractive, onSendLocation, onSendList, onSendProduct, isMobile, hasPendingMedia }, ref) => {
     const [localMessage, setLocalMessage] = useState("");
     const [sending, setSending] = useState(false);
     const [showEmojis, setShowEmojis] = useState(false);
@@ -49,7 +49,7 @@ const MessageInputBox = React.forwardRef(({ onSend, onTyping, fileInputRef, hand
     const handleSubmit = (e) => {
         if (e) e.preventDefault();
         const msg = localMessage.trim();
-        if (!msg || sending) return;
+        if ((!msg && !hasPendingMedia) || sending) return;
         onSend(msg);
         setTimeout(() => {
             const input = textareaRef.current;
@@ -148,7 +148,7 @@ const MessageInputBox = React.forwardRef(({ onSend, onTyping, fileInputRef, hand
                             )}
                         </div>
                         <div className="mb-[4px] text-[#54656f] dark:text-[#8696a0] shrink-0">
-                            {localMessage.trim() ? (
+                            {(localMessage.trim() || hasPendingMedia) ? (
                                 <button type="submit" disabled={sending} className="p-1.5 text-[#54656f] dark:text-[#8696a0] hover:text-[#111b21] dark:hover:text-[#d1d7db] transition-colors">
                                     <Send className="w-[22px] h-[22px]" />
                                 </button>
@@ -252,7 +252,7 @@ const MessageInputBox = React.forwardRef(({ onSend, onTyping, fileInputRef, hand
                 </div>
 
                 <div className="text-[#54656f] dark:text-[#8696a0] shrink-0">
-                    {localMessage.trim() ? (
+                    {(localMessage.trim() || hasPendingMedia) ? (
                         <button type="submit" disabled={sending} className="p-1.5 text-[#54656f] dark:text-[#8696a0] hover:text-[#111b21] dark:hover:text-[#d1d7db] transition-colors">
                             <Send className="w-[22px] h-[22px]" />
                         </button>
