@@ -3338,8 +3338,8 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                                 >
                                     <div className="flex items-start justify-between gap-2">
                                         <div className="flex-1 min-w-0">
-                                            <div className="flex items-center gap-2 mb-1">
-                                                <span className="text-xs font-bold text-[#111b21] dark:text-[#e9edef] truncate">{qr.name}</span>
+                                            <div className="flex items-center gap-2 mb-1 min-w-0">
+                                                <span className="text-xs font-bold text-[#111b21] dark:text-[#e9edef] truncate flex-1 min-w-0">{qr.name}</span>
                                                 {qr.shortcut && (
                                                     <span className="shrink-0 text-[10px] font-mono bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 px-1.5 py-0.5 rounded border border-gray-200 dark:border-gray-700">
                                                         {qr.shortcut}
