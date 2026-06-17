@@ -1259,14 +1259,23 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
         });
     }, [sseNewCandidate]);
 
-    // 🔄 SSE reconnect: re-sync candidate list to catch messages missed during disconnect
+    // 🔄 SSE reconnect: Vercel corta la conexión cada 60s (maxDuration).
+    // NO hacemos loadCandidates() aquí — con filtro de etiqueta activo eso escanea
+    // los 6,259 candidatos en Redis (9.4 MB) cada 60s = ~13 GB/día de bandwidth.
+    // El pub/sub ya maneja actualizaciones en tiempo real; no se necesita reload completo.
     useEffect(() => {
         if (!sseConnected) return;
         if (!sseWasConnectedOnceRef.current) {
-            sseWasConnectedOnceRef.current = true; // primera conexión — carga ya disparada en mount
+            sseWasConnectedOnceRef.current = true;
             return;
         }
-        loadCandidates(); // segunda+ conexión = reconexión tras caída
+        // Solo recargar si no hay filtro ni búsqueda activos.
+        // Con etiqueta o búsqueda → getCandidates escanea los 6,259 candidatos (9.4 MB por reconexión).
+        // Vercel corta el SSE cada 60s → sin esta guarda = ~13 GB/día de bandwidth perdido.
+        const hasExpensiveFilter = activeFilterRef.current === 'label' || !!searchRef.current;
+        if (!hasExpensiveFilter) {
+            loadCandidates();
+        }
     }, [sseConnected]);
 
     // Reset typing when switching chats
