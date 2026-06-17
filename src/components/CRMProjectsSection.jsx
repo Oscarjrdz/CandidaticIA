@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { FolderPlus, Trash2, Plus, Pencil, Users, User, Search, X, Loader2, MessageCircle, Copy, ChevronRight, GraduationCap, MapPin, Calendar, Palette } from 'lucide-react';
+import { FolderPlus, Trash2, Plus, Pencil, Users, User, Search, X, Loader2, MessageCircle, Copy, ChevronRight, GraduationCap, MapPin, Calendar, Palette, GripVertical } from 'lucide-react';
 import Card from './ui/Card';
 import Button from './ui/Button';
 import { useConfirmModal } from './ui/ConfirmModal';
@@ -7,7 +7,7 @@ import { formatPhone, formatRelativeDate, calculateAge } from '../utils/formatte
 import ChatWindow from './ChatWindow';
 import CalendarNotesModal from './CalendarNotesModal';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, DragOverlay, useDroppable } from '@dnd-kit/core';
-import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
+import { SortableContext, verticalListSortingStrategy, horizontalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { useToastContext } from '../contexts/ToastContext';
 import { useAuthContext } from '../contexts/AuthContext';
@@ -108,6 +108,54 @@ const SortableCandCard = ({ candidate, onRemove, onChat, onCalendar }) => {
                     ))}
                 </div>
             )}
+        </div>
+    );
+};
+
+const SortableStepColumn = ({ step, stepCands, onRename, onDelete, canDelete, children }) => {
+    const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+        id: step.id,
+        data: { type: 'step' }
+    });
+    const stepColor = step.color || '#64748b';
+    return (
+        <div
+            ref={setNodeRef}
+            style={{
+                transform: CSS.Translate.toString(transform),
+                transition,
+                opacity: isDragging ? 0.4 : 1,
+                backgroundColor: `${stepColor}08`,
+                borderColor: `${stepColor}25`
+            }}
+            className="w-72 shrink-0 flex flex-col rounded-2xl border overflow-hidden">
+            {/* Column Header with drag handle */}
+            <div className="px-3 py-3 flex items-center justify-between"
+                style={{ backgroundColor: stepColor, borderBottom: `1px solid ${stepColor}40` }}>
+                <div className="flex items-center gap-1.5 min-w-0">
+                    <button
+                        {...attributes}
+                        {...listeners}
+                        className="cursor-grab active:cursor-grabbing p-1 rounded hover:bg-white/20 text-white/60 hover:text-white transition-colors touch-none shrink-0"
+                        title="Mover paso"
+                    >
+                        <GripVertical className="w-3.5 h-3.5" />
+                    </button>
+                    <h3 className="font-bold text-sm text-white truncate">{step.name}</h3>
+                    <span className="text-[10px] bg-white/25 text-white px-1.5 py-0.5 rounded-full font-bold shrink-0">{stepCands.length}</span>
+                </div>
+                <div className="flex gap-0.5 shrink-0">
+                    <button onClick={() => onRename(step.id)} className="p-1 rounded hover:bg-white/20 text-white/70 hover:text-white transition-colors">
+                        <Pencil className="w-3 h-3" />
+                    </button>
+                    {canDelete && (
+                        <button onClick={() => onDelete(step.id)} className="p-1 rounded hover:bg-white/20 text-white/70 hover:text-white transition-colors">
+                            <Trash2 className="w-3 h-3" />
+                        </button>
+                    )}
+                </div>
+            </div>
+            {children}
         </div>
     );
 };
@@ -365,8 +413,10 @@ const CRMProjectsSection = () => {
     };
 
     const handleDragOver = (event) => {
-        const { over } = event;
+        const { active, over } = event;
         if (!over) { setOverStepId(null); return; }
+        // Don't highlight candidate drop zones while dragging a step column
+        if (active.data.current?.type === 'step') { setOverStepId(null); return; }
         // Determine which step we're hovering over
         if (over.data.current?.type === 'step') {
             setOverStepId(over.id);
@@ -384,6 +434,19 @@ const CRMProjectsSection = () => {
         setOverStepId(null);
 
         if (!over) return;
+
+        // Step Reordering (horizontal drag of kanban columns)
+        if (active.data.current?.type === 'step') {
+            if (over.data.current?.type === 'step' && active.id !== over.id) {
+                const oldIndex = steps.findIndex(s => s.id === active.id);
+                const newIndex = steps.findIndex(s => s.id === over.id);
+                if (oldIndex !== -1 && newIndex !== -1) {
+                    const newSteps = arrayMove([...steps], oldIndex, newIndex);
+                    await saveSteps(newSteps, 'Pasos reordenados');
+                }
+            }
+            return;
+        }
 
         // Project Reordering
         if (active.data.current?.type === 'project' && over.data.current?.type === 'project') {
@@ -534,36 +597,20 @@ const CRMProjectsSection = () => {
 
                             {/* Kanban Columns */}
                             <div className="flex-1 overflow-x-auto overflow-y-hidden">
+                                <SortableContext items={steps.map(s => s.id)} strategy={horizontalListSortingStrategy}>
                                 <div className="flex gap-4 h-full pb-4" style={{ minWidth: `${Math.max(steps.length * 280, 560)}px` }}>
                                     {steps.map(step => {
                                         const stepCands = candidates.filter(c => c.crmMeta?.stepId === step.id);
-                                        const stepColor = step.color || '#64748b';
 
                                         return (
-                                            <div key={step.id}
-                                                className="w-72 shrink-0 flex flex-col rounded-2xl border overflow-hidden"
-                                                style={{
-                                                    backgroundColor: `${stepColor}08`,
-                                                    borderColor: `${stepColor}25`
-                                                }}>
-                                                {/* Column Header */}
-                                                <div className="px-4 py-3 flex items-center justify-between"
-                                                    style={{
-                                                        backgroundColor: stepColor,
-                                                        borderBottom: `1px solid ${stepColor}40`
-                                                    }}>
-                                                    <div className="flex items-center gap-2">
-                                                        <h3 className="font-bold text-sm text-white truncate">{step.name}</h3>
-                                                        <span className="text-[10px] bg-white/25 text-white px-1.5 py-0.5 rounded-full font-bold">{stepCands.length}</span>
-                                                    </div>
-                                                    <div className="flex gap-0.5">
-                                                        <button onClick={() => handleRenameStep(step.id)} className="p-1 rounded hover:bg-white/20 text-white/70 hover:text-white transition-colors"><Pencil className="w-3 h-3" /></button>
-                                                        {steps.length > 1 && (
-                                                            <button onClick={() => handleDeleteStep(step.id)} className="p-1 rounded hover:bg-white/20 text-white/70 hover:text-white transition-colors"><Trash2 className="w-3 h-3" /></button>
-                                                        )}
-                                                    </div>
-                                                </div>
-
+                                            <SortableStepColumn
+                                                key={step.id}
+                                                step={step}
+                                                stepCands={stepCands}
+                                                onRename={handleRenameStep}
+                                                onDelete={handleDeleteStep}
+                                                canDelete={steps.length > 1}
+                                            >
                                                 {/* Candidates */}
                                                 <SortableContext items={stepCands.map(c => c.id)} strategy={verticalListSortingStrategy}>
                                                     <DroppableStepZone stepId={step.id} isOver={overStepId === step.id}>
@@ -580,7 +627,7 @@ const CRMProjectsSection = () => {
                                                         ))}
                                                     </DroppableStepZone>
                                                 </SortableContext>
-                                            </div>
+                                            </SortableStepColumn>
                                         );
                                     })}
 
@@ -593,6 +640,7 @@ const CRMProjectsSection = () => {
                                         <p className="text-sm font-bold text-slate-300 dark:text-slate-600 group-hover:text-blue-500 transition-colors">Nuevo Paso</p>
                                     </div>
                                 </div>
+                                </SortableContext>
                             </div>
                         </>
                     )}
