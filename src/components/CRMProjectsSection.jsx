@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { FolderPlus, Trash2, Plus, Pencil, Users, User, Search, X, Loader2, MessageCircle, Copy, ChevronRight, GraduationCap, MapPin, Calendar, Palette, GripVertical, Tag, Check } from 'lucide-react';
 import Card from './ui/Card';
 import Button from './ui/Button';
@@ -317,6 +317,21 @@ const CRMProjectsSection = () => {
         fetch('/api/tags').then(r => r.json()).then(d => { if (d.success) setAvailableTags(d.tags || []); }).catch(() => {});
     }, []);
 
+    // RBAC: same pattern as ChatSection — SuperAdmin/Admin see all, others filtered by allowed_crm_projects
+    const filteredProjects = useMemo(() => {
+        if (!user || user.role === 'SuperAdmin' || user.role === 'Admin') return projects;
+        const allowed = user?.allowed_crm_projects;
+        if (!Array.isArray(allowed) || allowed.length === 0) return projects;
+        return projects.filter(p => allowed.includes(p.id));
+    }, [projects, user]);
+
+    const filterProjectsForUser = (all) => {
+        if (!user || user.role === 'SuperAdmin' || user.role === 'Admin') return all;
+        const allowed = user?.allowed_crm_projects;
+        if (!Array.isArray(allowed) || allowed.length === 0) return all;
+        return all.filter(p => allowed.includes(p.id));
+    };
+
     const fetchProjects = async () => {
         setLoading(true);
         try {
@@ -324,7 +339,8 @@ const CRMProjectsSection = () => {
             const data = await res.json();
             if (data.success) {
                 setProjects(data.data);
-                if (data.data.length > 0 && !activeProject) setActiveProject(data.data[0]);
+                const visible = filterProjectsForUser(data.data);
+                if (visible.length > 0 && !activeProject) setActiveProject(visible[0]);
             }
         } catch (e) { console.error(e); }
         finally { setLoading(false); }
@@ -541,10 +557,10 @@ const CRMProjectsSection = () => {
         // Project Reordering
         if (active.data.current?.type === 'project' && over.data.current?.type === 'project') {
             if (active.id !== over.id) {
-                const oldIndex = projects.findIndex(p => `proj_${p.id}` === active.id);
-                const newIndex = projects.findIndex(p => `proj_${p.id}` === over.id);
+                const oldIndex = filteredProjects.findIndex(p => `proj_${p.id}` === active.id);
+                const newIndex = filteredProjects.findIndex(p => `proj_${p.id}` === over.id);
                 if (oldIndex !== -1 && newIndex !== -1) {
-                    const newProjects = arrayMove(projects, oldIndex, newIndex);
+                    const newProjects = arrayMove(filteredProjects, oldIndex, newIndex);
                     setProjects(newProjects);
                     try {
                         await fetch('/api/manual_projects', {
@@ -638,11 +654,11 @@ const CRMProjectsSection = () => {
                     <div className="flex-1 overflow-y-auto space-y-2 px-2 pb-4 pt-1 custom-scrollbar -mx-2">
                         {loading ? (
                             <div className="flex items-center justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-blue-500" /></div>
-                        ) : projects.length === 0 ? (
-                            <div className="text-center py-12 text-slate-400 text-sm">No hay proyectos aún</div>
+                        ) : filteredProjects.length === 0 ? (
+                            <div className="text-center py-12 text-slate-400 text-sm">No hay proyectos asignados</div>
                         ) : (
-                            <SortableContext items={projects.map(p => `proj_${p.id}`)} strategy={verticalListSortingStrategy}>
-                                {projects.map(p => (
+                            <SortableContext items={filteredProjects.map(p => `proj_${p.id}`)} strategy={verticalListSortingStrategy}>
+                                {filteredProjects.map(p => (
                                     <SortableProjectCard
                                         key={p.id}
                                         project={p}
