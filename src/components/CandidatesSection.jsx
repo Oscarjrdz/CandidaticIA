@@ -721,7 +721,7 @@ const CandidatesSection = () => {
                                 <div className="flex flex-col relative z-10">
                                     <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-1">Total Candidatos</span>
                                     <div className="flex items-center flex-wrap gap-2">
-                                        <h3 className="text-2xl font-bold text-gray-900 dark:text-white leading-none">{Number(totalItems).toLocaleString()}</h3>
+                                        <h3 className="text-2xl font-bold text-gray-900 dark:text-white leading-none">{Number((stats?.complete || 0) + (stats?.pending || 0) || totalItems).toLocaleString()}</h3>
                                         <div className="flex items-center gap-1.5 flex-wrap">
                                             <span className="text-[10px] text-emerald-500 font-bold flex items-center bg-emerald-50 dark:bg-emerald-900/20 px-2 py-0.5 rounded-full border border-emerald-100 dark:border-emerald-800/50">
                                                 <CheckCircle className="w-3 h-3 mr-1" /> {Number(stats?.complete || 0).toLocaleString()} Completos
