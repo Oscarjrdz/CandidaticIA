@@ -22,7 +22,7 @@ const parseAdIds = (raw = '') =>
 
 export default async function handler(req, res) {
     try {
-        const { getRedisClient, getCandidates, updateCandidate } = await import('./utils/storage.js');
+        const { getRedisClient, getCandidates, updateCandidate, validateAdminSession } = await import('./utils/storage.js');
         const redis = getRedisClient();
         if (!redis) return res.status(500).json({ error: 'Redis no disponible' });
 
@@ -32,6 +32,10 @@ export default async function handler(req, res) {
             const labels = (raw ? JSON.parse(raw) : []).map(normalize);
             return res.status(200).json({ success: true, labels });
         }
+
+        // All mutating methods require admin session
+        const userId = await validateAdminSession(req);
+        if (!userId) return res.status(401).json({ error: 'No autorizado' });
 
         // ── POST — Crear ───────────────────────────────────────────────────────
         if (req.method === 'POST') {

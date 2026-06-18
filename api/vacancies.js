@@ -17,7 +17,7 @@ export default async function handler(req, res) {
 
     try {
         // DYNAMIC IMPORT: Load storage safely
-        const { getRedisClient } = await import('./utils/storage.js');
+        const { getRedisClient, validateAdminSession } = await import('./utils/storage.js');
         const redis = getRedisClient();
 
         // En memoria local (storage.js) getRedisClient retorna null,
@@ -42,6 +42,9 @@ export default async function handler(req, res) {
                 message: 'Storage service not available (Redis missing)'
             });
         }
+
+        const userId = await validateAdminSession(req);
+        if (!userId) return res.status(401).json({ error: 'No autorizado' });
 
         const KEY = 'candidatic_vacancies';
 
