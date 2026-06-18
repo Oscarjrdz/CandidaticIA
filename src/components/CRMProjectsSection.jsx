@@ -523,9 +523,7 @@ const CRMProjectsSection = () => {
         setActiveItem(null);
         setOverStepId(null);
 
-        console.log('[DnD] dragEnd', { activeId: active?.id, activeType: active?.data?.current?.type, overId: over?.id, overType: over?.data?.current?.type, overStepId: over?.data?.current?.stepId, overCandidate: !!over?.data?.current?.candidate });
-
-        if (!over) { console.log('[DnD] over=null, snap back'); return; }
+        if (!over) return;
 
         // Step Reordering (horizontal drag of kanban columns)
         if (active.data.current?.type === 'step') {
