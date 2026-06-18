@@ -1320,13 +1320,9 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
             sseWasConnectedOnceRef.current = true;
             return;
         }
-        // Solo recargar si no hay filtro ni búsqueda activos.
-        // Con etiqueta o búsqueda → getCandidates escanea los 6,259 candidatos (9.4 MB por reconexión).
-        // Vercel corta el SSE cada 60s → sin esta guarda = ~13 GB/día de bandwidth perdido.
-        const hasExpensiveFilter = activeFilterRef.current === 'label' || !!searchRef.current;
-        if (!hasExpensiveFilter) {
-            loadCandidates();
-        }
+        // El pub/sub SSE maneja actualizaciones quirúrgicas en tiempo real — no necesitamos
+        // recargar todo el set en cada reconexión (Vercel corta cada ~60s). Un reload aquí
+        // cambia el tamaño/orden del set en memoria y hace que los badges fluctúen.
     }, [sseConnected]);
 
     // Reset typing when switching chats
