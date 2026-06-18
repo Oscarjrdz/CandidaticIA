@@ -550,8 +550,9 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
         const needsReload =
             (activeFilter === 'label' && filterValue) ||
             (prev === 'label' && activeFilter !== 'label') ||
-            activeFilter === 'all' ||
-            (prev === 'all');
+            activeFilter === 'all';
+            // Nota: NO recargamos al salir de 'all' — mantener los candidatos ya cargados
+            // evita que el badge cambie de conteo al cambiar entre Todos ↔ No Leídos.
 
         if (!needsReload) return;
 
