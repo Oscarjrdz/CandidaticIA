@@ -549,10 +549,10 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
 
         const needsReload =
             (activeFilter === 'label' && filterValue) ||
-            (prev === 'label' && activeFilter !== 'label') ||
-            activeFilter === 'all';
-            // Nota: NO recargamos al salir de 'all' — mantener los candidatos ya cargados
-            // evita que el badge cambie de conteo al cambiar entre Todos ↔ No Leídos.
+            (prev === 'label' && activeFilter !== 'label');
+            // Los filtros Todos/No Leídos/Completos/Incompletos son client-side puro.
+            // Recargar del servidor al cambiar de filtro cambia el tamaño del set en memoria
+            // y hace que los badges muestren conteos distintos dependiendo del filtro activo.
 
         if (!needsReload) return;
 
@@ -888,14 +888,13 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
         try {
             const tagParam = activeFilterRef.current === 'label' ? filterValueRef.current : "";
             const searchParam = searchRef.current || "";
-            const useUnreadFirst = (activeFilterRef.current === 'unread' || activeFilterRef.current === 'profile') && !searchParam && !tagParam;
-            const result = useUnreadFirst
-                ? await getCandidates(50, 0, "", false, "", true)
-                : await getCandidates(100, 0, searchParam, false, tagParam);
+            // Siempre cargar 100 con unreadFirst=true para que los no-leídos aparezcan
+            // primero Y el conteo del badge sea consistente sin importar el filtro activo.
+            const result = await getCandidates(100, 0, searchParam, false, tagParam, true);
             if (result.success) {
                 const fetchedCandidates = result.candidates || [];
                 setCandidates(fetchedCandidates);
-                setHasMore(!useUnreadFirst && fetchedCandidates.length === 100);
+                setHasMore(fetchedCandidates.length === 100);
                 if (fetchedCandidates.length > 0) {
                     setSelectedChat(current => { if (!current) return fetchedCandidates[0]; return current; });
                 }
