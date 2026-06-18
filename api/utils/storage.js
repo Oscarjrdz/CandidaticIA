@@ -408,13 +408,6 @@ export const getCandidates = async (limit = 100, offset = 0, search = '', exclud
     const client = getClient();
     if (!client) return { candidates: [], total: 0 };
 
-    // TEMP DEBUG: log large scans with stack trace to identify caller
-    if (limit >= 5000 && !search && !tagFilter && !excludeLinked) {
-        const stack = new Error().stack.split('\n').slice(1, 5).join(' | ');
-        console.error(`[BANDWIDTH-DEBUG] getCandidates(${limit}) fast-path | stack: ${stack}`);
-        client.set('debug:getcandidates:caller', stack, 'EX', 300).catch(() => {});
-    }
-
     // ✅ META AUDIT: Removed O(N) HKEYS call for CANDIDATE_PROJECT_LINK hydration.
     // The 'proyecto' virtual field is now derived from the candidate's own projectId field.
 
