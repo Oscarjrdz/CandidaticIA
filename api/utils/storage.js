@@ -864,6 +864,29 @@ export const getCandidateById = async (id) => {
     return data ? JSON.parse(data) : null;
 };
 
+// Fast lookup only — no fallback scan. Returns null if not in index.
+// Use this for cosmetic updates (read receipts) to avoid 2000-candidate scan.
+export const getCandidateIdByPhoneFast = async (phone) => {
+    if (!phone) return null;
+    const target = phone.replace(/\D/g, '');
+    const client = getRedisClient();
+    if (!client) return null;
+
+    let fastId = await client.hget(KEYS.PHONE_INDEX, target);
+    if (fastId) return fastId;
+
+    const last10 = target.slice(-10);
+    if (last10.length === 10) {
+        const variations = [last10, '52' + last10, '521' + last10];
+        for (const v of variations) {
+            if (v === target) continue;
+            fastId = await client.hget(KEYS.PHONE_INDEX, v);
+            if (fastId) return fastId;
+        }
+    }
+    return null;
+};
+
 // Optimized Lookup: O(1) Redis Hash
 export const getCandidateIdByPhone = async (phone) => {
     if (!phone) return null;
@@ -1515,10 +1538,10 @@ export const updateMessageStatus = async (candidateId, ultraMsgId, status, addit
 
     const key = `messages:${candidateId}`;
     try {
-        // Leer sólo los últimos 200 mensajes — los status (delivered/read) siempre son recientes.
-        // Antes: lrange(0,-1) cargaba hasta 500 mensajes por cada webhook = ~250 KB por evento.
+        // Leer sólo los últimos 50 mensajes — 'failed' siempre es un mensaje reciente.
+        // 'read' ya no llega aquí (webhook lo desvía a SSE-only, sin lrange).
         const listLen = await client.llen(key);
-        const start = Math.max(0, listLen - 200);
+        const start = Math.max(0, listLen - 50);
         const raw = await client.lrange(key, start, -1);
         const messages = raw.map(r => JSON.parse(r));
 

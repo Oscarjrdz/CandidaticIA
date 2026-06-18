@@ -11,6 +11,7 @@ import crypto from 'crypto';
 import {
     saveMessage,
     getCandidateIdByPhone,
+    getCandidateIdByPhoneFast,
     saveCandidate,
     updateCandidate,
     getRedisClient,
@@ -172,21 +173,40 @@ export default async function handler(req, res) {
 
                 if (!msgId || !statusStr) continue;
 
-                // Skip 'sent' and 'delivered' — each lrange reads 250KB for cosmetic checkmarks.
-                // Only persist 'read' (double blue checks) and 'failed' (actionable).
-                const shouldPersistStatus = statusStr === 'read' || statusStr === 'failed';
+                // 'sent' and 'delivered' — skip entirely (cosmetic, high volume).
+                if (statusStr === 'sent' || statusStr === 'delivered') continue;
 
-                try {
-                    if (shouldPersistStatus && recipientPhone.length >= 10) {
+                // 'read' — SSE-only via fast lookup (no lrange, no lset).
+                // Fast lookup never falls back to getCandidates(2000), so worst case
+                // is 4 HGET calls (~200 bytes) instead of 3 MB. Blue checks appear
+                // in real time for active admin sessions via SSE; not persisted to list.
+                if (statusStr === 'read' && recipientPhone.length >= 10) {
+                    (async () => {
+                        try {
+                            const candidateId = await getCandidateIdByPhoneFast(recipientPhone);
+                            if (candidateId) {
+                                const { notifyCandidateUpdate } = await import('../utils/sse-notify.js');
+                                await notifyCandidateUpdate(candidateId, {
+                                    messageStatusUpdate: { id: msgId, status: 'read' }
+                                });
+                            }
+                        } catch (e) { /* silent */ }
+                    })();
+                    continue;
+                }
+
+                // 'failed' — full persistence (actionable, low volume).
+                if (statusStr === 'failed' && recipientPhone.length >= 10) {
+                    try {
                         const candidateId = await getCandidateIdByPhone(recipientPhone);
                         if (candidateId) {
-                            // For failed messages, include the Meta error details
-                            if (statusStr === 'failed' && status.errors?.length > 0) {
-                                const metaError = status.errors[0];
-                                const errorText = `Meta Error #${metaError.code}: ${metaError.title || metaError.message || 'Unknown'}`;
-                                await updateMessageStatus(candidateId, msgId, statusStr, { error: errorText });
+                            const metaError = status.errors?.[0];
+                            const errorText = metaError
+                                ? `Meta Error #${metaError.code}: ${metaError.title || metaError.message || 'Unknown'}`
+                                : null;
+                            await updateMessageStatus(candidateId, msgId, 'failed', errorText ? { error: errorText } : {});
 
-                                // Save debug info for last failure
+                            if (metaError) {
                                 const redis = getRedisClient();
                                 if (redis) {
                                     redis.set('debug:last_meta_failure', JSON.stringify({
@@ -196,29 +216,18 @@ export default async function handler(req, res) {
                                         error: metaError
                                     }), 'EX', 86400).catch(() => {});
                                 }
-                            } else {
-                                await updateMessageStatus(candidateId, msgId, statusStr);
                             }
-                        }
-                    }
-                } catch (e) { /* Silent fail */ }
 
-                // Handle specific failure actions
-                if (statusStr === 'failed' && status.errors?.length > 0) {
-                    const errorCode = status.errors[0]?.code;
-                    // 131026 = number not on WhatsApp
-                    if (errorCode === 131026) {
-                        try {
-                            const candidateId = await getCandidateIdByPhone(recipientPhone);
-                            if (candidateId) {
+                            // 131026 = number not on WhatsApp
+                            if (metaError?.code === 131026) {
                                 await updateCandidate(candidateId, {
                                     status: 'Incontactable',
                                     incontactable: true,
                                     blocked: true
                                 });
                             }
-                        } catch (e) { }
-                    }
+                        }
+                    } catch (e) { /* silent */ }
                 }
             }
             return res.status(200).send('status_processed');
