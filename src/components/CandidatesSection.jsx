@@ -257,6 +257,7 @@ const CandidatesSection = () => {
 
     // ✅ META AUDIT: Deletion guard — prevents SSE ghost re-insertion after delete
     const recentlyDeletedRef = useRef(new Set());
+    const processedNewCandidateRef = useRef(null);
     const statCardRef = useRef(null); // 🎊 Confetti origin anchor
 
     // === TAGS STATE & LOGIC ===
@@ -385,8 +386,10 @@ const CandidatesSection = () => {
     // Listen for new candidates via SSE
     useEffect(() => {
         if (newCandidate && newCandidate.id) {
-            // ✅ META AUDIT: Ghost guard — skip if recently deleted
             if (recentlyDeletedRef.current.has(newCandidate.id)) return;
+            // Skip if this candidate was already processed (e.g. navigated away and back)
+            if (processedNewCandidateRef.current === newCandidate.id) return;
+            processedNewCandidateRef.current = newCandidate.id;
 
             setCandidates(prev => {
                 const exists = prev.some(c => c.id === newCandidate.id);
