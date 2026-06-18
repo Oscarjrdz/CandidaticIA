@@ -1206,9 +1206,10 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
         {
             const reengageKey = `reengagement:${candidateId}`;
             const noInteresaMarkerKey = `noInteresa:${candidateId}`;
-            const reengageState = await redis?.get(reengageKey);
-            // isNoInteresa: reads a Redis marker set when the exit move fires (reliable, step-name agnostic)
-            const noInteresaMarker = await redis?.get(noInteresaMarkerKey);
+            const [reengageState, noInteresaMarker] = await Promise.all([
+                redis?.get(reengageKey),
+                redis?.get(noInteresaMarkerKey)
+            ]);
             const isNoInteresa = !!noInteresaMarker ||
                 /no.?interesa/i.test(candidateData.status || '');
 

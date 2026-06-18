@@ -12,13 +12,14 @@ export async function intelligentExtract(candidateId, historyText) {
     try {
         const redis = getRedisClient();
 
-        // 1. Fetch Dynamic Rules from Redis
-        const redisRules = await (redis ? redis.get('automation_rules') : null);
-        let rules = redisRules ? JSON.parse(redisRules).filter(r => r.enabled) : [];
+        // 1. Fetch all Redis config in one round-trip
+        const [rulesJson, customFieldsJson, cats1, cats2] = redis
+            ? await redis.mget('automation_rules', 'custom_fields', 'candidatic_categories', 'bot_categories')
+            : [null, null, null, null];
 
+        let rules = rulesJson ? JSON.parse(rulesJson).filter(r => r.enabled) : [];
 
-        // STEEL-VESSEL FALLBACK: If no rules are found, use hardcoded core rules 
-        // to prevent data loss in case of empty configuration.
+        // STEEL-VESSEL FALLBACK: If no rules are found, use hardcoded core rules
         if (rules.length === 0) {
             const DEFAULT_FIELDS = [
                 { value: 'nombreReal', label: 'Nombre Real' },
@@ -30,10 +31,9 @@ export async function intelligentExtract(candidateId, historyText) {
 
             let customFields = [];
             try {
-                const customFieldsJson = await redis.get('custom_fields');
                 if (customFieldsJson) customFields = JSON.parse(customFieldsJson);
             } catch (e) {
-                console.warn('Error fetching custom fields for fallback:', e);
+                console.warn('Error parsing custom fields for fallback:', e);
             }
 
             const allFields = [...DEFAULT_FIELDS, ...customFields];
@@ -47,10 +47,10 @@ export async function intelligentExtract(candidateId, historyText) {
             }));
         }
 
-        // 2. Fetch Valid Categories for better mapping
+        // 2. Build categories list from already-fetched data
         let categoriesList = "";
         try {
-            const categoriesData = (await redis?.get('candidatic_categories')) || (await redis?.get('bot_categories'));
+            const categoriesData = cats1 || cats2;
             if (categoriesData) {
                 let cats = [];
                 try {
@@ -61,7 +61,7 @@ export async function intelligentExtract(candidateId, historyText) {
                 }
                 categoriesList = `\n[CATEGORÍAS VÁLIDAS EN EL SISTEMA]: ${cats.join(', ')}`;
             }
-        } catch (e) { console.warn('Error fetching categories for extractor:', e); }
+        } catch (e) { console.warn('Error building categories for extractor:', e); }
 
         // 3. Build Dynamic Schema and Instructions
         const schema = {
@@ -120,14 +120,18 @@ ${JSON.stringify(schema, null, 2)}
 
         let jsonText = '';
 
-        // --- PHASE A: GPT-4o-mini (Primary Extractor) ---
+        // --- PHASE A: GPT-4o-mini + getCandidateById in parallel ---
+        // getCandidateById (Redis GET ~10ms) runs while GPT processes (500-2000ms)
+        let currentCandidate = null;
         try {
             const startTime = Date.now();
-            const gptResult = await getOpenAIResponse([], prompt, 'gpt-4o-mini', null, { type: 'json_object' });
+            const [gptResult, fetchedCandidate] = await Promise.all([
+                getOpenAIResponse([], prompt, 'gpt-4o-mini', null, { type: 'json_object' }),
+                getCandidateById(candidateId)
+            ]);
+            currentCandidate = fetchedCandidate;
             if (gptResult && gptResult.content) {
                 jsonText = gptResult.content;
-
-                // Telemetry
                 recordAITelemetry(candidateId, 'extraction', {
                     model: 'gpt-4o-mini',
                     latency: Date.now() - startTime,
@@ -142,11 +146,13 @@ ${JSON.stringify(schema, null, 2)}
         if (!jsonText || !jsonText.includes('{')) {
             try {
                 const startTime = Date.now();
-                const gptResult = await getOpenAIResponse([], prompt, 'gpt-4o', null, { type: 'json_object' });
+                const [gptResult, fetchedCandidate] = await Promise.all([
+                    getOpenAIResponse([], prompt, 'gpt-4o', null, { type: 'json_object' }),
+                    currentCandidate ? Promise.resolve(currentCandidate) : getCandidateById(candidateId)
+                ]);
+                currentCandidate = currentCandidate || fetchedCandidate;
                 if (gptResult && gptResult.content) {
                     jsonText = gptResult.content;
-
-                    // Telemetry
                     recordAITelemetry(candidateId, 'extraction', {
                         model: 'gpt-4o',
                         latency: Date.now() - startTime,
@@ -181,7 +187,7 @@ ${JSON.stringify(schema, null, 2)}
         const conceptualSummary = extractedEnvelope.conceptual_summary || "";
 
         // 3. Smart Reconciliation (Amazon Data Engine Style)
-        const currentCandidate = await getCandidateById(candidateId);
+        if (!currentCandidate) currentCandidate = await getCandidateById(candidateId);
         const evidenceLogs = currentCandidate?.data_evidence || {};
         const updateData = {};
 
