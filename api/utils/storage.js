@@ -793,6 +793,12 @@ export const deleteCandidate = async (id) => {
             if (raw) {
                 const c = JSON.parse(raw);
                 phone = c.whatsapp ? c.whatsapp.replace(/\D/g, '') : null;
+                // Decrement tag counts
+                if (Array.isArray(c.tags) && c.tags.length > 0) {
+                    const tp = client.pipeline();
+                    c.tags.forEach(t => tp.hincrby('candidatic:tag_counts', t, -1));
+                    tp.exec().catch(() => {});
+                }
             }
         } catch (_) {}
 
@@ -1040,6 +1046,23 @@ export const updateCandidate = async (id, data) => {
     const candidate = await getCandidateById(id);
     if (!candidate) return null;
     const updated = { ...candidate, ...data };
+
+    // ATOMIC TAG COUNTS: keep candidatic:tag_counts hash in sync when tags change
+    if ('tags' in data) {
+        const oldSet = new Set(Array.isArray(candidate.tags) ? candidate.tags : []);
+        const newSet = new Set(Array.isArray(data.tags) ? data.tags : []);
+        const added   = [...newSet].filter(t => !oldSet.has(t));
+        const removed = [...oldSet].filter(t => !newSet.has(t));
+        if (added.length || removed.length) {
+            const tc = getRedisClient();
+            if (tc) {
+                const p = tc.pipeline();
+                added.forEach(t => p.hincrby('candidatic:tag_counts', t, 1));
+                removed.forEach(t => p.hincrby('candidatic:tag_counts', t, -1));
+                p.exec().catch(() => {});
+            }
+        }
+    }
 
     // 📊 ATOMIC UNREAD: Track unread state using timestamps (lastUserMessageAt > lastHumanMessageAt)
     {

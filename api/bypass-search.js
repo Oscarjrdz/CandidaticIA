@@ -14,7 +14,10 @@ export default async function handler(req, res) {
     }
 
     try {
-        const { getCandidates, getRedisClient } = await import('./utils/storage.js');
+        const { getCandidates, getRedisClient, validateAdminSession } = await import('./utils/storage.js');
+
+        const userId = await validateAdminSession(req);
+        if (!userId) return res.status(401).json({ success: false, error: 'No autorizado' });
 
         const { minAge, maxAge, municipios, escolaridades, categories, gender, excludedTags } = req.body;
 

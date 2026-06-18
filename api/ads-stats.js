@@ -34,7 +34,9 @@ export default async function handler(req, res) {
     // ─── GET: Return ad statistics ───────────────────────────────────
     if (req.method === 'GET') {
         try {
-            const { getAdsStatistics, getRedisClient } = await import('./utils/storage.js');
+            const { getAdsStatistics, getRedisClient, validateAdminSession } = await import('./utils/storage.js');
+            const userId = await validateAdminSession(req);
+            if (!userId) return res.status(401).json({ success: false, error: 'No autorizado' });
             const data = await getAdsStatistics();
 
             // Filter out hidden ads
