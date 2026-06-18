@@ -10,7 +10,10 @@ export default async function handler(req, res) {
     }
 
     try {
-        const { getCandidates, updateCandidate } = await import('../utils/storage.js');
+        const { getCandidates, updateCandidate, validateAdminSession } = await import('../utils/storage.js');
+        const userId = await validateAdminSession(req);
+        if (!userId) return res.status(401).json({ error: 'No autorizado' });
+
         const { detectGender } = await import('../utils/ai.js');
 
         // Scan ALL candidates (limit 3000 to cover all)
