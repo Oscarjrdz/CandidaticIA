@@ -523,7 +523,9 @@ const CRMProjectsSection = () => {
         setActiveItem(null);
         setOverStepId(null);
 
-        if (!over) return;
+        console.log('[DnD] dragEnd', { activeId: active?.id, activeType: active?.data?.current?.type, overId: over?.id, overType: over?.data?.current?.type, overStepId: over?.data?.current?.stepId, overCandidate: !!over?.data?.current?.candidate });
+
+        if (!over) { console.log('[DnD] over=null, snap back'); return; }
 
         // Step Reordering (horizontal drag of kanban columns)
         if (active.data.current?.type === 'step') {
@@ -566,7 +568,9 @@ const CRMProjectsSection = () => {
         // Determine target step
         let targetStepId = null;
         if (over.data.current?.type === 'step') {
-            targetStepId = over.data.current.stepId;
+            // over.data.current.stepId is set by DroppableStepZone; if SortableStepColumn
+            // wins collision instead (same id, but data has no stepId), fall back to over.id
+            targetStepId = over.data.current.stepId ?? over.id;
         } else if (over.data.current?.candidate) {
             targetStepId = over.data.current.candidate.crmMeta?.stepId;
         }
