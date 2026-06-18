@@ -111,7 +111,10 @@ export default async function handler(req, res) {
         }
 
         // DYNAMIC IMPORTS
-        const { getRedisClient, getCandidates, getMessages } = await import('../utils/storage.js');
+        const { getRedisClient, getCandidates, getMessages, validateAdminSession } = await import('../utils/storage.js');
+
+        const userId = await validateAdminSession(req);
+        if (!userId) return res.status(401).json({ error: 'No autorizado' });
         const redis = getRedisClient();
 
         let apiKey = process.env.OPENAI_API_KEY;
