@@ -317,16 +317,16 @@ const CRMProjectsSection = () => {
         fetch('/api/tags').then(r => r.json()).then(d => { if (d.success) setAvailableTags(d.tags || []); }).catch(() => {});
     }, []);
 
-    // RBAC: same pattern as ChatSection — SuperAdmin/Admin see all, others filtered by allowed_crm_projects
+    // RBAC: solo SuperAdmin ve todo sin restricción; Admin y demás se filtran por allowed_crm_projects
     const filteredProjects = useMemo(() => {
-        if (!user || user.role === 'SuperAdmin' || user.role === 'Admin') return projects;
+        if (!user || user.role === 'SuperAdmin') return projects;
         const allowed = user?.allowed_crm_projects;
         if (!Array.isArray(allowed) || allowed.length === 0) return projects;
         return projects.filter(p => allowed.includes(p.id));
     }, [projects, user]);
 
     const filterProjectsForUser = (all) => {
-        if (!user || user.role === 'SuperAdmin' || user.role === 'Admin') return all;
+        if (!user || user.role === 'SuperAdmin') return all;
         const allowed = user?.allowed_crm_projects;
         if (!Array.isArray(allowed) || allowed.length === 0) return all;
         return all.filter(p => allowed.includes(p.id));
