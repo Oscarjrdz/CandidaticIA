@@ -115,7 +115,7 @@ const CandidateRow = React.memo(({ candidate, columnOrder, fieldsMap, magicLoadi
             </td>
             <td className="py-0.5 px-2.5">
                 <div className="text-[10px] text-gray-900 dark:text-white font-medium" title={candidate.nombre}>
-                    {candidate.nombre && candidate.nombre.length > 8 ? `${candidate.nombre.substring(0, 8)}...` : (candidate.nombre || '-')}
+                    {candidate.nombre && candidate.nombre.length > 20 ? `${candidate.nombre.substring(0, 20)}...` : (candidate.nombre || '-')}
                 </div>
             </td>
             {columnOrder.map(colId => {
