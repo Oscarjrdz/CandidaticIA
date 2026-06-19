@@ -896,73 +896,42 @@ export default async function handler(req, res) {
 
                         let finalAgentInput = agentInput;
 
-                        // 🎧 AUDIO TRANSCRIPTION (reuses Redis-stored buffer to avoid double download)
-                        if ((messageType === 'audio' || messageType === 'ptt') && mediaId) {
+                        // 🎙️ AUDIO → Respuesta directa (sin transcripción)
+                        if (messageType === 'audio' || messageType === 'ptt') {
+                            const AUDIO_REPLIES = [
+                                '¡Hola! 😊 Por el momento no puedo escuchar audios. ¿Me podrías escribir tu mensaje? 📝 ¡Con mucho gusto te atiendo!',
+                                '¡Qué tal! 👋 Te cuento que no tengo forma de reproducir notas de voz. Escríbeme por favor y te respondo de inmediato ✍️😊',
+                                '¡Hola! 🌟 Recibí tu audio pero no me es posible escucharlo. ¿Podrías escribirme lo que necesitas? Estoy aquí para ayudarte 😄',
+                                '¡Hey! 😊 Lo siento, los mensajes de voz no los puedo reproducir. Te pido de favor que me escribas tu mensaje 📝 ¡Gracias!',
+                                '¡Hola! 🙌 Lamentablemente no puedo escuchar audios en este momento. Escríbeme y con mucho gusto te oriento 😊✍️',
+                                '¡Buenas! 🌸 Recibí tu nota de voz pero no tengo manera de escucharla. ¿Me escribes lo que necesitas? ¡Estoy lista para ayudarte! 😄',
+                                '¡Hola! 🎉 Para poder ayudarte mejor, ¿podrías escribirme tu mensaje? Los audios no los puedo escuchar 🙏 ¡Gracias por entender!',
+                                '¡Hey! 💬 No me es posible reproducir audios. Escríbeme con confianza y te atiendo enseguida 😊✨',
+                                '¡Hola! 😄 Te comento que los mensajes de voz no los puedo escuchar. ¿Podrías escribirme? ¡Con gusto te ayudo con lo que necesites! 🌟',
+                                '¡Qué tal! 😊 Ay, los audios no los puedo escuchar por el momento 😅 ¿Me escribes tu mensaje? Así te atiendo mucho mejor ✍️🙌',
+                            ];
+                            const reply = AUDIO_REPLIES[Math.floor(Math.random() * AUDIO_REPLIES.length)];
                             try {
-                                const aiConfigStr = await redis?.get('ai_config');
-                                const aiConfig = aiConfigStr ? JSON.parse(aiConfigStr) : {};
-                                const openAiKey = aiConfig.openaiApiKey || process.env.OPENAI_API_KEY;
-
-                                if (openAiKey && mediaUrl) {
-                                    // Reuse buffer from Redis (already downloaded in media save step)
-                                    let audioBuffer = null;
-                                    let audioMime = 'audio/ogg';
-                                    const redisMediaId = mediaUrl?.split('id=')?.[1];
-                                    if (redisMediaId) {
-                                        const base64 = await redis?.get(`image:${redisMediaId}`);
-                                        const metaRaw = await redis?.get(`meta:image:${redisMediaId}`);
-                                        if (base64) {
-                                            audioBuffer = Buffer.from(base64, 'base64');
-                                            if (metaRaw) {
-                                                try { audioMime = JSON.parse(metaRaw).mime || audioMime; } catch(e) {}
-                                            }
-                                        }
-                                    }
-                                    // Fallback: re-download if Redis buffer not available
-                                    if (!audioBuffer) {
-                                        const fallbackMedia = await downloadMetaMedia(mediaId);
-                                        if (fallbackMedia?.buffer) {
-                                            audioBuffer = fallbackMedia.buffer;
-                                            audioMime = fallbackMedia.mimeType || audioMime;
-                                        }
-                                    }
-
-                                    if (audioBuffer) {
-                                        const axios = (await import('axios')).default;
-                                        const FormData = (await import('form-data')).default;
-                                        const formData = new FormData();
-                                        formData.append('file', audioBuffer, {
-                                            filename: 'audio.ogg',
-                                            contentType: audioMime
-                                        });
-                                        formData.append('model', 'whisper-1');
-                                        formData.append('language', 'es');
-
-                                        const whisperRes = await axios.post(
-                                            'https://api.openai.com/v1/audio/transcriptions',
-                                            formData,
-                                            {
-                                                headers: {
-                                                    'Authorization': `Bearer ${openAiKey}`,
-                                                    ...formData.getHeaders()
-                                                },
-                                                timeout: 30000
-                                            }
-                                        );
-
-                                        if (whisperRes.data?.text) {
-                                            finalAgentInput = `🎙️ [AUDIO TRANSCRITO]: "${whisperRes.data.text}"`;
-                                        }
-                                    }
-                                }
+                                const { sendUltraMsgMessage } = await import('./utils.js');
+                                const cleanTo = candidate.whatsapp.replace(/\D/g, '');
+                                const ultraConfigStr = await redis?.get('ultra_config');
+                                const ultraConfig = ultraConfigStr ? JSON.parse(ultraConfigStr) : {};
+                                await sendUltraMsgMessage(ultraConfig.instanceId, ultraConfig.token, cleanTo, reply, 'chat', {});
+                                const replyMsg = {
+                                    id: `msg_${Date.now()}_audio_reply`,
+                                    from: 'bot',
+                                    content: reply,
+                                    type: 'text',
+                                    status: 'sent',
+                                    timestamp: new Date().toISOString(),
+                                };
+                                await saveMessage(candidateId, replyMsg);
+                                const { notifyCandidateUpdate } = await import('../utils/sse-notify.js');
+                                await notifyCandidateUpdate(candidateId, { newMessage: true, messagePayload: replyMsg });
                             } catch (e) {
-                                console.error('❌ Whisper transcription error:', e.message);
-                                finalAgentInput = agentInput || '[Audio no pudo ser transcrito]';
+                                console.error('❌ Audio reply error:', e.message);
                             }
-
-                            try {
-                                await redis.set('debug_last_audio_input', finalAgentInput);
-                            } catch (e) { }
+                            return; // No pasar al agente
                         }
 
                         // 🏁 1. ADD TO WAITLIST
