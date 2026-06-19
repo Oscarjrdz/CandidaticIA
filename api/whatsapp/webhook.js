@@ -935,8 +935,25 @@ export default async function handler(req, res) {
                             } catch (e) {
                                 console.error('❌ Audio disclaimer error:', e.message);
                             }
-                            // Continuar al agente con contexto para que retome su última pregunta
-                            finalAgentInput = '[El candidato mandó un audio de voz. Ya le avisaste (en un mensaje anterior) que no puedes escuchar audios. NO menciones el audio de nuevo. Simplemente retoma la conversación donde se quedó y repite tu última pregunta pendiente de forma natural, como si continuaras el hilo.]';
+
+                            // Buscar la última pregunta real del bot ANTES del disclaimer
+                            // para que el agente la repita exacta, no adivine
+                            let lastBotQuestion = '';
+                            try {
+                                const rawMsgs = await redis.lrange(`messages:${candidateId}`, 0, -1);
+                                const parsed = rawMsgs.map(s => { try { return JSON.parse(s); } catch { return null; } }).filter(Boolean);
+                                // Buscar hacia atrás el último mensaje del bot que NO sea el disclaimer que acabamos de mandar
+                                const lastBot = [...parsed].reverse().find(m =>
+                                    (m.from === 'bot' || m.from === 'me') && m.content !== disclaimer
+                                );
+                                lastBotQuestion = lastBot?.content || '';
+                            } catch (e) { /* silent */ }
+
+                            if (lastBotQuestion) {
+                                finalAgentInput = `[El candidato mandó un audio. Ya le dijiste que no puedes escuchar audios (en el mensaje anterior). NO menciones el audio ni el disclaimer. Tu última pregunta fue exactamente esta: "${lastBotQuestion}" — repítela de forma natural como si continuaras el hilo, sin cambiar el tema.]`;
+                            } else {
+                                finalAgentInput = '[El candidato mandó un audio. Ya le avisaste que no puedes escuchar audios. Continúa la conversación de forma natural retomando donde quedaste.]';
+                            }
                         }
 
                         // 🏁 1. ADD TO WAITLIST
