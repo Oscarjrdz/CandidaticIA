@@ -1560,8 +1560,8 @@ export const updateMessageStatus = async (candidateId, ultraMsgId, status, addit
 
     const key = `messages:${candidateId}`;
     try {
-        // Leer sólo los últimos 50 mensajes — 'failed' siempre es un mensaje reciente.
-        // 'read' ya no llega aquí (webhook lo desvía a SSE-only, sin lrange).
+        // Leer sólo los últimos 50 mensajes — mensaje reciente siempre está al final.
+        // 'read' llega vía SSE-only; 'delivered' y 'failed' persisten aquí.
         const listLen = await client.llen(key);
         const start = Math.max(0, listLen - 50);
         const raw = await client.lrange(key, start, -1);

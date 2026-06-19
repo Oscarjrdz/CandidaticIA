@@ -176,17 +176,21 @@ export default async function handler(req, res) {
                 // 'sent' — skip (frontend ya lo maneja con UI optimista).
                 if (statusStr === 'sent') continue;
 
-                // 'delivered' y 'read' — SSE-only via fast lookup (no lrange, no lset).
-                // 4 HGET calls (~200 bytes) en vez de 3 MB. Las palomitas aparecen
-                // en tiempo real para sesiones activas via SSE; no se persiste en lista.
+                // 'delivered' — persiste en Redis + SSE (updateMessageStatus ya dispara SSE).
+                // 'read' — SSE-only (fast path, no persiste — se ve en sesión activa).
                 if ((statusStr === 'delivered' || statusStr === 'read') && recipientPhone.length >= 10) {
                     (async () => {
                         try {
                             const candidateId = await getCandidateIdByPhoneFast(recipientPhone);
-                            if (candidateId) {
+                            if (!candidateId) return;
+                            if (statusStr === 'delivered') {
+                                // Persistir en Redis para que recargas muestren ✓✓ gris
+                                await updateMessageStatus(candidateId, msgId, 'delivered');
+                            } else {
+                                // 'read' — solo SSE, sin lrange/lset
                                 const { notifyCandidateUpdate } = await import('../utils/sse-notify.js');
                                 await notifyCandidateUpdate(candidateId, {
-                                    messageStatusUpdate: { id: msgId, status: statusStr }
+                                    messageStatusUpdate: { id: msgId, status: 'read' }
                                 });
                             }
                         } catch (e) { /* silent */ }
