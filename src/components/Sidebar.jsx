@@ -203,25 +203,20 @@ const Sidebar = ({ activeSection, onSectionChange, onLogout, isMobileOpen, onClo
         return () => window.removeEventListener('sse:candidate:update', handler);
     }, []);
 
-    // Unread count logic:
-    // 1. Chat montado + RBAC fresco → usar conteo RBAC exacto (fuente de verdad)
-    // 2. Chat montado + RBAC aún cargando → usar rbacUnread + sseDelta (evita flash descendente)
-    // 3. Chat desmontado → usar último RBAC + sseDelta de mensajes nuevos vía SSE
-    // 4. Sin historial RBAC → usar globalStats SSE + sseDelta
     const sseDelta = newUnreadIds.size;
     const unreadCount = (() => {
+        // Chat montado + RBAC fresco → fuente de verdad exacta
         if (chatMounted && rbacFreshSinceMounted && rbacUnread !== null) {
             return rbacUnread;
         }
-        if (rbacUnread !== null) {
-            return Math.max(0, rbacUnread) + sseDelta;
-        }
-        // Never visited Chat Web this session — fall back to SSE global stats
+        // Chat no montado → globalStats.unread es la fuente más actualizada (SSE cada 5s desde Redis)
+        // No sumamos sseDelta porque globalStats.unread ya incluye todos los mensajes nuevos
         const sseBaseline = globalStats?.unread;
         if (sseBaseline !== undefined && sseBaseline !== null) {
-            return sseBaseline + sseDelta;
+            return sseBaseline;
         }
-        return sseDelta;
+        // SSE aún no ha llegado (primer render) → localStorage + delta como último recurso
+        return Math.max(0, rbacUnread ?? 0) + sseDelta;
     })();
 
     const toggleCollapse = () => {
