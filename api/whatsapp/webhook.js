@@ -896,7 +896,7 @@ export default async function handler(req, res) {
 
                         let finalAgentInput = agentInput;
 
-                        // 🎙️ AUDIO → Respuesta directa (sin transcripción)
+                        // 🎙️ AUDIO → Disclaimer determinístico + agente retoma pregunta pendiente
                         if (messageType === 'audio' || messageType === 'ptt') {
                             const AUDIO_REPLIES = [
                                 '¡Hola! 😊 Por el momento no puedo escuchar audios. ¿Me podrías escribir tu mensaje? 📝 ¡Con mucho gusto te atiendo!',
@@ -910,28 +910,29 @@ export default async function handler(req, res) {
                                 '¡Hola! 😄 Te comento que los mensajes de voz no los puedo escuchar. ¿Podrías escribirme? ¡Con gusto te ayudo con lo que necesites! 🌟',
                                 '¡Qué tal! 😊 Ay, los audios no los puedo escuchar por el momento 😅 ¿Me escribes tu mensaje? Así te atiendo mucho mejor ✍️🙌',
                             ];
-                            const reply = AUDIO_REPLIES[Math.floor(Math.random() * AUDIO_REPLIES.length)];
+                            const disclaimer = AUDIO_REPLIES[Math.floor(Math.random() * AUDIO_REPLIES.length)];
                             try {
                                 const { sendUltraMsgMessage } = await import('./utils.js');
                                 const cleanTo = candidate.whatsapp.replace(/\D/g, '');
                                 const ultraConfigStr = await redis?.get('ultra_config');
                                 const ultraConfig = ultraConfigStr ? JSON.parse(ultraConfigStr) : {};
-                                await sendUltraMsgMessage(ultraConfig.instanceId, ultraConfig.token, cleanTo, reply, 'chat', {});
-                                const replyMsg = {
+                                await sendUltraMsgMessage(ultraConfig.instanceId, ultraConfig.token, cleanTo, disclaimer, 'chat', {});
+                                const disclaimerMsg = {
                                     id: `msg_${Date.now()}_audio_reply`,
                                     from: 'bot',
-                                    content: reply,
+                                    content: disclaimer,
                                     type: 'text',
                                     status: 'sent',
                                     timestamp: new Date().toISOString(),
                                 };
-                                await saveMessage(candidateId, replyMsg);
+                                await saveMessage(candidateId, disclaimerMsg);
                                 const { notifyCandidateUpdate } = await import('../utils/sse-notify.js');
-                                await notifyCandidateUpdate(candidateId, { newMessage: true, messagePayload: replyMsg });
+                                await notifyCandidateUpdate(candidateId, { newMessage: true, messagePayload: disclaimerMsg });
                             } catch (e) {
-                                console.error('❌ Audio reply error:', e.message);
+                                console.error('❌ Audio disclaimer error:', e.message);
                             }
-                            return; // No pasar al agente
+                            // Continuar al agente con contexto para que retome su última pregunta
+                            finalAgentInput = '[El candidato mandó un audio de voz. Ya le avisaste (en un mensaje anterior) que no puedes escuchar audios. NO menciones el audio de nuevo. Simplemente retoma la conversación donde se quedó y repite tu última pregunta pendiente de forma natural, como si continuaras el hilo.]';
                         }
 
                         // 🏁 1. ADD TO WAITLIST
