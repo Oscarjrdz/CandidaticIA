@@ -121,106 +121,62 @@ const Sidebar = ({ activeSection, onSectionChange, onLogout, isMobileOpen, onClo
     });
     const { globalStats } = useCandidatesSSE();
 
-    // Track whether ChatSection is currently mounted (broadcasting accurate RBAC counts)
-    const [chatMounted, setChatMounted] = useState(false);
-
-    // Seed from localStorage so the badge doesn't jump when switching sections
-    const [rbacUnread, setRbacUnread] = useState(() => {
+    // Badge de no-leídos:
+    // - liveUnreadIds (ref): Set de IDs con mensajes no leídos conocidos esta sesión
+    // - liveUnreadCount (state): tamaño del Set → lo que muestra el badge
+    // Se sincroniza con el conteo RBAC exacto cuando Chat Web abre (chat_unread_rbac).
+    // Se incrementa en tiempo real vía SSE cuando llega un nuevo mensaje de usuario.
+    const liveUnreadIds = React.useRef(new Set());
+    const [liveUnreadCount, setLiveUnreadCount] = useState(() => {
         const v = localStorage.getItem('chat_unread_rbac');
-        return v !== null ? Number(v) : null;
+        return v !== null ? Number(v) : 0;
     });
+    const [chatMounted, setChatMounted] = useState(false);
+    const chatMountedRef = React.useRef(false);
 
-    // SSE-based optimistic delta: tracks NEW candidate IDs that messaged while Chat is unmounted.
-    // Uses a Set so multiple messages from the same candidate only count once.
-    const [newUnreadIds, setNewUnreadIds] = useState(new Set());
-
-    // IDs ya contados en rbacUnread — para no sumar doble si un candidato ya era no-leído
-    const [rbacUnreadIds, setRbacUnreadIds] = useState(new Set());
-    const rbacUnreadIdsRef = React.useRef(new Set());
-    useEffect(() => { rbacUnreadIdsRef.current = rbacUnreadIds; }, [rbacUnreadIds]);
-
-    // true después del primer broadcast RBAC desde que ChatSection montó (cargó candidatos)
-    const [rbacFreshSinceMounted, setRbacFreshSinceMounted] = useState(false);
-
-    // Listen for ChatSection mount/unmount lifecycle
     useEffect(() => {
-        const mountHandler = (e) => {
-            setChatMounted(e.detail?.mounted ?? false);
-            if (e.detail?.mounted) {
-                // Marcar RBAC como stale hasta que llegue el primer broadcast post-carga.
-                // NO reseteamos newUnreadIds aquí — el broadcast RBAC lo hará cuando esté listo,
-                // para evitar el flash descendente mientras los candidatos cargan.
-                setRbacFreshSinceMounted(false);
-            }
+        const handler = (e) => {
+            const mounted = e.detail?.mounted ?? false;
+            setChatMounted(mounted);
+            chatMountedRef.current = mounted;
         };
-        window.addEventListener('chat_section_mounted', mountHandler);
-        return () => window.removeEventListener('chat_section_mounted', mountHandler);
+        window.addEventListener('chat_section_mounted', handler);
+        return () => window.removeEventListener('chat_section_mounted', handler);
     }, []);
 
-    // Listen for RBAC-filtered unread count + IDs from ChatSection and persist it
+    // Chat Web cargó y calculó el conteo RBAC exacto → sincronizar
     useEffect(() => {
         const handler = (e) => {
             const detail = e.detail;
-            // Soporte para formato nuevo { count, unreadIds } y legado (número)
             const count = typeof detail === 'number' ? detail : (detail?.count ?? 0);
             const ids = detail?.unreadIds instanceof Set ? detail.unreadIds : new Set();
-            setRbacUnread(count);
-            setRbacUnreadIds(ids);
-            setNewUnreadIds(new Set()); // Reset delta — RBAC es la fuente de verdad
-            setRbacFreshSinceMounted(true); // RBAC ya está actualizado post-carga
+            liveUnreadIds.current = new Set(ids); // Reemplazar con verdad RBAC
+            setLiveUnreadCount(count);
             localStorage.setItem('chat_unread_rbac', String(count));
         };
         window.addEventListener('chat_unread_rbac', handler);
         return () => window.removeEventListener('chat_unread_rbac', handler);
     }, []);
 
-    // Listen for new incoming messages via SSE to update badge when not on Chat.
-    // Solo suma candidatos que NO estaban ya en el conteo RBAC (evita doble conteo).
+    // SSE: nuevo mensaje de usuario → incrementar badge si el candidato no estaba ya contado
     useEffect(() => {
         const handler = (e) => {
+            if (chatMountedRef.current) return; // Chat abierto: él maneja su propio conteo
             const data = e.detail;
             const updates = data?.updates || data;
             if (updates?.newMessage && updates?.messageFrom === 'user' && data?.candidateId) {
                 const candidateId = data.candidateId;
-                // Si ya estaba en la lista de no-leídos, no incrementar
-                if (rbacUnreadIdsRef.current.has(candidateId)) return;
-                setNewUnreadIds(prev => {
-                    if (prev.has(candidateId)) return prev;
-                    const next = new Set(prev);
-                    next.add(candidateId);
-                    return next;
-                });
-                // Agregarlo a rbacUnreadIds para no contarlo de nuevo si manda otro mensaje
-                setRbacUnreadIds(prev => {
-                    if (prev.has(candidateId)) return prev;
-                    const next = new Set(prev);
-                    next.add(candidateId);
-                    return next;
-                });
+                if (liveUnreadIds.current.has(candidateId)) return; // Ya contado
+                liveUnreadIds.current.add(candidateId);
+                setLiveUnreadCount(prev => prev + 1);
+                localStorage.setItem('chat_unread_rbac', String(liveUnreadIds.current.size));
             }
         };
         window.addEventListener('sse:candidate:update', handler);
         return () => window.removeEventListener('sse:candidate:update', handler);
     }, []);
 
-    const sseDelta = newUnreadIds.size;
-    const unreadCount = (() => {
-        // Chat montado + RBAC fresco → fuente de verdad exacta
-        if (chatMounted && rbacFreshSinceMounted && rbacUnread !== null) {
-            return rbacUnread;
-        }
-        // Conteo RBAC previo (localStorage) → más preciso que globalStats.unread
-        // globalStats.unread = stats:bot:unread_v2 en Redis, puede estar inflado
-        if (rbacUnread !== null) {
-            return Math.max(0, rbacUnread) + sseDelta;
-        }
-        // Primera visita ever (sin localStorage): usar globalStats como hint inicial sin sumar delta
-        const sseBaseline = globalStats?.unread;
-        if (sseBaseline !== undefined && sseBaseline !== null) {
-            return sseBaseline;
-        }
-        return sseDelta;
-    })();
+    const unreadCount = liveUnreadCount;
 
     const toggleCollapse = () => {
         setIsCollapsed(prev => {
