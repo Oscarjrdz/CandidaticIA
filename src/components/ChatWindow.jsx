@@ -118,6 +118,12 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
         if (isOpen && candidate) {
             loadMessages();
             loadFields();
+            // Enviar palomitas azules al candidato (read receipt silencioso)
+            fetch('/api/chat', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'send_read_receipt', candidateId: candidate.id })
+            }).catch(() => {});
         }
     }, [isOpen, candidate]);
 
