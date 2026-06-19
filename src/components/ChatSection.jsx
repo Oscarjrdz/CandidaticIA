@@ -575,7 +575,6 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
     const [manualStepFilter, setManualStepFilter] = useState(null);
 
     const [showDropdown, setShowDropdown] = useState(null);
-    const [tagSearch, setTagSearch] = useState('');
 
     // New Chat creation
     const [showNewChat, setShowNewChat] = useState(false);
@@ -2373,14 +2372,13 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                                                 Todas las etiquetas
                                             </div>}
                                             {(Array.isArray(availableTags) ? availableTags : []).filter(tagObj => {
-                                                const name = typeof tagObj === 'string' ? tagObj : tagObj.name;
-                                                if (tagSearch && !name.toLowerCase().includes(tagSearch.toLowerCase())) return false;
+                                                const tSearchName = typeof tagObj === 'string' ? tagObj : tagObj.name;
+                                                if (tagSearch && !tSearchName.toLowerCase().includes(tagSearch.toLowerCase())) return false;
                                                 // User-level label filtering
                                                 if (!user || user.role === 'SuperAdmin' || user.role === 'Admin') return true;
                                                 const userLabels = user?.allowed_labels;
                                                 if (!Array.isArray(userLabels) || userLabels.length === 0) return true;
-                                                const name = typeof tagObj === 'string' ? tagObj : tagObj.name;
-                                                return userLabels.some(l => typeof l === 'string' && l.trim().toLowerCase() === name.trim().toLowerCase());
+                                                return userLabels.some(l => typeof l === 'string' && l.trim().toLowerCase() === tSearchName.trim().toLowerCase());
                                             }).map(tagObj => {
                                                 const tName = typeof tagObj === 'string' ? tagObj : tagObj.name;
                                                 const tColor = typeof tagObj === 'string' ? '#3b82f6' : tagObj.color;
