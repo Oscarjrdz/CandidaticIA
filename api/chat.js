@@ -163,7 +163,8 @@ export default async function handler(req, res) {
         if (req.method === 'POST') {
             const { candidateId, message, type = 'text', mediaUrl, base64Data, replyToId, extraParams: incomingExtraParams = {}, senderId, senderName } = req.body;
 
-            if (!candidateId || (!message && !mediaUrl && type !== 'template')) {
+            const typeHasOwnPayload = ['template', 'location', 'contacts', 'interactive'].includes(type);
+            if (!candidateId || (!message && !mediaUrl && !typeHasOwnPayload)) {
                 return res.status(400).json({ error: 'Faltan datos requeridos' });
             }
 
