@@ -18,6 +18,9 @@ import { deleteChatFileId, deleteLocalChatFile } from '../utils/storage';
 import { formatPhone, formatRelativeDate, formatDateTime, calculateAge, formatValue } from '../utils/formatters';
 import { useCandidatesSSE } from '../hooks/useCandidatesSSE';
 import { fireConfetti } from '../utils/confetti';
+
+// Module-level set: persists across component mounts/unmounts during the session
+const _firedConfettiIds = new Set();
 import { isProfileComplete, isChatEmpty } from '../utils/profileUtils';
 import { useToastContext } from '../contexts/ToastContext';
 import { useAuthContext } from '../contexts/AuthContext';
@@ -257,7 +260,6 @@ const CandidatesSection = () => {
 
     // ✅ META AUDIT: Deletion guard — prevents SSE ghost re-insertion after delete
     const recentlyDeletedRef = useRef(new Set());
-    const processedNewCandidateRef = useRef(null);
     const statCardRef = useRef(null); // 🎊 Confetti origin anchor
 
     // === TAGS STATE & LOGIC ===
@@ -387,15 +389,16 @@ const CandidatesSection = () => {
     useEffect(() => {
         if (newCandidate && newCandidate.id) {
             if (recentlyDeletedRef.current.has(newCandidate.id)) return;
-            // Skip if this candidate was already processed (e.g. navigated away and back)
-            if (processedNewCandidateRef.current === newCandidate.id) return;
-            processedNewCandidateRef.current = newCandidate.id;
 
             setCandidates(prev => {
                 const exists = prev.some(c => c.id === newCandidate.id);
                 if (exists) return prev;
                 showToast && showToast('Nuevo candidato recibido 🎉', 'success');
-                fireConfetti(80, statCardRef.current); // 🎊
+                // Only fire confetti once per candidate per session (survives remounts)
+                if (!_firedConfettiIds.has(newCandidate.id)) {
+                    _firedConfettiIds.add(newCandidate.id);
+                    fireConfetti(80, statCardRef.current);
+                }
                 return [newCandidate, ...prev];
             });
         }
