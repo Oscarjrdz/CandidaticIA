@@ -193,7 +193,11 @@ export default async function handler(req, res) {
                                     });
                                 }
                             } else {
-                                // 'read': señal global — el front marca todos los enviados
+                                // 'read': persiste timestamp + SSE global
+                                const redis = getRedisClient();
+                                if (redis) {
+                                    await redis.set(`candidate:lastRead:${candidateId}`, Date.now(), 'EX', 86400 * 30);
+                                }
                                 await notifyCandidateUpdate(candidateId, {
                                     markAllSentAsRead: true
                                 });

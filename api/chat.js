@@ -22,7 +22,26 @@ export default async function handler(req, res) {
                 return res.status(400).json({ error: 'Falta candidateId' });
             }
 
-            const messages = await getMessages(candidateId);
+            let messages = await getMessages(candidateId);
+
+            // Aplicar estado 'read' persistido — cuando el candidato leyó nuestros mensajes,
+            // el webhook guarda candidate:lastRead:{id}. Al recargar mensajes lo aplicamos
+            // para que las palomitas azules sobrevivan cambios de sección.
+            const redis = getRedisClient();
+            if (redis) {
+                const lastReadTs = await redis.get(`candidate:lastRead:${candidateId}`);
+                if (lastReadTs) {
+                    const lastRead = parseInt(lastReadTs);
+                    messages = messages.map(m => {
+                        if ((m.from === 'me' || m.from === 'bot') &&
+                            (m.status === 'sent' || m.status === 'delivered') &&
+                            new Date(m.timestamp || m.fecha || 0).getTime() <= lastRead) {
+                            return { ...m, status: 'read' };
+                        }
+                        return m;
+                    });
+                }
+            }
 
             // If no messages exist but candidate is flagged as unread, auto-clear silently
             if (messages.length === 0) {
