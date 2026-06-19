@@ -1193,6 +1193,15 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                 });
             } else if (sseUpdate.updates?.newMessage) {
                 if (sseUpdate.updates?.messagePayload) {
+                    // Si el candidato mandó este mensaje mientras tenemos su chat abierto → read receipt inmediato
+                    const incomingMsg = sseUpdate.updates.messagePayload;
+                    if (incomingMsg.from === 'user' && currentChat?.id) {
+                        fetch('/api/chat', {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ action: 'send_read_receipt', candidateId: currentChat.id })
+                        }).catch(() => {});
+                    }
                     console.log('🚀 [SSE] Injecting INSTANT MESSAGE:', sseUpdate.updates.messagePayload);
                     // 🚀 O(1) Instant Message Injection (Meta Standard)
                     // Functional update chains correctly even when React batches

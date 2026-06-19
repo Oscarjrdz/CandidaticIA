@@ -144,10 +144,17 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
 
             // Inyectar nuevo mensaje
             if (updates.newMessage && updates.messagePayload) {
+                // Si el candidato mandó este mensaje mientras tenemos el chat abierto → read receipt inmediato
+                if (updates.messagePayload.from === 'user' && candidate?.id) {
+                    fetch('/api/chat', {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ action: 'send_read_receipt', candidateId: candidate.id })
+                    }).catch(() => {});
+                }
                 setMessages(prev => {
                     // Evita inyectar doble si el WebSocket fue más rápido
                     if (prev.some(m => m.id === updates.messagePayload.id)) {
-                        // Si ya existe, podríamos actualizar su estado
                         return prev.map(m => m.id === updates.messagePayload.id ? { ...m, ...updates.messagePayload } : m);
                     }
                     return [...prev, updates.messagePayload];
