@@ -2718,14 +2718,16 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                                     <p className="text-xs text-[#667781] dark:text-[#8696a0] truncate shrink">
                                         {selectedChat.whatsapp} • últ. msj {formatRelativeDate(selectedChat.ultimoMensaje)}
                                     </p>
-                                    <span className={`shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded-full ${isProfileComplete(selectedChat) ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400' : 'bg-red-100 dark:bg-red-900/30 text-red-500 dark:text-red-400'}`}>
-                                        {isProfileComplete(selectedChat) ? 'Completo' : 'Incompleto'}
-                                    </span>
                                     {(selectedChat.adHeadline || selectedChat.adId) && (
                                         <span className="hidden lg:inline-flex items-center gap-1 shrink-0 text-[10px] font-medium text-violet-500 dark:text-violet-400 bg-violet-50 dark:bg-violet-500/10 px-2 py-0.5 rounded-full border border-violet-200/60 dark:border-violet-500/20 truncate max-w-[180px]" title={selectedChat.adHeadline || selectedChat.adId}>
                                             📢 {selectedChat.adHeadline || `Ad ${selectedChat.adId}`}
                                         </span>
                                     )}
+                                </div>
+                                <div className="mt-0.5">
+                                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${isProfileComplete(selectedChat) ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400' : 'bg-red-100 dark:bg-red-900/30 text-red-500 dark:text-red-400'}`}>
+                                        {isProfileComplete(selectedChat) ? 'Completo' : 'Incompleto'}
+                                    </span>
                                 </div>
                             </div>
                         </div>
