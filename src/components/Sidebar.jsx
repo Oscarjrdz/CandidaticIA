@@ -209,14 +209,17 @@ const Sidebar = ({ activeSection, onSectionChange, onLogout, isMobileOpen, onClo
         if (chatMounted && rbacFreshSinceMounted && rbacUnread !== null) {
             return rbacUnread;
         }
-        // Chat no montado → globalStats.unread es la fuente más actualizada (SSE cada 5s desde Redis)
-        // No sumamos sseDelta porque globalStats.unread ya incluye todos los mensajes nuevos
+        // Conteo RBAC previo (localStorage) → más preciso que globalStats.unread
+        // globalStats.unread = stats:bot:unread_v2 en Redis, puede estar inflado
+        if (rbacUnread !== null) {
+            return Math.max(0, rbacUnread) + sseDelta;
+        }
+        // Primera visita ever (sin localStorage): usar globalStats como hint inicial sin sumar delta
         const sseBaseline = globalStats?.unread;
         if (sseBaseline !== undefined && sseBaseline !== null) {
             return sseBaseline;
         }
-        // SSE aún no ha llegado (primer render) → localStorage + delta como último recurso
-        return Math.max(0, rbacUnread ?? 0) + sseDelta;
+        return sseDelta;
     })();
 
     const toggleCollapse = () => {
