@@ -623,22 +623,30 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
 
                     {msg.content && (
                         <div className="relative min-w-[60px] max-w-full text-[14.5px]">
-                            <div 
-                                className="whitespace-pre-wrap leading-snug break-words" 
-                                dangerouslySetInnerHTML={{ __html: formatWhatsAppText(msg.content) + '<span class="inline-block w-[60px] h-2 invisible pointer-events-none"></span>' }}
+                            <div
+                                className="whitespace-pre-wrap leading-snug break-words"
+                                dangerouslySetInnerHTML={{ __html: formatWhatsAppText(msg.content) + '<span class="inline-block w-[78px] h-2 invisible pointer-events-none"></span>' }}
                             />
                         </div>
                     )}
 
-                    <div className={`flex items-center space-x-1 select-none ${msg.content ? 'absolute bottom-1 right-2' : 'justify-end mt-1'}`}>
+                    <div className={`flex items-center gap-0.5 select-none ${msg.content ? 'absolute bottom-1 right-2' : 'justify-end mt-1'}`}>
                         <p className="text-[10px] text-gray-500/90 dark:text-gray-400/90 font-medium tracking-tight">
                             {safeFormatTime(msg.timestamp)}
                         </p>
-                        {isMe && (
-                            <span className={`text-[13px] font-bold uppercase leading-none ${msg.status === 'seen' || msg.status === 'read' ? 'text-[#53bdeb]' : 'text-gray-400/80'}`}>
-                                {msg.status === 'seen' || msg.status === 'read' ? '✓✓' : msg.status === 'delivered' ? '✓✓' : msg.status === 'queued' ? '...' : '✓'}
-                            </span>
-                        )}
+                        {isMe && (() => {
+                            const isSeen = msg.status === 'seen' || msg.status === 'read';
+                            const isDouble = isSeen || msg.status === 'delivered';
+                            if (msg.status === 'queued') return <span className="text-[10px] text-gray-400/70 leading-none">···</span>;
+                            return (
+                                <span
+                                    className={`text-[13px] font-bold leading-none ${isSeen ? 'text-[#53bdeb]' : 'text-gray-400/80'}`}
+                                    style={{ letterSpacing: '-2px' }}
+                                >
+                                    {isDouble ? '✓✓' : '✓'}
+                                </span>
+                            );
+                        })()}
                     </div>
                 </div>
             </div>
