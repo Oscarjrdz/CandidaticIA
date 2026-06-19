@@ -575,6 +575,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
     const [manualStepFilter, setManualStepFilter] = useState(null);
 
     const [showDropdown, setShowDropdown] = useState(null);
+    const [tagSearch, setTagSearch] = useState('');
 
     // New Chat creation
     const [showNewChat, setShowNewChat] = useState(false);
@@ -2349,17 +2350,31 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                                     )}
 
                                     {showDropdown === 'labels' && (
-                                        <div className="absolute top-full left-0 mt-2 w-full bg-white dark:bg-[#202c33] border border-gray-100 dark:border-gray-700 shadow-xl rounded-lg z-[100] py-1 max-h-64 overflow-y-auto custom-scrollbar">
-                                            <div 
-                                                onClick={() => { setActiveFilter(null); setFilterValue(null); setShowDropdown(null); }}
+                                        <div className="absolute top-full left-0 mt-2 w-full bg-white dark:bg-[#202c33] border border-gray-100 dark:border-gray-700 shadow-xl rounded-lg z-[100] py-1 max-h-72 flex flex-col">
+                                            <div className="px-3 py-2 border-b border-gray-100 dark:border-gray-700 shrink-0">
+                                                <input
+                                                    autoFocus
+                                                    type="text"
+                                                    value={tagSearch}
+                                                    onChange={e => setTagSearch(e.target.value)}
+                                                    onClick={e => e.stopPropagation()}
+                                                    placeholder="Buscar etiqueta..."
+                                                    className="w-full text-xs px-2.5 py-1.5 rounded-md bg-[#f0f2f5] dark:bg-[#111b21] text-[#111b21] dark:text-[#e9edef] outline-none placeholder-gray-400 dark:placeholder-gray-500"
+                                                />
+                                            </div>
+                                            <div className="overflow-y-auto custom-scrollbar flex-1">
+                                            {!tagSearch && <div
+                                                onClick={() => { setActiveFilter(null); setFilterValue(null); setShowDropdown(null); setTagSearch(''); }}
                                                 className={`px-4 py-2.5 text-xs cursor-pointer flex items-center gap-2 ${!activeFilter ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 font-bold' : 'text-[#111b21] dark:text-[#e9edef] hover:bg-[#f0f2f5] dark:hover:bg-[#111b21]'}`}
                                             >
                                                 <div className="w-3 h-3 rounded border border-gray-300 dark:border-gray-600 flex items-center justify-center">
                                                     {!activeFilter && <div className="w-1.5 h-1.5 rounded-sm bg-indigo-500"></div>}
                                                 </div>
                                                 Todas las etiquetas
-                                            </div>
+                                            </div>}
                                             {(Array.isArray(availableTags) ? availableTags : []).filter(tagObj => {
+                                                const name = typeof tagObj === 'string' ? tagObj : tagObj.name;
+                                                if (tagSearch && !name.toLowerCase().includes(tagSearch.toLowerCase())) return false;
                                                 // User-level label filtering
                                                 if (!user || user.role === 'SuperAdmin' || user.role === 'Admin') return true;
                                                 const userLabels = user?.allowed_labels;
@@ -2378,7 +2393,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                                                 return (
                                                     <div 
                                                         key={tName}
-                                                        onClick={() => { setActiveFilter('label'); setFilterValue(tName); setShowDropdown(null); }}
+                                                        onClick={() => { setActiveFilter('label'); setFilterValue(tName); setShowDropdown(null); setTagSearch(''); }}
                                                         className={`px-4 py-2.5 text-xs cursor-pointer flex items-center justify-between ${isSelected ? 'bg-indigo-50 dark:bg-indigo-900/30 text-[#111b21] dark:text-[#e9edef] font-bold' : 'text-[#111b21] dark:text-[#e9edef] hover:bg-[#f0f2f5] dark:hover:bg-[#111b21]'}`}
                                                     >
                                                         <div className="flex items-center gap-2 truncate pr-2">
@@ -2393,6 +2408,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                                                     </div>
                                                 );
                                             })}
+                                            </div>
                                         </div>
                                     )}
                                 </div>
