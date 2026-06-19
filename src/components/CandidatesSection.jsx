@@ -115,7 +115,7 @@ const CandidateRow = React.memo(({ candidate, columnOrder, fieldsMap, magicLoadi
             </td>
             <td className="py-0.5 px-2.5">
                 <div className="text-[10px] text-gray-900 dark:text-white font-medium" title={candidate.nombre}>
-                    {candidate.nombre && candidate.nombre.length > 20 ? `${candidate.nombre.substring(0, 20)}...` : (candidate.nombre || '-')}
+                    {candidate.nombre && candidate.nombre.length > 8 ? `${candidate.nombre.substring(0, 8)}...` : (candidate.nombre || '-')}
                 </div>
             </td>
             {columnOrder.map(colId => {
@@ -128,9 +128,11 @@ const CandidateRow = React.memo(({ candidate, columnOrder, fieldsMap, magicLoadi
                         {['escolaridad', 'categoria', 'nombreReal', 'municipio'].includes(field.value) ? (
                             <div onClick={() => onMagicFix(candidate.id, field.value, candidate[field.value])}
                                  className={`inline-flex items-center px-2 py-0.5 rounded-md cursor-pointer smooth-transition text-[10px] font-medium ${isMLoading ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 animate-pulse' : 'hover:bg-blue-50 dark:hover:bg-blue-900/40 hover:text-blue-600 dark:text-white'}`}
-                                 title="Clic para Magia IA ✨">
+                                 title={field.value === 'nombreReal' ? candidate[field.value] : 'Clic para Magia IA ✨'}>
                                 {isMLoading && <Loader2 className="w-3 h-3 animate-spin mr-1.5" />}
-                                {formatValue(candidate[field.value])}
+                                {field.value === 'nombreReal'
+                                    ? (() => { const v = formatValue(candidate[field.value]); return v && v.length > 20 ? `${v.substring(0, 20)}...` : v; })()
+                                    : formatValue(candidate[field.value])}
                                 <Sparkles className={`w-2.5 h-2.5 ml-1.5 opacity-0 group-hover:opacity-100 ${isMLoading ? 'hidden' : ''} text-blue-400`} />
                             </div>
                         ) : (
