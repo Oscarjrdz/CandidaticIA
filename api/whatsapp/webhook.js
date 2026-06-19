@@ -176,23 +176,14 @@ export default async function handler(req, res) {
                 // 'sent' — skip (frontend ya lo maneja con UI optimista).
                 if (statusStr === 'sent') continue;
 
-                // 'delivered' — persiste en Redis + SSE (updateMessageStatus ya dispara SSE).
-                // 'read' — SSE-only (fast path, no persiste — se ve en sesión activa).
+                // 'delivered' y 'read' — persisten en Redis + SSE.
+                // updateMessageStatus busca por ultraMsgId y llama notifyCandidateUpdate internamente.
                 if ((statusStr === 'delivered' || statusStr === 'read') && recipientPhone.length >= 10) {
                     (async () => {
                         try {
                             const candidateId = await getCandidateIdByPhoneFast(recipientPhone);
                             if (!candidateId) return;
-                            if (statusStr === 'delivered') {
-                                // Persistir en Redis para que recargas muestren ✓✓ gris
-                                await updateMessageStatus(candidateId, msgId, 'delivered');
-                            } else {
-                                // 'read' — solo SSE, sin lrange/lset
-                                const { notifyCandidateUpdate } = await import('../utils/sse-notify.js');
-                                await notifyCandidateUpdate(candidateId, {
-                                    messageStatusUpdate: { id: msgId, status: 'read' }
-                                });
-                            }
+                            await updateMessageStatus(candidateId, msgId, statusStr);
                         } catch (e) { /* silent */ }
                     })();
                     continue;
