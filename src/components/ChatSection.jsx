@@ -1179,9 +1179,12 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                 ));
             } else if (sseUpdate.updates?.messageStatusUpdate) {
                 const { id, status, additionalData } = sseUpdate.updates.messageStatusUpdate;
+                const STATUS_RANK = { failed: -1, queued: 0, pending: 0, sent: 1, delivered: 2, read: 3, seen: 3 };
                 setMessages(prev => {
                     const idx = prev.findIndex(m => m.ultraMsgId === id || m.id === id);
                     if (idx !== -1) {
+                        const cur = prev[idx].status;
+                        if ((STATUS_RANK[status] ?? 0) <= (STATUS_RANK[cur] ?? 0) && status !== 'failed') return prev;
                         const newArr = [...prev];
                         newArr[idx] = { ...newArr[idx], status, ...additionalData };
                         return newArr;

@@ -1567,10 +1567,15 @@ export const updateMessageStatus = async (candidateId, ultraMsgId, status, addit
         const raw = await client.lrange(key, start, -1);
         const messages = raw.map(r => JSON.parse(r));
 
+        const STATUS_RANK = { failed: -1, queued: 0, pending: 0, sent: 1, delivered: 2, read: 3, seen: 3 };
         const localIndex = messages.findIndex(m => m.ultraMsgId === ultraMsgId || m.id === ultraMsgId);
         if (localIndex !== -1) {
-            const absoluteIndex = start + localIndex; // índice real en la lista completa de Redis
+            const absoluteIndex = start + localIndex;
             const oldStatus = messages[localIndex].status;
+            // Nunca degradar: si ya es 'read' no volver a 'delivered'
+            if ((STATUS_RANK[status] ?? 0) <= (STATUS_RANK[oldStatus] ?? 0) && status !== 'failed') {
+                return true; // mensaje encontrado, pero no degradamos
+            }
             messages[localIndex] = { ...messages[localIndex], status, ...additionalData };
             await client.lset(key, absoluteIndex, JSON.stringify(messages[localIndex]));
 

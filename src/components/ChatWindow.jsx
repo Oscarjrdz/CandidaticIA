@@ -166,11 +166,12 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
             // Actualización de estado específica por ID (palomitas delivered)
             if (updates.messageStatusUpdate) {
                 const { id: statusId, status: newStatus } = updates.messageStatusUpdate;
-                setMessages(prev => prev.map(m =>
-                    (m.id === statusId || m.ultraMsgId === statusId)
-                        ? { ...m, status: newStatus }
-                        : m
-                ));
+                const STATUS_RANK = { failed: -1, queued: 0, pending: 0, sent: 1, delivered: 2, read: 3, seen: 3 };
+                setMessages(prev => prev.map(m => {
+                    if (m.id !== statusId && m.ultraMsgId !== statusId) return m;
+                    if ((STATUS_RANK[newStatus] ?? 0) <= (STATUS_RANK[m.status] ?? 0) && newStatus !== 'failed') return m;
+                    return { ...m, status: newStatus };
+                }));
             }
         };
 
