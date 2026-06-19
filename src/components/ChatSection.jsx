@@ -441,7 +441,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
     const [quickReplies, setQuickReplies] = useState([]);
     const [showQuickRepliesPanel, setShowQuickRepliesPanel] = useState(false);
     const [editingQuickReply, setEditingQuickReply] = useState(null); // null = creating, object = editing
-    const [qrForm, setQrForm] = useState({ name: '', message: '', shortcut: '', imageUrl: '' });
+    const [qrForm, setQrForm] = useState({ name: '', message: '', shortcut: '', imageUrl: '', type: 'text', locName: '', locAddress: '', locLat: '', locLng: '' });
     const [qrImageUploading, setQrImageUploading] = useState(false);
     const [pendingQrImage, setPendingQrImage] = useState(''); // imagen de QR en espera de enviar
     const [qrSaving, setQrSaving] = useState(false);
@@ -772,13 +772,36 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
     };
 
     const handleApplyQuickReply = useCallback(async (qr) => {
-        // Dejar imagen pendiente para enviar junto con el texto al presionar Enviar
-        if (qr.imageUrl) {
-            setPendingQrImage(qr.imageUrl);
+        // Tipo ubicación: enviar directamente sin pasar por el input de texto
+        if (qr.type === 'location' && qr.location?.lat && qr.location?.lng) {
+            setShowQuickRepliesPanel(false);
+            if (!selectedChat) return;
+            autoSilenceBot(selectedChat);
+            const optimisticId = 'temp-loc-' + Date.now();
+            setMessages(prev => [...(prev || []), {
+                id: optimisticId, content: `[Ubicación: ${qr.location.name || 'Mapa'}]`, tipo: 'location',
+                from: 'me', enviado_por_agente: 1, status: 'pending', fecha: new Date().toISOString()
+            }]);
+            fetch('/api/chat', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    candidateId: selectedChat.id, message: '', type: 'location',
+                    extraParams: { name: qr.location.name, address: qr.location.address, lat: qr.location.lat, lng: qr.location.lng },
+                    senderId: user?.id || user?.whatsapp, senderName: user?.name || user?.nombre
+                })
+            }).then(r => r.json()).then(data => {
+                setMessages(prev => prev.map(m => m.id === optimisticId
+                    ? (data.success && data.message ? data.message : { ...m, status: 'failed', error: data.error })
+                    : m
+                ));
+            }).catch(() => {
+                setMessages(prev => prev.map(m => m.id === optimisticId ? { ...m, status: 'failed' } : m));
+            });
+            return;
         }
-        if (qr.message) {
-            messageInputRef.current?.injectText(qr.message);
-        }
+        // Tipo texto/imagen: inyectar en el input
+        if (qr.imageUrl) setPendingQrImage(qr.imageUrl);
+        if (qr.message) messageInputRef.current?.injectText(qr.message);
         setShowQuickRepliesPanel(false);
     }, [selectedChat, user, showToast]);
 
@@ -3291,43 +3314,97 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                     <div className="p-3 border-b border-[#f0f2f5] dark:border-[#222e35] space-y-2">
                         <input
                             type="text"
-                            placeholder="Nombre (ej: Saludo)"
+                            placeholder="Nombre (ej: Cita HR One)"
                             value={qrForm.name}
                             onChange={(e) => setQrForm({ ...qrForm, name: e.target.value })}
                             className="w-full text-xs px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#202c33] text-[#111b21] dark:text-[#e9edef] outline-none focus:border-green-500 transition-colors"
                         />
-                        <textarea
-                            placeholder="Mensaje... (opcional si adjuntas imagen)"
-                            value={qrForm.message}
-                            onChange={(e) => setQrForm({ ...qrForm, message: e.target.value })}
-                            rows={6}
-                            className="w-full text-xs px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#202c33] text-[#111b21] dark:text-[#e9edef] outline-none focus:border-green-500 transition-colors resize-y"
-                        />
-                        {/* Image upload */}
-                        <div className="relative">
-                            {qrForm.imageUrl ? (
-                                <div className="relative rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700">
-                                    <img src={qrForm.imageUrl} alt="preview" className="w-full max-h-36 object-cover" />
-                                    <button
-                                        type="button"
-                                        onClick={() => setQrForm(prev => ({ ...prev, imageUrl: '' }))}
-                                        className="absolute top-1.5 right-1.5 bg-black/60 hover:bg-black/80 text-white rounded-full p-0.5 transition-colors"
-                                        title="Quitar imagen"
-                                    >
-                                        <X className="w-3.5 h-3.5" />
-                                    </button>
-                                </div>
-                            ) : (
-                                <label className={`flex items-center gap-2 w-full px-3 py-2 rounded-lg border border-dashed border-gray-300 dark:border-gray-600 cursor-pointer hover:border-green-500 transition-colors text-xs text-gray-400 dark:text-gray-500 ${qrImageUploading ? 'opacity-60 pointer-events-none' : ''}`}>
-                                    {qrImageUploading ? (
-                                        <><Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" /><span>Subiendo...</span></>
-                                    ) : (
-                                        <><Paperclip className="w-3.5 h-3.5 shrink-0" /><span>Adjuntar imagen (opcional)</span></>
-                                    )}
-                                    <input type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) handleQrImageUpload(f); e.target.value = ''; }} />
-                                </label>
-                            )}
+                        {/* Tipo toggle */}
+                        <div className="flex rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden text-xs">
+                            <button type="button"
+                                onClick={() => setQrForm(prev => ({ ...prev, type: 'text' }))}
+                                className={`flex-1 py-1.5 font-medium transition-colors ${qrForm.type !== 'location' ? 'bg-green-600 text-white' : 'bg-white dark:bg-[#202c33] text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-[#2a3942]'}`}>
+                                📝 Texto / Imagen
+                            </button>
+                            <button type="button"
+                                onClick={() => setQrForm(prev => ({ ...prev, type: 'location' }))}
+                                className={`flex-1 py-1.5 font-medium transition-colors ${qrForm.type === 'location' ? 'bg-green-600 text-white' : 'bg-white dark:bg-[#202c33] text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-[#2a3942]'}`}>
+                                📍 Ubicación
+                            </button>
                         </div>
+
+                        {qrForm.type === 'location' ? (
+                            <div className="space-y-2">
+                                <input
+                                    type="text"
+                                    placeholder="Nombre del lugar (ej: HR One México)"
+                                    value={qrForm.locName}
+                                    onChange={e => setQrForm(prev => ({ ...prev, locName: e.target.value }))}
+                                    className="w-full text-xs px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#202c33] text-[#111b21] dark:text-[#e9edef] outline-none focus:border-green-500 transition-colors"
+                                />
+                                <input
+                                    type="text"
+                                    placeholder="Dirección (opcional)"
+                                    value={qrForm.locAddress}
+                                    onChange={e => setQrForm(prev => ({ ...prev, locAddress: e.target.value }))}
+                                    className="w-full text-xs px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#202c33] text-[#111b21] dark:text-[#e9edef] outline-none focus:border-green-500 transition-colors"
+                                />
+                                <div className="flex gap-2">
+                                    <input
+                                        type="text"
+                                        placeholder="Latitud (ej: 25.6866)"
+                                        value={qrForm.locLat}
+                                        onChange={e => setQrForm(prev => ({ ...prev, locLat: e.target.value }))}
+                                        className="flex-1 text-xs px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#202c33] text-[#111b21] dark:text-[#e9edef] outline-none focus:border-green-500 transition-colors"
+                                    />
+                                    <input
+                                        type="text"
+                                        placeholder="Longitud (ej: -100.316)"
+                                        value={qrForm.locLng}
+                                        onChange={e => setQrForm(prev => ({ ...prev, locLng: e.target.value }))}
+                                        className="flex-1 text-xs px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#202c33] text-[#111b21] dark:text-[#e9edef] outline-none focus:border-green-500 transition-colors"
+                                    />
+                                </div>
+                                <p className="text-[10px] text-gray-400 dark:text-gray-500 leading-relaxed">
+                                    💡 En Google Maps: clic derecho sobre el lugar → selecciona las coordenadas que aparecen (las copia automáticamente)
+                                </p>
+                            </div>
+                        ) : (
+                            <>
+                                <textarea
+                                    placeholder="Mensaje... (opcional si adjuntas imagen)"
+                                    value={qrForm.message}
+                                    onChange={(e) => setQrForm({ ...qrForm, message: e.target.value })}
+                                    rows={5}
+                                    className="w-full text-xs px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#202c33] text-[#111b21] dark:text-[#e9edef] outline-none focus:border-green-500 transition-colors resize-y"
+                                />
+                                {/* Image upload */}
+                                <div className="relative">
+                                    {qrForm.imageUrl ? (
+                                        <div className="relative rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700">
+                                            <img src={qrForm.imageUrl} alt="preview" className="w-full max-h-36 object-cover" />
+                                            <button
+                                                type="button"
+                                                onClick={() => setQrForm(prev => ({ ...prev, imageUrl: '' }))}
+                                                className="absolute top-1.5 right-1.5 bg-black/60 hover:bg-black/80 text-white rounded-full p-0.5 transition-colors"
+                                                title="Quitar imagen"
+                                            >
+                                                <X className="w-3.5 h-3.5" />
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <label className={`flex items-center gap-2 w-full px-3 py-2 rounded-lg border border-dashed border-gray-300 dark:border-gray-600 cursor-pointer hover:border-green-500 transition-colors text-xs text-gray-400 dark:text-gray-500 ${qrImageUploading ? 'opacity-60 pointer-events-none' : ''}`}>
+                                            {qrImageUploading ? (
+                                                <><Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" /><span>Subiendo...</span></>
+                                            ) : (
+                                                <><Paperclip className="w-3.5 h-3.5 shrink-0" /><span>Adjuntar imagen (opcional)</span></>
+                                            )}
+                                            <input type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) handleQrImageUpload(f); e.target.value = ''; }} />
+                                        </label>
+                                    )}
+                                </div>
+                            </>
+                        )}
                         <div className="flex items-center gap-2">
                             <div className="flex-1 relative">
                                 <Keyboard className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
@@ -3365,7 +3442,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                             {editingQuickReply !== null && (
                                 <button
                                     type="button"
-                                    onClick={() => { setEditingQuickReply(null); setQrForm({ name: '', message: '', shortcut: '', imageUrl: '' }); }}
+                                    onClick={() => { setEditingQuickReply(null); setQrForm({ name: '', message: '', shortcut: '', imageUrl: '', type: 'text', locName: '', locAddress: '', locLat: '', locLng: '' }); }}
                                     className="flex-1 text-xs py-2 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-[#202c33] transition-colors font-medium"
                                 >
                                     Cancelar
@@ -3373,9 +3450,24 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                             )}
                             <button
                                 type="button"
-                                disabled={!qrForm.name.trim() || (!qrForm.message.trim() && !qrForm.imageUrl)}
+                                disabled={!qrForm.name.trim() || (qrForm.type === 'location'
+                                    ? (!qrForm.locLat || !qrForm.locLng)
+                                    : (!qrForm.message.trim() && !qrForm.imageUrl)
+                                )}
                                 onClick={async () => {
-                                    const entry = { id: editingQuickReply?.id || `qr_${Date.now()}`, name: qrForm.name.trim(), message: qrForm.message.trim(), shortcut: qrForm.shortcut.trim(), imageUrl: qrForm.imageUrl || '' };
+                                    const isLoc = qrForm.type === 'location';
+                                    const entry = {
+                                        id: editingQuickReply?.id || `qr_${Date.now()}`,
+                                        name: qrForm.name.trim(),
+                                        shortcut: qrForm.shortcut.trim(),
+                                        type: qrForm.type || 'text',
+                                        ...(isLoc ? {
+                                            location: { lat: parseFloat(qrForm.locLat), lng: parseFloat(qrForm.locLng), name: qrForm.locName.trim(), address: qrForm.locAddress.trim() }
+                                        } : {
+                                            message: qrForm.message.trim(),
+                                            imageUrl: qrForm.imageUrl || ''
+                                        })
+                                    };
                                     let newList;
                                     if (editingQuickReply) {
                                         newList = quickReplies.map(q => q.id === editingQuickReply.id ? entry : q);
@@ -3383,7 +3475,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                                         newList = [...quickReplies, entry];
                                     }
                                     await saveQuickReplies(newList);
-                                    setQrForm({ name: '', message: '', shortcut: '', imageUrl: '' });
+                                    setQrForm({ name: '', message: '', shortcut: '', imageUrl: '', type: 'text', locName: '', locAddress: '', locLat: '', locLng: '' });
                                     setEditingQuickReply(null);
                                     showToast && showToast(editingQuickReply ? 'Respuesta actualizada' : 'Respuesta creada', 'success');
                                 }}
@@ -3418,14 +3510,21 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                                                     </span>
                                                 )}
                                             </div>
-                                            {qr.imageUrl && (
-                                                <img src={qr.imageUrl} alt="img" className="mb-1 rounded-md max-h-20 object-cover border border-gray-200 dark:border-gray-700" />
+                                            {qr.type === 'location' && qr.location ? (
+                                                <div className="flex items-center gap-1 text-[11px] text-blue-500 dark:text-blue-400">
+                                                    <MapPin className="w-3 h-3 shrink-0" />
+                                                    <span className="line-clamp-1">{qr.location.name || qr.location.address || 'Ubicación'}</span>
+                                                </div>
+                                            ) : (
+                                                <>
+                                                    {qr.imageUrl && <img src={qr.imageUrl} alt="img" className="mb-1 rounded-md max-h-20 object-cover border border-gray-200 dark:border-gray-700" />}
+                                                    {qr.message && <p className="text-[11px] text-[#667781] dark:text-[#8696a0] line-clamp-2 leading-relaxed">{qr.message}</p>}
+                                                </>
                                             )}
-                                            {qr.message && <p className="text-[11px] text-[#667781] dark:text-[#8696a0] line-clamp-2 leading-relaxed">{qr.message}</p>}
                                         </div>
                                         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
                                             <button
-                                                onClick={(e) => { e.stopPropagation(); setEditingQuickReply(qr); setQrForm({ name: qr.name, message: qr.message, shortcut: qr.shortcut || '', imageUrl: qr.imageUrl || '' }); }}
+                                                onClick={(e) => { e.stopPropagation(); setEditingQuickReply(qr); setQrForm({ name: qr.name, message: qr.message || '', shortcut: qr.shortcut || '', imageUrl: qr.imageUrl || '', type: qr.type || 'text', locName: qr.location?.name || '', locAddress: qr.location?.address || '', locLat: qr.location?.lat ? String(qr.location.lat) : '', locLng: qr.location?.lng ? String(qr.location.lng) : '' }); }}
                                                 className="p-1.5 text-gray-400 hover:text-blue-500 transition-colors rounded-full hover:bg-blue-50 dark:hover:bg-blue-900/20"
                                                 title="Editar"
                                             >
