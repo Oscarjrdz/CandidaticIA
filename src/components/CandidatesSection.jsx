@@ -94,14 +94,14 @@ const CandidateRow = React.memo(({ candidate, columnOrder, fieldsMap, magicLoadi
                 </div>
             </td>
             <td className="py-0.5 px-2.5">
-                <div className={`flex items-center justify-center w-6 h-6 rounded-full overflow-hidden ${showEmptyRing && isChatEmpty(candidate) ? 'ring-2 ring-blue-500 ring-offset-1 dark:ring-offset-gray-900' : ''}`}>
+                <div className={`flex items-center justify-center w-5 h-5 rounded-full overflow-hidden ${showEmptyRing && isChatEmpty(candidate) ? 'ring-2 ring-blue-500 ring-offset-1 dark:ring-offset-gray-900' : ''}`}>
                     {candidate.profilePic ? (
                         <img src={candidate.profilePic}
                              alt="Avatar" className="w-full h-full object-cover"
                              onError={(e) => { e.target.onerror = null; e.target.style.display = 'none'; e.target.parentElement.innerHTML = `<span class="flex items-center justify-center w-full h-full text-[11px] font-bold text-white" style="background:${['#f9a8d4','#a5b4fc','#86efac','#fcd34d','#fdba74','#c4b5fd','#67e8f9','#f0abfc','#fca5a5','#bef264'][((candidate.nombre||'U').charCodeAt(0)*7)%10]}">${(candidate.nombre||'U')[0].toUpperCase()}</span>`; }} />
                     ) : (
                         <span
-                            className="flex items-center justify-center w-full h-full text-[11px] font-bold text-white"
+                            className="flex items-center justify-center w-full h-full text-[9px] font-bold text-white"
                             style={{ background: ['#f9a8d4','#a5b4fc','#86efac','#fcd34d','#fdba74','#c4b5fd','#67e8f9','#f0abfc','#fca5a5','#bef264'][((candidate.nombre||'U').charCodeAt(0)*7)%10] }}
                         >
                             {(candidate.nombre || 'U')[0].toUpperCase()}
@@ -110,8 +110,8 @@ const CandidateRow = React.memo(({ candidate, columnOrder, fieldsMap, magicLoadi
                 </div>
             </td>
             <td className="py-0.5 px-2.5">
-                <div className="text-[10px] text-gray-900 dark:text-white font-mono font-medium">{formatPhone(candidate.whatsapp)}</div>
-                <div className="text-[8px] text-gray-500 dark:text-gray-400 mt-0.5 opacity-80">Desde {formatRelativeDate(candidate.primerContacto)}</div>
+                <div className="text-[10px] text-gray-900 dark:text-white font-mono font-medium leading-none">{formatPhone(candidate.whatsapp)}</div>
+                <div className="text-[8px] text-gray-500 dark:text-gray-400 mt-[2px] opacity-80 leading-none">Desde {formatRelativeDate(candidate.primerContacto)}</div>
             </td>
             <td className="py-0.5 px-2.5">
                 <div className="text-[10px] text-gray-900 dark:text-white font-medium" title={candidate.nombre}>
@@ -144,8 +144,8 @@ const CandidateRow = React.memo(({ candidate, columnOrder, fieldsMap, magicLoadi
                 );
             })}
             <td className="py-0.5 px-2.5">
-                <div className="text-[10px] text-gray-700 dark:text-gray-300 font-medium">{formatDateTime(candidate.ultimoMensaje)}</div>
-                <div className="text-[8px] text-gray-500 dark:text-gray-400 mt-0.5 opacity-80">{formatRelativeDate(candidate.ultimoMensaje)}</div>
+                <div className="text-[10px] text-gray-700 dark:text-gray-300 font-medium leading-none">{formatDateTime(candidate.ultimoMensaje)}</div>
+                <div className="text-[8px] text-gray-500 dark:text-gray-400 mt-[2px] opacity-80 leading-none">{formatRelativeDate(candidate.ultimoMensaje)}</div>
             </td>
             <td className="py-0.5 px-2.5 text-center">
                 <button type="button" onClick={(e) => { e.stopPropagation(); onOpenChat(candidate); }}
