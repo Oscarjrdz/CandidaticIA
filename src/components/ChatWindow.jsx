@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Trash2, AlertCircle, Maximize2, Minimize2, Paperclip, Mic, Image as ImageIcon, Send, ArrowLeft, RefreshCw, X, Play, Square, Download, Smile, Plus, Camera, MoreVertical, Reply, Copy, Check, CheckCheck, Clock } from 'lucide-react';
 import Button from './ui/Button';
 import VacancyHistoryCard from './VacancyHistoryCard';
-import CandidateADNCard from './CandidateADNCard';
 
 const formatWhatsAppText = (text) => {
     if (!text) return '';
@@ -151,9 +150,10 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
             
             // Inyectar actualización de estado (palomitas)
             if (updates.messageStatusUpdate) {
-                setMessages(prev => prev.map(m => 
-                    m.id === updates.messageStatusUpdate.id 
-                        ? { ...m, status: updates.messageStatusUpdate.status } 
+                const { id: statusId, status: newStatus } = updates.messageStatusUpdate;
+                setMessages(prev => prev.map(m =>
+                    (m.id === statusId || m.ultraMsgId === statusId)
+                        ? { ...m, status: newStatus }
                         : m
                 ));
             }
@@ -684,15 +684,18 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
                             />
                         ) : (
                             <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center text-blue-600 dark:text-blue-300 font-bold text-xs">
-                                {candidate?.nombre?.charAt(0) || '?'}
+                                {(candidate?.nombreReal || candidate?.nombre)?.charAt(0) || '?'}
                             </div>
                         )}
                         <div>
                             <h3 className="font-bold text-sm text-gray-900 dark:text-white leading-tight">
-                                {candidate?.nombre}
+                                {candidate?.nombreReal || candidate?.nombre}
                             </h3>
-                            <p className="text-[10px] text-gray-500 font-mono">
-                                {candidate?.whatsapp}
+                            <p className="text-[10px] font-mono leading-tight">
+                                <span className="text-green-500 dark:text-green-400">whatsapp </span>
+                                <span className="text-green-500 dark:text-green-400 font-semibold">
+                                    {candidate?.whatsapp ? candidate.whatsapp.replace(/\D/g, '').slice(-10) : ''}
+                                </span>
                             </p>
                         </div>
                     </div>
@@ -710,9 +713,6 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
                         </button>
                     </div>
                 </div>
-
-                {/* 🏷️ CV CARD / ADN SUMMARY */}
-                <CandidateADNCard candidate={candidate} />
 
                 {/* Scalable Vacancy History Timeline */}
                 <VacancyHistoryCard candidateId={candidate?.id} />
@@ -733,7 +733,7 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
                             <p className="text-[10.5px] leading-tight">Los mensajes están protegidos por Candidatic IA Nivel Meta.</p>
                         </div>
                     ) : (
-                        <div className="flex-1 relative z-10 overflow-y-auto custom-scrollbar py-2">
+                        <div className="flex-1 relative z-10 overflow-y-auto overflow-x-hidden custom-scrollbar py-2">
                             {displayMessages.map((msg, index) => (
                                 <React.Fragment key={msg.id + '-' + index}>
                                     {renderMessage(index, msg)}
@@ -744,28 +744,6 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
                     )}
                 </div>
 
-                {/* Variable Tray */}
-                {(Array.isArray(availableFields) && availableFields.length > 0) && (
-                    <div className="px-3 py-1.5 bg-gray-50 dark:bg-gray-800 border-t border-gray-100 dark:border-gray-700 overflow-x-auto whitespace-nowrap scrollbar-hide">
-                        <div className="flex space-x-1.5">
-                            {[
-                                { label: 'Nombre', value: '{{nombre}}' },
-                                { label: 'WhatsApp', value: '{{whatsapp}}' },
-                                ...availableFields.map(f => ({ label: f.label, value: `{{${f.value}}}` }))
-                            ].map(tag => (
-                                <button
-                                    key={tag.value}
-                                    type="button"
-                                    onClick={() => setNewMessage(prev => prev + tag.value)}
-                                    className="px-2 py-0.5 bg-blue-50 dark:bg-blue-900/40 text-blue-600 dark:text-blue-300 rounded border border-blue-100 dark:border-blue-800 text-[10px] font-medium hover:bg-blue-100 dark:hover:bg-blue-900/60 transition-colors"
-                                    title={`Insertar ${tag.label}`}
-                                >
-                                    {tag.value}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-                )}
 
                 {/* Input Area (With Reply Context Banner) */}
                 <div className="flex flex-col bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
