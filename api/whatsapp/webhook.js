@@ -173,21 +173,20 @@ export default async function handler(req, res) {
 
                 if (!msgId || !statusStr) continue;
 
-                // 'sent' and 'delivered' — skip entirely (cosmetic, high volume).
-                if (statusStr === 'sent' || statusStr === 'delivered') continue;
+                // 'sent' — skip (frontend ya lo maneja con UI optimista).
+                if (statusStr === 'sent') continue;
 
-                // 'read' — SSE-only via fast lookup (no lrange, no lset).
-                // Fast lookup never falls back to getCandidates(2000), so worst case
-                // is 4 HGET calls (~200 bytes) instead of 3 MB. Blue checks appear
-                // in real time for active admin sessions via SSE; not persisted to list.
-                if (statusStr === 'read' && recipientPhone.length >= 10) {
+                // 'delivered' y 'read' — SSE-only via fast lookup (no lrange, no lset).
+                // 4 HGET calls (~200 bytes) en vez de 3 MB. Las palomitas aparecen
+                // en tiempo real para sesiones activas via SSE; no se persiste en lista.
+                if ((statusStr === 'delivered' || statusStr === 'read') && recipientPhone.length >= 10) {
                     (async () => {
                         try {
                             const candidateId = await getCandidateIdByPhoneFast(recipientPhone);
                             if (candidateId) {
                                 const { notifyCandidateUpdate } = await import('../utils/sse-notify.js');
                                 await notifyCandidateUpdate(candidateId, {
-                                    messageStatusUpdate: { id: msgId, status: 'read' }
+                                    messageStatusUpdate: { id: msgId, status: statusStr }
                                 });
                             }
                         } catch (e) { /* silent */ }
