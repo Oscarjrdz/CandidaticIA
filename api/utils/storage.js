@@ -398,9 +398,8 @@ export const auditProfile = (c, customFields = []) => {
 export const isProfileComplete = (c, customFields = []) => {
     const { isComplete } = auditProfile(c, customFields);
     if (!isComplete) return false;
-    // Candidatos nuevos (paso2Requerido) deben completar paso 2 para contar como completos
-    if (c.paso2Requerido) return c.paso2Estado === 'completo';
-    return true;
+    // Completo = paso 1 (datos) + paso 2 completo
+    return c.paso2Estado === 'completo';
 };
 
 // Native Redis Pagination (Page size 100)

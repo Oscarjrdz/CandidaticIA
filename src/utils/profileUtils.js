@@ -14,6 +14,8 @@ export const isProfileComplete = (c) => {
     if (c.statusAudit) return c.statusAudit === 'complete';
 
     // Fallback for legacy candidates not yet re-synced
+    // Completo = paso 1 (datos) + paso 2 completo
+    if (c.paso2Estado !== 'completo') return false;
     const coreFields = ['nombreReal', 'municipio', 'escolaridad', 'categoria', 'genero'];
     const hasCoreData = coreFields.every(f => {
         const val = valToStr(c[f]);
