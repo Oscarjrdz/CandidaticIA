@@ -78,19 +78,28 @@ export default async function handler(req, res) {
             metaMediaId: metaMediaId
         };
 
+        const isQuickReplyAsset = fields?.candidateId?.[0] === 'quick_reply_asset' ||
+                                   fields?.candidateId === 'quick_reply_asset';
+        // Quick reply assets necesitan TTL largo: el metaMediaId de Meta expira y
+        // necesitamos el base64 para re-subirlo. Mensajes normales usan TTL corto (OOM).
+        const metaTTL = isQuickReplyAsset ? 86400 * 90 : 172800; // 90 días vs 48h
+
+        const base64Data = fileBuffer.toString('base64');
+        if (base64Data.length > 5 * 1024 * 1024) {
+            return res.status(413).json({ error: 'El archivo es demasiado grande (> 5MB).' });
+        }
+
         const redisOps = [
-            redis.set(metaKey, JSON.stringify(metaData), 'EX', 172800), // metadata lives 48h
+            redis.set(metaKey, JSON.stringify(metaData), 'EX', metaTTL),
             redis.zadd('candidatic:media_library', Date.now(), id)
         ];
 
-        // Only store the bulky base64 in Redis if Meta upload failed (fallback mode)
-        // Set TTL to 10 minutes instead of 48 hours to avoid OOM
-        if (!metaMediaId) {
-             const base64Data = fileBuffer.toString('base64');
-             if (base64Data.length > 5 * 1024 * 1024) {
-                 return res.status(413).json({ error: 'El archivo es demasiado grande (> 5MB) y Meta rechazó la subida directa.' });
-             }
-             redisOps.push(redis.set(key, base64Data, 'EX', 600)); // 10 minutes
+        if (isQuickReplyAsset) {
+            // Siempre guardar base64 para quick replies (re-subida cuando metaMediaId expire)
+            redisOps.push(redis.set(key, base64Data, 'EX', metaTTL));
+        } else if (!metaMediaId) {
+            // Mensajes normales: solo guardar base64 si Meta falló (fallback 10 min)
+            redisOps.push(redis.set(key, base64Data, 'EX', 600));
         }
 
         await Promise.all(redisOps);
