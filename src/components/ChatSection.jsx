@@ -1171,7 +1171,13 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
 
         // --- Messages for the actively viewed chat → inject INSTANTLY ---
         if (String(sseUpdate.candidateId) === String(currentChat?.id) || (currentChat?.whatsapp && String(sseUpdate.phoneMatch) === String(currentChat.whatsapp))) {
-            if (sseUpdate.updates?.messageStatusUpdate) {
+            if (sseUpdate.updates?.markAllSentAsRead) {
+                setMessages(prev => prev.map(m =>
+                    (m.from === 'me' || m.from === 'bot') && (m.status === 'sent' || m.status === 'delivered' || m.status === 'queued' || m.status === 'pending')
+                        ? { ...m, status: 'read' }
+                        : m
+                ));
+            } else if (sseUpdate.updates?.messageStatusUpdate) {
                 const { id, status, additionalData } = sseUpdate.updates.messageStatusUpdate;
                 setMessages(prev => {
                     const idx = prev.findIndex(m => m.ultraMsgId === id || m.id === id);

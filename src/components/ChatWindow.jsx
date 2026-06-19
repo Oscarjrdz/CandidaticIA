@@ -148,7 +148,16 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
                 });
             } 
             
-            // Inyectar actualización de estado (palomitas)
+            // Señal global de lectura — marca todos los enviados como leídos
+            if (updates.markAllSentAsRead) {
+                setMessages(prev => prev.map(m =>
+                    (m.from === 'me' || m.from === 'bot') && (m.status === 'sent' || m.status === 'delivered' || m.status === 'queued' || m.status === 'pending')
+                        ? { ...m, status: 'read' }
+                        : m
+                ));
+            }
+
+            // Actualización de estado específica por ID (palomitas delivered)
             if (updates.messageStatusUpdate) {
                 const { id: statusId, status: newStatus } = updates.messageStatusUpdate;
                 setMessages(prev => prev.map(m =>

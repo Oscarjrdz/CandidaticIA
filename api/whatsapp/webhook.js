@@ -176,20 +176,26 @@ export default async function handler(req, res) {
                 // 'sent' — skip (frontend ya lo maneja con UI optimista).
                 if (statusStr === 'sent') continue;
 
-                // 'delivered' y 'read' — persisten en Redis + SSE vía updateMessageStatus.
-                // Si no encuentra el mensaje en Redis, dispara SSE directamente de todas formas
-                // para que sesiones activas vean el cambio aunque no se pueda persistir.
+                // 'delivered' — persiste en Redis (por ultraMsgId) + SSE específico.
+                // 'read' — SSE global: marca todos los enviados como leídos (más robusto
+                //          que buscar por ultraMsgId que puede no estar en Redis).
                 if ((statusStr === 'delivered' || statusStr === 'read') && recipientPhone.length >= 10) {
                     (async () => {
                         try {
                             const candidateId = await getCandidateIdByPhoneFast(recipientPhone);
                             if (!candidateId) return;
-                            const found = await updateMessageStatus(candidateId, msgId, statusStr);
-                            if (!found) {
-                                // Mensaje no encontrado en Redis — SSE directo como fallback
-                                const { notifyCandidateUpdate } = await import('../utils/sse-notify.js');
+                            const { notifyCandidateUpdate } = await import('../utils/sse-notify.js');
+                            if (statusStr === 'delivered') {
+                                const found = await updateMessageStatus(candidateId, msgId, 'delivered');
+                                if (!found) {
+                                    await notifyCandidateUpdate(candidateId, {
+                                        messageStatusUpdate: { id: msgId, status: 'delivered' }
+                                    });
+                                }
+                            } else {
+                                // 'read': señal global — el front marca todos los enviados
                                 await notifyCandidateUpdate(candidateId, {
-                                    messageStatusUpdate: { id: msgId, status: statusStr }
+                                    markAllSentAsRead: true
                                 });
                             }
                         } catch (e) { /* silent */ }
