@@ -84,7 +84,7 @@ const CandidateRow = React.memo(({ candidate, columnOrder, fieldsMap, magicLoadi
     const isComplete = isProfileComplete(candidate);
     return (
         <tr className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-900 smooth-transition relative">
-            <td className="py-0.5 px-1 text-center">
+            <td className="py-px px-1 text-center">
                 <div className="flex items-center justify-center">
                     {isComplete ? (
                         <div className="w-2.5 h-2.5 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)] animate-pulse"></div>
@@ -93,7 +93,7 @@ const CandidateRow = React.memo(({ candidate, columnOrder, fieldsMap, magicLoadi
                     )}
                 </div>
             </td>
-            <td className="py-0.5 px-2.5">
+            <td className="py-px px-2.5">
                 <div className={`flex items-center justify-center w-5 h-5 rounded-full overflow-hidden ${showEmptyRing && isChatEmpty(candidate) ? 'ring-2 ring-blue-500 ring-offset-1 dark:ring-offset-gray-900' : ''}`}>
                     {candidate.profilePic ? (
                         <img src={candidate.profilePic}
@@ -109,11 +109,11 @@ const CandidateRow = React.memo(({ candidate, columnOrder, fieldsMap, magicLoadi
                     )}
                 </div>
             </td>
-            <td className="py-0.5 px-2.5">
+            <td className="py-px px-2.5">
                 <div className="text-[10px] text-gray-900 dark:text-white font-mono font-medium leading-none">{formatPhone(candidate.whatsapp)}</div>
                 <div className="text-[8px] text-gray-500 dark:text-gray-400 mt-[2px] opacity-80 leading-none">Desde {formatRelativeDate(candidate.primerContacto)}</div>
             </td>
-            <td className="py-0.5 px-2.5">
+            <td className="py-px px-2.5">
                 <div className="text-[10px] text-gray-900 dark:text-white font-medium" title={candidate.nombre}>
                     {candidate.nombre && candidate.nombre.length > 8 ? `${candidate.nombre.substring(0, 8)}...` : (candidate.nombre || '-')}
                 </div>
@@ -124,10 +124,10 @@ const CandidateRow = React.memo(({ candidate, columnOrder, fieldsMap, magicLoadi
                 const mKey = `${candidate.id}-${field.value}`;
                 const isMLoading = magicLoading[mKey];
                 return (
-                    <td className={`py-0.5 px-2.5 ${field.advanced ? 'bg-[#1d3a5f]/5 dark:bg-[#1d3a5f]/20' : ''}`} key={field.value}>
+                    <td className={`py-px px-2.5 ${field.advanced ? 'bg-[#1d3a5f]/5 dark:bg-[#1d3a5f]/20' : ''}`} key={field.value}>
                         {['escolaridad', 'categoria', 'nombreReal', 'municipio'].includes(field.value) ? (
                             <div onClick={() => onMagicFix(candidate.id, field.value, candidate[field.value])}
-                                 className={`inline-flex items-center px-2 py-0.5 rounded-md cursor-pointer smooth-transition text-[10px] font-medium ${isMLoading ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 animate-pulse' : 'hover:bg-blue-50 dark:hover:bg-blue-900/40 hover:text-blue-600 dark:text-white'}`}
+                                 className={`inline-flex items-center px-2 py-px rounded-md cursor-pointer smooth-transition text-[10px] font-medium ${isMLoading ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 animate-pulse' : 'hover:bg-blue-50 dark:hover:bg-blue-900/40 hover:text-blue-600 dark:text-white'}`}
                                  title={field.value === 'nombreReal' ? candidate[field.value] : 'Clic para Magia IA ✨'}>
                                 {isMLoading && <Loader2 className="w-3 h-3 animate-spin mr-1.5" />}
                                 {field.value === 'nombreReal'
@@ -143,11 +143,11 @@ const CandidateRow = React.memo(({ candidate, columnOrder, fieldsMap, magicLoadi
                     </td>
                 );
             })}
-            <td className="py-0.5 px-2.5">
+            <td className="py-px px-2.5">
                 <div className="text-[10px] text-gray-700 dark:text-gray-300 font-medium leading-none">{formatDateTime(candidate.ultimoMensaje)}</div>
                 <div className="text-[8px] text-gray-500 dark:text-gray-400 mt-[2px] opacity-80 leading-none">{formatRelativeDate(candidate.ultimoMensaje)}</div>
             </td>
-            <td className="py-0.5 px-2.5 text-center">
+            <td className="py-px px-2.5 text-center">
                 <button type="button" onClick={(e) => { e.stopPropagation(); onOpenChat(candidate); }}
                         className="p-1.5 hover:bg-blue-50 dark:hover:bg-blue-900/20 text-blue-500 rounded-lg smooth-transition group relative flex items-center justify-center" title="Abrir chat">
                     <div className="relative">
@@ -156,7 +156,7 @@ const CandidateRow = React.memo(({ candidate, columnOrder, fieldsMap, magicLoadi
                     </div>
                 </button>
             </td>
-            <td className="py-0.5 px-2 text-center">
+            <td className="py-px px-2 text-center">
                 <div className="flex justify-center items-center">
                     <button type="button" onClick={(e) => { e.stopPropagation(); onBlockToggle(candidate); }} disabled={isBlockLoading}
                             className={`w-6 h-3 rounded-full relative transition-colors duration-200 focus:outline-none ${candidate.blocked ? 'bg-red-500' : 'bg-gray-200 dark:bg-gray-700'}`}
@@ -167,7 +167,7 @@ const CandidateRow = React.memo(({ candidate, columnOrder, fieldsMap, magicLoadi
                     </button>
                 </div>
             </td>
-            <td className="py-0.5 px-2.5 text-center">
+            <td className="py-px px-2.5 text-center">
                 <button type="button" onClick={(e) => onDelete(e, candidate)} className="p-1.5 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg smooth-transition group" title="Eliminar permanentemente">
                     <Trash2 className="w-3.5 h-3.5 text-gray-400 group-hover:text-red-600 dark:group-hover:text-red-400" />
                 </button>
@@ -731,13 +731,13 @@ const CandidatesSection = () => {
                                     <div className="flex items-center flex-wrap gap-2">
                                         <h3 className="text-2xl font-bold text-gray-900 dark:text-white leading-none">{Number((stats?.complete || 0) + (stats?.pending || 0) || totalItems).toLocaleString()}</h3>
                                         <div className="flex items-center gap-1.5 flex-wrap">
-                                            <span className="text-[10px] text-emerald-500 font-bold flex items-center bg-emerald-50 dark:bg-emerald-900/20 px-2 py-0.5 rounded-full border border-emerald-100 dark:border-emerald-800/50">
+                                            <span className="text-[10px] text-emerald-500 font-bold flex items-center bg-emerald-50 dark:bg-emerald-900/20 px-2 py-px rounded-full border border-emerald-100 dark:border-emerald-800/50">
                                                 <CheckCircle className="w-3 h-3 mr-1" /> {Number(stats?.complete || 0).toLocaleString()} Completos
                                             </span>
-                                            <span className="text-[10px] text-amber-500 font-bold flex items-center bg-amber-50 dark:bg-amber-900/20 px-2 py-0.5 rounded-full border border-amber-100 dark:border-amber-800/50">
+                                            <span className="text-[10px] text-amber-500 font-bold flex items-center bg-amber-50 dark:bg-amber-900/20 px-2 py-px rounded-full border border-amber-100 dark:border-amber-800/50">
                                                 <Clock className="w-3 h-3 mr-1" /> {Number(stats?.pending || 0).toLocaleString()} Incompletos
                                             </span>
-                                            <span className="text-[10px] text-blue-500 font-bold flex items-center bg-blue-50 dark:bg-blue-900/20 px-2 py-0.5 rounded-full border border-blue-100 dark:border-blue-800/50">
+                                            <span className="text-[10px] text-blue-500 font-bold flex items-center bg-blue-50 dark:bg-blue-900/20 px-2 py-px rounded-full border border-blue-100 dark:border-blue-800/50">
                                                 <Zap className="w-3 h-3 mr-1" /> Activos
                                             </span>
                                         </div>
@@ -778,7 +778,7 @@ const CandidatesSection = () => {
                                         <h3 className="text-2xl font-bold text-gray-900 dark:text-white">
                                             {Number(stats?.outgoing || 0).toLocaleString()}
                                         </h3>
-                                        <span className="text-[10px] text-purple-500 font-medium flex items-center bg-purple-50 dark:bg-purple-900/20 px-1.5 py-0.5 rounded-full">
+                                        <span className="text-[10px] text-purple-500 font-medium flex items-center bg-purple-50 dark:bg-purple-900/20 px-1.5 py-px rounded-full">
                                             <Sparkles className="w-3 h-3 mr-0.5" /> AI & Manual
                                         </span>
                                     </div>
