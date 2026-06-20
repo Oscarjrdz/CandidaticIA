@@ -89,14 +89,14 @@ const ChatRow = React.memo(({ chat, isSelected, isPinned, onSelect, onBlock, onD
 
                         <button
                             onClick={(e) => { e.stopPropagation(); onScheduleReminder && onScheduleReminder(chat); }}
-                            className="hidden lg:block p-1 rounded text-gray-400 hover:text-amber-500 dark:hover:text-amber-400 opacity-0 group-hover:opacity-100 transition-colors"
+                            className="hidden lg:block p-1 rounded text-gray-400 hover:text-amber-500 dark:hover:text-amber-400 transition-colors"
                             title="Programar mensaje"
                         >
                             <Bell className="w-3.5 h-3.5" />
                         </button>
                         <button
                             onClick={(e) => { e.stopPropagation(); onTogglePin(chat.id); }}
-                            className={`hidden lg:block p-1 rounded transition-colors ${isPinned ? 'text-[#25d366] dark:text-[#00a884]' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 opacity-0 group-hover:opacity-100'}`}
+                            className={`hidden lg:block p-1 rounded transition-colors ${isPinned ? 'text-[#25d366] dark:text-[#00a884]' : 'text-gray-400 hover:text-amber-500 dark:hover:text-amber-400'}`}
                             title={isPinned ? 'Desfijar chat' : 'Fijar chat (máx 3)'}
                         >
                             <Pin className={`w-3.5 h-3.5 ${isPinned ? 'fill-current' : ''}`} />
