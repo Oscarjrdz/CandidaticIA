@@ -171,7 +171,13 @@ export default async function handler(req, res) {
             const candidate = await getCandidateById(candidateId);
             if (!candidate) return res.status(404).json({ error: 'Candidato no encontrado' });
 
-            const finalMessage = message ? substituteVariables(message, candidate) : '';
+            const primerNombre = (candidate.nombreReal?.trim() || '').split(' ')[0];
+            const finalMessage = message
+                ? substituteVariables(message, candidate)
+                    .replace(/\{\{nombre\}\}/gi, primerNombre)
+                    .replace(/\s{2,}/g, ' ')
+                    .trim()
+                : '';
 
             // ═══ META CLOUD API: Single number, no instance routing ═══
             const ultraConfig = await getUltraMsgConfig();
