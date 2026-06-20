@@ -544,17 +544,6 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
     const prevActiveFilterRef = useRef(null);
     useEffect(() => { selectedTagRef.current = selectedTag; }, [selectedTag]);
 
-    // When tag filter changes, reload from server to scan ALL candidates in Redis.
-    // Debounced 400ms so rapid clicks don't each trigger a full scan.
-    const prevSelectedTagRef = useRef(undefined);
-    useEffect(() => {
-        if (prevSelectedTagRef.current === undefined) { prevSelectedTagRef.current = null; return; }
-        if (prevSelectedTagRef.current === selectedTag) return;
-        prevSelectedTagRef.current = selectedTag;
-        const timer = setTimeout(() => { loadCandidates(); }, 400);
-        return () => clearTimeout(timer);
-    }, [selectedTag]);
-
     // Tab changes (all/unread/profile) are client-side pure — no server reload needed.
     useEffect(() => {
         prevActiveFilterRef.current = activeFilter;
