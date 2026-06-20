@@ -803,7 +803,14 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
         // Tipo texto/imagen: inyectar en el input
         const imgs = qr.imageUrls?.length ? qr.imageUrls : (qr.imageUrl ? [qr.imageUrl] : []);
         if (imgs.length) setPendingQrImages(imgs);
-        if (qr.message) messageInputRef.current?.injectText(qr.message);
+        if (qr.message) {
+            const nombre = selectedChat?.nombreReal?.trim() || '';
+            const resolved = qr.message
+                .replace(/\{\{nombre\}\}/gi, nombre)
+                .replace(/\s{2,}/g, ' ')
+                .trim();
+            messageInputRef.current?.injectText(resolved);
+        }
         setShowQuickRepliesPanel(false);
     }, [selectedChat, user, showToast]);
 
