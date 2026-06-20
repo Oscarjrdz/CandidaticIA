@@ -835,25 +835,29 @@ const CandidatesSection = () => {
                         </button>
                     </div>}
 
-                    {canViewIncomplete && !hideIncomplete && <div className="flex items-center gap-2 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 px-3 py-1.5 rounded-xl shadow-sm cursor-pointer" onClick={() => setShowOnlyIncomplete(!showOnlyIncomplete)}>
+                    {canViewIncomplete && <div
+                        className={`flex items-center gap-2 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 px-3 py-1.5 rounded-xl shadow-sm transition-opacity ${hideIncomplete ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
+                        onClick={() => !hideIncomplete && setShowOnlyIncomplete(!showOnlyIncomplete)}
+                    >
                         <div className="flex flex-col">
                             <span className="text-[8px] font-black uppercase tracking-widest text-gray-400 leading-none">Solo</span>
-                            <span className={`text-[10px] font-bold ${showOnlyIncomplete ? 'text-amber-500' : 'text-gray-400'}`}>
-                                {showOnlyIncomplete ? 'INCOMPLETOS' : 'INCOMPLETOS'}
+                            <span className={`text-[10px] font-bold ${showOnlyIncomplete && !hideIncomplete ? 'text-amber-500' : 'text-gray-400'}`}>
+                                INCOMPLETOS
                             </span>
                         </div>
                         <button
                             type="button"
+                            disabled={hideIncomplete}
                             className={`
                                 relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none
-                                ${showOnlyIncomplete ? 'bg-amber-500' : 'bg-gray-300 dark:bg-gray-600'}
+                                ${showOnlyIncomplete && !hideIncomplete ? 'bg-amber-500' : 'bg-gray-300 dark:bg-gray-600'}
                             `}
                             title="Mostrar solo candidatos con perfil incompleto"
                         >
                             <span
                                 className={`
                                     inline-block h-4 w-4 transform rounded-full bg-white transition-transform
-                                    ${showOnlyIncomplete ? 'translate-x-6' : 'translate-x-1'}
+                                    ${showOnlyIncomplete && !hideIncomplete ? 'translate-x-6' : 'translate-x-1'}
                                 `}
                             />
                         </button>
