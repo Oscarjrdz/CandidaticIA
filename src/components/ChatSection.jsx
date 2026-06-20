@@ -805,7 +805,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
         if (imgs.length) setPendingQrImages(imgs);
         if (qr.message) {
             const candidatoFresh = candidates.find(c => c.id === selectedChat?.id) || selectedChat;
-            const nombre = candidatoFresh?.nombreReal?.trim() || '';
+            const nombre = (candidatoFresh?.nombreReal?.trim() || '').split(' ')[0];
             const resolved = qr.message
                 .replace(/\{\{nombre\}\}/gi, nombre)
                 .replace(/\s{2,}/g, ' ')
