@@ -2774,8 +2774,16 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                                     )}
                                 </div>
                                 <div className="flex items-center gap-2 mt-0.5 min-w-0">
-                                    <p className="text-xs text-[#667781] dark:text-[#8696a0] truncate shrink">
-                                        {selectedChat.whatsapp} • últ. msj {formatRelativeDate(selectedChat.ultimoMensaje)}
+                                    <p className="text-xs text-[#667781] dark:text-[#8696a0] truncate shrink flex items-center gap-1">
+                                        <span className="font-semibold" style={{ color: '#25D366' }}>WhatsApp</span>
+                                        {(() => {
+                                            let p = String(selectedChat.whatsapp || '');
+                                            if (p.startsWith('521') && p.length === 13) p = p.slice(3);
+                                            else if (p.startsWith('52') && p.length === 12) p = p.slice(2);
+                                            return p;
+                                        })()}
+                                        <span className="mx-0.5 opacity-50">·</span>
+                                        Último Mensaje {formatRelativeDate(selectedChat.ultimoMensaje)}
                                     </p>
                                     {(selectedChat.adHeadline || selectedChat.adId) && (
                                         <span className="hidden lg:inline-flex items-center gap-1 shrink-0 text-[10px] font-medium text-violet-500 dark:text-violet-400 bg-violet-50 dark:bg-violet-500/10 px-2 py-0.5 rounded-full border border-violet-200/60 dark:border-violet-500/20 truncate max-w-[180px]" title={selectedChat.adHeadline || selectedChat.adId}>
