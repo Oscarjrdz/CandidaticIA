@@ -734,7 +734,7 @@ const CandidatesSection = () => {
             <div className="flex-none space-y-4">
 
                 {/* 📊 Live Dashboard - Zuckerberg Style */}
-                <div className="grid gap-4" style={{ gridTemplateColumns: '2fr 1fr 1fr 1fr' }}>
+                <div className="grid grid-cols-4 gap-4">
                     {isInitialLoading ? (
                         <>
                             <CardSkeleton />
