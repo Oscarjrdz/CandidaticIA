@@ -228,7 +228,6 @@ const CandidatesSection = () => {
     const [aiFilteredCandidates, setAiFilteredCandidates] = useState(null); // Results from AI
     const [aiExplanation, setAiExplanation] = useState('');
     const [sortWhatsAppByDate, setSortWhatsAppByDate] = useState('desc');
-    const [showOnlyAvanzados, setShowOnlyAvanzados] = useState(false);
     const [hideIncomplete, setHideIncomplete] = useState(() => {
         // Load initial state from localStorage if available
         try {
@@ -691,9 +690,7 @@ const CandidatesSection = () => {
         if (!canViewIncomplete || hideIncomplete) {
             result = result.filter(c => isProfileComplete(c));
         }
-        if (showOnlyAvanzados) {
-            result = result.filter(c => c.paso2Estado === 'completo');
-        }
+
         if (sortWhatsAppByDate) {
             result = [...result].sort((a, b) => {
                 const dateA = new Date(a.primerContacto || a.createdAt || 0).getTime();
@@ -702,7 +699,7 @@ const CandidatesSection = () => {
             });
         }
         return result;
-    }, [candidates, aiFilteredCandidates, hideIncomplete, showOnlyAvanzados, sortWhatsAppByDate]);
+    }, [candidates, aiFilteredCandidates, hideIncomplete, sortWhatsAppByDate]);
 
     const totalPages = Math.ceil(totalItems / LIMIT);
 
@@ -827,30 +824,6 @@ const CandidatesSection = () => {
                         </button>
                     </div>}
 
-                    {/* Completos Avanzados Toggle */}
-                    <div className="flex items-center gap-2 border px-3 py-1.5 rounded-xl shadow-sm cursor-pointer bg-white dark:bg-gray-800 border-[#1d3a5f]/20 dark:border-blue-900/40" onClick={() => setShowOnlyAvanzados(!showOnlyAvanzados)}>
-                        <div className="flex flex-col">
-                            <span className="text-[8px] font-black uppercase tracking-widest text-[#1d3a5f]/60 dark:text-blue-400/70 leading-none">Avanzados</span>
-                            <span className={`text-[10px] font-bold ${showOnlyAvanzados ? 'text-[#1d3a5f] dark:text-blue-300' : 'text-gray-400'}`}>
-                                {showOnlyAvanzados ? 'FILTRADO' : 'TODOS'}
-                            </span>
-                        </div>
-                        <button
-                            type="button"
-                            className={`
-                                relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none
-                                ${showOnlyAvanzados ? 'bg-[#1d3a5f]' : 'bg-gray-300 dark:bg-gray-600'}
-                            `}
-                            title="Mostrar solo candidatos con paso 2 completo"
-                        >
-                            <span
-                                className={`
-                                    inline-block h-4 w-4 transform rounded-full bg-white transition-transform
-                                    ${showOnlyAvanzados ? 'translate-x-6' : 'translate-x-1'}
-                                `}
-                            />
-                        </button>
-                    </div>
 
 
 
