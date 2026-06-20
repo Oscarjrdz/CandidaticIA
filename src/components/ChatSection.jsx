@@ -3312,13 +3312,15 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
 
                     {/* Create / Edit Form */}
                     <div className="p-3 border-b border-[#f0f2f5] dark:border-[#222e35] space-y-2">
-                        <input
-                            type="text"
-                            placeholder="Nombre (ej: Cita HR One)"
-                            value={qrForm.name}
-                            onChange={(e) => setQrForm({ ...qrForm, name: e.target.value })}
-                            className="w-full text-xs px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#202c33] text-[#111b21] dark:text-[#e9edef] outline-none focus:border-green-500 transition-colors"
-                        />
+                        {qrForm.type !== 'location' && (
+                            <input
+                                type="text"
+                                placeholder="Nombre (ej: Saludo inicial)"
+                                value={qrForm.name}
+                                onChange={(e) => setQrForm({ ...qrForm, name: e.target.value })}
+                                className="w-full text-xs px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#202c33] text-[#111b21] dark:text-[#e9edef] outline-none focus:border-green-500 transition-colors"
+                            />
+                        )}
                         {/* Tipo toggle */}
                         <div className="flex rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden text-xs">
                             <button type="button"
@@ -3450,15 +3452,15 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                             )}
                             <button
                                 type="button"
-                                disabled={!qrForm.name.trim() || (qrForm.type === 'location'
-                                    ? (!qrForm.locLat || !qrForm.locLng)
-                                    : (!qrForm.message.trim() && !qrForm.imageUrl)
-                                )}
+                                disabled={qrForm.type === 'location'
+                                    ? (!qrForm.locLat || !qrForm.locLng || !qrForm.locName.trim())
+                                    : (!qrForm.name.trim() || (!qrForm.message.trim() && !qrForm.imageUrl))
+                                }
                                 onClick={async () => {
                                     const isLoc = qrForm.type === 'location';
                                     const entry = {
                                         id: editingQuickReply?.id || `qr_${Date.now()}`,
-                                        name: qrForm.name.trim(),
+                                        name: qrForm.name.trim() || qrForm.locName.trim(),
                                         shortcut: qrForm.shortcut.trim(),
                                         type: qrForm.type || 'text',
                                         ...(isLoc ? {
