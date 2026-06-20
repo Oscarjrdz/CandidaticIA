@@ -4288,7 +4288,7 @@ Responde ÚNICAMENTE con el número entero de meses. Si evade o no menciona ning
         }
 
         const _paso2Listo = !candidateData.paso2Requerido || candidateData.paso2Estado === 'completo';
-        if (!isRecruiterMode && !isBridgeActive && isProfileComplete && _paso2Listo && activeAiConfig.gptHostEnabled) {
+        if (!isRecruiterMode && !isBridgeActive && isProfileComplete && _paso2Listo && activeAiConfig.gptHostEnabled && !responseTextVal) {
             isHostMode = true;
             try {
                 const candFirstName = (candidateData.nombreReal || '').split(' ')[0] || 'amig@';
