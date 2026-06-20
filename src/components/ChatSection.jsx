@@ -804,6 +804,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
         const imgs = qr.imageUrls?.length ? qr.imageUrls : (qr.imageUrl ? [qr.imageUrl] : []);
         if (imgs.length) setPendingQrImages(imgs);
         if (qr.message) {
+            console.log('[QR] selectedChat.nombre=', selectedChat?.nombre, 'selectedChat.nombreReal=', selectedChat?.nombreReal);
             const nombre = selectedChat?.nombreReal?.trim() || '';
             const resolved = qr.message
                 .replace(/\{\{nombre\}\}/gi, nombre)
