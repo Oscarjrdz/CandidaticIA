@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Users, Search, Trash2, RefreshCw, User, MessageCircle, Clock, Loader2, CheckCircle, Sparkles, Send, Zap, Ban, GripVertical, Tag, ChevronDown, X, Pencil, Plus, AlertTriangle } from 'lucide-react';
+import { Users, Search, Trash2, RefreshCw, User, MessageCircle, Clock, Loader2, CheckCircle, Sparkles, Send, Zap, Ban, GripVertical, Tag, ChevronDown, X, Pencil, Plus, AlertTriangle, TrendingUp } from 'lucide-react';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, horizontalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -692,6 +692,20 @@ const CandidatesSection = () => {
         }
     }, [showToast]);
 
+    // CTR de Completos: % de completos en los últimos 100 candidatos registrados
+    // Se recalcula automáticamente cuando SSE parchea el estado de cualquier candidato
+    const completionCTR = React.useMemo(() => {
+        if (!candidates || candidates.length === 0) return null;
+        const sorted = [...candidates].sort((a, b) => {
+            const dateA = new Date(a.primerContacto || a.createdAt || 0).getTime();
+            const dateB = new Date(b.primerContacto || b.createdAt || 0).getTime();
+            return dateB - dateA;
+        });
+        const last100 = sorted.slice(0, 100);
+        const completos = last100.filter(c => isProfileComplete(c)).length;
+        return { completos, total: last100.length, pct: Math.round((completos / last100.length) * 100) };
+    }, [candidates]);
+
     // ✅ META AUDIT: Memoized pipeline — filter + sort only recalculated when deps change
     const displayedCandidates = React.useMemo(() => {
         let result = aiFilteredCandidates || candidates;
@@ -753,7 +767,34 @@ const CandidatesSection = () => {
                                 </div>
                             </div>
 
-                            {/* Card 2: Incoming Messages (Live) */}
+                            {/* Card 2: CTR Completos (últimos 100) */}
+                            {completionCTR && (
+                            <div className="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm relative overflow-hidden group">
+                                <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
+                                    <TrendingUp className="w-16 h-16 text-emerald-500 transform rotate-6" />
+                                </div>
+                                <div className="flex flex-col relative z-10">
+                                    <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-1">CTR de Completos</span>
+                                    <div className="flex items-baseline gap-2 flex-wrap">
+                                        <h3 className={`text-2xl font-bold leading-none ${completionCTR.pct >= 70 ? 'text-emerald-500' : completionCTR.pct >= 40 ? 'text-amber-500' : 'text-red-500'}`}>
+                                            {completionCTR.pct}%
+                                        </h3>
+                                        <span className="text-[10px] text-gray-400 dark:text-gray-500 font-medium">
+                                            {completionCTR.completos}/{completionCTR.total} últimos
+                                        </span>
+                                    </div>
+                                    <div className="mt-2 w-full bg-gray-100 dark:bg-gray-700 rounded-full h-1.5">
+                                        <div
+                                            className={`h-1.5 rounded-full transition-all duration-500 ${completionCTR.pct >= 70 ? 'bg-emerald-500' : completionCTR.pct >= 40 ? 'bg-amber-500' : 'bg-red-500'}`}
+                                            style={{ width: `${completionCTR.pct}%` }}
+                                        />
+                                    </div>
+                                    <span className="text-[9px] text-gray-400 dark:text-gray-500 mt-1">Qué tan bien trabaja Brenda</span>
+                                </div>
+                            </div>
+                            )}
+
+                            {/* Card 3: Incoming Messages (Live) */}
                             <div className="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm relative overflow-hidden group">
                                 <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
                                     <MessageCircle className="w-16 h-16 text-green-500 opacity-20 transform -rotate-12" />
