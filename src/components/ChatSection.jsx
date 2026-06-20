@@ -292,7 +292,7 @@ const MessagesEncryptionHeader = () => (
     </div>
 );
 
-export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
+export default function ChatSection({ rolePermissions, onlineUsers = [], onUnreadCountChange }) {
     const { showToast } = useToastContext();
     const { user } = useAuthContext();
 
@@ -649,15 +649,6 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
             window.removeEventListener('ad_label_created', onCreate);
             window.removeEventListener('ad_label_renamed', onRename);
             window.removeEventListener('ad_label_deleted', onDelete);
-        };
-    }, []);
-
-    // 📡 Broadcast mount/unmount lifecycle to Sidebar so it knows when to trust
-    // RBAC-accurate unread counts vs SSE-based global fallback
-    useEffect(() => {
-        window.dispatchEvent(new CustomEvent('chat_section_mounted', { detail: { mounted: true } }));
-        return () => {
-            window.dispatchEvent(new CustomEvent('chat_section_mounted', { detail: { mounted: false } }));
         };
     }, []);
 
@@ -1108,12 +1099,10 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
         return counts;
     }, [baseCandidates, user, rolePermissions]);
 
-    // 📡 Broadcast RBAC-filtered unread count + IDs to Sidebar badge (only after candidates are loaded)
+    // 📡 Reportar conteo RBAC exacto al padre (App.jsx) — fuente única de verdad
     useEffect(() => {
         if (loadingChats) return;
-        window.dispatchEvent(new CustomEvent('chat_unread_rbac', {
-            detail: { count: unreadCounts.all, unreadIds: unreadCounts.unreadIds }
-        }));
+        onUnreadCountChange?.(unreadCounts.all, unreadCounts.unreadIds);
     }, [unreadCounts.all, loadingChats]);
 
     // 🏎️ Online readers por chat — evita recalcular dentro de cada ChatRow

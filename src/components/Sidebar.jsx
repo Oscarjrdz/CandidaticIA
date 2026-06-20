@@ -111,7 +111,7 @@ const SortableMenuItem = ({ item, activeSection, onSectionChange, badge, isColla
     );
 };
 
-const Sidebar = ({ activeSection, onSectionChange, onLogout, isMobileOpen, onClose }) => {
+const Sidebar = ({ activeSection, onSectionChange, onLogout, isMobileOpen, onClose, chatUnreadCount = 0 }) => {
     const { user, setUser } = useAuthContext();
 
     const [items, setItems] = useState([]);
@@ -121,66 +121,7 @@ const Sidebar = ({ activeSection, onSectionChange, onLogout, isMobileOpen, onClo
     });
     const { globalStats } = useCandidatesSSE();
 
-    // Badge de no-leídos:
-    // - liveUnreadIds (ref): Set de IDs con mensajes no leídos conocidos esta sesión
-    // - liveUnreadCount (state): tamaño del Set → lo que muestra el badge
-    // Se sincroniza con el conteo RBAC exacto cuando Chat Web abre (chat_unread_rbac_v2).
-    // Se incrementa en tiempo real vía SSE cuando llega un nuevo mensaje de usuario.
-    const liveUnreadIds = React.useRef(new Set());
-    const [liveUnreadCount, setLiveUnreadCount] = useState(() => {
-        const v2 = localStorage.getItem('chat_unread_rbac_v2');
-        if (v2 !== null) return Number(v2);
-        // Migración: usar v1 solo si el valor es razonable (< 300), rechaza el 576 corrupto
-        const v1 = localStorage.getItem('chat_unread_rbac');
-        const n = v1 !== null ? Number(v1) : 0;
-        return n > 0 && n < 300 ? n : 0;
-    });
-    const [chatMounted, setChatMounted] = useState(false);
-    const chatMountedRef = React.useRef(false);
-
-    useEffect(() => {
-        const handler = (e) => {
-            const mounted = e.detail?.mounted ?? false;
-            setChatMounted(mounted);
-            chatMountedRef.current = mounted;
-        };
-        window.addEventListener('chat_section_mounted', handler);
-        return () => window.removeEventListener('chat_section_mounted', handler);
-    }, []);
-
-    // Chat Web cargó y calculó el conteo RBAC exacto → sincronizar
-    useEffect(() => {
-        const handler = (e) => {
-            const detail = e.detail;
-            const count = typeof detail === 'number' ? detail : (detail?.count ?? 0);
-            const ids = detail?.unreadIds instanceof Set ? detail.unreadIds : new Set();
-            liveUnreadIds.current = new Set(ids); // Reemplazar con verdad RBAC
-            setLiveUnreadCount(count);
-            localStorage.setItem('chat_unread_rbac_v2', String(count));
-        };
-        window.addEventListener('chat_unread_rbac_v2', handler);
-        return () => window.removeEventListener('chat_unread_rbac_v2', handler);
-    }, []);
-
-    // SSE: nuevo mensaje de usuario → incrementar badge si el candidato no estaba ya contado
-    useEffect(() => {
-        const handler = (e) => {
-            if (chatMountedRef.current) return; // Chat abierto: él maneja su propio conteo
-            const data = e.detail;
-            const updates = data?.updates || data;
-            if (updates?.newMessage && updates?.messageFrom === 'user' && data?.candidateId) {
-                const candidateId = data.candidateId;
-                if (liveUnreadIds.current.has(candidateId)) return; // Ya contado
-                liveUnreadIds.current.add(candidateId);
-                setLiveUnreadCount(prev => prev + 1);
-                localStorage.setItem('chat_unread_rbac_v2', String(liveUnreadIds.current.size));
-            }
-        };
-        window.addEventListener('sse:candidate:update', handler);
-        return () => window.removeEventListener('sse:candidate:update', handler);
-    }, []);
-
-    const unreadCount = liveUnreadCount;
+    const unreadCount = chatUnreadCount;
 
     const toggleCollapse = () => {
         setIsCollapsed(prev => {

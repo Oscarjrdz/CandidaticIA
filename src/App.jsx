@@ -1,4 +1,4 @@
-import React, { useState, useEffect, Suspense, useCallback } from 'react';
+import React, { useState, useEffect, useRef, Suspense, useCallback } from 'react';
 import { Moon, Sun, Menu } from 'lucide-react';
 import Sidebar from './components/Sidebar';
 import LoadingOverlay from './components/ui/LoadingOverlay';
@@ -60,6 +60,44 @@ function AppShell() {
   const [activeSection, setActiveSection] = useState('candidates');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+
+  // Conteo de no-leídos — fuente única de verdad para el badge de Chat Web
+  const [chatUnreadCount, setChatUnreadCount] = useState(() => {
+    const v2 = localStorage.getItem('chat_unread_rbac_v2');
+    if (v2 !== null) return Number(v2);
+    const v1 = localStorage.getItem('chat_unread_rbac');
+    const n = v1 !== null ? Number(v1) : 0;
+    return n > 0 && n < 300 ? n : 0;
+  });
+  const liveUnreadIds = useRef(new Set());
+
+  // Cuando Chat Web está abierto, recibe el conteo RBAC exacto directo de ChatSection
+  const handleUnreadCountChange = useCallback((count, unreadIds) => {
+    liveUnreadIds.current = new Set(unreadIds);
+    setChatUnreadCount(count);
+    localStorage.setItem('chat_unread_rbac_v2', String(count));
+  }, []);
+
+  // Cuando Chat Web NO está abierto, incrementar por SSE para candidatos nuevos
+  useEffect(() => {
+    const handler = (e) => {
+      if (activeSection === 'chat') return;
+      const data = e.detail;
+      const updates = data?.updates || data;
+      if (updates?.newMessage && updates?.messageFrom === 'user' && data?.candidateId) {
+        const candidateId = data.candidateId;
+        if (liveUnreadIds.current.has(candidateId)) return;
+        liveUnreadIds.current.add(candidateId);
+        setChatUnreadCount(prev => {
+          const next = prev + 1;
+          localStorage.setItem('chat_unread_rbac_v2', String(next));
+          return next;
+        });
+      }
+    };
+    window.addEventListener('sse:candidate:update', handler);
+    return () => window.removeEventListener('sse:candidate:update', handler);
+  }, [activeSection]);
 
   // Resize listener for mobile viewport detection
   useEffect(() => {
@@ -169,7 +207,7 @@ function AppShell() {
         <main className="flex-1 h-full w-full p-0 overflow-hidden">
           <ErrorBoundary>
             <Suspense fallback={<SectionSkeleton />}>
-              <ChatSection rolePermissions={rolePermissions} onlineUsers={onlineUsers} />
+              <ChatSection rolePermissions={rolePermissions} onlineUsers={onlineUsers} onUnreadCountChange={handleUnreadCountChange} />
             </Suspense>
           </ErrorBoundary>
         </main>
@@ -186,6 +224,7 @@ function AppShell() {
         onLogout={handleLogout}
         isMobileOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
+        chatUnreadCount={chatUnreadCount}
       />
 
       {/* Main Content */}
@@ -308,7 +347,7 @@ function AppShell() {
           {activeSection === 'candidates' ? (
             <CandidatesSection />
           ) : activeSection === 'chat' ? (
-            <ChatSection rolePermissions={rolePermissions} onlineUsers={onlineUsers} />
+            <ChatSection rolePermissions={rolePermissions} onlineUsers={onlineUsers} onUnreadCountChange={handleUnreadCountChange} />
           ) : activeSection === 'bulks' ? (
             <BulksSection />
           ) : activeSection === 'bot-ia' ? (
