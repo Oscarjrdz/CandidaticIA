@@ -124,11 +124,11 @@ const Sidebar = ({ activeSection, onSectionChange, onLogout, isMobileOpen, onClo
     // Badge de no-leídos:
     // - liveUnreadIds (ref): Set de IDs con mensajes no leídos conocidos esta sesión
     // - liveUnreadCount (state): tamaño del Set → lo que muestra el badge
-    // Se sincroniza con el conteo RBAC exacto cuando Chat Web abre (chat_unread_rbac).
+    // Se sincroniza con el conteo RBAC exacto cuando Chat Web abre (chat_unread_rbac_v2).
     // Se incrementa en tiempo real vía SSE cuando llega un nuevo mensaje de usuario.
     const liveUnreadIds = React.useRef(new Set());
     const [liveUnreadCount, setLiveUnreadCount] = useState(() => {
-        const v = localStorage.getItem('chat_unread_rbac');
+        const v = localStorage.getItem('chat_unread_rbac_v2');
         return v !== null ? Number(v) : 0;
     });
     const [chatMounted, setChatMounted] = useState(false);
@@ -152,10 +152,10 @@ const Sidebar = ({ activeSection, onSectionChange, onLogout, isMobileOpen, onClo
             const ids = detail?.unreadIds instanceof Set ? detail.unreadIds : new Set();
             liveUnreadIds.current = new Set(ids); // Reemplazar con verdad RBAC
             setLiveUnreadCount(count);
-            localStorage.setItem('chat_unread_rbac', String(count));
+            localStorage.setItem('chat_unread_rbac_v2', String(count));
         };
-        window.addEventListener('chat_unread_rbac', handler);
-        return () => window.removeEventListener('chat_unread_rbac', handler);
+        window.addEventListener('chat_unread_rbac_v2', handler);
+        return () => window.removeEventListener('chat_unread_rbac_v2', handler);
     }, []);
 
     // SSE: nuevo mensaje de usuario → incrementar badge si el candidato no estaba ya contado
@@ -169,7 +169,7 @@ const Sidebar = ({ activeSection, onSectionChange, onLogout, isMobileOpen, onClo
                 if (liveUnreadIds.current.has(candidateId)) return; // Ya contado
                 liveUnreadIds.current.add(candidateId);
                 setLiveUnreadCount(prev => prev + 1);
-                localStorage.setItem('chat_unread_rbac', String(liveUnreadIds.current.size));
+                localStorage.setItem('chat_unread_rbac_v2', String(liveUnreadIds.current.size));
             }
         };
         window.addEventListener('sse:candidate:update', handler);
