@@ -4287,7 +4287,8 @@ Responde ÚNICAMENTE con el número entero de meses. Si evade o no menciona ning
             }
         }
 
-        const _paso2Listo = !candidateData.paso2Requerido || candidateData.paso2Estado === 'completo';
+        const _paso2EnProceso = ['esperando_colonia', 'esperando_experiencia', 'esperando_meses_experiencia'].includes(candidateData.paso2Estado);
+        const _paso2Listo = !_paso2EnProceso && (!candidateData.paso2Requerido || candidateData.paso2Estado === 'completo');
         if (!isRecruiterMode && !isBridgeActive && isProfileComplete && _paso2Listo && activeAiConfig.gptHostEnabled && !responseTextVal) {
             isHostMode = true;
             try {
