@@ -158,22 +158,15 @@ const Sidebar = ({ activeSection, onSectionChange, onLogout, isMobileOpen, onClo
         return () => window.removeEventListener('chat_unread_rbac', handler);
     }, []);
 
-    // SSE: nuevo mensaje de usuario → actualizar badge en tiempo real
+    // SSE: nuevo mensaje de usuario → incrementar badge si el candidato no estaba ya contado
     useEffect(() => {
         const handler = (e) => {
             if (chatMountedRef.current) return; // Chat abierto: él maneja su propio conteo
             const data = e.detail;
-            // El servidor incluye globalUnread (de stats:bot:unread_v2) en mensajes de usuario
-            if (typeof data?.globalUnread === 'number') {
-                setLiveUnreadCount(data.globalUnread);
-                localStorage.setItem('chat_unread_rbac', String(data.globalUnread));
-                return;
-            }
-            // Fallback legacy: incrementar localmente si no trae conteo global
             const updates = data?.updates || data;
             if (updates?.newMessage && updates?.messageFrom === 'user' && data?.candidateId) {
                 const candidateId = data.candidateId;
-                if (liveUnreadIds.current.has(candidateId)) return;
+                if (liveUnreadIds.current.has(candidateId)) return; // Ya contado
                 liveUnreadIds.current.add(candidateId);
                 setLiveUnreadCount(prev => prev + 1);
                 localStorage.setItem('chat_unread_rbac', String(liveUnreadIds.current.size));

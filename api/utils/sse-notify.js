@@ -36,13 +36,6 @@ export async function notifyCandidateUpdate(candidateId, updates = {}) {
             timestamp: new Date().toISOString()
         };
 
-        // Incluir conteo global de no-leídos en mensajes de usuario para que el
-        // badge del Sidebar se actualice en tiempo real sin polling
-        if (updates.messageFrom === 'user') {
-            const raw = await redis.get('stats:bot:unread_v2');
-            notification.globalUnread = parseInt(raw) || 0;
-        }
-
         // 🚀 Broadcast to ALL connected clients instantly via Pub/Sub
         await redis.publish('channel:sse:updates', JSON.stringify(notification));
         console.log('✅ SSE Pub/Sub published for UPDATED candidate:', candidateId);
