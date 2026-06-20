@@ -128,8 +128,12 @@ const Sidebar = ({ activeSection, onSectionChange, onLogout, isMobileOpen, onClo
     // Se incrementa en tiempo real vía SSE cuando llega un nuevo mensaje de usuario.
     const liveUnreadIds = React.useRef(new Set());
     const [liveUnreadCount, setLiveUnreadCount] = useState(() => {
-        const v = localStorage.getItem('chat_unread_rbac_v2');
-        return v !== null ? Number(v) : 0;
+        const v2 = localStorage.getItem('chat_unread_rbac_v2');
+        if (v2 !== null) return Number(v2);
+        // Migración: usar v1 solo si el valor es razonable (< 300), rechaza el 576 corrupto
+        const v1 = localStorage.getItem('chat_unread_rbac');
+        const n = v1 !== null ? Number(v1) : 0;
+        return n > 0 && n < 300 ? n : 0;
     });
     const [chatMounted, setChatMounted] = useState(false);
     const chatMountedRef = React.useRef(false);
