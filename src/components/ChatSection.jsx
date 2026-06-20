@@ -464,9 +464,11 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
     const [draggedIcon, setDraggedIcon] = useState(null);
 
     // Filter Chips State
-    const [activeFilter, setActiveFilter] = useState('unread'); // 'all', 'unread', 'label', 'profile'
+    const [activeFilter, setActiveFilter] = useState('unread'); // 'all', 'unread', 'profile'
     const [filterValue, setFilterValue] = useState(null);
     const [profileUnreadOnly, setProfileUnreadOnly] = useState(false);
+    const [selectedTag, setSelectedTag] = useState(null);
+    const selectedTagRef = useRef(null);
     const [hasMore, setHasMore] = useState(false);
     const [loadingMore, setLoadingMore] = useState(false);
     const loadingMoreRef = useRef(false);
@@ -540,25 +542,23 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
     useEffect(() => { candidatesRef.current = candidates; }, [candidates]);
 
     const prevActiveFilterRef = useRef(null);
-    // When label filter changes, reload from server so we scan ALL candidates (not just the first 5000 in memory).
-    // Debounced 400ms so rapid filter clicks don't each trigger a full Redis scan.
+    useEffect(() => { selectedTagRef.current = selectedTag; }, [selectedTag]);
+
+    // When tag filter changes, reload from server to scan ALL candidates in Redis.
+    // Debounced 400ms so rapid clicks don't each trigger a full scan.
+    const prevSelectedTagRef = useRef(undefined);
     useEffect(() => {
-        const prev = prevActiveFilterRef.current;
-        prevActiveFilterRef.current = activeFilter;
-        if (prev === null) return; // skip mount — loadCandidates already called in mount effect
-
-        const needsReload =
-            (activeFilter === 'label' && filterValue) ||
-            (prev === 'label' && activeFilter !== 'label');
-            // Los filtros Todos/No Leídos/Completos/Incompletos son client-side puro.
-            // Recargar del servidor al cambiar de filtro cambia el tamaño del set en memoria
-            // y hace que los badges muestren conteos distintos dependiendo del filtro activo.
-
-        if (!needsReload) return;
-
+        if (prevSelectedTagRef.current === undefined) { prevSelectedTagRef.current = null; return; }
+        if (prevSelectedTagRef.current === selectedTag) return;
+        prevSelectedTagRef.current = selectedTag;
         const timer = setTimeout(() => { loadCandidates(); }, 400);
         return () => clearTimeout(timer);
-    }, [activeFilter, filterValue]);
+    }, [selectedTag]);
+
+    // Tab changes (all/unread/profile) are client-side pure — no server reload needed.
+    useEffect(() => {
+        prevActiveFilterRef.current = activeFilter;
+    }, [activeFilter]);
 
     // Server-side search: reload when search query changes (debounced 250ms)
     useEffect(() => {
@@ -919,7 +919,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
 
     const loadCandidates = async () => {
         try {
-            const tagParam = activeFilterRef.current === 'label' ? filterValueRef.current : "";
+            const tagParam = selectedTagRef.current || "";
             const searchParam = searchRef.current || "";
             // Siempre cargar 100 con unreadFirst=true para que los no-leídos aparezcan
             // primero Y el conteo del badge sea consistente sin importar el filtro activo.
@@ -941,7 +941,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
 
     const loadMore = useCallback(async () => {
         if (loadingMoreRef.current || !hasMore) return;
-        const tagParam = activeFilterRef.current === 'label' ? filterValueRef.current : "";
+        const tagParam = selectedTagRef.current || "";
         const searchParam = searchRef.current || "";
         loadingMoreRef.current = true;
         setLoadingMore(true);
@@ -986,7 +986,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
             }
 
             if (activeFilter === 'unread' && !checkIfUnread(c)) return false;
-            if (activeFilter === 'label' && filterValue && !(Array.isArray(c?.tags) && c.tags.includes(filterValue))) return false;
+            if (selectedTag && !(Array.isArray(c?.tags) && c.tags.includes(selectedTag))) return false;
             if (activeFilter === 'profile') {
                 const isComplete = isProfileComplete(c);
                 if (filterValue === 'complete' && !isComplete) return false;
@@ -1029,6 +1029,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
     }, [
         candidates, user,
         activeFilter, filterValue, profileUnreadOnly,
+        selectedTag,
         manualPipelineFilter, manualStepFilter,
         pinnedChats,
         selectedAges, selectedGenders, selectedMunicipalities
@@ -2233,7 +2234,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                     {isMobile && (
                         <div className="flex gap-2 overflow-x-auto py-2.5 px-4 scrollbar-none select-none border-b border-[#f0f2f5] dark:border-[#222e35] mb-1">
                             <button 
-                                onClick={() => { setActiveFilter('all'); setFilterValue(null); setManualPipelineFilter(null); setManualStepFilter(null); setShowDropdown(null); }}
+                                onClick={() => { setActiveFilter('all'); setFilterValue(null); setSelectedTag(null); setManualPipelineFilter(null); setManualStepFilter(null); setShowDropdown(null); }}
                                 className={`px-4 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-colors flex items-center gap-1 shrink-0 ${
                                     activeFilter === 'all' 
                                     ? 'bg-[#d9fdd3] text-[#128c7e] dark:bg-[#0a332c] dark:text-[#25d366]' 
@@ -2243,7 +2244,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                                 Todos {stableStats.total != null ? `(${stableStats.total})` : ''}
                             </button>
                             <button
-                                onClick={() => { setActiveFilter('unread'); setFilterValue(null); setShowDropdown(null); }}
+                                onClick={() => { setActiveFilter('unread'); setFilterValue(null); setSelectedTag(null); setShowDropdown(null); }}
                                 className={`px-4 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-colors flex items-center gap-1.5 shrink-0 ${
                                     activeFilter === 'unread'
                                     ? 'bg-[#d9fdd3] text-[#128c7e] dark:bg-[#0a332c] dark:text-[#25d366]'
@@ -2258,7 +2259,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                                 )}
                             </button>
                             <button 
-                                onClick={() => { setActiveFilter('profile'); setFilterValue('complete'); setProfileUnreadOnly(true); setShowDropdown(null); }}
+                                onClick={() => { setActiveFilter('profile'); setFilterValue('complete'); setProfileUnreadOnly(true); setSelectedTag(null); setShowDropdown(null); }}
                                 className={`px-4 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-colors flex items-center gap-1 shrink-0 ${
                                     activeFilter === 'profile' && filterValue === 'complete' 
                                     ? 'bg-[#d9fdd3] text-[#128c7e] dark:bg-[#0a332c] dark:text-[#25d366]' 
@@ -2269,7 +2270,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                             </button>
                             {(user?.role === 'SuperAdmin' || !rolePermissions || Object.keys(rolePermissions).length === 0 || rolePermissions.view_incomplete_candidates === true) && (
                                 <button
-                                    onClick={() => { setActiveFilter('profile'); setFilterValue('incomplete'); setProfileUnreadOnly(true); setShowDropdown(null); }}
+                                    onClick={() => { setActiveFilter('profile'); setFilterValue('incomplete'); setProfileUnreadOnly(true); setSelectedTag(null); setShowDropdown(null); }}
                                     className={`px-4 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-colors flex items-center gap-1 shrink-0 ${
                                         activeFilter === 'profile' && filterValue === 'incomplete'
                                         ? 'bg-[#d9fdd3] text-[#128c7e] dark:bg-[#0a332c] dark:text-[#25d366]'
@@ -2298,7 +2299,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                         >
                         {canSeeFilter('filter_todos') && (
                             <button 
-                                onClick={() => { setActiveFilter('all'); setFilterValue(null); setManualPipelineFilter(null); setManualStepFilter(null); setShowDropdown(null); }}
+                                onClick={() => { setActiveFilter('all'); setFilterValue(null); setSelectedTag(null); setManualPipelineFilter(null); setManualStepFilter(null); setShowDropdown(null); }}
                                 className={`flex-1 flex justify-center px-1.5 py-1.5 rounded-full font-medium whitespace-nowrap transition-colors border border-transparent items-center gap-1 min-w-[50px] ${
                                     activeFilter === 'all' 
                                     ? 'bg-[#d9fdd3] text-[#111b21] dark:bg-[#0a332c] dark:text-[#25d366]' 
@@ -2310,7 +2311,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                             </button>
                         )}
                         <button
-                            onClick={() => { setActiveFilter('unread'); setFilterValue(null); setShowDropdown(null); }}
+                            onClick={() => { setActiveFilter('unread'); setFilterValue(null); setSelectedTag(null); setShowDropdown(null); }}
                             className={`flex-[1.2] flex justify-center px-1.5 py-1.5 rounded-full font-medium whitespace-nowrap transition-colors border border-transparent items-center gap-1 min-w-[70px] ${
                                 activeFilter === 'unread'
                                 ? 'bg-[#d9fdd3] text-[#111b21] dark:bg-[#0a332c] dark:text-[#25d366]'
@@ -2327,7 +2328,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                         </button>
                         {canSeeFilter('filter_complete') && (
                             <button 
-                                onClick={() => { setActiveFilter('profile'); setFilterValue('complete'); setProfileUnreadOnly(true); setShowDropdown(null); }}
+                                onClick={() => { setActiveFilter('profile'); setFilterValue('complete'); setProfileUnreadOnly(true); setSelectedTag(null); setShowDropdown(null); }}
                                 className={`flex-[1.5] flex justify-center px-1.5 py-1.5 rounded-full font-medium whitespace-nowrap transition-colors border border-transparent items-center gap-1 min-w-[90px] ${
                                     activeFilter === 'profile' && filterValue === 'complete' 
                                     ? 'bg-[#d9fdd3] text-[#111b21] dark:bg-[#0a332c] dark:text-[#25d366]' 
@@ -2349,7 +2350,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                         )}
                         {canSeeFilter('filter_incomplete') && (user?.role === 'SuperAdmin' || !rolePermissions || Object.keys(rolePermissions).length === 0 || rolePermissions.view_incomplete_candidates === true) && (
                             <button 
-                                onClick={() => { setActiveFilter('profile'); setFilterValue('incomplete'); setProfileUnreadOnly(true); setShowDropdown(null); }}
+                                onClick={() => { setActiveFilter('profile'); setFilterValue('incomplete'); setProfileUnreadOnly(true); setSelectedTag(null); setShowDropdown(null); }}
                                 className={`flex-[1.5] flex justify-center px-1.5 py-1.5 rounded-full font-medium whitespace-nowrap transition-colors border border-transparent items-center gap-1 min-w-[90px] ${
                                     activeFilter === 'profile' && filterValue === 'incomplete' 
                                     ? 'bg-[#d9fdd3] text-[#111b21] dark:bg-[#0a332c] dark:text-[#25d366]' 
@@ -2378,22 +2379,22 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                                 <div className="relative w-full">
                                     <div 
                                         onClick={() => setShowDropdown(showDropdown === 'labels' ? null : 'labels')}
-                                        className={`w-full bg-[#f0f2f5] dark:bg-[#202c33] border ${activeFilter === 'label' ? 'border-transparent' : 'border-gray-200 dark:border-gray-700'} rounded-lg pl-9 pr-14 py-2 text-xs outline-none font-medium text-left cursor-pointer transition-all flex items-center shadow-sm relative`}
-                                        style={activeFilter === 'label' ? {
-                                            boxShadow: `0 0 0 2px ${(availableTags.find(t => (typeof t === 'string' ? t : t.name) === filterValue))?.color || '#3b82f6'}`,
+                                        className={`w-full bg-[#f0f2f5] dark:bg-[#202c33] border ${selectedTag ? 'border-transparent' : 'border-gray-200 dark:border-gray-700'} rounded-lg pl-9 pr-14 py-2 text-xs outline-none font-medium text-left cursor-pointer transition-all flex items-center shadow-sm relative`}
+                                        style={selectedTag ? {
+                                            boxShadow: `0 0 0 2px ${(availableTags.find(t => (typeof t === 'string' ? t : t.name) === selectedTag))?.color || '#3b82f6'}`,
                                             borderColor: 'transparent'
                                         } : {}}
                                     >
-                                        <Tag className={`w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 ${activeFilter === 'label' ? 'text-[#111b21] dark:text-[#e9edef]' : 'text-gray-400 dark:text-gray-500'}`} style={activeFilter === 'label' ? { color: (availableTags.find(t => (typeof t === 'string' ? t : t.name) === filterValue))?.color } : {}} />
-                                        <span className="flex-1 truncate text-[#111b21] dark:text-[#e9edef]">{activeFilter === 'label' ? filterValue : 'Todas las etiquetas'}</span>
+                                        <Tag className={`w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 ${selectedTag ? 'text-[#111b21] dark:text-[#e9edef]' : 'text-gray-400 dark:text-gray-500'}`} style={selectedTag ? { color: (availableTags.find(t => (typeof t === 'string' ? t : t.name) === selectedTag))?.color } : {}} />
+                                        <span className="flex-1 truncate text-[#111b21] dark:text-[#e9edef]">{selectedTag || 'Todas las etiquetas'}</span>
                                         <div className={`absolute right-2 top-1/2 -translate-y-1/2 transition-transform ${showDropdown === 'labels' ? 'rotate-180' : ''}`}>
                                             <ChevronIcon />
                                         </div>
                                     </div>
                                     
-                                    {activeFilter === 'label' && (
+                                    {selectedTag && (
                                         <button
-                                            onClick={(e) => { e.stopPropagation(); setActiveFilter(null); setFilterValue(null); }}
+                                            onClick={(e) => { e.stopPropagation(); setSelectedTag(null); }}
                                             className="absolute right-8 top-1/2 -translate-y-1/2 p-1 rounded-md bg-red-50 dark:bg-red-900/20 text-red-500 hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors shrink-0 z-10"
                                             title="Quitar filtro"
                                         >
@@ -2416,7 +2417,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                                             </div>
                                             <div className="overflow-y-auto custom-scrollbar flex-1">
                                             {!tagSearch && <div
-                                                onClick={() => { setActiveFilter(null); setFilterValue(null); setShowDropdown(null); setTagSearch(''); }}
+                                                onClick={() => { setSelectedTag(null); setShowDropdown(null); setTagSearch(''); }}
                                                 className={`px-4 py-2.5 text-xs cursor-pointer flex items-center gap-2 ${!activeFilter ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 font-bold' : 'text-[#111b21] dark:text-[#e9edef] hover:bg-[#f0f2f5] dark:hover:bg-[#111b21]'}`}
                                             >
                                                 <div className="w-3 h-3 rounded border border-gray-300 dark:border-gray-600 flex items-center justify-center">
@@ -2439,12 +2440,12 @@ export default function ChatSection({ rolePermissions, onlineUsers = [] }) {
                                                 
                                                 // Use global memoized count
                                                 const unreadCount = unreadCounts.tags[tName.trim().toLowerCase()] || 0;
-                                                const isSelected = activeFilter === 'label' && filterValue === tName;
+                                                const isSelected = selectedTag === tName;
 
                                                 return (
-                                                    <div 
+                                                    <div
                                                         key={tName}
-                                                        onClick={() => { setActiveFilter('label'); setFilterValue(tName); setShowDropdown(null); setTagSearch(''); }}
+                                                        onClick={() => { setSelectedTag(tName); setShowDropdown(null); setTagSearch(''); }}
                                                         className={`px-4 py-2.5 text-xs cursor-pointer flex items-center justify-between ${isSelected ? 'bg-indigo-50 dark:bg-indigo-900/30 text-[#111b21] dark:text-[#e9edef] font-bold' : 'text-[#111b21] dark:text-[#e9edef] hover:bg-[#f0f2f5] dark:hover:bg-[#111b21]'}`}
                                                     >
                                                         <div className="flex items-center gap-2 truncate pr-2">
