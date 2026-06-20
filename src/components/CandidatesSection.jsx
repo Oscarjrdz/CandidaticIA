@@ -247,6 +247,15 @@ const CandidatesSection = () => {
         }
     }, [hideIncomplete]);
 
+    const [showOnlyIncomplete, setShowOnlyIncomplete] = useState(() => {
+        try {
+            return localStorage.getItem('showOnlyIncompleteCandidates') === 'true';
+        } catch { return false; }
+    });
+    useEffect(() => {
+        try { localStorage.setItem('showOnlyIncompleteCandidates', showOnlyIncomplete.toString()); } catch {}
+    }, [showOnlyIncomplete]);
+
     // Pagination State
     const [currentPage, setCurrentPage] = useState(1);
     const [totalItems, setTotalItems] = useState(0);
@@ -689,6 +698,8 @@ const CandidatesSection = () => {
 
         if (!canViewIncomplete || hideIncomplete) {
             result = result.filter(c => isProfileComplete(c));
+        } else if (showOnlyIncomplete) {
+            result = result.filter(c => !isProfileComplete(c));
         }
 
         if (sortWhatsAppByDate) {
@@ -699,7 +710,7 @@ const CandidatesSection = () => {
             });
         }
         return result;
-    }, [candidates, aiFilteredCandidates, hideIncomplete, sortWhatsAppByDate]);
+    }, [candidates, aiFilteredCandidates, hideIncomplete, showOnlyIncomplete, sortWhatsAppByDate]);
 
     const totalPages = Math.ceil(totalItems / LIMIT);
 
@@ -819,6 +830,30 @@ const CandidatesSection = () => {
                                 className={`
                                     inline-block h-4 w-4 transform rounded-full bg-white transition-transform
                                     ${!hideIncomplete ? 'translate-x-6' : 'translate-x-1'}
+                                `}
+                            />
+                        </button>
+                    </div>}
+
+                    {canViewIncomplete && !hideIncomplete && <div className="flex items-center gap-2 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 px-3 py-1.5 rounded-xl shadow-sm cursor-pointer" onClick={() => setShowOnlyIncomplete(!showOnlyIncomplete)}>
+                        <div className="flex flex-col">
+                            <span className="text-[8px] font-black uppercase tracking-widest text-gray-400 leading-none">Solo</span>
+                            <span className={`text-[10px] font-bold ${showOnlyIncomplete ? 'text-amber-500' : 'text-gray-400'}`}>
+                                {showOnlyIncomplete ? 'INCOMPLETOS' : 'INCOMPLETOS'}
+                            </span>
+                        </div>
+                        <button
+                            type="button"
+                            className={`
+                                relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none
+                                ${showOnlyIncomplete ? 'bg-amber-500' : 'bg-gray-300 dark:bg-gray-600'}
+                            `}
+                            title="Mostrar solo candidatos con perfil incompleto"
+                        >
+                            <span
+                                className={`
+                                    inline-block h-4 w-4 transform rounded-full bg-white transition-transform
+                                    ${showOnlyIncomplete ? 'translate-x-6' : 'translate-x-1'}
                                 `}
                             />
                         </button>
