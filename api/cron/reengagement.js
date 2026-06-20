@@ -12,13 +12,6 @@ import { getMissingFields, FIELD_LABELS } from '../reengagement-queue.js';
 const SETTINGS_KEY = 'reengagement:settings';
 
 // ── Horario de negocio (Monterrey CST = UTC-6) ────────────────────────────────
-function isBusinessHour(startH, endH) {
-    const now = new Date();
-    // Convert UTC to CST (UTC-6)
-    const cst = new Date(now.getTime() - 6 * 3_600_000);
-    const h = cst.getUTCHours();
-    return h >= startH && h < endH;
-}
 
 // ── Selector determinista: mismo candidato → misma variante siempre ───────────
 // Usa el ID del candidato para elegir variante (no aleatorio en cada ejecución)
@@ -142,13 +135,6 @@ export default async function handler(req, res) {
 
     if (!settings?.enabled && !forceCandidateId) {
         return res.json({ success: true, skipped: 'disabled', processed: 0 });
-    }
-
-    // ── Verificar horario de negocio (omitir si es envío forzado) ────────────
-    const startH = settings?.businessHoursStart ?? 8;
-    const endH   = settings?.businessHoursEnd   ?? 20;
-    if (!forceCandidateId && !isBusinessHour(startH, endH)) {
-        return res.json({ success: true, skipped: 'outside_business_hours', processed: 0 });
     }
 
     const activeFromMs  = settings?.activeFrom ? new Date(settings.activeFrom).getTime() : 0;

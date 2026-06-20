@@ -441,29 +441,6 @@ const ReengagementPanel = () => {
                             </div>
                         </div>
 
-                        {/* Horario laboral */}
-                        <div>
-                            <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2 uppercase tracking-wider">
-                                Horario de envío (zona Monterrey)
-                            </label>
-                            <div className="flex items-center gap-3">
-                                <input
-                                    type="number" min="0" max="23"
-                                    value={draft.businessHoursStart}
-                                    onChange={e => setDraft(d => ({ ...d, businessHoursStart: Number(e.target.value) }))}
-                                    className="w-20 text-center px-2 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-sm text-gray-800 dark:text-gray-200 outline-none focus:border-blue-500"
-                                />
-                                <span className="text-gray-400 text-sm">hrs hasta</span>
-                                <input
-                                    type="number" min="0" max="23"
-                                    value={draft.businessHoursEnd}
-                                    onChange={e => setDraft(d => ({ ...d, businessHoursEnd: Number(e.target.value) }))}
-                                    className="w-20 text-center px-2 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-sm text-gray-800 dark:text-gray-200 outline-none focus:border-blue-500"
-                                />
-                                <span className="text-gray-400 text-sm">hrs</span>
-                            </div>
-                        </div>
-
                         {/* Preview de templates */}
                         <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4 space-y-4">
                             <p className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
