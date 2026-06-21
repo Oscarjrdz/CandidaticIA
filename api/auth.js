@@ -123,8 +123,8 @@ export default async function handler(req, res) {
                 return res.status(200).json({ success: true, user: { ...user, sessionToken } });
             }
 
-            // If user does NOT exist, signal frontend to proceed to Registration
-            return res.status(200).json({ success: true, newUser: true });
+            // No user found — silent reject, no registration allowed
+            return res.status(401).json({ error: 'PIN inválido o expirado' });
         }
 
         if (action === 'register') {

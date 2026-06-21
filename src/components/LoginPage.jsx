@@ -109,10 +109,9 @@ export default function LoginPage({ onLogin }) {
                     }
                 }
             } else {
-                setError(data.error || 'Código incorrecto. Intenta de nuevo.');
-                // Reset PIN on error
                 setPinDigits(['', '', '', '', '', '']);
-                pinRefs.current[0].focus();
+                setPhone('');
+                setStep('phone');
             }
         } catch (err) {
             setError('Error de conexión.');
