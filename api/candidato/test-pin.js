@@ -20,6 +20,12 @@ export default async function handler(req, res) {
         type: 'body',
         parameters: [{ type: 'text', text: String(pin) }],
       },
+      {
+        type: 'button',
+        sub_type: 'url',
+        index: '0',
+        parameters: [{ type: 'text', text: String(pin) }],
+      },
     ],
   });
 
