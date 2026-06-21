@@ -44,13 +44,13 @@ export default async function handler(req, res) {
         components: [
           {
             type: 'body',
-            parameters: [{ type: 'text', text: pin }],
+            parameters: [{ type: 'text', text: String(pin) }],
           },
           {
             type: 'button',
-            sub_type: 'copy_code',
+            sub_type: 'url',
             index: '0',
-            parameters: [{ type: 'coupon_code', coupon_code: pin }],
+            parameters: [{ type: 'text', text: String(pin) }],
           },
         ],
       });
