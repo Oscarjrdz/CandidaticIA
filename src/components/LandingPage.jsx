@@ -534,6 +534,7 @@ const LandingPage = ({ onLoginSuccess }) => {
                                                 <input
                                                     type="tel" inputMode="numeric" pattern="[0-9]*" maxLength={10} value={phone}
                                                     onChange={e => { if (loginStep === 'phone') { const v = e.target.value.replace(/\D/g,'').slice(0,10); setPhone(v); } }}
+                                                    onKeyDown={e => { if (e.key === 'Enter' && loginStep === 'phone' && phone.length === 10) handlePhoneSubmit(); }}
                                                     placeholder="10 dígitos"
                                                     readOnly={loginStep === 'pin'}
                                                     className="min-w-0 flex-1 px-3 py-2.5 text-[15px] font-semibold text-gray-800 bg-transparent border-0 appearance-none placeholder:text-gray-300 placeholder:font-normal text-center"
