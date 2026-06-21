@@ -60,7 +60,16 @@ export default async function handler(req, res) {
         const redis = (await import('./utils/storage.js')).getRedisClient();
 
         if (action === 'request-pin') {
-            // Rate limit: max 3 solicitudes por número cada 15 min
+            // Rate limit por IP: máx 10 solicitudes por hora
+            const ip = (req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'unknown').split(',')[0].trim();
+            const ipKey = `auth:ip:${ip}`;
+            const ipCount = await redis.incr(ipKey);
+            if (ipCount === 1) await redis.expire(ipKey, 3600);
+            if (ipCount > 10) {
+                return res.status(429).json({ error: 'Demasiadas solicitudes. Intenta más tarde.' });
+            }
+
+            // Rate limit por número: máx 3 solicitudes cada 15 min
             const reqKey = `auth:req:${whatsappNumber}`;
             const reqCount = await redis.incr(reqKey);
             if (reqCount === 1) await redis.expire(reqKey, 900);
