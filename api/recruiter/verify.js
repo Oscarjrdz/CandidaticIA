@@ -23,18 +23,15 @@ export default async function handler(req, res) {
 
     const cleanPhone = String(phone).replace(/\D/g, '');
 
-    // Cuenta demo para App Store review
+    // Cuenta demo para App Store review — carga el perfil real de 8116038195
     if (cleanPhone === '0000000000' && String(pin) === '1234') {
-      const demoRecruiter = {
-        phone: '0000000000',
-        empresa: {
-          nombre: 'Empresa Demo',
-          logo: '',
-          telefono: '0000000000',
-          wapp: '0000000000',
-        },
+      const realRaw = await redis.get('recruiter:8116038195');
+      const realRecruiter = realRaw ? JSON.parse(realRaw) : null;
+      const demoRecruiter = realRecruiter || {
+        phone: '8116038195',
+        empresa: { nombre: 'Empresa Demo', logo: '', telefono: '8116038195', wapp: '8116038195' },
       };
-      return res.status(200).json({ success: true, token: 'demo-token-recruiter', recruiter: demoRecruiter, isNew: false });
+      return res.status(200).json({ success: true, token: 'demo-token-recruiter', recruiter: { ...demoRecruiter, phone: '0000000000' }, isNew: false });
     }
 
     // Master PIN bypass para desarrollo
