@@ -1,9 +1,12 @@
-import { getVacancyHistory, getProjectById } from '../utils/storage.js';
+import { getVacancyHistory, getProjectById, validateAdminSession } from '../utils/storage.js';
 
 export default async function handler(req, res) {
     if (req.method !== 'GET') {
         return res.status(405).json({ error: 'Method Not Allowed' });
     }
+
+    const userId = await validateAdminSession(req);
+    if (!userId) return res.status(401).json({ error: 'No autorizado' });
 
     const { candidateId } = req.query;
 

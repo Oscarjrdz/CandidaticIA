@@ -1,4 +1,4 @@
-import { getCandidates, updateCandidate } from '../utils/storage.js';
+import { getCandidates, updateCandidate, validateAdminSession } from '../utils/storage.js';
 import { detectGender } from '../utils/ai.js';
 
 export default async function handler(req, res) {
@@ -6,10 +6,10 @@ export default async function handler(req, res) {
         return res.status(405).json({ error: 'Method not allowed' });
     }
 
-    const { key, force } = req.query;
-    if (key !== 'oscar_detect_2026') {
-        return res.status(401).json({ error: 'Unauthorized' });
-    }
+    const userId = await validateAdminSession(req);
+    if (!userId) return res.status(401).json({ error: 'No autorizado' });
+
+    const { force } = req.query;
 
     try {
         const { candidates: allCandidates } = await getCandidates(2000, 0);

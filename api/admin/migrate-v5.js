@@ -1,4 +1,4 @@
-import { getCandidates, saveCandidate, getRedisClient } from '../utils/storage.js';
+import { getCandidates, saveCandidate, getRedisClient, validateAdminSession } from '../utils/storage.js';
 
 /**
  * Titan Search v5.0 Metadata Repair Script
@@ -6,11 +6,8 @@ import { getCandidates, saveCandidate, getRedisClient } from '../utils/storage.j
  * the 'statusAudit' field injected into their JSON profile.
  */
 export default async function handler(req, res) {
-    const { secret } = req.query;
-
-    if (secret !== 'oscar-titan-repair-2024') {
-        return res.status(401).json({ error: 'No autorizado' });
-    }
+    const userId = await validateAdminSession(req);
+    if (!userId) return res.status(401).json({ error: 'No autorizado' });
 
     try {
         const client = getRedisClient();

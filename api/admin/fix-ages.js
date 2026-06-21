@@ -1,4 +1,4 @@
-import { getRedisClient } from '../utils/storage.js';
+import { getRedisClient, validateAdminSession } from '../utils/storage.js';
 
 /**
  * 🛠️ AGE FIX API (Admin Only) - TARGET DEBUG MODE
@@ -9,6 +9,9 @@ export default async function handler(req, res) {
     if (req.method !== 'GET') {
         return res.status(405).json({ error: 'Method not allowed' });
     }
+
+    const userId = await validateAdminSession(req);
+    if (!userId) return res.status(401).json({ error: 'No autorizado' });
 
     const { search } = req.query;
     const redis = getRedisClient();

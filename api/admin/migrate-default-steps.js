@@ -1,5 +1,5 @@
 
-import { getRedisClient, updateProjectSteps, getProjects } from '../../utils/storage.js';
+import { getRedisClient, updateProjectSteps, getProjects, validateAdminSession } from '../../utils/storage.js';
 
 /**
  * API Handler for Migrating Project Steps to Immutable Default Step
@@ -10,8 +10,8 @@ export default async function handler(req, res) {
         return res.status(405).json({ error: 'Method not allowed' });
     }
 
-    // Optional: Add a simple secret check if needed, or rely on admin role.
-    // const { secret } = req.query;
+    const userId = await validateAdminSession(req);
+    if (!userId) return res.status(401).json({ error: 'No autorizado' });
 
     console.log('--- 🛡️ STARTING MIGRATION (API): IMMUTABLE DEFAULT STEPS ---');
     const logs = [];

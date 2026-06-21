@@ -9,7 +9,10 @@ function normalizePhone(raw = '') {
 export default async function handler(req, res) {
     try {
         // Dynamic import to prevent boot crashes and ensure path resolution
-        const { getUsers, saveUser, deleteUser } = await import('./utils/storage.js');
+        const { getUsers, saveUser, deleteUser, validateAdminSession } = await import('./utils/storage.js');
+
+        const userId = await validateAdminSession(req);
+        if (!userId) return res.status(401).json({ error: 'No autorizado' });
 
         if (req.method === 'GET') {
             let users = await getUsers();

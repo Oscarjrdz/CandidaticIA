@@ -1,9 +1,12 @@
-import { getAITelemetry, getRedisClient } from '../utils/storage.js';
+import { getAITelemetry, getRedisClient, validateAdminSession } from '../utils/storage.js';
 
 export default async function handler(req, res) {
     if (req.method !== 'GET') {
         return res.status(405).json({ error: 'Method not allowed' });
     }
+
+    const userId = await validateAdminSession(req);
+    if (!userId) return res.status(401).json({ error: 'No autorizado' });
 
     try {
         const telemetry = await getAITelemetry();
