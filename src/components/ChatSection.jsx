@@ -1102,7 +1102,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
     // 📡 Reportar conteo RBAC exacto al padre (App.jsx) — fuente única de verdad
     useEffect(() => {
         if (loadingChats) return;
-        onUnreadCountChange?.(unreadCounts.all, unreadCounts.unreadIds);
+        onUnreadCountChange?.(unreadCounts.all);
     }, [unreadCounts.all, loadingChats]);
 
     // 🏎️ Online readers por chat — evita recalcular dentro de cada ChatRow

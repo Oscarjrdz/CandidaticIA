@@ -69,16 +69,24 @@ function AppShell() {
     const n = v1 !== null ? Number(v1) : 0;
     return n > 0 && n < 300 ? n : 0;
   });
-  const liveUnreadIds = useRef(new Set());
+  // IDs de candidatos que ya incrementaron el badge en esta "sesión fuera de Chat Web"
+  // Se limpia al entrar a Chat Web para empezar desde cero al salir
+  const awayUnreadIds = useRef(new Set());
+
+  // Al entrar a Chat Web, limpiar el dedup para que la próxima salida cuente fresco
+  useEffect(() => {
+    if (activeSection === 'chat') {
+      awayUnreadIds.current = new Set();
+    }
+  }, [activeSection]);
 
   // Cuando Chat Web está abierto, recibe el conteo RBAC exacto directo de ChatSection
-  const handleUnreadCountChange = useCallback((count, unreadIds) => {
-    liveUnreadIds.current = new Set(unreadIds);
+  const handleUnreadCountChange = useCallback((count) => {
     setChatUnreadCount(count);
     localStorage.setItem('chat_unread_rbac_v2', String(count));
   }, []);
 
-  // Cuando Chat Web NO está abierto, incrementar por SSE para candidatos nuevos
+  // Cuando Chat Web NO está abierto, incrementar por SSE — una vez por candidato por sesión
   useEffect(() => {
     const handler = (e) => {
       if (activeSection === 'chat') return;
@@ -86,8 +94,8 @@ function AppShell() {
       const updates = data?.updates || data;
       if (updates?.newMessage && updates?.messageFrom === 'user' && data?.candidateId) {
         const candidateId = data.candidateId;
-        if (liveUnreadIds.current.has(candidateId)) return;
-        liveUnreadIds.current.add(candidateId);
+        if (awayUnreadIds.current.has(candidateId)) return;
+        awayUnreadIds.current.add(candidateId);
         setChatUnreadCount(prev => {
           const next = prev + 1;
           localStorage.setItem('chat_unread_rbac_v2', String(next));
