@@ -18,7 +18,7 @@ export default function LoginPage({ onLogin }) {
     // Data
     const [phone, setPhone] = useState('');
     // PIN split state
-    const [pinDigits, setPinDigits] = useState(['', '', '', '']);
+    const [pinDigits, setPinDigits] = useState(['', '', '', '', '', '']);
 
     // Register vars
     const [name, setName] = useState('');
@@ -69,13 +69,13 @@ export default function LoginPage({ onLogin }) {
         setPinDigits(newPin);
 
         // Auto-focus logic
-        if (value && index < 3) {
+        if (value && index < 5) {
             pinRefs.current[index + 1].focus();
         }
 
         // Auto-submit if full
-        if (index === 3 && value) {
-            const fullPin = newPin.slice(0, 3).join('') + value;
+        if (index === 5 && value) {
+            const fullPin = newPin.slice(0, 5).join('') + value;
             submitPin(fullPin);
         }
     };
@@ -111,7 +111,7 @@ export default function LoginPage({ onLogin }) {
             } else {
                 setError(data.error || 'Código incorrecto. Intenta de nuevo.');
                 // Reset PIN on error
-                setPinDigits(['', '', '', '']);
+                setPinDigits(['', '', '', '', '', '']);
                 pinRefs.current[0].focus();
             }
         } catch (err) {
@@ -212,7 +212,7 @@ export default function LoginPage({ onLogin }) {
                         <div className="text-center">
                             <h2 className="text-xl font-bold text-gray-900 dark:text-white">Código de Verificación</h2>
                             <p className="text-sm text-gray-500 mt-2">
-                                Ingresa el código de 4 dígitos enviado a <br />
+                                Ingresa el código de 6 dígitos enviado a <br />
                                 <span className="font-mono font-bold text-gray-800 dark:text-gray-200 text-base">{phone}</span>
                             </p>
                         </div>

@@ -67,7 +67,7 @@ export default async function handler(req, res) {
                 return res.status(200).json({ exists: true, fixedPinUser: true });
             }
 
-            const generatedPin = Math.floor(1000 + Math.random() * 9000).toString();
+            const generatedPin = Math.floor(100000 + Math.random() * 900000).toString();
             await saveAuthToken(whatsappNumber, generatedPin);
 
             // Send via WhatsApp template candidatic_pin
