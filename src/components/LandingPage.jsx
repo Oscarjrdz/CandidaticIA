@@ -544,7 +544,7 @@ const LandingPage = ({ onLoginSuccess }) => {
                                                     <span className="pr-3 shrink-0"><CheckCircle className="w-4 h-4 text-green-500" /></span>
                                                 )}
                                                 {loginStep === 'pin' && (
-                                                    <button type="button" onClick={() => { setLoginStep('phone'); setPinDigits(['','','','']); }} className="text-xs text-violet-500 font-semibold pr-3 shrink-0 hover:underline">Cambiar</button>
+                                                    <button type="button" onClick={() => { setLoginStep('phone'); setPinDigits(['','','','','','']); }} className="text-xs text-violet-500 font-semibold pr-3 shrink-0 hover:underline">Cambiar</button>
                                                 )}
                                             </div>
 
@@ -558,7 +558,7 @@ const LandingPage = ({ onLoginSuccess }) => {
                                                                 type="tel" inputMode="numeric" pattern="[0-9]*" value={d} maxLength={1}
                                                                 onChange={e => handlePinChange(i, e.target.value)}
                                                                 onKeyDown={e => handleKeyDown(i, e)}
-                                                                className={`w-12 h-12 text-center text-xl font-bold border-2 rounded-xl outline-none transition-all ${d ? 'border-violet-500 text-violet-700 bg-violet-50' : 'border-gray-200 bg-white focus:border-violet-400 focus:ring-2 focus:ring-violet-100'}`}
+                                                                className={`w-10 h-10 text-center text-lg font-bold border-2 rounded-xl outline-none transition-all ${d ? 'border-violet-500 text-violet-700 bg-violet-50' : 'border-gray-200 bg-white focus:border-violet-400 focus:ring-2 focus:ring-violet-100'}`}
                                                                 autoFocus={i === 0}
                                                             />
                                                         ))}
@@ -636,6 +636,7 @@ const LandingPage = ({ onLoginSuccess }) => {
                                     <input
                                         type="tel" inputMode="numeric" pattern="[0-9]*" maxLength={10} value={phone}
                                         onChange={e => { if (loginStep === 'phone') { const v = e.target.value.replace(/\D/g,'').slice(0,10); setPhone(v); } }}
+                                        onKeyDown={e => { if (e.key === 'Enter' && loginStep === 'phone' && phone.length === 10) handlePhoneSubmit(); }}
                                         placeholder="10 dígitos"
                                         readOnly={loginStep === 'pin'}
                                         className="min-w-0 flex-1 px-3 py-3 text-[15px] font-semibold text-gray-800 bg-transparent border-0 appearance-none placeholder:text-gray-300 placeholder:font-normal"
@@ -646,7 +647,7 @@ const LandingPage = ({ onLoginSuccess }) => {
                                         <span className="pr-3 shrink-0"><CheckCircle className="w-4 h-4 text-green-500" /></span>
                                     )}
                                     {loginStep === 'pin' && (
-                                        <button type="button" onClick={() => { setLoginStep('phone'); setPinDigits(['','','','']); }} className="text-xs text-violet-500 font-semibold pr-3 shrink-0">Cambiar</button>
+                                        <button type="button" onClick={() => { setLoginStep('phone'); setPinDigits(['','','','','','']); }} className="text-xs text-violet-500 font-semibold pr-3 shrink-0">Cambiar</button>
                                     )}
                                 </div>
 
@@ -660,7 +661,7 @@ const LandingPage = ({ onLoginSuccess }) => {
                                                     type="tel" inputMode="numeric" pattern="[0-9]*" value={d} maxLength={1}
                                                     onChange={e => handlePinChange(i, e.target.value)}
                                                     onKeyDown={e => handleKeyDown(i, e)}
-                                                    className={`w-14 h-14 text-center text-2xl font-bold border-2 rounded-xl outline-none transition-all ${d ? 'border-violet-500 text-violet-700 bg-violet-50' : 'border-gray-200 bg-white focus:border-violet-400 focus:ring-2 focus:ring-violet-100'}`}
+                                                    className={`w-11 h-11 text-center text-xl font-bold border-2 rounded-xl outline-none transition-all ${d ? 'border-violet-500 text-violet-700 bg-violet-50' : 'border-gray-200 bg-white focus:border-violet-400 focus:ring-2 focus:ring-violet-100'}`}
                                                     autoFocus={i === 0}
                                                 />
                                             ))}
