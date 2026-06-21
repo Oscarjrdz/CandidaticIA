@@ -4,9 +4,12 @@
  * Usage: GET /api/backfill-gateway?confirm=yes
  * Delete this file after running it once.
  */
-import { getRedisClient } from './utils/storage.js';
+import { getRedisClient, validateAdminSession } from './utils/storage.js';
 
 export default async function handler(req, res) {
+    const userId = await validateAdminSession(req);
+    if (!userId) return res.status(401).json({ error: 'No autorizado' });
+
     if (req.query.confirm !== 'yes') {
         return res.status(200).json({
             message: 'Dry run. Add ?confirm=yes to execute.',

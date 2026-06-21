@@ -4,13 +4,16 @@
  * POST /api/settings { type, data }
  */
 
-import { getRedisClient } from './utils/storage.js';
+import { getRedisClient, validateAdminSession } from './utils/storage.js';
 import { DEFAULT_SYSTEM_PROMPT, DEFAULT_ASSISTANT_PROMPT } from './ai/agent.js';
 
 export default async function handler(req, res) {
     if (req.method === 'OPTIONS') {
         return res.status(200).end();
     }
+
+    const userId = await validateAdminSession(req);
+    if (!userId) return res.status(401).json({ error: 'No autorizado' });
 
     const redis = getRedisClient();
 

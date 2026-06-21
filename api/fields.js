@@ -1,4 +1,8 @@
 export default async function handler(req, res) {
+    const { validateAdminSession } = await import('./utils/storage.js');
+    const userId = await validateAdminSession(req);
+    if (!userId) return res.status(401).json({ error: 'No autorizado' });
+
     if (req.method === 'GET') {
         try {
             const { getRedisClient } = await import('./utils/storage.js');

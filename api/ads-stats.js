@@ -9,6 +9,10 @@ export default async function handler(req, res) {
         return res.status(200).end();
     }
 
+    const { validateAdminSession } = await import('./utils/storage.js');
+    const userId = await validateAdminSession(req);
+    if (!userId) return res.status(401).json({ error: 'No autorizado' });
+
     // ─── DELETE: Hide an ad from the dashboard ───────────────────────
     if (req.method === 'DELETE') {
         try {

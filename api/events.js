@@ -3,13 +3,16 @@
  * GET /api/events?limit=50&offset=0&type=message.incoming
  */
 
-import { getEvents, getEventsByType, getEventStats } from './utils/storage.js';
+import { getEvents, getEventsByType, getEventStats, validateAdminSession } from './utils/storage.js';
 
 export default async function handler(req, res) {
     // CORS preflight
     if (req.method === 'OPTIONS') {
         return res.status(200).end();
     }
+
+    const userId = await validateAdminSession(req);
+    if (!userId) return res.status(401).json({ error: 'No autorizado' });
 
     // Solo aceptar GET
     if (req.method !== 'GET') {

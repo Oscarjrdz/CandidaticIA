@@ -5,7 +5,7 @@
  * DELETE /api/timer-states (cleanup expired)
  */
 
-import { getRedisClient } from './utils/storage.js';
+import { getRedisClient, validateAdminSession } from './utils/storage.js';
 
 const TIMER_STATES_KEY = 'timer_states:green';
 const TTL_SECONDS = 86400; // 24 hours
@@ -14,6 +14,9 @@ export default async function handler(req, res) {
     if (req.method === 'OPTIONS') {
         return res.status(200).end();
     }
+
+    const userId = await validateAdminSession(req);
+    if (!userId) return res.status(401).json({ error: 'No autorizado' });
 
     const redis = getRedisClient();
 

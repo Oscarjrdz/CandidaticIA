@@ -1,4 +1,4 @@
-import { getRedisClient } from './utils/storage.js';
+import { getRedisClient, validateAdminSession } from './utils/storage.js';
 
 const REDIS_KEY = 'automation_rules';
 
@@ -110,6 +110,9 @@ function validatePattern(pattern) {
  * API Handler
  */
 export default async function handler(req, res) {
+    const userId = await validateAdminSession(req);
+    if (!userId) return res.status(401).json({ error: 'No autorizado' });
+
     const { method } = req;
     const { id } = req.query;
 

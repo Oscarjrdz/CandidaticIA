@@ -7,7 +7,7 @@
  *   internal:dm:{canonicalKey}      → list of DM messages per conversation pair
  *   internal:threads:{userId}       → set of partner IDs for this user
  */
-import { getRedisClient } from './utils/storage.js';
+import { getRedisClient, validateAdminSession } from './utils/storage.js';
 
 const BROADCAST_KEY = 'internal:broadcast';
 const MAX_BROADCAST = 100;
@@ -20,6 +20,9 @@ function canonicalKey(a, b) {
 
 export default async function handler(req, res) {
     if (req.method === 'OPTIONS') return res.status(200).end();
+
+    const userId = await validateAdminSession(req);
+    if (!userId) return res.status(401).json({ error: 'No autorizado' });
 
     const redis = getRedisClient();
     if (!redis) return res.status(500).json({ error: 'Redis unavailable' });

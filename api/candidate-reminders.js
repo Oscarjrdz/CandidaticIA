@@ -6,7 +6,7 @@
  * POST { candidateId, whatsapp, nombre, message, scheduledAt }  → crea uno
  * DELETE ?id=xxx         → cancela uno
  */
-import { getRedisClient } from './utils/storage.js';
+import { getRedisClient, validateAdminSession } from './utils/storage.js';
 
 const ZSET_KEY = 'direct_reminders';
 
@@ -16,6 +16,9 @@ function makeId() {
 
 export default async function handler(req, res) {
     if (req.method === 'OPTIONS') return res.status(200).end();
+
+    const userId = await validateAdminSession(req);
+    if (!userId) return res.status(401).json({ error: 'No autorizado' });
 
     const redis = getRedisClient();
     if (!redis) return res.status(500).json({ error: 'Redis unavailable' });

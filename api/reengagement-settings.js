@@ -2,7 +2,7 @@
  * GET  /api/reengagement-settings  — Lee config
  * POST /api/reengagement-settings  — Guarda config
  */
-import { getRedisClient } from './utils/storage.js';
+import { getRedisClient, validateAdminSession } from './utils/storage.js';
 
 const REDIS_KEY = 'reengagement:settings';
 
@@ -19,6 +19,9 @@ export const DEFAULT_SETTINGS = {
 
 export default async function handler(req, res) {
     if (req.method === 'OPTIONS') return res.status(200).end();
+
+    const userId = await validateAdminSession(req);
+    if (!userId) return res.status(401).json({ error: 'No autorizado' });
 
     const redis = getRedisClient();
     if (!redis) return res.status(500).json({ error: 'Redis unavailable' });

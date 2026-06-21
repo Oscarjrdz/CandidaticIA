@@ -8,10 +8,13 @@ export default async function handler(req, res) {
     if (!client) return res.status(500).json({ error: 'No Redis' });
 
     try {
-        const historyRaw = await client.lrange('debug:webhook_history', 0, 50);
-        const history = historyRaw.map(h => JSON.parse(h));
+        const instancePayloads = await client.lrange('debug:instance_payload_last', 0, 20);
+        const webhookPayloads = await client.lrange('debug:webhook_payload_last', 0, 20); // if exists
         
-        return res.json({ history });
+        return res.status(200).json({
+            instancePayloads: instancePayloads.map(p => JSON.parse(p)),
+            webhookPayloads: webhookPayloads.map(p => JSON.parse(p))
+        });
     } catch (e) {
         return res.status(500).json({ error: e.message });
     }

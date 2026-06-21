@@ -10,6 +10,10 @@
 export default async function handler(req, res) {
     if (req.method === 'OPTIONS') return res.status(200).end();
 
+    const { validateAdminSession } = await import('./utils/storage.js');
+    const userId = await validateAdminSession(req);
+    if (!userId) return res.status(401).json({ error: 'No autorizado' });
+
     const adsToken = process.env.META_ADS_TOKEN;
     const pageToken = process.env.META_ACCESS_TOKEN;
 
