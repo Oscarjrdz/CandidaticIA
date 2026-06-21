@@ -226,7 +226,7 @@ const LandingPage = ({ onLoginSuccess }) => {
     const [loginError, setLoginError] = useState('');
     const [phone, setPhone] = useState('');
     const [name, setName] = useState('');
-    const [pinDigits, setPinDigits] = useState(['', '', '', '']);
+    const [pinDigits, setPinDigits] = useState(['', '', '', '', '', '']);
     const pinRefs = useRef([]);
     const mobilePinRefs = useRef([]);
     const dropdownRef = useRef(null);
@@ -335,10 +335,10 @@ const LandingPage = ({ onLoginSuccess }) => {
         const newPin = [...pinDigits];
         newPin[index] = digit;
         flushSync(() => setPinDigits(newPin));
-        if (digit && index < 3) {
+        if (digit && index < 5) {
             getActivePinRef(index + 1)?.focus();
         }
-        if (digit && index === 3) submitPin(newPin.join(''));
+        if (digit && index === 5) submitPin(newPin.join(''));
     };
 
     const handleKeyDown = (index, e) => {
@@ -360,7 +360,7 @@ const LandingPage = ({ onLoginSuccess }) => {
                 else onLoginSuccess(data.user);
             } else {
                 setLoginError('Código incorrecto.');
-                setPinDigits(['', '', '', '']);
+                setPinDigits(['', '', '', '', '', '']);
                 pinRefs.current[0]?.focus();
             }
         } catch { setLoginError('Error de conexión.'); }
