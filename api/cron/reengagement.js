@@ -292,7 +292,7 @@ export default async function handler(req, res) {
                     const silenceElapsed = now - (lastMsgTs || now);
 
                     if (!forceCandidateId) {
-                        if (p2Attempts >= 3) { paso2Skipped++; continue; }
+                        if (p2Attempts >= maxAttempts) { paso2Skipped++; continue; }
                         if (silenceElapsed > maxSilenceMs) {
                             await redis.srem('paso2_waiting', candidate.id);
                             paso2Skipped++;
@@ -311,21 +311,24 @@ export default async function handler(req, res) {
                         ? firstName.charAt(0).toUpperCase() + firstName.slice(1).toLowerCase()
                         : '';
 
+                    // Rotar variante por intento: misma base de candidato, pero avanza cada reintento
+                    const p2Variant = (pickVariant(candidate.id, 3) + p2Attempts) % 3;
+
                     let p2Message;
                     if (p2Estado === 'esperando_colonia') {
                         const opts = [
-                            nombre ? `${nombre}, ¿me puedes decir en qué colonia vives? Lo necesito para validar si te queda la ruta de transporte 🚌🏘️` : `¿Me puedes decir en qué colonia vives? Lo necesito para validar si te queda la ruta de transporte 🚌🏘️`,
+                            nombre ? `${nombre}, ¿en qué colonia vives? Con eso puedo ver si te llega la ruta de transporte 🚌` : `¿En qué colonia vives? Con eso puedo ver si te llega la ruta de transporte 🚌`,
                             nombre ? `Oye ${nombre} 😊 Necesito tu colonia para ver si te conviene la ruta de camión. ¿Cuál es? 🌸` : `Necesito tu colonia para ver si te conviene la ruta de camión. ¿Cuál es? 🌸`,
-                            nombre ? `${nombre}, ¿en qué colonia vives? Con eso valido que te llegue el transporte 🌟` : `¿En qué colonia vives? Con eso valido que te llegue el transporte 🌟`,
+                            nombre ? `${nombre}, solo dime tu colonia y con eso valido el transporte 🌟 ¿Cuál es? 🏘️` : `Solo dime tu colonia y con eso valido el transporte 🌟 ¿Cuál es? 🏘️`,
                         ];
-                        p2Message = opts[pickVariant(candidate.id, 3)];
+                        p2Message = opts[p2Variant];
                     } else if (p2Estado === 'esperando_experiencia') {
                         const opts = [
                             nombre ? `${nombre}, solo falta una pregunta 😊 ¿Tienes experiencia trabajando en fábrica? 🏭` : `Solo falta una pregunta 😊 ¿Tienes experiencia trabajando en fábrica? 🏭`,
                             nombre ? `Oye ${nombre} 🌸 ¿Has trabajado antes en fábrica o producción? Sí o no está bien 😊` : `¿Has trabajado antes en fábrica o producción? Sí o no está bien 😊`,
                             nombre ? `${nombre}, ¿tienes experiencia en fábrica? 🏭 Con eso termino tu perfil ✨` : `¿Tienes experiencia en fábrica? 🏭 Con eso termino tu perfil ✨`,
                         ];
-                        p2Message = opts[pickVariant(candidate.id, 3)];
+                        p2Message = opts[p2Variant];
                     } else {
                         // esperando_meses_experiencia
                         const opts = [
@@ -333,7 +336,7 @@ export default async function handler(req, res) {
                             nombre ? `Oye ${nombre} 🌸 Solo dime cuántos meses o años tienes de experiencia en fábrica 😊` : `Solo dime cuántos meses o años tienes de experiencia en fábrica 😊`,
                             nombre ? `${nombre}, ¿más o menos cuánto tiempo tienes de experiencia en fábrica? 🏭✨` : `¿Más o menos cuánto tiempo tienes de experiencia en fábrica? 🏭✨`,
                         ];
-                        p2Message = opts[pickVariant(candidate.id, 3)];
+                        p2Message = opts[p2Variant];
                     }
 
                     await sendUltraMsgMessage(
