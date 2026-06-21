@@ -24,7 +24,7 @@ export default async function handler(req, res) {
             {
                 type: 'button',
                 sub_type: 'url',
-                index: 0,
+                index: '0',
                 parameters: [{ type: 'text', text: String(pin) }]
             }
         ]
