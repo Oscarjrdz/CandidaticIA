@@ -308,7 +308,7 @@ const LandingPage = ({ onLoginSuccess }) => {
     const cleanLogin = () => { setLoginError(''); setLoginLoading(false); };
 
     const handlePhoneSubmit = async (e) => {
-        e.preventDefault();
+        e?.preventDefault();
         cleanLogin();
         if (phone.length < 10) { setLoginError('Número inválido (10 dígitos).'); return; }
         setLoginLoading(true);
