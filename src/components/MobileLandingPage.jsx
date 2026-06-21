@@ -20,7 +20,7 @@ const MobileLandingPage = ({ onLoginSuccess }) => {
     const [loginError, setLoginError] = useState('');
     const [phone, setPhone] = useState('');
     const [name, setName] = useState('');
-    const [pinDigits, setPinDigits] = useState(['', '', '', '']);
+    const [pinDigits, setPinDigits] = useState(['', '', '', '', '', '']);
     const pinRefs = useRef([]);
 
     /* ── INFO FORM STATE ── */
@@ -63,8 +63,8 @@ const MobileLandingPage = ({ onLoginSuccess }) => {
         const newPin = [...pinDigits];
         newPin[index] = digit;
         flushSync(() => setPinDigits(newPin));
-        if (digit && index < 3) pinRefs.current[index + 1]?.focus();
-        if (digit && index === 3) submitPin(newPin.join(''));
+        if (digit && index < 5) pinRefs.current[index + 1]?.focus();
+        if (digit && index === 5) submitPin(newPin.join(''));
     };
 
     const handleKeyDown = (index, e) => {
@@ -82,7 +82,7 @@ const MobileLandingPage = ({ onLoginSuccess }) => {
             const data = await res.json();
             if (data.success && data.user) { onLoginSuccess(data.user); }
             else if (data.needsRegistration) { setLoginStep('register'); }
-            else { setLoginError(data.error || 'PIN incorrecto'); setPinDigits(['','','','']); pinRefs.current[0]?.focus(); }
+            else { setLoginError(data.error || 'PIN incorrecto'); setPinDigits(['','','','','','']); pinRefs.current[0]?.focus(); }
         } catch { setLoginError('Error de conexión'); }
         finally { setLoginLoading(false); }
     };
