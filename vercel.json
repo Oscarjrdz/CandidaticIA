@@ -87,6 +87,9 @@
         },
         "api/ai/agent.js": {
             "maxDuration": 60
+        },
+        "api/cron/reengagement.js": {
+            "maxDuration": 60
         }
     },
     "crons": [
