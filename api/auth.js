@@ -26,6 +26,7 @@ export default async function handler(req, res) {
         // DYNAMIC IMPORTS: Load modules safely inside try-catch
         const { getUsers, saveUser, saveAuthToken, getAuthToken, deleteAuthToken } = await import('./utils/storage.js');
         const { sendMessage } = await import('./utils/messenger.js');
+        const { sendMetaMessage } = await import('./whatsapp/utils.js');
 
         const { action, phone, pin, name, role } = req.body;
 
@@ -69,8 +70,15 @@ export default async function handler(req, res) {
             const generatedPin = Math.floor(1000 + Math.random() * 9000).toString();
             await saveAuthToken(whatsappNumber, generatedPin);
 
-            // Send via WhatsApp
-            const msgResult = await sendMessage(whatsappNumber, `🔐 Tu PIN de acceso Candidatic IA es: *${generatedPin}*`);
+            // Send via WhatsApp template candidatic_pin
+            const msgResult = await sendMetaMessage(whatsappNumber, 'candidatic_pin', 'template', {
+                templateName: 'candidatic_pin',
+                languageCode: 'es_MX',
+                components: [
+                    { type: 'body', parameters: [{ type: 'text', text: generatedPin }] },
+                    { type: 'button', sub_type: 'url', index: '0', parameters: [{ type: 'text', text: generatedPin }] }
+                ]
+            });
 
             if (!msgResult.success) {
                 console.warn('⚠️ Error enviando PIN:', msgResult);
