@@ -61,12 +61,6 @@ export default async function handler(req, res) {
         if (action === 'request-pin') {
             // ALWAYS Allow PIN generation for any valid number (Existing OR New)
 
-            // ⚡️ FIXED PIN BYPASS: If user has a fixedPin (or legacy pin) configured, skip SMS entirely
-            const userFixedPin = user?.fixedPin;
-            if (user && userFixedPin) {
-                return res.status(200).json({ exists: true, fixedPinUser: true });
-            }
-
             const generatedPin = Math.floor(100000 + Math.random() * 900000).toString();
             await saveAuthToken(whatsappNumber, generatedPin);
 
@@ -96,15 +90,9 @@ export default async function handler(req, res) {
         if (action === 'verify-pin') {
             const validPin = await getAuthToken(whatsappNumber);
 
-            // Check PIN validity first
+            // Check PIN validity
             if (!validPin || validPin !== pin) {
-                // Fixed PIN fallback: only if user has fixedPin explicitly set
-                const userFixedPin = user?.fixedPin;
-                if (user && userFixedPin && pin === userFixedPin) {
-                    // Allow fixed PIN login
-                } else {
-                    return res.status(401).json({ error: 'PIN inválido o expirado' });
-                }
+                return res.status(401).json({ error: 'PIN inválido o expirado' });
             }
 
             await deleteAuthToken(whatsappNumber);
