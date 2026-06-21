@@ -62,7 +62,7 @@ export default async function handler(req, res) {
             // ALWAYS Allow PIN generation for any valid number (Existing OR New)
 
             // ⚡️ FIXED PIN BYPASS: If user has a fixedPin (or legacy pin) configured, skip SMS entirely
-            const userFixedPin = user?.fixedPin || user?.pin;
+            const userFixedPin = user?.fixedPin;
             if (user && userFixedPin) {
                 return res.status(200).json({ exists: true, fixedPinUser: true });
             }
@@ -98,8 +98,8 @@ export default async function handler(req, res) {
 
             // Check PIN validity first
             if (!validPin || validPin !== pin) {
-                // Fixed PIN fallback: if user has a fixedPin (or legacy pin) configured, accept it
-                const userFixedPin = user?.fixedPin || user?.pin;
+                // Fixed PIN fallback: only if user has fixedPin explicitly set
+                const userFixedPin = user?.fixedPin;
                 if (user && userFixedPin && pin === userFixedPin) {
                     // Allow fixed PIN login
                 } else {

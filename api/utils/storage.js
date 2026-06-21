@@ -1162,7 +1162,6 @@ export const getUsers = async () => {
             id: 'user_default_admin',
             name: 'Oscar Rodriguez',
             whatsapp: adminPhone,
-            pin: '1234',
             role: 'SuperAdmin',
             status: 'Active',
             createdAt: new Date().toISOString()
@@ -1172,11 +1171,9 @@ export const getUsers = async () => {
     } else {
         // Force Active status/Role if exists
         const current = users[adminIndex];
-        // Check against 'SuperAdmin' code
-        if (current.status !== 'Active' || current.role !== 'SuperAdmin' || current.pin !== '1234') {
+        if (current.status !== 'Active' || current.role !== 'SuperAdmin') {
             users[adminIndex] = {
                 ...current,
-                pin: '1234',
                 role: 'SuperAdmin',
                 status: 'Active'
             };
