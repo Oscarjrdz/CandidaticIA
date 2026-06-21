@@ -57,9 +57,16 @@ export default async function handler(req, res) {
         // Sensitive log: do not log full user list in prod, just count
 
         const user = users.find(u => u.whatsapp === whatsappNumber);
+        const redis = (await import('./utils/storage.js')).getRedisClient();
 
         if (action === 'request-pin') {
-            // ALWAYS Allow PIN generation for any valid number (Existing OR New)
+            // Rate limit: max 3 solicitudes por número cada 15 min
+            const reqKey = `auth:req:${whatsappNumber}`;
+            const reqCount = await redis.incr(reqKey);
+            if (reqCount === 1) await redis.expire(reqKey, 900);
+            if (reqCount > 3) {
+                return res.status(429).json({ error: 'Demasiados intentos. Espera 15 minutos.' });
+            }
 
             const generatedPin = Math.floor(100000 + Math.random() * 900000).toString();
             await saveAuthToken(whatsappNumber, generatedPin);
@@ -88,13 +95,27 @@ export default async function handler(req, res) {
         }
 
         if (action === 'verify-pin') {
+            // Rate limit: max 5 intentos fallidos → bloqueo 30 min
+            const failKey = `auth:fail:${whatsappNumber}`;
+            const blocked = await redis.get(`auth:block:${whatsappNumber}`);
+            if (blocked) {
+                return res.status(429).json({ error: 'Cuenta bloqueada temporalmente. Intenta en 30 minutos.' });
+            }
+
             const validPin = await getAuthToken(whatsappNumber);
 
             // Check PIN validity
             if (!validPin || validPin !== pin) {
+                const fails = await redis.incr(failKey);
+                if (fails === 1) await redis.expire(failKey, 1800);
+                if (fails >= 5) {
+                    await redis.set(`auth:block:${whatsappNumber}`, '1', 'EX', 1800);
+                    await redis.del(failKey);
+                }
                 return res.status(401).json({ error: 'PIN inválido o expirado' });
             }
 
+            await redis.del(failKey);
             await deleteAuthToken(whatsappNumber);
 
             // If user exists, check status and login
