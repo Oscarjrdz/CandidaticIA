@@ -4226,7 +4226,7 @@ Responde ÚNICAMENTE con el número entero de meses. Si evade o no menciona ning
             } else if (p2Estado === 'esperando_experiencia') {
                 isHostMode = true;
                 // Regex-first detection: No primero para evitar falsos positivos cuando dicen "no en maquiladora"
-                const SI_RE = /\b(s[ií]|claro|sim[oó]n|simons|ya\b|yep|aj[aá]|as[ií]\s+es|por\s+supuesto|sale\b|orale\b|andale\b|va\b|pos\s+s[ií]|pues\s+s[ií]|de\s+una\b|sí\s+tuve|s[ií]\s+tengo|trabaj[eé]\s+(en\s+)?(f[aá]brica|maquila|producci[oó]n|planta|manufactura)|tuve?\s+experiencia|con\s+experiencia|he\s+trabajado\s+en|en\s+(ensamble|maquiladora|maquila|manufactura|f[aá]brica|producci[oó]n|planta|armado)|ensamble|maquiladora|operadora?)\b/i;
+                const SI_RE = /\b(s[ií]|claro|sim[oó]n|simons|ya\b|yep|aj[aá]|as[ií]\s+es|por\s+supuesto|sale\b|orale\b|andale\b|va\b|pos\s+s[ií]|pues\s+s[ií]|de\s+una\b|sí\s+tuve|s[ií]\s+tengo|algo\b|un\s+poco|poca?\b|poquita?\b|algo\s+de|un\s+ratito?\b|trabaj[eé]\s+(en\s+)?(f[aá]brica|maquila|producci[oó]n|planta|manufactura)|tuve?\s+experiencia|con\s+experiencia|he\s+trabajado\s+en|en\s+(ensamble|maquiladora|maquila|manufactura|f[aá]brica|producci[oó]n|planta|armado)|ensamble|maquiladora|operadora?)\b/i;
                 const NO_RE = /\b(no\b|nop|nope|tampoco|nunca|jam[aá]s|sin\s+experiencia|no\s+tengo|no\s+tuve|no\s+he\s+trabajado)\b/i;
 
                 // Pre-chequeo para acentuados que \b no detecta bien en JS
