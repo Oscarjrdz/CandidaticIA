@@ -906,13 +906,15 @@ const CandidatesSection = () => {
 
                                 {/* Calendar range picker */}
                                 <div className="relative mb-1.5" ref={calRef}>
-                                    <button
-                                        onClick={() => { setCalOpen(o => !o); setPickStep('from'); setPendingFrom(null); }}
-                                        className="w-full flex items-center justify-between gap-1 border border-gray-200 dark:border-gray-600 rounded-lg px-2 py-1 bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors text-[10px] text-gray-600 dark:text-gray-300"
-                                    >
-                                        <span className="font-medium">{fmtCalLabel(dailyFrom)} – {fmtCalLabel(dailyTo)}</span>
-                                        <CalendarDays className="w-3 h-3 text-gray-400 flex-shrink-0" />
-                                    </button>
+                                    <div className="flex items-center justify-between border border-gray-200 dark:border-gray-600 rounded-lg px-2 py-1 bg-gray-50 dark:bg-gray-700">
+                                        <span className="text-[10px] font-medium text-gray-600 dark:text-gray-300">{fmtCalLabel(dailyFrom)} – {fmtCalLabel(dailyTo)}</span>
+                                        <button
+                                            onClick={() => { setCalOpen(o => !o); setPickStep('from'); setPendingFrom(null); }}
+                                            className="p-0.5 rounded hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                                        >
+                                        <CalendarDays className="w-3.5 h-3.5 text-gray-400 hover:text-indigo-500 transition-colors" />
+                                        </button>
+                                    </div>
 
                                     {calOpen && (() => {
                                         const firstDay = new Date(calYear, calMonth, 1).getDay(); // 0=Sun
