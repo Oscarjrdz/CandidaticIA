@@ -922,7 +922,7 @@ const CandidatesSection = () => {
                                         for (let d = 1; d <= daysInMonth; d++) cells.push(d);
 
                                         return (
-                                            <div className="absolute top-full mt-1 left-1/2 -translate-x-1/2 z-50 bg-white dark:bg-gray-800 rounded-xl shadow-2xl border border-gray-100 dark:border-gray-700 p-3 w-56">
+                                            <div className="absolute top-full mt-1 right-0 z-50 bg-white dark:bg-gray-800 rounded-xl shadow-2xl border border-gray-100 dark:border-gray-700 p-3 w-56">
                                                 {/* Month nav */}
                                                 <div className="flex items-center justify-between mb-2">
                                                     <button onClick={() => { if (calMonth === 0) { setCalMonth(11); setCalYear(y => y-1); } else setCalMonth(m => m-1); }} className="p-0.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700"><ChevronLeft className="w-3.5 h-3.5 text-gray-500" /></button>
