@@ -31,7 +31,7 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: 'Fechas inválidas' });
     }
 
-    const candidates = await getCandidates();
+    const { candidates } = await getCandidates(10000);
 
     // Group candidates by their Monterrey-timezone date — string comparison, no UTC confusion
     const counts = {};
