@@ -894,27 +894,23 @@ const CandidatesSection = () => {
 
                             {/* Card 5: Candidatos por día */}
                             <div className="bg-white dark:bg-gray-800 p-3 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm flex flex-col min-h-0">
-                                {/* Header */}
-                                <div className="flex items-center justify-between mb-1.5">
+                                {/* Header + calendar icon */}
+                                <div className="flex items-center justify-between mb-2">
                                     <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">Capturas por día</span>
-                                    {dailyStats && (
-                                        <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 px-1.5 py-px rounded-full whitespace-nowrap">
-                                            {dailyStats.total.toLocaleString()} · {dailyStats.days.length === 7 ? 'últ. 7 días' : `${dailyStats.days.length} días`}
-                                        </span>
-                                    )}
-                                </div>
-
-                                {/* Calendar range picker */}
-                                <div className="relative mb-1.5" ref={calRef}>
-                                    <div className="flex items-center justify-between border border-gray-200 dark:border-gray-600 rounded-lg px-2 py-1 bg-gray-50 dark:bg-gray-700">
-                                        <span className="text-[10px] font-medium text-gray-600 dark:text-gray-300">{fmtCalLabel(dailyFrom)} – {fmtCalLabel(dailyTo)}</span>
-                                        <button
-                                            onClick={() => { setCalOpen(o => !o); setPickStep('from'); setPendingFrom(null); }}
-                                            className="p-0.5 rounded hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
-                                        >
-                                        <CalendarDays className="w-3.5 h-3.5 text-gray-400 hover:text-indigo-500 transition-colors" />
-                                        </button>
-                                    </div>
+                                    <div className="flex items-center gap-1.5">
+                                        {dailyStats && (
+                                            <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 px-1.5 py-px rounded-full whitespace-nowrap">
+                                                {dailyStats.total.toLocaleString()} · {dailyStats.days.length === 7 ? 'últ. 7 días' : `${dailyStats.days.length} días`}
+                                            </span>
+                                        )}
+                                        <div className="relative" ref={calRef}>
+                                            <button
+                                                onClick={() => { setCalOpen(o => !o); setPickStep('from'); setPendingFrom(null); }}
+                                                className="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                                                title={`${fmtCalLabel(dailyFrom)} – ${fmtCalLabel(dailyTo)}`}
+                                            >
+                                                <CalendarDays className="w-3.5 h-3.5 text-gray-400 hover:text-indigo-500 transition-colors" />
+                                            </button>
 
                                     {calOpen && (() => {
                                         const firstDay = new Date(calYear, calMonth, 1).getDay(); // 0=Sun
@@ -965,6 +961,8 @@ const CandidatesSection = () => {
                                             </div>
                                         );
                                     })()}
+                                        </div>
+                                    </div>
                                 </div>
 
                                 {/* Bar chart — fills remaining height */}
