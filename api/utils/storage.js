@@ -1101,6 +1101,8 @@ export const updateCandidate = async (id, data) => {
                     await redisAtomic.incr('stats:bot:unread_v2').catch(() => {});
                     await redisAtomic.sadd(KEYS.CANDIDATES_UNREAD, id).catch(() => {});
                 }
+                // Broadcast updated unread count to all SSE clients immediately
+                _publishGlobalStats(redisAtomic).catch(() => {});
             }
         }
     }

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, Suspense, useCallback } from 'react';
+import React, { useState, useEffect, Suspense, useCallback } from 'react';
 import { Moon, Sun, Menu } from 'lucide-react';
 import Sidebar from './components/Sidebar';
 import LoadingOverlay from './components/ui/LoadingOverlay';
@@ -11,6 +11,7 @@ import { AuthProvider, useAuthContext } from './contexts/AuthContext';
 import { getTheme, saveTheme } from './utils/storage';
 import { usePresence } from './hooks/usePresence';
 import InternalChat from './components/InternalChat';
+import { useCandidatesSSE } from './hooks/useCandidatesSSE';
 
 // ⚡ React.lazy with auto-retry on stale chunk errors (post-deploy cache mismatch)
 // If a dynamic import fails (e.g. old chunk hash no longer exists), reload the page ONCE
@@ -62,50 +63,21 @@ function AppShell() {
   const [isMobile, setIsMobile] = useState(false);
 
   // Conteo de no-leídos — fuente única de verdad para el badge de Chat Web
-  const [chatUnreadCount, setChatUnreadCount] = useState(() => {
-    const v2 = localStorage.getItem('chat_unread_rbac_v2');
-    if (v2 !== null) return Number(v2);
-    const v1 = localStorage.getItem('chat_unread_rbac');
-    const n = v1 !== null ? Number(v1) : 0;
-    return n > 0 && n < 300 ? n : 0;
-  });
-  // IDs de candidatos que ya incrementaron el badge en esta "sesión fuera de Chat Web"
-  // Se limpia al entrar a Chat Web para empezar desde cero al salir
-  const awayUnreadIds = useRef(new Set());
+  const [chatUnreadCount, setChatUnreadCount] = useState(0);
+  const { globalStats } = useCandidatesSSE();
 
-  // Al entrar a Chat Web, limpiar el dedup para que la próxima salida cuente fresco
+  // Fuera de Chat Web: badge viene de globalStats.unread (Redis, tiempo real via SSE Pub/Sub)
+  // Dentro de Chat Web: ChatSection reporta el conteo RBAC exacto via onUnreadCountChange
   useEffect(() => {
-    if (activeSection === 'chat') {
-      awayUnreadIds.current = new Set();
+    if (activeSection !== 'chat' && globalStats?.unread !== undefined) {
+      setChatUnreadCount(globalStats.unread);
     }
-  }, [activeSection]);
+  }, [globalStats?.unread, activeSection]);
 
   // Cuando Chat Web está abierto, recibe el conteo RBAC exacto directo de ChatSection
   const handleUnreadCountChange = useCallback((count) => {
     setChatUnreadCount(count);
-    localStorage.setItem('chat_unread_rbac_v2', String(count));
   }, []);
-
-  // Incrementar badge por SSE — una vez por candidato por "sesión fuera de Chat Web"
-  // Cuando Chat Web está abierto, ChatSection corrige al conteo RBAC exacto vía onUnreadCountChange
-  useEffect(() => {
-    const handler = (e) => {
-      const data = e.detail;
-      const updates = data?.updates || data;
-      if (updates?.newMessage && updates?.messageFrom === 'user' && data?.candidateId) {
-        const candidateId = data.candidateId;
-        if (awayUnreadIds.current.has(candidateId)) return;
-        awayUnreadIds.current.add(candidateId);
-        setChatUnreadCount(prev => {
-          const next = prev + 1;
-          localStorage.setItem('chat_unread_rbac_v2', String(next));
-          return next;
-        });
-      }
-    };
-    window.addEventListener('sse:candidate:update', handler);
-    return () => window.removeEventListener('sse:candidate:update', handler);
-  }, [activeSection]);
 
   // Resize listener for mobile viewport detection
   useEffect(() => {
