@@ -1110,9 +1110,10 @@ export const updateCandidate = async (id, data) => {
 
     const saved = await saveCandidate(updated);
     
-    // Fire SSE so the dashboard updates the candidate profile (e.g. AI extraction) instantly
+    // Fire SSE — include statusAudit so the green dot updates instantly on the frontend
     import('./sse-notify.js').then(({ notifyCandidateUpdate }) => {
-        notifyCandidateUpdate(id, data).catch(() => {});
+        const ssePayload = updated.statusAudit ? { ...data, statusAudit: updated.statusAudit } : data;
+        notifyCandidateUpdate(id, ssePayload).catch(() => {});
     }).catch(() => {});
     
     return saved;
