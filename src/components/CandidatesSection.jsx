@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Users, Search, Trash2, RefreshCw, User, MessageCircle, Clock, Loader2, CheckCircle, Sparkles, Send, Zap, Ban, GripVertical, Tag, ChevronDown, X, Pencil, Plus, AlertTriangle, TrendingUp } from 'lucide-react';
+import { Users, Search, Trash2, RefreshCw, User, MessageCircle, Clock, Loader2, CheckCircle, Sparkles, Send, Zap, Ban, GripVertical, Tag, ChevronDown, ChevronLeft, ChevronRight, X, Pencil, Plus, AlertTriangle, TrendingUp, CalendarDays } from 'lucide-react';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, horizontalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -267,6 +267,19 @@ const CandidatesSection = () => {
     const [dailyFrom, setDailyFrom] = useState(() => mtyDaysAgo(6));
     const [dailyTo, setDailyTo] = useState(mtyToday);
     const [dailyLoading, setDailyLoading] = useState(false);
+    const [calOpen, setCalOpen] = useState(false);
+    const [calYear, setCalYear] = useState(() => new Date().getFullYear());
+    const [calMonth, setCalMonth] = useState(() => new Date().getMonth());
+    const [pickStep, setPickStep] = useState('from'); // 'from' | 'to'
+    const [pendingFrom, setPendingFrom] = useState(null);
+    const calRef = useRef(null);
+
+    useEffect(() => {
+        if (!calOpen) return;
+        const handler = (e) => { if (calRef.current && !calRef.current.contains(e.target)) setCalOpen(false); };
+        document.addEventListener('mousedown', handler);
+        return () => document.removeEventListener('mousedown', handler);
+    }, [calOpen]);
 
     const fetchDailyStats = async (from, to) => {
         setDailyLoading(true);
@@ -275,6 +288,28 @@ const CandidatesSection = () => {
             if (res.ok) setDailyStats(await res.json());
         } catch {}
         finally { setDailyLoading(false); }
+    };
+
+    const handleCalDayClick = (ymd) => {
+        if (pickStep === 'from') {
+            setPendingFrom(ymd);
+            setPickStep('to');
+        } else {
+            const from = pendingFrom <= ymd ? pendingFrom : ymd;
+            const to   = pendingFrom <= ymd ? ymd : pendingFrom;
+            setDailyFrom(from);
+            setDailyTo(to);
+            setPickStep('from');
+            setPendingFrom(null);
+            setCalOpen(false);
+            fetchDailyStats(from, to);
+        }
+    };
+
+    const fmtCalLabel = (ymd) => {
+        if (!ymd) return '';
+        const d = new Date(ymd + 'T12:00:00.000Z');
+        return d.toLocaleDateString('es-MX', { day: 'numeric', month: 'short', timeZone: 'America/Monterrey' });
     };
 
     useEffect(() => { fetchDailyStats(dailyFrom, dailyTo); }, []);
@@ -858,63 +893,101 @@ const CandidatesSection = () => {
                             </div>
 
                             {/* Card 5: Candidatos por día */}
-                            <div className="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm flex flex-col">
-                                <div className="flex items-center justify-between mb-2">
+                            <div className="bg-white dark:bg-gray-800 p-3 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm flex flex-col min-h-0">
+                                {/* Header */}
+                                <div className="flex items-center justify-between mb-1.5">
                                     <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">Capturas por día</span>
                                     {dailyStats && (
-                                        <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 px-1.5 py-px rounded-full">
-                                            {dailyStats.total.toLocaleString()} total
+                                        <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 px-1.5 py-px rounded-full whitespace-nowrap">
+                                            {dailyStats.total.toLocaleString()} · {dailyStats.days.length === 7 ? 'últ. 7 días' : `${dailyStats.days.length} días`}
                                         </span>
                                     )}
                                 </div>
 
-                                {/* Date range picker */}
-                                <div className="flex items-center gap-1 mb-2">
-                                    <input
-                                        type="date"
-                                        value={dailyFrom}
-                                        max={dailyTo}
-                                        onChange={e => setDailyFrom(e.target.value)}
-                                        className="flex-1 text-[9px] border border-gray-200 dark:border-gray-600 rounded-md px-1 py-0.5 bg-gray-50 dark:bg-gray-700 text-gray-700 dark:text-gray-300 min-w-0"
-                                    />
-                                    <span className="text-[9px] text-gray-400">–</span>
-                                    <input
-                                        type="date"
-                                        value={dailyTo}
-                                        min={dailyFrom}
-                                        onChange={e => setDailyTo(e.target.value)}
-                                        className="flex-1 text-[9px] border border-gray-200 dark:border-gray-600 rounded-md px-1 py-0.5 bg-gray-50 dark:bg-gray-700 text-gray-700 dark:text-gray-300 min-w-0"
-                                    />
+                                {/* Calendar range picker */}
+                                <div className="relative mb-1.5" ref={calRef}>
                                     <button
-                                        onClick={() => fetchDailyStats(dailyFrom, dailyTo)}
-                                        disabled={dailyLoading}
-                                        className="flex-shrink-0 bg-indigo-500 hover:bg-indigo-600 text-white rounded-md px-1.5 py-0.5 text-[9px] font-bold transition-colors disabled:opacity-50"
+                                        onClick={() => { setCalOpen(o => !o); setPickStep('from'); setPendingFrom(null); }}
+                                        className="w-full flex items-center justify-between gap-1 border border-gray-200 dark:border-gray-600 rounded-lg px-2 py-1 bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors text-[10px] text-gray-600 dark:text-gray-300"
                                     >
-                                        {dailyLoading ? '…' : 'Buscar'}
+                                        <span className="font-medium">{fmtCalLabel(dailyFrom)} – {fmtCalLabel(dailyTo)}</span>
+                                        <CalendarDays className="w-3 h-3 text-gray-400 flex-shrink-0" />
                                     </button>
+
+                                    {calOpen && (() => {
+                                        const firstDay = new Date(calYear, calMonth, 1).getDay(); // 0=Sun
+                                        const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
+                                        const today = mtyToday();
+                                        const MONTHS_ES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+                                        const cells = [];
+                                        for (let i = 0; i < firstDay; i++) cells.push(null);
+                                        for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+
+                                        return (
+                                            <div className="absolute top-full mt-1 left-1/2 -translate-x-1/2 z-50 bg-white dark:bg-gray-800 rounded-xl shadow-2xl border border-gray-100 dark:border-gray-700 p-3 w-56">
+                                                {/* Month nav */}
+                                                <div className="flex items-center justify-between mb-2">
+                                                    <button onClick={() => { if (calMonth === 0) { setCalMonth(11); setCalYear(y => y-1); } else setCalMonth(m => m-1); }} className="p-0.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700"><ChevronLeft className="w-3.5 h-3.5 text-gray-500" /></button>
+                                                    <span className="text-[11px] font-bold text-gray-700 dark:text-gray-200">{MONTHS_ES[calMonth]} {calYear}</span>
+                                                    <button onClick={() => { if (calMonth === 11) { setCalMonth(0); setCalYear(y => y+1); } else setCalMonth(m => m+1); }} className="p-0.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700"><ChevronRight className="w-3.5 h-3.5 text-gray-500" /></button>
+                                                </div>
+                                                {/* Day labels */}
+                                                <div className="grid grid-cols-7 mb-1">
+                                                    {['D','L','M','M','J','V','S'].map((d,i) => <span key={i} className="text-center text-[9px] text-gray-400 font-semibold">{d}</span>)}
+                                                </div>
+                                                {/* Day cells */}
+                                                <div className="grid grid-cols-7 gap-y-0.5">
+                                                    {cells.map((d, i) => {
+                                                        if (!d) return <span key={i} />;
+                                                        const ymd = `${calYear}-${String(calMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+                                                        const isFrom = ymd === (pendingFrom || dailyFrom);
+                                                        const isTo = !pendingFrom && ymd === dailyTo;
+                                                        const inRange = !pendingFrom && ymd > dailyFrom && ymd < dailyTo;
+                                                        const isPending = pendingFrom && ymd === pendingFrom;
+                                                        const isToday = ymd === today;
+                                                        return (
+                                                            <button key={i} onClick={() => handleCalDayClick(ymd)}
+                                                                className={`text-[10px] h-6 w-full rounded transition-colors font-medium
+                                                                    ${isFrom || isTo || isPending ? 'bg-indigo-500 text-white' :
+                                                                      inRange ? 'bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300' :
+                                                                      isToday ? 'text-indigo-500 font-bold' :
+                                                                      'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'}`}>
+                                                                {d}
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
+                                                {pickStep === 'to' && (
+                                                    <p className="text-[9px] text-indigo-500 text-center mt-2">Selecciona la fecha final</p>
+                                                )}
+                                            </div>
+                                        );
+                                    })()}
                                 </div>
 
-                                {/* Bar chart */}
-                                <div className="flex-1 flex items-end gap-px min-h-0" style={{ height: '52px' }}>
+                                {/* Bar chart — fills remaining height */}
+                                <div className="flex-1 flex items-end gap-px min-h-0">
                                     {dailyLoading ? (
                                         <div className="w-full flex items-center justify-center">
                                             <Loader2 className="w-4 h-4 animate-spin text-gray-300" />
                                         </div>
                                     ) : dailyStats?.days?.length ? (() => {
                                         const max = Math.max(...dailyStats.days.map(d => d.count), 1);
+                                        const showLabels = dailyStats.days.length <= 31;
                                         return dailyStats.days.map((day) => (
-                                            <div key={day.date} className="flex-1 flex flex-col items-center justify-end gap-px min-w-0 group/bar relative" style={{ height: '100%' }}>
-                                                {/* Tooltip */}
+                                            <div key={day.date} className="flex-1 flex flex-col items-center justify-end min-w-0 group/bar relative h-full">
                                                 <div className="absolute bottom-full mb-1 left-1/2 -translate-x-1/2 bg-gray-800 dark:bg-gray-600 text-white text-[8px] rounded px-1 py-0.5 whitespace-nowrap opacity-0 group-hover/bar:opacity-100 pointer-events-none transition-opacity z-10">
                                                     {day.count} · {day.label}
                                                 </div>
-                                                <div
-                                                    className="w-full rounded-t-sm bg-indigo-400 dark:bg-indigo-500 group-hover/bar:bg-indigo-500 dark:group-hover/bar:bg-indigo-400 transition-colors"
-                                                    style={{ height: `${Math.max((day.count / max) * 100, day.count > 0 ? 4 : 0)}%` }}
-                                                />
-                                                {dailyStats.days.length <= 14 && (
-                                                    <span className="text-[7px] text-gray-400 dark:text-gray-500 leading-none truncate w-full text-center">
-                                                        {day.label.replace(/\.\s*\d+/, '').slice(0, 3)}
+                                                <div className="w-full flex flex-col justify-end" style={{ height: '100%' }}>
+                                                    <div
+                                                        className="w-full rounded-t-sm bg-indigo-400 dark:bg-indigo-500 group-hover/bar:bg-indigo-600 transition-colors"
+                                                        style={{ height: `${Math.max((day.count / max) * 100, day.count > 0 ? 3 : 0)}%` }}
+                                                    />
+                                                </div>
+                                                {showLabels && (
+                                                    <span className="text-[7px] text-gray-400 dark:text-gray-500 leading-none truncate w-full text-center mt-px">
+                                                        {day.label.replace(/\.\s*/, ' ').slice(0, 5)}
                                                     </span>
                                                 )}
                                             </div>
