@@ -4260,13 +4260,41 @@ Responde ÚNICAMENTE con el número entero de meses. Si evade o no menciona ning
                     responseTextVal = `¡Listo${p2CloseName}! 🌟 Ya tengo todo lo que necesitaba.[MSG_SPLIT]Deja termino de subir tu información al sistema y te contacto para darte más info de la vacante 🌸✨[MSG_SPLIT]🙏 porfi no desesperes si tardo un poquito en contactarte, ok cuídate y platicamos pronto 😊`;
                     await MediaEngine.sendCongratsPack(config, candidateData.whatsapp, 'bot_paso2_sticker', candidateId);
                 } else if (expResult === 'Sí') {
-                    // Con experiencia — preguntar cuánto tiempo
                     candidateUpdates.experiencia = 'Sí';
-                    candidateUpdates.paso2Estado = 'esperando_meses_experiencia';
-                    const _expQ = p2FirstName
-                        ? `Perfecto ${p2FirstName} 🌟 ¿y cuánto tiempo más o menos tienes de experiencia en fábrica? 😮[MSG_SPLIT]Un aproximado ${p2FirstName} no tiene que ser tan exacto 😅`
-                        : `Perfecto 🌟 ¿y cuánto tiempo más o menos tienes de experiencia en fábrica? 😮[MSG_SPLIT]Un aproximado, no tiene que ser tan exacto 😅`;
-                    responseTextVal = _expQ;
+
+                    // Intentar extraer duración del mismo mensaje antes de preguntar
+                    const DURATION_INLINE_RE = /\b(\d+)\s*(a[ñn]os?|meses?|semanas?|d[ií]as?)\b|\b(un|una|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|once|doce|quince|veinte)\s+(a[ñn]os?|meses?|semanas?)\b|a[ñn]o\s+y\s+medio/i;
+                    let mesesInline = null;
+                    if (DURATION_INLINE_RE.test(aggregatedText)) {
+                        try {
+                            const mesesGpt = await getOpenAIResponse(
+                                [{ from: 'user', content: aggregatedText }],
+                                `El candidato respondió cuánto tiempo lleva trabajando en fábrica. Convierte su respuesta a número de meses enteros.\nEjemplos: "2 años" → 24, "6 meses" → 6, "año y medio" → 18, "3 semanas" → 1, "10 días" → 1, "un año" → 12, "poco más de un año" → 14, "5 años" → 60.\nResponde ÚNICAMENTE con el número entero de meses. Si evade o no menciona ningún tiempo, responde null.`,
+                                modelAvanzado,
+                                activeAiConfig.openaiApiKey
+                            );
+                            const mesesRaw = (mesesGpt?.content || '').trim();
+                            const parsed = parseInt(mesesRaw, 10);
+                            if (!isNaN(parsed) && parsed > 0) mesesInline = parsed;
+                        } catch (_e) { /* fall through to ask */ }
+                    }
+
+                    if (mesesInline !== null) {
+                        // Duración capturada en el mismo mensaje — cerrar paso 2 sin preguntar
+                        candidateUpdates.meses = mesesInline;
+                        candidateUpdates.paso2Estado = 'completo';
+                        await redis?.srem('paso2_waiting', candidateId);
+                        const p2CloseName = p2FirstName ? `, ${p2FirstName}` : '';
+                        responseTextVal = `¡Listo${p2CloseName}! 🌟 Ya tengo todo lo que necesitaba.[MSG_SPLIT]Deja termino de subir tu información al sistema y te contacto para darte más info de la vacante 🌸✨[MSG_SPLIT]🙏 porfi no desesperes si tardo un poquito en contactarte, ok cuídate y platicamos pronto 😊`;
+                        await MediaEngine.sendCongratsPack(config, candidateData.whatsapp, 'bot_paso2_sticker', candidateId);
+                    } else {
+                        // Duración no detectada — preguntar
+                        candidateUpdates.paso2Estado = 'esperando_meses_experiencia';
+                        const _expQ = p2FirstName
+                            ? `Perfecto ${p2FirstName} 🌟 ¿y cuánto tiempo más o menos tienes de experiencia en fábrica? 😮[MSG_SPLIT]Un aproximado ${p2FirstName} no tiene que ser tan exacto 😅`
+                            : `Perfecto 🌟 ¿y cuánto tiempo más o menos tienes de experiencia en fábrica? 😮[MSG_SPLIT]Un aproximado, no tiene que ser tan exacto 😅`;
+                        responseTextVal = _expQ;
+                    }
                 } else {
                     // Evasion — persuade
                     const evasionSys = `${promptAvanzado ? promptAvanzado + '\n\n' : ''}Eres Brenda Rodríguez, reclutadora de Candidatic. El candidato evadió la pregunta sobre experiencia en fábrica. Tu misión es reconocer lo que dijo con calidez y redirigirlo con mucha persuasión a responder si tiene o no experiencia en fábrica/maquiladora. Genera 2 burbujas con [MSG_SPLIT]. Sin markdown. Sin inventar datos.\n[ADN]: ${JSON.stringify(cleanAdnBase)}`;
