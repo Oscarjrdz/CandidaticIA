@@ -63,7 +63,12 @@ function _connectSingleton() {
     if (_singletonES) return; // Already connected
 
     try {
-        const eventSource = new EventSource('/api/sse/candidates');
+        let token = '';
+        try {
+            const raw = localStorage.getItem('candidatic_user_session');
+            token = raw ? (JSON.parse(raw)?.sessionToken || '') : '';
+        } catch {}
+        const eventSource = new EventSource(`/api/sse/candidates?token=${encodeURIComponent(token)}`);
         _singletonES = eventSource;
 
         eventSource.onopen = () => {

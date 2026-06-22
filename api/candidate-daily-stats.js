@@ -1,9 +1,9 @@
-import { getCandidates, validateAdminSession } from './utils/storage.js';
+import { getCandidates, validateAdminSession, getRedisClient } from './utils/storage.js';
 
 const TZ = 'America/Monterrey';
+const HASH_KEY = 'stats:daily:captures';
 
 function toMtyDate(isoString) {
-    // Returns 'YYYY-MM-DD' in Monterrey timezone
     return new Date(isoString).toLocaleDateString('sv-SE', { timeZone: TZ });
 }
 
@@ -12,10 +12,21 @@ function todayMty() {
 }
 
 function addDays(ymdStr, n) {
-    // Add n days to a YYYY-MM-DD string without timezone issues (use noon UTC)
     const d = new Date(ymdStr + 'T12:00:00.000Z');
     d.setUTCDate(d.getUTCDate() + n);
     return d.toLocaleDateString('sv-SE', { timeZone: TZ });
+}
+
+function buildDayArray(fromStr, toStr, counts) {
+    const days = [];
+    let cur = fromStr;
+    while (cur <= toStr) {
+        const d = new Date(cur + 'T12:00:00.000Z');
+        const label = d.toLocaleDateString('es-MX', { timeZone: TZ, weekday: 'short', day: 'numeric' });
+        days.push({ date: cur, label, count: parseInt(counts[cur] || 0) });
+        cur = addDays(cur, 1);
+    }
+    return days;
 }
 
 export default async function handler(req, res) {
@@ -27,38 +38,36 @@ export default async function handler(req, res) {
     const toStr   = req.query.to   || todayMty();
     const fromStr = req.query.from || addDays(toStr, -6);
 
-    if (fromStr > toStr) {
-        return res.status(400).json({ error: 'Fechas inválidas' });
+    if (fromStr > toStr) return res.status(400).json({ error: 'Fechas inválidas' });
+
+    const redis = getRedisClient();
+
+    // Fast path: Redis hash O(1) per field — populated by saveCandidate + backfill
+    if (redis) {
+        try {
+            const hash = await redis.hgetall(HASH_KEY);
+            if (hash && Object.keys(hash).length > 0) {
+                const days = buildDayArray(fromStr, toStr, hash);
+                const total = days.reduce((s, d) => s + d.count, 0);
+                return res.status(200).json({ days, total, from: fromStr, to: toStr, source: 'hash' });
+            }
+        } catch {}
     }
 
+    // Fallback: full scan (used until backfill is run once)
     const { candidates } = await getCandidates(10000);
-
-    // Group candidates by their Monterrey-timezone date — string comparison, no UTC confusion
     const counts = {};
     for (const c of candidates) {
         const raw = c.createdAt || c.primerContacto;
         if (!raw) continue;
         try {
-            const key = toMtyDate(raw); // YYYY-MM-DD in Monterrey
+            const key = toMtyDate(raw);
             if (key < fromStr || key > toStr) continue;
             counts[key] = (counts[key] || 0) + 1;
         } catch {}
     }
 
-    // Build contiguous day array from fromStr to toStr
-    const days = [];
-    let cur = fromStr;
-    while (cur <= toStr) {
-        const d = new Date(cur + 'T12:00:00.000Z');
-        const label = d.toLocaleDateString('es-MX', {
-            timeZone: TZ,
-            weekday: 'short',
-            day: 'numeric',
-        });
-        days.push({ date: cur, label, count: counts[cur] || 0 });
-        cur = addDays(cur, 1);
-    }
-
+    const days = buildDayArray(fromStr, toStr, counts);
     const total = days.reduce((s, d) => s + d.count, 0);
-    return res.status(200).json({ days, total, from: fromStr, to: toStr });
+    return res.status(200).json({ days, total, from: fromStr, to: toStr, source: 'scan' });
 }

@@ -724,6 +724,13 @@ export const saveCandidate = async (candidate) => {
     // If the incoming object is missing these fields but Redis already has them,
     // the Redis value wins — prevents any race condition from silently wiping them.
     const client = getRedisClient();
+
+    // Track new candidates for daily stats (O(1) EXISTS check)
+    let _isNewCandidate = false;
+    if (client && candidate.id) {
+        try { _isNewCandidate = !(await client.exists(`${KEYS.CANDIDATE_PREFIX}${candidate.id}`)); } catch {}
+    }
+
     if (client && candidate.id && (!candidate.lastUserMessageAt || !candidate.primerContacto || !candidate.mensajesTotales)) {
         try {
             const existing = await client.get(`${KEYS.CANDIDATE_PREFIX}${candidate.id}`);
@@ -744,6 +751,17 @@ export const saveCandidate = async (candidate) => {
     // [SIN TANTO ROLLO] Atomic Status Sync
     const enriched = await syncCandidateStats(candidate.id, candidate);
     const finalCandidate = enriched || candidate;
+
+    // Increment daily captures hash for new candidates (used by /api/candidate-daily-stats)
+    if (_isNewCandidate && client) {
+        const rawDate = finalCandidate.createdAt || finalCandidate.primerContacto;
+        if (rawDate) {
+            try {
+                const dateKey = new Date(rawDate).toLocaleDateString('sv-SE', { timeZone: 'America/Monterrey' });
+                await client.hincrby('stats:daily:captures', dateKey, 1);
+            } catch {}
+        }
+    }
 
     // Sort by Last Message (Desc) or Creation Time
     const score = new Date(finalCandidate.ultimoMensaje || finalCandidate.primerContacto || Date.now()).getTime();

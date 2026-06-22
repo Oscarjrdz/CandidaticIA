@@ -17,10 +17,24 @@ export const config = {
 export default async function handler(req, res) {
     if (req.method !== 'GET') return res.status(405).send('Method not allowed');
 
+    // Auth: EventSource can't send headers, so token comes as query param
+    const token = req.query.token?.trim();
+    const redis = getRedisClient();
+    const userId = token && redis ? await redis.get(`session:admin:${token}`) : null;
+    if (!userId) {
+        res.status(401).end();
+        return;
+    }
+
+    // Restrict CORS to own domain only
+    const origin = req.headers.origin || '';
+    const allowedOrigin = origin.includes('candidatic') || origin.includes('localhost')
+        ? origin
+        : `https://${req.headers.host || ''}`;
+    res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache, no-transform');
     res.setHeader('Connection', 'keep-alive');
-    res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('X-Accel-Buffering', 'no');
 
     const sendEvent = (data) => {

@@ -314,6 +314,22 @@ const CandidatesSection = () => {
 
     useEffect(() => { fetchDailyStats(dailyFrom, dailyTo); }, []);
 
+    // SSE: increment today's bar when a new candidate arrives (no fetch needed)
+    useEffect(() => {
+        const handler = () => {
+            const today = mtyToday();
+            setDailyStats(prev => {
+                if (!prev) return prev;
+                const days = prev.days.map(d =>
+                    d.date === today ? { ...d, count: d.count + 1 } : d
+                );
+                return { ...prev, days, total: prev.total + 1 };
+            });
+        };
+        window.addEventListener('sse:candidate:new', handler);
+        return () => window.removeEventListener('sse:candidate:new', handler);
+    }, []);
+
     // Pagination State
     const [currentPage, setCurrentPage] = useState(1);
     const [totalItems, setTotalItems] = useState(0);
