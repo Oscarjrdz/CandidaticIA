@@ -17,37 +17,36 @@ export const config = {
 export default async function handler(req, res) {
     if (req.method !== 'GET') return res.status(405).send('Method not allowed');
 
-    // Auth: EventSource can't send headers, so token comes as query param
-    const token = req.query.token?.trim();
-    const redis = getRedisClient();
-    const userId = token && redis ? await redis.get(`session:admin:${token}`) : null;
-    if (!userId) {
-        res.status(401).end();
-        return;
-    }
-
-    // Restrict CORS to own domain only
-    const origin = req.headers.origin || '';
-    const allowedOrigin = origin.includes('candidatic') || origin.includes('localhost')
-        ? origin
-        : `https://${req.headers.host || ''}`;
-    res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
+    // SSE headers must be sent immediately — streaming breaks if we delay for auth
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache, no-transform');
     res.setHeader('Connection', 'keep-alive');
+    res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('X-Accel-Buffering', 'no');
 
     const sendEvent = (data) => {
         res.write(`data: ${JSON.stringify(data)}\n\n`);
     };
 
+    // Auth: validate token after headers are set (required for Vercel streaming)
+    const token = req.query.token?.trim();
+    const redis = getRedisClient();
+    let userId = null;
+    try {
+        userId = token && redis ? await redis.get(`session:admin:${token}`) : null;
+    } catch (_e) { /* Redis error — treat as unauthorized */ }
+
+    if (!userId) {
+        sendEvent({ type: 'unauthorized' });
+        res.end();
+        return;
+    }
+
     sendEvent({ type: 'connected', timestamp: new Date().toISOString() });
 
     const keepAliveInterval = setInterval(() => {
         res.write(': ping\n\n');
     }, 30000);
-
-    const redis = getRedisClient();
     
     // 🚀 NEW: Dedicated subscriber client for Real-Time Pub/Sub
     let subscriber = null;

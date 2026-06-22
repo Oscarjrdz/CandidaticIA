@@ -81,7 +81,16 @@ function _connectSingleton() {
             try {
                 const data = JSON.parse(event.data);
 
-                if (data.type === 'connected') {
+                if (data.type === 'unauthorized') {
+                    console.warn('🔒 SSE: token inválido, reconectando con token fresco...');
+                    eventSource.close();
+                    _singletonES = null;
+                    // Small delay then reconnect — fresh token read from localStorage
+                    if (_subscriberCount > 0) {
+                        setTimeout(() => { if (_subscriberCount > 0) _connectSingleton(); }, 800);
+                    }
+                    return;
+                } else if (data.type === 'connected') {
                     console.log('📡 SSE connection established (singleton)');
                 } else if (data.type === 'candidate:new') {
                     console.log('🆕 New candidate via SSE:', data.data);
