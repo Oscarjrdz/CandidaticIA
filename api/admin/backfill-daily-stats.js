@@ -25,12 +25,13 @@ export default async function handler(req, res) {
         } catch { skipped++; }
     }
 
-    // Atomic replace: delete old hash, write new one in pipeline
+    // Atomic replace: delete old hash, write new one in pipeline, set initialized marker
     const pipeline = redis.pipeline();
     pipeline.del(HASH_KEY);
     for (const [date, count] of Object.entries(counts)) {
         pipeline.hset(HASH_KEY, date, count);
     }
+    pipeline.set('stats:daily:captures:initialized', '1');
     await pipeline.exec();
 
     return res.status(200).json({

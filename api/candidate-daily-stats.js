@@ -44,11 +44,12 @@ export default async function handler(req, res) {
 
     const redis = getRedisClient();
 
-    // Fast path: Redis hash O(1) per field — populated by saveCandidate + backfill
+    // Fast path: Redis hash — only after backfill has run (marker key set)
     if (redis) {
         try {
-            const hash = await redis.hgetall(HASH_KEY);
-            if (hash && Object.keys(hash).length > 0) {
+            const initialized = await redis.exists('stats:daily:captures:initialized');
+            if (initialized) {
+                const hash = await redis.hgetall(HASH_KEY) || {};
                 const days = buildDayArray(fromStr, toStr, hash);
                 const total = days.reduce((s, d) => s + d.count, 0);
                 return res.status(200).json({ days, total, from: fromStr, to: toStr, source: 'hash' });
@@ -56,7 +57,7 @@ export default async function handler(req, res) {
         } catch {}
     }
 
-    // Fallback: full scan (used until backfill is run once)
+    // Fallback: full scan (used until backfill is run once via POST /api/admin/backfill-daily-stats)
     const { candidates } = await getCandidates(10000);
     const counts = {};
     for (const c of candidates) {
