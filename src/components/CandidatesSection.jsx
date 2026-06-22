@@ -1003,7 +1003,7 @@ const CandidatesSection = () => {
                                                 </div>
                                                 {showLabels && (
                                                     <span className="text-[7px] text-gray-400 dark:text-gray-500 leading-none truncate w-full text-center mt-px">
-                                                        {day.label.replace(/\.\s*/, ' ').slice(0, 5)}
+                                                        {day.label}
                                                     </span>
                                                 )}
                                             </div>

@@ -22,7 +22,9 @@ function buildDayArray(fromStr, toStr, counts) {
     let cur = fromStr;
     while (cur <= toStr) {
         const d = new Date(cur + 'T12:00:00.000Z');
-        const label = d.toLocaleDateString('es-MX', { timeZone: TZ, weekday: 'short', day: 'numeric' });
+        const wd = d.toLocaleDateString('es-MX', { timeZone: TZ, weekday: 'short' }).replace('.', '').slice(0, 2);
+        const dayNum = parseInt(cur.split('-')[2]);
+        const label = `${wd} ${dayNum}`;
         days.push({ date: cur, label, count: parseInt(counts[cur] || 0) });
         cur = addDays(cur, 1);
     }
