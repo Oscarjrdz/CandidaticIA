@@ -1,4 +1,4 @@
-import React, { useState, useEffect, Suspense, useCallback } from 'react';
+import React, { useState, useEffect, useRef, Suspense, useCallback } from 'react';
 import { Moon, Sun, Menu } from 'lucide-react';
 import Sidebar from './components/Sidebar';
 import LoadingOverlay from './components/ui/LoadingOverlay';
@@ -63,21 +63,32 @@ function AppShell() {
   const [isMobile, setIsMobile] = useState(false);
 
   // Conteo de no-leídos — fuente única de verdad para el badge de Chat Web
-  const [chatUnreadCount, setChatUnreadCount] = useState(0);
-  const { globalStats } = useCandidatesSSE();
-
-  // Fuera de Chat Web: badge viene de globalStats.unread (Redis, tiempo real via SSE Pub/Sub)
-  // Dentro de Chat Web: ChatSection reporta el conteo RBAC exacto via onUnreadCountChange
-  useEffect(() => {
-    if (activeSection !== 'chat' && globalStats?.unread !== undefined) {
-      setChatUnreadCount(globalStats.unread);
-    }
-  }, [globalStats?.unread, activeSection]);
+  const [chatUnreadCount, setChatUnreadCount] = useState(() => {
+    const saved = localStorage.getItem('chat_unread_rbac_v2');
+    return saved !== null ? Number(saved) : 0;
+  });
+  const { newCandidate } = useCandidatesSSE();
 
   // Cuando Chat Web está abierto, recibe el conteo RBAC exacto directo de ChatSection
   const handleUnreadCountChange = useCallback((count) => {
     setChatUnreadCount(count);
+    localStorage.setItem('chat_unread_rbac_v2', String(count));
   }, []);
+
+  // Candidato nuevo = siempre no-leído: incrementar badge si estamos fuera de Chat Web
+  const prevNewCandidateId = useRef(null);
+  useEffect(() => {
+    if (!newCandidate?.id) return;
+    if (newCandidate.id === prevNewCandidateId.current) return;
+    prevNewCandidateId.current = newCandidate.id;
+    if (activeSection !== 'chat') {
+      setChatUnreadCount(prev => {
+        const next = prev + 1;
+        localStorage.setItem('chat_unread_rbac_v2', String(next));
+        return next;
+      });
+    }
+  }, [newCandidate, activeSection]);
 
   // Resize listener for mobile viewport detection
   useEffect(() => {
