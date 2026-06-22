@@ -58,7 +58,10 @@ export default async function handler(req, res) {
                 try {
                     const update = JSON.parse(message);
                     const eventType = update.type || 'candidate:update';
-                    sendEvent({ type: eventType, data: update });
+                    // stats:global already has flat {total,complete,pending} in update.data
+                    // — unwrap to match runPoll() format so frontend reads it correctly
+                    const payload = eventType === 'stats:global' ? update.data : update;
+                    sendEvent({ type: eventType, data: payload });
                 } catch (err) {
                     console.error('SSE Pub/Sub parse error:', err);
                 }
