@@ -256,6 +256,29 @@ const CandidatesSection = () => {
         try { localStorage.setItem('showOnlyIncompleteCandidates', showOnlyIncomplete.toString()); } catch {}
     }, [showOnlyIncomplete]);
 
+    // Daily stats card
+    const todayStr = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Monterrey' });
+    const sevenDaysAgo = () => {
+        const d = new Date();
+        d.setDate(d.getDate() - 6);
+        return d.toLocaleDateString('sv-SE', { timeZone: 'America/Monterrey' });
+    };
+    const [dailyStats, setDailyStats] = useState(null);
+    const [dailyFrom, setDailyFrom] = useState(sevenDaysAgo);
+    const [dailyTo, setDailyTo] = useState(todayStr);
+    const [dailyLoading, setDailyLoading] = useState(false);
+
+    const fetchDailyStats = async (from, to) => {
+        setDailyLoading(true);
+        try {
+            const res = await fetch(`/api/candidate-daily-stats?from=${from}&to=${to}`);
+            if (res.ok) setDailyStats(await res.json());
+        } catch {}
+        finally { setDailyLoading(false); }
+    };
+
+    useEffect(() => { fetchDailyStats(dailyFrom, dailyTo); }, []);
+
     // Pagination State
     const [currentPage, setCurrentPage] = useState(1);
     const [totalItems, setTotalItems] = useState(0);
@@ -734,7 +757,7 @@ const CandidatesSection = () => {
             <div className="flex-none space-y-4">
 
                 {/* 📊 Live Dashboard - Zuckerberg Style */}
-                <div className="grid grid-cols-4 gap-4">
+                <div className="grid grid-cols-5 gap-4">
                     {isInitialLoading ? (
                         <>
                             <CardSkeleton />
@@ -816,7 +839,7 @@ const CandidatesSection = () => {
                                 </div>
                             </div>
 
-                            {/* Card 3: Outgoing Messages */}
+                            {/* Card 4: Outgoing Messages */}
                             <div className="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm relative overflow-hidden group">
                                 <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
                                     <Send className="w-16 h-16 text-purple-500 transform rotate-6" />
@@ -831,6 +854,74 @@ const CandidatesSection = () => {
                                             <Sparkles className="w-3 h-3 mr-0.5" /> AI & Manual
                                         </span>
                                     </div>
+                                </div>
+                            </div>
+
+                            {/* Card 5: Candidatos por día */}
+                            <div className="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm flex flex-col">
+                                <div className="flex items-center justify-between mb-2">
+                                    <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">Capturas por día</span>
+                                    {dailyStats && (
+                                        <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 px-1.5 py-px rounded-full">
+                                            {dailyStats.total.toLocaleString()} total
+                                        </span>
+                                    )}
+                                </div>
+
+                                {/* Date range picker */}
+                                <div className="flex items-center gap-1 mb-2">
+                                    <input
+                                        type="date"
+                                        value={dailyFrom}
+                                        max={dailyTo}
+                                        onChange={e => setDailyFrom(e.target.value)}
+                                        className="flex-1 text-[9px] border border-gray-200 dark:border-gray-600 rounded-md px-1 py-0.5 bg-gray-50 dark:bg-gray-700 text-gray-700 dark:text-gray-300 min-w-0"
+                                    />
+                                    <span className="text-[9px] text-gray-400">–</span>
+                                    <input
+                                        type="date"
+                                        value={dailyTo}
+                                        min={dailyFrom}
+                                        onChange={e => setDailyTo(e.target.value)}
+                                        className="flex-1 text-[9px] border border-gray-200 dark:border-gray-600 rounded-md px-1 py-0.5 bg-gray-50 dark:bg-gray-700 text-gray-700 dark:text-gray-300 min-w-0"
+                                    />
+                                    <button
+                                        onClick={() => fetchDailyStats(dailyFrom, dailyTo)}
+                                        disabled={dailyLoading}
+                                        className="flex-shrink-0 bg-indigo-500 hover:bg-indigo-600 text-white rounded-md px-1.5 py-0.5 text-[9px] font-bold transition-colors disabled:opacity-50"
+                                    >
+                                        {dailyLoading ? '…' : 'Buscar'}
+                                    </button>
+                                </div>
+
+                                {/* Bar chart */}
+                                <div className="flex-1 flex items-end gap-px min-h-0" style={{ height: '52px' }}>
+                                    {dailyLoading ? (
+                                        <div className="w-full flex items-center justify-center">
+                                            <Loader2 className="w-4 h-4 animate-spin text-gray-300" />
+                                        </div>
+                                    ) : dailyStats?.days?.length ? (() => {
+                                        const max = Math.max(...dailyStats.days.map(d => d.count), 1);
+                                        return dailyStats.days.map((day) => (
+                                            <div key={day.date} className="flex-1 flex flex-col items-center justify-end gap-px min-w-0 group/bar relative" style={{ height: '100%' }}>
+                                                {/* Tooltip */}
+                                                <div className="absolute bottom-full mb-1 left-1/2 -translate-x-1/2 bg-gray-800 dark:bg-gray-600 text-white text-[8px] rounded px-1 py-0.5 whitespace-nowrap opacity-0 group-hover/bar:opacity-100 pointer-events-none transition-opacity z-10">
+                                                    {day.count} · {day.label}
+                                                </div>
+                                                <div
+                                                    className="w-full rounded-t-sm bg-indigo-400 dark:bg-indigo-500 group-hover/bar:bg-indigo-500 dark:group-hover/bar:bg-indigo-400 transition-colors"
+                                                    style={{ height: `${Math.max((day.count / max) * 100, day.count > 0 ? 4 : 0)}%` }}
+                                                />
+                                                {dailyStats.days.length <= 14 && (
+                                                    <span className="text-[7px] text-gray-400 dark:text-gray-500 leading-none truncate w-full text-center">
+                                                        {day.label.replace(/\.\s*\d+/, '').slice(0, 3)}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        ));
+                                    })() : (
+                                        <div className="w-full flex items-center justify-center text-[10px] text-gray-300 dark:text-gray-600">Sin datos</div>
+                                    )}
                                 </div>
                             </div>
                         </>
