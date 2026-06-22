@@ -86,10 +86,10 @@ function AppShell() {
     localStorage.setItem('chat_unread_rbac_v2', String(count));
   }, []);
 
-  // Cuando Chat Web NO está abierto, incrementar por SSE — una vez por candidato por sesión
+  // Incrementar badge por SSE — una vez por candidato por "sesión fuera de Chat Web"
+  // Cuando Chat Web está abierto, ChatSection corrige al conteo RBAC exacto vía onUnreadCountChange
   useEffect(() => {
     const handler = (e) => {
-      if (activeSection === 'chat') return;
       const data = e.detail;
       const updates = data?.updates || data;
       if (updates?.newMessage && updates?.messageFrom === 'user' && data?.candidateId) {

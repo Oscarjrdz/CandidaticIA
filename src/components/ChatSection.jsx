@@ -1291,6 +1291,8 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
                         updated.ultimoMensajeBot = patch.lastBotMessageAt;
                     }
                     if (patch.unreadMsgCount !== undefined) updated.unreadMsgCount = patch.unreadMsgCount;
+                    // lastHumanMessageAt drives checkIfUnread — must stay in sync with Redis
+                    if (patch.lastHumanMessageAt !== undefined) updated.lastHumanMessageAt = patch.lastHumanMessageAt;
                     return updated;
                 }));
             } else if (patch.lastUserMessageAt || patch.ultimoMensaje) {
@@ -1323,6 +1325,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
                         updated.unreadMsgCount = (updated.unreadMsgCount || 0) + 1;
                     }
                     if (patch.unreadMsgCount !== undefined) updated.unreadMsgCount = patch.unreadMsgCount;
+                    if (patch.lastHumanMessageAt !== undefined) updated.lastHumanMessageAt = patch.lastHumanMessageAt;
                     return updated;
                 });
             }
