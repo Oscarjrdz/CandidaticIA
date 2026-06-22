@@ -257,15 +257,15 @@ const CandidatesSection = () => {
     }, [showOnlyIncomplete]);
 
     // Daily stats card
-    const todayStr = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Monterrey' });
-    const sevenDaysAgo = () => {
-        const d = new Date();
-        d.setDate(d.getDate() - 6);
+    const mtyToday = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Monterrey' });
+    const mtyDaysAgo = (n) => {
+        const d = new Date(mtyToday() + 'T12:00:00.000Z');
+        d.setUTCDate(d.getUTCDate() - n);
         return d.toLocaleDateString('sv-SE', { timeZone: 'America/Monterrey' });
     };
     const [dailyStats, setDailyStats] = useState(null);
-    const [dailyFrom, setDailyFrom] = useState(sevenDaysAgo);
-    const [dailyTo, setDailyTo] = useState(todayStr);
+    const [dailyFrom, setDailyFrom] = useState(() => mtyDaysAgo(6));
+    const [dailyTo, setDailyTo] = useState(mtyToday);
     const [dailyLoading, setDailyLoading] = useState(false);
 
     const fetchDailyStats = async (from, to) => {
