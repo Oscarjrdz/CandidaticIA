@@ -893,7 +893,7 @@ const CandidatesSection = () => {
                             </div>
 
                             {/* Card 5: Candidatos por día */}
-                            <div className="bg-white dark:bg-gray-800 p-3 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm flex flex-col min-h-0">
+                            <div className="bg-white dark:bg-gray-800 p-3 pb-2 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm flex flex-col" style={{ minHeight: '130px' }}>
                                 {/* Header + calendar icon */}
                                 <div className="flex items-center justify-between mb-2">
                                     <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">Capturas por día</span>
@@ -966,7 +966,7 @@ const CandidatesSection = () => {
                                 </div>
 
                                 {/* Bar chart — fills remaining height */}
-                                <div className="flex-1 flex items-end gap-px min-h-0">
+                                <div className="flex-1 flex items-end gap-px" style={{ minHeight: '80px' }}>
                                     {dailyLoading ? (
                                         <div className="w-full flex items-center justify-center">
                                             <Loader2 className="w-4 h-4 animate-spin text-gray-300" />
