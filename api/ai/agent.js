@@ -4556,6 +4556,18 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
                             });
                         }
                         responseTextVal = formatRecruiterMessage(aiResult.response_text, candidateData, { extractedCategoria: aiResult.extracted_data?.categoria });
+
+                        // ── NUEVO CANDIDATO: forzar 2 burbujas si GPT no usó [MSG_SPLIT] ──
+                        // La pregunta del dato faltante siempre va sola en la segunda burbuja.
+                        if (isNewFlag && responseTextVal && !responseTextVal.includes('[MSG_SPLIT]')) {
+                            const _nameQRe = /(¿[Mm]e\s+(?:puedes?\s+)?(?:compartir|dar|decir)|¿[Cc]u[aá]l\s+es\s+tu\s+nombre|¿[Cc][oó]mo\s+te\s+llamas|¿[Mm]e\s+(?:dices?|dices?\s+tu)|¿[Pp]uedes?\s+(?:decirme|compartir)|¿[Mm]e\s+lo\s+compartes?|dime\s+tu\s+nombre|comparte\s+tu\s+nombre)/i;
+                            const _qMatch = responseTextVal.match(_nameQRe);
+                            if (_qMatch && _qMatch.index > 15) {
+                                const _p1 = responseTextVal.substring(0, _qMatch.index).trim().replace(/[,\s]+$/, '.');
+                                const _p2 = responseTextVal.substring(_qMatch.index).trim();
+                                if (_p1 && _p2) responseTextVal = `${_p1}[MSG_SPLIT]${_p2}`;
+                            }
+                        }
                     } catch (err) {
                         console.error('[GPT BRAIN] JSON Parse Fail:', err.message);
                         throw new Error('GPT returned invalid JSON');
