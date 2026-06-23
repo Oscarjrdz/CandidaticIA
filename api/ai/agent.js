@@ -4462,7 +4462,7 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
                                 .replace('{{faltantes}}', auditForMode.missingLabels.join(', '))
                                 .replace(/{{categorias}}/g, maskedCategoriesList)
                                 .replace(/\[LISTA DE CATEGORÍAS\]/g, maskedCategoriesList);
-                            systemInstruction += `\n[MISION: BIENVENIDA CON PREGUNTA]: Es el primer mensaje. Preséntate en UNA SOLA ORACIÓN como Brenda Rodríguez de Candidatic (NO termines la frase en "Lic."). Luego responde brevemente la pregunta del candidato con info real. Al final pide el dato faltante: ${auditForMode.missingLabels[0]}.\n${cerebro1Rules}\n`;
+                            systemInstruction += `\n[MISION: BIENVENIDA CON PREGUNTA]: Es el primer mensaje. OBLIGATORIO usar [MSG_SPLIT] para dividir en DOS burbujas: Burbuja 1 = preséntate en UNA SOLA ORACIÓN como Brenda Rodríguez de Candidatic (NO termines en "Lic.") + responde brevemente la pregunta con info real. Burbuja 2 = pide ÚNICAMENTE el dato faltante: ${auditForMode.missingLabels[0]} — con emoji. Ejemplo de formato: "¡Hola! Soy Brenda Rodríguez... [respuesta breve].[MSG_SPLIT]¿Me compartes tu Nombre y Apellidos completos? 😊"\n${cerebro1Rules}\n`;
                         } else {
                             systemInstruction += `\n[MISION: BIENVENIDA]: Es el inicio. Preséntate en UNA SOLA ORACIÓN como Brenda Rodríguez de Candidatic (NO termines la frase en "Lic."). Luego en otra línea pide el Nombre Y Apellidos completos del candidato — siempre incluye al menos un emoji en esa segunda línea. ✨🌸\n`;
                         }
