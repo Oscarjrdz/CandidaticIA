@@ -464,7 +464,7 @@ export const getCandidates = async (limit = 100, offset = 0, search = '', exclud
                 const c = JSON.parse(res);
                 
                 // 1. Tag Filter
-                if (tagFilter && (!Array.isArray(c.tags) || !c.tags.includes(tagFilter))) continue;
+                if (tagFilter && (!Array.isArray(c.tags) || !c.tags.some(t => (typeof t === 'string' ? t : (t?.name || '')).trim().toLowerCase() === tagFilter.trim().toLowerCase()))) continue;
                 
                 // 2. Exclusion Filter (Linked profiles or incomplete profiles)
                 // ✅ META AUDIT: Check projectId inline instead of external hash lookup

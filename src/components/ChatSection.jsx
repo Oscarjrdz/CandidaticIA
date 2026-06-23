@@ -966,7 +966,10 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
             }
 
             if (activeFilter === 'unread' && !checkIfUnread(c)) return false;
-            if (selectedTag && !(Array.isArray(c?.tags) && c.tags.includes(selectedTag))) return false;
+            if (selectedTag && !(Array.isArray(c?.tags) && c.tags.some(t => {
+                const n = typeof t === 'string' ? t : (t?.name || '');
+                return n.trim().toLowerCase() === selectedTag.trim().toLowerCase();
+            }))) return false;
             if (activeFilter === 'profile') {
                 const isComplete = isProfileComplete(c);
                 if (filterValue === 'complete' && !isComplete) return false;
