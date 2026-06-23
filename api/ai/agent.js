@@ -4681,6 +4681,25 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
                     }
                 }
 
+                // ── ESCOLARIDAD SAFETY NET (early, before finalAudit) ─────────────
+                // If GPT failed to extract escolaridad but the user's message contains a
+                // known keyword, save it now so finalAudit / paso 2 see the correct state.
+                if (!candidateUpdates.escolaridad && !candidateData.escolaridad) {
+                    const _ESC_EARLY = [
+                        [/\b(primaria|prima|prim)\b/i, 'Primaria'],
+                        [/\b(secundaria|secund|secu|sec)\b/i, 'Secundaria'],
+                        [/\b(preparatoria|bachillerato|prepa|prep|cbetis|cbtis|conalep|cecyte|cetis)\b/i, 'Preparatoria'],
+                        [/\b(licenciatura|licenc|lic|ingenier[ií]a)\b/i, 'Licenciatura'],
+                        [/\b(universidad|uni|itesm|tec de monterrey|uanl|udem)\b/i, 'Licenciatura'],
+                        [/\b(t[eé]cnic[ao]|tecnica|tecnico|carrera t[eé]cnica)\b/i, 'Técnica'],
+                        [/\b(posgrado|maestr[ií]a|maestria|doctorado|mba)\b/i, 'Posgrado']
+                    ];
+                    const _msgLower = aggregatedText.toLowerCase();
+                    for (const [_pat, _nivel] of _ESC_EARLY) {
+                        if (_pat.test(_msgLower)) { candidateUpdates.escolaridad = _nivel; break; }
+                    }
+                }
+
                 // Guardrail Pass
                 const freshAudit = auditProfile({ ...candidateData, ...candidateUpdates }, customFields);
                 const guardContext = {
@@ -4806,7 +4825,7 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
         // strip the closing phrase and append the question for the next missing field.
         // SKIP if isNowComplete — profile was just finished this turn and closing is intentional.
         if (responseTextVal && auditForMode && auditForMode.missingLabels && auditForMode.missingLabels.length > 0 && !isNowComplete) {
-            const _CLOSING_RE = /(?:te contactar[eé]|te escribir[eé]|nos\s+vemos|¡hasta\s+(luego|pronto|la\s+próxima)|¡bye|¡chao|te\s+aviso\s+pronto|pronto\s+un\s+reclutador|estaremos\s+en\s+contacto|listo\s+por\s+hoy|eso\s+es\s+todo\s+por\s+ahora)/i;
+            const _CLOSING_RE = /(?:te contactar[eé]|te escribir[eé]|nos\s+vemos|¡hasta\s+(luego|pronto|la\s+próxima)|¡bye|¡chao|te\s+aviso\s+pronto|pronto\s+un\s+reclutador|estaremos?\s+en\s+contacto|listo\s+por\s+hoy|eso\s+es\s+todo\s+por\s+ahora|te\s+agradezco\s+tu\s+paciencia|te\s+agradecer[eé]\s+tu\s+paciencia)/i;
             if (_CLOSING_RE.test(responseTextVal)) {
                 // Remove the closing sentence
                 responseTextVal = responseTextVal
