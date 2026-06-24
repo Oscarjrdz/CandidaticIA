@@ -1746,7 +1746,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
 
     const injectVacancy = (vac) => {
         if (!vac || !vac.messageDescription) return;
-        messageInputRef.current?.injectText(`💼 *Información sobre: ${vac.name}*\n\n${vac.messageDescription}`);
+        messageInputRef.current?.injectText(`*${vac.name}*\n\n${vac.messageDescription}`);
         setShowDropdown(null);
     };
 
