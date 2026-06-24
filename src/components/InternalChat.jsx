@@ -74,6 +74,7 @@ export default function InternalChat({ onlineUsers = [] }) {
     const inputRef = useRef(null);
     // Stable refs so SSE handler never has stale closures
     const myIdRef = useRef(null);
+    const myIdAltRef = useRef(null);
     const openRef = useRef(false);
     const clearedAtRef = useRef(localStorage.getItem('internalChatClearedAt') || null);
 
@@ -84,8 +85,9 @@ export default function InternalChat({ onlineUsers = [] }) {
         setMessages([]);
     }, []);
 
-    const myId = user?.whatsapp;
+    const myId = user?.whatsapp || user?.id;
     myIdRef.current = myId;
+    myIdAltRef.current = user?.id || user?.whatsapp;
     openRef.current = open;
 
     // Others online (excluding self)
@@ -170,15 +172,17 @@ export default function InternalChat({ onlineUsers = [] }) {
         const handle = (e) => {
             const msg = e.detail;
             const me = myIdRef.current;
+            const meAlt = myIdAltRef.current;
             if (!me || !msg?.id) return;
 
-            const relevant = msg.to === 'all' || msg.from === me || msg.to === me;
+            const isMe = (v) => v && (v === me || v === meAlt);
+            const relevant = msg.to === 'all' || isMe(msg.from) || isMe(msg.to);
             if (!relevant) return;
             if (clearedAtRef.current && (msg.timestamp || '') < clearedAtRef.current) return;
 
             setMessages(prev => mergeMessages(prev, msg));
 
-            if (msg.from !== me && !openRef.current) {
+            if (!isMe(msg.from) && !openRef.current) {
                 setUnread(u => u + 1);
                 playNotificationSound();
                 setPulsing(true);
