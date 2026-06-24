@@ -122,6 +122,8 @@ function _connectSingleton() {
                     window.dispatchEvent(new CustomEvent('sse:internal:message', { detail: data.data }));
                 } else if (data.type === 'internal:status') {
                     window.dispatchEvent(new CustomEvent('sse:internal:status', { detail: data.data }));
+                } else if (data.type === 'internal:reaction') {
+                    window.dispatchEvent(new CustomEvent('sse:internal:reaction', { detail: data.data }));
                 }
             } catch (parseError) {
                 console.error('SSE parse error:', parseError);

@@ -64,15 +64,18 @@ export default async function handler(req, res) {
         // Sort ascending by timestamp
         all.sort((a, b) => (a.timestamp || '').localeCompare(b.timestamp || ''));
 
-        // Fetch statuses separately (stored outside the message JSON)
+        // Fetch statuses and reactions separately
         if (all.length > 0) {
-            const stPipe = redis.pipeline();
-            all.forEach(m => stPipe.get(`internal:status:${m.id}`));
-            const stResults = await stPipe.exec();
+            const metaPipe = redis.pipeline();
+            all.forEach(m => metaPipe.get(`internal:status:${m.id}`));
+            all.forEach(m => metaPipe.hgetall(`internal:reactions:${m.id}`));
+            const metaResults = await metaPipe.exec();
+            const half = all.length;
             all.forEach((m, i) => {
-                const s = stResults[i]?.[1];
+                const s = metaResults[i]?.[1];
                 if (s) m.status = s;
                 else if (!m.status) m.status = 'sent';
+                m.reactions = metaResults[half + i]?.[1] || {};
             });
         }
 
@@ -129,9 +132,29 @@ export default async function handler(req, res) {
     }
 
     if (req.method === 'PATCH') {
-        const { msgId, status } = req.body;
-        if (!msgId || !['delivered', 'read'].includes(status))
-            return res.status(400).json({ error: 'Invalid params' });
+        const { msgId, action, status, userId, emoji } = req.body;
+        if (!msgId) return res.status(400).json({ error: 'Missing msgId' });
+
+        if (action === 'react') {
+            if (!userId) return res.status(400).json({ error: 'Missing userId' });
+            const rKey = `internal:reactions:${msgId}`;
+            if (!emoji) {
+                await redis.hdel(rKey, userId);
+            } else {
+                await redis.hset(rKey, userId, emoji);
+                await redis.expire(rKey, 86400 * 30);
+            }
+            const reactions = await redis.hgetall(rKey) || {};
+            redis.publish('channel:sse:updates', JSON.stringify({
+                type: 'internal:reaction',
+                msgId,
+                reactions,
+            })).catch(() => {});
+            return res.json({ success: true, reactions });
+        }
+
+        if (!['delivered', 'read'].includes(status))
+            return res.status(400).json({ error: 'Invalid status' });
 
         await redis.set(`internal:status:${msgId}`, status, 'EX', 86400 * 30);
 

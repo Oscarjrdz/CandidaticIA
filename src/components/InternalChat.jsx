@@ -90,6 +90,8 @@ export default function InternalChat({ onlineUsers = [] }) {
     const [recipientId, setRecipientId] = useState(null);
     const [pulsing, setPulsing] = useState(false);
     const [loaded, setLoaded] = useState(false);
+    const [hoveredMsg, setHoveredMsg] = useState(null);
+    const [pickerFor, setPickerFor] = useState(null);
 
     const bottomRef = useRef(null);
     const inputRef = useRef(null);
@@ -201,6 +203,29 @@ export default function InternalChat({ onlineUsers = [] }) {
         }).catch(() => {});
     }, []);
 
+    // ── Reactions ─────────────────────────────────────────────────────────
+    const react = useCallback((msgId, emoji) => {
+        setPickerFor(null);
+        const current = messagesRef.current.find(m => m.id === msgId);
+        const myCurrentEmoji = current?.reactions?.[myId];
+        const newEmoji = myCurrentEmoji === emoji ? '' : emoji; // toggle off si es el mismo
+
+        // Optimistic
+        setMessages(prev => prev.map(m => {
+            if (m.id !== msgId) return m;
+            const reactions = { ...(m.reactions || {}) };
+            if (newEmoji) reactions[myId] = newEmoji;
+            else delete reactions[myId];
+            return { ...m, reactions };
+        }));
+
+        fetch('/api/internal-chat', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'react', msgId, userId: myId, emoji: newEmoji }),
+        }).catch(() => {});
+    }, [myId]);
+
     // ── SSE real-time handler ──────────────────────────────────────────────
     useEffect(() => {
         const handle = (e) => {
@@ -240,6 +265,16 @@ export default function InternalChat({ onlineUsers = [] }) {
         };
         window.addEventListener('sse:internal:status', handle);
         return () => window.removeEventListener('sse:internal:status', handle);
+    }, []);
+
+    // ── SSE reactions ──────────────────────────────────────────────────────
+    useEffect(() => {
+        const handle = (e) => {
+            const { msgId, reactions } = e.detail;
+            setMessages(prev => prev.map(m => m.id === msgId ? { ...m, reactions } : m));
+        };
+        window.addEventListener('sse:internal:reaction', handle);
+        return () => window.removeEventListener('sse:internal:reaction', handle);
     }, []);
 
     // ── Mark as read when chat opens or conversation changes ───────────────
@@ -398,12 +433,53 @@ export default function InternalChat({ onlineUsers = [] }) {
                             const prevMsg = messages[i - 1];
                             const showSender = !isMe && prevMsg?.from !== msg.from;
                             const isBroadcast = msg.to === 'all';
+                            const rxEntries = Object.entries(msg.reactions || {});
+                            // Group: emoji → [userIds]
+                            const rxGroups = rxEntries.reduce((acc, [uid, em]) => {
+                                acc[em] = acc[em] || [];
+                                acc[em].push(uid);
+                                return acc;
+                            }, {});
+                            const myReaction = msg.reactions?.[myId];
+                            const isHovered = hoveredMsg === msg.id;
+                            const pickerOpen = pickerFor === msg.id;
 
                             return (
-                                <div key={msg.id} className={`flex gap-1.5 ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
+                                <div
+                                    key={msg.id}
+                                    className={`flex gap-1.5 items-end ${isMe ? 'flex-row-reverse' : 'flex-row'}`}
+                                    onMouseEnter={() => setHoveredMsg(msg.id)}
+                                    onMouseLeave={() => { setHoveredMsg(null); setPickerFor(null); }}
+                                >
                                     {!isMe && showSender && <Avatar name={msg.fromName} />}
                                     {!isMe && !showSender && <div className="w-6 shrink-0" />}
-                                    <div className={`max-w-[78%] flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
+
+                                    {/* Reaction button */}
+                                    <div className="relative self-center shrink-0">
+                                        {(isHovered || pickerOpen) && !msg._opt && (
+                                            <button
+                                                onClick={() => setPickerFor(p => p === msg.id ? null : msg.id)}
+                                                className="w-6 h-6 rounded-full bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center text-sm transition-colors"
+                                            >
+                                                🙂
+                                            </button>
+                                        )}
+                                        {pickerOpen && (
+                                            <div className={`absolute bottom-8 ${isMe ? 'right-0' : 'left-0'} bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-600 flex gap-1 p-1.5 z-50`}>
+                                                {['👍','❤️','😂','😮','😢','🙏'].map(em => (
+                                                    <button
+                                                        key={em}
+                                                        onClick={() => react(msg.id, em)}
+                                                        className={`w-8 h-8 rounded-full flex items-center justify-center text-base hover:bg-gray-100 dark:hover:bg-gray-700 transition-transform hover:scale-125 ${myReaction === em ? 'bg-blue-100 dark:bg-blue-900/40' : ''}`}
+                                                    >
+                                                        {em}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    <div className={`max-w-[72%] flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
                                         {showSender && (
                                             <span className="text-[10px] text-gray-400 dark:text-gray-500 mb-0.5 ml-1">{msg.fromName}</span>
                                         )}
@@ -416,6 +492,27 @@ export default function InternalChat({ onlineUsers = [] }) {
                                         } ${msg._opt ? 'opacity-60' : ''}`}>
                                             {msg.content}
                                         </div>
+
+                                        {/* Reaction pills */}
+                                        {Object.keys(rxGroups).length > 0 && (
+                                            <div className={`flex flex-wrap gap-1 mt-1 ${isMe ? 'justify-end' : 'justify-start'}`}>
+                                                {Object.entries(rxGroups).map(([em, uids]) => (
+                                                    <button
+                                                        key={em}
+                                                        onClick={() => react(msg.id, em)}
+                                                        className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-xs border transition-colors ${
+                                                            uids.includes(myId)
+                                                                ? 'bg-blue-100 dark:bg-blue-900/40 border-blue-300 dark:border-blue-600'
+                                                                : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'
+                                                        }`}
+                                                    >
+                                                        <span>{em}</span>
+                                                        {uids.length > 1 && <span className="text-gray-500 dark:text-gray-400 font-medium">{uids.length}</span>}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        )}
+
                                         <div className={`flex items-center gap-1 mt-0.5 mx-1 ${isMe ? 'flex-row-reverse' : ''}`}>
                                             <span className="text-[9px] text-gray-400">{formatTime(msg.timestamp)}</span>
                                             {isBroadcast
