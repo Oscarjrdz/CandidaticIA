@@ -175,7 +175,7 @@ export default async function handler(req, res) {
             const finalMessage = message
                 ? substituteVariables(message, candidate)
                     .replace(/\{\{nombre\}\}/gi, primerNombre)
-                    .replace(/\s{2,}/g, ' ')
+                    .replace(/[^\S\n]{2,}/g, ' ')
                     .trim()
                 : '';
 
