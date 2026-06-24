@@ -542,7 +542,16 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
     useEffect(() => { candidatesRef.current = candidates; }, [candidates]);
 
     const prevActiveFilterRef = useRef(null);
-    useEffect(() => { selectedTagRef.current = selectedTag; }, [selectedTag]);
+    const prevSelectedTagRef = useRef(undefined);
+    useEffect(() => {
+        selectedTagRef.current = selectedTag;
+        // Primer render: solo sincronizar ref, no recargar
+        if (prevSelectedTagRef.current === undefined) { prevSelectedTagRef.current = selectedTag; return; }
+        if (prevSelectedTagRef.current === selectedTag) return;
+        prevSelectedTagRef.current = selectedTag;
+        // Recargar del servidor con el nuevo tagFilter para traer candidatos correctos
+        loadCandidates();
+    }, [selectedTag]);
 
     // Tab changes (all/unread/profile) are client-side pure — no server reload needed.
     useEffect(() => {
