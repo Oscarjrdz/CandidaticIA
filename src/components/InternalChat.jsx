@@ -454,16 +454,14 @@ export default function InternalChat({ onlineUsers = [] }) {
                                     {!isMe && showSender && <Avatar name={msg.fromName} />}
                                     {!isMe && !showSender && <div className="w-6 shrink-0" />}
 
-                                    {/* Reaction button */}
-                                    <div className="relative self-center shrink-0">
-                                        {(isHovered || pickerOpen) && !msg._opt && (
-                                            <button
-                                                onClick={() => setPickerFor(p => p === msg.id ? null : msg.id)}
-                                                className="w-6 h-6 rounded-full bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center text-sm transition-colors"
-                                            >
-                                                🙂
-                                            </button>
-                                        )}
+                                    {/* Reaction button — siempre ocupa el espacio (w-6) para no mover la burbuja */}
+                                    <div className="relative self-center w-6 shrink-0">
+                                        <button
+                                            onClick={() => setPickerFor(p => p === msg.id ? null : msg.id)}
+                                            className={`w-6 h-6 rounded-full bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center text-sm transition-opacity ${(isHovered || pickerOpen) && !msg._opt ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+                                        >
+                                            🙂
+                                        </button>
                                         {pickerOpen && (
                                             <div className={`absolute bottom-8 ${isMe ? 'right-0' : 'left-0'} bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-600 flex gap-1 p-1.5 z-50`}>
                                                 {['👍','❤️','😂','😮','😢','🙏'].map(em => (
