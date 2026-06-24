@@ -64,6 +64,18 @@ export default async function handler(req, res) {
         // Sort ascending by timestamp
         all.sort((a, b) => (a.timestamp || '').localeCompare(b.timestamp || ''));
 
+        // Fetch statuses separately (stored outside the message JSON)
+        if (all.length > 0) {
+            const stPipe = redis.pipeline();
+            all.forEach(m => stPipe.get(`internal:status:${m.id}`));
+            const stResults = await stPipe.exec();
+            all.forEach((m, i) => {
+                const s = stResults[i]?.[1];
+                if (s) m.status = s;
+                else if (!m.status) m.status = 'sent';
+            });
+        }
+
         // Respect per-user clearedAt (sent as query param)
         const clearedAt = req.query.clearedAt || null;
         const messages = clearedAt
@@ -86,6 +98,7 @@ export default async function handler(req, res) {
             toName: toName || (to === 'all' ? 'Todos' : to),
             content: content.trim(),
             timestamp: new Date().toISOString(),
+            status: 'sent',
         };
 
         const pipe = redis.pipeline();
@@ -113,6 +126,22 @@ export default async function handler(req, res) {
         })).catch(() => {});
 
         return res.json({ success: true, message: msg });
+    }
+
+    if (req.method === 'PATCH') {
+        const { msgId, status } = req.body;
+        if (!msgId || !['delivered', 'read'].includes(status))
+            return res.status(400).json({ error: 'Invalid params' });
+
+        await redis.set(`internal:status:${msgId}`, status, 'EX', 86400 * 30);
+
+        redis.publish('channel:sse:updates', JSON.stringify({
+            type: 'internal:status',
+            msgId,
+            status,
+        })).catch(() => {});
+
+        return res.json({ success: true });
     }
 
     return res.status(405).end();

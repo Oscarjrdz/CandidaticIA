@@ -2,6 +2,27 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { MessageSquare, Send, ChevronDown, Users, Lock, Trash2 } from 'lucide-react';
 import { useAuthContext } from '../contexts/AuthContext';
 
+function MsgStatus({ status, opt }) {
+    if (opt) return (
+        <svg className="w-3 h-3 text-white/40 shrink-0" viewBox="0 0 16 16" fill="none">
+            <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="1.5"/>
+            <path d="M8 5v3.5l2 1.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+        </svg>
+    );
+    const color = status === 'read' ? 'text-blue-300' : 'text-white/50';
+    if (status === 'delivered' || status === 'read') return (
+        <svg className={`w-4 h-3 ${color} shrink-0`} viewBox="0 0 20 14" fill="none">
+            <path d="M1 7l4 4L11 4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+            <path d="M7 7l4 4 6-7" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
+    );
+    return (
+        <svg className="w-3 h-3 text-white/50 shrink-0" viewBox="0 0 14 14" fill="none">
+            <path d="M1 7l4 4 8-8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
+    );
+}
+
 function playNotificationSound() {
     try {
         const ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -76,6 +97,8 @@ export default function InternalChat({ onlineUsers = [] }) {
     const myIdRef = useRef(null);
     const myIdAltRef = useRef(null);
     const openRef = useRef(false);
+    const messagesRef = useRef([]);
+    const recipientIdRef = useRef(null);
     const clearedAtRef = useRef(localStorage.getItem('internalChatClearedAt') || null);
 
     const clearChat = useCallback(() => {
@@ -89,6 +112,8 @@ export default function InternalChat({ onlineUsers = [] }) {
     myIdRef.current = myId;
     myIdAltRef.current = user?.id || user?.whatsapp;
     openRef.current = open;
+    messagesRef.current = messages;
+    recipientIdRef.current = recipientId;
 
     // Others online (excluding self)
     const others = onlineUsers.filter(u => {
@@ -167,6 +192,15 @@ export default function InternalChat({ onlineUsers = [] }) {
         if (open) setTimeout(() => inputRef.current?.focus(), 50);
     }, [open]);
 
+    // ── Status receipt helper ──────────────────────────────────────────────
+    const sendReceipt = useCallback((msgId, status) => {
+        fetch('/api/internal-chat', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ msgId, status }),
+        }).catch(() => {});
+    }, []);
+
     // ── SSE real-time handler ──────────────────────────────────────────────
     useEffect(() => {
         const handle = (e) => {
@@ -188,10 +222,37 @@ export default function InternalChat({ onlineUsers = [] }) {
                 setPulsing(true);
                 setTimeout(() => setPulsing(false), 1200);
             }
+
+            // Auto-receipt for DMs addressed to me
+            if (msg.to !== 'all' && isMe(msg.to) && !isMe(msg.from)) {
+                sendReceipt(msg.id, openRef.current ? 'read' : 'delivered');
+            }
         };
         window.addEventListener('sse:internal:message', handle);
         return () => window.removeEventListener('sse:internal:message', handle);
-    }, []); // No deps — uses refs for live values
+    }, [sendReceipt]); // sendReceipt is stable (useCallback with no deps)
+
+    // ── SSE status updates ─────────────────────────────────────────────────
+    useEffect(() => {
+        const handle = (e) => {
+            const { msgId, status } = e.detail;
+            setMessages(prev => prev.map(m => m.id === msgId ? { ...m, status } : m));
+        };
+        window.addEventListener('sse:internal:status', handle);
+        return () => window.removeEventListener('sse:internal:status', handle);
+    }, []);
+
+    // ── Mark as read when chat opens or conversation changes ───────────────
+    useEffect(() => {
+        if (!open || !myId) return;
+        const rId = recipientIdRef.current;
+        if (!rId || rId === 'all') return;
+        const toMark = messagesRef.current.filter(m =>
+            m.to !== 'all' && m.from !== myId && m.status !== 'read' &&
+            (m.from === rId || m.to === myId)
+        );
+        toMark.forEach(m => sendReceipt(m.id, 'read'));
+    }, [open, recipientId, myId, sendReceipt]);
 
     // ── Send ───────────────────────────────────────────────────────────────
     const send = useCallback(async () => {
@@ -360,7 +421,7 @@ export default function InternalChat({ onlineUsers = [] }) {
                                             {isBroadcast
                                                 ? <span className="text-[9px] text-indigo-400 flex items-center gap-0.5"><Users className="w-2.5 h-2.5" />Todos</span>
                                                 : isMe
-                                                    ? <span className="text-[9px] text-gray-400 flex items-center gap-0.5"><Lock className="w-2.5 h-2.5" />{msg.toName}</span>
+                                                    ? <MsgStatus status={msg.status} opt={msg._opt} />
                                                     : null
                                             }
                                         </div>

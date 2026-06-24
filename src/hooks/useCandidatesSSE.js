@@ -120,6 +120,8 @@ function _connectSingleton() {
                 } else if (data.type === 'internal:message') {
                     // data.data = { type, id, from, to, content, ... } (flat publish from internal-chat.js)
                     window.dispatchEvent(new CustomEvent('sse:internal:message', { detail: data.data }));
+                } else if (data.type === 'internal:status') {
+                    window.dispatchEvent(new CustomEvent('sse:internal:status', { detail: data.data }));
                 }
             } catch (parseError) {
                 console.error('SSE parse error:', parseError);
