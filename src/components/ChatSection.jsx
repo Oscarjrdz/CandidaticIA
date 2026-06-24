@@ -797,7 +797,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
             const nombre = (candidatoFresh?.nombreReal?.trim() || '').split(' ')[0];
             const resolved = qr.message
                 .replace(/\{\{nombre\}\}/gi, nombre)
-                .replace(/\s{2,}/g, ' ')
+                .replace(/[^\S\n]{2,}/g, ' ')
                 .trim();
             messageInputRef.current?.injectText(resolved);
         }
