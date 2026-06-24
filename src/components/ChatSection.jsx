@@ -912,7 +912,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
             const searchParam = searchRef.current || "";
             // Siempre cargar 100 con unreadFirst=true para que los no-leídos aparezcan
             // primero Y el conteo del badge sea consistente sin importar el filtro activo.
-            const result = await getCandidates(100, 0, searchParam, false, tagParam, true);
+            const result = await getCandidates(33, 0, searchParam, false, tagParam, true);
             if (result.success) {
                 const fetchedCandidates = result.candidates || [];
                 setCandidates(fetchedCandidates);
@@ -936,10 +936,10 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
         setLoadingMore(true);
         try {
             const nextOffset = candidatesRef.current.length;
-            const result = await getCandidates(100, nextOffset, searchParam, false, tagParam);
+            const result = await getCandidates(33, nextOffset, searchParam, false, tagParam);
             if (result.success) {
                 const newCandidates = result.candidates || [];
-                if (newCandidates.length < 100) setHasMore(false);
+                if (newCandidates.length < 33) setHasMore(false);
                 if (newCandidates.length > 0) {
                     const existingIds = new Set(candidatesRef.current.map(c => c.id));
                     const unique = newCandidates.filter(c => !existingIds.has(c.id));
