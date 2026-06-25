@@ -4569,6 +4569,26 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
                                 if (_p1 && _p2) responseTextVal = `${_p1}[MSG_SPLIT]${_p2}`;
                             }
                         }
+
+                        // ── BURBUJA DE EMPRESA (solo candidatos nuevos de Ads con empresa configurada) ──
+                        if (isNewFlag && candidateData.adId && responseTextVal && responseTextVal.includes('[MSG_SPLIT]')) {
+                            try {
+                                const _adRedis = getRedisClient();
+                                const _adLabelsRaw = await _adRedis.get('candidatic:ad_labels');
+                                const _adLabels = _adLabelsRaw ? JSON.parse(_adLabelsRaw) : [];
+                                const _adIdStr = String(candidateData.adId);
+                                const _matchLabel = _adLabels.find(l =>
+                                    (l.adIds || (l.adId ? [l.adId] : [])).map(String).includes(_adIdStr)
+                                );
+                                if (_matchLabel?.company?.trim()) {
+                                    const _companyMsg = `Para comenzar con tu proceso de reclutamiento para la vacante de *${_matchLabel.company.trim()}* 🏭`;
+                                    const _splitParts = responseTextVal.split('[MSG_SPLIT]');
+                                    // Insertar entre burbuja 1 (saludo) y burbuja 2 (pregunta del nombre)
+                                    _splitParts.splice(1, 0, _companyMsg);
+                                    responseTextVal = _splitParts.join('[MSG_SPLIT]');
+                                }
+                            } catch (_e) { /* no interrumpir si falla */ }
+                        }
                     } catch (err) {
                         console.error('[GPT BRAIN] JSON Parse Fail:', err.message);
                         throw new Error('GPT returned invalid JSON');
