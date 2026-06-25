@@ -598,12 +598,46 @@ export const getCandidatesUnreadFirst = async (recentLimit = 50) => {
     return { candidates, total: candidates.length };
 };
 
+// Unread-first pero filtrado por etiqueta — para la primera página con tag activo
+export const getCandidatesUnreadFirstByTag = async (tagFilter, limit = 33) => {
+    const client = getClient();
+    if (!client) return { candidates: [], total: 0 };
+
+    const tagLower = tagFilter.trim().toLowerCase();
+
+    // 1. Todos los no-leídos
+    const unreadIds = await client.smembers(KEYS.CANDIDATES_UNREAD);
+
+    // 2. Candidatos recientes para completar si hay pocos no-leídos con ese tag
+    const recentIds = await client.zrevrange(KEYS.CANDIDATES_LIST, 0, 499);
+
+    // 3. Unión sin duplicados: no-leídos primero
+    const unreadSet = new Set(unreadIds);
+    const recentOnly = recentIds.filter(id => !unreadSet.has(id));
+    const allIds = [...unreadIds, ...recentOnly];
+
+    if (!allIds.length) return { candidates: [], total: 0 };
+
+    // 4. Cargar y filtrar por tag
+    const pipeline = client.pipeline();
+    allIds.forEach(id => pipeline.get(`${KEYS.CANDIDATE_PREFIX}${id}`));
+    const results = await pipeline.exec();
+
+    const matching = results
+        .map(([err, res]) => (err || !res) ? null : JSON.parse(res))
+        .filter(c => c && Array.isArray(c.tags) && c.tags.some(t =>
+            (typeof t === 'string' ? t : (t?.name || '')).trim().toLowerCase() === tagLower
+        ));
+
+    return { candidates: matching.slice(0, limit), total: matching.length };
+};
+
 const _publishGlobalStats = async (client) => {
     try {
         const p = client.pipeline();
         p.scard(KEYS.LIST_COMPLETE);
         p.scard(KEYS.LIST_PENDING);
-        p.get('stats:bot:unread_v2');
+        p.scard(KEYS.CANDIDATES_UNREAD);
         p.get(KEYS.STATS_INCOMING);
         p.get(KEYS.STATS_OUTGOING);
         const results = await p.exec();
@@ -805,11 +839,15 @@ export const deleteCandidate = async (id) => {
     if (client) {
         // 1. Fetch candidate first to get phone (needed to clean PHONE_INDEX)
         let phone = null;
+        let wasUnread = false;
         try {
             const raw = await client.get(`${KEYS.CANDIDATE_PREFIX}${id}`);
             if (raw) {
                 const c = JSON.parse(raw);
                 phone = c.whatsapp ? c.whatsapp.replace(/\D/g, '') : null;
+                const userTime = c.lastUserMessageAt ? new Date(c.lastUserMessageAt).getTime() : 0;
+                const humanTime = c.lastHumanMessageAt ? new Date(c.lastHumanMessageAt).getTime() : 0;
+                wasUnread = !!userTime && userTime > humanTime;
                 // Decrement tag counts
                 if (Array.isArray(c.tags) && c.tags.length > 0) {
                     const tp = client.pipeline();
@@ -822,7 +860,15 @@ export const deleteCandidate = async (id) => {
         // 2. Atomic cleanup from stat sets + PHONE_INDEX
         const multi = client.multi()
             .srem(KEYS.LIST_COMPLETE, id)
-            .srem(KEYS.LIST_PENDING, id);
+            .srem(KEYS.LIST_PENDING, id)
+            .srem(KEYS.CANDIDATES_UNREAD, id);
+        if (wasUnread) {
+            multi.eval(
+                "local current = tonumber(redis.call('GET', KEYS[1]) or '0'); if current > 0 then return redis.call('DECR', KEYS[1]); end; return current;",
+                1,
+                'stats:bot:unread_v2'
+            );
+        }
         if (phone) {
             multi.hdel(KEYS.PHONE_INDEX, phone);
             // Also clean common Mexico variations
@@ -864,7 +910,13 @@ export const deleteCandidate = async (id) => {
         } catch (_) {}
     }
 
-    return await deleteDistributedItem(KEYS.CANDIDATES_LIST, KEYS.CANDIDATE_PREFIX, id);
+    const deleted = await deleteDistributedItem(KEYS.CANDIDATES_LIST, KEYS.CANDIDATE_PREFIX, id);
+    if (deleted) {
+        import('./sse-notify.js').then(({ notifyCandidateDelete }) => {
+            notifyCandidateDelete(id).catch(() => {});
+        }).catch(() => {});
+    }
+    return deleted;
 };
 
 /**
@@ -1095,7 +1147,11 @@ export const updateCandidate = async (id, data) => {
             const redisAtomic = getRedisClient();
             if (redisAtomic) {
                 if (wasUnread && !isNowUnread) {
-                    await redisAtomic.decr('stats:bot:unread_v2').catch(() => {});
+                    await redisAtomic.eval(
+                        "local current = tonumber(redis.call('GET', KEYS[1]) or '0'); if current > 0 then return redis.call('DECR', KEYS[1]); end; return current;",
+                        1,
+                        'stats:bot:unread_v2'
+                    ).catch(() => {});
                     await redisAtomic.srem(KEYS.CANDIDATES_UNREAD, id).catch(() => {});
                 } else {
                     await redisAtomic.incr('stats:bot:unread_v2').catch(() => {});
@@ -1578,6 +1634,57 @@ export const updateMessageStatus = async (candidateId, ultraMsgId, status, addit
 
     const key = `messages:${candidateId}`;
     try {
+        const STATUS_RANK = { failed: -1, queued: 0, pending: 0, sent: 1, delivered: 2, read: 3, seen: 3 };
+
+        const persistIndex = async (msg, absoluteIndex) => {
+            const ids = [msg?.id, msg?.ultraMsgId].filter(Boolean);
+            if (ids.length === 0) return;
+            const pipe = client.pipeline();
+            ids.forEach(id => {
+                pipe.set(`message:index:${id}`, JSON.stringify({ candidateId, index: absoluteIndex }), 'EX', 86400 * 30);
+            });
+            await pipe.exec().catch(() => {});
+        };
+
+        const notifyStatus = async () => {
+            try {
+                const { notifyCandidateUpdate } = await import('./sse-notify.js');
+                await notifyCandidateUpdate(candidateId, {
+                    messageStatusUpdate: { id: ultraMsgId, status, additionalData }
+                });
+            } catch (err) {
+                console.error("Could not import sse-notify", err);
+            }
+        };
+
+        const cachedIndexRaw = await client.get(`message:index:${ultraMsgId}`);
+        if (cachedIndexRaw) {
+            try {
+                const cachedIndex = JSON.parse(cachedIndexRaw);
+                if (cachedIndex?.candidateId === candidateId && Number.isInteger(cachedIndex.index)) {
+                    const rawMsg = await client.lindex(key, cachedIndex.index);
+                    if (rawMsg) {
+                        const msg = JSON.parse(rawMsg);
+                        if (msg.ultraMsgId === ultraMsgId || msg.id === ultraMsgId) {
+                            const oldStatus = msg.status;
+                            if ((STATUS_RANK[status] ?? 0) <= (STATUS_RANK[oldStatus] ?? 0) && status !== 'failed') {
+                                return true;
+                            }
+                            const nextMsg = { ...msg, status, ...additionalData };
+                            await client.lset(key, cachedIndex.index, JSON.stringify(nextMsg));
+                            await persistIndex(nextMsg, cachedIndex.index);
+                            if (nextMsg.campaignId && oldStatus !== status && ['sent', 'delivered', 'read'].includes(status)) {
+                                client.hincrby(`bulk_stats:${nextMsg.campaignId}`, status, 1).catch(() => {});
+                            }
+                            await notifyStatus();
+                            return true;
+                        }
+                    }
+                }
+            } catch {}
+            await client.del(`message:index:${ultraMsgId}`).catch(() => {});
+        }
+
         // Leer sólo los últimos 50 mensajes — mensaje reciente siempre está al final.
         // 'read' llega vía SSE-only; 'delivered' y 'failed' persisten aquí.
         const listLen = await client.llen(key);
@@ -1585,7 +1692,6 @@ export const updateMessageStatus = async (candidateId, ultraMsgId, status, addit
         const raw = await client.lrange(key, start, -1);
         const messages = raw.map(r => JSON.parse(r));
 
-        const STATUS_RANK = { failed: -1, queued: 0, pending: 0, sent: 1, delivered: 2, read: 3, seen: 3 };
         const localIndex = messages.findIndex(m => m.ultraMsgId === ultraMsgId || m.id === ultraMsgId);
         if (localIndex !== -1) {
             const absoluteIndex = start + localIndex;
@@ -1596,6 +1702,7 @@ export const updateMessageStatus = async (candidateId, ultraMsgId, status, addit
             }
             messages[localIndex] = { ...messages[localIndex], status, ...additionalData };
             await client.lset(key, absoluteIndex, JSON.stringify(messages[localIndex]));
+            await persistIndex(messages[localIndex], absoluteIndex);
 
             // 📊 UPDATE CAMPAIGN STATS
             if (messages[localIndex].campaignId && oldStatus !== status && ['sent', 'delivered', 'read'].includes(status)) {
@@ -1603,18 +1710,13 @@ export const updateMessageStatus = async (candidateId, ultraMsgId, status, addit
             }
 
             // 🚀 FIRE SSE! Update Chat UI checks in real time
-            try {
-                const { notifyCandidateUpdate } = await import('./sse-notify.js');
-                await notifyCandidateUpdate(candidateId, {
-                    messageStatusUpdate: { id: ultraMsgId, status, additionalData }
-                });
-            } catch (err) {
-                console.error("Could not import sse-notify", err);
-            }
+            await notifyStatus();
 
             return true;
         } else {
-            console.warn(`⚠️ [Storage] updateMessageStatus: Message ${ultraMsgId} NOT FOUND in ${key}`);
+            if (process.env.DEBUG_MODE === 'true' || Math.random() < 0.01) {
+                console.warn(`⚠️ [Storage] updateMessageStatus: Message ${ultraMsgId} NOT FOUND in ${key}`);
+            }
         }
     } catch (e) {
         console.error('❌ [Storage] updateMessageStatus Error:', e);

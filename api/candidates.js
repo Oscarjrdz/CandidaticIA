@@ -15,7 +15,7 @@ export default async function handler(req, res) {
 
     try {
         // DYNAMIC IMPORTS
-        const { getCandidates, getCandidatesUnreadFirst, getCandidateById, deleteCandidate, validateAdminSession } = await import('./utils/storage.js');
+        const { getCandidates, getCandidatesUnreadFirst, getCandidatesUnreadFirstByTag, getCandidateById, deleteCandidate, validateAdminSession } = await import('./utils/storage.js');
 
         // Validar sesión admin
         const userId = await validateAdminSession(req);
@@ -67,7 +67,7 @@ export default async function handler(req, res) {
                 });
             }
 
-            // Modo unreadFirst: no-leídos + N recientes (sin búsqueda ni filtro)
+            // Modo unreadFirst sin filtro: no-leídos + N recientes
             if (unreadFirst === 'true' && !search && !tag && excludeLinked !== 'true') {
                 const { candidates } = await getCandidatesUnreadFirst(parseInt(limit) || 50);
                 return res.status(200).json({
@@ -77,6 +77,12 @@ export default async function handler(req, res) {
                     candidates,
                     stats: statsData
                 });
+            }
+
+            // Modo unreadFirst con tag activo y primera página: no-leídos con ese tag primero
+            if (unreadFirst === 'true' && tag && !search && offset === '0' && excludeLinked !== 'true') {
+                const { candidates, total } = await getCandidatesUnreadFirstByTag(tag, parseInt(limit) || 33);
+                return res.status(200).json({ success: true, count: candidates.length, total, candidates });
             }
 
             // Lista de candidatos (modo normal)
