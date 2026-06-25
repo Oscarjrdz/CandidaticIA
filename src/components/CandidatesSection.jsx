@@ -42,6 +42,8 @@ const extractPersistentCandidatePatch = (patch = {}) => {
     );
 };
 
+const DASHBOARD_CARD_SKELETON_COUNT = 5;
+
 /**
  * Sortable Header Sub-component
  */
@@ -209,6 +211,7 @@ const CandidatesSection = () => {
     const [isDeleting, setIsDeleting] = useState(false);
     // Dynamic Fields & Column Order State
     const [fields, setFields] = useState([]);
+    const [fieldsLoaded, setFieldsLoaded] = useState(false);
     const fieldsMap = React.useMemo(() => fields.reduce((acc, f) => ({ ...acc, [f.value]: f }), {}), [fields]);
     const [columnOrder, setColumnOrder] = useState(() => {
         try {
@@ -565,20 +568,24 @@ const CandidatesSection = () => {
         // ✅ META AUDIT: loadFields is the ONLY init work here.
         // Candidate loading is handled by subscription.start() → pollFull()
         const loadFields = async () => {
-            const result = await getFields();
-            if (result.success) {
-                const dynamicFields = result.fields.filter(f => f.value !== 'foto');
-                setFields(dynamicFields);
+            try {
+                const result = await getFields();
+                if (result.success) {
+                    const dynamicFields = result.fields.filter(f => f.value !== 'foto');
+                    setFields(dynamicFields);
 
-                setColumnOrder(prevOrder => {
-                    const existingOrderIds = new Set(prevOrder);
-                    const newIds = dynamicFields.map(f => f.value).filter(id => !existingOrderIds.has(id));
-                    const mergedOrder = [...prevOrder.filter(id => dynamicFields.some(f => f.value === id)), ...newIds];
-                    if (mergedOrder.length !== prevOrder.length || mergedOrder.some((v, i) => v !== prevOrder[i])) {
-                        try { localStorage.setItem('candidateColumnOrder', JSON.stringify(mergedOrder)); } catch (e) { }
-                    }
-                    return mergedOrder;
-                });
+                    setColumnOrder(prevOrder => {
+                        const existingOrderIds = new Set(prevOrder);
+                        const newIds = dynamicFields.map(f => f.value).filter(id => !existingOrderIds.has(id));
+                        const mergedOrder = [...prevOrder.filter(id => dynamicFields.some(f => f.value === id)), ...newIds];
+                        if (mergedOrder.length !== prevOrder.length || mergedOrder.some((v, i) => v !== prevOrder[i])) {
+                            try { localStorage.setItem('candidateColumnOrder', JSON.stringify(mergedOrder)); } catch (e) { }
+                        }
+                        return mergedOrder;
+                    });
+                }
+            } finally {
+                setFieldsLoaded(true);
             }
         };
 
@@ -828,6 +835,7 @@ const CandidatesSection = () => {
     }, [candidates, aiFilteredCandidates, hideIncomplete, showOnlyIncomplete, sortWhatsAppByDate]);
 
     const totalPages = Math.ceil(totalItems / LIMIT);
+    const isBootstrapping = isInitialLoading || !fieldsLoaded;
 
     return (
         <div className="flex-1 min-h-0 flex flex-col space-y-4">
@@ -836,12 +844,10 @@ const CandidatesSection = () => {
 
                 {/* 📊 Live Dashboard - Zuckerberg Style */}
                 <div className="grid grid-cols-5 gap-4">
-                    {isInitialLoading ? (
-                        <>
-                            <CardSkeleton />
-                            <CardSkeleton />
-                            <CardSkeleton />
-                        </>
+                    {isBootstrapping ? (
+                        Array.from({ length: DASHBOARD_CARD_SKELETON_COUNT }).map((_, i) => (
+                            <CardSkeleton key={i} />
+                        ))
                     ) : (
                         <>
                             {/* Card 1: Candidates */}
@@ -1369,8 +1375,8 @@ const CandidatesSection = () => {
 
             {/* Tabla con Sticky Header */}
             <div className="flex-1 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden flex flex-col min-h-0">
-                <div className="flex-1 overflow-auto">
-                    {displayedCandidates.length === 0 ? (
+                <div className="flex-1 overflow-auto min-h-[520px]">
+                    {!isBootstrapping && displayedCandidates.length === 0 ? (
                         <div className="text-center py-12">
                             <User className="w-16 h-16 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
                             <p className="text-gray-500 dark:text-gray-400 text-[12px]">
@@ -1429,9 +1435,9 @@ const CandidatesSection = () => {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {isInitialLoading ? (
+                                    {isBootstrapping ? (
                                         <>
-                                            {[...Array(8)].map((_, i) => (
+                                            {Array.from({ length: 12 }).map((_, i) => (
                                                 <TableRowSkeleton key={i} columns={columnOrder.length + 3} />
                                             ))}
                                         </>
