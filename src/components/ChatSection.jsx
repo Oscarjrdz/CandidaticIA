@@ -2465,7 +2465,8 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
                                         <span className="flex-1 truncate text-[#111b21] dark:text-[#e9edef]">
                                             {selectedTag ? (() => {
                                                 const hasSubFilters = selectedAges.length > 0 || selectedGenders.length > 0 || selectedMunicipalities.length > 0;
-                                                const count = hasSubFilters ? filteredCandidates.length : candidatesTotal;
+                                                const tagObj = availableTags.find(t => (typeof t === 'string' ? t : t.name) === selectedTag);
+                                                const count = hasSubFilters ? filteredCandidates.length : (tagObj?.count ?? candidatesTotal);
                                                 return `${selectedTag} (${count})`;
                                             })() : 'Todas las etiquetas'}
                                         </span>
