@@ -399,7 +399,25 @@ const CRMProjectsSection = () => {
         const handleCandidateRealtime = (event) => {
             const update = event.detail || {};
             const activeId = activeProjectRef.current?.id;
-            if (!activeId || update.projectId !== activeId) return;
+            if (!activeId) return;
+
+            if (Array.isArray(update.removedProjectIds) && update.removedProjectIds.includes(activeId) && update.candidateId) {
+                setCandidates(prev => prev.filter(c => c.id !== update.candidateId));
+                return;
+            }
+
+            if (update.removedProjectIdsByCandidate && typeof update.removedProjectIdsByCandidate === 'object') {
+                const removedIds = Object.entries(update.removedProjectIdsByCandidate)
+                    .filter(([, projectIds]) => Array.isArray(projectIds) && projectIds.includes(activeId))
+                    .map(([candidateId]) => candidateId);
+                if (removedIds.length > 0) {
+                    const removedSet = new Set(removedIds);
+                    setCandidates(prev => prev.filter(c => !removedSet.has(c.id)));
+                    return;
+                }
+            }
+
+            if (update.projectId !== activeId) return;
 
             if (update.action === 'moveCandidate' && update.candidateId && update.stepId) {
                 setCandidates(prev => prev.map(c => {

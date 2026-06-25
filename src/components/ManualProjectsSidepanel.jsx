@@ -3,6 +3,21 @@ import { Plus, X, GripVertical, Check, Trash2, Edit2, Box, ArrowRight, Loader2, 
 import { useConfirmModal } from './ui/ConfirmModal';
 import { updateCandidate } from '../services/candidatesService';
 
+const TRANSIENT_CANDIDATE_UPDATE_KEYS = new Set([
+    'candidateTyping',
+    'markAllSentAsRead',
+    'messagePayload',
+    'messageStatusUpdate',
+    'newMessage',
+    'recruiterTyping',
+]);
+
+const extractPersistentCandidatePatch = (patch = {}) => {
+    return Object.fromEntries(
+        Object.entries(patch).filter(([key]) => !TRANSIENT_CANDIDATE_UPDATE_KEYS.has(key))
+    );
+};
+
 const CustomProjectDropdown = ({ activeProjectId, projects, onChange, candidates = [] }) => {
     const [isOpen, setIsOpen] = useState(false);
     
@@ -118,6 +133,47 @@ export default function ManualProjectsSidepanel({ selectedChat, onClose, showToa
         window.addEventListener('sse:crm:project', handleProjectRealtime);
         return () => window.removeEventListener('sse:crm:project', handleProjectRealtime);
     }, []);
+
+    useEffect(() => {
+        if (!selectedChat?.id || !onCandidateUpdated) return;
+
+        const patchSelectedCandidate = (patch) => {
+            if (!patch || Object.keys(patch).length === 0) return;
+            onCandidateUpdated({ ...selectedChat, ...patch });
+        };
+
+        const handleCandidateUpdate = (event) => {
+            const update = event.detail || {};
+            if (update.candidateId !== selectedChat.id || !update.updates) return;
+            const persistentPatch = extractPersistentCandidatePatch(update.updates);
+            patchSelectedCandidate(persistentPatch);
+        };
+
+        const handleCrmCandidate = (event) => {
+            const update = event.detail || {};
+            if (update.candidateId && update.candidateId !== selectedChat.id) return;
+            if (Array.isArray(update.candidateIds) && !update.candidateIds.includes(selectedChat.id)) return;
+
+            if (update.action === 'unlinkCandidate' && selectedChat.manualProjectId === update.projectId) {
+                patchSelectedCandidate({ manualProjectId: null, manualProjectStepId: null });
+                return;
+            }
+
+            if ((update.action === 'linkCandidate' || update.action === 'batchLink' || update.action === 'moveCandidate') && update.projectId) {
+                patchSelectedCandidate({
+                    manualProjectId: update.projectId,
+                    manualProjectStepId: update.stepId || selectedChat.manualProjectStepId
+                });
+            }
+        };
+
+        window.addEventListener('sse:candidate:update', handleCandidateUpdate);
+        window.addEventListener('sse:crm:candidate', handleCrmCandidate);
+        return () => {
+            window.removeEventListener('sse:candidate:update', handleCandidateUpdate);
+            window.removeEventListener('sse:crm:candidate', handleCrmCandidate);
+        };
+    }, [selectedChat, onCandidateUpdated]);
 
     const handleCreateProject = async (e) => {
         e.preventDefault();

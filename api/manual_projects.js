@@ -27,6 +27,61 @@ export default async function handler(req, res) {
             })).catch(() => {});
         };
 
+        const loadProjects = async () => {
+            const data = await redis.get(KEY);
+            return data ? JSON.parse(data) : [];
+        };
+
+        const unlinkCandidateFromProject = async (projectId, candidateId, { publish = true } = {}) => {
+            const linksRaw = await redis.get(`${LINKS_PREFIX}${projectId}`);
+            const links = linksRaw ? JSON.parse(linksRaw) : [];
+            const nextLinks = links.filter(l => l.candidateId !== candidateId);
+            if (nextLinks.length === links.length) return false;
+            await redis.set(`${LINKS_PREFIX}${projectId}`, JSON.stringify(nextLinks));
+            if (publish) publishRealtime('crm:candidate', { action: 'unlinkCandidate', projectId, candidateId });
+            return true;
+        };
+
+        const unlinkCandidateFromOtherProjects = async (candidateId, keepProjectId) => {
+            const projects = await loadProjects();
+            const removedProjectIds = [];
+            for (const project of projects) {
+                if (!project?.id || project.id === keepProjectId) continue;
+                const removed = await unlinkCandidateFromProject(project.id, candidateId);
+                if (removed) removedProjectIds.push(project.id);
+            }
+            return removedProjectIds;
+        };
+
+        const unlinkCandidatesFromRemovedSteps = async (projectId, oldSteps = [], nextSteps = []) => {
+            const nextStepIds = new Set((nextSteps || []).map(s => s.id));
+            const removedStepIds = (oldSteps || []).map(s => s.id).filter(id => id && !nextStepIds.has(id));
+            if (removedStepIds.length === 0) return [];
+
+            const removedSet = new Set(removedStepIds);
+            const linksRaw = await redis.get(`${LINKS_PREFIX}${projectId}`);
+            const links = linksRaw ? JSON.parse(linksRaw) : [];
+            const removedLinks = links.filter(l => removedSet.has(l.stepId));
+            if (removedLinks.length === 0) return [];
+
+            const keptLinks = links.filter(l => !removedSet.has(l.stepId));
+            await redis.set(`${LINKS_PREFIX}${projectId}`, JSON.stringify(keptLinks));
+
+            await Promise.all(removedLinks.map(link =>
+                updateCandidate(link.candidateId, { manualProjectId: null, manualProjectStepId: null })
+                    .catch(() => null)
+            ));
+            removedLinks.forEach(link => {
+                publishRealtime('crm:candidate', {
+                    action: 'unlinkCandidate',
+                    projectId,
+                    candidateId: link.candidateId,
+                    reason: 'stepDeleted'
+                });
+            });
+            return removedLinks;
+        };
+
         // GET - List all manual projects OR get candidates for a specific project
         if (req.method === 'GET') {
             const { id, view } = req.query;
@@ -73,6 +128,7 @@ export default async function handler(req, res) {
                 const { projectId, candidateId, stepId } = body;
                 if (!projectId || !candidateId) return res.status(400).json({ error: 'Missing projectId or candidateId' });
 
+                const removedProjectIds = await unlinkCandidateFromOtherProjects(candidateId, projectId);
                 const linksRaw = await redis.get(`${LINKS_PREFIX}${projectId}`);
                 let links = linksRaw ? JSON.parse(linksRaw) : [];
                 const existingLink = links.find(l => l.candidateId === candidateId);
@@ -88,7 +144,7 @@ export default async function handler(req, res) {
 
                 await redis.set(`${LINKS_PREFIX}${projectId}`, JSON.stringify(links));
                 await updateCandidate(candidateId, { manualProjectId: projectId, manualProjectStepId: finalStepId });
-                publishRealtime('crm:candidate', { action: 'linkCandidate', projectId, candidateId, stepId: finalStepId });
+                publishRealtime('crm:candidate', { action: 'linkCandidate', projectId, candidateId, stepId: finalStepId, removedProjectIds });
                 return res.status(200).json({ success: true });
             }
 
@@ -100,8 +156,11 @@ export default async function handler(req, res) {
                 let links = linksRaw ? JSON.parse(linksRaw) : [];
                 const existingIds = new Set(links.map(l => l.candidateId));
                 const finalStepId = stepId || 'step_inicio';
+                const removedProjectIdsByCandidate = {};
 
                 for (const cId of candidateIds) {
+                    const removed = await unlinkCandidateFromOtherProjects(cId, projectId);
+                    if (removed.length > 0) removedProjectIdsByCandidate[cId] = removed;
                     if (!existingIds.has(cId)) {
                         links.push({ candidateId: cId, stepId: finalStepId, linkedAt: new Date().toISOString() });
                     }
@@ -111,7 +170,7 @@ export default async function handler(req, res) {
                 await Promise.all(candidateIds.map(cId =>
                     updateCandidate(cId, { manualProjectId: projectId, manualProjectStepId: finalStepId })
                 ));
-                publishRealtime('crm:candidate', { action: 'batchLink', projectId, candidateIds, stepId: finalStepId });
+                publishRealtime('crm:candidate', { action: 'batchLink', projectId, candidateIds, stepId: finalStepId, removedProjectIdsByCandidate });
                 return res.status(200).json({ success: true, linked: candidateIds.length });
             }
 
@@ -177,6 +236,8 @@ export default async function handler(req, res) {
                 const idx = projects.findIndex(p => p.id === projectId);
                 if (idx === -1) return res.status(404).json({ error: 'Project not found' });
 
+                const oldSteps = projects[idx].steps || [];
+                await unlinkCandidatesFromRemovedSteps(projectId, oldSteps, steps);
                 projects[idx].steps = steps;
                 await redis.set(KEY, JSON.stringify(projects));
                 publishRealtime('crm:project', { action: 'stepsUpdated', projectId, project: projects[idx] });
@@ -260,6 +321,9 @@ export default async function handler(req, res) {
                 return res.status(400).json({ error: 'steps must be an array' });
             }
 
+            if (updates.steps) {
+                await unlinkCandidatesFromRemovedSteps(id, projects[index].steps || [], updates.steps);
+            }
             projects[index] = { ...projects[index], ...updates };
             await redis.set(KEY, JSON.stringify(projects));
             publishRealtime('crm:project', { action: 'updated', projectId: id, project: projects[index] });
@@ -277,8 +341,20 @@ export default async function handler(req, res) {
             const newProjects = projects.filter(p => p.id !== id);
             await redis.set(KEY, JSON.stringify(newProjects));
 
-            // Clean up candidate links
+            // Clean up candidate links and candidate metadata so other recruiters do not see stale CRM state.
+            const linksRaw = await redis.get(`${LINKS_PREFIX}${id}`);
+            const links = linksRaw ? JSON.parse(linksRaw) : [];
+            await Promise.all(links.map(link =>
+                updateCandidate(link.candidateId, { manualProjectId: null, manualProjectStepId: null })
+                    .catch(() => null)
+            ));
             await redis.del(`${LINKS_PREFIX}${id}`).catch(() => {});
+            links.forEach(link => publishRealtime('crm:candidate', {
+                action: 'unlinkCandidate',
+                projectId: id,
+                candidateId: link.candidateId,
+                reason: 'projectDeleted'
+            }));
             publishRealtime('crm:project', { action: 'deleted', projectId: id });
 
             return res.status(200).json({ success: true });
