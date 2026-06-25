@@ -1,6 +1,42 @@
 import { getRedisClient } from './utils/storage.js';
 
+const ONE_YEAR_SECONDS = 31536000;
+
+function setPublicMediaCacheHeaders(res, etag) {
+    res.setHeader('Cache-Control', `public, max-age=${ONE_YEAR_SECONDS}, s-maxage=${ONE_YEAR_SECONDS}, immutable`);
+    res.setHeader('CDN-Cache-Control', `public, max-age=${ONE_YEAR_SECONDS}, immutable`);
+    res.setHeader('Vercel-CDN-Cache-Control', `public, max-age=${ONE_YEAR_SECONDS}, immutable`);
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    if (etag) res.setHeader('ETag', etag);
+}
+
+function buildMediaEtag(rawId, meta = {}) {
+    const version = [
+        rawId,
+        meta.size || '',
+        meta.createdAt || '',
+        meta.metaMediaId || '',
+        meta.mime || ''
+    ].join(':');
+    return `"${Buffer.from(version).toString('base64url')}"`;
+}
+
+async function trackMediaHit(client, source, bytes = 0) {
+    if (process.env.MEDIA_METRICS !== 'true') return;
+    try {
+        const pipeline = client.pipeline();
+        pipeline.incr(`metrics:media:${source}:hits`);
+        if (bytes) pipeline.incrby(`metrics:media:${source}:bytes`, bytes);
+        await pipeline.exec();
+    } catch (_) {}
+}
+
 export default async function handler(req, res) {
+    if (req.method === 'OPTIONS') return res.status(200).end();
+    if (req.method !== 'GET' && req.method !== 'HEAD') {
+        return res.status(405).send('Method not allowed');
+    }
+
     const { id } = req.query;
 
     if (!id) {
@@ -14,24 +50,44 @@ export default async function handler(req, res) {
             return res.status(500).send('Database Error');
         }
 
-        // Handle ?id=img_123
-        const rawId = id.split('.')[0];
-        let requestedExt = req.query.ext;
-
+        // Handle ?id=img_123 and ?id=img_123.jpg
+        const rawId = String(Array.isArray(id) ? id[0] : id).split('.')[0];
+        const requestedExt = req.query.ext;
 
         const key = `image:${rawId}`;
         const metaKey = `meta:image:${rawId}`;
 
-        let data = await client.get(key);
         const metaRaw = await client.get(metaKey);
         const meta = metaRaw ? JSON.parse(metaRaw) : { mime: 'image/jpeg' };
+        const etag = buildMediaEtag(rawId, meta);
+
+        // Let browsers/CDN answer repeat views without pulling the blob from Redis/Meta.
+        setPublicMediaCacheHeaders(res, etag);
+        if (req.headers['if-none-match'] === etag) {
+            await trackMediaHit(client, 'not_modified');
+            return res.status(304).end();
+        }
+
+        if (req.method === 'HEAD' && meta.size) {
+            let headMime = meta.mime;
+            if (requestedExt === 'jpg' || requestedExt === 'jpeg') {
+                headMime = 'image/jpeg';
+            }
+            res.setHeader('Content-Type', headMime);
+            res.setHeader('Content-Length', meta.size);
+            await trackMediaHit(client, 'head');
+            return res.status(200).end();
+        }
 
         let buffer;
+        let source = 'redis';
+        const data = await client.get(key);
         if (data) {
             // Binary conversion from Redis cache
             buffer = Buffer.from(data, 'base64');
         } else if (meta.metaMediaId) {
             // Dynamic fetch from Meta (since we stopped saving huge base64 blobs to Redis to prevent OOM)
+            source = 'meta';
             try {
                 const { downloadMetaMedia } = await import('./whatsapp/utils.js');
                 const metaMedia = await downloadMetaMedia(meta.metaMediaId);
@@ -70,8 +126,11 @@ export default async function handler(req, res) {
         // Headers for scale and reliability
         res.setHeader('Content-Type', finalMime);
         res.setHeader('Content-Length', buffer.length);
-        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
-        res.setHeader('Access-Control-Allow-Origin', '*');
+        setPublicMediaCacheHeaders(res, etag);
+
+        await trackMediaHit(client, source, buffer.length);
+
+        if (req.method === 'HEAD') return res.status(200).end();
 
         return res.end(buffer);
 

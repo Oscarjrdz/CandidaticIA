@@ -6,7 +6,7 @@ export default async function handler(req, res) {
     }
 
     try {
-        const { getRedisClient, getCandidateById, validateAdminSession } = await import('./utils/storage.js');
+        const { getRedisClient, getCandidateById, updateCandidate, validateAdminSession } = await import('./utils/storage.js');
 
         const userId = await validateAdminSession(req);
         if (!userId) return res.status(401).json({ error: 'No autorizado' });
@@ -19,6 +19,13 @@ export default async function handler(req, res) {
 
         const KEY = 'candidatic_manual_projects';
         const LINKS_PREFIX = 'crm_links:'; // crm_links:{projectId} → [{candidateId, stepId, linkedAt}]
+        const publishRealtime = (type, payload = {}) => {
+            redis.publish('channel:sse:updates', JSON.stringify({
+                type,
+                ...payload,
+                timestamp: new Date().toISOString()
+            })).catch(() => {});
+        };
 
         // GET - List all manual projects OR get candidates for a specific project
         if (req.method === 'GET') {
@@ -68,16 +75,20 @@ export default async function handler(req, res) {
 
                 const linksRaw = await redis.get(`${LINKS_PREFIX}${projectId}`);
                 let links = linksRaw ? JSON.parse(linksRaw) : [];
+                const existingLink = links.find(l => l.candidateId === candidateId);
+                const finalStepId = stepId || existingLink?.stepId || 'step_inicio';
 
                 // Don't duplicate
-                if (links.find(l => l.candidateId === candidateId)) {
+                if (existingLink) {
                     // Update step if already linked
-                    links = links.map(l => l.candidateId === candidateId ? { ...l, stepId: stepId || l.stepId } : l);
+                    links = links.map(l => l.candidateId === candidateId ? { ...l, stepId: finalStepId } : l);
                 } else {
-                    links.push({ candidateId, stepId: stepId || 'step_inicio', linkedAt: new Date().toISOString() });
+                    links.push({ candidateId, stepId: finalStepId, linkedAt: new Date().toISOString() });
                 }
 
                 await redis.set(`${LINKS_PREFIX}${projectId}`, JSON.stringify(links));
+                await updateCandidate(candidateId, { manualProjectId: projectId, manualProjectStepId: finalStepId });
+                publishRealtime('crm:candidate', { action: 'linkCandidate', projectId, candidateId, stepId: finalStepId });
                 return res.status(200).json({ success: true });
             }
 
@@ -88,14 +99,19 @@ export default async function handler(req, res) {
                 const linksRaw = await redis.get(`${LINKS_PREFIX}${projectId}`);
                 let links = linksRaw ? JSON.parse(linksRaw) : [];
                 const existingIds = new Set(links.map(l => l.candidateId));
+                const finalStepId = stepId || 'step_inicio';
 
                 for (const cId of candidateIds) {
                     if (!existingIds.has(cId)) {
-                        links.push({ candidateId: cId, stepId: stepId || 'step_inicio', linkedAt: new Date().toISOString() });
+                        links.push({ candidateId: cId, stepId: finalStepId, linkedAt: new Date().toISOString() });
                     }
                 }
 
                 await redis.set(`${LINKS_PREFIX}${projectId}`, JSON.stringify(links));
+                await Promise.all(candidateIds.map(cId =>
+                    updateCandidate(cId, { manualProjectId: projectId, manualProjectStepId: finalStepId })
+                ));
+                publishRealtime('crm:candidate', { action: 'batchLink', projectId, candidateIds, stepId: finalStepId });
                 return res.status(200).json({ success: true, linked: candidateIds.length });
             }
 
@@ -108,6 +124,8 @@ export default async function handler(req, res) {
                 links = links.filter(l => l.candidateId !== candidateId);
 
                 await redis.set(`${LINKS_PREFIX}${projectId}`, JSON.stringify(links));
+                await updateCandidate(candidateId, { manualProjectId: null, manualProjectStepId: null });
+                publishRealtime('crm:candidate', { action: 'unlinkCandidate', projectId, candidateId });
                 return res.status(200).json({ success: true });
             }
 
@@ -120,6 +138,8 @@ export default async function handler(req, res) {
                 links = links.map(l => l.candidateId === candidateId ? { ...l, stepId } : l);
 
                 await redis.set(`${LINKS_PREFIX}${projectId}`, JSON.stringify(links));
+                await updateCandidate(candidateId, { manualProjectId: projectId, manualProjectStepId: stepId });
+                publishRealtime('crm:candidate', { action: 'moveCandidate', projectId, candidateId, stepId });
                 return res.status(200).json({ success: true });
             }
 
@@ -144,6 +164,7 @@ export default async function handler(req, res) {
                 const remaining = stepLinks.filter(l => !reorderedIds.has(l.candidateId));
 
                 await redis.set(`${LINKS_PREFIX}${projectId}`, JSON.stringify([...otherLinks, ...reordered, ...remaining]));
+                publishRealtime('crm:candidate', { action: 'reorderCandidates', projectId, stepId, candidateIds });
                 return res.status(200).json({ success: true });
             }
 
@@ -158,6 +179,7 @@ export default async function handler(req, res) {
 
                 projects[idx].steps = steps;
                 await redis.set(KEY, JSON.stringify(projects));
+                publishRealtime('crm:project', { action: 'stepsUpdated', projectId, project: projects[idx] });
 
                 return res.status(200).json({ success: true, data: projects[idx] });
             }
@@ -171,6 +193,7 @@ export default async function handler(req, res) {
                 const reordered = projectIds.map(id => projects.find(p => p.id === id)).filter(Boolean);
 
                 await redis.set(KEY, JSON.stringify(reordered));
+                publishRealtime('crm:project', { action: 'reordered', projectIds, projects: reordered });
                 return res.status(200).json({ success: true });
             }
 
@@ -193,6 +216,7 @@ export default async function handler(req, res) {
 
                 projects.unshift(cloned);
                 await redis.set(KEY, JSON.stringify(projects));
+                publishRealtime('crm:project', { action: 'cloned', projectId: cloned.id, project: cloned });
 
                 return res.status(200).json({ success: true, data: cloned });
             }
@@ -214,6 +238,7 @@ export default async function handler(req, res) {
             const projects = data ? JSON.parse(data) : [];
             projects.unshift(newProject);
             await redis.set(KEY, JSON.stringify(projects));
+            publishRealtime('crm:project', { action: 'created', projectId: newProject.id, project: newProject });
 
             return res.status(201).json({ success: true, data: newProject });
         }
@@ -237,6 +262,7 @@ export default async function handler(req, res) {
 
             projects[index] = { ...projects[index], ...updates };
             await redis.set(KEY, JSON.stringify(projects));
+            publishRealtime('crm:project', { action: 'updated', projectId: id, project: projects[index] });
 
             return res.status(200).json({ success: true, data: projects[index] });
         }
@@ -253,6 +279,7 @@ export default async function handler(req, res) {
 
             // Clean up candidate links
             await redis.del(`${LINKS_PREFIX}${id}`).catch(() => {});
+            publishRealtime('crm:project', { action: 'deleted', projectId: id });
 
             return res.status(200).json({ success: true });
         }

@@ -353,8 +353,15 @@ async function processMessengerMessage(psid, message, timestamp, referral) {
             if (referral.source) updatedCandidate.adSource = referral.source;
         }
 
-        if ((Number(freshCandidate?.unreadMsgCount) || 0) === 0) {
-            if (redis) await redis.incr('stats:bot:unread_v2').catch(() => {});
+        const previousUserTime = freshCandidate?.lastUserMessageAt ? new Date(freshCandidate.lastUserMessageAt).getTime() : 0;
+        const previousHumanTime = freshCandidate?.lastHumanMessageAt ? new Date(freshCandidate.lastHumanMessageAt).getTime() : 0;
+        const wasUnread = !!previousUserTime && previousUserTime > previousHumanTime;
+        if (redis) {
+            await redis.sadd('candidates:unread', candidateId).catch(() => {});
+            if (!wasUnread) {
+                await redis.incr('stats:bot:unread_v2').catch(() => {});
+                await redis.incr('stats:unread:version').catch(() => {});
+            }
         }
 
         await saveWebhookTransaction({

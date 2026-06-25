@@ -62,12 +62,12 @@ function AppShell() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
 
-  // Conteo de no-leídos — fuente única de verdad para el badge de Chat Web
+  // Conteo de no-leídos — mismo cálculo que usa Chat Web, persistido solo como cache visual inicial.
   const [chatUnreadCount, setChatUnreadCount] = useState(() => {
     const saved = localStorage.getItem('chat_unread_rbac_v2');
     return saved !== null ? Number(saved) : 0;
   });
-  const { newCandidate } = useCandidatesSSE();
+  const { newCandidate, updatedCandidate, globalStats } = useCandidatesSSE();
 
   // Cuando Chat Web está abierto, recibe el conteo RBAC exacto directo de ChatSection
   const handleUnreadCountChange = useCallback((count) => {
@@ -75,20 +75,42 @@ function AppShell() {
     localStorage.setItem('chat_unread_rbac_v2', String(count));
   }, []);
 
-  // Candidato nuevo = siempre no-leído: incrementar badge si estamos fuera de Chat Web
-  const prevNewCandidateId = useRef(null);
+  // Refresca el badge aunque Chat Web no esté montado, sin descargar perfiles completos.
+  const unreadRefreshSeq = useRef(0);
   useEffect(() => {
-    if (!newCandidate?.id) return;
-    if (newCandidate.id === prevNewCandidateId.current) return;
-    prevNewCandidateId.current = newCandidate.id;
-    if (activeSection !== 'chat') {
-      setChatUnreadCount(prev => {
-        const next = prev + 1;
-        localStorage.setItem('chat_unread_rbac_v2', String(next));
-        return next;
-      });
-    }
-  }, [newCandidate, activeSection]);
+    if (!user) return;
+    let cancelled = false;
+    const seq = ++unreadRefreshSeq.current;
+
+    const refreshUnreadBadge = async () => {
+      let data;
+      try {
+        const res = await fetch('/api/chat-unread-count');
+        data = await res.json();
+        if (cancelled || seq !== unreadRefreshSeq.current || !res.ok || !data.success) return;
+      } catch {
+        return;
+      }
+
+      const next = Number(data.unreadCount) || 0;
+      setChatUnreadCount(next);
+      localStorage.setItem('chat_unread_rbac_v2', String(next));
+    };
+
+    const timer = setTimeout(refreshUnreadBadge, 150);
+
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [
+    user,
+    rolePermissions,
+    newCandidate?.id,
+    updatedCandidate?.candidateId,
+    updatedCandidate?.id,
+    updatedCandidate?.unreadMsgCount,
+    updatedCandidate?.lastUserMessageAt,
+    updatedCandidate?.lastHumanMessageAt,
+    globalStats?.unread
+  ]);
 
   // Resize listener for mobile viewport detection
   useEffect(() => {
@@ -128,26 +150,6 @@ function AppShell() {
       if (fallback) setActiveSection(fallback);
     }
   }, [user, rolePermissions, isViewer, isMobile]);
-
-  // Bulk engine heartbeat — adaptive interval: 5s while running, 30s idle
-  // Only runs for users who have explicit bulk access (avoids polling for every session)
-  useEffect(() => {
-    if (!user) return;
-    // Skip polling if rolePermissions is loaded and bulks is explicitly disabled for this role
-    if (rolePermissions && rolePermissions['bulks'] === false) return;
-    let timer;
-    const poll = () => {
-        fetch('/api/bulks?action=status')
-            .then(r => r.json())
-            .then(d => {
-                const isRunning = d?.state?.isRunning === true;
-                timer = setTimeout(poll, isRunning ? 5000 : 30000);
-            })
-            .catch(() => { timer = setTimeout(poll, 30000); });
-    };
-    timer = setTimeout(poll, 5000); // first check after 5s
-    return () => clearTimeout(timer);
-  }, [user, rolePermissions]);
 
   // Toggle tema
   const toggleTheme = useCallback(() => {

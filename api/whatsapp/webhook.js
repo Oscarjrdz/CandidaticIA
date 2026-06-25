@@ -124,7 +124,10 @@ export default async function handler(req, res) {
             }
             // rawBody no disponible (limitación de Vercel sin bodyParser desactivado).
             // TODO: exportar config = { api: { bodyParser: false } } y parsear manualmente.
-            console.warn('[META WEBHOOK] ⚠️ HMAC no validado — rawBody no disponible. Configura bodyParser: false en Vercel.');
+            if (!global.__metaRawBodyWarned) {
+                console.warn('[META WEBHOOK] ⚠️ HMAC no validado — rawBody no disponible. Configura bodyParser: false en Vercel.');
+                global.__metaRawBodyWarned = true;
+            }
         }
     } else {
         // Log once per cold start to remind ops team to configure the secret
@@ -529,8 +532,15 @@ export default async function handler(req, res) {
                 if (metaMsg.referral.ctwa_clid) updatedCandidate.adClickId = metaMsg.referral.ctwa_clid;
             }
 
-            if ((Number(freshCandidate?.unreadMsgCount) || 0) === 0) {
-                if (redis) await redis.incr('stats:bot:unread_v2').catch(() => {});
+            const previousUserTime = freshCandidate?.lastUserMessageAt ? new Date(freshCandidate.lastUserMessageAt).getTime() : 0;
+            const previousHumanTime = freshCandidate?.lastHumanMessageAt ? new Date(freshCandidate.lastHumanMessageAt).getTime() : 0;
+            const wasUnread = !!previousUserTime && previousUserTime > previousHumanTime;
+            if (redis) {
+                await redis.sadd('candidates:unread', candidateId).catch(() => {});
+                if (!wasUnread) {
+                    await redis.incr('stats:bot:unread_v2').catch(() => {});
+                    await redis.incr('stats:unread:version').catch(() => {});
+                }
             }
 
             await saveWebhookTransaction({

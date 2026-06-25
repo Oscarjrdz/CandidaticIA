@@ -20,6 +20,7 @@ import { useState, useEffect, useRef, useCallback, useSyncExternalStore } from '
 const SSE_EVENTS = {
     CANDIDATE_UPDATE: 'sse:candidate:update',
     CANDIDATE_NEW: 'sse:candidate:new',
+    CANDIDATE_DELETE: 'sse:candidate:delete',
 };
 
 // ─── SINGLETON: Single global EventSource ───
@@ -30,6 +31,7 @@ let _reconnectAttempts = 0;
 let _globalState = {
     newCandidate: null,
     updatedCandidate: null,
+    deletedCandidate: null,
     globalStats: null,
     connected: false,
     error: null,
@@ -112,6 +114,9 @@ function _connectSingleton() {
                     window.dispatchEvent(new CustomEvent(SSE_EVENTS.CANDIDATE_UPDATE, { detail: data.data }));
                     // Also update state for backward-compat (simple consumers that only need latest)
                     _updateState({ updatedCandidate: data.data });
+                } else if (data.type === 'candidate:delete') {
+                    window.dispatchEvent(new CustomEvent(SSE_EVENTS.CANDIDATE_DELETE, { detail: data.data }));
+                    _updateState({ deletedCandidate: data.data });
                 } else if (data.type === 'stats:global') {
                     _updateState({ globalStats: data.data });
                 } else if (data.type === 'presence:update') {
@@ -124,6 +129,10 @@ function _connectSingleton() {
                     window.dispatchEvent(new CustomEvent('sse:internal:status', { detail: data.data }));
                 } else if (data.type === 'internal:reaction') {
                     window.dispatchEvent(new CustomEvent('sse:internal:reaction', { detail: data.data }));
+                } else if (data.type === 'crm:project') {
+                    window.dispatchEvent(new CustomEvent('sse:crm:project', { detail: data.data }));
+                } else if (data.type === 'crm:candidate') {
+                    window.dispatchEvent(new CustomEvent('sse:crm:candidate', { detail: data.data }));
                 }
             } catch (parseError) {
                 console.error('SSE parse error:', parseError);
@@ -213,6 +222,7 @@ export function useCandidatesSSE() {
     return {
         newCandidate: state.newCandidate,
         updatedCandidate: state.updatedCandidate,
+        deletedCandidate: state.deletedCandidate,
         globalStats: state.globalStats,
         connected: state.connected,
         error: state.error,

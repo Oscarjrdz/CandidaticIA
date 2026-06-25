@@ -29,6 +29,24 @@ export default async function handler(req, res) {
         const role = roles.find(r => r.name === user.role);
         const rolePermissions = role?.permissions || {};
 
+        const [unreadSetSize, unreadVersionRaw] = await Promise.all([
+            redis.scard('candidates:unread'),
+            redis.get('stats:unread:version')
+        ]);
+        const unreadVersion = unreadVersionRaw || '0';
+        const restrictionSig = JSON.stringify({
+            role: user.role || '',
+            crm: Array.isArray(user.allowed_crm_projects) ? [...user.allowed_crm_projects].sort() : [],
+            labels: Array.isArray(user.allowed_labels) ? [...user.allowed_labels].sort() : [],
+            viewIncomplete: rolePermissions.view_incomplete_candidates === true
+        });
+        const cacheKey = `cache:chat_unread_count:${userId}:${Buffer.from(restrictionSig).toString('base64url')}:${unreadSetSize}:${unreadVersion}`;
+        const cached = await redis.get(cacheKey);
+        if (cached) {
+            res.setHeader('Cache-Control', 'private, max-age=5');
+            return res.status(200).json(JSON.parse(cached));
+        }
+
         const canSeeIncomplete =
             user.role === 'SuperAdmin' ||
             !rolePermissions ||
@@ -41,9 +59,15 @@ export default async function handler(req, res) {
         const hasLabelRestriction = Array.isArray(allowedLabels) && allowedLabels.length > 0;
         const hasRBACRestriction = user.role !== 'SuperAdmin' && user.role !== 'Admin' && (hasCrmRestriction || hasLabelRestriction);
 
-        const unreadIds = await redis.smembers('candidates:unread');
         const counts = { all: 0, complete: 0, incomplete: 0, tags: {}, completeTags: {}, incompleteTags: {}, crmProjects: {} };
-        if (!unreadIds.length) return res.status(200).json({ success: true, unreadCount: 0, counts });
+        if (!unreadSetSize) {
+            const payload = { success: true, unreadCount: 0, counts };
+            await redis.set(cacheKey, JSON.stringify(payload), 'EX', 8).catch(() => {});
+            res.setHeader('Cache-Control', 'private, max-age=5');
+            return res.status(200).json(payload);
+        }
+
+        const unreadIds = await redis.smembers('candidates:unread');
 
         const customFieldsRaw = await redis.get('custom_fields');
         const customFields = customFieldsRaw ? JSON.parse(customFieldsRaw) : [];
@@ -103,7 +127,10 @@ export default async function handler(req, res) {
             }
         }
 
-        return res.status(200).json({ success: true, unreadCount: counts.all, counts });
+        const payload = { success: true, unreadCount: counts.all, counts };
+        await redis.set(cacheKey, JSON.stringify(payload), 'EX', 8).catch(() => {});
+        res.setHeader('Cache-Control', 'private, max-age=5');
+        return res.status(200).json(payload);
     } catch (error) {
         console.error('Chat unread count error:', error);
         return res.status(500).json({ error: 'Internal error', details: error.message });

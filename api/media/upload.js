@@ -1,7 +1,6 @@
 import { getRedisClient } from '../utils/storage.js';
 import { IncomingForm } from 'formidable';
 import { readFileSync } from 'fs';
-import path from 'path';
 import os from 'os';
 
 export const config = {
@@ -83,10 +82,16 @@ export default async function handler(req, res) {
         // Quick reply assets necesitan TTL largo: el metaMediaId de Meta expira y
         // necesitamos el base64 para re-subirlo. Mensajes normales usan TTL corto (OOM).
         const metaTTL = isQuickReplyAsset ? 86400 * 90 : 172800; // 90 días vs 48h
+        const needsRedisBlob = isQuickReplyAsset || !metaMediaId;
+        let base64Data = null;
 
-        const base64Data = fileBuffer.toString('base64');
-        if (base64Data.length > 5 * 1024 * 1024) {
-            return res.status(413).json({ error: 'El archivo es demasiado grande (> 5MB).' });
+        // Only encode/store base64 when Redis actually needs the blob. Normal media with
+        // a Meta media_id keeps Redis lean: metadata only, no duplicated payload.
+        if (needsRedisBlob) {
+            base64Data = fileBuffer.toString('base64');
+            if (base64Data.length > 5 * 1024 * 1024) {
+                return res.status(413).json({ error: 'El archivo es demasiado grande (> 5MB).' });
+            }
         }
 
         const redisOps = [

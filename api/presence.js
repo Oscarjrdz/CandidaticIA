@@ -1,6 +1,6 @@
 /**
  * Endpoint para manejar la presencia global de reclutadores y usuarios en línea.
- * Recibe un "heartbeat" cada ~8 segundos desde el cliente.
+ * Recibe un heartbeat periódico desde el cliente.
  * 
  * POST /api/presence -> Guarda estado en Redis, retorna lista de conectados.
  */
@@ -17,7 +17,7 @@ export default async function handler(req, res) {
         }
 
         if (req.method === 'POST') {
-            const { userId, whatsapp, userName, role, currentChatId, idle } = req.body;
+            const { userId, whatsapp, userName, role, currentChatId, idle, activeSeconds } = req.body;
 
             if (!userId) {
                 return res.status(400).json({ error: 'Missing userId' });
@@ -26,7 +26,7 @@ export default async function handler(req, res) {
             // Use whatsapp as the canonical key when available (stable, no prefix ambiguity)
             const stableKey = whatsapp || userId;
             const now = Date.now();
-            const PRESENCE_TTL_MS = 35000; // 35s — heartbeat cada 20s, TTL da margen para lag de red
+            const PRESENCE_TTL_MS = 90000; // 90s — heartbeat cada 45s, TTL da margen para lag de red
             const expiresAt = now + PRESENCE_TTL_MS;
 
             // ── Write user state into Hash + Sorted Set (replaces individual SET with EX 12) ──
@@ -54,7 +54,8 @@ export default async function handler(req, res) {
             actPipe.set(`recruiter:meta:${userId}`, JSON.stringify({ userName, role: role || 'User' }), 'EX', ttl);
             // Accumulate active seconds only when user is not idle
             if (!idle) {
-                actPipe.incrby(`recruiter:time:${userId}:${today}`, 3);
+                const seconds = Math.max(0, Math.min(Number(activeSeconds) || 3, 60));
+                actPipe.incrby(`recruiter:time:${userId}:${today}`, seconds);
                 actPipe.expire(`recruiter:time:${userId}:${today}`, ttl);
             }
             // Track unique chats visited (opened, not necessarily responded)
@@ -82,10 +83,10 @@ export default async function handler(req, res) {
             }
 
             // ── Conditional SSE publish: only when the user list actually changes ──
-            // Compare sorted list of userIds to detect additions/removals
+            // Compare sorted user presence state to detect additions/removals and chat switches.
             const { createHash } = await import('crypto');
             const listHash = createHash('md5')
-                .update(onlineUsers.map(u => u.userId).sort().join(','))
+                .update(onlineUsers.map(u => `${u.userId}:${u.currentChatId || ''}`).sort().join(','))
                 .digest('hex');
             const prevHash = await redis.get('presence:last_hash');
 
@@ -95,6 +96,10 @@ export default async function handler(req, res) {
                     type: 'presence:update',
                     onlineUsers,
                 })).catch(() => {});
+            }
+
+            if (req.query.lean === '1') {
+                return res.status(200).json({ success: true });
             }
 
             return res.status(200).json({ success: true, onlineUsers });

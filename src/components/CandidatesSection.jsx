@@ -25,6 +25,23 @@ import { isProfileComplete, isChatEmpty } from '../utils/profileUtils';
 import { useToastContext } from '../contexts/ToastContext';
 import { useAuthContext } from '../contexts/AuthContext';
 
+const TRANSIENT_CANDIDATE_UPDATE_KEYS = new Set([
+    'candidateTyping',
+    'markAllSentAsRead',
+    'messageFrom',
+    'messagePayload',
+    'messageStatusUpdate',
+    'newMessage',
+    'recruiterTyping',
+    'statusUpdate',
+]);
+
+const extractPersistentCandidatePatch = (patch = {}) => {
+    return Object.fromEntries(
+        Object.entries(patch).filter(([key]) => !TRANSIENT_CANDIDATE_UPDATE_KEYS.has(key))
+    );
+};
+
 /**
  * Sortable Header Sub-component
  */
@@ -467,7 +484,7 @@ const CandidatesSection = () => {
 
 
     // 📡 SSE: Real-time candidate updates
-    const { newCandidate, updatedCandidate, globalStats } = useCandidatesSSE();
+    const { newCandidate, updatedCandidate, deletedCandidate, globalStats } = useCandidatesSSE();
 
     // Listen for new candidates via SSE
     useEffect(() => {
@@ -493,6 +510,7 @@ const CandidatesSection = () => {
         if (updatedCandidate && (updatedCandidate.candidateId || updatedCandidate.phoneMatch) && updatedCandidate.updates) {
             // ✅ META AUDIT: Ghost guard — skip updates for recently deleted candidates
             if (updatedCandidate.candidateId && recentlyDeletedRef.current.has(updatedCandidate.candidateId)) return;
+            const candidatePatch = extractPersistentCandidatePatch(updatedCandidate.updates);
 
             setCandidates(prev => {
                 const index = prev.findIndex(c => 
@@ -502,7 +520,7 @@ const CandidatesSection = () => {
                 if (index === -1) return prev;
 
                 const updatedList = [...prev];
-                updatedList[index] = { ...updatedList[index], ...updatedCandidate.updates };
+                updatedList[index] = { ...updatedList[index], ...candidatePatch };
                 return updatedList;
             });
 
@@ -510,11 +528,20 @@ const CandidatesSection = () => {
                  const matchId = updatedCandidate.candidateId && selectedCandidate.id === updatedCandidate.candidateId;
                  const matchPhone = updatedCandidate.phoneMatch && selectedCandidate.whatsapp && selectedCandidate.whatsapp.includes(updatedCandidate.phoneMatch);
                  if (matchId || matchPhone) {
-                     setSelectedCandidate(prev => ({ ...prev, ...updatedCandidate.updates }));
+                     setSelectedCandidate(prev => ({ ...prev, ...candidatePatch }));
                  }
             }
         }
     }, [updatedCandidate]);
+
+    useEffect(() => {
+        const deletedId = deletedCandidate?.candidateId || deletedCandidate?.id;
+        if (!deletedId) return;
+
+        setCandidates(prev => prev.filter(c => c.id !== deletedId));
+        setAiFilteredCandidates(prev => prev ? prev.filter(c => c.id !== deletedId) : prev);
+        if (selectedCandidate?.id === deletedId) setSelectedCandidate(null);
+    }, [deletedCandidate, selectedCandidate?.id]);
 
     // ✅ META AUDIT: Live Stats — sync BOTH stats object AND totalItems from SSE
     useEffect(() => {

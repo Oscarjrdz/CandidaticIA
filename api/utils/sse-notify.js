@@ -43,3 +43,21 @@ export async function notifyCandidateUpdate(candidateId, updates = {}) {
         console.error('❌ SSE candidate update notification error:', error);
     }
 }
+
+export async function notifyCandidateDelete(candidateId) {
+    try {
+        const redis = getRedisClient();
+        if (!redis) return;
+
+        const notification = {
+            type: 'candidate:delete',
+            candidateId,
+            timestamp: new Date().toISOString()
+        };
+
+        await redis.publish('channel:sse:updates', JSON.stringify(notification));
+        console.log('✅ SSE Pub/Sub published for DELETED candidate:', candidateId);
+    } catch (error) {
+        console.error('❌ SSE candidate delete notification error:', error);
+    }
+}

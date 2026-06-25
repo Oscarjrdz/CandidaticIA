@@ -544,6 +544,7 @@ async function _seedUnreadSet(client) {
             await new Promise(r => setTimeout(r, 5));
         }
         await client.set('stats:bot:unread_v2', totalUnread);
+        await client.incr('stats:unread:version').catch(() => {});
         console.log(`✅ [candidates:unread] Set sembrado: ${totalUnread} no leídos`);
     } catch (err) {
         console.error('❌ [candidates:unread] Siembra fallida:', err);
@@ -914,6 +915,7 @@ export const deleteCandidate = async (id) => {
                 1,
                 'stats:bot:unread_v2'
             );
+            multi.incr('stats:unread:version');
         }
         if (phone) {
             multi.hdel(KEYS.PHONE_INDEX, phone);
@@ -1203,6 +1205,7 @@ export const updateCandidate = async (id, data) => {
                     await redisAtomic.incr('stats:bot:unread_v2').catch(() => {});
                     await redisAtomic.sadd(KEYS.CANDIDATES_UNREAD, id).catch(() => {});
                 }
+                await redisAtomic.incr('stats:unread:version').catch(() => {});
                 // Broadcast updated unread count to all SSE clients immediately
                 _publishGlobalStats(redisAtomic).catch(() => {});
             }

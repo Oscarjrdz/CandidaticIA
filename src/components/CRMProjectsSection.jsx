@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { FolderPlus, Trash2, Plus, Pencil, Users, User, Search, X, Loader2, MessageCircle, Copy, ChevronRight, GraduationCap, MapPin, Calendar, Palette, GripVertical, Tag, Check } from 'lucide-react';
 import Card from './ui/Card';
 import Button from './ui/Button';
@@ -310,9 +310,11 @@ const CRMProjectsSection = () => {
     const [activeId, setActiveId] = useState(null);
     const [activeItem, setActiveItem] = useState(null);
     const [overStepId, setOverStepId] = useState(null);
+    const activeProjectRef = useRef(null);
 
     useEffect(() => { fetchProjects(); }, []);
     useEffect(() => { if (activeProject) fetchCandidates(activeProject.id); }, [activeProject?.id]);
+    useEffect(() => { activeProjectRef.current = activeProject; }, [activeProject]);
     useEffect(() => {
         fetch('/api/tags').then(r => r.json()).then(d => { if (d.success) setAvailableTags(d.tags || []); }).catch(() => {});
     }, []);
@@ -356,6 +358,84 @@ const CRMProjectsSection = () => {
         finally { setLoadingCands(false); }
     };
 
+    const refreshCandidatesSilently = async (projectId) => {
+        if (!projectId || activeProjectRef.current?.id !== projectId) return;
+        try {
+            const res = await fetch(`/api/manual_projects?id=${projectId}&view=candidates`);
+            const data = await res.json();
+            if (data.success && activeProjectRef.current?.id === projectId) setCandidates(data.candidates);
+        } catch (e) { console.error(e); }
+    };
+
+    useEffect(() => {
+        const handleProjectRealtime = (event) => {
+            const update = event.detail || {};
+            const { action, projectId, project, projects: orderedProjects } = update;
+
+            if (action === 'reordered' && Array.isArray(orderedProjects)) {
+                setProjects(orderedProjects);
+                return;
+            }
+
+            if (action === 'deleted' && projectId) {
+                setProjects(prev => prev.filter(p => p.id !== projectId));
+                setActiveProject(prev => {
+                    if (prev?.id !== projectId) return prev;
+                    setCandidates([]);
+                    return null;
+                });
+                return;
+            }
+
+            if (!project?.id) return;
+            setProjects(prev => {
+                const exists = prev.some(p => p.id === project.id);
+                if (exists) return prev.map(p => p.id === project.id ? project : p);
+                return [project, ...prev];
+            });
+            setActiveProject(prev => prev?.id === project.id ? project : prev);
+        };
+
+        const handleCandidateRealtime = (event) => {
+            const update = event.detail || {};
+            const activeId = activeProjectRef.current?.id;
+            if (!activeId || update.projectId !== activeId) return;
+
+            if (update.action === 'moveCandidate' && update.candidateId && update.stepId) {
+                setCandidates(prev => prev.map(c => {
+                    if (c.id !== update.candidateId) return c;
+                    return { ...c, crmMeta: { ...(c.crmMeta || {}), stepId: update.stepId } };
+                }));
+                return;
+            }
+
+            if (update.action === 'unlinkCandidate' && update.candidateId) {
+                setCandidates(prev => prev.filter(c => c.id !== update.candidateId));
+                return;
+            }
+
+            if (['linkCandidate', 'batchLink', 'reorderCandidates'].includes(update.action)) {
+                refreshCandidatesSilently(activeId);
+            }
+        };
+
+        const handleCandidateDelete = (event) => {
+            const deletedId = event.detail?.candidateId || event.detail?.id;
+            if (!deletedId) return;
+            setCandidates(prev => prev.filter(c => c.id !== deletedId));
+            setChatCandidate(prev => prev?.id === deletedId ? null : prev);
+        };
+
+        window.addEventListener('sse:crm:project', handleProjectRealtime);
+        window.addEventListener('sse:crm:candidate', handleCandidateRealtime);
+        window.addEventListener('sse:candidate:delete', handleCandidateDelete);
+        return () => {
+            window.removeEventListener('sse:crm:project', handleProjectRealtime);
+            window.removeEventListener('sse:crm:candidate', handleCandidateRealtime);
+            window.removeEventListener('sse:candidate:delete', handleCandidateDelete);
+        };
+    }, []);
+
     const handleCreate = async () => {
         if (!projName.trim()) return;
         try {
@@ -372,7 +452,9 @@ const CRMProjectsSection = () => {
                     if (activeProject?.id === data.data.id) setActiveProject(data.data);
                     showToast('Proyecto actualizado', 'success');
                 } else {
-                    setProjects(prev => [data.data, ...prev]);
+                    setProjects(prev => prev.some(p => p.id === data.data.id)
+                        ? prev.map(p => p.id === data.data.id ? data.data : p)
+                        : [data.data, ...prev]);
                     setActiveProject(data.data);
                     showToast('Proyecto creado', 'success');
                 }
@@ -398,7 +480,12 @@ const CRMProjectsSection = () => {
         try {
             const res = await fetch('/api/manual_projects', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'clone', projectId: id }) });
             const data = await res.json();
-            if (data.success) { setProjects(prev => [data.data, ...prev]); showToast('Proyecto clonado', 'success'); }
+            if (data.success) {
+                setProjects(prev => prev.some(p => p.id === data.data.id)
+                    ? prev.map(p => p.id === data.data.id ? data.data : p)
+                    : [data.data, ...prev]);
+                showToast('Proyecto clonado', 'success');
+            }
         } catch (e) { showToast('Error', 'error'); }
     };
 

@@ -4,7 +4,7 @@ import { getRedisClient } from './storage.js';
  * Bot Stats Engine v3.1 — Pure Atomic Reads
  *
  * Reads only O(1) counters. No candidate scan, ever.
- * - unread   → stats:bot:unread_v2  (INCR/DECR mantenido en tiempo real)
+ * - unread   → SCARD candidates:unread
  * - complete / pending → SCARD (O(1))
  * - proactive counters → single GET each
  *
@@ -40,7 +40,7 @@ export const calculateBotStats = async () => {
         pipeline.get('ai:proactive:total_recovered');
         pipeline.scard('stats:list:complete');
         pipeline.scard('stats:list:pending');
-        pipeline.get('stats:bot:unread_v2');
+        pipeline.scard('candidates:unread');
         const results = await pipeline.exec();
 
         const complete = results[3][1] || 0;

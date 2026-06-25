@@ -97,8 +97,8 @@ export default function ManualProjectsSidepanel({ selectedChat, onClose, showToa
         }
     }, [selectedChat?.id]);
 
-    const loadProjects = async () => {
-        setLoading(true);
+    const loadProjects = async (silent = false) => {
+        if (!silent) setLoading(true);
         try {
             const res = await fetch('/api/manual_projects');
             const data = await res.json();
@@ -109,9 +109,15 @@ export default function ManualProjectsSidepanel({ selectedChat, onClose, showToa
             console.error(e);
             showToast && showToast('Error cargando proyectos', 'error');
         } finally {
-            setLoading(false);
+            if (!silent) setLoading(false);
         }
     };
+
+    useEffect(() => {
+        const handleProjectRealtime = () => loadProjects(true);
+        window.addEventListener('sse:crm:project', handleProjectRealtime);
+        return () => window.removeEventListener('sse:crm:project', handleProjectRealtime);
+    }, []);
 
     const handleCreateProject = async (e) => {
         e.preventDefault();
@@ -124,7 +130,9 @@ export default function ManualProjectsSidepanel({ selectedChat, onClose, showToa
             });
             const data = await res.json();
             if (data.success) {
-                setProjects([...projects, data.data]);
+                setProjects(prev => prev.some(p => p.id === data.data.id)
+                    ? prev.map(p => p.id === data.data.id ? data.data : p)
+                    : [...prev, data.data]);
                 setNewProjectName('');
                 setShowNewProjectForm(false);
                 setExpandedProjectId(data.data.id);

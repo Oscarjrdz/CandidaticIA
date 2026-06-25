@@ -44,7 +44,7 @@ async function drainWaitlist(candidateId, fromPhone) {
 
         const msgIds = parsed.map(m => m.msgId).filter(id => id);
 
-        console.error(`[Serverless Engine] 🌪️ Draining burst for ${candidateId}. Count: ${pendingMsgs.length}.`);
+        console.log(`[Serverless Engine] Draining burst for ${candidateId}. Count: ${pendingMsgs.length}.`);
 
         // 🔁 Retry logic: up to 2 attempts with 2s backoff
         let attempts = 0;
@@ -52,7 +52,7 @@ async function drainWaitlist(candidateId, fromPhone) {
         while (attempts < 2 && !success) {
             try {
                 if (attempts > 0) {
-                    console.error(`[Serverless Engine] 🔁 Retry attempt ${attempts} for ${candidateId}...`);
+                    console.log(`[Serverless Engine] Retry attempt ${attempts} for ${candidateId}...`);
                     await new Promise(r => setTimeout(r, 2000));
                 }
                 
@@ -72,7 +72,7 @@ async function drainWaitlist(candidateId, fromPhone) {
                 const { clearWaitlist } = await import('../utils/storage.js');
                 await clearWaitlist(candidateId, pendingMsgs.length);
 
-                console.error(`[Serverless Engine] ✅ Completed burst of ${pendingMsgs.length} messages.`);
+                console.log(`[Serverless Engine] Completed burst of ${pendingMsgs.length} messages.`);
                 success = true;
             } catch (procErr) {
                 attempts++;
@@ -90,7 +90,7 @@ async function drainWaitlist(candidateId, fromPhone) {
 }
 
 export async function runTurboEngine(candidateId, from) {
-    console.error(`🔄 Worker triggered for ${candidateId} from ${from}`);
+    console.log(`Worker triggered for ${candidateId} from ${from}`);
 
     try {
         // 🔒 1. ACQUIRE LOCK (atomic SET NX — if someone else has it, wait and retry)
@@ -100,7 +100,7 @@ export async function runTurboEngine(candidateId, from) {
             // if the POST-UNLOCK SWEEP is killed by Vercel), we wait for the lock to free
             // and then process the waitlist ourselves. This handles the race condition where
             // "lunes" arrives 7s into the "si" processing window.
-            console.error(`[Serverless Engine] ⏳ ${candidateId} busy. Waiting for lock to release...`);
+            console.log(`[Serverless Engine] ${candidateId} busy. Waiting for lock to release...`);
             
             // Poll for up to 50 seconds — the agent can hold the lock for 15-25s
             // (step transition + media sends + delays). 50s < Vercel's 60s maxDuration.
@@ -118,13 +118,13 @@ export async function runTurboEngine(candidateId, from) {
                 if (!stillLocked) {
                     // We now hold the lock — drain the waitlist
                     lockFreed = true;
-                    console.error(`[Serverless Engine] 🔓 Lock freed after ${waited}ms. Draining waitlist for ${candidateId}...`);
+                    console.log(`[Serverless Engine] Lock freed after ${waited}ms. Draining waitlist for ${candidateId}...`);
                     try {
                         await new Promise(r => setTimeout(r, 50)); // brief debounce
                         await drainWaitlist(candidateId, from);
                     } finally {
                         await unlockCandidate(candidateId);
-                        console.error(`[Serverless Engine] ✅ Late-arrival drain complete for ${candidateId}.`);
+                        console.log(`[Serverless Engine] Late-arrival drain complete for ${candidateId}.`);
                     }
                     break;
                 }
@@ -147,13 +147,13 @@ export async function runTurboEngine(candidateId, from) {
         } finally {
             // 🔓 4. UNLOCK
             await unlockCandidate(candidateId);
-            console.error(`[Serverless Engine] 🔓 ${candidateId} unlocked.`);
+            console.log(`[Serverless Engine] ${candidateId} unlocked.`);
 
             // 🧹 5. POST-UNLOCK SWEEP (Safety Net for messages arriving in the unlock microsecond)
             try {
                 const orphaned = await getWaitlist(candidateId);
                 if (orphaned && orphaned.length > 0) {
-                    console.error(`[Serverless Engine] 🔍 POST-UNLOCK SWEEP: Found ${orphaned.length} orphaned message(s). Re-acquiring lock...`);
+                    console.log(`[Serverless Engine] POST-UNLOCK SWEEP: Found ${orphaned.length} orphaned message(s). Re-acquiring lock...`);
                     // Try to re-acquire lock. If another instance already got it, they'll handle it.
                     const reLocked = await isCandidateLocked(candidateId);
                     if (!reLocked) {
@@ -162,10 +162,10 @@ export async function runTurboEngine(candidateId, from) {
                             await drainWaitlist(candidateId, from);
                         } finally {
                             await unlockCandidate(candidateId);
-                            console.error(`[Serverless Engine] 🔓 POST-UNLOCK SWEEP complete. ${candidateId} unlocked.`);
+                            console.log(`[Serverless Engine] POST-UNLOCK SWEEP complete. ${candidateId} unlocked.`);
                         }
                     } else {
-                        console.error(`[Serverless Engine] 🤝 Another instance already processing orphans for ${candidateId}.`);
+                        console.log(`[Serverless Engine] Another instance already processing orphans for ${candidateId}.`);
                     }
                 }
             } catch (sweepErr) {

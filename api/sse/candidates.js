@@ -82,7 +82,7 @@ export default async function handler(req, res) {
             pipeline.get('stats:msg:outgoing');
             pipeline.scard('stats:list:complete');
             pipeline.scard('stats:list:pending');
-            pipeline.get('stats:bot:unread_v2');
+            pipeline.scard('candidates:unread');
 
             const results = await pipeline.exec();
 
