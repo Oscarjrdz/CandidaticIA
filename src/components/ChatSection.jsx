@@ -2460,7 +2460,9 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
                                         } : {}}
                                     >
                                         <Tag className={`w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 ${selectedTag ? 'text-[#111b21] dark:text-[#e9edef]' : 'text-gray-400 dark:text-gray-500'}`} style={selectedTag ? { color: (availableTags.find(t => (typeof t === 'string' ? t : t.name) === selectedTag))?.color } : {}} />
-                                        <span className="flex-1 truncate text-[#111b21] dark:text-[#e9edef]">{selectedTag || 'Todas las etiquetas'}</span>
+                                        <span className="flex-1 truncate text-[#111b21] dark:text-[#e9edef]">
+                                            {selectedTag ? `${selectedTag} (${filteredCandidates.length})` : 'Todas las etiquetas'}
+                                        </span>
                                         <div className={`absolute right-2 top-1/2 -translate-y-1/2 transition-transform ${showDropdown === 'labels' ? 'rotate-180' : ''}`}>
                                             <ChevronIcon />
                                         </div>
