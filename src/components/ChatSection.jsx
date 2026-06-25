@@ -550,8 +550,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
         loadCandidates();
     }, [selectedTag]);
 
-    // Cuando hay tag activo, cambiar entre "No Leídos"/"Todos" sí requiere recargar
-    // porque el límite de carga cambia (500 vs 33).
+    // Con tag activo, cambiar de filtro requiere recargar porque el límite cambia.
     useEffect(() => {
         const prev = prevActiveFilterRef.current;
         prevActiveFilterRef.current = activeFilter;
@@ -911,16 +910,17 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
         try {
             const tagParam = selectedTagRef.current || "";
             const searchParam = searchRef.current || "";
-            // Cuando "No Leídos" + etiqueta están activos: pedir hasta 500 de golpe
-            // (todos los no-leídos con ese tag caben en el set de Redis, es acotado)
-            const isUnreadTagMode = activeFilterRef.current === 'unread' && !!tagParam;
-            const limit = isUnreadTagMode ? 500 : 33;
+            // Cuando hay etiqueta + cualquier filtro distinto de "Todos": cargar 500 de golpe
+            // para que el filtro cliente vea todos los candidatos con ese tag, no solo 33.
+            // "Todos" + tag sigue con 33 por página (puede haber cientos).
+            const isFilteredTagMode = !!tagParam && activeFilterRef.current !== 'all';
+            const limit = isFilteredTagMode ? 500 : 33;
             const result = await getCandidates(limit, 0, searchParam, false, tagParam, true);
             if (result.success) {
                 const fetchedCandidates = result.candidates || [];
                 setCandidates(fetchedCandidates);
-                // En modo unread+tag ya vinieron todos, no hay más páginas
-                setHasMore(!isUnreadTagMode && fetchedCandidates.length === limit);
+                // En modo filtro+tag ya vinieron todos, no hay más páginas
+                setHasMore(!isFilteredTagMode && fetchedCandidates.length === limit);
                 if (fetchedCandidates.length > 0) {
                     setSelectedChat(current => { if (!current) return fetchedCandidates[0]; return current; });
                 }
