@@ -1645,6 +1645,7 @@ ${safeDnaLines}
         let aiResult = null;
         let isRecruiterMode = false;
         let responseTextVal = null;
+        let _responseWithSplit = null; // preserva [MSG_SPLIT] para guardar en DB con burbujas
         let project = null;
         let activeStepNameLower = ''; // hoisted so delivery section can read it
         let recruiterTriggeredMove = false; // hoisted — used in final delivery safeguard (lines ~2789)
@@ -4974,6 +4975,7 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
                 // 1️⃣ Handle SPLIT sentinel from formatRecruiterMessage (confirmation & special splits)
                 const SENTINEL = '[MSG_SPLIT]';
                 if (responseTextVal.includes(SENTINEL)) {
+                    _responseWithSplit = responseTextVal; // capturar con [MSG_SPLIT] antes de reemplazar
                     responseTextVal.split(SENTINEL).forEach(p => { if (p.trim()) messagesToSend.push(p.trim()); });
                     responseTextVal = responseTextVal.replace(/\[MSG_SPLIT\]/g, '\n\n').trim();
                 } else {
@@ -5118,7 +5120,7 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
         }
 
         const finalReaction = (aiResult?.reaction && aiResult.reaction !== 'null' && aiResult.reaction !== 'undefined') ? aiResult.reaction : null;
-        let dbContentToSave = responseTextVal;
+        let dbContentToSave = _responseWithSplit || responseTextVal;
 
         if (!dbContentToSave) {
             dbContentToSave = finalReaction ? `[REACCIÓN: ${finalReaction}]` : ' ';
