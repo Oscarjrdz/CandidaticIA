@@ -10,6 +10,7 @@ import { isProfileComplete } from '../utils/profileUtils';
 import { useToastContext } from '../contexts/ToastContext';
 import { useAuthContext } from '../contexts/AuthContext';
 import { safeFormatTime, toTitleCase, formatWhatsAppText, TAG_COLORS, checkIfUnread } from './chat/chatUtils';
+import { passesChatRBACFilter, canSeeIncompleteChats } from '../utils/chatUnreadCount';
 import CandidateReminderModal from './CandidateReminderModal';
 import MessageStatusTicks from './chat/MessageStatusTicks';
 import MessageInputBox from './chat/MessageInputBox';
@@ -21,27 +22,22 @@ import MessageBubble from './chat/MessageBubble';
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-// HIGH-1: Shared RBAC filter (eliminates duplication between filteredCandidates & baseCandidates)
-const passesRBACFilter = (c, user) => {
-    if (!user || user.role === 'SuperAdmin' || user.role === 'Admin') return true;
+const TRANSIENT_CANDIDATE_UPDATE_KEYS = new Set([
+    'candidateTyping',
+    'markAllSentAsRead',
+    'messageFrom',
+    'messagePayload',
+    'messageStatusUpdate',
+    'newMessage',
+    'recruiterTyping',
+    'statusUpdate',
+]);
 
-    const allowedCrm = user?.allowed_crm_projects;
-    const hasCrmRestriction = Array.isArray(allowedCrm) && allowedCrm.length > 0;
-    
-    const allowedLabels = user?.allowed_labels;
-    const hasLabelRestriction = Array.isArray(allowedLabels) && allowedLabels.length > 0;
-
-    if (!hasCrmRestriction && !hasLabelRestriction) return true;
-
-    const inAllowedCrm = hasCrmRestriction && c?.manualProjectId && allowedCrm.includes(c.manualProjectId);
-    const inAllowedLabel = hasLabelRestriction && Array.isArray(c?.tags) && c.tags.some(t => {
-        const searchLabel = typeof t === 'string' ? t.trim().toLowerCase() : (t?.name?.trim()?.toLowerCase() || '');
-        return searchLabel && allowedLabels.some(al => typeof al === 'string' && al.trim().toLowerCase() === searchLabel);
-    });
-
-    return inAllowedCrm || inAllowedLabel;
+const extractPersistentCandidatePatch = (patch = {}) => {
+    return Object.fromEntries(
+        Object.entries(patch).filter(([key]) => !TRANSIENT_CANDIDATE_UPDATE_KEYS.has(key))
+    );
 };
-
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 🧩 CustomSelect Component
@@ -307,7 +303,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
     }, []);
 
     const canManageTags = user?.role === 'SuperAdmin' || user?.can_manage_tags === true;
-    const { newCandidate: sseNewCandidate, connected: sseConnected, globalStats } = useCandidatesSSE();
+    const { newCandidate: sseNewCandidate, updatedCandidate: sseUpdatedCandidate, deletedCandidate: sseDeletedCandidate, connected: sseConnected, globalStats } = useCandidatesSSE();
 
     const [stableStats, setStableStats] = useState(() => {
         try {
@@ -328,6 +324,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
     }, [globalStats]);
 
     const [candidates, setCandidates] = useState([]);
+    const [globalUnreadCounts, setGlobalUnreadCounts] = useState(null);
     const [selectedChat, setSelectedChat] = useState(null);
     const [headerImgError, setHeaderImgError] = useState(false);
     const [showVCardModal, setShowVCardModal] = useState(false);
@@ -955,7 +952,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
         const result = (candidates || []).filter(c => {
 
             // --- RBAC Base Filter: Only show candidates from allowed projects or tags ---
-            if (!passesRBACFilter(c, user)) return false;
+            if (!passesChatRBACFilter(c, user)) return false;
 
             // --- Permiso: ocultar candidatos incompletos si el rol no lo permite ---
             if (user?.role !== 'SuperAdmin' &&
@@ -1028,7 +1025,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
     ]);
 
     // ── Badge counts (MEMOIZED — only recalculated when candidates change) ──
-    const baseCandidates = useMemo(() => (candidates || []).filter(c => passesRBACFilter(c, user)
+    const baseCandidates = useMemo(() => (candidates || []).filter(c => passesChatRBACFilter(c, user)
     ), [candidates, user]);
 
     const badgeCounts = useMemo(() => {
@@ -1073,9 +1070,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
 
     const unreadCounts = useMemo(() => {
         const counts = { tags: {}, crmProjects: {}, complete: 0, incomplete: 0, all: 0, unreadIds: new Set() };
-        const canSeeIncomplete = user?.role === 'SuperAdmin' ||
-            !rolePermissions || Object.keys(rolePermissions).length === 0 ||
-            rolePermissions.view_incomplete_candidates === true;
+        const canSeeIncomplete = canSeeIncompleteChats(user, rolePermissions);
 
         for (const c of baseCandidates) {
             const profComplete = isProfileComplete(c);
@@ -1111,11 +1106,47 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
         return counts;
     }, [baseCandidates, user, rolePermissions]);
 
+    useEffect(() => {
+        if (!user) return;
+        let cancelled = false;
+        const timer = setTimeout(async () => {
+            try {
+                const res = await fetch('/api/chat-unread-count');
+                const data = await res.json();
+                if (cancelled || !res.ok || !data.success) return;
+                const counts = data.counts || {};
+                setGlobalUnreadCounts({
+                    all: Number(data.unreadCount ?? counts.all) || 0,
+                    complete: Number(counts.complete) || 0,
+                    incomplete: Number(counts.incomplete) || 0,
+                    tags: counts.tags || {},
+                    crmProjects: counts.crmProjects || {},
+                    unreadIds: new Set(),
+                });
+            } catch {}
+        }, 150);
+
+        return () => { cancelled = true; clearTimeout(timer); };
+    }, [
+        user,
+        rolePermissions,
+        sseNewCandidate?.id,
+        sseUpdatedCandidate?.candidateId,
+        sseUpdatedCandidate?.updates?.lastUserMessageAt,
+        sseUpdatedCandidate?.updates?.lastHumanMessageAt,
+        sseUpdatedCandidate?.updates?.unreadMsgCount,
+        sseDeletedCandidate?.candidateId,
+        sseDeletedCandidate?.id,
+        globalStats?.unread,
+    ]);
+
+    const displayUnreadCounts = globalUnreadCounts || unreadCounts;
+
     // 📡 Reportar conteo RBAC exacto al padre (App.jsx) — fuente única de verdad
     useEffect(() => {
         if (loadingChats) return;
-        onUnreadCountChange?.(unreadCounts.all);
-    }, [unreadCounts.all, loadingChats]);
+        onUnreadCountChange?.(displayUnreadCounts.all);
+    }, [displayUnreadCounts.all, loadingChats]);
 
     // 🏎️ Online readers por chat — evita recalcular dentro de cada ChatRow
     const EMPTY_READERS = [];
@@ -1287,16 +1318,19 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
         // --- SURGICAL CANDIDATE PATCH (replaces loadCandidates) ---
         if (sseUpdate.candidateId && sseUpdate.updates && !sseUpdate.updates?.recruiterTyping) {
             const patch = sseUpdate.updates;
+            const candidatePatch = extractPersistentCandidatePatch(patch);
             const isInList = candidatesRef.current.some(c => c.id === sseUpdate.candidateId);
 
             if (isInList) {
                 setCandidates(prev => prev.map(c => {
                     if (c.id !== sseUpdate.candidateId) return c;
-                    const updated = { ...c };
+                    const updated = { ...c, ...candidatePatch };
                     if (patch.ultimoMensaje) updated.ultimoMensaje = patch.ultimoMensaje;
                     if (patch.lastUserMessageAt) {
                         updated.lastUserMessageAt = patch.lastUserMessageAt;
-                        updated.unreadMsgCount = (c.unreadMsgCount || 0) + 1;
+                        if (patch.unreadMsgCount === undefined) {
+                            updated.unreadMsgCount = (c.unreadMsgCount || 0) + 1;
+                        }
                     }
                     if (patch.lastBotMessageAt) {
                         updated.lastBotMessageAt = patch.lastBotMessageAt;
@@ -1326,7 +1360,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
             if (currentChat?.id === sseUpdate.candidateId) {
                 setSelectedChat(prev => {
                     if (!prev || prev.id !== sseUpdate.candidateId) return prev;
-                    const updated = { ...prev };
+                    const updated = { ...prev, ...candidatePatch };
                     if (patch.ultimoMensaje) updated.ultimoMensaje = patch.ultimoMensaje;
                     if (patch.lastBotMessageAt) {
                         updated.lastBotMessageAt = patch.lastBotMessageAt;
@@ -1334,7 +1368,9 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
                     }
                     if (patch.lastUserMessageAt) {
                         updated.lastUserMessageAt = patch.lastUserMessageAt;
-                        updated.unreadMsgCount = (updated.unreadMsgCount || 0) + 1;
+                        if (patch.unreadMsgCount === undefined) {
+                            updated.unreadMsgCount = (prev.unreadMsgCount || 0) + 1;
+                        }
                     }
                     if (patch.unreadMsgCount !== undefined) updated.unreadMsgCount = patch.unreadMsgCount;
                     if (patch.lastHumanMessageAt !== undefined) updated.lastHumanMessageAt = patch.lastHumanMessageAt;
@@ -1354,6 +1390,17 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
             return [sseNewCandidate, ...prev];
         });
     }, [sseNewCandidate]);
+
+    useEffect(() => {
+        const deletedId = sseDeletedCandidate?.candidateId || sseDeletedCandidate?.id;
+        if (!deletedId) return;
+
+        setCandidates(prev => prev.filter(c => c.id !== deletedId));
+        if (selectedChatRef.current?.id === deletedId) {
+            setSelectedChat(null);
+            setMessages([]);
+        }
+    }, [sseDeletedCandidate]);
 
     // 🔄 SSE reconnect: Vercel corta la conexión cada 60s (maxDuration).
     // NO hacemos loadCandidates() aquí — con filtro de etiqueta activo eso escanea
@@ -2245,9 +2292,9 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
                                 }`}
                             >
                                 No leídos
-                                {unreadCounts.all > 0 && (
+                                {displayUnreadCounts.all > 0 && (
                                     <div className="min-w-[16px] h-[16px] px-1 rounded-full bg-[#25d366] dark:bg-[#00a884] flex items-center justify-center shrink-0 text-white text-[9px] font-bold shadow-sm">
-                                        {unreadCounts.all}
+                                        {displayUnreadCounts.all}
                                     </div>
                                 )}
                             </button>
@@ -2313,9 +2360,9 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
                             style={{ fontSize: 'clamp(8px, 2.2cqw, 11px)' }}
                         >
                             No Leídos
-                            {unreadCounts.all > 0 && (
+                            {displayUnreadCounts.all > 0 && (
                                 <div className="min-w-[18px] h-[18px] px-1 rounded-full bg-[#25d366] dark:bg-[#00a884] flex items-center justify-center shrink-0 text-white text-[9px] font-bold shadow-sm -ml-0.5">
-                                    {unreadCounts.all}
+                                    {displayUnreadCounts.all}
                                 </div>
                             )}
                         </button>
@@ -2330,13 +2377,13 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
                                 style={{ fontSize: 'clamp(8px, 2.2cqw, 11px)' }}
                             >
                                 Completos ({stableStats.complete ?? badgeCounts.complete})
-                                {unreadCounts.complete > 0 && (
+                                {displayUnreadCounts.complete > 0 && (
                                     <div
                                         onClick={(e) => { e.stopPropagation(); setActiveFilter('profile'); setFilterValue('complete'); setProfileUnreadOnly(true); setShowDropdown(null); }}
                                         className={`min-w-[18px] h-[18px] px-1 rounded-full flex items-center justify-center shrink-0 text-white text-[9px] font-bold shadow-sm -ml-0.5 cursor-pointer transition-all ${activeFilter === 'profile' && filterValue === 'complete' && profileUnreadOnly ? 'bg-[#128c7e] ring-2 ring-white/50 scale-110' : 'bg-[#25d366] dark:bg-[#00a884] hover:scale-110'}`}
                                         title="Ver solo no leídos completos"
                                     >
-                                        {unreadCounts.complete}
+                                        {displayUnreadCounts.complete}
                                     </div>
                                 )}
                             </button>
@@ -2352,13 +2399,13 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
                                 style={{ fontSize: 'clamp(8px, 2.2cqw, 11px)' }}
                             >
                                 Incompletos ({stableStats.pending ?? badgeCounts.incomplete})
-                                {unreadCounts.incomplete > 0 && (
+                                {displayUnreadCounts.incomplete > 0 && (
                                     <div
                                         onClick={(e) => { e.stopPropagation(); setActiveFilter('profile'); setFilterValue('incomplete'); setProfileUnreadOnly(true); setShowDropdown(null); }}
                                         className={`min-w-[18px] h-[18px] px-1 rounded-full flex items-center justify-center shrink-0 text-white text-[9px] font-bold shadow-sm -ml-0.5 cursor-pointer transition-all ${activeFilter === 'profile' && filterValue === 'incomplete' && profileUnreadOnly ? 'bg-[#128c7e] ring-2 ring-white/50 scale-110' : 'bg-[#25d366] dark:bg-[#00a884] hover:scale-110'}`}
                                         title="Ver solo no leídos incompletos"
                                     >
-                                        {unreadCounts.incomplete}
+                                        {displayUnreadCounts.incomplete}
                                     </div>
                                 )}
                             </button>
@@ -2431,8 +2478,9 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
                                                 const tColor = typeof tagObj === 'string' ? '#3b82f6' : tagObj.color;
                                                 const display = tagObj.count !== undefined ? `${tName} (${tagObj.count})` : tName;
                                                 
-                                                // Use global memoized count
-                                                const unreadCount = unreadCounts.tags[tName.trim().toLowerCase()] || 0;
+                                                // Usar siempre globalUnreadCounts (API, escaneo completo) para los badges
+                                                // del dropdown — nunca los conteos locales que cambian con el filtro activo
+                                                const unreadCount = (globalUnreadCounts?.tags ?? unreadCounts.tags)[tName.trim().toLowerCase()] || 0;
                                                 const isSelected = selectedTag === tName;
 
                                                 return (
@@ -2515,7 +2563,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
                                                     <div className="px-4 py-2.5 text-xs text-gray-500 italic">No hay pipelines</div>
                                                 ) : (
                                                     filteredManualProjects.map(project => {
-                                                        const unreadCount = unreadCounts.crmProjects[project.id] || 0;
+                                                        const unreadCount = displayUnreadCounts.crmProjects[project.id] || 0;
                                                         const isSelected = manualPipelineFilter === project.id;
                                                         return (
                                                             <div
