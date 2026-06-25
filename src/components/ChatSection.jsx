@@ -466,6 +466,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
     const [profileUnreadOnly, setProfileUnreadOnly] = useState(false);
     const [selectedTag, setSelectedTag] = useState(null);
     const selectedTagRef = useRef(null);
+    const [candidatesTotal, setCandidatesTotal] = useState(0);
     const [hasMore, setHasMore] = useState(false);
     const [loadingMore, setLoadingMore] = useState(false);
     const loadingMoreRef = useRef(false);
@@ -943,6 +944,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
             if (result.success) {
                 const fetchedCandidates = result.candidates || [];
                 setCandidates(fetchedCandidates);
+                setCandidatesTotal(result.total ?? fetchedCandidates.length);
                 // Solo "Todos" tiene paginación infinita (con o sin tag)
                 const isPaginated = !serverFilter && af === 'all';
                 setHasMore(isPaginated && fetchedCandidates.length === limit);
@@ -2461,7 +2463,11 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
                                     >
                                         <Tag className={`w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 ${selectedTag ? 'text-[#111b21] dark:text-[#e9edef]' : 'text-gray-400 dark:text-gray-500'}`} style={selectedTag ? { color: (availableTags.find(t => (typeof t === 'string' ? t : t.name) === selectedTag))?.color } : {}} />
                                         <span className="flex-1 truncate text-[#111b21] dark:text-[#e9edef]">
-                                            {selectedTag ? `${selectedTag} (${filteredCandidates.length})` : 'Todas las etiquetas'}
+                                            {selectedTag ? (() => {
+                                                const hasSubFilters = selectedAges.length > 0 || selectedGenders.length > 0 || selectedMunicipalities.length > 0;
+                                                const count = hasSubFilters ? filteredCandidates.length : candidatesTotal;
+                                                return `${selectedTag} (${count})`;
+                                            })() : 'Todas las etiquetas'}
                                         </span>
                                         <div className={`absolute right-2 top-1/2 -translate-y-1/2 transition-transform ${showDropdown === 'labels' ? 'rotate-180' : ''}`}>
                                             <ChevronIcon />
