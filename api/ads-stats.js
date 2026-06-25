@@ -4,6 +4,10 @@
  * DELETE /api/ads-stats — hides an ad from the dashboard
  */
 
+const GRAPH_API_VERSION = 'v21.0';
+const GRAPH_BASE_URL = `https://graph.facebook.com/${GRAPH_API_VERSION}`;
+const META_FETCH_TIMEOUT_MS = 8000;
+
 export default async function handler(req, res) {
     if (req.method === 'OPTIONS') {
         return res.status(200).end();
@@ -85,30 +89,35 @@ export default async function handler(req, res) {
                         const INSIGHTS_TTL = 3600; // 1 hora
                         const STATUS_TTL   = 3600;
 
-                        // Fetch insights — con cache Redis 1h por ad
-                        const insightResults = await Promise.allSettled(
-                            adIds.map(async adId => {
+                        // Fetch insights with bounded concurrency so one large account
+                        // does not spike Graph API calls or exhaust the serverless window.
+                        const insightResults = await allSettledWithConcurrency(
+                            adIds,
+                            5,
+                            async adId => {
                                 const cacheKey = `ads:insights:${adId}`;
                                 const cached = redis ? await redis.get(cacheKey) : null;
                                 if (cached) return { adId, data: JSON.parse(cached) };
-                                const json = await fetch(`https://graph.facebook.com/v21.0/${adId}/insights?fields=impressions,clicks,spend,cpc,cpm,ctr,reach,frequency,actions,cost_per_action_type&date_preset=maximum&access_token=${adsToken}`).then(r => r.json());
+                                const json = await fetchGraphJson(`${GRAPH_BASE_URL}/${adId}/insights?fields=impressions,clicks,spend,cpc,cpm,ctr,reach,frequency,actions,cost_per_action_type&date_preset=maximum&access_token=${encodeURIComponent(adsToken)}`);
                                 const result = json.data?.[0] || null;
                                 if (redis && result) await redis.set(cacheKey, JSON.stringify(result), 'EX', INSIGHTS_TTL);
                                 return { adId, data: result, error: json.error || null };
-                            })
+                            }
                         );
 
-                        // Fetch status — con cache Redis 1h por ad
-                        const statusResults = await Promise.allSettled(
-                            adIds.map(async adId => {
+                        // Fetch status with the same guardrail.
+                        const statusResults = await allSettledWithConcurrency(
+                            adIds,
+                            5,
+                            async adId => {
                                 const cacheKey = `ads:status:${adId}`;
                                 const cached = redis ? await redis.get(cacheKey) : null;
                                 if (cached) return { adId, ...JSON.parse(cached) };
-                                const json = await fetch(`https://graph.facebook.com/v21.0/${adId}?fields=effective_status,name&access_token=${adsToken}`).then(r => r.json());
+                                const json = await fetchGraphJson(`${GRAPH_BASE_URL}/${adId}?fields=effective_status,name&access_token=${encodeURIComponent(adsToken)}`);
                                 const result = { status: json.effective_status || null, name: json.name || null };
                                 if (redis && result.status) await redis.set(cacheKey, JSON.stringify(result), 'EX', STATUS_TTL);
                                 return { adId, ...result };
-                            })
+                            }
                         );
 
                         // Build status map
@@ -186,6 +195,7 @@ export default async function handler(req, res) {
                 }
             }
 
+            res.setHeader('Cache-Control', 'private, max-age=60, stale-while-revalidate=300');
             return res.status(200).json({
                 success: true,
                 ads: data.ads,
@@ -201,4 +211,35 @@ export default async function handler(req, res) {
     }
 
     return res.status(405).json({ success: false, error: 'Method not allowed' });
+}
+
+async function fetchGraphJson(url) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), META_FETCH_TIMEOUT_MS);
+
+    try {
+        const response = await fetch(url, { signal: controller.signal });
+        return await response.json();
+    } finally {
+        clearTimeout(timer);
+    }
+}
+
+async function allSettledWithConcurrency(items, limit, iteratee) {
+    const results = new Array(items.length);
+    let index = 0;
+
+    async function worker() {
+        while (index < items.length) {
+            const current = index++;
+            try {
+                results[current] = { status: 'fulfilled', value: await iteratee(items[current], current) };
+            } catch (reason) {
+                results[current] = { status: 'rejected', reason };
+            }
+        }
+    }
+
+    await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+    return results;
 }

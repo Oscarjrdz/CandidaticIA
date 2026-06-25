@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Target, TrendingUp, Users, Calendar, Megaphone, Loader2, Clock, Copy, ExternalLink, RefreshCw, Video, DollarSign, Eye, MousePointerClick, Percent, MessageCircle, Heart, ArrowUpRight, Trash2, X, Send, MessageSquare, ChevronDown, ChevronUp, CornerDownRight, Tag, Plus, Check } from 'lucide-react';
 import { useConfirmModal } from './ui/ConfirmModal';
 import { getAdsStats } from '../services/adsService';
@@ -74,17 +74,17 @@ const CommentsModal = ({ ad, onClose, showToast }) => {
     const [replyText, setReplyText] = useState('');
     const [sending, setSending] = useState(false);
     const [expandedReplies, setExpandedReplies] = useState(new Set());
+    const commentsAbortRef = useRef(null);
 
-    useEffect(() => {
+    const fetchComments = useCallback(async ({ silent = false } = {}) => {
         if (!ad?.adId) return;
-        fetchComments();
-    }, [ad?.adId]);
-
-    const fetchComments = async () => {
-        setLoading(true);
+        commentsAbortRef.current?.abort();
+        const controller = new AbortController();
+        commentsAbortRef.current = controller;
+        if (!silent) setLoading(true);
         setErrorMsg(null);
         try {
-            const res = await fetch(`/api/ads-comments?adId=${ad.adId}`);
+            const res = await fetch(`/api/ads-comments?adId=${ad.adId}`, { signal: controller.signal });
             const data = await res.json();
             if (data.success) {
                 setComments(data.comments || []);
@@ -97,27 +97,71 @@ const CommentsModal = ({ ad, onClose, showToast }) => {
                 showToast?.(data.error || 'Error al cargar comentarios', 'error');
             }
         } catch (e) {
+            if (e.name === 'AbortError') return;
             setErrorMsg('Error de red al cargar comentarios');
             showToast?.('Error de red', 'error');
         }
-        setLoading(false);
-    };
+        if (!controller.signal.aborted) setLoading(false);
+    }, [ad?.adId, showToast]);
+
+    useEffect(() => {
+        if (!ad?.adId) return;
+        fetchComments();
+        return () => commentsAbortRef.current?.abort();
+    }, [ad?.adId, fetchComments]);
+
+    const addReplyToThread = useCallback((targetId, reply) => {
+        const parentId = comments.find(comment =>
+            comment.id === targetId || comment.replies?.some(r => r.id === targetId)
+        )?.id;
+
+        setComments(prev => prev.map(comment => {
+            const isParent = comment.id === targetId;
+            const isChild = comment.replies?.some(r => r.id === targetId);
+
+            if (!isParent && !isChild) return comment;
+
+            const replies = [...(comment.replies || []), reply];
+            return {
+                ...comment,
+                replies,
+                replyCount: Math.max(comment.replyCount || 0, replies.length)
+            };
+        }));
+
+        if (parentId) {
+            setExpandedReplies(prev => {
+                const next = new Set(prev);
+                next.add(parentId);
+                return next;
+            });
+        }
+    }, [comments]);
 
     const handleReply = async (commentId) => {
         if (!replyText.trim()) return;
+        const message = replyText.trim();
         setSending(true);
         try {
             const res = await fetch('/api/ads-comments', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ commentId, message: replyText.trim() })
+                body: JSON.stringify({ commentId, message, adId: ad.adId })
             });
             const data = await res.json();
             if (data.success) {
+                const optimisticReply = data.reply || {
+                    id: data.replyId || `local-${Date.now()}`,
+                    message,
+                    from: { name: 'Página', id: '' },
+                    createdTime: new Date().toISOString(),
+                    likeCount: 0
+                };
+                addReplyToThread(commentId, optimisticReply);
                 showToast?.('Respuesta enviada ✅', 'success');
                 setReplyText('');
                 setReplyingTo(null);
-                fetchComments();
+                fetchComments({ silent: true });
             } else {
                 showToast?.(data.error || 'Error al responder', 'error');
             }
@@ -165,9 +209,19 @@ const CommentsModal = ({ ad, onClose, showToast }) => {
                             <p className="text-[10px] text-gray-400 truncate">{ad.adHeadline}</p>
                         </div>
                     </div>
-                    <button onClick={onClose} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
-                        <X className="w-4 h-4 text-gray-500" />
-                    </button>
+                    <div className="flex items-center gap-1">
+                        <button
+                            onClick={() => fetchComments()}
+                            disabled={loading}
+                            title="Actualizar comentarios"
+                            className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-50"
+                        >
+                            <RefreshCw className={`w-4 h-4 text-gray-500 ${loading ? 'animate-spin' : ''}`} />
+                        </button>
+                        <button onClick={onClose} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                            <X className="w-4 h-4 text-gray-500" />
+                        </button>
+                    </div>
                 </div>
 
                 {/* Comments List */}
