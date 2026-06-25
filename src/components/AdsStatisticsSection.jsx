@@ -358,7 +358,7 @@ const AdsStatisticsSection = () => {
     const [adLabels, setAdLabels] = useState([]);
     const [showLabelForm, setShowLabelForm] = useState(false);
     const [editingLabel, setEditingLabel] = useState(null); // null = crear, object = editar
-    const [labelForm, setLabelForm] = useState({ adIds: '', name: '', emoji: '', color: '#a855f7' });
+    const [labelForm, setLabelForm] = useState({ adIds: '', name: '', emoji: '', color: '#a855f7', company: '' });
     const [labelSaving, setLabelSaving] = useState(false);
 
     const loadAdLabels = async () => {
@@ -370,7 +370,7 @@ const AdsStatisticsSection = () => {
     };
 
     const resetForm = () => {
-        setLabelForm({ adIds: '', name: '', emoji: '', color: '#a855f7' });
+        setLabelForm({ adIds: '', name: '', emoji: '', color: '#a855f7', company: '' });
         setEditingLabel(null);
         setShowLabelForm(false);
     };
@@ -378,7 +378,7 @@ const AdsStatisticsSection = () => {
     const handleOpenEdit = (label) => {
         const nameOnly = label.emoji ? label.tagName.replace(label.emoji + ' ', '') : label.tagName;
         const ids = label.adIds || (label.adId ? [label.adId] : []);
-        setLabelForm({ adIds: ids.join(', '), name: nameOnly, emoji: label.emoji || '', color: label.color });
+        setLabelForm({ adIds: ids.join(', '), name: nameOnly, emoji: label.emoji || '', color: label.color, company: label.company || '' });
         setEditingLabel(label);
         setShowLabelForm(true);
     };
@@ -575,6 +575,16 @@ const AdsStatisticsSection = () => {
                                     required
                                 />
                             </div>
+                            <div>
+                                <label className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase mb-1 block">Empresa</label>
+                                <input
+                                    type="text"
+                                    placeholder="ej: Metalsa S.A. de C.V."
+                                    value={labelForm.company}
+                                    onChange={e => setLabelForm(f => ({ ...f, company: e.target.value }))}
+                                    className="w-full text-xs px-3 py-2 rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white outline-none focus:border-violet-400 transition-colors"
+                                />
+                            </div>
                         </div>
                         <div className="flex items-end gap-3 mb-3">
                             <div className="w-24">
@@ -634,11 +644,16 @@ const AdsStatisticsSection = () => {
                         adLabels.map(label => (
                             <div key={label.id} className={`px-5 py-3 flex items-center justify-between gap-4 transition-colors ${editingLabel?.id === label.id ? 'bg-violet-50/60 dark:bg-violet-500/5' : ''}`}>
                                 <div className="flex items-center gap-3 min-w-0">
-                                    <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-white px-3 py-1 rounded-full shrink-0"
-                                        style={{ backgroundColor: label.color }}>
-                                        {label.emoji && <span>{label.emoji}</span>}
-                                        {label.tagName.replace(label.emoji ? label.emoji + ' ' : '', '')}
-                                    </span>
+                                    <div className="flex flex-col gap-0.5 shrink-0">
+                                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-white px-3 py-1 rounded-full"
+                                            style={{ backgroundColor: label.color }}>
+                                            {label.emoji && <span>{label.emoji}</span>}
+                                            {label.tagName.replace(label.emoji ? label.emoji + ' ' : '', '')}
+                                        </span>
+                                        {label.company && (
+                                            <span className="text-[10px] text-gray-500 dark:text-gray-400 px-1 font-medium truncate max-w-[160px]">{label.company}</span>
+                                        )}
+                                    </div>
                                     <div className="flex flex-wrap gap-1 min-w-0">
                                         {(label.adIds || (label.adId ? [label.adId] : [])).map(id => (
                                             <span key={id} className="text-[9px] font-mono text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-700 px-1.5 py-0.5 rounded truncate max-w-[160px]">{id}</span>

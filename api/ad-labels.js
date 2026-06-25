@@ -39,7 +39,7 @@ export default async function handler(req, res) {
 
         // ── POST — Crear ───────────────────────────────────────────────────────
         if (req.method === 'POST') {
-            const { adIds: rawAdIds, name, emoji, color } = req.body || {};
+            const { adIds: rawAdIds, name, emoji, color, company } = req.body || {};
             const adIds = parseAdIds(rawAdIds);
             if (!adIds.length || !name?.trim()) {
                 return res.status(400).json({ error: 'Al menos un Ad ID y nombre son obligatorios' });
@@ -55,7 +55,7 @@ export default async function handler(req, res) {
                 return res.status(400).json({ error: 'Ya existe una etiqueta con ese nombre para alguno de esos Ad IDs' });
             }
 
-            const newLabel = { id: labelId, adIds, tagName, emoji: emoji?.trim() || '', color: tagColor, createdAt: new Date().toISOString() };
+            const newLabel = { id: labelId, adIds, tagName, emoji: emoji?.trim() || '', color: tagColor, company: company?.trim() || '', createdAt: new Date().toISOString() };
             labels.push(newLabel);
             await redis.set(AD_LABELS_KEY, JSON.stringify(labels));
 
@@ -87,7 +87,7 @@ export default async function handler(req, res) {
 
         // ── PUT — Editar ───────────────────────────────────────────────────────
         if (req.method === 'PUT') {
-            const { id, adIds: rawAdIds, name, emoji, color } = req.body || {};
+            const { id, adIds: rawAdIds, name, emoji, color, company } = req.body || {};
             if (!id || !name?.trim()) return res.status(400).json({ error: 'id y nombre son obligatorios' });
 
             const adIds = parseAdIds(rawAdIds);
@@ -106,7 +106,7 @@ export default async function handler(req, res) {
             // Nuevos adIds que no estaban antes → aplicar tag a esos candidatos
             const addedAdIds = adIds.filter(id => !oldLabel.adIds.includes(id));
 
-            labels[idx] = { ...oldLabel, adIds, tagName: newTagName, emoji: emoji?.trim() || '', color: newColor };
+            labels[idx] = { ...oldLabel, adIds, tagName: newTagName, emoji: emoji?.trim() || '', color: newColor, company: company?.trim() ?? oldLabel.company ?? '' };
             await redis.set(AD_LABELS_KEY, JSON.stringify(labels));
 
             // Actualizar en global tags
