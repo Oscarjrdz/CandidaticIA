@@ -623,12 +623,22 @@ export const getCandidatesUnreadFirstByTag = async (tagFilter, limit = 33) => {
     allIds.forEach(id => pipeline.get(`${KEYS.CANDIDATE_PREFIX}${id}`));
     const results = await pipeline.exec();
 
-    const matching = results
+    const all = results
         .map(([err, res]) => (err || !res) ? null : JSON.parse(res))
         .filter(c => c && Array.isArray(c.tags) && c.tags.some(t =>
             (typeof t === 'string' ? t : (t?.name || '')).trim().toLowerCase() === tagLower
         ));
 
+    // Separar no-leídos de leídos y ordenar cada grupo por último mensaje DESC
+    const ts = c => new Date(c.lastUserMessageAt || c.ultimoMensaje || 0).getTime();
+    const unread = all.filter(c => {
+        const u = new Date(c.lastUserMessageAt || 0).getTime();
+        const h = new Date(c.lastHumanMessageAt || 0).getTime();
+        return u > 0 && u > h;
+    }).sort((a, b) => ts(b) - ts(a));
+    const read = all.filter(c => !unread.includes(c)).sort((a, b) => ts(b) - ts(a));
+
+    const matching = [...unread, ...read];
     return { candidates: matching.slice(0, limit), total: matching.length };
 };
 
