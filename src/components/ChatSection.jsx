@@ -1127,6 +1127,8 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
                     complete: Number(counts.complete) || 0,
                     incomplete: Number(counts.incomplete) || 0,
                     tags: counts.tags || {},
+                    completeTags: counts.completeTags || {},
+                    incompleteTags: counts.incompleteTags || {},
                     crmProjects: counts.crmProjects || {},
                     unreadIds: new Set(),
                 });
@@ -2485,9 +2487,17 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
                                                 const tColor = typeof tagObj === 'string' ? '#3b82f6' : tagObj.color;
                                                 const display = tagObj.count !== undefined ? `${tName} (${tagObj.count})` : tName;
                                                 
-                                                // Usar siempre globalUnreadCounts (API, escaneo completo) para los badges
-                                                // del dropdown — nunca los conteos locales que cambian con el filtro activo
-                                                const unreadCount = (globalUnreadCounts?.tags ?? unreadCounts.tags)[tName.trim().toLowerCase()] || 0;
+                                                // Badge de etiqueta según filtro activo
+                                                const _tagKey = tName.trim().toLowerCase();
+                                                const _gc = globalUnreadCounts;
+                                                const _tagCounts = _gc
+                                                    ? (activeFilter === 'profile' && filterValue === 'complete'
+                                                        ? _gc.completeTags
+                                                        : activeFilter === 'profile' && filterValue === 'incomplete'
+                                                            ? _gc.incompleteTags
+                                                            : _gc.tags)
+                                                    : unreadCounts.tags;
+                                                const unreadCount = (_tagCounts?.[_tagKey]) || 0;
                                                 const isSelected = selectedTag === tName;
 
                                                 return (
