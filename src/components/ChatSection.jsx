@@ -550,13 +550,13 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
         loadCandidates();
     }, [selectedTag]);
 
-    // Con tag activo, cambiar de filtro requiere recargar porque el límite cambia.
+    // Cambiar de filtro siempre recarga: con tag cambia el límite, sin tag cambia el modo servidor.
     useEffect(() => {
         const prev = prevActiveFilterRef.current;
         prevActiveFilterRef.current = activeFilter;
         if (prev === null) return; // primer render
-        if (selectedTagRef.current) loadCandidates();
-    }, [activeFilter]);
+        loadCandidates();
+    }, [activeFilter, filterValue]);
 
     // Server-side search: reload when search query changes (debounced 250ms)
     useEffect(() => {
