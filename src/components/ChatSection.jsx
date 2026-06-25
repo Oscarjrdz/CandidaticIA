@@ -910,17 +910,42 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
         try {
             const tagParam = selectedTagRef.current || "";
             const searchParam = searchRef.current || "";
-            // Cuando hay etiqueta + cualquier filtro distinto de "Todos": cargar 500 de golpe
-            // para que el filtro cliente vea todos los candidatos con ese tag, no solo 33.
-            // "Todos" + tag sigue con 33 por página (puede haber cientos).
-            const isFilteredTagMode = !!tagParam && activeFilterRef.current !== 'all';
+            const af = activeFilterRef.current;
+            const fv = filterValueRef.current;
+
+            // Traducir filtro UI → param servidor
+            const getServerFilter = () => {
+                if (!tagParam) {
+                    if (af === 'unread') return 'unread';
+                    if (af === 'profile' && fv === 'complete') return 'complete';
+                    if (af === 'profile' && fv === 'incomplete') return 'incomplete';
+                }
+                return null;
+            };
+            const serverFilter = getServerFilter();
+
+            // Con tag + filtro distinto de "Todos": cargar 500 de golpe
+            const isFilteredTagMode = !!tagParam && af !== 'all';
             const limit = isFilteredTagMode ? 500 : 33;
-            const result = await getCandidates(limit, 0, searchParam, false, tagParam, true);
+
+            let result;
+            if (serverFilter) {
+                // Sin tag: el servidor filtra (unread/complete/incomplete) y devuelve todo ordenado por fecha
+                result = await getCandidates(500, 0, searchParam, false, '', false, serverFilter);
+            } else if (af === 'all') {
+                // "Todos": todos los chats por fecha, sin prioridad a no-leídos, paginado 33 x página
+                result = await getCandidates(limit, 0, searchParam, false, tagParam, false);
+            } else {
+                // Tag + filtro activo: cargar 500 con no-leídos primero, cliente filtra
+                result = await getCandidates(limit, 0, searchParam, false, tagParam, true);
+            }
+
             if (result.success) {
                 const fetchedCandidates = result.candidates || [];
                 setCandidates(fetchedCandidates);
-                // En modo filtro+tag ya vinieron todos, no hay más páginas
-                setHasMore(!isFilteredTagMode && fetchedCandidates.length === limit);
+                // Solo "Todos" tiene paginación infinita (con o sin tag)
+                const isPaginated = !serverFilter && af === 'all';
+                setHasMore(isPaginated && fetchedCandidates.length === limit);
                 if (fetchedCandidates.length > 0) {
                     setSelectedChat(current => { if (!current) return fetchedCandidates[0]; return current; });
                 }

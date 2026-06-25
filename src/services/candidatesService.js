@@ -7,7 +7,7 @@ const API_BASE = import.meta.env.PROD ? '' : 'http://localhost:3000';
 /**
  * Obtiene lista de candidatos
  */
-export const getCandidates = async (limit = 100, offset = 0, search = '', includeStats = false, tag = '', unreadFirst = false) => {
+export const getCandidates = async (limit = 100, offset = 0, search = '', includeStats = false, tag = '', unreadFirst = false, filter = '') => {
     try {
         const params = new URLSearchParams({
             limit: limit.toString(),
@@ -18,6 +18,7 @@ export const getCandidates = async (limit = 100, offset = 0, search = '', includ
         if (includeStats) params.append('stats', 'true'); // Hybrid mode
         if (tag) params.append('tag', tag);
         if (unreadFirst) params.append('unreadFirst', 'true');
+        if (filter) params.append('filter', filter);
 
         const response = await fetch(`${API_BASE}/api/candidates?${params}`);
         const data = await response.json();

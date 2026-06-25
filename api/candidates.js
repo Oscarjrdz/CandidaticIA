@@ -15,7 +15,7 @@ export default async function handler(req, res) {
 
     try {
         // DYNAMIC IMPORTS
-        const { getCandidates, getCandidatesUnreadFirst, getCandidatesUnreadFirstByTag, getCandidateById, deleteCandidate, validateAdminSession } = await import('./utils/storage.js');
+        const { getCandidates, getCandidatesUnreadFirst, getCandidatesUnreadFirstByTag, getCandidatesFiltered, getCandidateById, deleteCandidate, validateAdminSession } = await import('./utils/storage.js');
 
         // Validar sesión admin
         const userId = await validateAdminSession(req);
@@ -23,7 +23,7 @@ export default async function handler(req, res) {
 
         // GET /api/candidates - Obtener lista o estadísticas
         if (req.method === 'GET') {
-            const { limit = '100', offset = '0', search = '', stats, id, excludeLinked = 'false', tag = '', unreadFirst = 'false' } = req.query;
+            const { limit = '100', offset = '0', search = '', stats, id, excludeLinked = 'false', tag = '', unreadFirst = 'false', filter = '' } = req.query;
 
             // Estadísticas (Optional mixed response)
             let statsData = null;
@@ -65,6 +65,12 @@ export default async function handler(req, res) {
                     success: true,
                     candidate: candidate
                 });
+            }
+
+            // Modo filtro servidor: unread / complete / incomplete (sin tag ni búsqueda)
+            if (['unread', 'complete', 'incomplete'].includes(filter) && !search && !tag) {
+                const { candidates, total } = await getCandidatesFiltered(filter, parseInt(limit) || 500, parseInt(offset) || 0);
+                return res.status(200).json({ success: true, candidates, total, count: candidates.length });
             }
 
             // Modo unreadFirst sin filtro: no-leídos + N recientes

@@ -598,6 +598,42 @@ export const getCandidatesUnreadFirst = async (recentLimit = 50) => {
     return { candidates, total: candidates.length };
 };
 
+// Filtro servidor: 'unread' | 'complete' | 'incomplete' — escanea candidates:unread y filtra
+export const getCandidatesFiltered = async (filter, limit = 500, offset = 0) => {
+    const client = getClient();
+    if (!client) return { candidates: [], total: 0 };
+
+    const unreadIds = await client.smembers(KEYS.CANDIDATES_UNREAD);
+    if (!unreadIds.length) return { candidates: [], total: 0 };
+
+    const customFieldsRaw = await client.get('custom_fields');
+    const customFields = customFieldsRaw ? JSON.parse(customFieldsRaw) : [];
+
+    const pipe = client.pipeline();
+    unreadIds.forEach(id => pipe.get(`${KEYS.CANDIDATE_PREFIX}${id}`));
+    const results = await pipe.exec();
+
+    const candidates = results
+        .map(([err, res]) => (err || !res) ? null : JSON.parse(res))
+        .filter(c => {
+            if (!c) return false;
+            const u = new Date(c.lastUserMessageAt || 0).getTime();
+            const h = new Date(c.lastHumanMessageAt || 0).getTime();
+            if (!u || u <= h) return false; // no es realmente no-leído
+            if (filter === 'complete') return isProfileComplete(c, customFields);
+            if (filter === 'incomplete') return !isProfileComplete(c, customFields);
+            return true; // 'unread' = todos los no-leídos
+        });
+
+    // Ordenar por último mensaje DESC
+    candidates.sort((a, b) =>
+        new Date(b.lastUserMessageAt || 0).getTime() - new Date(a.lastUserMessageAt || 0).getTime()
+    );
+
+    const total = candidates.length;
+    return { candidates: candidates.slice(offset, offset + limit), total };
+};
+
 // Unread-first pero filtrado por etiqueta — para la primera página con tag activo
 export const getCandidatesUnreadFirstByTag = async (tagFilter, limit = 33) => {
     const client = getClient();
