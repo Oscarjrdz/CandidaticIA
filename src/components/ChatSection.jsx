@@ -2896,10 +2896,15 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
                                         </span>
                                     )}
                                 </div>
-                                <div className="mt-0.5">
+                                <div className="mt-0.5 flex items-center gap-1.5 flex-wrap">
                                     <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${isProfileComplete(selectedChat) ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400' : 'bg-red-100 dark:bg-red-900/30 text-red-500 dark:text-red-400'}`}>
                                         {isProfileComplete(selectedChat) ? 'Completo' : 'Incompleto'}
                                     </span>
+                                    {selectedChat.incomingPhoneNumberId && (
+                                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400">
+                                            {selectedChat.incomingPhoneNumberId === '1249373631587237' ? 'Hr One México' : selectedChat.incomingPhoneNumberId === '1061455557054529' ? 'Candidatic IA' : selectedChat.incomingPhoneNumberId}
+                                        </span>
+                                    )}
                                 </div>
                             </div>
                         </div>
