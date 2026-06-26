@@ -36,9 +36,11 @@ export class MediaEngine {
             });
         }
 
+        const phoneExtra = _config?.phoneNumberId ? { phoneNumberId: _config.phoneNumberId } : {};
+
         // Attempt 1: Send with stored mediaId
         if (metaMediaId) {
-            const result = await sendMetaMessage(phone, stickerUrl, 'sticker', { mediaId: metaMediaId });
+            const result = await sendMetaMessage(phone, stickerUrl, 'sticker', { ...phoneExtra, mediaId: metaMediaId });
             if (result?.success) return result;
             console.warn(`[MEDIA ENGINE] ⚠️ Stored mediaId expired for ${customStickerKey}, re-uploading...`);
         }
@@ -55,12 +57,12 @@ export class MediaEngine {
                     if (upload?.mediaId) {
                         // Update stored mediaId for future sends
                         await client?.set(customStickerKey, JSON.stringify({ url: stickerUrl, mediaId: upload.mediaId }));
-                        const result = await sendMetaMessage(phone, stickerUrl, 'sticker', { mediaId: upload.mediaId });
+                        const result = await sendMetaMessage(phone, stickerUrl, 'sticker', { ...phoneExtra, mediaId: upload.mediaId });
                         if (result?.success) return result;
 
                         // If sticker format rejected, try as image
                         console.warn(`[MEDIA ENGINE] ⚠️ Sticker format rejected, falling back to image`);
-                        return await sendMetaMessage(phone, stickerUrl, 'image', { mediaId: upload.mediaId });
+                        return await sendMetaMessage(phone, stickerUrl, 'image', { ...phoneExtra, mediaId: upload.mediaId });
                     }
                 } catch (e) {
                     console.error(`[MEDIA ENGINE] ❌ Re-upload failed:`, e.message);
@@ -70,7 +72,7 @@ export class MediaEngine {
 
         // Attempt 3: Last resort — try link-based send (only works if URL is publicly accessible)
         if (stickerUrl?.startsWith('http')) {
-            return await sendMetaMessage(phone, stickerUrl, 'image');
+            return await sendMetaMessage(phone, stickerUrl, 'image', phoneExtra);
         }
 
         console.error(`[MEDIA ENGINE] ❌ All sticker delivery methods failed for ${customStickerKey}`);
@@ -90,7 +92,8 @@ export class MediaEngine {
         if (mediaUrl.toLowerCase().endsWith('.pdf')) type = 'document';
         if (mediaUrl.toLowerCase().includes('sticker')) type = 'sticker';
 
-        return await sendMetaMessage(phone, mediaUrl, type, { caption });
+        const phoneExtra = _config?.phoneNumberId ? { phoneNumberId: _config.phoneNumberId } : {};
+        return await sendMetaMessage(phone, mediaUrl, type, { ...phoneExtra, caption });
     }
 
     /**

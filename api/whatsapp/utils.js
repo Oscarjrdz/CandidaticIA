@@ -369,12 +369,13 @@ export const sendUltraMsgMessage = async (_instanceId, _token, to, body, type = 
 /**
  * ✅ Mark a message as read
  */
-export const markMessageAsRead = async (messageId) => {
+export const markMessageAsRead = async (messageId, phoneNumberId = null) => {
     const config = getMetaConfig();
-    if (!config.phoneNumberId || !config.accessToken || !messageId) return;
+    const resolvedPhoneId = phoneNumberId || config.phoneNumberId;
+    if (!resolvedPhoneId || !config.accessToken || !messageId) return;
 
     try {
-        const url = `${GRAPH_BASE_URL}/${config.phoneNumberId}/messages`;
+        const url = `${GRAPH_BASE_URL}/${resolvedPhoneId}/messages`;
         await axios.post(url, {
             messaging_product: 'whatsapp',
             status: 'read',

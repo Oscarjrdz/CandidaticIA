@@ -555,7 +555,7 @@ export default async function handler(req, res) {
             // Marcar mensaje como leído inmediatamente (candidato ve palomitas azules)
             // El bot también lo hace en process-message.js, pero cuando el bot está
             // inactivo (modo manual recruiter) nadie lo llamaba → candidato sin azules
-            markMessageAsRead(msgId).catch(() => {});
+            markMessageAsRead(msgId, metadata?.phone_number_id).catch(() => {});
 
             await logTelemetry('ingress_captured', {
                 msgId, from: phone, type: messageType, isNew: isNewCandidate,
