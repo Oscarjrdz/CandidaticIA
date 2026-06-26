@@ -570,6 +570,10 @@ export default async function handler(req, res) {
                 // ═══════════════════════════════════════════════════════════
                 const adminNumber = process.env.ADMIN_NUMBER || '5218116038195';
                 const isAdmin = phone.slice(-10) === adminNumber.slice(-10);
+                // Wrapper: responde desde el mismo número que recibió el comando
+                const _cmdPhoneId = metadata?.phone_number_id;
+                const sendCmd = (to, msg, type = 'chat', extra = {}) =>
+                    sendMessage(to, msg, type, { ...extra, phoneNumberId: _cmdPhoneId });
 
                 // ── PUBLIC COMMANDS (any number) ──
                 const lowerBodyPublic = body.toLowerCase().trim();
@@ -623,7 +627,7 @@ export default async function handler(req, res) {
                         }
 
                         const timeStr = now.toLocaleTimeString('es-MX', { timeZone: 'America/Monterrey', hour: '2-digit', minute: '2-digit' });
-                        await sendMessage(phone,
+                        await sendCmd(phone,
                             `📊 *Candidatos Nuevos Hoy*\n` +
                             `📅 ${todayStr} (${timeStr} MTY)\n\n` +
                             `👥 *Total:* ${countToday}\n` +
@@ -632,7 +636,7 @@ export default async function handler(req, res) {
                         );
                     } catch (e) {
                         console.error('Error in CANDIDATOS NUEVOS command:', e);
-                        await sendMessage(phone, '❌ Error al consultar candidatos. Intenta de nuevo.');
+                        await sendCmd(phone, '❌ Error al consultar candidatos. Intenta de nuevo.');
                     }
                     continue;
                 }
@@ -690,7 +694,7 @@ export default async function handler(req, res) {
                         }
 
                         const timeStr = now.toLocaleTimeString('es-MX', { timeZone: 'America/Monterrey', hour: '2-digit', minute: '2-digit' });
-                        await sendMessage(phone,
+                        await sendCmd(phone,
                             `📊 *Candidatos Nuevos de Ayer*\n` +
                             `📅 ${yesterdayStr} (día completo)\n\n` +
                             `👥 *Total:* ${countYesterday}\n` +
@@ -699,7 +703,7 @@ export default async function handler(req, res) {
                         );
                     } catch (e) {
                         console.error('Error in CANDIDATOS NUEVOS DE AYER command:', e);
-                        await sendMessage(phone, '❌ Error al consultar candidatos de ayer. Intenta de nuevo.');
+                        await sendCmd(phone, '❌ Error al consultar candidatos de ayer. Intenta de nuevo.');
                     }
                     continue;
                 }
@@ -739,7 +743,7 @@ export default async function handler(req, res) {
                     if (matchedCommand) {
                         const { key, label } = BRIDGE_COMMANDS[matchedCommand];
                         await redis.set(`admin_state:${phone}`, `waiting_bridge_sticker:${key}`);
-                        await sendMessage(adminNumber, `✅ Listo. Ahora mándame el *STICKER* que quieres usar como puente para:\n\n🎯 *${label}*\n\nEspero tu sticker... 🌸`);
+                        await sendCmd(adminNumber, `✅ Listo. Ahora mándame el *STICKER* que quieres usar como puente para:\n\n🎯 *${label}*\n\nEspero tu sticker... 🌸`);
                         continue;
                     }
 
@@ -765,13 +769,13 @@ export default async function handler(req, res) {
                                 } catch (e) {}
                             }
 
-                            await sendMessage(adminNumber, `${bridge.label}\n📌 ${bridge.desc}\n${stickerUrl ? '✅ Configurado' : '❌ Sin configurar aún'}`);
+                            await sendCmd(adminNumber, `${bridge.label}\n📌 ${bridge.desc}\n${stickerUrl ? '✅ Configurado' : '❌ Sin configurar aún'}`);
                             if (stickerUrl) {
-                                await sendMessage(adminNumber, stickerUrl, 'sticker', { mediaId: metaMediaId });
+                                await sendCmd(adminNumber, stickerUrl, 'sticker', { mediaId: metaMediaId });
                                 anyFound = true;
                             }
                         }
-                        if (!anyFound) await sendMessage(adminNumber, '⚠️ Ningún puente configurado todavía. Usa los comandos *APRENDER PUENTE...* para enseñarle a Brenda.');
+                        if (!anyFound) await sendCmd(adminNumber, '⚠️ Ningún puente configurado todavía. Usa los comandos *APRENDER PUENTE...* para enseñarle a Brenda.');
                         continue;
                     }
 
@@ -787,11 +791,11 @@ export default async function handler(req, res) {
                                     const user = users[userIndex];
                                     user.status = 'Active';
                                     await saveUser(user);
-                                    await sendMessage(adminNumber, `✅ Usuario ${user.name} (${targetPhone}) activado con éxito.`);
-                                    await sendMessage(user.whatsapp, `🎉 ¡Felicidades ${user.name}! Tu cuenta ha sido activada. Ya puedes iniciar sesión en Candidatic IA. 🚀`);
+                                    await sendCmd(adminNumber, `✅ Usuario ${user.name} (${targetPhone}) activado con éxito.`);
+                                    await sendCmd(user.whatsapp, `🎉 ¡Felicidades ${user.name}! Tu cuenta ha sido activada. Ya puedes iniciar sesión en Candidatic IA. 🚀`);
                                     continue;
                                 } else {
-                                    await sendMessage(adminNumber, `❌ No encontré ningún usuario pendiente con el número ${targetPhone}.`);
+                                    await sendCmd(adminNumber, `❌ No encontré ningún usuario pendiente con el número ${targetPhone}.`);
                                     continue;
                                 }
                             } catch (err) {
@@ -820,7 +824,7 @@ export default async function handler(req, res) {
                     if (redis) {
                         const pin = Math.floor(1000 + Math.random() * 9000).toString();
                         await redis.set(`app_login_pin:${phone}`, pin, 'EX', 600);
-                        await sendMessage(phone, `👋 ¡Hola!\n\nTu PIN de acceso para la app de Candidatic es: *${pin}*\n\nEste código expirará en 10 minutos. 🔐`);
+                        await sendCmd(phone, `👋 ¡Hola!\n\nTu PIN de acceso para la app de Candidatic es: *${pin}*\n\nEste código expirará en 10 minutos. 🔐`);
                     }
                     continue; // Detener propagación para no activar IA ni guardar mensaje
                 }
@@ -838,9 +842,9 @@ export default async function handler(req, res) {
                     const targetCandId = await getCandidateIdByPhone(targetPhone);
                     if (targetCandId) {
                         await deleteCandidate(targetCandId);
-                        await sendMessage(phone, `✅ *RESET COMPLETADO*\nEl historial y perfil del número \`${targetPhone}\` han sido borrados.\n\nEscribe "Hola" para reiniciar el flujo como un candidato nuevo.`);
+                        await sendCmd(phone, `✅ *RESET COMPLETADO*\nEl historial y perfil del número \`${targetPhone}\` han sido borrados.\n\nEscribe "Hola" para reiniciar el flujo como un candidato nuevo.`);
                     } else {
-                        await sendMessage(phone, `⚠️ *Aviso*: El número \`${targetPhone}\` no existe en la base de datos o ya fue reseteado.`);
+                        await sendCmd(phone, `⚠️ *Aviso*: El número \`${targetPhone}\` no existe en la base de datos o ya fue reseteado.`);
                     }
                     continue;
                 }
@@ -891,7 +895,7 @@ export default async function handler(req, res) {
                             }
                         } catch (e) {}
 
-                        await sendMessage(adminNumber, `✅ ¡Puente *"${label}"* guardado con éxito! 🚀\n\nClave: \`${redisKey}\`\n♾️ Sticker guardado permanentemente.`);
+                        await sendCmd(adminNumber, `✅ ¡Puente *"${label}"* guardado con éxito! 🚀\n\nClave: \`${redisKey}\`\n♾️ Sticker guardado permanentemente.`);
                         continue;
                     }
                     // If not waiting for a bridge sticker, fall through and treat as normal candidate message
@@ -901,7 +905,7 @@ export default async function handler(req, res) {
                 if (phone.slice(-10) === adminNumber.slice(-10) && (messageType === 'image' || messageType === 'video' || messageType === 'document')) {
                     if (mediaUrl && body?.toLowerCase().includes('screen')) {
                         await redis.set('dev_last_screenshot', mediaUrl, 'EX', 86400);
-                        await sendMessage(adminNumber, `📸 Screenshot guardado. La IA puede consultarlo ahora.`);
+                        await sendCmd(adminNumber, `📸 Screenshot guardado. La IA puede consultarlo ahora.`);
                         continue;
                     }
                 }
