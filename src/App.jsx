@@ -35,8 +35,10 @@ function lazyWithRetry(importFn, chunkName) {
   );
 }
 
+const importChatSection = () => import('./components/ChatSection');
+
 const CandidatesSection = lazyWithRetry(() => import('./components/CandidatesSection'), 'CandidatesSection');
-const ChatSection = lazyWithRetry(() => import('./components/ChatSection'), 'ChatSection');
+const ChatSection = lazyWithRetry(importChatSection, 'ChatSection');
 const BulksSection = lazyWithRetry(() => import('./components/BulksSection'), 'BulksSection');
 const SettingsSection = lazyWithRetry(() => import('./components/SettingsSection'), 'SettingsSection');
 const AutomationsSection = lazyWithRetry(() => import('./components/AutomationsSection'), 'AutomationsSection');
@@ -172,6 +174,17 @@ function AppShell() {
       window.location.reload();
     }, 500);
   }, [logout, showToast]);
+
+  useEffect(() => {
+    if (!user || !isAppReady || activeSection === 'chat') return;
+    const run = () => importChatSection().catch(() => {});
+    if ('requestIdleCallback' in window) {
+      const id = window.requestIdleCallback(run, { timeout: 2500 });
+      return () => window.cancelIdleCallback(id);
+    }
+    const timer = setTimeout(run, 1200);
+    return () => clearTimeout(timer);
+  }, [user, isAppReady, activeSection]);
 
   // AUTH GUARD
   if (isAuthChecking) {

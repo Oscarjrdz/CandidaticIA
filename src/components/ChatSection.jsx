@@ -39,6 +39,16 @@ const extractPersistentCandidatePatch = (patch = {}) => {
     );
 };
 
+const scheduleIdleTask = (callback, timeout = 1200) => {
+    if (typeof window === 'undefined') return () => {};
+    if ('requestIdleCallback' in window) {
+        const id = window.requestIdleCallback(callback, { timeout });
+        return () => window.cancelIdleCallback(id);
+    }
+    const timer = window.setTimeout(callback, Math.min(timeout, 500));
+    return () => window.clearTimeout(timer);
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
 // 🧩 CustomSelect Component
 // ─────────────────────────────────────────────────────────────────────────────
@@ -402,10 +412,14 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
     const isSendingRef = useRef(false);
     const isAtBottomRef = useRef(true);
     const virtuosoScrollerRef = useRef(null);
+    const scrollFrameRef = useRef(null);
 
     const scrollToBottom = (behavior = 'smooth') => {
-        const el = virtuosoScrollerRef.current;
-        if (el) el.scrollTo({ top: el.scrollHeight, behavior });
+        if (scrollFrameRef.current) cancelAnimationFrame(scrollFrameRef.current);
+        scrollFrameRef.current = requestAnimationFrame(() => {
+            const el = virtuosoScrollerRef.current;
+            if (el) el.scrollTo({ top: el.scrollHeight, behavior });
+        });
     };
     const fileInputRef = useRef(null);
     const lastPresenceTimeRef = useRef(0);
@@ -436,6 +450,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
 
     // Quick Replies (Banco de Respuestas)
     const [quickReplies, setQuickReplies] = useState([]);
+    const quickRepliesLoadedRef = useRef(false);
     const [showQuickRepliesPanel, setShowQuickRepliesPanel] = useState(false);
     const [editingQuickReply, setEditingQuickReply] = useState(null); // null = creating, object = editing
     const [qrForm, setQrForm] = useState({ name: '', message: '', shortcut: '', imageUrl: '', imageUrl2: '', type: 'text', locName: '', locAddress: '', locLat: '', locLng: '' });
@@ -666,31 +681,24 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
     useEffect(() => {
         loadCandidates();
         loadTags();
-        loadVacanciesList();
-        loadManualProjects();
+        const cancelIdleLoads = scheduleIdleTask(() => {
+            loadVacanciesList();
+            loadManualProjects();
+            loadQuickReplies();
 
+            fetch('/api/whatsapp/templates')
+                .then(res => res.json())
+                .then(data => { if(data.success && data.data) setMetaTemplates(data.data.filter(t => t.status==='APPROVED')); })
+                .catch(() => {});
 
-        // Fetch Meta Templates in background
-        fetch('/api/whatsapp/templates')
-            .then(res => res.json())
-            .then(data => { if(data.success && data.data) setMetaTemplates(data.data.filter(t => t.status==='APPROVED')); })
-            .catch(() => {});
+            // ✅ META AUDIT: chat-stats polling KILLED — locks fetched once after first paint.
+            fetch('/api/chat-stats')
+                .then(res => res.json())
+                .then(data => { if (data.success) setChatLocks(data.locks || {}); })
+                .catch(() => {});
+        }, 1600);
 
-        // ✅ META AUDIT: chat-stats polling KILLED — locks fetched once at mount.
-        // Locks are visual-only indicators; they don't need 5s real-time precision.
-        // Saves 17,280 requests/day/user.
-        const fetchStats = async () => {
-            try {
-                const res = await fetch('/api/chat-stats');
-                const data = await res.json();
-                if (data.success) setChatLocks(data.locks || {});
-            } catch (e) { /* silent */ }
-        };
-        fetchStats(); // Single hydration fetch at mount
-
-        const onTagsChanged = () => {
-            loadTags();
-        };
+        return cancelIdleLoads;
     }, []);
 
     // RBAC effect removed (handled inline)
@@ -725,11 +733,16 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
 
     // Quick Replies loader
     const loadQuickReplies = async () => {
+        if (quickRepliesLoadedRef.current) return;
+        quickRepliesLoadedRef.current = true;
         try {
             const res = await fetch('/api/quick_replies');
             const data = await res.json();
             if (data.success) setQuickReplies(data.replies || []);
-        } catch (e) { console.error('Error loading quick replies', e); }
+        } catch (e) {
+            quickRepliesLoadedRef.current = false;
+            console.error('Error loading quick replies', e);
+        }
     };
 
     const saveQuickReplies = async (newList) => {
@@ -805,13 +818,15 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
         setShowQuickRepliesPanel(false);
     }, [selectedChat, candidates, user, showToast]);
 
-    // Load quick replies on mount
-    useEffect(() => { loadQuickReplies(); }, []);
+    useEffect(() => {
+        if (showQuickRepliesPanel) loadQuickReplies();
+    }, [showQuickRepliesPanel]);
 
     // HIGH-3: Clean up typing indicator timers on unmount to prevent state updates on unmounted component
     useEffect(() => {
         return () => {
             Object.values(typingTimersRef.current).forEach(t => clearTimeout(t));
+            if (scrollFrameRef.current) cancelAnimationFrame(scrollFrameRef.current);
         };
     }, []);
 
@@ -1030,11 +1045,6 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
             return true;
         });
 
-        // 🔍 DIAGNOSTIC: Track filter pipeline losses
-        if ((candidates || []).length !== result.length) {
-            console.log(`🔍 [ChatSection] Filter Pipeline: ${(candidates || []).length} total → ${result.length} visible | role=${user?.role} filter=${activeFilter} crmFilter=${manualPipelineFilter || 'none'}`);
-        }
-
         // 🏎️ Pre-compute timestamps ONCE (eliminates ~44,000 Date objects per sort)
         const tsCache = new Map();
         for (const c of result) {
@@ -1214,12 +1224,12 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
             prevChatId.current = selectedChat?.id;
             prevMessagesLength.current = messages.length;
             setUnseenCount(0);
-            setTimeout(() => scrollToBottom('auto'), 80);
+            scrollToBottom('auto');
             return;
         }
         if (messages.length > prevMessagesLength.current) {
             if (isAtBottomRef.current || isSendingRef.current) {
-                setTimeout(() => scrollToBottom('smooth'), 80);
+                scrollToBottom('smooth');
             } else {
                 // Count only real incoming messages (not our own optimistic ones)
                 const newMsgs = messages.slice(prevMessagesLength.current);
@@ -1316,12 +1326,12 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
                             if (pendingIndex !== -1) {
                                 const newArr = [...prev];
                                 newArr[pendingIndex] = newMsg;
-                                setTimeout(() => scrollToBottom(), 100);
+                                scrollToBottom();
                                 return newArr;
                             }
                         }
 
-                        setTimeout(() => scrollToBottom(), 100);
+                        scrollToBottom();
                         return [...prev, newMsg];
                     });
                 } else {
