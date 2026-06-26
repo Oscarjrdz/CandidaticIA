@@ -1152,11 +1152,15 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
         // (always points to the number the candidate JUST wrote to), with fallback
         // to candidate object's instanceId for backward compatibility.
         const phone = candidateData.whatsapp?.replace(/\D/g, '');
+        // incomingPhoneNumberId (set per-message in webhook) always wins — it's the number
+        // the candidate JUST wrote to. Only fall back to candidate_instance if it's a valid
+        // numeric Meta phone ID (not a legacy UltraMSG alphanumeric instanceId).
+        const isValidMetaPhoneId = (id) => id && /^\d{10,}$/.test(String(id));
         let resolvedInstanceId = candidateData.incomingPhoneNumberId || candidateData.instanceId;
         try {
             const freshInstanceId = await redis?.get(`candidate_instance:${phone}`);
-            if (freshInstanceId) resolvedInstanceId = freshInstanceId;
-        } catch (e) { /* fallback to candidateData.instanceId */ }
+            if (freshInstanceId && isValidMetaPhoneId(freshInstanceId)) resolvedInstanceId = freshInstanceId;
+        } catch (e) { /* fallback to incomingPhoneNumberId */ }
 
         // 1. High-Speed Parallel Acquisition (Memory Boost: 40 messages)
         const configKeys = [
