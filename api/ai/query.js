@@ -360,10 +360,12 @@ IMPORTANTE: Responde SÓLO con el JSON en bruto, sin backticks (\`\`\`) ni marca
             return acc;
         }, []);
 
-        // 5. Sort & Cap (Expanded Limit to 500)
+        // 5. Sort & Cap.
+        // Default used to be 5000, which could ship megabytes of candidate JSON to the browser.
         filtered = filtered.sort((a, b) => b._relevance - a._relevance);
 
-        const limit = parseInt(req.query.limit || 5000);
+        const requestedLimit = parseInt(req.query.limit || '200', 10);
+        const limit = Math.min(Math.max(Number.isFinite(requestedLimit) ? requestedLimit : 200, 1), 500);
 
         // Strip chat_summary antes de enviar al browser — el scoring ya ocurrió, el frontend no lo renderiza
         const candidatesForClient = filtered.slice(0, limit).map(({ chat_summary, ...c }) => c);

@@ -34,6 +34,17 @@ function humanEta(ms) {
     return `~${m}m`;
 }
 
+function isTodayInMonterrey(timestamp) {
+    if (!timestamp) return false;
+    const formatter = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'America/Monterrey',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+    });
+    return formatter.format(new Date(timestamp)) === formatter.format(new Date());
+}
+
 export default async function handler(req, res) {
     if (req.method === 'OPTIONS') return res.status(200).end();
     if (req.method !== 'GET') return res.status(405).end();
@@ -73,8 +84,6 @@ export default async function handler(req, res) {
         const converted  = [];
         let sentToday    = 0;
 
-        const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
-
         for (const c of candidates) {
             const lastMsgTs = c.lastUserMessageAt ? new Date(c.lastUserMessageAt).getTime() : 0;
 
@@ -110,8 +119,10 @@ export default async function handler(req, res) {
             // ── Ya alcanzó el máximo de intentos ─────────────────────────────
             if (meta.attempts >= maxAttempts) {
                 if (lastSentTs > 0) {
-                    if (lastSentTs >= todayStart.getTime()) sentToday++;
-                    sent.push({ ...meta, status: 'maxed' });
+                    if (isTodayInMonterrey(lastSentTs)) {
+                        sentToday++;
+                        sent.push({ ...meta, status: 'maxed' });
+                    }
                 }
                 continue;
             }
@@ -133,8 +144,10 @@ export default async function handler(req, res) {
                 etaMs = Math.max(0, intervalMs - (now - lastSentTs));
                 readyToSend = etaMs === 0;
                 // Contar enviados hoy
-                if (lastSentTs >= todayStart.getTime()) sentToday++;
-                sent.push({ ...meta, status: 'sent' });
+                if (isTodayInMonterrey(lastSentTs)) {
+                    sentToday++;
+                    sent.push({ ...meta, status: 'sent' });
+                }
             }
 
             pending.push({

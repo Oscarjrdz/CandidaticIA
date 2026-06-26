@@ -28,8 +28,6 @@ export default async function handler(req, res) {
         return res.status(500).json({ success: false, error: 'No Meta tokens configured' });
     }
 
-    const commentsToken = await resolveCommentsToken({ pageToken, adsToken, redis });
-
     // ─── GET: Fetch comments for an ad ──────────────────────────────
     if (req.method === 'GET') {
         const { adId } = req.query;
@@ -52,6 +50,8 @@ export default async function handler(req, res) {
                 return res.status(200).json({ success: true, comments: [], postId: null, message: 'No se encontró el post vinculado a este anuncio' });
             }
 
+            const commentsToken = await resolveCommentsToken({ pageToken, adsToken, redis, postId });
+
             // Step 2: Fetch comments from the post (use page token)
             const commentsRes = await fetch(
                 `${GRAPH_BASE_URL}/${postId}/comments?fields=id,message,from,created_time,comment_count,like_count,attachment&limit=50&order=reverse_chronological&access_token=${encodeURIComponent(commentsToken)}`
@@ -71,6 +71,7 @@ export default async function handler(req, res) {
                         return res.status(200).json(payload);
                     }
                 }
+                await clearCommentsTokenCache({ redis, postId });
                 console.error('[Ads Comments] Graph API error:', commentsData.error);
                 return res.status(400).json({ success: false, error: commentsData.error.message || 'Error al cargar comentarios. Verifica los permisos del token.' });
             }
@@ -95,6 +96,7 @@ export default async function handler(req, res) {
         }
 
         try {
+            const commentsToken = await resolveCommentsToken({ pageToken, adsToken, redis });
             // Page token is required for posting replies
             const replyToken = commentsToken;
 
@@ -112,6 +114,7 @@ export default async function handler(req, res) {
             const replyData = await replyRes.json();
 
             if (replyData.error) {
+                await clearCommentsTokenCache({ redis });
                 console.error('[Ads Comments] Reply error:', replyData.error);
                 return res.status(400).json({ success: false, error: replyData.error.message || 'Error al responder' });
             }
@@ -172,7 +175,7 @@ async function processComments(comments, token, postId) {
                         likeCount: r.like_count || 0
                     }));
                 }
-            } catch (e) {
+            } catch {
                 // Non-fatal: replies fetch failed
             }
         }
@@ -188,11 +191,12 @@ async function processComments(comments, token, postId) {
     };
 }
 
-async function resolveCommentsToken({ pageToken, adsToken, redis }) {
-    const directPageToken = process.env.META_PAGE_TOKEN || process.env.MESSENGER_PAGE_TOKEN;
+async function resolveCommentsToken({ pageToken, adsToken, redis, postId }) {
+    const directPageToken = process.env.META_PAGE_TOKEN;
     if (directPageToken) return directPageToken;
 
-    const cacheKey = 'meta:page-token:ads-comments';
+    const pageId = getPageIdFromPostId(postId);
+    const cacheKey = pageId ? `meta:page-token:ads-comments:${pageId}` : 'meta:page-token:ads-comments';
     const cached = redis ? await redis.get(cacheKey).catch(() => null) : null;
     if (cached) return cached;
 
@@ -200,10 +204,13 @@ async function resolveCommentsToken({ pageToken, adsToken, redis }) {
 
     try {
         if (pageToken) {
-            const accountsRes = await fetch(`${GRAPH_BASE_URL}/me/accounts?access_token=${encodeURIComponent(pageToken)}`);
+            const accountsRes = await fetch(`${GRAPH_BASE_URL}/me/accounts?fields=id,name,access_token,tasks&access_token=${encodeURIComponent(pageToken)}`);
             const accountsData = await accountsRes.json();
-            if (accountsData?.data?.[0]?.access_token) {
-                commentsToken = accountsData.data[0].access_token;
+            const account = pageId
+                ? accountsData?.data?.find(page => page.id === pageId)
+                : accountsData?.data?.[0];
+            if (account?.access_token) {
+                commentsToken = account.access_token;
                 if (redis) await redis.set(cacheKey, commentsToken, 'EX', PAGE_TOKEN_CACHE_TTL).catch(() => {});
             }
         }
@@ -212,6 +219,20 @@ async function resolveCommentsToken({ pageToken, adsToken, redis }) {
     }
 
     return commentsToken;
+}
+
+function getPageIdFromPostId(postId) {
+    if (!postId || typeof postId !== 'string') return null;
+    const [pageId] = postId.split('_');
+    return pageId && pageId !== postId ? pageId : null;
+}
+
+async function clearCommentsTokenCache({ redis, postId } = {}) {
+    if (!redis) return;
+    const pageId = getPageIdFromPostId(postId);
+    const keys = ['meta:page-token:ads-comments'];
+    if (pageId) keys.push(`meta:page-token:ads-comments:${pageId}`);
+    await Promise.all(keys.map(key => redis.del(key).catch(() => {})));
 }
 
 async function resolveAdPostId({ adId, adsToken, redis }) {

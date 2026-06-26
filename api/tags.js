@@ -98,8 +98,8 @@ export default async function handler(req, res) {
             // Background cleanup: remove tag from all candidate profiles (non-blocking)
             (async () => {
                 try {
-                    const { getCandidates, updateCandidate } = await import('./utils/storage.js');
-                    const { candidates } = await getCandidates(20000, 0, '', false, tagName);
+                    const { getCandidatesByTag, updateCandidate } = await import('./utils/storage.js');
+                    const candidates = await getCandidatesByTag(tagName, 5000);
                     if (candidates.length > 0) {
                         await Promise.all(candidates.map(c =>
                             updateCandidate(c.id, { tags: c.tags.filter(t => t !== tagName) })

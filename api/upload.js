@@ -40,15 +40,17 @@ export default async function handler(req, res) {
         const key = `image:${id}`;
         const metaKey = `meta:image:${id}`;
 
-        // Store in Redis without expiration (Persistent Media)
+        // Legacy upload path: keep media temporary. Persistent base64 blobs in Redis
+        // turn every /api/image read into avoidable bandwidth and memory pressure.
+        const ttlSeconds = 86400 * 7;
         const pipeline = client.pipeline();
-        pipeline.set(key, base64Data);
+        pipeline.set(key, base64Data, 'EX', ttlSeconds);
         pipeline.set(metaKey, JSON.stringify({
             mime,
             filename: filename || (mime === 'application/pdf' ? 'Informacion.pdf' : 'Imagen.jpg'),
             size: base64Data.length,
             createdAt: new Date().toISOString()
-        }));
+        }), 'EX', ttlSeconds);
 
         // Register in Library Index (O(1) scard)
         pipeline.zadd('candidatic:media_library', Date.now(), id);

@@ -22,7 +22,7 @@ const parseAdIds = (raw = '') =>
 
 export default async function handler(req, res) {
     try {
-        const { getRedisClient, getCandidates, updateCandidate, validateAdminSession } = await import('./utils/storage.js');
+        const { getRedisClient, getCandidatesByAdIds, getCandidatesByTag, updateCandidate, validateAdminSession } = await import('./utils/storage.js');
         const redis = getRedisClient();
         if (!redis) return res.status(500).json({ error: 'Redis no disponible' });
 
@@ -67,8 +67,9 @@ export default async function handler(req, res) {
                 await redis.set(GLOBAL_TAGS_KEY, JSON.stringify(globalTags));
             }
 
-            // Batch apply a todos los candidatos con cualquiera de esos adIds
-            const { candidates } = await getCandidates(20000, 0, '');
+            // Batch apply sólo a candidatos indexados con cualquiera de esos adIds.
+            // Evita barrer toda la base de candidatos por cada etiqueta creada.
+            const candidates = await getCandidatesByAdIds(adIds, 2000);
             const updates = [];
             let applied = 0;
             for (const c of candidates) {
@@ -120,7 +121,9 @@ export default async function handler(req, res) {
             // Renombrar en candidatos si cambió el nombre
             let renamed = 0;
             const updates = [];
-            const { candidates } = await getCandidates(20000, 0, '');
+            const byOldTag = await getCandidatesByTag(oldTagName, 5000);
+            const byAddedAds = addedAdIds.length ? await getCandidatesByAdIds(addedAdIds, 2000) : [];
+            const candidates = [...new Map([...byOldTag, ...byAddedAds].map(c => [c.id, c])).values()];
             for (const c of candidates) {
                 const hasTags = Array.isArray(c.tags);
                 const hasOldTag = hasTags && c.tags.includes(oldTagName);
@@ -166,8 +169,8 @@ export default async function handler(req, res) {
                 globalTags.filter(t => (typeof t === 'string' ? t : t.name) !== removed.tagName)
             ));
 
-            // Quitar de todos los candidatos
-            const { candidates } = await getCandidates(20000, 0, '');
+            // Quitar sólo de candidatos que el índice sabe que tienen la etiqueta.
+            const candidates = await getCandidatesByTag(removed.tagName, 5000);
             const updates = [];
             let removedFrom = 0;
             for (const c of candidates) {

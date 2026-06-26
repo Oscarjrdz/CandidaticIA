@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { MessageCirclePlus, Clock, RefreshCw, ChevronDown, ChevronUp, SkipForward, Zap, Send, Users, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
+import { MessageCirclePlus, Clock, RefreshCw, ChevronDown, ChevronUp, SkipForward, Zap, Send, Users, CheckCircle, XCircle, AlertCircle, SlidersHorizontal, ListTodo } from 'lucide-react';
 import { useToastContext } from '../../contexts/ToastContext';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -45,6 +45,20 @@ const MAX_SILENCE_OPTIONS = [
     { label: '15 días', value: 15 },
 ];
 const ATTEMPT_OPTIONS = [1, 2, 3];
+const PANEL_CLASS = 'h-auto xl:h-[520px] bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden min-w-0 flex flex-col';
+const PANEL_HEADER_CLASS = 'h-16 px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between gap-3 shrink-0';
+const PANEL_BODY_CLASS = 'flex-1 min-h-0 overflow-y-auto';
+
+const PanelTitle = ({ icon: Icon, title }) => (
+    <div className="flex items-center space-x-3 min-w-0">
+        <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-blue-100 dark:bg-blue-900/30 shrink-0">
+            <Icon className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+        </div>
+        <h2 className="text-sm font-bold text-gray-900 dark:text-white truncate">
+            {title}
+        </h2>
+    </div>
+);
 
 // ── Tab badge ─────────────────────────────────────────────────────────────────
 const Badge = ({ count, color = 'blue' }) => {
@@ -189,7 +203,7 @@ const CandidateRow = React.memo(({ cand, onSkip, onSendNow, isSent, isSkipped })
 });
 
 // ── Main Panel ────────────────────────────────────────────────────────────────
-const ReengagementPanel = () => {
+const ReengagementPanel = ({ templatesPanel = null }) => {
     const { showToast } = useToastContext();
 
     const [settings, setSettings] = useState(null);
@@ -197,7 +211,7 @@ const ReengagementPanel = () => {
     const [loading, setLoading]   = useState(true);
     const [saving, setSaving]     = useState(false);
     const [queueLoading, setQueueLoading] = useState(false);
-    const [showConfig, setShowConfig]     = useState(false);
+    const [showConfig, setShowConfig]     = useState(true);
     const [activeTab, setActiveTab]       = useState('pending');
 
     // Editable local settings (to avoid saving on every keystroke)
@@ -284,75 +298,69 @@ const ReengagementPanel = () => {
     const readyCount = queue.pending?.filter(c => c.readyToSend).length || 0;
 
     return (
-        <div className="space-y-4">
+        <div className="grid grid-cols-1 xl:grid-cols-4 gap-4 items-stretch">
 
             {/* ── Header con toggle ─────────────────────────────────────────── */}
-            <div className={`rounded-2xl border p-5 transition-colors ${
-                isEnabled
-                    ? 'bg-green-50 dark:bg-green-900/10 border-green-200 dark:border-green-800'
-                    : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700'
-            }`}>
-                <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${isEnabled ? 'bg-green-500' : 'bg-gray-300 dark:bg-gray-600'}`}>
-                            <MessageCirclePlus className="w-5 h-5 text-white" />
-                        </div>
-                        <div>
-                            <h3 className="font-bold text-gray-900 dark:text-white text-sm">
-                                Re-engagement Proactivo
-                            </h3>
-                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                                {isEnabled
-                                    ? `Activo desde ${new Date(settings.activeFrom).toLocaleDateString('es-MX')}`
-                                    : 'Brenda retoma candidatos con perfil incompleto'}
-                            </p>
-                        </div>
-                    </div>
-
+            <div className={PANEL_CLASS}>
+                <div className={PANEL_HEADER_CLASS}>
+                    <PanelTitle icon={MessageCirclePlus} title="Re-engagement Proactivo" />
                     <button
                         onClick={handleToggle}
                         disabled={saving}
-                        className={`relative w-12 h-6 rounded-full transition-colors duration-200 focus:outline-none flex items-center ${
-                            isEnabled ? 'bg-green-500' : 'bg-gray-300 dark:bg-gray-600'
+                        className={`relative w-12 h-6 rounded-full transition-colors duration-200 focus:outline-none flex items-center shrink-0 ${
+                            isEnabled ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'
                         } ${saving ? 'opacity-60' : ''}`}
                     >
                         <div className={`absolute w-5 h-5 rounded-full bg-white shadow transition-transform duration-200 ${isEnabled ? 'translate-x-6' : 'translate-x-0.5'}`} />
                     </button>
                 </div>
 
-                {/* Stats row */}
-                {isEnabled && (
-                    <div className="mt-4 grid grid-cols-3 gap-3">
+                <div className={`${PANEL_BODY_CLASS} p-5`}>
+                    <div className="grid grid-cols-3 gap-3">
                         {[
-                            { label: 'Pendientes', value: pendingCount, icon: Clock, color: 'text-amber-600 dark:text-amber-400', bg: 'bg-amber-50 dark:bg-amber-900/20' },
-                            { label: 'Listos ahora', value: readyCount, icon: Zap, color: 'text-green-600 dark:text-green-400', bg: 'bg-green-50 dark:bg-green-900/20' },
-                            { label: 'Enviados hoy', value: sentToday, icon: CheckCircle, color: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-50 dark:bg-blue-900/20' },
-                        ].map(({ label, value, icon: Icon, color, bg }) => (
-                            <div key={label} className={`${bg} rounded-xl p-3 text-center`}>
-                                <Icon className={`w-4 h-4 ${color} mx-auto mb-1`} />
-                                <p className={`text-lg font-black ${color}`}>{value}</p>
+                            { label: 'Pendientes', value: pendingCount, icon: Clock },
+                            { label: 'Listos ahora', value: readyCount, icon: Zap },
+                            { label: 'Enviados hoy', value: sentToday, icon: CheckCircle },
+                        ].map(({ label, value, icon: Icon }) => (
+                            <div key={label} className="rounded-xl p-3 text-center bg-gray-50 dark:bg-gray-800/70 border border-gray-100 dark:border-gray-800">
+                                <Icon className="w-4 h-4 text-blue-600 dark:text-blue-400 mx-auto mb-1" />
+                                <p className="text-lg font-black text-gray-900 dark:text-white">{value}</p>
                                 <p className="text-[10px] text-gray-500 dark:text-gray-400">{label}</p>
                             </div>
                         ))}
                     </div>
-                )}
+                    <div className="mt-5 rounded-xl bg-gray-50 dark:bg-gray-800/70 border border-gray-100 dark:border-gray-800 p-4">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-2">Estado</p>
+                        <div className="flex items-center gap-2">
+                            <span className={`w-2 h-2 rounded-full ${isEnabled ? 'bg-blue-600' : 'bg-gray-400'}`} />
+                            <p className="text-sm font-semibold text-gray-700 dark:text-gray-200">
+                                {isEnabled ? 'Automatización activa' : 'Automatización pausada'}
+                            </p>
+                        </div>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                            {isEnabled
+                                ? `Activo desde ${new Date(settings.activeFrom).toLocaleDateString('es-MX')}`
+                                : 'Brenda retoma candidatos con perfil incompleto'}
+                        </p>
+                    </div>
+                </div>
             </div>
 
             {/* ── Reglas de configuración ───────────────────────────────────── */}
-            <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+            <div className={PANEL_CLASS}>
                 <button
                     onClick={() => setShowConfig(v => !v)}
-                    className="w-full flex items-center justify-between px-5 py-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
+                    className={`${PANEL_HEADER_CLASS} w-full hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors text-left`}
                 >
-                    <span className="font-semibold text-sm text-gray-800 dark:text-gray-100">Reglas de configuración</span>
+                    <PanelTitle icon={SlidersHorizontal} title="Reglas de configuración" />
                     {showConfig ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
                 </button>
 
                 {showConfig && draft && (
-                    <div className="px-5 pb-5 space-y-5 border-t border-gray-100 dark:border-gray-800 pt-4">
+                    <div className={`${PANEL_BODY_CLASS} px-5 pb-5 space-y-5 pt-4`}>
 
                         {/* Row: silencio + intentos */}
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 gap-4">
                             <div>
                                 <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2 uppercase tracking-wider">
                                     Silencio antes del 1er mensaje
@@ -397,7 +405,7 @@ const ReengagementPanel = () => {
                         </div>
 
                         {/* Row: intervalo + caducidad */}
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 gap-4">
                             <div>
                                 <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2 uppercase tracking-wider">
                                     Intervalo entre mensajes
@@ -442,7 +450,7 @@ const ReengagementPanel = () => {
                         </div>
 
                         {/* Preview de templates */}
-                        <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4 space-y-4">
+                        <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4 space-y-4 border border-gray-100 dark:border-gray-800">
                             <p className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                                 Preview de mensajes — 3 variantes por intento (campo ejemplo: escolaridad)
                             </p>
@@ -501,16 +509,42 @@ const ReengagementPanel = () => {
                         </button>
                     </div>
                 )}
+                {(!showConfig || !draft) && (
+                    <div className={`${PANEL_BODY_CLASS} p-5 flex items-center justify-center text-center`}>
+                        <div>
+                            <div className="w-10 h-10 rounded-xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center mx-auto mb-3">
+                                <ChevronDown className="w-5 h-5 text-gray-400" />
+                            </div>
+                            <p className="text-sm font-semibold text-gray-700 dark:text-gray-200">Reglas contraídas</p>
+                            <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">Abre el panel para ajustar tiempos e intentos.</p>
+                        </div>
+                    </div>
+                )}
             </div>
 
+            {templatesPanel}
+
             {/* ── Cola de candidatos ────────────────────────────────────────── */}
-            {isEnabled && (
-                <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden">
-                    <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100 dark:border-gray-800">
-                        <div className="flex gap-1">
+            <div className={PANEL_CLASS}>
+                <div className={PANEL_HEADER_CLASS}>
+                    <PanelTitle icon={ListTodo} title="Listas de pendientes" />
+                    <button
+                        onClick={refreshQueue}
+                        disabled={queueLoading}
+                        className="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"
+                        title="Refrescar"
+                    >
+                        <RefreshCw className={`w-4 h-4 ${queueLoading ? 'animate-spin' : ''}`} />
+                    </button>
+                </div>
+
+                {/* List */}
+                <div className={PANEL_BODY_CLASS}>
+                    <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-800">
+                        <div className="flex flex-wrap gap-1">
                             {[
                                 { id: 'pending', label: 'Pendientes', count: pendingCount, color: 'amber' },
-                                { id: 'sent',    label: 'Enviados',   count: queue.sent?.length || 0, color: 'blue' },
+                                { id: 'sent',    label: 'Enviados hoy', count: sentToday, color: 'blue' },
                                 { id: 'skipped', label: 'Saltados',   count: skippedCount, color: 'gray' },
                             ].map(tab => (
                                 <button
@@ -526,49 +560,39 @@ const ReengagementPanel = () => {
                                 </button>
                             ))}
                         </div>
-
-                        <button
-                            onClick={refreshQueue}
-                            disabled={queueLoading}
-                            className="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"
-                            title="Refrescar"
-                        >
-                            <RefreshCw className={`w-4 h-4 ${queueLoading ? 'animate-spin' : ''}`} />
-                        </button>
                     </div>
 
-                    {/* List */}
-                    <div className="max-h-[360px] overflow-y-auto">
-                        {activeTab === 'pending' && (
-                            queue.pending?.length > 0 ? (
-                                queue.pending.map(c => (
-                                    <CandidateRow key={c.id} cand={c} onSkip={refreshQueue} onSendNow={refreshQueue} />
-                                ))
-                            ) : (
-                                <EmptyState icon={Clock} text="No hay candidatos pendientes" />
-                            )
-                        )}
-                        {activeTab === 'sent' && (
-                            queue.sent?.length > 0 ? (
-                                queue.sent.map(c => (
-                                    <CandidateRow key={c.id} cand={c} isSent onSkip={refreshQueue} />
-                                ))
-                            ) : (
-                                <EmptyState icon={CheckCircle} text="Aún no se han enviado mensajes" />
-                            )
-                        )}
-                        {activeTab === 'skipped' && (
-                            queue.skipped?.length > 0 ? (
-                                queue.skipped.map(c => (
-                                    <CandidateRow key={c.id} cand={c} isSkipped onSkip={refreshQueue} />
-                                ))
-                            ) : (
-                                <EmptyState icon={XCircle} text="No hay candidatos saltados" />
-                            )
-                        )}
+                    <div>
+                    {activeTab === 'pending' && (
+                        queue.pending?.length > 0 ? (
+                            queue.pending.map(c => (
+                                <CandidateRow key={c.id} cand={c} onSkip={refreshQueue} onSendNow={refreshQueue} />
+                            ))
+                        ) : (
+                            <EmptyState icon={Clock} text="No hay candidatos pendientes" />
+                        )
+                    )}
+                    {activeTab === 'sent' && (
+                        queue.sent?.length > 0 ? (
+                            queue.sent.map(c => (
+                                <CandidateRow key={c.id} cand={c} isSent onSkip={refreshQueue} />
+                            ))
+                        ) : (
+                            <EmptyState icon={CheckCircle} text="Aún no se han enviado mensajes hoy" />
+                        )
+                    )}
+                    {activeTab === 'skipped' && (
+                        queue.skipped?.length > 0 ? (
+                            queue.skipped.map(c => (
+                                <CandidateRow key={c.id} cand={c} isSkipped onSkip={refreshQueue} />
+                            ))
+                        ) : (
+                            <EmptyState icon={XCircle} text="No hay candidatos saltados" />
+                        )
+                    )}
                     </div>
                 </div>
-            )}
+            </div>
         </div>
     );
 };

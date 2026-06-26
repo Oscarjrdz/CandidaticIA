@@ -88,7 +88,7 @@ EJEMPLO DE SALIDA:
         const aiResponse = JSON.parse(jsonMatch[0]);
 
         // 3. Search Data
-        const candidates = await getCandidates(1000, 0);
+        const candidates = await getCandidates(300, 0);
 
         // Helper: Age Calc
         const calculateAge = (dob) => {

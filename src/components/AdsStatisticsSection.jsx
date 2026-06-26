@@ -239,7 +239,7 @@ const CommentsModal = ({ ad, onClose, showToast }) => {
                                 {errorMsg}
                             </p>
                             <div className="mt-4 p-3 bg-red-50/10 rounded-lg text-[10px] border border-red-500/20 max-w-sm">
-                                Para ver y contestar comentarios, asegúrate de que el token en META_ACCESS_TOKEN tenga los permisos <strong>pages_read_engagement</strong> y <strong>pages_manage_engagement</strong>, y que la Página de Facebook esté asignada al Usuario del Sistema en el Administrador Comercial.
+                                Para ver y contestar comentarios, asegúrate de que el token en META_ACCESS_TOKEN tenga los permisos <strong>pages_read_user_content</strong>, <strong>pages_read_engagement</strong> y <strong>pages_manage_engagement</strong>, y que la Página de Facebook esté asignada al Usuario del Sistema en el Administrador Comercial.
                             </div>
                         </div>
                     ) : comments.length === 0 ? (

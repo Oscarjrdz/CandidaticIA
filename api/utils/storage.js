@@ -88,6 +88,117 @@ const KEYS = {
     BYPASS_PREFIX: 'bypass:'
 };
 
+const INDEX_KEYS = {
+    TAG_PREFIX: 'index:candidates:tag:',
+    AD_PREFIX: 'index:candidates:ad:',
+    READY: 'index:candidates:secondary:ready',
+    LOCK: 'index:candidates:secondary:lock'
+};
+
+const indexPart = (value) => Buffer.from(String(value || '').trim().toLowerCase()).toString('base64url');
+const tagIndexKey = (tag) => `${INDEX_KEYS.TAG_PREFIX}${indexPart(typeof tag === 'string' ? tag : tag?.name)}`;
+const adIndexKey = (adId) => `${INDEX_KEYS.AD_PREFIX}${indexPart(adId)}`;
+const cleanTagValues = (tags) => [...new Set((Array.isArray(tags) ? tags : [])
+    .map(t => typeof t === 'string' ? t : t?.name)
+    .map(t => String(t || '').trim())
+    .filter(Boolean))];
+
+async function syncCandidateSecondaryIndexes(client, oldCandidate = null, newCandidate = null) {
+    if (!client) return;
+    const id = newCandidate?.id || oldCandidate?.id;
+    if (!id || String(id).startsWith('sim_')) return;
+
+    const oldTags = new Set(cleanTagValues(oldCandidate?.tags));
+    const newTags = new Set(cleanTagValues(newCandidate?.tags));
+    const oldAd = oldCandidate?.adId ? String(oldCandidate.adId).trim() : '';
+    const newAd = newCandidate?.adId ? String(newCandidate.adId).trim() : '';
+
+    const pipe = client.pipeline();
+    for (const tag of oldTags) if (!newTags.has(tag)) pipe.srem(tagIndexKey(tag), id);
+    for (const tag of newTags) if (!oldTags.has(tag)) pipe.sadd(tagIndexKey(tag), id);
+    if (oldAd && oldAd !== newAd) pipe.srem(adIndexKey(oldAd), id);
+    if (newAd && oldAd !== newAd) pipe.sadd(adIndexKey(newAd), id);
+    await pipe.exec().catch(() => {});
+}
+
+export async function ensureCandidateSecondaryIndexes() {
+    const client = getRedisClient();
+    if (!client) return false;
+    const ready = await client.get(INDEX_KEYS.READY).catch(() => null);
+    if (ready === '1') return true;
+
+    const locked = await client.set(INDEX_KEYS.LOCK, '1', 'EX', 300, 'NX').catch(() => null);
+    if (!locked) {
+        for (let i = 0; i < 20; i++) {
+            await new Promise(r => setTimeout(r, 250));
+            const nowReady = await client.get(INDEX_KEYS.READY).catch(() => null);
+            if (nowReady === '1') return true;
+        }
+        return false;
+    }
+
+    try {
+        const total = (await client.scard(KEYS.LIST_COMPLETE)) + (await client.scard(KEYS.LIST_PENDING));
+        const CHUNK = 500;
+        for (let offset = 0; offset < total; offset += CHUNK) {
+            const ids = await client.zrevrange(KEYS.CANDIDATES_LIST, offset, offset + CHUNK - 1);
+            if (!ids?.length) break;
+            const readPipe = client.pipeline();
+            ids.forEach(id => readPipe.get(`${KEYS.CANDIDATE_PREFIX}${id}`));
+            const rows = await readPipe.exec();
+            const writePipe = client.pipeline();
+            for (const [err, raw] of rows) {
+                if (err || !raw) continue;
+                let c;
+                try { c = JSON.parse(raw); } catch { continue; }
+                if (!c?.id) continue;
+                cleanTagValues(c.tags).forEach(tag => writePipe.sadd(tagIndexKey(tag), c.id));
+                if (c.adId) writePipe.sadd(adIndexKey(c.adId), c.id);
+            }
+            await writePipe.exec();
+            await new Promise(r => setTimeout(r, 2));
+        }
+        await client.set(INDEX_KEYS.READY, '1');
+        return true;
+    } finally {
+        await client.del(INDEX_KEYS.LOCK).catch(() => {});
+    }
+}
+
+export async function hydrateCandidateIds(ids, limit = 500) {
+    const client = getRedisClient();
+    if (!client || !Array.isArray(ids) || ids.length === 0) return [];
+    const uniqueIds = [...new Set(ids)].slice(0, limit);
+    const pipe = client.pipeline();
+    uniqueIds.forEach(id => pipe.get(`${KEYS.CANDIDATE_PREFIX}${id}`));
+    const rows = await pipe.exec();
+    return rows
+        .map(([err, raw]) => {
+            if (err || !raw) return null;
+            try { return JSON.parse(raw); } catch { return null; }
+        })
+        .filter(Boolean);
+}
+
+export async function getCandidatesByAdIds(adIds = [], limit = 500) {
+    const client = getRedisClient();
+    if (!client || !Array.isArray(adIds) || adIds.length === 0) return [];
+    await ensureCandidateSecondaryIndexes();
+    const pipe = client.pipeline();
+    adIds.map(String).filter(Boolean).forEach(adId => pipe.smembers(adIndexKey(adId)));
+    const rows = await pipe.exec();
+    const ids = rows.flatMap(([err, members]) => err || !members ? [] : members);
+    return hydrateCandidateIds(ids, limit);
+}
+
+export async function getCandidatesByTag(tag, limit = 1000) {
+    const client = getRedisClient();
+    if (!client || !tag) return [];
+    await ensureCandidateSecondaryIndexes();
+    const ids = await client.smembers(tagIndexKey(tag));
+    return hydrateCandidateIds(ids, limit);
+}
+
 export const DEFAULT_PROJECT_STEPS = [
     { id: 'step_new', name: 'Nuevos' },
     { id: 'step_contact', name: 'Contacto' },
@@ -812,11 +923,13 @@ export const saveCandidate = async (candidate) => {
         try { _isNewCandidate = !(await client.exists(`${KEYS.CANDIDATE_PREFIX}${candidate.id}`)); } catch {}
     }
 
+    let previousCandidate = null;
     if (client && candidate.id && (!candidate.lastUserMessageAt || !candidate.primerContacto || !candidate.mensajesTotales)) {
         try {
             const existing = await client.get(`${KEYS.CANDIDATE_PREFIX}${candidate.id}`);
             if (existing) {
                 const ex = JSON.parse(existing);
+                previousCandidate = ex;
                 if (!candidate.lastUserMessageAt && ex.lastUserMessageAt) candidate = { ...candidate, lastUserMessageAt: ex.lastUserMessageAt };
                 if (!candidate.primerContacto && ex.primerContacto) candidate = { ...candidate, primerContacto: ex.primerContacto };
                 if (!candidate.mensajesTotales && ex.mensajesTotales) candidate = { ...candidate, mensajesTotales: ex.mensajesTotales };
@@ -846,7 +959,9 @@ export const saveCandidate = async (candidate) => {
 
     // Sort by Last Message (Desc) or Creation Time
     const score = new Date(finalCandidate.ultimoMensaje || finalCandidate.primerContacto || Date.now()).getTime();
-    return await saveDistributedItem(KEYS.CANDIDATES_LIST, KEYS.CANDIDATE_PREFIX, finalCandidate, finalCandidate.id, score);
+    const saved = await saveDistributedItem(KEYS.CANDIDATES_LIST, KEYS.CANDIDATE_PREFIX, finalCandidate, finalCandidate.id, score);
+    syncCandidateSecondaryIndexes(client, previousCandidate, finalCandidate).catch(() => {});
+    return saved;
 };
 
 export const getCandidateByPhone = async (phone) => {
@@ -901,6 +1016,7 @@ export const deleteCandidate = async (id) => {
                     c.tags.forEach(t => tp.hincrby('candidatic:tag_counts', t, -1));
                     tp.exec().catch(() => {});
                 }
+                syncCandidateSecondaryIndexes(client, c, null).catch(() => {});
             }
         } catch (_) {}
 
@@ -1216,6 +1332,7 @@ export const updateCandidate = async (id, data) => {
     await syncCandidateStats(id, updated);
 
     const saved = await saveCandidate(updated);
+    syncCandidateSecondaryIndexes(getRedisClient(), candidate, updated).catch(() => {});
     
     // Fire SSE — include statusAudit so the green dot updates instantly on the frontend
     import('./sse-notify.js').then(({ notifyCandidateUpdate }) => {
@@ -1827,6 +1944,7 @@ export const saveWebhookTransaction = async ({
     if (!client) return null;
 
     const pipeline = client.pipeline();
+    let indexedCandidate = null;
 
     // 1. Save Event (LPUSH + LTRIM)
     if (eventData) {
@@ -1848,6 +1966,7 @@ export const saveWebhookTransaction = async ({
         // This makes sure new candidates or status changes are reflected in O(1) SCARD results.
         const enriched = await syncCandidateStats(candidateId, candidateUpdates, pipeline);
         const finalCandidate = enriched || candidateUpdates;
+        indexedCandidate = finalCandidate;
 
         pipeline.set(`${KEYS.CANDIDATE_PREFIX}${candidateId}`, JSON.stringify(finalCandidate));
 
@@ -1875,6 +1994,9 @@ export const saveWebhookTransaction = async ({
         if (errors.length > 0) {
             console.error('❌ [Storage] Pipeline Transaction had partial failures:', errors);
         } else {
+            if (indexedCandidate) {
+                syncCandidateSecondaryIndexes(client, null, indexedCandidate).catch(() => {});
+            }
             // 🚀 FIRE SSE! Enriched payload for surgical frontend updates (zero re-fetch)
             if (candidateId) {
                 const ssePayload = { 

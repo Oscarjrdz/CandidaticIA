@@ -187,6 +187,71 @@ const BotIASection = () => {
         }
     };
 
+    const metaTemplatesPanel = (
+        <Card
+            title={<span className="text-gray-900 dark:text-white font-bold text-sm">Plantillas de Meta</span>}
+            icon={MessageSquare}
+            className="h-auto xl:h-[520px] flex flex-col shadow-sm border-gray-200 dark:border-gray-700 rounded-2xl min-w-0 overflow-hidden"
+            headerClassName="h-16 shrink-0"
+            bodyClassName="flex-1 min-h-0 overflow-hidden"
+            actions={
+                <button
+                    type="button"
+                    onClick={() => {
+                        setLoadingTemplates(true);
+                        fetch('/api/whatsapp/templates')
+                            .then(r => r.json())
+                            .then(d => { if (d.success) setTemplates(d.data); setLoadingTemplates(false); })
+                            .catch(() => setLoadingTemplates(false));
+                    }}
+                    className="text-gray-400 hover:text-blue-500 transition-colors"
+                >
+                    <RefreshCw className={`w-4 h-4 ${loadingTemplates ? 'animate-spin' : ''}`} />
+                </button>
+            }
+        >
+            <div className="h-full min-h-0 flex flex-col space-y-4">
+                <div className="flex items-center justify-between gap-2 shrink-0">
+                    <label className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest px-1">
+                        Aprobadas
+                    </label>
+                    <a href="https://business.facebook.com/wa/manage/message-templates/" target="_blank" rel="noreferrer" className="text-[9px] font-bold text-blue-500 hover:text-blue-600 uppercase text-right">
+                        + Crear
+                    </a>
+                </div>
+                {loadingTemplates ? (
+                    <div className="flex justify-center p-6"><RefreshCw className="w-5 h-5 animate-spin text-gray-400" /></div>
+                ) : templates.length === 0 ? (
+                    <div className="text-center p-6 bg-gray-50 dark:bg-gray-800/50 rounded-2xl border border-dashed border-gray-200 dark:border-gray-700">
+                        <MessageSquare className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+                        <p className="text-xs text-gray-500 font-medium">No se encontraron plantillas.</p>
+                    </div>
+                ) : (
+                    <div className="grid grid-cols-1 gap-3 flex-1 min-h-0 overflow-y-auto custom-scrollbar pr-2">
+                        {templates.map(t => (
+                            <div key={t.id} className="p-3 bg-gray-50 dark:bg-gray-800/70 border border-gray-100 dark:border-gray-800 rounded-xl flex flex-col gap-1.5 min-w-0">
+                                <div className="flex justify-between items-start gap-2">
+                                    <span className="text-xs font-bold text-gray-900 dark:text-white truncate min-w-0">{t.name}</span>
+                                    <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full shrink-0 ${
+                                        t.status === 'APPROVED' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
+                                        t.status === 'PENDING' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' :
+                                        'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+                                    }`}>
+                                        {t.status === 'APPROVED' ? 'ACTIVA' : t.status === 'PENDING' ? 'REVISIÓN' : t.status}
+                                    </span>
+                                </div>
+                                <div className="text-[10px] text-gray-500 font-medium flex justify-between gap-2">
+                                    <span className="uppercase truncate">{t.category}</span>
+                                    <span className="uppercase shrink-0">{t.language}</span>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+        </Card>
+    );
+
     return (
         <div className="space-y-4 w-full pb-8">
             {/* Master Bot Controller: Compact Native */}
@@ -363,68 +428,6 @@ const BotIASection = () => {
                     </div>
                 </Card>
 
-                {/* Templates List */}
-                <Card
-                    title={<span className="text-gray-900 dark:text-white font-bold text-sm">Plantillas de Meta</span>}
-                    icon={MessageSquare}
-                    className="shadow-sm border-gray-100 dark:border-gray-700 rounded-3xl lg:col-span-3"
-                    headerClassName="h-16"
-                    actions={
-                        <button
-                            type="button"
-                            onClick={() => {
-                                setLoadingTemplates(true);
-                                fetch('/api/whatsapp/templates')
-                                    .then(r => r.json())
-                                    .then(d => { if (d.success) setTemplates(d.data); setLoadingTemplates(false); })
-                                    .catch(() => setLoadingTemplates(false));
-                            }}
-                            className="text-gray-400 hover:text-blue-500 transition-colors"
-                        >
-                            <RefreshCw className={`w-4 h-4 ${loadingTemplates ? 'animate-spin' : ''}`} />
-                        </button>
-                    }
-                >
-                    <div className="space-y-4">
-                        <div className="flex items-center justify-between mb-2">
-                            <label className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest px-1">
-                                TUS PLANTILLAS APROBADAS 📝
-                            </label>
-                            <a href="https://business.facebook.com/wa/manage/message-templates/" target="_blank" rel="noreferrer" className="text-[9px] font-bold text-blue-500 hover:text-blue-600 uppercase">
-                                + Crear Plantilla en Meta
-                            </a>
-                        </div>
-                        {loadingTemplates ? (
-                            <div className="flex justify-center p-6"><RefreshCw className="w-5 h-5 animate-spin text-gray-400" /></div>
-                        ) : templates.length === 0 ? (
-                            <div className="text-center p-6 bg-gray-50 dark:bg-gray-800/50 rounded-2xl border border-dashed border-gray-200 dark:border-gray-700">
-                                <MessageSquare className="w-8 h-8 text-gray-300 mx-auto mb-2" />
-                                <p className="text-xs text-gray-500 font-medium">No se encontraron plantillas.</p>
-                            </div>
-                        ) : (
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-60 overflow-y-auto custom-scrollbar pr-2">
-                                {templates.map(t => (
-                                    <div key={t.id} className="p-3 bg-white dark:bg-[#202c33] border border-gray-100 dark:border-gray-700 rounded-xl flex flex-col gap-1.5 shadow-sm">
-                                        <div className="flex justify-between items-start">
-                                            <span className="text-xs font-bold text-gray-900 dark:text-white truncate">{t.name}</span>
-                                            <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full ${
-                                                t.status === 'APPROVED' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
-                                                t.status === 'PENDING' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' :
-                                                'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
-                                            }`}>
-                                                {t.status === 'APPROVED' ? 'ACTIVA' : t.status === 'PENDING' ? 'REVISIÓN' : t.status}
-                                            </span>
-                                        </div>
-                                        <div className="text-[10px] text-gray-500 font-medium flex justify-between">
-                                            <span className="uppercase">{t.category}</span>
-                                            <span className="uppercase">{t.language}</span>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-                    </div>
-                </Card>
             </div>
 
 
@@ -442,11 +445,7 @@ const BotIASection = () => {
 
             {/* Re-engagement Proactivo */}
             <div>
-                <h2 className="text-base font-black text-gray-900 dark:text-white mb-1">Re-engagement Proactivo IA</h2>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
-                    Brenda retoma candidatos incompletos después de un período de silencio con mensajes personalizados.
-                </p>
-                <ReengagementPanel />
+                <ReengagementPanel templatesPanel={metaTemplatesPanel} />
             </div>
         </div>
     );
