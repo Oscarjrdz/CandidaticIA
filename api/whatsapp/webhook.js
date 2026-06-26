@@ -519,7 +519,9 @@ export default async function handler(req, res) {
                 ultimoMensaje: new Date().toISOString(),
                 lastUserMessageAt: new Date().toISOString(),
                 unreadMsgCount: (Number(freshCandidate?.unreadMsgCount) || 0) + 1,
-                mensajesTotales: (Number(freshCandidate?.mensajesTotales) || 0) + 1
+                mensajesTotales: (Number(freshCandidate?.mensajesTotales) || 0) + 1,
+                // Guardar qué número de la empresa recibió este mensaje para responder desde el mismo
+                incomingPhoneNumberId: metadata?.phone_number_id || process.env.META_PHONE_NUMBER_ID
             };
 
             // ─── META AI RETARGETING FIX: Update referral for existing candidates ───

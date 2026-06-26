@@ -32,10 +32,12 @@ export const getMetaConfig = () => {
 // Legacy alias — keeps existing imports working without mass-renaming
 export const getUltraMsgConfig = async (_requestedInstanceId = null) => {
     const config = getMetaConfig();
+    const phoneNumberId = _requestedInstanceId || config.phoneNumberId;
     return {
-        instanceId: config.phoneNumberId,
+        instanceId: phoneNumberId,
         token: config.accessToken,
-        ...config
+        ...config,
+        phoneNumberId
     };
 };
 
@@ -46,7 +48,9 @@ export const getUltraMsgConfig = async (_requestedInstanceId = null) => {
  */
 export const sendMetaMessage = async (to, body, type = 'chat', extraParams = {}) => {
     const config = getMetaConfig();
-    if (!config.phoneNumberId || !config.accessToken) {
+    // Permitir sobreescribir el phoneNumberId por mensaje (multi-número)
+    const phoneNumberId = extraParams.phoneNumberId || config.phoneNumberId;
+    if (!phoneNumberId || !config.accessToken) {
         console.error('❌ Missing META_PHONE_NUMBER_ID or META_ACCESS_TOKEN');
         return { success: false, error: 'Meta API configuration missing' };
     }
@@ -56,7 +60,7 @@ export const sendMetaMessage = async (to, body, type = 'chat', extraParams = {})
     // Remove @c.us or @s.whatsapp.net suffixes if present (legacy compat)
     phone = phone.split('@')[0];
 
-    const url = `${GRAPH_BASE_URL}/${config.phoneNumberId}/messages`;
+    const url = `${GRAPH_BASE_URL}/${phoneNumberId}/messages`;
     const headers = {
         'Authorization': `Bearer ${config.accessToken}`,
         'Content-Type': 'application/json'
@@ -349,8 +353,9 @@ export const sendUltraMsgMessage = async (_instanceId, _token, to, body, type = 
     } catch (e) {
         // Fallback to WhatsApp on any error
     }
-    // Default: WhatsApp Cloud API
-    return sendMetaMessage(to, body, type, extraParams);
+    // Default: WhatsApp Cloud API — pasar phoneNumberId para soporte multi-número
+    const metaExtra = _instanceId ? { phoneNumberId: _instanceId, ...extraParams } : extraParams;
+    return sendMetaMessage(to, body, type, metaExtra);
 };
 
 /**

@@ -1152,7 +1152,7 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
         // (always points to the number the candidate JUST wrote to), with fallback
         // to candidate object's instanceId for backward compatibility.
         const phone = candidateData.whatsapp?.replace(/\D/g, '');
-        let resolvedInstanceId = candidateData.instanceId;
+        let resolvedInstanceId = candidateData.incomingPhoneNumberId || candidateData.instanceId;
         try {
             const freshInstanceId = await redis?.get(`candidate_instance:${phone}`);
             if (freshInstanceId) resolvedInstanceId = freshInstanceId;
