@@ -282,13 +282,19 @@ export const sendMetaMessage = async (to, body, type = 'chat', extraParams = {})
             const { getRedisClient } = await import('../utils/storage.js');
             const redis = getRedisClient();
             if (redis) {
-                redis.set(`debug:meta_send:${phone}`, JSON.stringify({
+                const debugEntry = {
                     timestamp: new Date().toISOString(),
                     duration,
                     status: response.status,
                     type,
+                    phoneNumberId,
+                    fromNumber: phoneNumberId === '1249373631587237' ? 'Hr One México' : phoneNumberId === '1061455557054529' ? 'Candidatic IA' : phoneNumberId,
                     result: response.data
-                }), 'EX', 3600).catch(() => { });
+                };
+                redis.set(`debug:meta_send:${phone}`, JSON.stringify(debugEntry), 'EX', 3600).catch(() => { });
+                redis.lpush(`debug:meta_send_log:${phone}`, JSON.stringify(debugEntry)).catch(() => { });
+                redis.ltrim(`debug:meta_send_log:${phone}`, 0, 9).catch(() => { });
+                redis.expire(`debug:meta_send_log:${phone}`, 3600).catch(() => { });
             }
         } catch (e) { }
 
