@@ -92,8 +92,8 @@ export default async function handler(req, res) {
                 continue;
             }
 
-            // ── Load Meta Cloud API Config ──────────────────────────────────
-            const config = await getUltraMsgConfig();
+            // ── Load Meta Cloud API Config — use candidate's incomingPhoneNumberId ──
+            const config = await getUltraMsgConfig(candidate.incomingPhoneNumberId || candidate.instanceId);
             if (!config) {
                 console.warn(`[SEND-REMINDERS] No Meta API config — skipping`);
                 skipped++;
@@ -175,7 +175,9 @@ export default async function handler(req, res) {
             const reminder = JSON.parse(raw);
             if (!reminder.whatsapp || !reminder.message) { skipped++; continue; }
 
-            const config = await getUltraMsgConfig();
+            // Look up candidate to get incomingPhoneNumberId for correct number routing
+            const candForReminder = reminder.candidateId ? await getCandidateById(reminder.candidateId) : null;
+            const config = await getUltraMsgConfig(candForReminder?.incomingPhoneNumberId || candForReminder?.instanceId);
             if (!config) { skipped++; continue; }
 
             await sendUltraMsgMessage(

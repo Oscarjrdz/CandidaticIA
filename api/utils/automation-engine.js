@@ -275,13 +275,13 @@ REGLAS DE ORO:
                         }
                     }
 
-                    for (let i = 0; i < messagesToSend.length; i++) {
-                        const candConfig = await getUltraMsgConfig();
-                        if (!candConfig) {
-                            logs.push(`🔴 Sin config WhatsApp para ${cand.nombre}. Saltando envío.`);
-                            break;
+                    const candConfig = await getUltraMsgConfig(cand.incomingPhoneNumberId || cand.instanceId);
+                    if (!candConfig) {
+                        logs.push(`🔴 Sin config WhatsApp para ${cand.nombre}. Saltando envío.`);
+                    } else {
+                        for (let i = 0; i < messagesToSend.length; i++) {
+                            await sendUltraMsgMessage(candConfig.instanceId, candConfig.token, cand.whatsapp, messagesToSend[i], 'chat', { priority: i });
                         }
-                        await sendUltraMsgMessage(candConfig.instanceId, candConfig.token, cand.whatsapp, messagesToSend[i], 'chat', { priority: i });
                     }
 
                     // AUTO-MOVE LOGIC (Outbound)
@@ -330,7 +330,7 @@ REGLAS DE ORO:
                         let candidateFirstName = (cand.nombreReal || cand.nombre || 'Candidato').split(' ')[0];
                         let p = `¡Mira ${candidateFirstName}! Te comparto la vacante que encontré para ti: ⏬\n\n${vacancyContext.messageDescription || vacancyContext.description || ''}`;
 
-                        const failsafeConfig = await getUltraMsgConfig();
+                        const failsafeConfig = await getUltraMsgConfig(cand.incomingPhoneNumberId || cand.instanceId);
                         if (!failsafeConfig) {
                             logs.push(`❌[PIPELINE FAILSAFE] Sin config WhatsApp para ${cand.nombre}.`);
                             continue;

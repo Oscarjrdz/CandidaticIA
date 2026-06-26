@@ -179,8 +179,7 @@ export default async function handler(req, res) {
                     .trim()
                 : '';
 
-            // ═══ META CLOUD API: Single number, no instance routing ═══
-            const ultraConfig = await getUltraMsgConfig();
+            const ultraConfig = await getUltraMsgConfig(candidate.incomingPhoneNumberId || candidate.instanceId);
 
             if (!ultraConfig) return res.status(400).json({ error: 'Faltan credenciales' });
 

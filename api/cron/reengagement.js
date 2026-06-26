@@ -170,18 +170,6 @@ export default async function handler(req, res) {
         return res.status(500).json({ error: 'Cannot fetch candidates' });
     }
 
-    // ── Cargar config de WhatsApp ─────────────────────────────────────────────
-    let waConfig;
-    try {
-        waConfig = await getUltraMsgConfig();
-    } catch (e) {
-        waConfig = null;
-    }
-
-    if (!waConfig) {
-        return res.status(500).json({ error: 'No WhatsApp config available' });
-    }
-
     let sent = 0, skipped = 0, errors = 0;
     const log = [];
 
@@ -221,6 +209,7 @@ export default async function handler(req, res) {
             const message = buildMessage(candidate, missingLabels, attemptNumber);
             const nombre  = candidate.nombreReal || candidate.nombre || candidate.whatsapp;
 
+            const waConfig = await getUltraMsgConfig(candidate.incomingPhoneNumberId || candidate.instanceId);
             await sendUltraMsgMessage(
                 waConfig.instanceId,
                 waConfig.token,
@@ -339,9 +328,10 @@ export default async function handler(req, res) {
                         p2Message = opts[p2Variant];
                     }
 
+                    const waConfig2 = await getUltraMsgConfig(candidate.incomingPhoneNumberId || candidate.instanceId);
                     await sendUltraMsgMessage(
-                        waConfig.instanceId,
-                        waConfig.token,
+                        waConfig2.instanceId,
+                        waConfig2.token,
                         candidate.whatsapp,
                         p2Message,
                         'chat',

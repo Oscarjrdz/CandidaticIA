@@ -39,8 +39,16 @@ export default async function handler(req, res) {
                 // Respect minimum delay — skip until fireAfter timestamp passes
                 if (fireAfter && Date.now() < fireAfter) continue;
 
-                // Get UltraMsg config for this instance
-                const config = await getUltraMsgConfig(instanceId);
+                // Prefer incomingPhoneNumberId from candidate (most recent number used)
+                let resolvedInstanceId = instanceId;
+                if (candidateId) {
+                    try {
+                        const { getCandidateById } = await import('../utils/storage.js');
+                        const cand = await getCandidateById(candidateId);
+                        if (cand?.incomingPhoneNumberId) resolvedInstanceId = cand.incomingPhoneNumberId;
+                    } catch (e) {}
+                }
+                const config = await getUltraMsgConfig(resolvedInstanceId);
                 if (!config?.token) {
                     console.warn(`[paso2-trigger] No config for instance ${instanceId}`);
                     continue;

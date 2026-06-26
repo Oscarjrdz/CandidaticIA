@@ -933,10 +933,9 @@ export default async function handler(req, res) {
                             ];
                             const disclaimer = AUDIO_REPLIES[Math.floor(Math.random() * AUDIO_REPLIES.length)];
                             try {
-                                const { sendUltraMsgMessage } = await import('./utils.js');
+                                const { sendUltraMsgMessage, getUltraMsgConfig: _getConfig } = await import('./utils.js');
                                 const cleanTo = candidate.whatsapp.replace(/\D/g, '');
-                                const ultraConfigStr = await redis?.get('ultra_config');
-                                const ultraConfig = ultraConfigStr ? JSON.parse(ultraConfigStr) : {};
+                                const ultraConfig = await _getConfig(candidate.incomingPhoneNumberId || candidate.instanceId);
                                 await sendUltraMsgMessage(ultraConfig.instanceId, ultraConfig.token, cleanTo, disclaimer, 'chat', {});
                                 const disclaimerMsg = {
                                     id: `msg_${Date.now()}_audio_reply`,
