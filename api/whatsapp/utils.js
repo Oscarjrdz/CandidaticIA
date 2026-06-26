@@ -353,8 +353,10 @@ export const sendUltraMsgMessage = async (_instanceId, _token, to, body, type = 
     } catch (e) {
         // Fallback to WhatsApp on any error
     }
-    // Default: WhatsApp Cloud API — pasar phoneNumberId para soporte multi-número
-    const metaExtra = _instanceId ? { phoneNumberId: _instanceId, ...extraParams } : extraParams;
+    // Default: WhatsApp Cloud API — pasar phoneNumberId solo si es un ID numérico de Meta
+    // (los instanceId legacy de UltraMSG son alfanuméricos como "a2c8cea97a" y se ignoran)
+    const isMetaPhoneId = _instanceId && /^\d{10,}$/.test(String(_instanceId));
+    const metaExtra = isMetaPhoneId ? { phoneNumberId: _instanceId, ...extraParams } : extraParams;
     return sendMetaMessage(to, body, type, metaExtra);
 };
 
