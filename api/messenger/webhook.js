@@ -257,6 +257,7 @@ async function processMessengerMessage(psid, message, timestamp, referral) {
             const diffMins = (Date.now() - msgTimeMs) / 1000 / 60;
             if (diffMins > 30) {
                 await logTelemetry('messenger_stale', { psid, diffMins: Math.round(diffMins) });
+                await markMessageAsDone(msgId);
                 return;
             }
         }
@@ -367,6 +368,7 @@ async function processMessengerMessage(psid, message, timestamp, referral) {
             eventData: { platform: 'messenger', psid, mid: msgId },
             statsType: 'incoming'
         });
+        await markMessageAsDone(msgId);
         if (redis) await redis.del('stats:bot:last_calc');
 
         await logTelemetry('messenger_ingress', {

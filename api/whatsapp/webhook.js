@@ -410,6 +410,7 @@ export default async function handler(req, res) {
                 const diffMins = (Date.now() - msgTimeMs) / 1000 / 60;
                 if (diffMins > 30) {
                     await logTelemetry('ingress_dropped', { reason: 'stale_message', phone, diffMins: Math.round(diffMins) });
+                    await markMessageAsDone(msgId);
                     continue;
                 }
             }
@@ -508,6 +509,7 @@ export default async function handler(req, res) {
                     await updateMessageReaction(candidateId, targetMsgId, metaMsg.reaction.emoji || '');
                     if (redis) await redis.del('stats:bot:last_calc');
                 }
+                await markMessageAsDone(msgId);
                 continue; // Reactions don't need AI processing
             }
 
@@ -548,6 +550,7 @@ export default async function handler(req, res) {
                 candidateUpdates: updatedCandidate,
                 eventData: metaMsg, statsType: 'incoming'
             });
+            await markMessageAsDone(msgId);
             if (redis) await redis.del('stats:bot:last_calc');
 
             // Marcar mensaje como leído inmediatamente (candidato ve palomitas azules)

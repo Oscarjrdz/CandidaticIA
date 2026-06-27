@@ -2032,6 +2032,9 @@ export const saveWebhookTransaction = async ({
             if (indexedCandidate) {
                 syncCandidateSecondaryIndexes(client, null, indexedCandidate).catch(() => {});
             }
+            if (statsType) {
+                _publishGlobalStats(client).catch(() => {});
+            }
             // 🚀 FIRE SSE! Enriched payload for surgical frontend updates (zero re-fetch)
             if (candidateId) {
                 const ssePayload = { 
