@@ -1,5 +1,11 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { MessageSquare, Send, ChevronDown, Users, Lock, Trash2 } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { MessageSquare, Send, ChevronDown, Users, Lock, Trash2, Monitor, MonitorOff, X } from 'lucide-react';
+
+const ICE_SERVERS = [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+];
 import { useAuthContext } from '../contexts/AuthContext';
 
 function MsgStatus({ status, opt }) {
@@ -92,6 +98,9 @@ export default function InternalChat({ onlineUsers = [] }) {
     const [loaded, setLoaded] = useState(false);
     const [hoveredMsg, setHoveredMsg] = useState(null);
     const [pickerFor, setPickerFor] = useState(null);
+    const [sharing, setSharing] = useState(false);
+    const [incomingOffer, setIncomingOffer] = useState(null);
+    const [viewing, setViewing] = useState(false);
 
     const bottomRef = useRef(null);
     const inputRef = useRef(null);
@@ -102,12 +111,49 @@ export default function InternalChat({ onlineUsers = [] }) {
     const messagesRef = useRef([]);
     const recipientIdRef = useRef(null);
     const clearedAtRef = useRef(localStorage.getItem('internalChatClearedAt') || null);
+    const pcRef = useRef(null);
+    const localStreamRef = useRef(null);
+    const videoRef = useRef(null);
+    const pendingIceRef = useRef([]);
 
     const clearChat = useCallback(() => {
         const ts = new Date().toISOString();
         clearedAtRef.current = ts;
         localStorage.setItem('internalChatClearedAt', ts);
         setMessages([]);
+    }, []);
+
+    const sendSignal = useCallback((msgType, payload, toId) => {
+        if (!toId || !myIdRef.current) return;
+        fetch('/api/internal-chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                from: myIdRef.current,
+                fromName: user?.name || user?.nombre || 'Reclutador',
+                to: toId,
+                content: JSON.stringify(payload),
+                msgType,
+            }),
+        }).catch(() => {});
+    }, [user]);
+
+    const stopShare = useCallback(() => {
+        localStreamRef.current?.getTracks().forEach(t => t.stop());
+        localStreamRef.current = null;
+        pcRef.current?.close();
+        pcRef.current = null;
+        setSharing(false);
+        const toId = recipientIdRef.current;
+        if (toId && toId !== 'all') sendSignal('webrtc:end', {}, toId);
+    }, [sendSignal]);
+
+    const stopViewing = useCallback(() => {
+        pcRef.current?.close();
+        pcRef.current = null;
+        if (videoRef.current) videoRef.current.srcObject = null;
+        setViewing(false);
+        pendingIceRef.current = [];
     }, []);
 
     const myId = user?.whatsapp || user?.id;
@@ -228,6 +274,31 @@ export default function InternalChat({ onlineUsers = [] }) {
 
     // ── SSE real-time handler ──────────────────────────────────────────────
     useEffect(() => {
+        const handleWebRTC = async (e) => {
+            const sig = e.detail;
+            const me = myIdRef.current;
+            if (!sig || sig.to !== me) return;
+            let payload;
+            try { payload = JSON.parse(sig.content); } catch { return; }
+
+            if (sig.msgType === 'webrtc:offer') {
+                pendingIceRef.current = [];
+                setIncomingOffer({ from: sig.from, fromName: sig.fromName, sdp: payload.sdp });
+                playNotificationSound();
+            } else if (sig.msgType === 'webrtc:answer' && pcRef.current) {
+                await pcRef.current.setRemoteDescription(new RTCSessionDescription(payload.sdp)).catch(() => {});
+            } else if (sig.msgType === 'webrtc:ice') {
+                if (pcRef.current?.remoteDescription) {
+                    try { await pcRef.current.addIceCandidate(new RTCIceCandidate(payload.candidate)); } catch {}
+                } else {
+                    pendingIceRef.current.push(payload.candidate);
+                }
+            } else if (sig.msgType === 'webrtc:end') {
+                stopViewing();
+                setIncomingOffer(null);
+            }
+        };
+
         const handle = (e) => {
             const msg = e.detail;
             const me = myIdRef.current;
@@ -253,8 +324,12 @@ export default function InternalChat({ onlineUsers = [] }) {
                 sendReceipt(msg.id, openRef.current ? 'read' : 'delivered');
             }
         };
+        window.addEventListener('sse:internal:webrtc', handleWebRTC);
         window.addEventListener('sse:internal:message', handle);
-        return () => window.removeEventListener('sse:internal:message', handle);
+        return () => {
+            window.removeEventListener('sse:internal:webrtc', handleWebRTC);
+            window.removeEventListener('sse:internal:message', handle);
+        };
     }, [sendReceipt]); // sendReceipt is stable (useCallback with no deps)
 
     // ── SSE status updates ─────────────────────────────────────────────────
@@ -344,6 +419,52 @@ export default function InternalChat({ onlineUsers = [] }) {
     if (!user) return null;
 
     const isPrivate = recipientId !== 'all';
+    const recipientOnline = isPrivate && others.find(u => u.userId === recipientId);
+
+    const startShare = async () => {
+        const toId = recipientIdRef.current;
+        if (!toId || toId === 'all') return;
+        try {
+            const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+            localStreamRef.current = stream;
+            const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+            pcRef.current = pc;
+            stream.getTracks().forEach(track => pc.addTrack(track, stream));
+            stream.getVideoTracks()[0].onended = stopShare;
+            pc.onicecandidate = ({ candidate }) => {
+                if (candidate) sendSignal('webrtc:ice', { candidate }, toId);
+            };
+            const offer = await pc.createOffer();
+            await pc.setLocalDescription(offer);
+            sendSignal('webrtc:offer', { sdp: offer }, toId);
+            setSharing(true);
+        } catch (err) {
+            if (err.name !== 'NotAllowedError') console.error('Screen share:', err);
+        }
+    };
+
+    const acceptShare = async () => {
+        if (!incomingOffer) return;
+        const { sdp, from } = incomingOffer;
+        setIncomingOffer(null);
+        setViewing(true);
+        const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+        pcRef.current = pc;
+        pc.ontrack = ({ streams }) => {
+            if (videoRef.current && streams[0]) videoRef.current.srcObject = streams[0];
+        };
+        pc.onicecandidate = ({ candidate }) => {
+            if (candidate) sendSignal('webrtc:ice', { candidate }, from);
+        };
+        await pc.setRemoteDescription(new RTCSessionDescription(sdp));
+        for (const c of pendingIceRef.current) {
+            try { await pc.addIceCandidate(new RTCIceCandidate(c)); } catch {}
+        }
+        pendingIceRef.current = [];
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        sendSignal('webrtc:answer', { sdp: answer }, from);
+    };
 
     const visibleMessages = messages.filter(m => {
         if (recipientId === 'all') return m.to === 'all';
@@ -357,6 +478,20 @@ export default function InternalChat({ onlineUsers = [] }) {
 
     return (
         <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-3">
+        {viewing && createPortal(
+            <div className="fixed inset-0 z-[200] bg-black/95 flex flex-col">
+                <div className="flex items-center justify-between px-4 py-3 bg-black/60 shrink-0">
+                    <span className="text-white text-sm font-medium flex items-center gap-2">
+                        <Monitor className="w-4 h-4 text-blue-400" /> Pantalla compartida
+                    </span>
+                    <button onClick={stopViewing} className="flex items-center gap-1.5 text-white/80 hover:text-white text-sm bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-full transition-colors">
+                        <X className="w-3.5 h-3.5" /> Cerrar
+                    </button>
+                </div>
+                <video ref={videoRef} autoPlay playsInline className="flex-1 w-full object-contain" />
+            </div>,
+            document.body
+        )}
             {open && (
                 <div className="w-80 bg-white dark:bg-gray-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 flex flex-col overflow-hidden"
                     style={{ height: 460 }}>
@@ -527,6 +662,19 @@ export default function InternalChat({ onlineUsers = [] }) {
                         <div ref={bottomRef} />
                     </div>
 
+                    {/* Incoming screen share banner */}
+                    {incomingOffer && (
+                        <div className="mx-3 mb-2 p-3 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 rounded-xl shrink-0">
+                            <p className="text-xs font-medium text-blue-700 dark:text-blue-300 mb-2">
+                                🖥️ {incomingOffer.fromName} quiere compartir pantalla
+                            </p>
+                            <div className="flex gap-2">
+                                <button onClick={acceptShare} className="flex-1 text-xs bg-blue-600 text-white rounded-lg py-1.5 font-medium hover:bg-blue-700 transition-colors">Aceptar</button>
+                                <button onClick={() => setIncomingOffer(null)} className="flex-1 text-xs bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg py-1.5 font-medium hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors">Rechazar</button>
+                            </div>
+                        </div>
+                    )}
+
                     {/* Recipient + Input */}
                     <div className="px-3 pb-3 pt-2 border-t border-gray-100 dark:border-gray-700 shrink-0">
                         {recipient && (
@@ -548,6 +696,15 @@ export default function InternalChat({ onlineUsers = [] }) {
                                 disabled={!recipient && others.length === 0}
                                 className="flex-1 text-sm bg-gray-100 dark:bg-gray-800 rounded-full px-4 py-2 outline-none text-gray-900 dark:text-gray-100 placeholder-gray-400 disabled:opacity-50"
                             />
+                            {recipientOnline && (
+                                <button
+                                    onClick={sharing ? stopShare : startShare}
+                                    title={sharing ? 'Dejar de compartir' : 'Compartir pantalla'}
+                                    className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors shrink-0 ${sharing ? 'bg-red-500 hover:bg-red-600 animate-pulse' : 'bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600'}`}
+                                >
+                                    {sharing ? <MonitorOff className="w-3.5 h-3.5 text-white" /> : <Monitor className="w-3.5 h-3.5 text-gray-600 dark:text-gray-300" />}
+                                </button>
+                            )}
                             <button
                                 onClick={send}
                                 disabled={!input.trim() || sending || !recipient}
