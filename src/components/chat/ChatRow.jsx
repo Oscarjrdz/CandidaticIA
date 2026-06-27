@@ -1,15 +1,20 @@
 import React from 'react';
-import { Pin, Trash2, Bell } from 'lucide-react';
+import { Lock, Pin, Trash2, Bell } from 'lucide-react';
 import { formatRelativeDate } from '../../utils/formatters';
 import { isProfileComplete } from '../../utils/profileUtils';
 import { toTitleCase, checkIfUnread, AVATAR_COLORS } from './chatUtils';
 import MessageStatusTicks from './MessageStatusTicks';
 
-const ChatRow = React.memo(({ chat, isSelected, isPinned, onSelect, onBlock, onDelete, onTogglePin, onlineReaders, blockLoading, userId, onOpenProfileModal, onMarkAsRead, onMarkAsUnread, onScheduleReminder, tagColorMap }) => {
+const readersSignature = (readers = []) =>
+    readers.map(r => `${r.userId || ''}:${r.userName || ''}`).join('|');
+
+const ChatRow = React.memo(({ chat, isSelected, isPinned, onSelect, onBlock, onDelete, onTogglePin, onlineReaders, blockLoading, userId, onOpenProfileModal, onMarkAsRead, onMarkAsUnread, onScheduleReminder, tagColorMap, lock }) => {
     const isUnread = checkIfUnread(chat);
     const profileComplete = isProfileComplete(chat);
     const avatarColor = AVATAR_COLORS[((chat.nombre||'C').charCodeAt(0)*7)%10];
     const isEmptyChat = chat.mensajesTotales === 0 || !chat.ultimoMensaje;
+    const lockUser = lock?.user;
+    const lockText = lockUser ? `${lock.userId === userId ? 'Tú' : lockUser} atendiendo` : '';
     const [imgError, setImgError] = React.useState(false);
 
     return (
@@ -143,7 +148,7 @@ const ChatRow = React.memo(({ chat, isSelected, isPinned, onSelect, onBlock, onD
                         )}
                     </div>
                 )}
-                {(chat.adId || chat.adHeadline || onlineReaders.length > 0) && (
+                {(chat.adId || chat.adHeadline || onlineReaders.length > 0 || lockText) && (
                     <div className="hidden lg:flex items-center justify-between mt-0.5 text-[10px] text-[#8696a0] dark:text-[#697882]">
                         <span className="flex items-center gap-1.5 min-w-0 truncate">
                             {chat.adId && (
@@ -155,6 +160,12 @@ const ChatRow = React.memo(({ chat, isSelected, isPinned, onSelect, onBlock, onD
                                 >
                                     📢 {chat.adId}
                                 </button>
+                            )}
+                            {lockText && (
+                                <span className="inline-flex items-center gap-1 text-[9px] font-semibold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-500/10 border border-blue-100 dark:border-blue-500/20 px-1.5 py-0.5 rounded truncate max-w-[130px]" title={lockText}>
+                                    <Lock className="w-2.5 h-2.5 shrink-0" />
+                                    <span className="truncate">{lockText}</span>
+                                </span>
                             )}
                         </span>
                         {onlineReaders.length > 0 && (
@@ -177,9 +188,10 @@ const ChatRow = React.memo(({ chat, isSelected, isPinned, onSelect, onBlock, onD
         prevProps.isSelected === nextProps.isSelected &&
         prevProps.isPinned === nextProps.isPinned &&
         prevProps.blockLoading === nextProps.blockLoading &&
-        prevProps.onlineReaders.length === nextProps.onlineReaders.length &&
+        readersSignature(prevProps.onlineReaders) === readersSignature(nextProps.onlineReaders) &&
         prevProps.userId === nextProps.userId &&
-        prevProps.tagColorMap === nextProps.tagColorMap
+        prevProps.tagColorMap === nextProps.tagColorMap &&
+        prevProps.lock === nextProps.lock
     );
 });
 

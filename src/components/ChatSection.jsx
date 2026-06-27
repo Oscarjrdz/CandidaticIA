@@ -616,6 +616,75 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
         return manualProjects.filter(p => allowed.includes(p.id));
     }, [manualProjects, user]);
 
+    const getUnreadContribution = useCallback((candidate) => {
+        if (!candidate || !passesChatRBACFilter(candidate, user)) return null;
+        const complete = isProfileComplete(candidate);
+        if (!complete && !canSeeIncompleteChats(user, rolePermissions)) return null;
+        if (!checkIfUnread(candidate)) return null;
+
+        const tagKeys = Array.isArray(candidate.tags)
+            ? candidate.tags
+                .map(t => (typeof t === 'string' ? t : t?.name))
+                .filter(Boolean)
+                .map(t => t.trim().toLowerCase())
+                .filter(Boolean)
+            : [];
+
+        return { complete, tagKeys, projectId: candidate.manualProjectId || null };
+    }, [user, rolePermissions]);
+
+    const updateCountMap = (map = {}, key, delta) => {
+        if (!key) return map;
+        const next = { ...map };
+        const value = Math.max(0, (Number(next[key]) || 0) + delta);
+        if (value > 0) next[key] = value;
+        else delete next[key];
+        return next;
+    };
+
+    const applyUnreadDelta = (counts, contribution, delta) => {
+        if (!contribution) return counts;
+        let next = { ...counts };
+        next.all = Math.max(0, (Number(next.all) || 0) + delta);
+        next.complete = Math.max(0, (Number(next.complete) || 0) + (contribution.complete ? delta : 0));
+        next.incomplete = Math.max(0, (Number(next.incomplete) || 0) + (!contribution.complete ? delta : 0));
+
+        let tags = next.tags || {};
+        let completeTags = next.completeTags || {};
+        let incompleteTags = next.incompleteTags || {};
+        contribution.tagKeys.forEach(tagKey => {
+            tags = updateCountMap(tags, tagKey, delta);
+            if (contribution.complete) completeTags = updateCountMap(completeTags, tagKey, delta);
+            else incompleteTags = updateCountMap(incompleteTags, tagKey, delta);
+        });
+
+        next.tags = tags;
+        next.completeTags = completeTags;
+        next.incompleteTags = incompleteTags;
+        next.crmProjects = updateCountMap(next.crmProjects || {}, contribution.projectId, delta);
+        return next;
+    };
+
+    const reconcileUnreadBadges = useCallback((beforeCandidate, afterCandidate) => {
+        setGlobalUnreadCounts(prev => {
+            if (!prev) return prev;
+            let next = { ...prev };
+            next = applyUnreadDelta(next, getUnreadContribution(beforeCandidate), -1);
+            next = applyUnreadDelta(next, getUnreadContribution(afterCandidate), 1);
+            return next;
+        });
+    }, [getUnreadContribution]);
+
+    const applyCandidateUnreadPatch = useCallback((candidateId, patch) => {
+        const before =
+            candidatesRef.current.find(c => c.id === candidateId) ||
+            (selectedChatRef.current?.id === candidateId ? selectedChatRef.current : null);
+        const after = before ? { ...before, ...patch } : null;
+        reconcileUnreadBadges(before, after);
+        setCandidates(prev => prev.map(c => c.id === candidateId ? { ...c, ...patch } : c));
+        setSelectedChat(prev => prev?.id === candidateId ? { ...prev, ...patch } : prev);
+    }, [reconcileUnreadBadges]);
+
 
 
     // Optimistic unread clearance
@@ -623,15 +692,16 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
         const handleReply = (e) => {
             const { candidateId } = e.detail;
             const now = new Date().toISOString();
-            setCandidates(prev => prev.map(c => 
-                c.id === candidateId 
-                    ? { ...c, unreadMsgCount: 0, lastBotMessageAt: now, ultimoMensajeBot: now, lastHumanMessageAt: now } 
-                    : c
-            ));
+            applyCandidateUnreadPatch(candidateId, {
+                unreadMsgCount: 0,
+                lastBotMessageAt: now,
+                ultimoMensajeBot: now,
+                lastHumanMessageAt: now,
+            });
         };
         window.addEventListener('candidate_replied', handleReply);
         return () => window.removeEventListener('candidate_replied', handleReply);
-    }, []);
+    }, [applyCandidateUnreadPatch]);
 
     // 🏷️ Ad Label events → actualizar estado de candidatos al instante
     useEffect(() => {
@@ -1178,6 +1248,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
         rolePermissions,
         sseNewCandidate?.id,
         sseUpdatedCandidate?.candidateId,
+        sseUpdatedCandidate?.timestamp,
         sseUpdatedCandidate?.updates?.lastUserMessageAt,
         sseUpdatedCandidate?.updates?.lastHumanMessageAt,
         sseUpdatedCandidate?.updates?.unreadMsgCount,
@@ -1438,6 +1509,46 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
     }, [sseNewCandidate]);
 
     useEffect(() => {
+        const pruneExpiredLocks = () => {
+            const now = Date.now();
+            setChatLocks(prev => {
+                let changed = false;
+                const next = {};
+                for (const [candidateId, lock] of Object.entries(prev || {})) {
+                    if (lock?.expiresAt && Number(lock.expiresAt) < now) {
+                        changed = true;
+                        continue;
+                    }
+                    next[candidateId] = lock;
+                }
+                return changed ? next : prev;
+            });
+        };
+
+        const handleLockEvent = (event) => {
+            const update = event.detail || {};
+            if (!update.candidateId) return;
+
+            setChatLocks(prev => {
+                const next = { ...(prev || {}) };
+                if (update.action === 'unlock') {
+                    delete next[update.candidateId];
+                } else if (update.lock) {
+                    next[update.candidateId] = update.lock;
+                }
+                return next;
+            });
+        };
+
+        window.addEventListener('sse:chat:lock', handleLockEvent);
+        const pruneInterval = setInterval(pruneExpiredLocks, 10000);
+        return () => {
+            window.removeEventListener('sse:chat:lock', handleLockEvent);
+            clearInterval(pruneInterval);
+        };
+    }, []);
+
+    useEffect(() => {
         const deletedId = sseDeletedCandidate?.candidateId || sseDeletedCandidate?.id;
         if (!deletedId) return;
 
@@ -1682,9 +1793,12 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
 
         // Optimistic update: we must trick the logic userTime > botTime by setting botTime to now
         const now = new Date().toISOString();
-        setCandidates(prev => prev.map(c => 
-            c.id === chatToMark.id ? { ...c, unreadMsgCount: 0, lastBotMessageAt: now, ultimoMensajeBot: now, lastHumanMessageAt: now } : c
-        ));
+        applyCandidateUnreadPatch(chatToMark.id, {
+            unreadMsgCount: 0,
+            lastBotMessageAt: now,
+            ultimoMensajeBot: now,
+            lastHumanMessageAt: now,
+        });
 
         try {
             await fetch('/api/chat', {
@@ -1695,16 +1809,14 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
         } catch(err) {
             console.error('Error marking as read', err);
         }
-    }, []);
+    }, [applyCandidateUnreadPatch]);
 
     const handleMarkAsUnread = useCallback(async (chatToMark, e) => {
         if (e) e.stopPropagation();
         if (!chatToMark) return;
 
         // Optimistic update: clear lastHumanMessageAt so checkIfUnread returns true
-        setCandidates(prev => prev.map(c =>
-            c.id === chatToMark.id ? { ...c, lastHumanMessageAt: null } : c
-        ));
+        applyCandidateUnreadPatch(chatToMark.id, { lastHumanMessageAt: null });
 
         try {
             await fetch('/api/chat', {
@@ -1715,7 +1827,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
         } catch(err) {
             console.error('Error marking as unread', err);
         }
-    }, []);
+    }, [applyCandidateUnreadPatch]);
 
     const handleSelectChat = useCallback((chat) => {
         // Save draft of current chat before switching
@@ -2830,6 +2942,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
                                     onMarkAsUnread={handleMarkAsUnread}
                                     onScheduleReminder={setReminderModalCandidate}
                                     tagColorMap={tagColorMap}
+                                    lock={chatLocks[chat.id] || null}
                                 />
                             )}
                         />

@@ -69,7 +69,7 @@ function AppShell() {
     const saved = localStorage.getItem('chat_unread_rbac_v2');
     return saved !== null ? Number(saved) : 0;
   });
-  const { newCandidate, updatedCandidate, globalStats } = useCandidatesSSE();
+  const { newCandidate, updatedCandidate, deletedCandidate, globalStats } = useCandidatesSSE();
 
   // Cuando Chat Web está abierto, recibe el conteo RBAC exacto directo de ChatSection
   const handleUnreadCountChange = useCallback((count) => {
@@ -108,9 +108,12 @@ function AppShell() {
     newCandidate?.id,
     updatedCandidate?.candidateId,
     updatedCandidate?.id,
-    updatedCandidate?.unreadMsgCount,
-    updatedCandidate?.lastUserMessageAt,
-    updatedCandidate?.lastHumanMessageAt,
+    updatedCandidate?.timestamp,
+    updatedCandidate?.updates?.unreadMsgCount,
+    updatedCandidate?.updates?.lastUserMessageAt,
+    updatedCandidate?.updates?.lastHumanMessageAt,
+    deletedCandidate?.candidateId,
+    deletedCandidate?.id,
     globalStats?.unread
   ]);
 

@@ -961,6 +961,11 @@ export const saveCandidate = async (candidate) => {
     const score = new Date(finalCandidate.ultimoMensaje || finalCandidate.primerContacto || Date.now()).getTime();
     const saved = await saveDistributedItem(KEYS.CANDIDATES_LIST, KEYS.CANDIDATE_PREFIX, finalCandidate, finalCandidate.id, score);
     syncCandidateSecondaryIndexes(client, previousCandidate, finalCandidate).catch(() => {});
+    if (_isNewCandidate) {
+        import('./sse-notify.js').then(({ notifyNewCandidate }) => {
+            notifyNewCandidate(saved).catch(() => {});
+        }).catch(() => {});
+    }
     return saved;
 };
 
@@ -1324,6 +1329,27 @@ export const updateCandidate = async (id, data) => {
                 await redisAtomic.incr('stats:unread:version').catch(() => {});
                 // Broadcast updated unread count to all SSE clients immediately
                 _publishGlobalStats(redisAtomic).catch(() => {});
+            }
+        } else if (isNowUnread) {
+            const unreadBucketKeys = [
+                'tags',
+                'manualProjectId',
+                'statusAudit',
+                'nombreReal',
+                'nombre',
+                'edad',
+                'fechaNacimiento',
+                'genero',
+                'municipio',
+                'escolaridad',
+                'categoria'
+            ];
+            if (unreadBucketKeys.some(key => key in data)) {
+                const redisAtomic = getRedisClient();
+                if (redisAtomic) {
+                    await redisAtomic.incr('stats:unread:version').catch(() => {});
+                    _publishGlobalStats(redisAtomic).catch(() => {});
+                }
             }
         }
     }

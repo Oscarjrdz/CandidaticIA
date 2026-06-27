@@ -67,26 +67,54 @@ export default async function handler(req, res) {
             if (!redis) return res.status(500).json({ error: 'Redis unavailable' });
 
             const lockKey = `chat_lock:${candidateId}`;
+            const publishLock = (payload) => {
+                redis.publish('channel:sse:updates', JSON.stringify({
+                    type: 'chat:lock',
+                    candidateId,
+                    ...payload,
+                })).catch(() => {});
+            };
 
             if (action === 'lock') {
                 // Set lock with 60s TTL (heartbeat renews it)
-                await redis.set(lockKey, JSON.stringify({
+                const now = Date.now();
+                const lock = {
                     user: userName || 'Reclutador',
-                    lockedAt: new Date().toISOString()
-                }), 'EX', 60);
+                    userId,
+                    lockedAt: new Date(now).toISOString(),
+                    refreshedAt: new Date(now).toISOString(),
+                    expiresAt: now + 60000
+                };
+                await redis.set(lockKey, JSON.stringify(lock), 'EX', 60);
+                publishLock({ action: 'lock', lock });
                 return res.status(200).json({ success: true, locked: true });
             }
 
             if (action === 'unlock') {
                 await redis.del(lockKey);
+                publishLock({ action: 'unlock' });
                 return res.status(200).json({ success: true, locked: false });
             }
 
             if (action === 'heartbeat') {
                 // Renew TTL
-                const exists = await redis.exists(lockKey);
-                if (exists) {
-                    await redis.expire(lockKey, 60);
+                const rawLock = await redis.get(lockKey);
+                if (rawLock) {
+                    let lock;
+                    try {
+                        lock = JSON.parse(rawLock);
+                    } catch {
+                        lock = { user: rawLock };
+                    }
+                    const now = Date.now();
+                    lock = {
+                        ...lock,
+                        userId: lock.userId || userId,
+                        refreshedAt: new Date(now).toISOString(),
+                        expiresAt: now + 60000
+                    };
+                    await redis.set(lockKey, JSON.stringify(lock), 'EX', 60);
+                    publishLock({ action: 'lock', lock });
                 }
                 return res.status(200).json({ success: true });
             }
