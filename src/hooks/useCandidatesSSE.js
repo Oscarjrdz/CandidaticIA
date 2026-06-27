@@ -129,6 +129,8 @@ function _connectSingleton() {
                     window.dispatchEvent(new CustomEvent('sse:internal:status', { detail: data.data }));
                 } else if (data.type === 'internal:reaction') {
                     window.dispatchEvent(new CustomEvent('sse:internal:reaction', { detail: data.data }));
+                } else if (data.type === 'internal:webrtc') {
+                    window.dispatchEvent(new CustomEvent('sse:internal:webrtc', { detail: data.data }));
                 } else if (data.type === 'crm:project') {
                     window.dispatchEvent(new CustomEvent('sse:crm:project', { detail: data.data }));
                 } else if (data.type === 'crm:candidate') {
