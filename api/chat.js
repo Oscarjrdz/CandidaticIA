@@ -241,7 +241,8 @@ export default async function handler(req, res) {
                 if (tData.components) {
                     const bodyComp = tData.components.find(c => (c.type || '').toUpperCase() === 'BODY');
                     if (bodyComp && bodyComp.text) {
-                        realText = bodyComp.text.replace(/\{\{\d+\}\}/g, candidate.nombreReal || candidate.nombre || 'Candidato');
+                        const _nr = candidate.nombreReal?.trim().split(/\s+/).slice(0, 2).join(' ');
+                        realText = bodyComp.text.replace(/\{\{\d+\}\}/g, _nr || candidate.nombre || 'Candidato');
                     }
                 }
                 const displayName = tData.name.replace(/_/g, ' ');
@@ -295,7 +296,8 @@ export default async function handler(req, res) {
 
                 if (type === 'template') {
                     const tData = req.body.templateData;
-                    const candidateNameFallback = String(candidate.nombreReal || candidate.nombre || 'Candidato').trim();
+                    const _nr = candidate.nombreReal?.trim().split(/\s+/).slice(0, 2).join(' ');
+                    const candidateNameFallback = _nr || candidate.nombre || 'Candidato';
                     extraParams.templateName = tData.name;
                     extraParams.languageCode = tData.language || 'es_MX';
                     

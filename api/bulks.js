@@ -147,7 +147,8 @@ const tickEngine = async (state) => {
                                 const templateName = state.templateData.name;
                                 const languageCode = state.templateData.language || 'es_MX';
                                 
-                                const candidateNameFallback = String(candidate.nombreReal || candidate.nombre || 'Candidato').trim();
+                                const _nr = candidate.nombreReal?.trim().split(/\s+/).slice(0, 2).join(' ');
+                                const candidateNameFallback = _nr || candidate.nombre || 'Candidato';
                                 
                                 extraParams = {
                                     templateName,
