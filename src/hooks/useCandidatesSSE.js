@@ -97,16 +97,6 @@ function _connectSingleton() {
                 } else if (data.type === 'candidate:new') {
                     console.log('🆕 New candidate via SSE:', data.data);
                     _updateState({ newCandidate: data.data });
-                    // Optimistic: new candidates start as incomplete — increment total + pending instantly
-                    if (_globalState.globalStats) {
-                        _updateState({
-                            globalStats: {
-                                ..._globalState.globalStats,
-                                total: (_globalState.globalStats.total || 0) + 1,
-                                pending: (_globalState.globalStats.pending || 0) + 1,
-                            }
-                        });
-                    }
                     window.dispatchEvent(new CustomEvent(SSE_EVENTS.CANDIDATE_NEW, { detail: data.data }));
                 } else if (data.type === 'candidate:update') {
                     console.log('🔄 Candidate update via SSE:', data.data?.candidateId);

@@ -962,6 +962,7 @@ export const saveCandidate = async (candidate) => {
     const saved = await saveDistributedItem(KEYS.CANDIDATES_LIST, KEYS.CANDIDATE_PREFIX, finalCandidate, finalCandidate.id, score);
     syncCandidateSecondaryIndexes(client, previousCandidate, finalCandidate).catch(() => {});
     if (_isNewCandidate) {
+        if (client) _publishGlobalStats(client).catch(() => {});
         import('./sse-notify.js').then(({ notifyNewCandidate }) => {
             notifyNewCandidate(saved).catch(() => {});
         }).catch(() => {});

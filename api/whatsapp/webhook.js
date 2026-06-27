@@ -33,7 +33,6 @@ import {
 import { markMessageAsRead, downloadMetaMedia, uploadMediaToMeta } from './utils.js';
 import { FEATURES } from '../utils/feature-flags.js';
 import { sendMessage } from '../utils/messenger.js';
-import { notifyNewCandidate } from '../utils/sse-notify.js';
 import { logTelemetry } from '../utils/telemetry.js';
 import { sendConversionEvent } from '../utils/metaConversions.js';
 
@@ -450,7 +449,6 @@ export default async function handler(req, res) {
                 });
                 candidateId = candidate.id;
                 isNewCandidate = true;
-                notifyNewCandidate(candidate).catch(() => {});
 
                 // 🏷️ Auto-apply Ad Labels to new CTWA candidates
                 if (candidate.adId) {

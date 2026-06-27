@@ -27,7 +27,6 @@ import {
     markMessageAsDone
 } from '../utils/storage.js';
 import { getMessengerProfile, markMessengerMessageAsRead } from './utils.js';
-import { notifyNewCandidate } from '../utils/sse-notify.js';
 import { logTelemetry } from '../utils/telemetry.js';
 
 export const maxDuration = 60;
@@ -319,8 +318,6 @@ async function processMessengerMessage(psid, message, timestamp, referral) {
             if (redis) {
                 await redis.hset('candidates:phone_index', psid, candidateId).catch(() => {});
             }
-
-            notifyNewCandidate(candidate).catch(() => {});
         }
 
         // ═══════════════════════════════════════════════════════════
