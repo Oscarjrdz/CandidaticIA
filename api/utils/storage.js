@@ -917,10 +917,17 @@ export const saveCandidate = async (candidate) => {
     // the Redis value wins — prevents any race condition from silently wiping them.
     const client = getRedisClient();
 
-    // Track new candidates for daily stats (O(1) EXISTS check)
+    // Track new candidates once, even if two webhooks race to create the same ID.
     let _isNewCandidate = false;
     if (client && candidate.id) {
-        try { _isNewCandidate = !(await client.exists(`${KEYS.CANDIDATE_PREFIX}${candidate.id}`)); } catch {}
+        try {
+            const candidateKey = `${KEYS.CANDIDATE_PREFIX}${candidate.id}`;
+            const exists = await client.exists(candidateKey);
+            if (!exists) {
+                const marked = await client.set(`candidate:new:seen:${candidate.id}`, '1', 'NX');
+                _isNewCandidate = marked === 'OK';
+            }
+        } catch {}
     }
 
     let previousCandidate = null;
@@ -946,20 +953,21 @@ export const saveCandidate = async (candidate) => {
     const enriched = await syncCandidateStats(candidate.id, candidate);
     const finalCandidate = enriched || candidate;
 
-    // Increment daily captures hash for new candidates (used by /api/candidate-daily-stats)
+    // Sort by Last Message (Desc) or Creation Time
+    const score = new Date(finalCandidate.ultimoMensaje || finalCandidate.primerContacto || Date.now()).getTime();
+    const saved = await saveDistributedItem(KEYS.CANDIDATES_LIST, KEYS.CANDIDATE_PREFIX, finalCandidate, finalCandidate.id, score);
+    // Increment daily captures hash for new candidates after the candidate exists in storage.
     if (_isNewCandidate && client) {
         const rawDate = finalCandidate.createdAt || finalCandidate.primerContacto;
         if (rawDate) {
             try {
-                const dateKey = new Date(rawDate).toLocaleDateString('sv-SE', { timeZone: 'America/Monterrey' });
+                const parsedDate = new Date(rawDate);
+                const dateSource = Number.isNaN(parsedDate.getTime()) ? new Date() : parsedDate;
+                const dateKey = dateSource.toLocaleDateString('sv-SE', { timeZone: 'America/Monterrey' });
                 await client.hincrby('stats:daily:captures', dateKey, 1);
             } catch {}
         }
     }
-
-    // Sort by Last Message (Desc) or Creation Time
-    const score = new Date(finalCandidate.ultimoMensaje || finalCandidate.primerContacto || Date.now()).getTime();
-    const saved = await saveDistributedItem(KEYS.CANDIDATES_LIST, KEYS.CANDIDATE_PREFIX, finalCandidate, finalCandidate.id, score);
     syncCandidateSecondaryIndexes(client, previousCandidate, finalCandidate).catch(() => {});
     if (_isNewCandidate) {
         if (client) _publishGlobalStats(client).catch(() => {});

@@ -293,6 +293,7 @@ const CandidatesSection = () => {
     const [pickStep, setPickStep] = useState('from'); // 'from' | 'to'
     const [pendingFrom, setPendingFrom] = useState(null);
     const calRef = useRef(null);
+    const dailySeenCandidateIdsRef = useRef(new Set());
 
     useEffect(() => {
         if (!calOpen) return;
@@ -334,21 +335,37 @@ const CandidatesSection = () => {
 
     useEffect(() => { fetchDailyStats(dailyFrom, dailyTo); }, []);
 
-    // SSE: increment today's bar when a new candidate arrives (no fetch needed)
+    // SSE: increment the visible daily bar once per candidate (no fetch needed)
     useEffect(() => {
-        const handler = () => {
-            const today = mtyToday();
+        const handler = (event) => {
+            const candidate = event.detail || {};
+            const candidateId = candidate.id;
+            if (candidateId) {
+                if (dailySeenCandidateIdsRef.current.has(candidateId)) return;
+                dailySeenCandidateIdsRef.current.add(candidateId);
+            }
+
+            const rawDate = candidate.createdAt || candidate.primerContacto || candidate.ultimoMensaje || new Date().toISOString();
+            const parsedDate = new Date(rawDate);
+            const daySource = Number.isNaN(parsedDate.getTime()) ? new Date() : parsedDate;
+            const dayKey = daySource.toLocaleDateString('sv-SE', { timeZone: 'America/Monterrey' });
+            if (dayKey < dailyFrom || dayKey > dailyTo) return;
+
             setDailyStats(prev => {
                 if (!prev) return prev;
-                const days = prev.days.map(d =>
-                    d.date === today ? { ...d, count: d.count + 1 } : d
-                );
-                return { ...prev, days, total: prev.total + 1 };
+                let matched = false;
+                const days = prev.days.map(d => {
+                    if (d.date !== dayKey) return d;
+                    matched = true;
+                    return { ...d, count: d.count + 1 };
+                });
+                if (!matched) return prev;
+                return { ...prev, days, total: (Number(prev.total) || 0) + 1 };
             });
         };
         window.addEventListener('sse:candidate:new', handler);
         return () => window.removeEventListener('sse:candidate:new', handler);
-    }, []);
+    }, [dailyFrom, dailyTo]);
 
     // Pagination State
     const [currentPage, setCurrentPage] = useState(1);

@@ -109,6 +109,7 @@ export default function InternalChat({ onlineUsers = [] }) {
     const myIdAltRef = useRef(null);
     const openRef = useRef(false);
     const messagesRef = useRef([]);
+    const seenMessageIdsRef = useRef(new Set());
     const recipientIdRef = useRef(null);
     const clearedAtRef = useRef(localStorage.getItem('internalChatClearedAt') || null);
     const pcRef = useRef(null);
@@ -120,6 +121,7 @@ export default function InternalChat({ onlineUsers = [] }) {
         const ts = new Date().toISOString();
         clearedAtRef.current = ts;
         localStorage.setItem('internalChatClearedAt', ts);
+        seenMessageIdsRef.current.clear();
         setMessages([]);
     }, []);
 
@@ -189,6 +191,9 @@ export default function InternalChat({ onlineUsers = [] }) {
             .then(r => r.json())
             .then(d => {
                 if (d.success && Array.isArray(d.messages)) {
+                    const seen = new Set(seenMessageIdsRef.current);
+                    d.messages.forEach(m => { if (m.id) seen.add(m.id); });
+                    seenMessageIdsRef.current = seen;
                     setMessages(d.messages);
                     setLoaded(true);
                 }
@@ -309,8 +314,11 @@ export default function InternalChat({ onlineUsers = [] }) {
             const relevant = msg.to === 'all' || isMe(msg.from) || isMe(msg.to);
             if (!relevant) return;
             if (clearedAtRef.current && (msg.timestamp || '') < clearedAtRef.current) return;
+            const alreadySeen = seenMessageIdsRef.current.has(msg.id);
+            if (!alreadySeen) seenMessageIdsRef.current.add(msg.id);
 
             setMessages(prev => mergeMessages(prev, msg));
+            if (alreadySeen) return;
 
             if (!isMe(msg.from) && !openRef.current) {
                 setUnread(u => u + 1);

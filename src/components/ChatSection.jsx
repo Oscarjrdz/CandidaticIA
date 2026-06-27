@@ -681,6 +681,12 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
             (selectedChatRef.current?.id === candidateId ? selectedChatRef.current : null);
         const after = before ? { ...before, ...patch } : null;
         reconcileUnreadBadges(before, after);
+        if (after) {
+            candidatesRef.current = candidatesRef.current.map(c => c.id === candidateId ? { ...c, ...patch } : c);
+            if (selectedChatRef.current?.id === candidateId) {
+                selectedChatRef.current = { ...selectedChatRef.current, ...patch };
+            }
+        }
         setCandidates(prev => prev.map(c => c.id === candidateId ? { ...c, ...patch } : c));
         setSelectedChat(prev => prev?.id === candidateId ? { ...prev, ...patch } : prev);
     }, [reconcileUnreadBadges]);
