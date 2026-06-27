@@ -1,4 +1,30 @@
 {
+    "redirects": [
+        {
+            "source": "/(.*)",
+            "has": [{ "type": "host", "value": "candidatic.com.mx" }],
+            "destination": "https://www.candidatic.com/$1",
+            "permanent": true
+        },
+        {
+            "source": "/(.*)",
+            "has": [{ "type": "host", "value": "www.candidatic.com.mx" }],
+            "destination": "https://www.candidatic.com/$1",
+            "permanent": true
+        },
+        {
+            "source": "/(.*)",
+            "has": [{ "type": "host", "value": "candidatic.mx" }],
+            "destination": "https://www.candidatic.com/$1",
+            "permanent": true
+        },
+        {
+            "source": "/(.*)",
+            "has": [{ "type": "host", "value": "www.candidatic.mx" }],
+            "destination": "https://www.candidatic.com/$1",
+            "permanent": true
+        }
+    ],
     "buildCommand": "npm run build",
     "outputDirectory": "dist",
     "framework": "vite",
@@ -16,18 +42,6 @@
             "destination": "/api/share?id=:id"
         },
         {
-            "source": "/api/media/upload",
-            "destination": "/api/media/upload"
-        },
-        {
-            "source": "/api/media/list",
-            "destination": "/api/media/list"
-        },
-        {
-            "source": "/api/media/delete",
-            "destination": "/api/media/delete"
-        },
-        {
             "source": "/api/media/:id",
             "destination": "/api/image?id=:id"
         },
@@ -38,10 +52,6 @@
         {
             "source": "/lp/bolsadeempleo",
             "destination": "/api/lp/bolsadeempleo"
-        },
-        {
-            "source": "/api/:path*",
-            "destination": "/api/:path*"
         }
     ],
     "headers": [
