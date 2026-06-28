@@ -1800,23 +1800,23 @@ export const saveMessage = async (candidateId, message) => {
             }
         }
 
-        // TRIGGER SSE: Notify frontends with enriched payload for surgical UI updates (zero re-fetch)
-        // ⚠️ SKIP for 'me' messages — those are sent by the dashboard and already rendered optimistically.
-        // Firing SSE for them causes a flash/duplication since the UI already has the message.
-        if (message.from !== 'me') {
+        // TRIGGER SSE: Notify all connected frontends for real-time multi-recruiter sync.
+        // 'me' messages ARE included so other recruiters viewing the same chat see them instantly.
+        // The sender's own client deduplicates via ID or content match (no flash/duplication).
+        {
             const now = new Date().toISOString();
             const isFromUser = message.from === 'user';
+            const isFromMe = message.from === 'me';
             try {
                 const { notifyCandidateUpdate } = await import('./sse-notify.js');
-                await notifyCandidateUpdate(candidateId, { 
+                await notifyCandidateUpdate(candidateId, {
                     newMessage: true,
-                    messagePayload: message, // 🚀 ENRICHED PAYLOAD: Send full object to avoid HTTP polling
+                    messagePayload: message,
                     messageFrom: message.from,
                     ultimoMensaje: now,
-                    // ⚠️ Bot replies should NOT clear recruiter's unread badge.
-                    // unreadMsgCount is only cleared by explicit recruiter action
-                    // (writing a message or clicking "mark as read").
-                    ...(isFromUser ? { lastUserMessageAt: now } : { lastBotMessageAt: now })
+                    // Only increment unread for real candidate messages; bot/recruiter replies don't
+                    ...(isFromUser ? { lastUserMessageAt: now } : {}),
+                    ...((!isFromUser && !isFromMe) ? { lastBotMessageAt: now } : {})
                 });
             } catch (err) {
                 console.error('Error in SSE notify:', err);
@@ -1955,6 +1955,12 @@ export const updateMessageReaction = async (candidateId, messageId, emoji) => {
             }
 
             await client.lset(key, absoluteIndex, JSON.stringify(msg));
+            // Notify other clients in real-time so reactions appear without reload
+            import('./sse-notify.js').then(({ notifyCandidateUpdate }) => {
+                notifyCandidateUpdate(candidateId, {
+                    reactionUpdate: { id: messageId, reactions: msg.reactions }
+                }).catch(() => {});
+            }).catch(() => {});
             return { updated: true, msg };
         }
     } catch (e) {

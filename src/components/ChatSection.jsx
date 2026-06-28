@@ -29,6 +29,7 @@ const TRANSIENT_CANDIDATE_UPDATE_KEYS = new Set([
     'messagePayload',
     'messageStatusUpdate',
     'newMessage',
+    'reactionUpdate',
     'recruiterTyping',
     'statusUpdate',
 ]);
@@ -1369,6 +1370,15 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
                     }
                     return prev;
                 });
+            } else if (sseUpdate.updates?.reactionUpdate) {
+                const { id, reactions } = sseUpdate.updates.reactionUpdate;
+                setMessages(prev => {
+                    const idx = prev.findIndex(m => m.ultraMsgId === id || m.id === id);
+                    if (idx === -1) return prev;
+                    const newArr = [...prev];
+                    newArr[idx] = { ...newArr[idx], reactions };
+                    return newArr;
+                });
             } else if (sseUpdate.updates?.newMessage) {
                 if (sseUpdate.updates?.messagePayload) {
                     // Si el candidato mandó este mensaje mientras tenemos su chat abierto → read receipt inmediato
@@ -1380,7 +1390,6 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
                             body: JSON.stringify({ action: 'send_read_receipt', candidateId: currentChat.id })
                         }).catch(() => {});
                     }
-                    console.log('🚀 [SSE] Injecting INSTANT MESSAGE:', sseUpdate.updates.messagePayload);
                     // 🚀 O(1) Instant Message Injection (Meta Standard)
                     // Functional update chains correctly even when React batches
                     setMessages(prev => {
