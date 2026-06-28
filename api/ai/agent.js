@@ -4161,8 +4161,9 @@ ${safeDnaLines}
 REGLAS:
 - Los candidatos frecuentemente responden SÓLO con el nombre sin decir la palabra "colonia" (ej: "Las Nubes", "Valle Verde", "Centro", "La Fe", "Mitras", "Cumbres").
 - Si el mensaje contiene 1 a 4 palabras que suenan como nombre de lugar, barrio o fraccionamiento → extráelo aunque no diga "colonia".
+- CRÍTICO: Muchas colonias en México llevan nombres de personas, santos o apellidos. Si el candidato responde con algo que parece nombre propio (ej: "Gloria Mendiola", "Francisco Villa", "Benito Juárez", "Linda Vista", "San Bernabé", "Valle de Lincoln") → trátalo como nombre de colonia y extráelo. En este contexto la respuesta SIEMPRE es una colonia, no el nombre de una persona.
 - Devuelve ÚNICAMENTE el nombre en Title Case (primera letra de cada palabra en mayúscula).
-- Solo devuelve null si el candidato claramente evade, cambia de tema, hace una pregunta sin responder, o manda un mensaje que no tiene nada que ver con un lugar (ej: "jaja", "no sé", "¿por qué?", "ok").`;
+- Solo devuelve null si el candidato claramente evade, cambia de tema, hace una pregunta, o manda algo que definitivamente no es un nombre de lugar (ej: "jaja", "no sé", "¿por qué?", "ok", stickers, audios sin texto).`;
 
                 try {
                     const coloniaGpt = await getOpenAIResponse(
@@ -4180,7 +4181,7 @@ REGLAS:
                         responseTextVal = `A sí 😊, colonia ${coloniaRaw} la conozco bien 😊[MSG_SPLIT]${_expName} solo me faltaría saber si tienes experiencia en fábrica 🏭 ¿sí o no?`;
                     } else {
                         // Evasion — persuade using promptAvanzado + ADN
-                        const evasionSys = `${promptAvanzado ? promptAvanzado + '\n\n' : ''}Eres Brenda Rodríguez, reclutadora de Candidatic. El candidato NO quiso dar su colonia. Tu misión es convencerlo de compartirla de manera cálida, persistente y con personalidad. Genera 2 burbujas separadas con [MSG_SPLIT]: la primera reconoce lo que dijo con calidez, la segunda pide la colonia con una razón concreta (validar transporte). Máximo 2 líneas cada una. Sin markdown.\n[ADN]: ${JSON.stringify(cleanAdnBase)}`;
+                        const evasionSys = `${promptAvanzado ? promptAvanzado + '\n\n' : ''}Eres Brenda Rodríguez, reclutadora de Candidatic. El candidato no dio claramente el nombre de su colonia. Tu misión es pedirle amablemente que comparta su colonia. REGLA CRÍTICA: NUNCA digas que ya tienes la colonia ni confirmes haberla recibido — aún no la tienes. Genera 2 burbujas separadas con [MSG_SPLIT]: la primera reconoce su respuesta con calidez, la segunda pide la colonia con una razón concreta (validar transporte). Máximo 2 líneas cada una. Sin markdown.\n[ADN]: ${JSON.stringify(cleanAdnBase)}`;
                         const evasionGpt = await getOpenAIResponse(
                             allMessages.slice(-4),
                             evasionSys,
