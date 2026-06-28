@@ -15,12 +15,16 @@ const REDIS_KEY = 'config:wa_numbers';
 // Add every known phone number ID here. They will auto-appear in the list
 // even if Redis already has an older stored version.
 const KNOWN_NUMBERS = [
-    { id: process.env.META_PHONE_NUMBER_ID || '1061455557054529', label: 'Principal', color: '#25d366' },
-    { id: '1249373631587237', label: 'Secundario', color: '#0ea5e9' },
+    { id: process.env.META_PHONE_NUMBER_ID || '1061455557054529', label: 'Principal · 8180859480', color: '#25d366' },
+    { id: '1249373631587237', label: 'Secundario · 8123732882', color: '#0ea5e9' },
 ];
 
 function mergeKnown(stored) {
-    const result = [...stored];
+    const result = stored.map(n => {
+        const known = KNOWN_NUMBERS.find(k => k.id === n.id);
+        // Always sync label and color from KNOWN_NUMBERS so UI stays current
+        return known ? { ...n, label: known.label, color: known.color } : n;
+    });
     for (const known of KNOWN_NUMBERS) {
         if (!known.id) continue;
         if (result.some(n => n.id === known.id)) continue;
