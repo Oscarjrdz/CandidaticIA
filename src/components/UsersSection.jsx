@@ -809,8 +809,26 @@ const UsersSection = () => {
                                                 <p className="text-[10px] text-gray-400 mt-0.5">Sin selección = todos. "Ninguno" = acceso cero.</p>
                                             </div>
                                             <div className="rounded-xl border border-purple-200 dark:border-purple-800 bg-purple-50/40 dark:bg-purple-900/10 overflow-hidden">
+                                                {/* Sel. todos / Quitar todos */}
+                                                {(() => {
+                                                    const allProjIds = allManualProjects.map(p => p.id);
+                                                    const hasNoneP = (formData.allowed_crm_projects || []).includes('__none__');
+                                                    const allProjSelected = allProjIds.length > 0 && allProjIds.every(id => (formData.allowed_crm_projects || []).includes(id));
+                                                    return (
+                                                        <div className={`flex items-center justify-between px-3 py-2 bg-purple-100/60 dark:bg-purple-900/30 border-b border-purple-200 dark:border-purple-800 ${hasNoneP ? 'opacity-40 pointer-events-none' : ''}`}>
+                                                            <span className="text-[10px] font-bold text-purple-600 dark:text-purple-400 uppercase tracking-wide">Proyectos</span>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setFormData(f => ({ ...f, allowed_crm_projects: allProjSelected ? [] : allProjIds }))}
+                                                                className="text-[10px] font-bold px-2 py-0.5 rounded-lg bg-purple-200 dark:bg-purple-800 text-purple-700 dark:text-purple-300 hover:bg-purple-300 dark:hover:bg-purple-700 transition-colors"
+                                                            >
+                                                                {allProjSelected ? 'Quitar todos' : 'Sel. todos'}
+                                                            </button>
+                                                        </div>
+                                                    );
+                                                })()}
                                                 {/* Ninguno */}
-                                                <label className="flex items-center gap-2.5 px-3 py-2.5 bg-purple-100/60 dark:bg-purple-900/30 border-b border-purple-200 dark:border-purple-800 cursor-pointer hover:bg-purple-100 dark:hover:bg-purple-900/40 transition-colors">
+                                                <label className="flex items-center gap-2.5 px-3 py-2 border-b border-purple-200 dark:border-purple-800 cursor-pointer hover:bg-purple-100 dark:hover:bg-purple-900/40 transition-colors">
                                                     <input
                                                         type="checkbox"
                                                         checked={(formData.allowed_crm_projects || []).includes('__none__')}
@@ -869,20 +887,7 @@ const UsersSection = () => {
                                                 {/* Dropdown panel */}
                                                 {tagPanelOpen && (
                                                     <div className="absolute z-50 top-full left-0 right-0 mt-1 rounded-xl border border-amber-200 dark:border-amber-700 bg-white dark:bg-gray-900 shadow-xl overflow-hidden">
-                                                        {/* Ninguna */}
-                                                        <label className="flex items-center gap-2.5 px-3 py-2.5 bg-amber-50 dark:bg-amber-900/20 border-b border-amber-100 dark:border-amber-800 cursor-pointer hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors">
-                                                            <input
-                                                                type="checkbox"
-                                                                checked={hasNoneLabels}
-                                                                onChange={() => {
-                                                                    setFormData(f => ({ ...f, allowed_labels: hasNoneLabels ? [] : ['__none__'] }));
-                                                                }}
-                                                                className="w-3.5 h-3.5 text-amber-600 rounded"
-                                                            />
-                                                            <span className="text-xs font-bold text-amber-700 dark:text-amber-300 select-none">🚫 Ninguna etiqueta</span>
-                                                        </label>
-
-                                                        {/* Search + select all */}
+                                                        {/* Search + select all — FIRST */}
                                                         <div className={`px-2 py-2 border-b border-gray-100 dark:border-gray-700 flex gap-2 ${hasNoneLabels ? 'opacity-40 pointer-events-none' : ''}`}>
                                                             <div className="relative flex-1">
                                                                 <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400" />
@@ -909,8 +914,21 @@ const UsersSection = () => {
                                                             </button>
                                                         </div>
 
-                                                        {/* Scrollable list — 10 items */}
-                                                        <div className={`overflow-y-auto divide-y divide-gray-50 dark:divide-gray-800 ${hasNoneLabels ? 'opacity-40 pointer-events-none' : ''}`} style={{ maxHeight: '240px' }}>
+                                                        {/* Ninguna — second */}
+                                                        <label className="flex items-center gap-2.5 px-3 py-2 bg-amber-50 dark:bg-amber-900/20 border-b border-amber-100 dark:border-amber-800 cursor-pointer hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors">
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={hasNoneLabels}
+                                                                onChange={() => {
+                                                                    setFormData(f => ({ ...f, allowed_labels: hasNoneLabels ? [] : ['__none__'] }));
+                                                                }}
+                                                                className="w-3.5 h-3.5 text-amber-600 rounded"
+                                                            />
+                                                            <span className="text-xs font-bold text-amber-700 dark:text-amber-300 select-none">🚫 Ninguna etiqueta</span>
+                                                        </label>
+
+                                                        {/* Scrollable list — 6 items visible */}
+                                                        <div className={`overflow-y-auto divide-y divide-gray-50 dark:divide-gray-800 ${hasNoneLabels ? 'opacity-40 pointer-events-none' : ''}`} style={{ maxHeight: '156px' }}>
                                                             {filteredTags.length === 0 ? (
                                                                 <p className="px-3 py-3 text-xs text-gray-400 text-center">Sin resultados</p>
                                                             ) : filteredTags.map(tagObj => {
