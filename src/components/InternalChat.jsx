@@ -459,7 +459,7 @@ export default function InternalChat({ onlineUsers = [] }) {
         const toId = recipientIdRef.current;
         if (!toId || toId === 'all') return;
         try {
-            const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+            const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false, preferCurrentTab: true });
             localStreamRef.current = stream;
             const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
             pcRef.current = pc;
