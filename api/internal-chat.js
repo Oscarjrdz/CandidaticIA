@@ -89,8 +89,21 @@ export default async function handler(req, res) {
     }
 
     if (req.method === 'POST') {
-        const { from, fromName, fromRole, to, toName, content } = req.body;
+        const { from, fromName, fromRole, to, toName, content, msgType } = req.body;
         if (!from || !content?.trim() || !to) return res.status(400).json({ error: 'Faltan datos' });
+
+        // WebRTC signaling: ephemeral — publish via SSE only, never persist to Redis
+        if (msgType && msgType.startsWith('webrtc:')) {
+            redis.publish('channel:sse:updates', JSON.stringify({
+                type: 'internal:webrtc',
+                from,
+                fromName: fromName || 'Reclutador',
+                to,
+                content: content.trim(),
+                msgType,
+            })).catch(() => {});
+            return res.json({ success: true });
+        }
 
         const msg = {
             id: `im_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
