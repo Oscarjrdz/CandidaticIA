@@ -163,6 +163,26 @@ const MessageBubble = React.memo(function MessageBubble({
                                     );
                                 }
 
+                                const isTemplate = typeof msg.content === 'string' && msg.content.startsWith('⚡ Plantilla oficial:');
+                                if (isTemplate) {
+                                    const lines = msg.content.split('\n\n');
+                                    const titleLine = lines[0].replace('⚡ Plantilla oficial:', '').replace(/\*/g, '').trim();
+                                    const bodyLines = lines.slice(1).join('\n\n');
+                                    return (
+                                        <div className="flex flex-col w-full min-w-[220px]">
+                                            <div className="flex items-center gap-1.5 px-2 py-1.5 bg-[#008069]/10 dark:bg-[#00a884]/10 rounded-t-md border-b border-[#008069]/20 dark:border-[#00a884]/20 -mx-0.5 mb-1">
+                                                <span className="text-[13px]">⚡</span>
+                                                <span className="text-[11px] font-bold text-[#008069] dark:text-[#00a884] uppercase tracking-wide truncate">{titleLine}</span>
+                                            </div>
+                                            {bodyLines && (
+                                                <div className="whitespace-pre-wrap leading-[1.35] text-[14.2px]">
+                                                    {bodyLines}
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                }
+
                                 const isProduct = typeof msg.content === 'string' && msg.content.startsWith('[Producto del Catálogo:');
                                 if (isProduct) {
                                     const skuMatch = msg.content.match(/\[Producto del Catálogo:\s*(.+)\]/i);

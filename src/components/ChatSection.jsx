@@ -2255,11 +2255,18 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
         const currentCandidateId = selectedChat.id;
         const optimisticId = 'temp-' + Date.now();
 
-        // Optimistic append
+        // Optimistic append — build content matching server format so it renders immediately
+        const _bodyComp = (templateObj.components || []).find(c => (c.type || '').toUpperCase() === 'BODY');
+        const _candidateName = selectedChat.nombreReal?.trim().split(/\s+/).slice(0, 2).join(' ')
+            || selectedChat.nombre || 'Candidato';
+        const _bodyText = _bodyComp?.text ? _bodyComp.text.replace(/\{\{\d+\}\}/g, _candidateName) : '';
+        const _displayName = templateObj.name.replace(/_/g, ' ');
+        const _optimisticContent = `⚡ Plantilla oficial: *${_displayName}*\n\n${_bodyText}`.trim();
+
         isSendingRef.current = true;
         setMessages(prev => [...(prev || []), {
             id: optimisticId,
-            content: `[Plantilla: ${templateObj.name}]`,
+            content: _optimisticContent,
             tipo: 'template',
             from: 'me',
             enviado_por_agente: 1,
