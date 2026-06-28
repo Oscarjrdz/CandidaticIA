@@ -53,6 +53,12 @@ function formatTime(iso) {
     return d.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
 }
 
+function formatElapsed(secs) {
+    const m = Math.floor(secs / 60);
+    const s = secs % 60;
+    return `${m}:${String(s).padStart(2, '0')}`;
+}
+
 const COLORS = ['bg-blue-500', 'bg-emerald-500', 'bg-violet-500', 'bg-rose-500', 'bg-amber-500', 'bg-cyan-500'];
 function avatarColor(name) { return COLORS[(name?.charCodeAt(0) || 0) % COLORS.length]; }
 
@@ -65,17 +71,14 @@ function Avatar({ name }) {
 }
 
 // Merge new messages into existing list, deduplicating by id.
-// Replaces any optimistic (_opt) entry that matches the incoming real message.
 function mergeMessages(prev, incoming) {
     const results = [...prev];
     for (const msg of (Array.isArray(incoming) ? incoming : [incoming])) {
         const existingIdx = results.findIndex(m => m.id === msg.id);
         if (existingIdx >= 0) {
-            // Already present (possibly optimistic replaced by real) — update in place
             results[existingIdx] = msg;
             continue;
         }
-        // Remove any matching optimistic (same sender + same content)
         const optIdx = results.findIndex(m => m._opt && m.from === msg.from && m.content === msg.content);
         if (optIdx >= 0) {
             results[optIdx] = msg;
@@ -85,6 +88,13 @@ function mergeMessages(prev, incoming) {
     }
     return results;
 }
+
+// rtcStatus shape:
+//   null
+//   { type: 'waiting', toId, toName }           — I sent offer, waiting for accept
+//   { type: 'offer', fromId, fromName, sdp }     — I received offer
+//   { type: 'sharing', fromId?, fromName?, startedAt }  — active session
+//   { type: 'ended' }                            — session just ended (clears after 4s)
 
 export default function InternalChat({ onlineUsers = [] }) {
     const { user } = useAuthContext();
@@ -99,12 +109,14 @@ export default function InternalChat({ onlineUsers = [] }) {
     const [hoveredMsg, setHoveredMsg] = useState(null);
     const [pickerFor, setPickerFor] = useState(null);
     const [sharing, setSharing] = useState(false);
-    const [incomingOffer, setIncomingOffer] = useState(null);
     const [viewing, setViewing] = useState(false);
+
+    // Screen share state — drives the in-chat RTC card
+    const [rtcStatus, setRtcStatus] = useState(null);
+    const [elapsed, setElapsed] = useState(0);
 
     const bottomRef = useRef(null);
     const inputRef = useRef(null);
-    // Stable refs so SSE handler never has stale closures
     const myIdRef = useRef(null);
     const myIdAltRef = useRef(null);
     const openRef = useRef(false);
@@ -116,6 +128,8 @@ export default function InternalChat({ onlineUsers = [] }) {
     const localStreamRef = useRef(null);
     const videoRef = useRef(null);
     const pendingIceRef = useRef([]);
+    const rtcStatusRef = useRef(null);
+    rtcStatusRef.current = rtcStatus;
 
     const clearChat = useCallback(() => {
         const ts = new Date().toISOString();
@@ -148,6 +162,8 @@ export default function InternalChat({ onlineUsers = [] }) {
         setSharing(false);
         const toId = recipientIdRef.current;
         if (toId && toId !== 'all') sendSignal('webrtc:end', {}, toId);
+        setRtcStatus({ type: 'ended' });
+        setTimeout(() => setRtcStatus(null), 4000);
     }, [sendSignal]);
 
     const stopViewing = useCallback(() => {
@@ -156,6 +172,8 @@ export default function InternalChat({ onlineUsers = [] }) {
         if (videoRef.current) videoRef.current.srcObject = null;
         setViewing(false);
         pendingIceRef.current = [];
+        setRtcStatus({ type: 'ended' });
+        setTimeout(() => setRtcStatus(null), 4000);
     }, []);
 
     const myId = user?.whatsapp || user?.id;
@@ -165,13 +183,11 @@ export default function InternalChat({ onlineUsers = [] }) {
     messagesRef.current = messages;
     recipientIdRef.current = recipientId;
 
-    // Others online (excluding self)
     const others = onlineUsers.filter(u => {
         const id = u.whatsapp || u.userId;
         return id && id !== myId;
     });
 
-    // Auto-select first online user as default DM recipient
     useEffect(() => {
         if (recipientId === null && others.length > 0) {
             setRecipientId(others[0].userId);
@@ -181,6 +197,18 @@ export default function InternalChat({ onlineUsers = [] }) {
     const recipient = recipientId === 'all'
         ? { userId: 'all', userName: 'Todos' }
         : others.find(u => u.userId === recipientId) ?? (recipientId ? { userId: recipientId, userName: recipientId } : null);
+
+    // ── Elapsed timer while sharing ────────────────────────────────────────
+    useEffect(() => {
+        if (rtcStatus?.type !== 'sharing' || !rtcStatus.startedAt) {
+            setElapsed(0);
+            return;
+        }
+        const interval = setInterval(() => {
+            setElapsed(Math.floor((Date.now() - new Date(rtcStatus.startedAt).getTime()) / 1000));
+        }, 1000);
+        return () => clearInterval(interval);
+    }, [rtcStatus?.type, rtcStatus?.startedAt]);
 
     // ── Fetch message history ──────────────────────────────────────────────
     const fetchHistory = useCallback(() => {
@@ -201,7 +229,6 @@ export default function InternalChat({ onlineUsers = [] }) {
             .catch(() => {});
     }, [myId]);
 
-    // Load once when chat first opens
     useEffect(() => {
         if (open && !loaded) {
             fetchHistory();
@@ -210,29 +237,24 @@ export default function InternalChat({ onlineUsers = [] }) {
         if (open) setUnread(0);
     }, [open, loaded, fetchHistory]);
 
-    // SSE maneja tiempo real — no polling. Carga una vez al abrir el drawer.
-
     const containerRef = useRef(null);
     const isNearBottomRef = useRef(true);
     const justOpenedRef = useRef(false);
 
-    // Track if user is near the bottom so we only auto-scroll when appropriate
     const handleScroll = useCallback(() => {
         const el = containerRef.current;
         if (!el) return;
         isNearBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 100;
     }, []);
 
-    // Scroll to bottom only when user is already near bottom or chat just opened
     useEffect(() => {
         if (!open) return;
         if (justOpenedRef.current || isNearBottomRef.current) {
             bottomRef.current?.scrollIntoView({ behavior: justOpenedRef.current ? 'auto' : 'smooth' });
             justOpenedRef.current = false;
         }
-    }, [messages, open]);
+    }, [messages, open, rtcStatus]);
 
-    // Mark "just opened" so the first render scrolls to bottom
     useEffect(() => {
         if (open) {
             justOpenedRef.current = true;
@@ -240,7 +262,6 @@ export default function InternalChat({ onlineUsers = [] }) {
         }
     }, [open]);
 
-    // Focus input when opened
     useEffect(() => {
         if (open) setTimeout(() => inputRef.current?.focus(), 50);
     }, [open]);
@@ -259,9 +280,8 @@ export default function InternalChat({ onlineUsers = [] }) {
         setPickerFor(null);
         const current = messagesRef.current.find(m => m.id === msgId);
         const myCurrentEmoji = current?.reactions?.[myId];
-        const newEmoji = myCurrentEmoji === emoji ? '' : emoji; // toggle off si es el mismo
+        const newEmoji = myCurrentEmoji === emoji ? '' : emoji;
 
-        // Optimistic
         setMessages(prev => prev.map(m => {
             if (m.id !== msgId) return m;
             const reactions = { ...(m.reactions || {}) };
@@ -288,10 +308,13 @@ export default function InternalChat({ onlineUsers = [] }) {
 
             if (sig.msgType === 'webrtc:offer') {
                 pendingIceRef.current = [];
-                setIncomingOffer({ from: sig.from, fromName: sig.fromName, sdp: payload.sdp });
+                setRtcStatus({ type: 'offer', fromId: sig.from, fromName: sig.fromName, sdp: payload.sdp });
                 playNotificationSound();
             } else if (sig.msgType === 'webrtc:answer' && pcRef.current) {
                 await pcRef.current.setRemoteDescription(new RTCSessionDescription(payload.sdp)).catch(() => {});
+                // Sharer: transition from 'waiting' to 'sharing'
+                const startedAt = new Date().toISOString();
+                setRtcStatus(prev => prev ? { ...prev, type: 'sharing', startedAt } : null);
             } else if (sig.msgType === 'webrtc:ice') {
                 if (pcRef.current?.remoteDescription) {
                     try { await pcRef.current.addIceCandidate(new RTCIceCandidate(payload.candidate)); } catch {}
@@ -299,8 +322,13 @@ export default function InternalChat({ onlineUsers = [] }) {
                     pendingIceRef.current.push(payload.candidate);
                 }
             } else if (sig.msgType === 'webrtc:end') {
-                stopViewing();
-                setIncomingOffer(null);
+                pcRef.current?.close();
+                pcRef.current = null;
+                if (videoRef.current) videoRef.current.srcObject = null;
+                setViewing(false);
+                pendingIceRef.current = [];
+                setRtcStatus({ type: 'ended' });
+                setTimeout(() => setRtcStatus(null), 4000);
             }
         };
 
@@ -327,7 +355,6 @@ export default function InternalChat({ onlineUsers = [] }) {
                 setTimeout(() => setPulsing(false), 1200);
             }
 
-            // Auto-receipt for DMs addressed to me
             if (msg.to !== 'all' && isMe(msg.to) && !isMe(msg.from)) {
                 sendReceipt(msg.id, openRef.current ? 'read' : 'delivered');
             }
@@ -338,7 +365,7 @@ export default function InternalChat({ onlineUsers = [] }) {
             window.removeEventListener('sse:internal:webrtc', handleWebRTC);
             window.removeEventListener('sse:internal:message', handle);
         };
-    }, [sendReceipt]); // sendReceipt is stable (useCallback with no deps)
+    }, [sendReceipt]);
 
     // ── SSE status updates ─────────────────────────────────────────────────
     useEffect(() => {
@@ -407,7 +434,6 @@ export default function InternalChat({ onlineUsers = [] }) {
             });
             const data = await res.json();
             if (data.success) {
-                // SSE may have already delivered this — mergeMessages handles both cases
                 setMessages(prev => mergeMessages(prev, data.message));
             } else {
                 setMessages(prev => prev.filter(m => !m._opt));
@@ -446,23 +472,29 @@ export default function InternalChat({ onlineUsers = [] }) {
             await pc.setLocalDescription(offer);
             sendSignal('webrtc:offer', { sdp: offer }, toId);
             setSharing(true);
+            const toName = recipient?.userName || toId;
+            setRtcStatus({ type: 'waiting', toId, toName });
+            // Open chat so the sharer sees the waiting card
+            setOpen(true);
         } catch (err) {
             if (err.name !== 'NotAllowedError') console.error('Screen share:', err);
         }
     };
 
     const acceptShare = async () => {
-        if (!incomingOffer) return;
-        const { sdp, from } = incomingOffer;
-        setIncomingOffer(null);
+        const status = rtcStatusRef.current;
+        if (!status || status.type !== 'offer') return;
+        const { fromId, fromName, sdp } = status;
+        const startedAt = new Date().toISOString();
         setViewing(true);
+        setRtcStatus({ type: 'sharing', fromId, fromName, startedAt });
         const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
         pcRef.current = pc;
         pc.ontrack = ({ streams }) => {
             if (videoRef.current && streams[0]) videoRef.current.srcObject = streams[0];
         };
         pc.onicecandidate = ({ candidate }) => {
-            if (candidate) sendSignal('webrtc:ice', { candidate }, from);
+            if (candidate) sendSignal('webrtc:ice', { candidate }, fromId);
         };
         await pc.setRemoteDescription(new RTCSessionDescription(sdp));
         for (const c of pendingIceRef.current) {
@@ -471,7 +503,7 @@ export default function InternalChat({ onlineUsers = [] }) {
         pendingIceRef.current = [];
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
-        sendSignal('webrtc:answer', { sdp: answer }, from);
+        sendSignal('webrtc:answer', { sdp: answer }, fromId);
     };
 
     const visibleMessages = messages.filter(m => {
@@ -491,6 +523,9 @@ export default function InternalChat({ onlineUsers = [] }) {
                 <div className="flex items-center justify-between px-4 py-3 bg-black/60 shrink-0">
                     <span className="text-white text-sm font-medium flex items-center gap-2">
                         <Monitor className="w-4 h-4 text-blue-400" /> Pantalla compartida
+                        {rtcStatus?.type === 'sharing' && rtcStatus.startedAt && (
+                            <span className="text-white/60 font-mono text-xs">{formatElapsed(elapsed)}</span>
+                        )}
                     </span>
                     <button onClick={stopViewing} className="flex items-center gap-1.5 text-white/80 hover:text-white text-sm bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-full transition-colors">
                         <X className="w-3.5 h-3.5" /> Cerrar
@@ -566,7 +601,7 @@ export default function InternalChat({ onlineUsers = [] }) {
 
                     {/* Messages */}
                     <div ref={containerRef} onScroll={handleScroll} className="flex-1 overflow-y-auto px-3 py-3 space-y-2">
-                        {visibleMessages.length === 0 && (
+                        {visibleMessages.length === 0 && !rtcStatus && (
                             <p className="text-center text-xs text-gray-400 dark:text-gray-500 mt-8">
                                 {others.length === 0 ? 'No hay nadie más en línea' : 'Nadie ha escrito aún. ¡Di hola!'}
                             </p>
@@ -577,7 +612,6 @@ export default function InternalChat({ onlineUsers = [] }) {
                             const showSender = !isMe && prevMsg?.from !== msg.from;
                             const isBroadcast = msg.to === 'all';
                             const rxEntries = Object.entries(msg.reactions || {});
-                            // Group: emoji → [userIds]
                             const rxGroups = rxEntries.reduce((acc, [uid, em]) => {
                                 acc[em] = acc[em] || [];
                                 acc[em].push(uid);
@@ -597,7 +631,6 @@ export default function InternalChat({ onlineUsers = [] }) {
                                     {!isMe && showSender && <Avatar name={msg.fromName} />}
                                     {!isMe && !showSender && <div className="w-6 shrink-0" />}
 
-                                    {/* Reaction button — siempre ocupa el espacio (w-6) para no mover la burbuja */}
                                     <div className="relative self-center w-6 shrink-0">
                                         <button
                                             onClick={() => setPickerFor(p => p === msg.id ? null : msg.id)}
@@ -634,7 +667,6 @@ export default function InternalChat({ onlineUsers = [] }) {
                                             {msg.content}
                                         </div>
 
-                                        {/* Reaction pills */}
                                         {Object.keys(rxGroups).length > 0 && (
                                             <div className={`flex flex-wrap gap-1 mt-1 ${isMe ? 'justify-end' : 'justify-start'}`}>
                                                 {Object.entries(rxGroups).map(([em, uids]) => (
@@ -667,21 +699,132 @@ export default function InternalChat({ onlineUsers = [] }) {
                                 </div>
                             );
                         })}
+
+                        {/* ── RTC status card — lives inside the chat thread ── */}
+                        {rtcStatus && (
+                            <div className={`mx-1 rounded-2xl border overflow-hidden ${
+                                rtcStatus.type === 'sharing'
+                                    ? 'border-green-300 dark:border-green-700 bg-green-50 dark:bg-green-900/20'
+                                    : rtcStatus.type === 'offer'
+                                        ? 'border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/20'
+                                        : rtcStatus.type === 'ended'
+                                            ? 'border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/60'
+                                            : 'border-amber-200 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20'
+                            }`}>
+                                {/* waiting — I sent offer */}
+                                {rtcStatus.type === 'waiting' && (
+                                    <div className="p-3">
+                                        <div className="flex items-center gap-2.5 mb-2.5">
+                                            <div className="w-8 h-8 rounded-full bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center shrink-0">
+                                                <Monitor className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                                            </div>
+                                            <div className="min-w-0">
+                                                <p className="text-xs font-semibold text-amber-700 dark:text-amber-300">Solicitud enviada</p>
+                                                <p className="text-[10px] text-gray-500 dark:text-gray-400">
+                                                    Esperando que <strong>{rtcStatus.toName}</strong> acepte
+                                                    <span className="animate-pulse">...</span>
+                                                </p>
+                                            </div>
+                                            <span className="w-2 h-2 bg-amber-400 rounded-full animate-pulse shrink-0 ml-auto" />
+                                        </div>
+                                        <button
+                                            onClick={stopShare}
+                                            className="w-full text-xs py-1.5 rounded-xl bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 hover:bg-amber-200 dark:hover:bg-amber-900/60 font-semibold transition-colors"
+                                        >
+                                            Cancelar solicitud
+                                        </button>
+                                    </div>
+                                )}
+
+                                {/* offer — someone wants to share with me */}
+                                {rtcStatus.type === 'offer' && (
+                                    <div className="p-3">
+                                        <div className="flex items-center gap-2.5 mb-2.5">
+                                            <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center shrink-0">
+                                                <Monitor className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                                            </div>
+                                            <div className="min-w-0">
+                                                <p className="text-xs font-semibold text-blue-700 dark:text-blue-300">Solicitud de pantalla</p>
+                                                <p className="text-[10px] text-gray-500 dark:text-gray-400">
+                                                    <strong>{rtcStatus.fromName}</strong> quiere compartir su pantalla
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <div className="flex gap-2">
+                                            <button
+                                                onClick={acceptShare}
+                                                className="flex-1 text-xs py-1.5 rounded-xl bg-blue-600 text-white font-semibold hover:bg-blue-700 transition-colors"
+                                            >
+                                                ✅ Aceptar
+                                            </button>
+                                            <button
+                                                onClick={() => setRtcStatus(null)}
+                                                className="flex-1 text-xs py-1.5 rounded-xl bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 font-semibold hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+                                            >
+                                                ✕ Rechazar
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* sharing — active session */}
+                                {rtcStatus.type === 'sharing' && (
+                                    <div className="p-3">
+                                        <div className="flex items-center gap-2.5 mb-2.5">
+                                            <div className="w-8 h-8 rounded-full bg-green-100 dark:bg-green-900/40 flex items-center justify-center shrink-0">
+                                                <Monitor className="w-4 h-4 text-green-600 dark:text-green-400" />
+                                            </div>
+                                            <div className="min-w-0 flex-1">
+                                                <p className="text-xs font-semibold text-green-700 dark:text-green-300">
+                                                    {sharing ? 'Compartiendo pantalla' : `Pantalla de ${rtcStatus.fromName}`}
+                                                </p>
+                                                <p className="text-[10px] text-gray-500 dark:text-gray-400 font-mono">
+                                                    {formatElapsed(elapsed)}
+                                                </p>
+                                            </div>
+                                            <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse shrink-0" />
+                                        </div>
+                                        {sharing ? (
+                                            <button
+                                                onClick={stopShare}
+                                                className="w-full text-xs py-1.5 rounded-xl bg-red-500 text-white font-semibold hover:bg-red-600 transition-colors flex items-center justify-center gap-1.5"
+                                            >
+                                                <MonitorOff className="w-3 h-3" /> Dejar de compartir
+                                            </button>
+                                        ) : (
+                                            <div className="flex gap-2">
+                                                <button
+                                                    onClick={() => setViewing(true)}
+                                                    className="flex-1 text-xs py-1.5 rounded-xl bg-blue-600 text-white font-semibold hover:bg-blue-700 transition-colors flex items-center justify-center gap-1"
+                                                >
+                                                    <Monitor className="w-3 h-3" /> Ver pantalla
+                                                </button>
+                                                <button
+                                                    onClick={stopViewing}
+                                                    className="flex-1 text-xs py-1.5 rounded-xl bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 font-semibold hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+                                                >
+                                                    ✕ Cerrar
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
+                                {/* ended */}
+                                {rtcStatus.type === 'ended' && (
+                                    <div className="px-3 py-2.5 flex items-center gap-2">
+                                        <Monitor className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                                        <p className="text-[11px] text-gray-500 dark:text-gray-400">
+                                            Pantalla compartida finalizada
+                                            {elapsed > 0 && ` · ${formatElapsed(elapsed)}`}
+                                        </p>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
                         <div ref={bottomRef} />
                     </div>
-
-                    {/* Incoming screen share banner */}
-                    {incomingOffer && (
-                        <div className="mx-3 mb-2 p-3 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 rounded-xl shrink-0">
-                            <p className="text-xs font-medium text-blue-700 dark:text-blue-300 mb-2">
-                                🖥️ {incomingOffer.fromName} quiere compartir pantalla
-                            </p>
-                            <div className="flex gap-2">
-                                <button onClick={acceptShare} className="flex-1 text-xs bg-blue-600 text-white rounded-lg py-1.5 font-medium hover:bg-blue-700 transition-colors">Aceptar</button>
-                                <button onClick={() => setIncomingOffer(null)} className="flex-1 text-xs bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg py-1.5 font-medium hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors">Rechazar</button>
-                            </div>
-                        </div>
-                    )}
 
                     {/* Recipient + Input */}
                     <div className="px-3 pb-3 pt-2 border-t border-gray-100 dark:border-gray-700 shrink-0">
@@ -704,13 +847,13 @@ export default function InternalChat({ onlineUsers = [] }) {
                                 disabled={!recipient && others.length === 0}
                                 className="flex-1 text-sm bg-gray-100 dark:bg-gray-800 rounded-full px-4 py-2 outline-none text-gray-900 dark:text-gray-100 placeholder-gray-400 disabled:opacity-50"
                             />
-                            {recipientOnline && (
+                            {recipientOnline && !sharing && (
                                 <button
-                                    onClick={sharing ? stopShare : startShare}
-                                    title={sharing ? 'Dejar de compartir' : 'Compartir pantalla'}
-                                    className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors shrink-0 ${sharing ? 'bg-red-500 hover:bg-red-600 animate-pulse' : 'bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600'}`}
+                                    onClick={startShare}
+                                    title="Compartir pantalla"
+                                    className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 flex items-center justify-center transition-colors shrink-0"
                                 >
-                                    {sharing ? <MonitorOff className="w-3.5 h-3.5 text-white" /> : <Monitor className="w-3.5 h-3.5 text-gray-600 dark:text-gray-300" />}
+                                    <Monitor className="w-3.5 h-3.5 text-gray-600 dark:text-gray-300" />
                                 </button>
                             )}
                             <button
