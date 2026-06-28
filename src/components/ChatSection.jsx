@@ -1454,25 +1454,33 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
             const isInList = candidatesRef.current.some(c => c.id === sseUpdate.candidateId);
 
             if (isInList) {
-                setCandidates(prev => prev.map(c => {
-                    if (c.id !== sseUpdate.candidateId) return c;
-                    const updated = { ...c, ...candidatePatch };
-                    if (patch.ultimoMensaje) updated.ultimoMensaje = patch.ultimoMensaje;
-                    if (patch.lastUserMessageAt) {
-                        updated.lastUserMessageAt = patch.lastUserMessageAt;
-                        if (patch.unreadMsgCount === undefined) {
-                            updated.unreadMsgCount = (c.unreadMsgCount || 0) + 1;
+                setCandidates(prev => {
+                    const mapped = prev.map(c => {
+                        if (c.id !== sseUpdate.candidateId) return c;
+                        const updated = { ...c, ...candidatePatch };
+                        if (patch.ultimoMensaje) updated.ultimoMensaje = patch.ultimoMensaje;
+                        if (patch.lastUserMessageAt) {
+                            updated.lastUserMessageAt = patch.lastUserMessageAt;
+                            if (patch.unreadMsgCount === undefined) {
+                                updated.unreadMsgCount = (c.unreadMsgCount || 0) + 1;
+                            }
                         }
+                        if (patch.lastBotMessageAt) {
+                            updated.lastBotMessageAt = patch.lastBotMessageAt;
+                            updated.ultimoMensajeBot = patch.lastBotMessageAt;
+                        }
+                        if (patch.unreadMsgCount !== undefined) updated.unreadMsgCount = patch.unreadMsgCount;
+                        // lastHumanMessageAt drives checkIfUnread — must stay in sync with Redis
+                        if (patch.lastHumanMessageAt !== undefined) updated.lastHumanMessageAt = patch.lastHumanMessageAt;
+                        return updated;
+                    });
+                    // Bubble to top on new message so chat list stays sorted like WhatsApp
+                    if (patch.newMessage) {
+                        const idx = mapped.findIndex(c => c.id === sseUpdate.candidateId);
+                        if (idx > 0) return [mapped[idx], ...mapped.slice(0, idx), ...mapped.slice(idx + 1)];
                     }
-                    if (patch.lastBotMessageAt) {
-                        updated.lastBotMessageAt = patch.lastBotMessageAt;
-                        updated.ultimoMensajeBot = patch.lastBotMessageAt;
-                    }
-                    if (patch.unreadMsgCount !== undefined) updated.unreadMsgCount = patch.unreadMsgCount;
-                    // lastHumanMessageAt drives checkIfUnread — must stay in sync with Redis
-                    if (patch.lastHumanMessageAt !== undefined) updated.lastHumanMessageAt = patch.lastHumanMessageAt;
-                    return updated;
-                }));
+                    return mapped;
+                });
             } else if (patch.lastUserMessageAt || patch.ultimoMensaje) {
                 // Candidate not in the loaded 300 — fetch and inject at top (bubble-up)
                 getCandidateById(sseUpdate.candidateId)
