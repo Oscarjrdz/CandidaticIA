@@ -4,6 +4,14 @@ import { checkIfUnread } from '../components/chat/chatUtils';
 export const passesChatRBACFilter = (candidate, user) => {
     if (!user || user.role === 'SuperAdmin' || user.role === 'Admin') return true;
 
+    // ── WA number filter (AND — must pass before CRM/label check) ──
+    const allowedWa = user?.allowed_wa_numbers;
+    if (Array.isArray(allowedWa) && allowedWa.length > 0) {
+        const phoneId = candidate?.incomingPhoneNumberId;
+        if (!phoneId || !allowedWa.includes(phoneId)) return false;
+    }
+
+    // ── CRM project / label filter (OR between them) ──
     const allowedCrm = user?.allowed_crm_projects;
     const hasCrmRestriction = Array.isArray(allowedCrm) && allowedCrm.length > 0;
 
