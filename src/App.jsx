@@ -272,16 +272,24 @@ function AppShell() {
                   {activeSection === 'chat' && onlineUsers && onlineUsers.length > 0 && (
                     <div className="hidden sm:flex items-center">
                       <div className="flex -space-x-2 mr-2">
-                        {onlineUsers.slice(0, 4).map((u, i) => (
-                          <div key={u.userId || i} className="relative group">
-                            <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full border-2 border-white dark:border-gray-800 bg-gradient-to-br from-blue-400 to-indigo-500 text-white flex items-center justify-center text-xs font-bold uppercase shadow-sm">
-                              {u.userName ? u.userName.charAt(0) : '?'}
+                        {onlineUsers.slice(0, 4).map((u, i) => {
+                          const isMe = u.userId === (user?.id || user?.whatsapp);
+                          const canNavigate = !isMe && u.currentChatId;
+                          return (
+                            <div key={u.userId || i} className="relative group">
+                              <div
+                                className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full border-2 border-white dark:border-gray-800 bg-gradient-to-br from-blue-400 to-indigo-500 text-white flex items-center justify-center text-xs font-bold uppercase shadow-sm transition-transform ${canNavigate ? 'cursor-pointer hover:scale-110 hover:border-green-400' : ''}`}
+                                onClick={canNavigate ? () => window.dispatchEvent(new CustomEvent('navigate_to_recruiter_chat', { detail: { candidateId: u.currentChatId } })) : undefined}
+                                title={canNavigate ? `Ver chat de ${u.userName}` : undefined}
+                              >
+                                {u.userName ? u.userName.charAt(0) : '?'}
+                              </div>
+                              <div className="absolute left-1/2 -bottom-8 transform -translate-x-1/2 bg-gray-900 text-white text-[10px] py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50">
+                                {isMe ? 'Tú (en línea)' : canNavigate ? `${u.userName} → ir a su chat` : `${u.userName} (en línea)`}
+                              </div>
                             </div>
-                            <div className="absolute left-1/2 -bottom-8 transform -translate-x-1/2 bg-gray-900 text-white text-[10px] py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50">
-                              {u.userId === (user?.id || user?.whatsapp) ? 'Tú (en línea)' : `${u.userName} (en línea)`}
-                            </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                         {onlineUsers.length > 4 && (
                           <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full border-2 border-white dark:border-gray-800 bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 flex items-center justify-center text-xs font-bold shadow-sm z-10">
                             +{onlineUsers.length - 4}

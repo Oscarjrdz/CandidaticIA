@@ -1555,6 +1555,20 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
     }, []);
 
     useEffect(() => {
+        const handleNavigate = (e) => {
+            const targetId = e.detail?.candidateId;
+            if (!targetId) return;
+            const target = candidates.find(c => String(c.id) === String(targetId));
+            if (target) {
+                setSelectedChat(target);
+                setMessages([]);
+            }
+        };
+        window.addEventListener('navigate_to_recruiter_chat', handleNavigate);
+        return () => window.removeEventListener('navigate_to_recruiter_chat', handleNavigate);
+    }, [candidates]);
+
+    useEffect(() => {
         const deletedId = sseDeletedCandidate?.candidateId || sseDeletedCandidate?.id;
         if (!deletedId) return;
 
