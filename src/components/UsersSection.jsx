@@ -68,6 +68,14 @@ const UsersSection = () => {
         if (activeTab === 'activity') loadActivityStats(activityDate);
     }, [activeTab, activityDate]);
     
+    // WA numbers state
+    const [allWaNumbers, setAllWaNumbers] = useState([]);
+
+    // Tag dropdown UI state
+    const [tagSearch, setTagSearch] = useState('');
+    const [tagPanelOpen, setTagPanelOpen] = useState(false);
+    const tagPanelRef = useRef(null);
+
     // User Modal State
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [saving, setSaving] = useState(false);
@@ -79,7 +87,8 @@ const UsersSection = () => {
         role: 'Recruiter',
         status: 'Active',
         allowed_crm_projects: [],
-        allowed_labels: []
+        allowed_labels: [],
+        allowed_wa_numbers: []
     });
 
     // Role Modal State
@@ -102,22 +111,25 @@ const UsersSection = () => {
     const loadData = async () => {
         setLoading(true);
         try {
-            const [usersRes, rolesRes, manualRes, tagsRes] = await Promise.all([
+            const [usersRes, rolesRes, manualRes, tagsRes, waRes] = await Promise.all([
                 fetch('/api/users'),
                 fetch('/api/roles'),
                 fetch('/api/manual_projects'),
-                fetch('/api/tags')
+                fetch('/api/tags'),
+                fetch('/api/wa-numbers')
             ]);
-            
+
             const usersData = await usersRes.json();
             const rolesData = await rolesRes.json();
             const manualData = await manualRes.json();
             const tagsData = await tagsRes.json();
-            
+            const waData = await waRes.json();
+
             if (usersData.success) setUsers(usersData.users);
             if (rolesData.success) setRoles(rolesData.roles);
             if (manualData.success && manualData.data) setAllManualProjects(manualData.data);
             if (tagsData.success && tagsData.tags) setAllTags(tagsData.tags);
+            if (waData.success && waData.numbers) setAllWaNumbers(waData.numbers);
         } catch {
             showToast('Error cargando datos', 'error');
         } finally {
@@ -199,6 +211,18 @@ const UsersSection = () => {
         const refreshTags = () => fetch('/api/tags').then(r => r.json()).then(d => { if (d.success && d.tags) setAllTags(d.tags); }).catch(() => {});
     }, []);
 
+    // Close tag dropdown on outside click
+    useEffect(() => {
+        if (!tagPanelOpen) return;
+        const handleClick = (e) => {
+            if (tagPanelRef.current && !tagPanelRef.current.contains(e.target)) {
+                setTagPanelOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClick);
+        return () => document.removeEventListener('mousedown', handleClick);
+    }, [tagPanelOpen]);
+
     // -------- USER LOGIC --------
     // Helper: get permissions object for a given role name
     const getRolePermissions = (roleName) => {
@@ -207,6 +231,8 @@ const UsersSection = () => {
     };
 
     const handleOpenModal = (user = null) => {
+        setTagSearch('');
+        setTagPanelOpen(false);
         if (user) {
             setEditingUser(user);
             setFormData({
@@ -217,6 +243,7 @@ const UsersSection = () => {
                 status: user.status,
                 allowed_crm_projects: user.allowed_crm_projects || [],
                 allowed_labels: user.allowed_labels || [],
+                allowed_wa_numbers: user.allowed_wa_numbers || [],
                 can_manage_tags: user.can_manage_tags || false
             });
         } else {
@@ -228,7 +255,8 @@ const UsersSection = () => {
                 role: roles.length > 0 ? roles[0].name : 'Recruiter',
                 status: 'Active',
                 allowed_crm_projects: [],
-                allowed_labels: []
+                allowed_labels: [],
+                allowed_wa_numbers: []
             });
         }
         setIsModalOpen(true);
@@ -383,6 +411,16 @@ const UsersSection = () => {
                 ? current.filter(n => n !== labelName)
                 : [...current, labelName];
             return { ...prev, allowed_labels: next };
+        });
+    };
+
+    const toggleUserWaNumber = (numberId) => {
+        setFormData(prev => {
+            const current = prev.allowed_wa_numbers || [];
+            const next = current.includes(numberId)
+                ? current.filter(id => id !== numberId)
+                : [...current, numberId];
+            return { ...prev, allowed_wa_numbers: next };
         });
     };
 
@@ -698,160 +736,276 @@ const UsersSection = () => {
             {/* ----------- USER MODAL ----------- */}
             <Modal
                 isOpen={isModalOpen}
-                onClose={() => setIsModalOpen(false)}
+                onClose={() => { setIsModalOpen(false); setTagPanelOpen(false); }}
                 title={editingUser ? 'Editar Usuario' : 'Nuevo Usuario'}
                 maxWidth="max-w-4xl"
             >
-                <form onSubmit={handleSubmit} className="space-y-4 pt-2">
-                    <div className="grid grid-cols-2 gap-4">
-                        <Input
-                            label="Nombre Completo"
-                            value={formData.name}
-                            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                            required
-                            placeholder="Ej: Oscar Rodriguez"
-                        />
-                        <Input
-                            label="WhatsApp"
-                            value={formData.whatsapp}
-                            onChange={(e) => setFormData({ ...formData, whatsapp: e.target.value })}
-                            required
-                            placeholder="Ej: 5218116038195"
-                        />
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                        <Select
-                            label="Rol"
-                            value={formData.role}
-                            onChange={(val) => setFormData({ ...formData, role: val })}
-                            options={roles.map(r => ({ value: r.name, label: r.name }))}
-                            placeholder="Seleccionar rol..."
-                        />
-                        <Select
-                            label="Estado"
-                            value={formData.status}
-                            onChange={(val) => setFormData({ ...formData, status: val })}
-                            options={[
-                                { value: 'Active', label: 'Activo', color: '#10b981' },
-                                { value: 'Inactive', label: 'Inactivo', color: '#ef4444' }
-                            ]}
-                            placeholder="Estado..."
-                        />
+                <form onSubmit={handleSubmit} className="flex flex-col gap-0">
+                    {/* ── Datos básicos ── */}
+                    <div className="px-6 pt-4 pb-5 space-y-4">
+                        <div className="grid grid-cols-2 gap-4">
+                            <Input
+                                label="Nombre Completo"
+                                value={formData.name}
+                                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                                required
+                                placeholder="Ej: Oscar Rodriguez"
+                            />
+                            <Input
+                                label="WhatsApp"
+                                value={formData.whatsapp}
+                                onChange={(e) => setFormData({ ...formData, whatsapp: e.target.value })}
+                                required
+                                placeholder="Ej: 5218116038195"
+                            />
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                            <Select
+                                label="Rol"
+                                value={formData.role}
+                                onChange={(val) => setFormData({ ...formData, role: val })}
+                                options={roles.map(r => ({ value: r.name, label: r.name }))}
+                                placeholder="Seleccionar rol..."
+                            />
+                            <Select
+                                label="Estado"
+                                value={formData.status}
+                                onChange={(val) => setFormData({ ...formData, status: val })}
+                                options={[
+                                    { value: 'Active', label: 'Activo', color: '#10b981' },
+                                    { value: 'Inactive', label: 'Inactivo', color: '#ef4444' }
+                                ]}
+                                placeholder="Estado..."
+                            />
+                        </div>
                     </div>
 
-                    {/* === ASIGNACIONES POR USUARIO === */}
+                    {/* ── Accesos y permisos ── */}
                     {formData.role && formData.role !== 'SuperAdmin' && (() => {
                         const perms = getRolePermissions(formData.role);
-                        return (
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2 border-t border-gray-100 dark:border-gray-700">
-                                {/* Pipelines CRM Manual asignados */}
-                                {!!perms['filter_crm'] && allManualProjects.length > 0 && (
-                                    <div>
-                                        <h4 className="text-sm font-bold text-gray-800 dark:text-white mb-1">📋 Proyectos CRM Asignados</h4>
-                                        <p className="text-[10px] text-gray-400 mb-2">Sin selección = ver todos. Marca “Ninguno” para restringir a cero.</p>
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 p-2 border border-purple-100 dark:border-purple-900 rounded-lg bg-purple-50/50 dark:bg-purple-900/10">
-                                            {/* Opción Ninguno */}
-                                            <label className="col-span-full flex items-center space-x-3 cursor-pointer p-2 rounded-lg bg-purple-100/60 dark:bg-purple-900/30 hover:bg-purple-100 dark:hover:bg-purple-900/40 transition-colors border border-purple-200 dark:border-purple-800">
-                                                <input
-                                                    type="checkbox"
-                                                    checked={(formData.allowed_crm_projects || []).includes('__none__')}
-                                                    onChange={() => {
-                                                        const hasNone = (formData.allowed_crm_projects || []).includes('__none__');
-                                                        setFormData(f => ({ ...f, allowed_crm_projects: hasNone ? [] : ['__none__'] }));
-                                                    }}
-                                                    className="w-4 h-4 text-purple-600 bg-gray-100 border-gray-300 rounded focus:ring-purple-500 dark:bg-gray-700 dark:border-gray-600"
-                                                />
-                                                <span className="text-sm font-bold text-purple-700 dark:text-purple-300 select-none">🚫 Ninguno (sin acceso a pipelines)</span>
-                                            </label>
-                                            {allManualProjects.map(proj => (
-                                                <label key={proj.id} className={`flex items-center space-x-3 cursor-pointer p-2 rounded-lg hover:bg-purple-100/50 dark:hover:bg-purple-900/20 transition-colors ${ (formData.allowed_crm_projects || []).includes('__none__') ? 'opacity-40 pointer-events-none' : ''}`}>
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={(formData.allowed_crm_projects || []).includes(proj.id)}
-                                                        onChange={() => toggleUserCrmProject(proj.id)}
-                                                        disabled={(formData.allowed_crm_projects || []).includes('__none__')}
-                                                        className="w-4 h-4 text-purple-600 bg-gray-100 border-gray-300 rounded focus:ring-purple-500 dark:focus:ring-purple-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
-                                                    />
-                                                    <span className="text-sm font-medium text-gray-900 dark:text-gray-300 select-none truncate">{proj.name}</span>
-                                                </label>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
+                        const hasNoneLabels = (formData.allowed_labels || []).includes('__none__');
+                        const selectedLabels = (formData.allowed_labels || []).filter(l => l !== '__none__');
+                        const filteredTags = allTags.filter(t => {
+                            const name = typeof t === 'string' ? t : t.name;
+                            return name.toLowerCase().includes(tagSearch.toLowerCase());
+                        });
+                        const allTagNames = allTags.map(t => typeof t === 'string' ? t : t.name);
+                        const allSelected = allTagNames.length > 0 && allTagNames.every(n => selectedLabels.includes(n));
+                        const hasNoneWA = (formData.allowed_wa_numbers || []).length === 0;
 
-                                {/* Etiquetas visibles */}
-                                {!!perms['filter_labels'] && (
-                                    <div className="space-y-3">
-                                        {/* Checkboxes de etiquetas visibles */}
-                                        <div>
-                                            <h4 className="text-sm font-bold text-gray-800 dark:text-white mb-1">🏷️ Etiquetas Visibles</h4>
-                                            <p className="text-[10px] text-gray-400 mb-2">Sin selección = ver todas. Marca cuales puede ver o marca "Ninguna".</p>
-                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 p-2 border border-amber-100 dark:border-amber-900 rounded-lg bg-amber-50/50 dark:bg-amber-900/10">
-                                                {/* Opción Ninguna etiqueta */}
-                                                <label className="col-span-full flex items-center space-x-3 cursor-pointer p-2 rounded-lg bg-amber-100/60 dark:bg-amber-900/30 hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors border border-amber-200 dark:border-amber-800">
+                        return (
+                            <div className="border-t border-gray-100 dark:border-gray-700">
+                                {/* Header de sección */}
+                                <div className="px-6 py-3 bg-gray-50 dark:bg-gray-800/60 border-b border-gray-100 dark:border-gray-700">
+                                    <p className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest">Accesos y permisos</p>
+                                </div>
+
+                                <div className="px-6 py-5 grid grid-cols-1 md:grid-cols-3 gap-5">
+                                    {/* ── Proyectos CRM ── */}
+                                    {!!perms['filter_crm'] && allManualProjects.length > 0 && (
+                                        <div className="flex flex-col gap-2">
+                                            <div>
+                                                <h4 className="text-sm font-bold text-gray-800 dark:text-white">📋 Proyectos CRM</h4>
+                                                <p className="text-[10px] text-gray-400 mt-0.5">Sin selección = todos. "Ninguno" = acceso cero.</p>
+                                            </div>
+                                            <div className="rounded-xl border border-purple-200 dark:border-purple-800 bg-purple-50/40 dark:bg-purple-900/10 overflow-hidden">
+                                                {/* Ninguno */}
+                                                <label className="flex items-center gap-2.5 px-3 py-2.5 bg-purple-100/60 dark:bg-purple-900/30 border-b border-purple-200 dark:border-purple-800 cursor-pointer hover:bg-purple-100 dark:hover:bg-purple-900/40 transition-colors">
                                                     <input
                                                         type="checkbox"
-                                                        checked={(formData.allowed_labels || []).includes('__none__')}
+                                                        checked={(formData.allowed_crm_projects || []).includes('__none__')}
                                                         onChange={() => {
-                                                            const hasNone = (formData.allowed_labels || []).includes('__none__');
-                                                            setFormData(f => ({ ...f, allowed_labels: hasNone ? [] : ['__none__'] }));
+                                                            const hasNone = (formData.allowed_crm_projects || []).includes('__none__');
+                                                            setFormData(f => ({ ...f, allowed_crm_projects: hasNone ? [] : ['__none__'] }));
                                                         }}
-                                                        className="w-4 h-4 text-amber-600 bg-gray-100 border-gray-300 rounded focus:ring-amber-500 dark:bg-gray-700 dark:border-gray-600"
+                                                        className="w-3.5 h-3.5 text-purple-600 rounded"
                                                     />
-                                                    <span className="text-sm font-bold text-amber-700 dark:text-amber-300 select-none">🚫 Ninguna etiqueta (sin acceso por etiqueta)</span>
+                                                    <span className="text-xs font-bold text-purple-700 dark:text-purple-300 select-none">🚫 Ninguno</span>
                                                 </label>
-                                                {/* Etiquetas individuales */}
-                                                {allTags.map(tagObj => {
-                                                    const tName = typeof tagObj === 'string' ? tagObj : tagObj.name;
-                                                    const tColor = typeof tagObj === 'string' ? '#3b82f6' : tagObj.color;
-                                                    const isDisabled = (formData.allowed_labels || []).includes('__none__');
-                                                    return (
-                                                        <label key={tName} className={`flex items-center space-x-3 cursor-pointer p-2 rounded-lg hover:bg-amber-100/50 dark:hover:bg-amber-900/20 transition-colors ${isDisabled ? 'opacity-40 pointer-events-none' : ''}`}>
+                                                {/* Lista de proyectos */}
+                                                <div className="divide-y divide-purple-100 dark:divide-purple-900/40">
+                                                    {allManualProjects.map(proj => (
+                                                        <label key={proj.id} className={`flex items-center gap-2.5 px-3 py-2 cursor-pointer hover:bg-purple-50 dark:hover:bg-purple-900/10 transition-colors ${(formData.allowed_crm_projects || []).includes('__none__') ? 'opacity-40 pointer-events-none' : ''}`}>
                                                             <input
                                                                 type="checkbox"
-                                                                checked={(formData.allowed_labels || []).includes(tName)}
-                                                                onChange={() => toggleUserLabel(tName)}
-                                                                disabled={isDisabled}
-                                                                className="w-4 h-4 text-amber-600 bg-gray-100 border-gray-300 rounded focus:ring-amber-500 dark:focus:ring-amber-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
+                                                                checked={(formData.allowed_crm_projects || []).includes(proj.id)}
+                                                                onChange={() => toggleUserCrmProject(proj.id)}
+                                                                disabled={(formData.allowed_crm_projects || []).includes('__none__')}
+                                                                className="w-3.5 h-3.5 text-purple-600 rounded"
                                                             />
-                                                            <span className="flex items-center gap-2 text-sm font-medium text-gray-900 dark:text-gray-300 select-none truncate">
-                                                                <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: tColor }}></span>
-                                                                {tName}
-                                                            </span>
+                                                            <span className="text-xs font-medium text-gray-800 dark:text-gray-300 select-none truncate">{proj.name}</span>
                                                         </label>
-                                                    );
-                                                })}
-                                            </div>
-                                        </div>
-
-                                        {/* Permiso: ¿Puede editar etiquetas? */}
-                                        <div className="flex items-center justify-between p-3 border border-amber-200 dark:border-amber-800 rounded-xl bg-amber-50/40 dark:bg-amber-900/10">
-                                            <div>
-                                                <p className="text-sm font-semibold text-gray-800 dark:text-white">✏️ ¿Puede editar etiquetas?</p>
-                                                <p className="text-[10px] text-gray-400 mt-0.5">Permite crear, editar y eliminar etiquetas del sistema.</p>
-                                            </div>
-                                            <div className="relative">
-                                                <select
-                                                    value={formData.can_manage_tags ? 'yes' : 'no'}
-                                                    onChange={(e) => setFormData(f => ({ ...f, can_manage_tags: e.target.value === 'yes' }))}
-                                                    className="appearance-none pl-3 pr-8 py-2 text-sm font-bold bg-white dark:bg-gray-800 border border-amber-300 dark:border-amber-700 rounded-xl focus:ring-2 focus:ring-amber-400 focus:outline-none cursor-pointer text-gray-800 dark:text-gray-200"
-                                                >
-                                                    <option value="no">🚫 No puede</option>
-                                                    <option value="yes">✅ Sí puede</option>
-                                                </select>
-                                                <div className="pointer-events-none absolute inset-y-0 right-2 flex items-center">
-                                                    <svg className="w-3.5 h-3.5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                                                    ))}
                                                 </div>
                                             </div>
                                         </div>
+                                    )}
+
+                                    {/* ── Etiquetas (dropdown con search) ── */}
+                                    {!!perms['filter_labels'] && (
+                                        <div className="flex flex-col gap-2">
+                                            <div>
+                                                <h4 className="text-sm font-bold text-gray-800 dark:text-white">🏷️ Etiquetas Visibles</h4>
+                                                <p className="text-[10px] text-gray-400 mt-0.5">Sin selección = todas. "Ninguna" = acceso cero.</p>
+                                            </div>
+                                            <div className="relative" ref={tagPanelRef}>
+                                                {/* Trigger button */}
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setTagPanelOpen(o => !o)}
+                                                    className="w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl border border-amber-200 dark:border-amber-700 bg-amber-50/50 dark:bg-amber-900/10 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors text-left"
+                                                >
+                                                    <span className="text-xs font-medium text-gray-700 dark:text-gray-300 truncate">
+                                                        {hasNoneLabels
+                                                            ? '🚫 Sin acceso por etiqueta'
+                                                            : selectedLabels.length === 0
+                                                                ? '✅ Todas las etiquetas'
+                                                                : `${selectedLabels.length} etiqueta${selectedLabels.length !== 1 ? 's' : ''} seleccionada${selectedLabels.length !== 1 ? 's' : ''}`
+                                                        }
+                                                    </span>
+                                                    <svg className={`w-3.5 h-3.5 text-amber-500 transition-transform shrink-0 ${tagPanelOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                                                </button>
+
+                                                {/* Dropdown panel */}
+                                                {tagPanelOpen && (
+                                                    <div className="absolute z-50 top-full left-0 right-0 mt-1 rounded-xl border border-amber-200 dark:border-amber-700 bg-white dark:bg-gray-900 shadow-xl overflow-hidden">
+                                                        {/* Ninguna */}
+                                                        <label className="flex items-center gap-2.5 px-3 py-2.5 bg-amber-50 dark:bg-amber-900/20 border-b border-amber-100 dark:border-amber-800 cursor-pointer hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors">
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={hasNoneLabels}
+                                                                onChange={() => {
+                                                                    setFormData(f => ({ ...f, allowed_labels: hasNoneLabels ? [] : ['__none__'] }));
+                                                                }}
+                                                                className="w-3.5 h-3.5 text-amber-600 rounded"
+                                                            />
+                                                            <span className="text-xs font-bold text-amber-700 dark:text-amber-300 select-none">🚫 Ninguna etiqueta</span>
+                                                        </label>
+
+                                                        {/* Search + select all */}
+                                                        <div className={`px-2 py-2 border-b border-gray-100 dark:border-gray-700 flex gap-2 ${hasNoneLabels ? 'opacity-40 pointer-events-none' : ''}`}>
+                                                            <div className="relative flex-1">
+                                                                <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400" />
+                                                                <input
+                                                                    type="text"
+                                                                    value={tagSearch}
+                                                                    onChange={e => setTagSearch(e.target.value)}
+                                                                    placeholder="Buscar etiqueta..."
+                                                                    className="w-full pl-6 pr-2 py-1.5 text-xs rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                                                                />
+                                                            </div>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    if (allSelected) {
+                                                                        setFormData(f => ({ ...f, allowed_labels: [] }));
+                                                                    } else {
+                                                                        setFormData(f => ({ ...f, allowed_labels: allTagNames }));
+                                                                    }
+                                                                }}
+                                                                className="px-2 py-1 text-[10px] font-bold rounded-lg bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 hover:bg-amber-200 dark:hover:bg-amber-900/50 transition-colors whitespace-nowrap"
+                                                            >
+                                                                {allSelected ? 'Quitar todas' : 'Sel. todas'}
+                                                            </button>
+                                                        </div>
+
+                                                        {/* Scrollable list — 10 items */}
+                                                        <div className={`overflow-y-auto divide-y divide-gray-50 dark:divide-gray-800 ${hasNoneLabels ? 'opacity-40 pointer-events-none' : ''}`} style={{ maxHeight: '240px' }}>
+                                                            {filteredTags.length === 0 ? (
+                                                                <p className="px-3 py-3 text-xs text-gray-400 text-center">Sin resultados</p>
+                                                            ) : filteredTags.map(tagObj => {
+                                                                const tName = typeof tagObj === 'string' ? tagObj : tagObj.name;
+                                                                const tColor = typeof tagObj === 'string' ? '#3b82f6' : tagObj.color;
+                                                                return (
+                                                                    <label key={tName} className="flex items-center gap-2.5 px-3 py-2 cursor-pointer hover:bg-amber-50 dark:hover:bg-amber-900/10 transition-colors">
+                                                                        <input
+                                                                            type="checkbox"
+                                                                            checked={selectedLabels.includes(tName)}
+                                                                            onChange={() => toggleUserLabel(tName)}
+                                                                            className="w-3.5 h-3.5 text-amber-600 rounded"
+                                                                        />
+                                                                        <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: tColor }}></span>
+                                                                        <span className="text-xs font-medium text-gray-800 dark:text-gray-300 select-none truncate">{tName}</span>
+                                                                    </label>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {/* ¿Puede editar etiquetas? */}
+                                            <div className="flex items-center justify-between px-3 py-2.5 rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50/40 dark:bg-amber-900/10">
+                                                <div>
+                                                    <p className="text-xs font-semibold text-gray-800 dark:text-white">✏️ ¿Puede editar etiquetas?</p>
+                                                    <p className="text-[10px] text-gray-400 mt-0.5">Crear, editar y eliminar etiquetas.</p>
+                                                </div>
+                                                <div className="relative shrink-0">
+                                                    <select
+                                                        value={formData.can_manage_tags ? 'yes' : 'no'}
+                                                        onChange={(e) => setFormData(f => ({ ...f, can_manage_tags: e.target.value === 'yes' }))}
+                                                        className="appearance-none pl-3 pr-7 py-1.5 text-xs font-bold bg-white dark:bg-gray-800 border border-amber-300 dark:border-amber-700 rounded-lg focus:ring-2 focus:ring-amber-400 focus:outline-none cursor-pointer text-gray-800 dark:text-gray-200"
+                                                    >
+                                                        <option value="no">🚫 No</option>
+                                                        <option value="yes">✅ Sí</option>
+                                                    </select>
+                                                    <div className="pointer-events-none absolute inset-y-0 right-1.5 flex items-center">
+                                                        <svg className="w-3 h-3 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* ── Números WhatsApp ── */}
+                                    <div className="flex flex-col gap-2">
+                                        <div>
+                                            <h4 className="text-sm font-bold text-gray-800 dark:text-white">📱 Números WhatsApp</h4>
+                                            <p className="text-[10px] text-gray-400 mt-0.5">Sin selección = ve todos. Marca solo los que debe ver.</p>
+                                        </div>
+                                        <div className="rounded-xl border border-green-200 dark:border-green-800 bg-green-50/40 dark:bg-green-900/10 overflow-hidden">
+                                            {/* Todos */}
+                                            <label className="flex items-center gap-2.5 px-3 py-2.5 bg-green-100/60 dark:bg-green-900/30 border-b border-green-200 dark:border-green-800 cursor-pointer hover:bg-green-100 dark:hover:bg-green-900/40 transition-colors">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={hasNoneWA}
+                                                    onChange={() => setFormData(f => ({ ...f, allowed_wa_numbers: [] }))}
+                                                    className="w-3.5 h-3.5 text-green-600 rounded"
+                                                />
+                                                <span className="text-xs font-bold text-green-700 dark:text-green-300 select-none">✅ Todos los números</span>
+                                            </label>
+                                            {/* Lista de números WA */}
+                                            {allWaNumbers.length === 0 ? (
+                                                <p className="px-3 py-3 text-[10px] text-gray-400">Sin números configurados aún.</p>
+                                            ) : (
+                                                <div className="divide-y divide-green-100 dark:divide-green-900/30">
+                                                    {allWaNumbers.map(num => (
+                                                        <label key={num.id} className={`flex items-center gap-2.5 px-3 py-2.5 cursor-pointer hover:bg-green-50 dark:hover:bg-green-900/10 transition-colors ${hasNoneWA ? '' : ''}`}>
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={(formData.allowed_wa_numbers || []).includes(num.id)}
+                                                                onChange={() => toggleUserWaNumber(num.id)}
+                                                                className="w-3.5 h-3.5 text-green-600 rounded"
+                                                            />
+                                                            <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: num.color || '#25d366' }}></span>
+                                                            <div className="min-w-0">
+                                                                <p className="text-xs font-semibold text-gray-800 dark:text-gray-200 truncate">{num.label}</p>
+                                                                <p className="text-[10px] text-gray-400 truncate">{num.phone}</p>
+                                                            </div>
+                                                        </label>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
                                     </div>
-                                )}
+                                </div>
                             </div>
                         );
                     })()}
 
-                    <div className="flex justify-end space-x-3 pt-4">
-                        <Button variant="outline" type="button" onClick={() => setIsModalOpen(false)} disabled={saving}>
+                    {/* ── Footer ── */}
+                    <div className="px-6 py-4 border-t border-gray-100 dark:border-gray-700 flex justify-end gap-3 bg-gray-50/50 dark:bg-gray-800/30 rounded-b-xl">
+                        <Button variant="outline" type="button" onClick={() => { setIsModalOpen(false); setTagPanelOpen(false); }} disabled={saving}>
                             Cancelar
                         </Button>
                         <Button type="submit" disabled={saving}>
