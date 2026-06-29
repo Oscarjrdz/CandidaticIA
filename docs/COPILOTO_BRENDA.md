@@ -341,23 +341,52 @@ Estrategia de bajo consumo:
 - Usa contadores Redis O(1) para candidatos completos, incompletos y sin leer.
 - Usa hash `candidatic:tag_counts` para conteos de tags.
 - Lee blobs compactos para tags configurados, campos, automatizaciones, vacantes, usuarios y roles.
-- Toma solo una muestra reciente de hasta 500 candidatos para distribuciones agregadas.
+- Construye un snapshot compacto de candidatos en memoria por 60 segundos.
+- Calcula deterministamente filtros cruzados: completo/incompleto, leido/sin leer, tags, categoria, municipio y origen.
+- Incluye columnas de la seccion Candidatos: WhatsApp, nombre, nombre real, nacimiento, edad, genero, municipio, categoria, escolaridad, origen, colonia, experiencia, bloqueado, estatus y campos personalizados.
+- Calcula edad desde `fechaNacimiento` o usa `edad` cuando ya existe.
+- Calcula cumpleaños por mes desde `fechaNacimiento`.
+- Detecta si un candidato tiene burbuja de no leido con `unreadMsgCount` y timestamps `lastUserMessageAt > lastHumanMessageAt`.
+- Resuelve candidatos por telefono, ultimos digitos o nombre antes de llamar GPT.
+- Resume proyectos con candidatos, sin leer, completos, incompletos y conteos por etapa.
+- Toma una muestra reciente de hasta 500 candidatos para distribuciones agregadas.
 - Cachea el resultado 60 segundos en memoria del proceso.
 - Si la pregunta es simple, responde sin GPT.
-- Si la pregunta requiere interpretacion, manda a GPT un resumen agregado compacto.
+- Si la pregunta requiere interpretacion, manda a GPT un JSON compacto sin listas completas.
 
 Datos actuales del motor:
 
 - Candidatos totales, completos, incompletos y sin leer.
+- Consulta puntual por candidato/telefono.
+- Burbuja sin leer por candidato.
 - Mensajes entrantes/salientes.
 - Tags configurados y top tags.
+- Conteos cruzados por tags: total, sin leer, completo e incompleto.
+- Conteos por edad exacta, rangos de edad y cumpleanos por mes.
+- Conteos por municipio, categoria, escolaridad, genero, origen, colonia, experiencia y campos personalizados.
 - Filtros base.
 - Campos personalizados.
 - Vacantes totales y activas.
-- Proyectos.
+- Proyectos, etapas y candidatos por proyecto.
 - Automatizaciones totales y activas.
 - Usuarios, activos y roles.
 - Distribuciones recientes por origen, categoria, municipio, escolaridad y genero.
+
+Ejemplos soportados:
+
+```txt
+Cuantos candidatos completos tenemos?
+Cuantos candidatos con tag Urgente estan sin leer?
+El candidato 8111234567 tiene burbuja sin leer?
+Dame info de Juan Perez.
+Cuantos candidatos tiene el proyecto Operarios?
+Como va el proyecto de almacenistas por etapa?
+Cuantos de 40 anos tenemos?
+Cuantos de Monterrey estan completos?
+Cuantos cumplen anos este mes?
+Cuantos cumplen anos en julio?
+Cuantos de secundaria hay en Guadalupe con tag Entrevista?
+```
 
 ## Validaciones Realizadas
 
