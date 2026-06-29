@@ -134,6 +134,10 @@ const sortMessagesChronologically = (list = []) => {
 const areSameOutgoingMessage = (a = {}, b = {}) => {
     if (!isOutgoingAuthor(a) || !isOutgoingAuthor(b)) return false;
     if (a.id && b.id && String(a.id) === String(b.id)) return true;
+    // Two different temp IDs are always distinct user sends — never the same message
+    const aIsTemp = String(a.id || '').startsWith('temp');
+    const bIsTemp = String(b.id || '').startsWith('temp');
+    if (aIsTemp && bIsTemp) return false;
     if (a.ultraMsgId && b.ultraMsgId && String(a.ultraMsgId) === String(b.ultraMsgId)) return true;
 
     const kindA = getMessageKind(a);
@@ -160,9 +164,7 @@ const areVisuallyDuplicateOutgoingMessages = (a = {}, b = {}) => {
     if (!areSameOutgoingMessage(a, b)) return false;
     const aIsTransient = String(a.id || '').startsWith('temp') || ['pending', 'queued'].includes(a.status);
     const bIsTransient = String(b.id || '').startsWith('temp') || ['pending', 'queued'].includes(b.status);
-    if (!aIsTransient && !bIsTransient) return false; // both confirmed → keep both
-    if (aIsTransient && bIsTransient) return false;   // both pending → two distinct sends, keep both
-    // exactly one transient → optimistic message matching its server confirmation
+    if (!aIsTransient && !bIsTransient) return false;
     const timeA = getMessageTime(a);
     const timeB = getMessageTime(b);
     return !timeA || !timeB || Math.abs(timeA - timeB) < 45000;
