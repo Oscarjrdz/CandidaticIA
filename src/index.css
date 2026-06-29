@@ -188,21 +188,21 @@ body {
     animation: candidatic-icon-breathe 5.8s ease-in-out infinite;
   }
 
-  /* Phase 1 — row clip opens the space (clip-path doesn't affect layout) */
+  /* Phase 1 — row clip opens the space */
   .chat-message-row-enter {
-    -webkit-animation: chat-row-enter 2000ms cubic-bezier(0.1, 0, 0.4, 1) forwards;
-    animation: chat-row-enter 2000ms cubic-bezier(0.1, 0, 0.4, 1) forwards;
+    -webkit-animation: chat-row-enter 400ms cubic-bezier(0.1, 0, 0.4, 1) forwards;
+    animation: chat-row-enter 400ms cubic-bezier(0.1, 0, 0.4, 1) forwards;
   }
 
-  /* Phase 2 — bubble slides in from its side after space finishes */
+  /* Phase 2 — bubble appears almost instantly */
   .chat-message-enter-outgoing {
-    -webkit-animation: chat-message-enter-outgoing 600ms cubic-bezier(0.25, 0.46, 0.45, 0.94) 450ms forwards;
-    animation: chat-message-enter-outgoing 600ms cubic-bezier(0.25, 0.46, 0.45, 0.94) 450ms forwards;
+    -webkit-animation: chat-message-enter-outgoing 120ms ease-out 80ms forwards;
+    animation: chat-message-enter-outgoing 120ms ease-out 80ms forwards;
   }
 
   .chat-message-enter-incoming {
-    -webkit-animation: chat-message-enter-incoming 600ms cubic-bezier(0.25, 0.46, 0.45, 0.94) 450ms forwards;
-    animation: chat-message-enter-incoming 600ms cubic-bezier(0.25, 0.46, 0.45, 0.94) 450ms forwards;
+    -webkit-animation: chat-message-enter-incoming 120ms ease-out 80ms forwards;
+    animation: chat-message-enter-incoming 120ms ease-out 80ms forwards;
   }
 }
 
