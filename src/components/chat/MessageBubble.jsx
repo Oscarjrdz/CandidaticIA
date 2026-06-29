@@ -154,6 +154,7 @@ const MessageBubble = React.memo(function MessageBubble({
         <div className={`px-[5%] flex ${isMe ? 'justify-end' : 'justify-start'} group max-w-full relative ${!isFirstInSeries ? 'mt-0.5' : 'mt-2'} ${(msg.reactions && msg.reactions.length > 0) ? 'pb-5' : ''} ${rowEntryClass}`}>
             <div style={bubbleEntryStyle} className={`
                 max-w-[75%] rounded-[7.5px] px-2 pt-1.5 pb-1 shadow-[0_1px_0.5px_rgba(11,20,26,.13)] relative text-[14.2px] z-10
+                ${bubbleEntryClass}
                 ${isMe
                     ? `bg-[#d9fdd3] dark:bg-[#005c4b] text-[#111b21] dark:text-[#e9edef] ${isFirstInSeries ? 'rounded-tr-none' : ''}`
                     : `bg-white dark:bg-[#202c33] text-[#111b21] dark:text-[#e9edef] ${isFirstInSeries ? 'rounded-tl-none' : ''}`}
