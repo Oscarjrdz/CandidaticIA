@@ -176,13 +176,17 @@ const MessageBubble = React.memo(function MessageBubble({
             height: `${animatedSpaceHeight}px`,
             overflow: 'hidden',
             transition: `height ${spaceOpenDuration}ms cubic-bezier(0.2, 0.85, 0.22, 1)`,
-            willChange: 'height'
         }
         : undefined;
 
+    // Explicit opacity:0 so the element is invisible from frame 0 — we don't rely on
+    // animation-fill-mode:backwards because Chrome skips it on the very first paint frame,
+    // causing a 1-frame flash. The CSS animation (fill-mode:forwards) overrides this once active.
+    const entryStyle = shouldPlayEntryAnimation ? { opacity: 0 } : undefined;
+
     return (
         <div style={spaceStyle}>
-        <div ref={spaceContentRef} className={`px-[5%] flex ${isMe ? 'justify-end' : 'justify-start'} group max-w-full relative ${!isFirstInSeries ? 'mt-0.5' : 'mt-2'} ${(msg.reactions && msg.reactions.length > 0) ? 'pb-5' : ''} ${entryClass}`}>
+        <div ref={spaceContentRef} style={entryStyle} className={`px-[5%] flex ${isMe ? 'justify-end' : 'justify-start'} group max-w-full relative ${!isFirstInSeries ? 'mt-0.5' : 'mt-2'} ${(msg.reactions && msg.reactions.length > 0) ? 'pb-5' : ''} ${entryClass}`}>
             <div className={`
                 max-w-[75%] rounded-[7.5px] px-2 pt-1.5 pb-1 shadow-[0_1px_0.5px_rgba(11,20,26,.13)] relative text-[14.2px] z-10
                 ${isMe
