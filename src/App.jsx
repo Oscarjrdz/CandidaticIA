@@ -12,6 +12,7 @@ import { getTheme, saveTheme } from './utils/storage';
 import { usePresence } from './hooks/usePresence';
 import InternalChat from './components/InternalChat';
 import { useCandidatesSSE } from './hooks/useCandidatesSSE';
+import FloatingCopilot from './components/FloatingCopilot';
 
 // ⚡ React.lazy with auto-retry on stale chunk errors (post-deploy cache mismatch)
 // If a dynamic import fails (e.g. old chunk hash no longer exists), reload the page ONCE
@@ -50,13 +51,14 @@ const BotIASection = lazyWithRetry(() => import('./components/BotIASection'), 'B
 const MediaLibrarySection = lazyWithRetry(() => import('./components/MediaLibrarySection'), 'MediaLibrarySection');
 const CRMProjectsSection = lazyWithRetry(() => import('./components/CRMProjectsSection'), 'CRMProjectsSection');
 const AdsStatisticsSection = lazyWithRetry(() => import('./components/AdsStatisticsSection'), 'AdsStatisticsSection');
+const IACopilotoSection = lazyWithRetry(() => import('./components/IACopilotoSection'), 'IACopilotoSection');
 
 /**
  * Inner app shell — consumes both contexts.
  * Separated from providers to avoid re-rendering providers on state change.
  */
 function AppShell() {
-  const { user, setUser, isAuthChecking, isAppReady, rolePermissions, login, logout } = useAuthContext();
+  const { user, isAuthChecking, isAppReady, rolePermissions, login, logout } = useAuthContext();
   const { showToast } = useToastContext();
 
   const [theme, setTheme] = useState('light');
@@ -265,6 +267,7 @@ function AppShell() {
                       : activeSection === 'users' ? 'Usuarios'
                       : activeSection === 'media-library' ? 'Biblioteca'
                       : activeSection === 'projects' ? 'Proyectos'
+                      : activeSection === 'ia-copiloto' ? 'IA Copiloto'
                       : 'Configuración'}
                   </h1>
 
@@ -317,6 +320,7 @@ function AppShell() {
                       : activeSection === 'users' ? 'Gestión de equipo y permisos'
                       : activeSection === 'media-library' ? 'Biblioteca de archivos y recursos del Bot'
                       : activeSection === 'projects' ? 'Kanban de reclutamiento'
+                      : activeSection === 'ia-copiloto' ? 'Prompts, skills y Brenda Copiloto'
                       : 'Credenciales y configuración del sistema'}
                   </p>
                 </div>
@@ -385,6 +389,8 @@ function AppShell() {
             <MediaLibrarySection />
           ) : activeSection === 'projects' ? (
             <CRMProjectsSection />
+          ) : activeSection === 'ia-copiloto' && user?.role === 'SuperAdmin' ? (
+            <IACopilotoSection />
           ) : (
             <SettingsSection />
           )}
@@ -393,6 +399,9 @@ function AppShell() {
         </main>
 
         <InternalChat onlineUsers={onlineUsers} />
+        {user?.role === 'SuperAdmin' && (
+          <FloatingCopilot onOpenSection={() => setActiveSection('ia-copiloto')} />
+        )}
         {/* Footer */}
         <footer className="py-3 sm:py-4 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shrink-0 sticky bottom-0 z-10" style={{ WebkitBackdropFilter: 'blur(12px)', backdropFilter: 'blur(12px)', backgroundColor: 'rgba(255,255,255,0.9)' }}>
           <div className="px-4 sm:px-8">

@@ -3,7 +3,7 @@ import { useAuthContext } from '../contexts/AuthContext';
 import { useCandidatesSSE } from '../hooks/useCandidatesSSE';
 import {
     Users, Settings, Bot, History, Zap, Briefcase, Send, User, LogOut, BarChart3,
-    MessageSquare, Smartphone, Folder, FolderKanban, GripVertical, Wifi, BrainCircuit, X, ChevronLeft, ChevronRight, Bell
+    MessageSquare, Smartphone, Folder, FolderKanban, GripVertical, Wifi, BrainCircuit, X, ChevronLeft, ChevronRight, Bell, Sparkles
 } from 'lucide-react';
 import {
     DndContext,
@@ -38,6 +38,7 @@ const DEFAULT_MENU_ITEMS = [
     { id: 'vacancies', label: 'Vacantes', icon: Briefcase, position: 'top' },
     { id: 'bolsa', label: 'Bolsa (App)', icon: Smartphone, position: 'top' },
     { id: 'notificaciones', label: 'Notificaciones', icon: Bell, position: 'top' },
+    { id: 'ia-copiloto', label: 'IA Copiloto', icon: Sparkles, position: 'top', superAdminOnly: true },
     // { id: 'media-library', label: 'Biblioteca Multimedia', icon: Folder, position: 'top' },
     { id: 'projects', label: 'Proyectos', icon: FolderKanban, position: 'top' },
 { id: 'users', label: 'Usuarios', icon: User, position: 'top' },
@@ -119,7 +120,7 @@ const Sidebar = ({ activeSection, onSectionChange, onLogout, isMobileOpen, onClo
     const [isCollapsed, setIsCollapsed] = useState(() => {
         return localStorage.getItem('sidebar_collapsed') === 'true';
     });
-    const { globalStats } = useCandidatesSSE();
+    useCandidatesSSE();
 
     const unreadCount = chatUnreadCount;
 
@@ -163,6 +164,7 @@ const Sidebar = ({ activeSection, onSectionChange, onLogout, isMobileOpen, onClo
         const permittedDefaults = isViewerRole
             ? DEFAULT_MENU_ITEMS.filter(item => item.id === 'chat')
             : DEFAULT_MENU_ITEMS.filter(item => {
+                if (item.superAdminOnly && user?.role !== 'SuperAdmin') return false;
                 return rolePermissions[item.id] === true || user?.role === 'SuperAdmin';
             });
 
