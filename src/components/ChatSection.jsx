@@ -160,7 +160,9 @@ const areVisuallyDuplicateOutgoingMessages = (a = {}, b = {}) => {
     if (!areSameOutgoingMessage(a, b)) return false;
     const aIsTransient = String(a.id || '').startsWith('temp') || ['pending', 'queued'].includes(a.status);
     const bIsTransient = String(b.id || '').startsWith('temp') || ['pending', 'queued'].includes(b.status);
-    if (!aIsTransient && !bIsTransient) return false;
+    if (!aIsTransient && !bIsTransient) return false; // both confirmed → keep both
+    if (aIsTransient && bIsTransient) return false;   // both pending → two distinct sends, keep both
+    // exactly one transient → optimistic message matching its server confirmation
     const timeA = getMessageTime(a);
     const timeB = getMessageTime(b);
     return !timeA || !timeB || Math.abs(timeA - timeB) < 45000;
@@ -3846,7 +3848,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
                             computeItemKey={(index, msg) => getStableMessageKey(msg, index)}
                             overscan={400}
                             atBottomThreshold={150}
-                            components={{ Header: MessagesEncryptionHeader, Footer: () => <div style={{ height: 40 }} /> }}
+                            components={{ Header: MessagesEncryptionHeader, Footer: () => <div style={{ height: 25 }} /> }}
                             totalListHeightChanged={() => {
                                 if (bottomAnchorRef.current || isAtBottomRef.current || isSendingRef.current) {
                                     scrollToBottom();
