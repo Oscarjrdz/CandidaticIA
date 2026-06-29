@@ -147,16 +147,11 @@ const MessageBubble = React.memo(function MessageBubble({
         return () => window.clearTimeout(timer);
     }, [shouldPlayEntryAnimation, entryAnimationKey, isMe]);
 
-    // Row starts clipped; cleared via onAnimationEnd so reactions can overflow freely.
-    const rowEntryStyle = shouldPlayEntryAnimation ? { clipPath: 'inset(0 0 100% 0)' } : undefined;
-    const handleRowAnimEnd = React.useCallback((e) => {
-        if (e.animationName === 'chat-row-enter') e.currentTarget.style.clipPath = '';
-    }, []);
     // Bubble starts invisible; CSS animation overrides once it fires.
     const bubbleEntryStyle = shouldPlayEntryAnimation ? { opacity: 0 } : undefined;
 
     return (
-        <div style={rowEntryStyle} onAnimationEnd={handleRowAnimEnd} className={`px-[5%] flex ${isMe ? 'justify-end' : 'justify-start'} group max-w-full relative ${!isFirstInSeries ? 'mt-0.5' : 'mt-2'} ${(msg.reactions && msg.reactions.length > 0) ? 'pb-5' : ''} ${rowEntryClass}`}>
+        <div className={`px-[5%] flex ${isMe ? 'justify-end' : 'justify-start'} group max-w-full relative ${!isFirstInSeries ? 'mt-0.5' : 'mt-2'} ${(msg.reactions && msg.reactions.length > 0) ? 'pb-5' : ''} ${rowEntryClass}`}>
             <div style={bubbleEntryStyle} className={`
                 max-w-[75%] rounded-[7.5px] px-2 pt-1.5 pb-1 shadow-[0_1px_0.5px_rgba(11,20,26,.13)] relative text-[14.2px] z-10
                 ${bubbleEntryClass}
