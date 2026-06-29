@@ -642,33 +642,11 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
 
     const scrollToBottom = (behavior = 'smooth') => {
         const lastIndex = Math.max(0, (displayMessages.length || 1) - 1);
-        if (virtuosoRef.current && lastIndex >= 0) {
-            virtuosoRef.current.scrollToIndex({
-                index: lastIndex,
-                align: 'end',
-                behavior
-            });
-        }
-        const el = virtuosoScrollerRef.current;
-        if (behavior === 'auto' && el) {
-            el.scrollTop = el.scrollHeight;
-        }
         if (scrollFrameRef.current) cancelAnimationFrame(scrollFrameRef.current);
         scrollFrameRef.current = requestAnimationFrame(() => {
-            const nextEl = virtuosoScrollerRef.current;
-            if (!nextEl) return;
-            if (behavior === 'auto') {
-                if (virtuosoRef.current && lastIndex >= 0) {
-                    virtuosoRef.current.scrollToIndex({
-                        index: lastIndex,
-                        align: 'end',
-                        behavior: 'auto'
-                    });
-                }
-                nextEl.scrollTop = nextEl.scrollHeight;
-                return;
+            if (virtuosoRef.current && lastIndex >= 0) {
+                virtuosoRef.current.scrollToIndex({ index: lastIndex, align: 'end', behavior });
             }
-            nextEl.scrollTo({ top: nextEl.scrollHeight, behavior });
         });
     };
     const fileInputRef = useRef(null);
@@ -747,6 +725,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
     const hasSetInitialFilter = useRef(false);
     const filterValueRef = useRef(null);
     const selectedChatRef = useRef(null);
+    const pendingChatIdRef = useRef(null);
     const searchRef = useRef("");
     const candidatesRef = useRef([]);
     const prevSearchRef = useRef(null);
@@ -1619,9 +1598,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
             prevChatId.current = selectedChat?.id;
             prevMessagesLength.current = messages.length;
             setUnseenCount(0);
-            bottomAnchorRef.current = true;
             scrollToBottom('auto');
-            requestAnimationFrame(() => scrollToBottom('auto'));
             return;
         }
         if (messages.length > prevMessagesLength.current) {
@@ -1633,13 +1610,6 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
                 const incoming = newMsgs.filter(m => m.from !== 'me' && m.from !== 'bot' && !String(m.id).startsWith('temp'));
                 if (incoming.length > 0) setUnseenCount(prev => prev + incoming.length);
             }
-        }
-        if (bottomAnchorRef.current) {
-            scrollToBottom('auto');
-            requestAnimationFrame(() => {
-                scrollToBottom('auto');
-                bottomAnchorRef.current = false;
-            });
         }
         prevMessagesLength.current = messages.length;
     }, [messages, selectedChat?.id]);
@@ -1675,7 +1645,8 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
         }
 
         // --- Messages for the actively viewed chat → inject INSTANTLY ---
-        if (String(sseUpdate.candidateId) === String(currentChat?.id) || (currentChat?.whatsapp && String(sseUpdate.phoneMatch) === String(currentChat.whatsapp))) {
+        const activeChatId = pendingChatIdRef.current ?? currentChat?.id;
+        if (String(sseUpdate.candidateId) === String(activeChatId) || (currentChat?.whatsapp && String(sseUpdate.phoneMatch) === String(currentChat.whatsapp))) {
             if (sseUpdate.updates?.markAllSentAsRead) {
                 setMessages(prev => prev.map(m =>
                     (m.from === 'me' || m.from === 'bot') && m.ultraMsgId && (m.status === 'sent' || m.status === 'delivered')
@@ -2192,6 +2163,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
     }, [applyCandidateUnreadPatch]);
 
     const handleSelectChat = useCallback((chat) => {
+        pendingChatIdRef.current = chat.id; // guard SSE race before React commits
         // Save draft of current chat before switching
         const currentText = messageInputRef.current?.getText?.();
         const currentId = selectedChatRef.current?.id;
@@ -2202,7 +2174,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
                 draftsRef.current.delete(currentId);
             }
         }
-        bottomAnchorRef.current = true;
+        displayMessageCacheRef.current.clear(); // prevent stale cache cross-chat
         setSelectedChat(chat);
         setMessages(messagesByChatRef.current.get(chat.id) || []);
         setHeaderImgError(false);
