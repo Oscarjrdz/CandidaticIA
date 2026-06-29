@@ -196,13 +196,13 @@ body {
 
   /* Phase 2 — bubble appears almost instantly */
   .chat-message-enter-outgoing {
-    -webkit-animation: chat-message-enter-outgoing 120ms ease-out 80ms forwards;
-    animation: chat-message-enter-outgoing 120ms ease-out 80ms forwards;
+    -webkit-animation: chat-message-enter-outgoing 120ms ease-out 400ms forwards;
+    animation: chat-message-enter-outgoing 120ms ease-out 400ms forwards;
   }
 
   .chat-message-enter-incoming {
-    -webkit-animation: chat-message-enter-incoming 120ms ease-out 80ms forwards;
-    animation: chat-message-enter-incoming 120ms ease-out 80ms forwards;
+    -webkit-animation: chat-message-enter-incoming 120ms ease-out 400ms forwards;
+    animation: chat-message-enter-incoming 120ms ease-out 400ms forwards;
   }
 }
 
