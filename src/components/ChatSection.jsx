@@ -134,10 +134,10 @@ const sortMessagesChronologically = (list = []) => {
 const areSameOutgoingMessage = (a = {}, b = {}) => {
     if (!isOutgoingAuthor(a) || !isOutgoingAuthor(b)) return false;
     if (a.id && b.id && String(a.id) === String(b.id)) return true;
-    // Two different temp IDs are always distinct user sends — never the same message
     const aIsTemp = String(a.id || '').startsWith('temp');
     const bIsTemp = String(b.id || '').startsWith('temp');
-    if (aIsTemp && bIsTemp) return false;
+    if (aIsTemp && bIsTemp) return false; // two distinct pending sends
+    if (!aIsTemp && !bIsTemp && a.id && b.id) return false; // two different confirmed server IDs
     if (a.ultraMsgId && b.ultraMsgId && String(a.ultraMsgId) === String(b.ultraMsgId)) return true;
 
     const kindA = getMessageKind(a);
