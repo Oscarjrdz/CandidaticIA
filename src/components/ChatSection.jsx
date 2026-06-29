@@ -3838,7 +3838,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
                         <Virtuoso
                             ref={virtuosoRef}
                             scrollerRef={(el) => { virtuosoScrollerRef.current = el; }}
-                            style={{ height: '100%' }}
+                            style={{ height: '100%', paddingBottom: '80px' }}
                             data={displayMessages}
                             initialTopMostItemIndex={displayMessages.length > 0 ? displayMessages.length - 1 : 0}
                             followOutput={(isAtBottom) => {
@@ -3886,7 +3886,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
                             const isLast = index === displayMessages.length - 1;
 
                             return (
-                                <div style={isLast ? { paddingBottom: 80 } : undefined}>
+                                <div>
                                 <MessageBubble
                                     msg={msg}
                                     chatWhatsapp={selectedChat?.whatsapp}
