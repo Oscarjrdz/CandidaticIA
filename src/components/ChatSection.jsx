@@ -640,13 +640,11 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
         }));
     };
 
-    const scrollToBottom = (behavior = 'smooth') => {
-        const lastIndex = Math.max(0, (displayMessages.length || 1) - 1);
+    const scrollToBottom = () => {
         if (scrollFrameRef.current) cancelAnimationFrame(scrollFrameRef.current);
         scrollFrameRef.current = requestAnimationFrame(() => {
-            if (virtuosoRef.current && lastIndex >= 0) {
-                virtuosoRef.current.scrollToIndex({ index: lastIndex, align: 'end', behavior });
-            }
+            const el = virtuosoScrollerRef.current;
+            if (el) el.scrollTop = el.scrollHeight;
         });
     };
     const fileInputRef = useRef(null);
@@ -1598,12 +1596,12 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
             prevChatId.current = selectedChat?.id;
             prevMessagesLength.current = messages.length;
             setUnseenCount(0);
-            scrollToBottom('auto');
+            scrollToBottom();
             return;
         }
         if (messages.length > prevMessagesLength.current) {
             if (isAtBottomRef.current || isSendingRef.current) {
-                scrollToBottom('auto');
+                scrollToBottom();
             } else {
                 // Count only real incoming messages (not our own optimistic ones)
                 const newMsgs = messages.slice(prevMessagesLength.current);
@@ -1701,13 +1699,13 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
                             const pendingIndex = prev.findIndex(m => String(m.id).startsWith('temp') && areSameOutgoingMessage(m, newMsg));
                             if (pendingIndex !== -1) {
                                 const newArr = mergeOutgoingMessage(prev, newMsg, prev[pendingIndex].id);
-                                scrollToBottom('auto');
+                                scrollToBottom();
                                 return newArr;
                             }
                             if (prev.some(m => areSameOutgoingMessage(m, newMsg))) return prev;
                         }
 
-                        scrollToBottom('auto');
+                        scrollToBottom();
                         return [...prev, withMessageEntryAnimation(newMsg)];
                     });
                 } else {
@@ -3851,7 +3849,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
                             components={{ Header: MessagesEncryptionHeader }}
                             totalListHeightChanged={() => {
                                 if (bottomAnchorRef.current || isAtBottomRef.current || isSendingRef.current) {
-                                    scrollToBottom('auto');
+                                    scrollToBottom();
                                 }
                             }}
                             atBottomStateChange={(isAtBottom) => {
