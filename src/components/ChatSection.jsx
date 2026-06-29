@@ -3836,7 +3836,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
                         <Virtuoso
                             ref={virtuosoRef}
                             scrollerRef={(el) => { virtuosoScrollerRef.current = el; }}
-                            style={{ height: '100%', paddingBottom: '80px' }}
+                            style={{ height: '100%' }}
                             data={displayMessages}
                             initialTopMostItemIndex={displayMessages.length > 0 ? displayMessages.length - 1 : 0}
                             followOutput={(isAtBottom) => {
@@ -3846,7 +3846,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
                             computeItemKey={(index, msg) => getStableMessageKey(msg, index)}
                             overscan={400}
                             atBottomThreshold={150}
-                            components={{ Header: MessagesEncryptionHeader }}
+                            components={{ Header: MessagesEncryptionHeader, Footer: () => <div style={{ height: 40 }} /> }}
                             totalListHeightChanged={() => {
                                 if (bottomAnchorRef.current || isAtBottomRef.current || isSendingRef.current) {
                                     scrollToBottom();
