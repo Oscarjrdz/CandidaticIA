@@ -1627,7 +1627,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
         if (messages.length > prevMessagesLength.current) {
             if (isAtBottomRef.current || isSendingRef.current) {
                 if (isSendingRef.current) {
-                    animateScrollToBottom(450);
+                    animateScrollToBottom(3000);
                 } else {
                     scrollToBottom('auto');
                 }
