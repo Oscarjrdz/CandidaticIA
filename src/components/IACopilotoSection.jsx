@@ -11,10 +11,10 @@ const IACopilotoSection = () => {
                             <div className="w-10 h-10 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
                                 <Sparkles className="w-5 h-5 text-blue-600 dark:text-blue-400" />
                             </div>
-                            <h2 className="text-xl font-bold text-gray-900 dark:text-white">IA Copiloto</h2>
+                            <h2 className="text-xl font-bold text-gray-900 dark:text-white">Brenda IA</h2>
                         </div>
                         <p className="text-sm text-gray-600 dark:text-gray-300 max-w-2xl">
-                            Espacio reservado para prompts, skills y configuraciones internas de Brenda.
+                            Espacio reservado para prompts, skills y configuraciones internas.
                             La conversacion vive en el chat flotante para que puedas pedir ayuda desde cualquier modulo.
                         </p>
                     </div>
@@ -27,9 +27,9 @@ const IACopilotoSection = () => {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-5">
                     <Bot className="w-5 h-5 text-blue-600 dark:text-blue-400 mb-3" />
-                    <h3 className="font-semibold text-gray-900 dark:text-white mb-2">Brenda flotante</h3>
+                    <h3 className="font-semibold text-gray-900 dark:text-white mb-2">Chat global</h3>
                     <p className="text-sm text-gray-600 dark:text-gray-300">
-                        Preguntas, tips y redaccion rapida desde cualquier pantalla de Candidatic.
+                        Brenda IA responde desde cualquier pantalla de Candidatic.
                     </p>
                 </div>
                 <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-5">

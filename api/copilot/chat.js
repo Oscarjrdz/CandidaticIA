@@ -1,19 +1,23 @@
 import { getOpenAIResponse } from '../utils/openai.js';
 import { getUsers, validateAdminSession } from '../utils/storage.js';
+import { detectWebSearchIntent, formatSearchResultsForPrompt, searchWeb } from '../utils/web-search.js';
 
 const MAX_INPUT_CHARS = 900;
 const MAX_HISTORY_MESSAGES = 6;
 const MAX_HISTORY_CHARS = 2400;
 const MAX_REPLY_TOKENS = 360;
+const MAX_CONTEXT_CHARS = 120;
+const WEB_SEARCH_MAX_RESULTS = 3;
 
 const SYSTEM_PROMPT = `
-Eres Brenda Rodriguez, copiloto interno de Candidatic IA para SuperAdmin.
-Ayudas con dudas de plataforma, tips de reclutamiento, prompts, skills, automatizaciones y mejora de mensajes.
+Eres Brenda IA, asistente interna de Candidatic IA para SuperAdmin.
+Ayudas con operacion, reclutamiento, prompts, skills, automatizaciones, busqueda web y mejora de mensajes.
 
 Reglas:
 - Responde en espanol claro, breve y accionable.
 - Prioriza ahorro de tokens: no des explicaciones largas si no son necesarias.
-- No inventes que consultaste datos reales de candidatos, vacantes, Redis, Meta o WhatsApp.
+- Si se adjuntan resultados web, usalos como fuente y no inventes datos fuera de esos resultados.
+- No inventes que consultaste datos reales de candidatos, vacantes, Redis, Meta o WhatsApp si no se incluyeron en el contexto.
 - No afirmes haber ejecutado acciones. Si piden cambios, prepara pasos o una propuesta.
 - Si falta contexto, pide solo el dato minimo necesario.
 - No uses markdown pesado salvo listas cortas cuando ayuden.
@@ -21,8 +25,7 @@ Reglas:
 
 const KNOWLEDGE_BASE = `
 Candidatic IA tiene modulos como Candidatos, Chat Web, Envios Masivos, Estadisticas de Ads, Bot IA, Automatizaciones, Vacantes, Bolsa, Notificaciones, Proyectos, Usuarios y Settings.
-El Bot IA conversa con candidatos. Este copiloto es interno y ayuda al equipo a pensar, redactar, diagnosticar y disenar mejoras.
-En este MVP el copiloto es consultivo: no lee datos privados del sistema ni ejecuta acciones con efectos secundarios.
+El Bot IA conversa con candidatos. Brenda IA es interna y ayuda al equipo a pensar, redactar, diagnosticar y disenar mejoras.
 `;
 
 function sanitizeText(value, maxChars) {
@@ -50,6 +53,74 @@ function normalizeHistory(history) {
     return compact;
 }
 
+function normalizeForIntent(value) {
+    return String(value || '')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .trim();
+}
+
+function getMonterreyNow() {
+    const now = new Date();
+    return {
+        date: now.toLocaleDateString('es-MX', {
+            timeZone: 'America/Monterrey',
+            weekday: 'long',
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
+        }),
+        time: now.toLocaleTimeString('es-MX', {
+            timeZone: 'America/Monterrey',
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: true
+        })
+    };
+}
+
+function sanitizeAppContext(appContext) {
+    const ctx = appContext && typeof appContext === 'object' ? appContext : {};
+    return {
+        activeSection: sanitizeText(ctx.activeSection, MAX_CONTEXT_CHARS) || 'desconocida',
+        sectionLabel: sanitizeText(ctx.sectionLabel, MAX_CONTEXT_CHARS) || 'Candidatic',
+        path: sanitizeText(ctx.path, MAX_CONTEXT_CHARS) || '/'
+    };
+}
+
+function getOyeBrendaSearchQuery(message) {
+    const normalized = normalizeForIntent(message);
+    if (!/^oye\s+brenda\b/.test(normalized)) return null;
+
+    const query = String(message || '')
+        .replace(/^\s*[oó]ye\s+brenda[\s,:;.-]*/i, '')
+        .trim();
+
+    return query || message;
+}
+
+function getDirectSkillReply(message, appContext) {
+    const normalized = normalizeForIntent(message);
+    const asksTime = /\b(hora|fecha|dia|día|hoy)\b/.test(normalized) && /\b(monterrey|actual|real|es|estamos|estamos a)\b/.test(normalized);
+    const asksLocation = /\b(donde estoy|dónde estoy|donde estas|dónde estás|en que modulo|en qué módulo|en que pantalla|en qué pantalla)\b/.test(normalized);
+    const now = getMonterreyNow();
+
+    if (asksTime && asksLocation) {
+        return `Estas en ${appContext.sectionLabel}. En Monterrey es ${now.date}, ${now.time}.`;
+    }
+
+    if (asksTime) {
+        return `En Monterrey es ${now.date}, ${now.time}.`;
+    }
+
+    if (asksLocation) {
+        return `Estas en ${appContext.sectionLabel}.`;
+    }
+
+    return null;
+}
+
 export default async function handler(req, res) {
     if (req.method === 'OPTIONS') return res.status(200).end();
     if (req.method !== 'POST') {
@@ -64,7 +135,7 @@ export default async function handler(req, res) {
     const users = await getUsers();
     const user = users.find((u) => u.id === userId);
     if (!user || user.role !== 'SuperAdmin') {
-        return res.status(403).json({ success: false, error: 'Solo SuperAdmin puede usar Brenda Copiloto' });
+        return res.status(403).json({ success: false, error: 'Solo SuperAdmin puede usar Brenda IA' });
     }
 
     const message = sanitizeText(req.body?.message, MAX_INPUT_CHARS);
@@ -72,7 +143,59 @@ export default async function handler(req, res) {
         return res.status(400).json({ success: false, error: 'Mensaje requerido' });
     }
 
+    const appContext = sanitizeAppContext(req.body?.appContext);
+    const directReply = getDirectSkillReply(message, appContext);
+    if (directReply) {
+        return res.status(200).json({
+            success: true,
+            reply: directReply,
+            model: 'skill:context',
+            usage: null,
+            skills: ['context']
+        });
+    }
+
     const history = normalizeHistory(req.body?.history);
+    const now = getMonterreyNow();
+    const commandSearchQuery = getOyeBrendaSearchQuery(message);
+    const detectedSearchQuery = commandSearchQuery ? null : detectWebSearchIntent(message);
+    const searchQuery = commandSearchQuery || detectedSearchQuery;
+    let searchContext = '';
+    let skills = [];
+
+    if (searchQuery) {
+        const searchData = await searchWeb(searchQuery, {
+            maxResults: WEB_SEARCH_MAX_RESULTS,
+            lang: 'es',
+            country: 'mx'
+        });
+
+        if (!searchData.success && commandSearchQuery) {
+            return res.status(200).json({
+                success: true,
+                reply: `No pude consultar internet todavia: ${searchData.error || 'busqueda web no disponible'}.`,
+                model: 'skill:web-search',
+                usage: null,
+                skills: ['web-search']
+            });
+        }
+
+        if (searchData.success) {
+            searchContext = formatSearchResultsForPrompt(searchData);
+            skills.push(commandSearchQuery ? 'web-search-command' : 'web-search');
+        }
+    }
+
+    const runtimeContext = `
+[CONTEXTO ACTUAL]
+- Usuario: ${sanitizeText(user.name, MAX_CONTEXT_CHARS) || 'SuperAdmin'}
+- Pantalla actual: ${appContext.sectionLabel}
+- Ruta app: ${appContext.path}
+- Hora real en Monterrey: ${now.date}, ${now.time}
+- Comando de busqueda "Oye Brenda": ${commandSearchQuery ? 'activado' : 'no activado'}
+${searchContext ? `\n${searchContext}` : ''}
+`;
+
     const messages = [
         ...history,
         { role: 'user', content: message }
@@ -81,7 +204,7 @@ export default async function handler(req, res) {
     try {
         const result = await getOpenAIResponse(
             messages,
-            `${SYSTEM_PROMPT}\n\n${KNOWLEDGE_BASE}`,
+            `${SYSTEM_PROMPT}\n\n${KNOWLEDGE_BASE}\n\n${runtimeContext}`,
             'gpt-4o-mini',
             null,
             null,
@@ -94,6 +217,7 @@ export default async function handler(req, res) {
             reply: sanitizeText(result.content, 2200),
             model: result.model,
             usage: result.usage || null,
+            skills,
             limits: {
                 maxInputChars: MAX_INPUT_CHARS,
                 maxHistoryMessages: MAX_HISTORY_MESSAGES,

@@ -1,14 +1,27 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { ChevronRight, Loader2, MessageCircle, Minimize2, Send, Sparkles } from 'lucide-react';
+import { useAuthContext } from '../contexts/AuthContext';
 
 const MAX_INPUT_CHARS = 900;
 const MAX_CLIENT_HISTORY = 8;
+const GREETING_COOLDOWN_MS = 15 * 60 * 1000;
 
-const starterPrompts = [
-    'Dame tips para mejorar una vacante',
-    'Ayudame a redactar un mensaje para candidatos',
-    'Que automatizacion conviene crear primero?'
-];
+const SECTION_LABELS = {
+    candidates: 'Candidatos',
+    chat: 'Chat Web',
+    bulks: 'Envios Masivos',
+    'ads-stats': 'Estadisticas de Ads',
+    'bot-ia': 'Bot IA',
+    automations: 'Automatizaciones',
+    vacancies: 'Vacantes',
+    bolsa: 'Bolsa',
+    notificaciones: 'Notificaciones',
+    users: 'Usuarios',
+    'media-library': 'Biblioteca',
+    projects: 'Proyectos',
+    'ia-copiloto': 'Brenda IA',
+    settings: 'Configuracion'
+};
 
 function getSessionToken() {
     try {
@@ -20,18 +33,48 @@ function getSessionToken() {
     }
 }
 
-const FloatingCopilot = ({ onOpenSection }) => {
+function getMonterreyGreeting(name) {
+    const hourText = new Intl.DateTimeFormat('es-MX', {
+        timeZone: 'America/Monterrey',
+        hour: '2-digit',
+        hour12: false
+    }).format(new Date());
+    const hour = Number(hourText);
+    const period = hour < 12 ? 'buenos dias' : hour < 19 ? 'buenas tardes' : 'buenas noches';
+    return `Hola ${name || 'Oscar'}, ${period}.`;
+}
+
+function getGreetingKey(user) {
+    return `brenda_ia_last_greeting_${user?.id || user?.whatsapp || 'superadmin'}`;
+}
+
+function shouldShowGreeting(user) {
+    try {
+        const lastGreetingAt = Number(localStorage.getItem(getGreetingKey(user)) || 0);
+        return !lastGreetingAt || Date.now() - lastGreetingAt > GREETING_COOLDOWN_MS;
+    } catch {
+        return true;
+    }
+}
+
+function markGreetingShown(user) {
+    try {
+        localStorage.setItem(getGreetingKey(user), String(Date.now()));
+    } catch {
+        // No-op: greeting memory is only a UX nicety.
+    }
+}
+
+const FloatingCopilot = ({ onOpenSection, activeSection }) => {
+    const { user } = useAuthContext();
     const [open, setOpen] = useState(false);
-    const [messages, setMessages] = useState([
-        {
-            role: 'assistant',
-            content: 'Hola, soy Brenda. Preguntame sobre reclutamiento, prompts, automatizaciones o como usar Candidatic.'
-        }
-    ]);
+    const [messages, setMessages] = useState([]);
     const [input, setInput] = useState('');
     const [loading, setLoading] = useState(false);
     const [usage, setUsage] = useState(null);
     const inputRef = useRef(null);
+    const firstName = (user?.name || '').split(' ')[0] || 'Oscar';
+    const currentSectionLabel = SECTION_LABELS[activeSection] || 'Candidatic';
 
     const compactHistory = useMemo(() => {
         return messages
@@ -61,7 +104,12 @@ const FloatingCopilot = ({ onOpenSection }) => {
                 },
                 body: JSON.stringify({
                     message: clean,
-                    history: compactHistory
+                    history: compactHistory,
+                    appContext: {
+                        activeSection,
+                        sectionLabel: currentSectionLabel,
+                        path: window.location.pathname
+                    }
                 })
             });
             const data = await res.json();
@@ -81,17 +129,32 @@ const FloatingCopilot = ({ onOpenSection }) => {
         }
     };
 
+    const handleOpen = () => {
+        setOpen(true);
+        setTimeout(() => inputRef.current?.focus(), 50);
+
+        if (messages.length > 0 || !shouldShowGreeting(user)) {
+            return;
+        }
+
+        markGreetingShown(user);
+        setMessages([{
+            role: 'assistant',
+            content: `${getMonterreyGreeting(firstName)} Estoy en ${currentSectionLabel}.`
+        }]);
+    };
+
     if (!open) {
         return (
             <button
-                onClick={() => setOpen(true)}
+                onClick={handleOpen}
                 className="fixed left-5 bottom-6 z-[70] flex items-center gap-3 rounded-full bg-blue-600 hover:bg-blue-700 text-white shadow-xl px-4 py-3 transition-all"
-                title="Abrir Brenda Copiloto"
+                title="Abrir Brenda IA"
             >
                 <span className="relative w-9 h-9 rounded-full overflow-hidden bg-white/15 flex items-center justify-center">
                     <img src="/brenda/brenda-avatar.jpeg" alt="" className="w-full h-full object-cover" />
                 </span>
-                <span className="hidden sm:block text-sm font-bold">Brenda</span>
+                <span className="hidden sm:block text-sm font-bold">Brenda IA</span>
                 <MessageCircle className="w-5 h-5" />
             </button>
         );
@@ -105,15 +168,15 @@ const FloatingCopilot = ({ onOpenSection }) => {
                         <img src="/brenda/brenda-avatar.jpeg" alt="" className="w-full h-full object-cover" />
                     </div>
                     <div className="min-w-0">
-                        <h3 className="text-sm font-bold truncate">Brenda Copiloto</h3>
-                        <p className="text-[11px] text-blue-100 truncate">Consultiva, ligera y solo SuperAdmin</p>
+                        <h3 className="text-sm font-bold truncate">Brenda IA</h3>
+                        <p className="text-[11px] text-blue-100 truncate">{currentSectionLabel}</p>
                     </div>
                 </div>
                 <div className="flex items-center gap-1">
                     <button
                         onClick={onOpenSection}
                         className="p-2 rounded-lg hover:bg-white/15 transition-colors"
-                        title="Abrir IA Copiloto"
+                        title="Abrir Brenda IA"
                     >
                         <ChevronRight className="w-4 h-4" />
                     </button>
@@ -150,19 +213,6 @@ const FloatingCopilot = ({ onOpenSection }) => {
             </div>
 
             <div className="px-4 py-3 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
-                <div className="flex flex-wrap gap-2 mb-3">
-                    {starterPrompts.map((prompt) => (
-                        <button
-                            key={prompt}
-                            onClick={() => sendMessage(prompt)}
-                            disabled={loading}
-                            className="text-[11px] px-2.5 py-1 rounded-full bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-200 hover:bg-blue-100 dark:hover:bg-blue-900/50 border border-blue-100 dark:border-blue-800 disabled:opacity-50"
-                        >
-                            {prompt}
-                        </button>
-                    ))}
-                </div>
-
                 <div className="flex items-end gap-2">
                     <textarea
                         ref={inputRef}
@@ -174,7 +224,7 @@ const FloatingCopilot = ({ onOpenSection }) => {
                                 sendMessage();
                             }
                         }}
-                        placeholder="Preguntale a Brenda..."
+                        placeholder="Preguntale a Brenda IA..."
                         rows={2}
                         className="flex-1 resize-none rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white outline-none focus:border-blue-500"
                     />
@@ -190,10 +240,12 @@ const FloatingCopilot = ({ onOpenSection }) => {
 
                 <div className="mt-2 flex items-center justify-between text-[10px] text-gray-400 dark:text-gray-500">
                     <span>{input.length}/{MAX_INPUT_CHARS} caracteres</span>
-                    <span className="flex items-center gap-1">
-                        <Sparkles className="w-3 h-3" />
-                        {usage?.total_tokens ? `${usage.total_tokens} tokens ult. respuesta` : 'modo ahorro'}
-                    </span>
+                    {usage?.total_tokens ? (
+                        <span className="flex items-center gap-1">
+                            <Sparkles className="w-3 h-3" />
+                            {usage.total_tokens} tokens
+                        </span>
+                    ) : null}
                 </div>
             </div>
         </section>

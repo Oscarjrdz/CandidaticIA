@@ -267,7 +267,7 @@ function AppShell() {
                       : activeSection === 'users' ? 'Usuarios'
                       : activeSection === 'media-library' ? 'Biblioteca'
                       : activeSection === 'projects' ? 'Proyectos'
-                      : activeSection === 'ia-copiloto' ? 'IA Copiloto'
+                      : activeSection === 'ia-copiloto' ? 'Brenda IA'
                       : 'Configuración'}
                   </h1>
 
@@ -320,7 +320,7 @@ function AppShell() {
                       : activeSection === 'users' ? 'Gestión de equipo y permisos'
                       : activeSection === 'media-library' ? 'Biblioteca de archivos y recursos del Bot'
                       : activeSection === 'projects' ? 'Kanban de reclutamiento'
-                      : activeSection === 'ia-copiloto' ? 'Prompts, skills y Brenda Copiloto'
+                      : activeSection === 'ia-copiloto' ? 'Prompts, skills y asistencia inteligente'
                       : 'Credenciales y configuración del sistema'}
                   </p>
                 </div>
@@ -400,7 +400,7 @@ function AppShell() {
 
         <InternalChat onlineUsers={onlineUsers} />
         {user?.role === 'SuperAdmin' && (
-          <FloatingCopilot onOpenSection={() => setActiveSection('ia-copiloto')} />
+          <FloatingCopilot activeSection={activeSection} onOpenSection={() => setActiveSection('ia-copiloto')} />
         )}
         {/* Footer */}
         <footer className="py-3 sm:py-4 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shrink-0 sticky bottom-0 z-10" style={{ WebkitBackdropFilter: 'blur(12px)', backdropFilter: 'blur(12px)', backgroundColor: 'rgba(255,255,255,0.9)' }}>

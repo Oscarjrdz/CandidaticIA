@@ -1,29 +1,29 @@
-# IA Copiloto Brenda
+# Brenda IA
 
 ## Objetivo
 
-Crear una asistente interna dentro de Candidatic IA llamada Brenda Copiloto.
+Crear una asistente interna dentro de Candidatic IA llamada Brenda IA.
 
-Esta Brenda no reemplaza al Bot IA que conversa con candidatos. Su funcion es ayudar al equipo interno con dudas, tips, prompts, skills, ideas de automatizacion y mejoras operativas dentro de Candidatic.
+Esta Brenda no reemplaza al Bot IA que conversa con candidatos. Su funcion es ayudar al equipo interno con dudas, busqueda web, prompts, skills, ideas de automatizacion y mejoras operativas dentro de Candidatic.
 
 ## Deploy De Produccion
 
 Nombre sugerido del commit/deploy visible en Vercel:
 
 ```txt
-IA Copiloto Brenda SuperAdmin
+Brenda IA Web Skills SuperAdmin
 ```
 
 Este nombre describe el alcance actual:
 
-- Nueva seccion `IA Copiloto`.
-- Chat flotante global de Brenda.
+- Nueva seccion `Brenda IA`.
+- Chat flotante global de Brenda IA.
 - Acceso limitado a `SuperAdmin`.
-- MVP consultivo sin acciones de escritura.
+- Primeras skills: contexto de pantalla, hora real de Monterrey y busqueda web con comando.
 
 ## Estado Actual
 
-Implementado para produccion como MVP seguro y ligero.
+Implementado para produccion con alcance seguro, controlado y optimizado para tokens.
 
 Archivos creados:
 
@@ -39,7 +39,7 @@ Archivos modificados:
 
 ## Experiencia De Usuario
 
-### Seccion IA Copiloto
+### Seccion Brenda IA
 
 Ruta interna por estado React:
 
@@ -50,7 +50,7 @@ activeSection === 'ia-copiloto'
 La seccion aparece en el sidebar como:
 
 ```txt
-IA Copiloto
+Brenda IA
 ```
 
 Por ahora es un espacio base para prompts, skills y configuracion futura. La interaccion principal no vive ahi; vive en el chat flotante para que Brenda pueda acompanarte desde cualquier modulo.
@@ -68,18 +68,37 @@ Responsabilidades:
 - Mostrar un boton flotante de Brenda abajo a la izquierda.
 - Abrir/cerrar un chat compacto.
 - Permitir preguntas desde cualquier modulo.
-- Incluir prompts rapidos.
 - Enviar mensajes a `/api/copilot/chat`.
 - Mostrar consumo de tokens de la ultima respuesta cuando OpenAI lo devuelve.
 - Mantener historial corto solo en memoria del navegador.
+- Saludar de forma personalizada solo cuando tiene sentido.
 
 El chat se monta en `src/App.jsx` despues de `InternalChat`:
 
 ```jsx
 {user?.role === 'SuperAdmin' && (
-  <FloatingCopilot onOpenSection={() => setActiveSection('ia-copiloto')} />
+  <FloatingCopilot activeSection={activeSection} onOpenSection={() => setActiveSection('ia-copiloto')} />
 )}
 ```
+
+### Saludo Personalizado
+
+El saludo inicial es deterministico y no consume GPT.
+
+Ejemplo:
+
+```txt
+Hola Oscar, buenos dias. Estoy en Candidatos.
+```
+
+Reglas:
+
+- Usa el primer nombre del usuario autenticado.
+- Calcula buenos dias/tardes/noches con hora real de `America/Monterrey`.
+- Incluye la seccion actual.
+- Guarda el ultimo saludo por usuario en `localStorage`.
+- No vuelve a saludar si el chat se cierra y abre dentro de 15 minutos.
+- Si ya hay mensajes en el chat, no inserta otro saludo.
 
 ## Seguridad
 
@@ -98,7 +117,7 @@ En `src/App.jsx`:
 En `src/components/Sidebar.jsx`:
 
 ```js
-{ id: 'ia-copiloto', label: 'IA Copiloto', icon: Sparkles, position: 'top', superAdminOnly: true }
+{ id: 'ia-copiloto', label: 'Brenda IA', icon: Sparkles, position: 'top', superAdminOnly: true }
 ```
 
 El filtro del menu oculta items `superAdminOnly` si el rol no es `SuperAdmin`.
@@ -131,7 +150,9 @@ Decisiones de ahorro:
 
 - Usa `gpt-4o-mini`.
 - No manda candidatos, vacantes, mensajes, archivos ni datos pesados.
-- No hace consultas de contexto real en esta fase.
+- Resuelve hora y ubicacion de pantalla sin llamar GPT.
+- La busqueda web solo se activa por comando o por intencion clara.
+- La busqueda web manda solo resultados compactos al modelo.
 - El frontend limita la entrada a 900 caracteres.
 - El frontend manda historial compacto.
 - El backend vuelve a recortar todo aunque el frontend sea manipulado.
@@ -151,13 +172,15 @@ Esto cuida:
 Brenda puede:
 
 - Resolver dudas de uso general de Candidatic.
-- Dar tips de reclutamiento.
 - Ayudar a redactar mensajes.
 - Proponer prompts.
 - Sugerir skills.
 - Sugerir automatizaciones.
 - Explicar ideas o flujos.
 - Preparar planes de accion.
+- Saber en que seccion de Candidatic estas.
+- Saber la hora real de Monterrey.
+- Buscar en internet cuando se lo pides.
 
 Brenda no debe afirmar que ya:
 
@@ -224,9 +247,70 @@ Respuesta sin permiso:
 ```json
 {
   "success": false,
-  "error": "Solo SuperAdmin puede usar Brenda Copiloto"
+  "error": "Solo SuperAdmin puede usar Brenda IA"
 }
 ```
+
+## Skills Actuales
+
+### 1. Contexto De Pantalla
+
+No consume GPT cuando la pregunta es directa.
+
+Ejemplos:
+
+```txt
+Donde estoy?
+En que modulo estoy?
+```
+
+Respuesta:
+
+```txt
+Estas en Chat Web.
+```
+
+### 2. Hora Real De Monterrey
+
+No consume GPT cuando la pregunta es directa.
+
+Ejemplos:
+
+```txt
+Que hora es?
+Que hora real es en Monterrey?
+```
+
+Respuesta:
+
+```txt
+En Monterrey es lunes, 29 de junio de 2026, 10:42 a.m.
+```
+
+### 3. Busqueda Web
+
+Comando recomendado:
+
+```txt
+Oye Brenda <lo que quieres buscar>
+```
+
+Ejemplos:
+
+```txt
+Oye Brenda busca el salario promedio de almacenista en Monterrey
+Oye Brenda que noticias hay de la NOM laboral
+Oye Brenda clima de Monterrey manana
+```
+
+Funcionamiento:
+
+- El comando `Oye Brenda` fuerza la busqueda web.
+- Tambien existe deteccion automatica para temas que cambian, como clima, precios, noticias o leyes.
+- Usa `api/utils/web-search.js`.
+- Lee `SERPER_API_KEY` o `ai_config.serperApiKey`.
+- Limita resultados a 3 para controlar tokens.
+- Si no hay API key de busqueda, responde sin llamar OpenAI.
 
 ## Validaciones Realizadas
 
@@ -267,21 +351,23 @@ Si no existe API key, el chat aparece pero el endpoint respondera error de conex
 
 ## Roadmap
 
-### Fase 1: MVP Consultivo
+### Fase 1: Brenda IA Interna
 
 Estado: implementado.
 
-- Seccion `IA Copiloto`.
+- Seccion `Brenda IA`.
 - Chat flotante.
 - Endpoint seguro.
 - Solo SuperAdmin.
-- Sin lectura de datos reales.
+- Contexto de pantalla.
+- Hora real de Monterrey.
+- Busqueda web por comando `Oye Brenda`.
 - Sin acciones de escritura.
 - Limites estrictos de tokens y payload.
 
 ### Fase 2: Prompts Y Skills
 
-Guardar en la seccion `IA Copiloto`:
+Guardar en la seccion `Brenda IA`:
 
 - Prompts base.
 - Skills disponibles.
@@ -334,7 +420,7 @@ Cada accion debe guardar auditoria:
 
 - No se agrego permiso editable para Admin o Recruiter.
 - No se modificaron roles base en Redis.
-- No se agrego `IA Copiloto` a Usuarios/Roles.
+- No se agrego `Brenda IA` a Usuarios/Roles.
 - El bloqueo principal es por rol `SuperAdmin`, no por permiso configurable.
 - El historial del chat vive en memoria local del componente y se pierde al refrescar.
 - El avatar usa `public/brenda/brenda-avatar.jpeg`.

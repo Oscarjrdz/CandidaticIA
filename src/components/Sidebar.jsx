@@ -38,7 +38,7 @@ const DEFAULT_MENU_ITEMS = [
     { id: 'vacancies', label: 'Vacantes', icon: Briefcase, position: 'top' },
     { id: 'bolsa', label: 'Bolsa (App)', icon: Smartphone, position: 'top' },
     { id: 'notificaciones', label: 'Notificaciones', icon: Bell, position: 'top' },
-    { id: 'ia-copiloto', label: 'IA Copiloto', icon: Sparkles, position: 'top', superAdminOnly: true },
+    { id: 'ia-copiloto', label: 'Brenda IA', icon: Sparkles, position: 'top', superAdminOnly: true },
     // { id: 'media-library', label: 'Biblioteca Multimedia', icon: Folder, position: 'top' },
     { id: 'projects', label: 'Proyectos', icon: FolderKanban, position: 'top' },
 { id: 'users', label: 'Usuarios', icon: User, position: 'top' },
