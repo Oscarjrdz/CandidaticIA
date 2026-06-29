@@ -1626,11 +1626,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
         }
         if (messages.length > prevMessagesLength.current) {
             if (isAtBottomRef.current || isSendingRef.current) {
-                if (isSendingRef.current) {
-                    animateScrollToBottom(3000);
-                } else {
-                    scrollToBottom('auto');
-                }
+                scrollToBottom('auto');
             } else {
                 // Count only real incoming messages (not our own optimistic ones)
                 const newMsgs = messages.slice(prevMessagesLength.current);
