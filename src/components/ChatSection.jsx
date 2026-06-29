@@ -3886,7 +3886,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
                             const isLast = index === displayMessages.length - 1;
 
                             return (
-                                <div style={isLast ? { paddingBottom: 40 } : undefined}>
+                                <div style={isLast ? { paddingBottom: 80 } : undefined}>
                                 <MessageBubble
                                     msg={msg}
                                     chatWhatsapp={selectedChat?.whatsapp}
