@@ -155,7 +155,7 @@ const MessageBubble = React.memo(function MessageBubble({
 
         let frameOne = 0;
         let frameTwo = 0;
-        const timer = window.setTimeout(() => setAnimatedSpaceHeight(null), spaceOpenDuration + 80);
+        const timer = window.setTimeout(() => setAnimatedSpaceHeight(null), spaceOpenDuration + 400);
         setAnimatedSpaceHeight(0);
         frameOne = window.requestAnimationFrame(() => {
             frameTwo = window.requestAnimationFrame(() => {
