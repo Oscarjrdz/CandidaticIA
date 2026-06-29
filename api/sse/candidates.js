@@ -5,6 +5,7 @@
  */
 
 import { getRedisClient } from '../utils/storage.js';
+import { estimateJsonBytes, recordUsageMetric } from '../utils/usage-metrics.js';
 
 // Node.js runtime for Redis support
 export const config = {
@@ -25,8 +26,11 @@ export default async function handler(req, res) {
     res.setHeader('X-Accel-Buffering', 'no');
 
     const sendEvent = (data) => {
+        sseMetrics.events += 1;
+        sseMetrics.bytes += estimateJsonBytes(data);
         res.write(`data: ${JSON.stringify(data)}\n\n`);
     };
+    const sseMetrics = { events: 0, bytes: 0 };
 
     // Auth: validate token after headers are set (required for Vercel streaming)
     const token = req.query.token?.trim();
@@ -38,9 +42,14 @@ export default async function handler(req, res) {
 
     if (!userId) {
         sendEvent({ type: 'unauthorized' });
+        recordUsageMetric(redis, '/api/sse/candidates', {
+            responseBytes: sseMetrics.bytes
+        }).catch(() => {});
         res.end();
         return;
     }
+
+    recordUsageMetric(redis, '/api/sse/candidates', { redisReads: 1 }).catch(() => {});
 
     sendEvent({ type: 'connected', timestamp: new Date().toISOString() });
 
@@ -118,6 +127,10 @@ export default async function handler(req, res) {
             subscriber.unsubscribe();
             subscriber.quit();
         }
+        recordUsageMetric(redis, '/api/sse/candidates', {
+            responseBytes: sseMetrics.bytes,
+            redisReads: sseMetrics.events
+        }).catch(() => {});
         res.end();
     });
 }

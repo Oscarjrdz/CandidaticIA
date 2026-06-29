@@ -19,26 +19,25 @@ export default async function handler(req, res) {
             const redis = getRedisClient();
             if (!redis) return res.status(500).json({ error: 'Redis unavailable' });
 
+            const now = Date.now();
             const pipeline = redis.pipeline();
-
-            // Get active chat locks (KEYS is fine here — typically < 10 keys)
-            pipeline.keys('chat_lock:*');
+            pipeline.zremrangebyscore('chat_locks:active', '-inf', now - 1);
+            pipeline.zrangebyscore('chat_locks:active', now, '+inf');
             pipeline.scard('candidates:unread');
             
             const results = await pipeline.exec();
             
-            const lockKeys = results[0][1] || [];
-            const unreadCountStr = results[1][1] || '0';
+            const lockIds = results[1][1] || [];
+            const unreadCountStr = results[2][1] || '0';
             const unreadCount = parseInt(unreadCountStr) || 0;
 
             // Resolve locks
             const locks = {};
-            if (lockKeys.length > 0) {
+            if (lockIds.length > 0) {
                 const lockPipeline = redis.pipeline();
-                lockKeys.forEach(k => lockPipeline.get(k));
+                lockIds.forEach(id => lockPipeline.get(`chat_lock:${id}`));
                 const lockResults = await lockPipeline.exec();
-                lockKeys.forEach((k, i) => {
-                    const candidateId = k.replace('chat_lock:', '');
+                lockIds.forEach((candidateId, i) => {
                     const val = lockResults[i][1];
                     if (val) {
                         try {

@@ -4,10 +4,8 @@ import {
     getWaitlist,
     isCandidateLocked,
     unlockCandidate,
-    markMessageAsDone,
-    getCandidateById
+    markMessageAsDone
 } from '../utils/storage.js';
-import { markMessageAsRead } from '../whatsapp/utils.js';
 
 export const maxDuration = 60; // Extend Vercel timeout for LLM bursts
 
@@ -56,12 +54,6 @@ async function drainWaitlist(candidateId, fromPhone) {
                     await new Promise(r => setTimeout(r, 2000));
                 }
                 
-                // 🔹 UI MIMICRY: Mark all drained messages as read (Optional, but makes candidate see bot is reading)
-                if (fromPhone && msgIds.length > 0) {
-                    msgIds.forEach(mId => markMessageAsRead(mId).catch(() => {}));
-                }
-
-
                 await logTelemetry('processing_start', { candidateId, count: pendingMsgs.length, attempt: attempts });
                 await processMessage(candidateId, aggregatedText, msgIds[0] || null);
                 

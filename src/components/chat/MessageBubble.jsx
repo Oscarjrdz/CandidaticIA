@@ -4,6 +4,99 @@ import { safeFormatTime } from './chatUtils';
 import AudioPlayer from './AudioPlayer';
 import MessageStatusTicks from './MessageStatusTicks';
 
+const playedEntryAnimations = new Set();
+const playedEntryAnimationOrder = [];
+const MAX_PLAYED_ENTRY_ANIMATIONS = 800;
+const OUTGOING_SPACE_OPEN_MS = 360;
+const INCOMING_SPACE_OPEN_MS = 420;
+const OUTGOING_STATUS_REVEAL_MS = 800;
+
+const rememberEntryAnimation = (key) => {
+    if (!key || playedEntryAnimations.has(key)) return;
+    playedEntryAnimations.add(key);
+    playedEntryAnimationOrder.push(key);
+    while (playedEntryAnimationOrder.length > MAX_PLAYED_ENTRY_ANIMATIONS) {
+        const oldest = playedEntryAnimationOrder.shift();
+        if (oldest) playedEntryAnimations.delete(oldest);
+    }
+};
+
+const SmoothMediaImage = React.memo(function SmoothMediaImage({ src, previewSrc, alt, className, width, height, loading = 'lazy', fetchPriority = 'auto' }) {
+    const initialSrc = previewSrc || src;
+    const [visibleSrc, setVisibleSrc] = React.useState(initialSrc);
+    const [overlaySrc, setOverlaySrc] = React.useState(null);
+    const [overlayVisible, setOverlayVisible] = React.useState(false);
+    const visibleSrcRef = React.useRef(initialSrc);
+    const transitionTimerRef = React.useRef(null);
+
+    React.useEffect(() => {
+        if (!src || src === visibleSrcRef.current) return undefined;
+
+        let cancelled = false;
+        let settled = false;
+        const finishWithOverlay = () => {
+            if (cancelled || settled) return;
+            settled = true;
+            setOverlaySrc(src);
+            requestAnimationFrame(() => setOverlayVisible(true));
+            if (transitionTimerRef.current) window.clearTimeout(transitionTimerRef.current);
+            transitionTimerRef.current = window.setTimeout(() => {
+                visibleSrcRef.current = src;
+                setVisibleSrc(src);
+                setOverlaySrc(null);
+                setOverlayVisible(false);
+            }, 180);
+        };
+        const nextImage = new Image();
+        nextImage.decoding = 'async';
+        nextImage.onload = finishWithOverlay;
+        nextImage.onerror = () => {
+            if (cancelled) return;
+            visibleSrcRef.current = src;
+            setVisibleSrc(src);
+        };
+        nextImage.src = src;
+
+        if (nextImage.complete && nextImage.naturalWidth > 0) {
+            finishWithOverlay();
+        }
+
+        return () => {
+            cancelled = true;
+            if (transitionTimerRef.current) window.clearTimeout(transitionTimerRef.current);
+        };
+    }, [src]);
+
+    return (
+        <span className="relative block h-full w-full overflow-hidden">
+            <img
+                src={visibleSrc || src}
+                alt={alt}
+                loading={loading}
+                decoding="async"
+                fetchPriority={fetchPriority}
+                width={width}
+                height={height}
+                draggable={false}
+                className={className}
+            />
+            {overlaySrc && (
+                <img
+                    src={overlaySrc}
+                    alt=""
+                    aria-hidden="true"
+                    decoding="async"
+                    fetchPriority={fetchPriority}
+                    width={width}
+                    height={height}
+                    draggable={false}
+                    className={`${className} absolute inset-0 transition-opacity duration-200 ease-out ${overlayVisible ? 'opacity-100' : 'opacity-0'}`}
+                />
+            )}
+        </span>
+    );
+});
+
 const MessageBubble = React.memo(function MessageBubble({
     msg,
     chatWhatsapp,
@@ -17,9 +110,79 @@ const MessageBubble = React.memo(function MessageBubble({
 }) {
     const isMe = msg.from === 'me' || msg.from === 'bot';
     const isFirstInSeries = msg._isFirstInSeries;
+    const entryAnimationKey = String(msg._clientKey || msg.id || msg.ultraMsgId || `${msg.timestamp || msg.fecha || ''}-${msg.content || msg.mediaUrl || ''}`);
+    const entryAnimationDecisionRef = React.useRef({ key: null, value: false });
+    if (entryAnimationDecisionRef.current.key !== entryAnimationKey) {
+        entryAnimationDecisionRef.current = {
+            key: entryAnimationKey,
+            value: Boolean(msg._animateIn && entryAnimationKey && !playedEntryAnimations.has(entryAnimationKey))
+        };
+    }
+    const shouldPlayEntryAnimation = entryAnimationDecisionRef.current.value;
+    const spaceOpenDuration = isMe ? OUTGOING_SPACE_OPEN_MS : INCOMING_SPACE_OPEN_MS;
+    const spaceContentRef = React.useRef(null);
+    const [animatedSpaceHeight, setAnimatedSpaceHeight] = React.useState(() => shouldPlayEntryAnimation ? 0 : null);
+    const [heldStatusAnimationKey, setHeldStatusAnimationKey] = React.useState(() =>
+        isMe && shouldPlayEntryAnimation ? entryAnimationKey : null
+    );
+    const displayStatus = heldStatusAnimationKey === entryAnimationKey ? 'pending' : msg.status;
+    const mediaFrameClass = msg.type === 'image'
+        ? 'w-[260px] max-w-[70vw] aspect-square bg-gray-100 dark:bg-gray-800'
+        : msg.type === 'sticker'
+            ? 'w-[100px] h-[100px]'
+            : '';
+    const entryClass = shouldPlayEntryAnimation
+        ? (isMe ? 'chat-message-enter-outgoing' : 'chat-message-enter-incoming')
+        : '';
+
+    React.useEffect(() => {
+        if (!shouldPlayEntryAnimation) return undefined;
+        rememberEntryAnimation(entryAnimationKey);
+
+        if (!isMe) return undefined;
+        setHeldStatusAnimationKey(entryAnimationKey);
+        const timer = window.setTimeout(() => {
+            setHeldStatusAnimationKey(currentKey => currentKey === entryAnimationKey ? null : currentKey);
+        }, OUTGOING_STATUS_REVEAL_MS);
+        return () => window.clearTimeout(timer);
+    }, [shouldPlayEntryAnimation, entryAnimationKey, isMe]);
+
+    React.useLayoutEffect(() => {
+        if (!shouldPlayEntryAnimation) {
+            setAnimatedSpaceHeight(null);
+            return undefined;
+        }
+
+        let frameOne = 0;
+        let frameTwo = 0;
+        const timer = window.setTimeout(() => setAnimatedSpaceHeight(null), spaceOpenDuration + 80);
+        setAnimatedSpaceHeight(0);
+        frameOne = window.requestAnimationFrame(() => {
+            frameTwo = window.requestAnimationFrame(() => {
+                const measuredHeight = spaceContentRef.current?.scrollHeight || 0;
+                setAnimatedSpaceHeight(measuredHeight > 0 ? measuredHeight : null);
+            });
+        });
+
+        return () => {
+            window.clearTimeout(timer);
+            if (frameOne) window.cancelAnimationFrame(frameOne);
+            if (frameTwo) window.cancelAnimationFrame(frameTwo);
+        };
+    }, [shouldPlayEntryAnimation, entryAnimationKey, spaceOpenDuration]);
+
+    const spaceStyle = shouldPlayEntryAnimation && animatedSpaceHeight !== null
+        ? {
+            height: `${animatedSpaceHeight}px`,
+            overflow: 'hidden',
+            transition: `height ${spaceOpenDuration}ms cubic-bezier(0.2, 0.85, 0.22, 1)`,
+            willChange: 'height'
+        }
+        : undefined;
 
     return (
-        <div className={`px-[5%] flex ${isMe ? 'justify-end' : 'justify-start'} group max-w-full relative ${!isFirstInSeries ? 'mt-0.5' : 'mt-2'} ${(msg.reactions && msg.reactions.length > 0) ? 'pb-5' : ''}`}>
+        <div style={spaceStyle}>
+        <div ref={spaceContentRef} className={`px-[5%] flex ${isMe ? 'justify-end' : 'justify-start'} group max-w-full relative ${!isFirstInSeries ? 'mt-0.5' : 'mt-2'} ${(msg.reactions && msg.reactions.length > 0) ? 'pb-5' : ''} ${entryClass}`}>
             <div className={`
                 max-w-[75%] rounded-[7.5px] px-2 pt-1.5 pb-1 shadow-[0_1px_0.5px_rgba(11,20,26,.13)] relative text-[14.2px] z-10
                 ${isMe
@@ -61,12 +224,12 @@ const MessageBubble = React.memo(function MessageBubble({
                     )}
 
                     {msg.mediaUrl && (
-                        <div className="mb-0.5 rounded overflow-hidden mt-1 cursor-pointer">
+                        <div className={`${mediaFrameClass} mb-0.5 rounded overflow-hidden mt-1 cursor-pointer`}>
                             {msg.type === 'image' && (
-                                <img src={msg.mediaUrl} alt="media" loading="lazy" width="260" height="260" className="max-w-[260px] aspect-square object-cover rounded shadow-sm bg-gray-100 dark:bg-gray-800 animate-pulse" onLoad={(e) => e.target.classList.remove('animate-pulse')} />
+                                <SmoothMediaImage src={msg.mediaUrl} previewSrc={msg._displayMediaUrl || msg._localMediaUrl} alt="media" loading={isMe ? 'eager' : 'lazy'} fetchPriority={isMe ? 'high' : 'auto'} width="260" height="260" className="h-full w-full object-cover rounded shadow-sm bg-gray-100 dark:bg-gray-800" />
                             )}
                             {msg.type === 'sticker' && (
-                                <img src={msg.mediaUrl} alt="sticker" loading="lazy" width="100" height="100" className="max-w-[100px] max-h-[100px] object-contain" onLoad={(e) => e.target.classList.remove('animate-pulse')} />
+                                <SmoothMediaImage src={msg.mediaUrl} previewSrc={msg._displayMediaUrl || msg._localMediaUrl} alt="sticker" loading={isMe ? 'eager' : 'lazy'} fetchPriority={isMe ? 'high' : 'auto'} width="100" height="100" className="h-full w-full object-contain" />
                             )}
                             {msg.type === 'video' && (
                                 <video src={msg.mediaUrl} controls width="260" className="w-[260px] aspect-video rounded shadow-sm bg-black" />
@@ -214,15 +377,15 @@ const MessageBubble = React.memo(function MessageBubble({
                     )}
                 </div>
 
-                <div className={`absolute top-1 ${isMe ? '-left-[72px]' : '-right-[72px]'} opacity-0 group-hover:opacity-100 flex gap-1 z-30 transition-opacity`}>
-                    <button onClick={() => onReaction(msg.id)} title="Reaccionar" className="p-1.5 bg-white dark:bg-[#202c33] hover:bg-gray-50 dark:hover:bg-gray-800 shadow-sm border border-black/5 dark:border-white/5 rounded-[10px]"><Smile className="w-[18px] h-[18px] text-[#54656f] dark:text-[#8696a0]" /></button>
-                    <button onClick={() => onReply(msg)} title="Responder" className="p-1.5 bg-white dark:bg-[#202c33] hover:bg-gray-50 dark:hover:bg-gray-800 shadow-sm border border-black/5 dark:border-white/5 rounded-[10px]"><Reply className="w-[18px] h-[18px] text-[#54656f] dark:text-[#8696a0]" /></button>
+                <div className={`absolute top-1 ${isMe ? '-left-[72px]' : '-right-[72px]'} w-[68px] h-8 opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto flex gap-1 z-30`}>
+                    <button onClick={() => onReaction(msg.id)} title="Reaccionar" className="w-8 h-8 flex items-center justify-center bg-white dark:bg-[#202c33] hover:bg-gray-50 dark:hover:bg-gray-800 shadow-sm border border-black/5 dark:border-white/5 rounded-[10px]"><Smile className="w-[18px] h-[18px] text-[#54656f] dark:text-[#8696a0]" /></button>
+                    <button onClick={() => onReply(msg)} title="Responder" className="w-8 h-8 flex items-center justify-center bg-white dark:bg-[#202c33] hover:bg-gray-50 dark:hover:bg-gray-800 shadow-sm border border-black/5 dark:border-white/5 rounded-[10px]"><Reply className="w-[18px] h-[18px] text-[#54656f] dark:text-[#8696a0]" /></button>
                 </div>
 
                 {reactionPopupId === msg.id && (
                     <div className={`absolute -top-[44px] ${isMe ? 'right-0' : 'left-0'} bg-white dark:bg-[#202c33] shadow-lg rounded-full px-3 py-2 flex items-center gap-3 z-50 border border-gray-200 dark:border-gray-800 slide-in-from-bottom-2`}>
                         {['👍', '❤️', '😂', '😮', '😢', '🙏'].map(emoji => (
-                            <button key={emoji} onClick={() => onSendReaction(msg, emoji)} className="text-xl hover:scale-150 transition-transform origin-bottom">{emoji}</button>
+                            <button key={emoji} onClick={() => onSendReaction(msg, emoji)} className="text-xl leading-none hover:bg-black/5 dark:hover:bg-white/5 rounded-full w-8 h-8 flex items-center justify-center">{emoji}</button>
                         ))}
                         <button onClick={() => onReaction(null)} className="ml-1 p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full"><X className="w-3.5 h-3.5 text-gray-400" /></button>
                     </div>
@@ -234,13 +397,13 @@ const MessageBubble = React.memo(function MessageBubble({
                         <div className={`flex items-center space-x-1 select-none pr-1 ${
                             hasVisibleText
                                 ? 'absolute bottom-[3px] right-2'
-                                : 'justify-end mt-1 pb-0.5'
+                                : 'justify-end mt-1 pb-0.5 min-h-[13px]'
                         }`}>
                             <p className="text-[10px] text-[#667781] dark:text-[#8696a0] font-medium leading-none whitespace-nowrap">
-                                {safeFormatTime(msg.timestamp)}
+                                {safeFormatTime(msg.timestamp || msg.fecha)}
                             </p>
                             {isMe && (
-                                <MessageStatusTicks status={msg.status} />
+                                <MessageStatusTicks status={displayStatus} />
                             )}
                         </div>
                     );
@@ -259,6 +422,7 @@ const MessageBubble = React.memo(function MessageBubble({
                     </div>
                 );
             })()}
+        </div>
         </div>
     );
 }, (prev, next) =>

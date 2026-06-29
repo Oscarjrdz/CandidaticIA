@@ -25,25 +25,15 @@ export default async function handler(req, res) {
     const date = req.query.date || new Date().toISOString().split('T')[0];
 
     try {
-        // Cache recruiter IDs for 60s to avoid 4 full DB scans per page load
+        // Cache recruiter IDs for 60s; recruiter:ids:{date} is maintained by presence/chat writes.
         const cacheKey = `stats:recruiter:ids:${date}`;
         let userIds;
         const cached = await redis.get(cacheKey);
         if (cached) {
             userIds = new Set(JSON.parse(cached));
         } else {
-            const [timeKeys, msgKeys, visitedKeys, respondedKeys] = await Promise.all([
-                redis.keys(`recruiter:time:*:${date}`),
-                redis.keys(`recruiter:msgs:*:${date}`),
-                redis.keys(`recruiter:visited:*:${date}`),
-                redis.keys(`recruiter:chats:*:${date}`),
-            ]);
-            userIds = new Set();
-            const extractId = (key, prefix) => key.slice(prefix.length, key.lastIndexOf(':'));
-            timeKeys.forEach(k => userIds.add(extractId(k, 'recruiter:time:')));
-            msgKeys.forEach(k => userIds.add(extractId(k, 'recruiter:msgs:')));
-            visitedKeys.forEach(k => userIds.add(extractId(k, 'recruiter:visited:')));
-            respondedKeys.forEach(k => userIds.add(extractId(k, 'recruiter:chats:')));
+            const indexedIds = await redis.smembers(`recruiter:ids:${date}`);
+            userIds = new Set(indexedIds || []);
             if (userIds.size > 0) {
                 await redis.set(cacheKey, JSON.stringify([...userIds]), 'EX', 60);
             }

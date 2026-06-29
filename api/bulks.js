@@ -4,6 +4,7 @@ import { sendUltraMsgMessage, getUltraMsgConfig, buildMetaTemplateComponents } f
 import axios from 'axios';
 import { getRedisClient } from './utils/storage.js';
 import { getCachedConfig } from './utils/cache.js';
+import { estimateJsonBytes, recordUsageMetric } from './utils/usage-metrics.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // POLL-DRIVEN BULK ENGINE v2.0
@@ -341,7 +342,12 @@ export default async function handler(req, res) {
         }
 
         await saveState(newState);
-        return res.status(200).json({ success: true, message: 'Bulk started', state: newState });
+        const payload = { success: true, message: 'Bulk started', state: newState };
+        recordUsageMetric(getRedisClient(), '/api/bulks', {
+            candidateReads: candidates.length,
+            responseBytes: estimateJsonBytes(payload)
+        }).catch(() => {});
+        return res.status(200).json(payload);
     }
 
     // ─── ABORT ───────────────────────────────────────────────────────────────
@@ -411,7 +417,11 @@ export default async function handler(req, res) {
             }
         }
 
-        return res.status(200).json({ success: true, state });
+        const payload = { success: true, state };
+        recordUsageMetric(getRedisClient(), '/api/bulks', {
+            responseBytes: estimateJsonBytes(payload)
+        }).catch(() => {});
+        return res.status(200).json(payload);
     }
 
     // ─── SAVE DRAFT ──────────────────────────────────────────────────────────

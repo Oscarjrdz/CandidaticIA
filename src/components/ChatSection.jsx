@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback, useDeferredValue } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback, useDeferredValue } from 'react';
 import ConfirmModal from './ui/ConfirmModal';
 import { MapPin, List as ListIcon, ShoppingBag, UserSquare, MousePointerClick, Search, MessageSquare, Plus, Smile, Paperclip, Mic, ArrowLeft, Send, Tag, Pencil, Check, X, Trash2, Briefcase, Kanban, BookOpen, Keyboard, Loader2, Edit2, Reply, Zap, Pin, MessageCirclePlus, Phone, User, Bell } from 'lucide-react';
 import { getCandidates, getCandidateById, blockCandidate, deleteCandidate } from '../services/candidatesService';
@@ -48,6 +48,208 @@ const scheduleIdleTask = (callback, timeout = 1200) => {
     }
     const timer = window.setTimeout(callback, Math.min(timeout, 500));
     return () => window.clearTimeout(timer);
+};
+
+const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+const ORDERED_MESSAGE_GAP_MS = 450;
+
+const CHAT_LIST_PAGE_SIZE = 10;
+const CHAT_LIST_LOCAL_FILTER_PAGE_SIZE = 500;
+const EMPTY_UNREAD_COUNTS = {
+    tags: {},
+    crmProjects: {},
+    completeTags: {},
+    incompleteTags: {},
+    complete: 0,
+    incomplete: 0,
+    all: 0,
+    unreadIds: new Set()
+};
+
+const readStoredUnreadCounts = () => {
+    try {
+        const saved = sessionStorage.getItem('candidatic_unread_counts');
+        if (!saved) return null;
+        const parsed = JSON.parse(saved);
+        return {
+            ...EMPTY_UNREAD_COUNTS,
+            ...parsed,
+            tags: parsed.tags || {},
+            crmProjects: parsed.crmProjects || {},
+            completeTags: parsed.completeTags || {},
+            incompleteTags: parsed.incompleteTags || {},
+            unreadIds: new Set(),
+        };
+    } catch {
+        return null;
+    }
+};
+
+const normalizeOutgoingContent = (value = '') => String(value || '').replace(/\s+/g, ' ').trim();
+
+const getMessageKind = (message = {}) => message.type || message.tipo || (message.mediaUrl ? 'image' : 'text');
+
+const isOutgoingAuthor = (message = {}) => message.from === 'me' || message.from === 'bot';
+
+const isIncomingAuthor = (message = {}) => !!message && !isOutgoingAuthor(message);
+
+const withMessageEntryAnimation = (message = {}, direction = null) => ({
+    ...message,
+    _animateIn: direction || (isOutgoingAuthor(message) ? 'outgoing' : 'incoming')
+});
+
+const getMessageMediaCandidates = (message = {}) => [
+    message.mediaUrl,
+    message._serverMediaUrl,
+    message._localMediaUrl,
+    message._displayMediaUrl
+].filter(Boolean);
+
+const getMessageTime = (message = {}) => {
+    const value = new Date(message.timestamp || message.fecha || 0).getTime();
+    return Number.isFinite(value) ? value : 0;
+};
+
+const withClientMessageKey = (message = {}, fallback = null) => ({
+    ...message,
+    _clientKey: message._clientKey || fallback || message.id || message.ultraMsgId || `msg-${Date.now()}-${Math.random().toString(36).slice(2)}`
+});
+
+const getMessageOrderKey = (message = {}, fallbackIndex = 0) => {
+    const ts = getMessageTime(message);
+    return ts > 0 ? ts : fallbackIndex;
+};
+
+const sortMessagesChronologically = (list = []) => {
+    return [...(list || [])]
+        .map((message, index) => ({ message, index }))
+        .sort((a, b) => {
+            const timeDiff = getMessageOrderKey(a.message, a.index) - getMessageOrderKey(b.message, b.index);
+            if (timeDiff !== 0) return timeDiff;
+            return a.index - b.index;
+        })
+        .map(item => item.message);
+};
+
+const areSameOutgoingMessage = (a = {}, b = {}) => {
+    if (!isOutgoingAuthor(a) || !isOutgoingAuthor(b)) return false;
+    if (a.id && b.id && String(a.id) === String(b.id)) return true;
+    if (a.ultraMsgId && b.ultraMsgId && String(a.ultraMsgId) === String(b.ultraMsgId)) return true;
+
+    const kindA = getMessageKind(a);
+    const kindB = getMessageKind(b);
+    if (kindA !== kindB) return false;
+
+    const mediaSourcesA = getMessageMediaCandidates(a);
+    const mediaSourcesB = getMessageMediaCandidates(b);
+    if (mediaSourcesA.length || mediaSourcesB.length) {
+        if (!mediaSourcesA.some(src => mediaSourcesB.includes(src))) return false;
+    } else if (normalizeOutgoingContent(a.content) !== normalizeOutgoingContent(b.content)) {
+        return false;
+    }
+
+    const timeA = getMessageTime(a);
+    const timeB = getMessageTime(b);
+    if (timeA > 0 && timeB > 0) {
+        return Math.abs(timeA - timeB) < 30000;
+    }
+    return true;
+};
+
+const areVisuallyDuplicateOutgoingMessages = (a = {}, b = {}) => {
+    if (!areSameOutgoingMessage(a, b)) return false;
+    const aIsTransient = String(a.id || '').startsWith('temp') || ['pending', 'queued'].includes(a.status);
+    const bIsTransient = String(b.id || '').startsWith('temp') || ['pending', 'queued'].includes(b.status);
+    if (!aIsTransient && !bIsTransient) return false;
+    const timeA = getMessageTime(a);
+    const timeB = getMessageTime(b);
+    return !timeA || !timeB || Math.abs(timeA - timeB) < 45000;
+};
+
+const mergeOutgoingPayload = (current = {}, incoming = {}) => {
+    const merged = { ...current, ...incoming };
+    const wasTransient = String(current.id || '').startsWith('temp') || ['pending', 'queued'].includes(current.status);
+    const currentMediaUrl = current.mediaUrl || '';
+    const incomingMediaUrl = incoming.mediaUrl || '';
+
+    if (wasTransient) {
+        if (current.timestamp) merged.timestamp = current.timestamp;
+        if (current.fecha) merged.fecha = current.fecha;
+        if (incoming.timestamp || incoming.fecha) merged._confirmedAt = incoming.timestamp || incoming.fecha;
+    }
+
+    if (currentMediaUrl && incomingMediaUrl && currentMediaUrl !== incomingMediaUrl) {
+        merged._serverMediaUrl = incomingMediaUrl;
+        merged._displayMediaUrl = current._displayMediaUrl || current._localMediaUrl || currentMediaUrl;
+    }
+
+    return merged;
+};
+
+const mergeOutgoingMessage = (messages = [], incoming, replaceId = null) => {
+    if (!incoming) return messages;
+    let inserted = false;
+    const merged = [];
+
+    for (const current of messages || []) {
+        const shouldReplace = replaceId && String(current?.id) === String(replaceId);
+        const isDuplicate = areSameOutgoingMessage(current, incoming);
+
+        if (shouldReplace || isDuplicate) {
+            if (!inserted) {
+                merged.push(withClientMessageKey(mergeOutgoingPayload(current, incoming), current._clientKey || current.id || incoming.id));
+                inserted = true;
+            }
+            continue;
+        }
+
+        merged.push(current);
+    }
+
+    if (!inserted) merged.push(withClientMessageKey(incoming));
+    return sortMessagesChronologically(merged);
+};
+
+const mergeMessageList = (currentMessages = [], freshMessages = []) => {
+    if (!Array.isArray(freshMessages)) return currentMessages || [];
+    const byIdentity = new Map();
+    const merged = [];
+
+    for (const current of currentMessages || []) {
+        if (!current) continue;
+        const keyed = withClientMessageKey(current);
+        merged.push(keyed);
+        if (keyed.id) byIdentity.set(`id:${keyed.id}`, keyed);
+        if (keyed.ultraMsgId) byIdentity.set(`wa:${keyed.ultraMsgId}`, keyed);
+    }
+
+    for (const fresh of freshMessages) {
+        if (!fresh) continue;
+        const match = (fresh.id && byIdentity.get(`id:${fresh.id}`)) ||
+            (fresh.ultraMsgId && byIdentity.get(`wa:${fresh.ultraMsgId}`)) ||
+            (isOutgoingAuthor(fresh) && merged.find(existing => areSameOutgoingMessage(existing, fresh)));
+
+        if (match) {
+            const idx = merged.findIndex(m => m === match || m._clientKey === match._clientKey);
+            if (idx !== -1) {
+                merged[idx] = withClientMessageKey(mergeOutgoingPayload(match, fresh), match._clientKey || match.id || fresh.id);
+            }
+        } else {
+            merged.push(withClientMessageKey(fresh));
+        }
+    }
+
+    return sortMessagesChronologically(merged);
+};
+
+const getStableMessageKey = (msg, index) => {
+    if (!msg) return `empty-${index}`;
+    if (msg._clientKey) return String(msg._clientKey);
+    if (msg.id) return String(msg.id);
+    if (msg.ultraMsgId) return String(msg.ultraMsgId);
+    if (msg.type === 'date-separator') return String(msg.id || `date-${msg.date}`);
+    if (msg.type === 'unread-separator') return String(msg.id || '__unread_sep');
+    return `${msg.timestamp || msg.fecha || 'msg'}-${normalizeOutgoingContent(msg.content).slice(0, 32)}`;
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -335,7 +537,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
     }, [globalStats]);
 
     const [candidates, setCandidates] = useState([]);
-    const [globalUnreadCounts, setGlobalUnreadCounts] = useState(null);
+    const [globalUnreadCounts, setGlobalUnreadCounts] = useState(() => readStoredUnreadCounts());
     const [selectedChat, setSelectedChat] = useState(null);
     const [headerImgError, setHeaderImgError] = useState(false);
     const [showVCardModal, setShowVCardModal] = useState(false);
@@ -414,12 +616,39 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
     const isAtBottomRef = useRef(true);
     const virtuosoScrollerRef = useRef(null);
     const scrollFrameRef = useRef(null);
+    const messagesByChatRef = useRef(new Map());
+    const displayMessageCacheRef = useRef(new Map());
+    const bottomAnchorRef = useRef(false);
 
     const scrollToBottom = (behavior = 'smooth') => {
+        const lastIndex = Math.max(0, (displayMessages.length || 1) - 1);
+        if (virtuosoRef.current && lastIndex >= 0) {
+            virtuosoRef.current.scrollToIndex({
+                index: lastIndex,
+                align: 'end',
+                behavior
+            });
+        }
+        const el = virtuosoScrollerRef.current;
+        if (behavior === 'auto' && el) {
+            el.scrollTop = el.scrollHeight;
+        }
         if (scrollFrameRef.current) cancelAnimationFrame(scrollFrameRef.current);
         scrollFrameRef.current = requestAnimationFrame(() => {
-            const el = virtuosoScrollerRef.current;
-            if (el) el.scrollTo({ top: el.scrollHeight, behavior });
+            const nextEl = virtuosoScrollerRef.current;
+            if (!nextEl) return;
+            if (behavior === 'auto') {
+                if (virtuosoRef.current && lastIndex >= 0) {
+                    virtuosoRef.current.scrollToIndex({
+                        index: lastIndex,
+                        align: 'end',
+                        behavior: 'auto'
+                    });
+                }
+                nextEl.scrollTop = nextEl.scrollHeight;
+                return;
+            }
+            nextEl.scrollTo({ top: nextEl.scrollHeight, behavior });
         });
     };
     const fileInputRef = useRef(null);
@@ -433,6 +662,13 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
     // ✅ META AUDIT: Ghost guard — prevents SSE re-insertion after delete (same pattern as CandidatesSection)
     const recentlyDeletedRef = useRef(new Set());
     const draftsRef = useRef(new Map());
+    const quickReplyApplyRef = useRef({ key: '', time: 0 });
+
+    useEffect(() => {
+        const chatId = selectedChat?.id;
+        if (!chatId || !Array.isArray(messages)) return;
+        messagesByChatRef.current.set(chatId, messages);
+    }, [messages, selectedChat?.id]);
 
     const handleTyping = () => {
         if (!selectedChat) return;
@@ -485,6 +721,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
     const [candidatesTotal, setCandidatesTotal] = useState(0);
     const [hasMore, setHasMore] = useState(false);
     const [loadingMore, setLoadingMore] = useState(false);
+    const [visibleChatLimit, setVisibleChatLimit] = useState(CHAT_LIST_PAGE_SIZE);
     const loadingMoreRef = useRef(false);
     const activeFilterRef = useRef('unread');
     const hasSetInitialFilter = useRef(false);
@@ -693,22 +930,27 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
     }, [reconcileUnreadBadges]);
 
 
+    const markReplyHandledOptimistically = useCallback((candidateId) => {
+        if (!candidateId) return;
+        const now = new Date().toISOString();
+        applyCandidateUnreadPatch(candidateId, {
+            unreadMsgCount: 0,
+            lastBotMessageAt: now,
+            ultimoMensajeBot: now,
+            lastHumanMessageAt: now,
+        });
+    }, [applyCandidateUnreadPatch]);
+
 
     // Optimistic unread clearance
     useEffect(() => {
         const handleReply = (e) => {
             const { candidateId } = e.detail;
-            const now = new Date().toISOString();
-            applyCandidateUnreadPatch(candidateId, {
-                unreadMsgCount: 0,
-                lastBotMessageAt: now,
-                ultimoMensajeBot: now,
-                lastHumanMessageAt: now,
-            });
+            markReplyHandledOptimistically(candidateId);
         };
         window.addEventListener('candidate_replied', handleReply);
         return () => window.removeEventListener('candidate_replied', handleReply);
-    }, [applyCandidateUnreadPatch]);
+    }, [markReplyHandledOptimistically]);
 
     // 🏷️ Ad Label events → actualizar estado de candidatos al instante
     useEffect(() => {
@@ -853,16 +1095,22 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
     };
 
     const handleApplyQuickReply = useCallback(async (qr) => {
+        const now = Date.now();
+        const applyKey = `${selectedChat?.id || 'no-chat'}:${qr.id || qr.name || qr.shortcut || qr.message || qr.type}`;
+        if (quickReplyApplyRef.current.key === applyKey && now - quickReplyApplyRef.current.time < 1200) return;
+        quickReplyApplyRef.current = { key: applyKey, time: now };
+
         // Tipo ubicación: enviar directamente sin pasar por el input de texto
         if (qr.type === 'location' && qr.location?.lat && qr.location?.lng) {
             setShowQuickRepliesPanel(false);
             if (!selectedChat) return;
             autoSilenceBot(selectedChat);
+            markReplyHandledOptimistically(selectedChat.id);
             const optimisticId = 'temp-loc-' + Date.now();
-            setMessages(prev => [...(prev || []), {
+            setMessages(prev => [...(prev || []), withMessageEntryAnimation({
                 id: optimisticId, content: `[Ubicación: ${qr.location.name || 'Mapa'}]`, tipo: 'location',
                 from: 'me', enviado_por_agente: 1, status: 'pending', fecha: new Date().toISOString()
-            }]);
+            }, 'outgoing')]);
             fetch('/api/chat', {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -871,10 +1119,10 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
                     senderId: user?.id || user?.whatsapp, senderName: user?.name || user?.nombre
                 })
             }).then(r => r.json()).then(data => {
-                setMessages(prev => prev.map(m => m.id === optimisticId
-                    ? (data.success && data.message ? data.message : { ...m, status: 'failed', error: data.error })
-                    : m
-                ));
+                setMessages(prev => data.success && data.message
+                    ? mergeOutgoingMessage(prev, data.message, optimisticId)
+                    : prev.map(m => m.id === optimisticId ? { ...m, status: 'failed', error: data.error } : m)
+                );
             }).catch(() => {
                 setMessages(prev => prev.map(m => m.id === optimisticId ? { ...m, status: 'failed' } : m));
             });
@@ -893,7 +1141,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
             messageInputRef.current?.injectText(resolved);
         }
         setShowQuickRepliesPanel(false);
-    }, [selectedChat, candidates, user, showToast]);
+    }, [selectedChat, candidates, user, showToast, markReplyHandledOptimistically]);
 
     useEffect(() => {
         if (showQuickRepliesPanel) loadQuickReplies();
@@ -913,6 +1161,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
         const handler = (e) => {
             // Don't fire when user is typing in an input/textarea
             const tag = document.activeElement?.tagName?.toLowerCase();
+            if (['input', 'textarea', 'select'].includes(tag) || document.activeElement?.isContentEditable) return;
             // Only intercept if Ctrl or Meta is pressed
             if (!e.ctrlKey && !e.metaKey) return;
 
@@ -1017,19 +1266,26 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
             };
             const serverFilter = getServerFilter();
 
-            // Con tag + filtro distinto de "Todos": cargar 500 de golpe
+            const hasLocalFilters =
+                selectedAges.length > 0 ||
+                selectedGenders.length > 0 ||
+                selectedMunicipalities.length > 0 ||
+                !!manualPipelineFilter ||
+                !!manualStepFilter;
+
+            // Si hay filtros que se aplican en cliente, cargamos un universo más amplio
+            // para no perder resultados; la pantalla sigue revelando 10 en 10.
             const isFilteredTagMode = !!tagParam && af !== 'all';
-            const limit = isFilteredTagMode ? 500 : 33;
+            const limit = hasLocalFilters || isFilteredTagMode
+                ? CHAT_LIST_LOCAL_FILTER_PAGE_SIZE
+                : CHAT_LIST_PAGE_SIZE;
 
             let result;
             if (serverFilter) {
-                // Sin tag: el servidor filtra (unread/complete/incomplete) y devuelve todo ordenado por fecha
-                result = await getCandidates(500, 0, searchParam, false, '', false, serverFilter);
+                result = await getCandidates(limit, 0, searchParam, false, '', false, serverFilter);
             } else if (af === 'all') {
-                // "Todos": todos los chats por fecha, sin prioridad a no-leídos, paginado 33 x página
                 result = await getCandidates(limit, 0, searchParam, false, tagParam, false);
             } else {
-                // Tag + filtro activo: cargar 500 con no-leídos primero, cliente filtra
                 result = await getCandidates(limit, 0, searchParam, false, tagParam, true);
             }
 
@@ -1037,8 +1293,8 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
                 const fetchedCandidates = result.candidates || [];
                 setCandidates(fetchedCandidates);
                 setCandidatesTotal(result.total ?? fetchedCandidates.length);
-                // Solo "Todos" tiene paginación infinita (con o sin tag)
-                const isPaginated = !serverFilter && af === 'all';
+                setVisibleChatLimit(CHAT_LIST_PAGE_SIZE);
+                const isPaginated = !hasLocalFilters && !isFilteredTagMode;
                 setHasMore(isPaginated && fetchedCandidates.length === limit);
                 if (fetchedCandidates.length > 0) {
                     setSelectedChat(current => { if (!current) return fetchedCandidates[0]; return current; });
@@ -1055,14 +1311,32 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
         if (loadingMoreRef.current || !hasMore) return;
         const tagParam = selectedTagRef.current || "";
         const searchParam = searchRef.current || "";
+        const af = activeFilterRef.current;
+        const fv = filterValueRef.current;
+        const getServerFilter = () => {
+            if (!tagParam) {
+                if (af === 'unread') return 'unread';
+                if (af === 'profile' && fv === 'complete') return 'complete';
+                if (af === 'profile' && fv === 'incomplete') return 'incomplete';
+            }
+            return null;
+        };
+        const serverFilter = getServerFilter();
         loadingMoreRef.current = true;
         setLoadingMore(true);
         try {
             const nextOffset = candidatesRef.current.length;
-            const result = await getCandidates(33, nextOffset, searchParam, false, tagParam);
+            let result;
+            if (serverFilter) {
+                result = await getCandidates(CHAT_LIST_PAGE_SIZE, nextOffset, searchParam, false, '', false, serverFilter);
+            } else if (af === 'all') {
+                result = await getCandidates(CHAT_LIST_PAGE_SIZE, nextOffset, searchParam, false, tagParam, false);
+            } else {
+                result = await getCandidates(CHAT_LIST_PAGE_SIZE, nextOffset, searchParam, false, tagParam, true);
+            }
             if (result.success) {
                 const newCandidates = result.candidates || [];
-                if (newCandidates.length < 33) setHasMore(false);
+                if (newCandidates.length < CHAT_LIST_PAGE_SIZE) setHasMore(false);
                 if (newCandidates.length > 0) {
                     const existingIds = new Set(candidatesRef.current.map(c => c.id));
                     const unique = newCandidates.filter(c => !existingIds.has(c.id));
@@ -1144,6 +1418,19 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
         pinnedChats,
         selectedAges, selectedGenders, selectedMunicipalities
     ]);
+
+    const visibleCandidates = useMemo(
+        () => filteredCandidates.slice(0, visibleChatLimit),
+        [filteredCandidates, visibleChatLimit]
+    );
+
+    const handleChatListEndReached = useCallback(() => {
+        if (visibleChatLimit < filteredCandidates.length) {
+            setVisibleChatLimit(current => Math.min(current + CHAT_LIST_PAGE_SIZE, filteredCandidates.length));
+            return;
+        }
+        loadMore();
+    }, [filteredCandidates.length, loadMore, visibleChatLimit]);
 
     // ── Badge counts (MEMOIZED — only recalculated when candidates change) ──
     const baseCandidates = useMemo(() => (candidates || []).filter(c => passesChatRBACFilter(c, user)
@@ -1236,7 +1523,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
                 const data = await res.json();
                 if (cancelled || !res.ok || !data.success) return;
                 const counts = data.counts || {};
-                setGlobalUnreadCounts({
+                const nextCounts = {
                     all: Number(data.unreadCount ?? counts.all) || 0,
                     complete: Number(counts.complete) || 0,
                     incomplete: Number(counts.incomplete) || 0,
@@ -1245,7 +1532,12 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
                     incompleteTags: counts.incompleteTags || {},
                     crmProjects: counts.crmProjects || {},
                     unreadIds: new Set(),
-                });
+                };
+                setGlobalUnreadCounts(nextCounts);
+                try {
+                    const { unreadIds, ...serializable } = nextCounts;
+                    sessionStorage.setItem('candidatic_unread_counts', JSON.stringify(serializable));
+                } catch {}
             } catch {}
         }, 150);
 
@@ -1264,13 +1556,19 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
         globalStats?.unread,
     ]);
 
-    const displayUnreadCounts = globalUnreadCounts || unreadCounts;
+    const displayUnreadCounts = globalUnreadCounts || (
+        globalStats?.unread != null
+            ? { ...EMPTY_UNREAD_COUNTS, all: Number(globalStats.unread) || 0 }
+            : unreadCounts
+    );
 
-    // 📡 Reportar conteo RBAC exacto al padre (App.jsx) — fuente única de verdad
+    // Reportar al padre solo el conteo global exacto. El fallback local depende de la
+    // pagina cargada en Chat Web y puede ser parcial (por ejemplo 10 chats visibles).
     useEffect(() => {
         if (loadingChats) return;
-        onUnreadCountChange?.(displayUnreadCounts.all);
-    }, [displayUnreadCounts.all, loadingChats]);
+        if (!globalUnreadCounts) return;
+        onUnreadCountChange?.(globalUnreadCounts.all);
+    }, [globalUnreadCounts?.all, loadingChats, onUnreadCountChange]);
 
     // 🏎️ Online readers por chat — evita recalcular dentro de cada ChatRow
     const EMPTY_READERS = [];
@@ -1295,25 +1593,33 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
     // Scroll to bottom — covers initial load, chat switches, and new messages.
     const prevMessagesLength = useRef(0);
     const prevChatId = useRef(null);
-    useEffect(() => {
+    useLayoutEffect(() => {
         const chatSwitched = selectedChat?.id !== prevChatId.current;
         if (chatSwitched) {
-            // Chat switch: wait for Virtuoso to render then force scroll
             prevChatId.current = selectedChat?.id;
             prevMessagesLength.current = messages.length;
             setUnseenCount(0);
+            bottomAnchorRef.current = true;
             scrollToBottom('auto');
+            requestAnimationFrame(() => scrollToBottom('auto'));
             return;
         }
         if (messages.length > prevMessagesLength.current) {
             if (isAtBottomRef.current || isSendingRef.current) {
-                scrollToBottom('smooth');
+                scrollToBottom('auto');
             } else {
                 // Count only real incoming messages (not our own optimistic ones)
                 const newMsgs = messages.slice(prevMessagesLength.current);
                 const incoming = newMsgs.filter(m => m.from !== 'me' && m.from !== 'bot' && !String(m.id).startsWith('temp'));
                 if (incoming.length > 0) setUnseenCount(prev => prev + incoming.length);
             }
+        }
+        if (bottomAnchorRef.current) {
+            scrollToBottom('auto');
+            requestAnimationFrame(() => {
+                scrollToBottom('auto');
+                bottomAnchorRef.current = false;
+            });
         }
         prevMessagesLength.current = messages.length;
     }, [messages, selectedChat?.id]);
@@ -1352,7 +1658,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
         if (String(sseUpdate.candidateId) === String(currentChat?.id) || (currentChat?.whatsapp && String(sseUpdate.phoneMatch) === String(currentChat.whatsapp))) {
             if (sseUpdate.updates?.markAllSentAsRead) {
                 setMessages(prev => prev.map(m =>
-                    (m.from === 'me' || m.from === 'bot') && (m.status === 'sent' || m.status === 'delivered' || m.status === 'queued' || m.status === 'pending')
+                    (m.from === 'me' || m.from === 'bot') && m.ultraMsgId && (m.status === 'sent' || m.status === 'delivered')
                         ? { ...m, status: 'read' }
                         : m
                 ));
@@ -1384,10 +1690,11 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
                     // Si el candidato mandó este mensaje mientras tenemos su chat abierto → read receipt inmediato
                     const incomingMsg = sseUpdate.updates.messagePayload;
                     if (incomingMsg.from === 'user' && currentChat?.id) {
+                        const incomingMessageId = incomingMsg.id || incomingMsg.ultraMsgId;
                         fetch('/api/chat', {
                             method: 'PUT',
                             headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ action: 'send_read_receipt', candidateId: currentChat.id })
+                            body: JSON.stringify({ action: 'send_read_receipt', candidateId: currentChat.id, messageId: incomingMessageId })
                         }).catch(() => {});
                     }
                     // 🚀 O(1) Instant Message Injection (Meta Standard)
@@ -1400,25 +1707,17 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
                         }
                         // Smart deduplication: swap optimistic temp message
                         if (newMsg.from === 'me') {
-                            const pendingIndex = prev.findIndex(m => 
-                                m.status === 'pending' && 
-                                String(m.id).startsWith('temp') && 
-                                (
-                                    (newMsg.type === 'text' && m.content === newMsg.content) || 
-                                    (newMsg.mediaUrl && m.mediaUrl === newMsg.mediaUrl) ||
-                                    (newMsg.type === 'template' && m.tipo === 'template')
-                                )
-                            );
+                            const pendingIndex = prev.findIndex(m => String(m.id).startsWith('temp') && areSameOutgoingMessage(m, newMsg));
                             if (pendingIndex !== -1) {
-                                const newArr = [...prev];
-                                newArr[pendingIndex] = newMsg;
-                                scrollToBottom();
+                                const newArr = mergeOutgoingMessage(prev, newMsg, prev[pendingIndex].id);
+                                scrollToBottom('auto');
                                 return newArr;
                             }
+                            if (prev.some(m => areSameOutgoingMessage(m, newMsg))) return prev;
                         }
 
-                        scrollToBottom();
-                        return [...prev, newMsg];
+                        scrollToBottom('auto');
+                        return [...prev, withMessageEntryAnimation(newMsg)];
                     });
                 } else {
                     // Fallback: SSE hook didn't send payload — do a surgical merge
@@ -1577,8 +1876,9 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
             if (!targetId) return;
             const target = candidates.find(c => String(c.id) === String(targetId));
             if (target) {
+                bottomAnchorRef.current = true;
                 setSelectedChat(target);
-                setMessages([]);
+                setMessages(messagesByChatRef.current.get(target.id) || []);
             }
         };
         window.addEventListener('navigate_to_recruiter_chat', handleNavigate);
@@ -1720,7 +2020,12 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
             const res = await fetch(`/api/chat?candidateId=${chatId}`, { signal });
             const data = await res.json();
             if (data.success && !isSendingMediaRef.current && selectedChatRef.current?.id === chatId) {
-                setMessages(data.messages || []);
+                bottomAnchorRef.current = true;
+                setMessages(prev => {
+                    const merged = mergeMessageList(prev, data.messages || []);
+                    messagesByChatRef.current.set(chatId, merged);
+                    return merged;
+                });
             }
         } catch (e) {
             if (e.name === 'AbortError') return;
@@ -1877,7 +2182,9 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
                 draftsRef.current.delete(currentId);
             }
         }
+        bottomAnchorRef.current = true;
         setSelectedChat(chat);
+        setMessages(messagesByChatRef.current.get(chat.id) || []);
         setHeaderImgError(false);
         setPendingQrImages([]); // limpiar imágenes pendientes al cambiar de chat
         // Restore draft for the new chat (or clear)
@@ -1891,6 +2198,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
 
         // Auto-silence bot on manual intervention
         autoSilenceBot(selectedChat);
+        markReplyHandledOptimistically(selectedChat.id);
 
         // Reset input immediately so user can select the same file again if needed
         e.target.value = null;
@@ -1915,13 +2223,14 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
             from: 'me',
             content: '',
             mediaUrl: localUrl,
+            _localMediaUrl: localUrl,
             type: msgType,
             status: 'queued',
             timestamp: new Date().toISOString(),
             filename: file.name
         };
         isSendingRef.current = true;
-        setMessages(prev => [...prev, tempMsg]);
+        setMessages(prev => [...prev, withMessageEntryAnimation(tempMsg, 'outgoing')]);
         setSending(true);
         isSendingMediaRef.current = true; // Mute polling during upload
 
@@ -1945,8 +2254,8 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
 
             const mediaUrl = uploadData.url || uploadData.mediaUrl;
 
-            // Update optimistic message with the real Redis URL (so it persists after page reload)
-            setMessages(prev => prev.map(m => m.id === tempId ? { ...m, mediaUrl } : m));
+            // Keep the local preview visible while tracking the final URL for dedupe/send.
+            setMessages(prev => prev.map(m => m.id === tempId ? { ...m, _serverMediaUrl: mediaUrl } : m));
 
             // Send via Chat API (single attempt — pre-upload makes retries unnecessary)
             console.log(`📤 [FileUpload] Step 3: Sending via /api/chat with type=${msgType}, mediaUrl=${mediaUrl}`);
@@ -1968,10 +2277,10 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
             if (!res.ok) throw new Error(chatData?.error || 'Error al enviar media');
 
             // Update optimistic message in-place (no flicker from loadMessages)
-            setMessages(prev => prev.map(m => m.id === tempId 
-                ? { ...m, id: chatData.message?.id || tempId, status: 'sent', ultraMsgId: chatData.message?.ultraMsgId }
-                : m
-            ));
+            setMessages(prev => chatData.message
+                ? mergeOutgoingMessage(prev, { ...chatData.message, status: 'sent' }, tempId)
+                : prev.map(m => m.id === tempId ? { ...m, status: 'sent' } : m)
+            );
             window.dispatchEvent(new CustomEvent('candidate_replied', { detail: { candidateId: selectedChat.id } }));
 
         } catch (err) {
@@ -1982,7 +2291,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
         } finally {
             setSending(false);
             isSendingMediaRef.current = false;
-            URL.revokeObjectURL(localUrl);
+            setTimeout(() => URL.revokeObjectURL(localUrl), 60000);
         }
     };
 
@@ -2035,10 +2344,11 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
     const handleSendVCard = (name, phone, company, title, email, url) => {
         if (!name || !phone || !selectedChat) return;
         autoSilenceBot(selectedChat);
+        markReplyHandledOptimistically(selectedChat.id);
         
         const optimisticId = 'temp-' + Date.now();
         isSendingRef.current = true;
-        setMessages(prev => [...(prev || []), {
+        setMessages(prev => [...(prev || []), withMessageEntryAnimation({
             id: optimisticId,
             content: `[Tarjeta de Contacto: ${name}]`,
             tipo: 'contacts',
@@ -2046,7 +2356,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
             enviado_por_agente: 1,
             status: 'pending',
             fecha: new Date().toISOString()
-        }]);
+        }, 'outgoing')]);
 
         fetch('/api/chat', {
             method: 'POST',
@@ -2061,7 +2371,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
             })
         }).then(res => res.json()).then(data => {
             if (data.success && data.message) {
-                setMessages(prev => prev.map(m => m.id === optimisticId ? data.message : m));
+                setMessages(prev => mergeOutgoingMessage(prev, data.message, optimisticId));
                 window.dispatchEvent(new CustomEvent('candidate_replied', { detail: { candidateId: selectedChat.id } }));
             } else {
                 setMessages(prev => prev.map(m => m.id === optimisticId ? { ...m, status: 'failed', error: data.error } : m));
@@ -2074,17 +2384,18 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
     const handleSendLocation = (name, address, lat, lng) => {
         if (!lat || !lng || !selectedChat) return;
         autoSilenceBot(selectedChat);
+        markReplyHandledOptimistically(selectedChat.id);
         const optimisticId = 'temp-' + Date.now();
         isSendingRef.current = true;
-        setMessages(prev => [...(prev || []), {
+        setMessages(prev => [...(prev || []), withMessageEntryAnimation({
             id: optimisticId, content: `[Ubicación: ${name || 'Mapa'}]`, tipo: 'location', from: 'me', enviado_por_agente: 1, status: 'pending', fecha: new Date().toISOString()
-        }]);
+        }, 'outgoing')]);
         fetch('/api/chat', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ candidateId: selectedChat.id, message: '', type: 'location', extraParams: { name, address, lat, lng }, senderId: user?.id || user?.whatsapp, senderName: user?.name || user?.nombre })
         }).then(res => res.json()).then(data => {
             if (data.success && data.message) {
-                setMessages(prev => prev.map(m => m.id === optimisticId ? data.message : m));
+                setMessages(prev => mergeOutgoingMessage(prev, data.message, optimisticId));
                 window.dispatchEvent(new CustomEvent('candidate_replied', { detail: { candidateId: selectedChat.id } }));
             } else setMessages(prev => prev.map(m => m.id === optimisticId ? { ...m, status: 'failed', error: data.error } : m));
         });
@@ -2093,17 +2404,18 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
     const handleSendList = (bodyTxt, btnText, section, items) => {
         if (!bodyTxt || items.length === 0 || !selectedChat) return;
         autoSilenceBot(selectedChat);
+        markReplyHandledOptimistically(selectedChat.id);
         const optimisticId = 'temp-' + Date.now();
         isSendingRef.current = true;
-        setMessages(prev => [...(prev || []), {
+        setMessages(prev => [...(prev || []), withMessageEntryAnimation({
             id: optimisticId, content: `${bodyTxt}\n\n[Lista: ${items.map(i=>i.title).join(', ')}]`, tipo: 'interactive', from: 'me', enviado_por_agente: 1, status: 'pending', fecha: new Date().toISOString()
-        }]);
+        }, 'outgoing')]);
         fetch('/api/chat', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ candidateId: selectedChat.id, message: bodyTxt, type: 'interactive', extraParams: { interactiveType: 'list', listButtonText: btnText, listSectionTitle: section, listItems: items }, senderId: user?.id || user?.whatsapp, senderName: user?.name || user?.nombre })
         }).then(res => res.json()).then(data => {
             if (data.success && data.message) {
-                setMessages(prev => prev.map(m => m.id === optimisticId ? data.message : m));
+                setMessages(prev => mergeOutgoingMessage(prev, data.message, optimisticId));
                 window.dispatchEvent(new CustomEvent('candidate_replied', { detail: { candidateId: selectedChat.id } }));
             } else setMessages(prev => prev.map(m => m.id === optimisticId ? { ...m, status: 'failed', error: data.error } : m));
         });
@@ -2112,17 +2424,18 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
     const handleSendProduct = (bodyTxt, catalogId, productSku) => {
         if (!catalogId || !productSku || !selectedChat) return;
         autoSilenceBot(selectedChat);
+        markReplyHandledOptimistically(selectedChat.id);
         const optimisticId = 'temp-' + Date.now();
         isSendingRef.current = true;
-        setMessages(prev => [...(prev || []), {
+        setMessages(prev => [...(prev || []), withMessageEntryAnimation({
             id: optimisticId, content: `[Producto del Catálogo: ${productSku}]`, tipo: 'interactive', from: 'me', enviado_por_agente: 1, status: 'pending', fecha: new Date().toISOString()
-        }]);
+        }, 'outgoing')]);
         fetch('/api/chat', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ candidateId: selectedChat.id, message: bodyTxt, type: 'interactive', extraParams: { interactiveType: 'product', catalogId, productSku }, senderId: user?.id || user?.whatsapp, senderName: user?.name || user?.nombre })
         }).then(res => res.json()).then(data => {
             if (data.success && data.message) {
-                setMessages(prev => prev.map(m => m.id === optimisticId ? data.message : m));
+                setMessages(prev => mergeOutgoingMessage(prev, data.message, optimisticId));
                 window.dispatchEvent(new CustomEvent('candidate_replied', { detail: { candidateId: selectedChat.id } }));
             } else setMessages(prev => prev.map(m => m.id === optimisticId ? { ...m, status: 'failed', error: data.error } : m));
         });
@@ -2131,10 +2444,11 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
     const handleSendInteractive = (bodyTxt, buttons) => {
         if (!bodyTxt || buttons.length === 0 || !selectedChat) return;
         autoSilenceBot(selectedChat);
+        markReplyHandledOptimistically(selectedChat.id);
         
         const optimisticId = 'temp-' + Date.now();
         isSendingRef.current = true;
-        setMessages(prev => [...(prev || []), {
+        setMessages(prev => [...(prev || []), withMessageEntryAnimation({
             id: optimisticId,
             content: `${bodyTxt}\n\n[Botones: ${buttons.join(' | ')}]`,
             tipo: 'interactive',
@@ -2142,7 +2456,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
             enviado_por_agente: 1,
             status: 'pending',
             fecha: new Date().toISOString()
-        }]);
+        }, 'outgoing')]);
 
         fetch('/api/chat', {
             method: 'POST',
@@ -2157,7 +2471,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
             })
         }).then(res => res.json()).then(data => {
             if (data.success && data.message) {
-                setMessages(prev => prev.map(m => m.id === optimisticId ? data.message : m));
+                setMessages(prev => mergeOutgoingMessage(prev, data.message, optimisticId));
                 window.dispatchEvent(new CustomEvent('candidate_replied', { detail: { candidateId: selectedChat.id } }));
             } else {
                 setMessages(prev => prev.map(m => m.id === optimisticId ? { ...m, status: 'failed', error: data.error } : m));
@@ -2170,45 +2484,31 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
         });
     };
 
-    const handleSend = (msg) => {
-        if ((!msg && !pendingQrImages.length) || !selectedChat) return;
+    const handleSend = async (msg) => {
+        const textMessage = (msg || '').trim();
+        const queuedImages = [...pendingQrImages];
+        if ((!textMessage && !queuedImages.length) || !selectedChat) return;
         // Prevent double-send within 1 second
         const now = Date.now();
         if (now - lastSendTimeRef.current < 1000) return;
         lastSendTimeRef.current = now;
 
-        // Auto-silence bot on manual intervention
-        autoSilenceBot(selectedChat);
+        const currentChat = selectedChat;
+        const currentCandidateId = currentChat.id;
+        const senderId = user?.id || user?.whatsapp;
+        const senderName = user?.name || user?.nombre;
 
-        // Enviar imágenes pendientes de QR (fire-and-forget optimista)
-        if (pendingQrImages.length) {
-            const imgs = [...pendingQrImages];
-            setPendingQrImages([]);
-            imgs.forEach((imgUrl, idx) => {
-                const tempImgId = `temp_img_${Date.now()}_${idx}`;
-                setMessages(prev => [...prev, { id: tempImgId, from: 'me', content: '', mediaUrl: imgUrl, type: 'image', status: 'queued', timestamp: new Date().toISOString() }]);
-                fetch('/api/chat', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ candidateId: selectedChat.id, message: '', type: 'image', mediaUrl: imgUrl, senderId: user?.id || user?.whatsapp, senderName: user?.name || user?.nombre })
-                }).then(r => r.json()).then(d => {
-                    setMessages(prev => prev.map(m => m.id === tempImgId
-                        ? { ...m, id: d.message?.id || tempImgId, status: d.success ? 'sent' : 'failed', ultraMsgId: d.message?.ultraMsgId }
-                        : m
-                    ));
-                }).catch(() => {
-                    setMessages(prev => prev.map(m => m.id === tempImgId ? { ...m, status: 'failed' } : m));
-                });
-            });
-        }
+        // Auto-silence bot on manual intervention
+        autoSilenceBot(currentChat);
+        markReplyHandledOptimistically(currentCandidateId);
 
         // Optimistic clear + focus so the user can immediately type again
+        setPendingQrImages([]);
         messageInputRef.current?.clearText();
+        messageInputRef.current?.setSendingState?.(true);
+        setSending(true);
+        if (queuedImages.length) isSendingMediaRef.current = true;
 
-        // Si solo había imagen (sin texto), no hay mensaje de texto que enviar
-        if (!msg) return;
-
-        const currentCandidateId = selectedChat.id;
         const replyId = replyingToMsg ? (replyingToMsg.ultraMsgId || replyingToMsg.id) : null;
 
         // Optimistic contextualization
@@ -2216,72 +2516,142 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
             contextInfo: {
                 quotedMessage: {
                     stanzaId: replyId,
-                    participant: (replyingToMsg.from !== 'me' && replyingToMsg.from !== 'bot') ? selectedChat.whatsapp : '',
+                    participant: (replyingToMsg.from !== 'me' && replyingToMsg.from !== 'bot') ? currentChat.whatsapp : '',
                     text: replyingToMsg.content || 'Mensaje multimedia'
                 }
             }
         } : {};
 
         setReplyingToMsg(null);
-        
-        const optimisticId = 'temp-' + Date.now();
+
         isSendingRef.current = true;
-        setMessages(prev => [...(prev || []), {
-            id: optimisticId,
-            content: msg,
-            tipo: 'text',
-            from: 'me',
-            enviado_por_agente: 1, // Visual indicator for sent by us
-            status: 'pending',
-            fecha: new Date().toISOString(),
-            ...contextInfoParams
-        }]);
 
-        // Fire and forget (No blocking 'await')
-        fetch('/api/chat', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ candidateId: currentCandidateId, message: msg, type: 'text', replyToId: replyId, senderId: user?.id || user?.whatsapp, senderName: user?.name || user?.nombre })
-        }).then(res => res.json()).then(data => {
-            if (data.success && data.message) {
-                // Instantly swap the temp pending message for the real failed/sent one
-                setMessages(prev => prev.map(m => m.id === optimisticId ? data.message : m));
+        const markFailed = (tempId, error = 'Error al enviar') => {
+            setMessages(prev => prev.map(m => m.id === tempId ? { ...m, status: 'failed', error } : m));
+        };
 
-                // If it came back failed explicitly from Meta API (e.g., 24h rule)
-                if (data.message.status === 'failed') {
-                    const fallbackErrorStr = String(data.message.error || '').toLowerCase();
-                    const is24h = data.message.metaCode === 131047 || String(data.message.metaCode) === '131047'
-                        || fallbackErrorStr.includes('131047') || fallbackErrorStr.includes('24 hour') || fallbackErrorStr.includes('re-engagement');
-                    if (is24h) {
-                        showToast('⛔ Ventana de 24 hrs cerrada. Toca el Rayito Verde ⚡ abajo para mandar una plantilla oficial.', 'error', 8000);
-                    } else {
-                        showToast(`⚠️ Meta: ${data.message.error || 'Error desconocido'}`, 'error');
+        const showMetaError = (messageData, fallback = 'Error desconocido') => {
+            const fallbackErrorStr = String(messageData?.error || fallback || '').toLowerCase();
+            const is24h = messageData?.metaCode === 131047 || String(messageData?.metaCode) === '131047'
+                || fallbackErrorStr.includes('131047') || fallbackErrorStr.includes('24 hour') || fallbackErrorStr.includes('re-engagement');
+            if (is24h) {
+                showToast('⛔ Ventana de 24 hrs cerrada. Toca el Rayito Verde ⚡ abajo para mandar una plantilla oficial.', 'error', 8000);
+            } else {
+                showToast(`⚠️ Meta: ${messageData?.error || fallback}`, 'error');
+            }
+        };
+
+        const sendOrderedStep = async ({ tempId, optimisticMessage, payload, normalizeResponse = (messageData) => messageData }) => {
+            setMessages(prev => [...(prev || []), withMessageEntryAnimation(optimisticMessage, 'outgoing')]);
+            try {
+                const res = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) throw new Error(data.error || data.details || 'Error al enviar');
+
+                if (data.success && data.message) {
+                    const messageData = normalizeResponse(data.message);
+                    setMessages(prev => mergeOutgoingMessage(prev, messageData, tempId));
+                    window.dispatchEvent(new CustomEvent('candidate_replied', { detail: { candidateId: currentCandidateId } }));
+
+                    if (messageData.status === 'failed') {
+                        showMetaError(messageData);
+                        return { ok: false, status: 'failed', data: messageData };
                     }
+                    return { ok: true, data: messageData };
                 }
 
-                // 🚀 POLLING REMOVED: Trust the SSE `messagePayload` and optimistic UI for injection.
-                window.dispatchEvent(new CustomEvent('candidate_replied', { detail: { candidateId: currentCandidateId } }));
-            } else {
-                setMessages(prev => prev.map(m => m.id === optimisticId ? { ...m, status: 'failed', error: data.error || 'API Error' } : m));
-                showToast && showToast(`Error al enviar mensaje: ${data.error || 'Desconocido'}`, 'error');
+                const error = data.error || 'API Error';
+                markFailed(tempId, error);
+                showToast && showToast(`Error al enviar mensaje: ${error}`, 'error');
+                return { ok: false, status: 'failed', error };
+            } catch (error) {
+                markFailed(tempId, error.message || 'Red desconectada');
+                console.error(error);
+                showToast && showToast('Error de red al enviar', 'error');
+                return { ok: false, status: 'failed', error: error.message };
             }
-        }).catch(error => {
-            setMessages(prev => prev.map(m => m.id === optimisticId ? { ...m, status: 'failed', error: 'Red desconectada' } : m));
-            isSendingRef.current = false;
-            console.error(error);
-            showToast && showToast('Error de red al enviar', 'error');
-        });
+        };
 
-        // Backup focus
-        setTimeout(() => {
-            const input = document.getElementById('chat-msg-input');
-            if (input) input.focus();
-        }, 50);
+        try {
+            let textResult = { ok: true };
+            if (textMessage) {
+                const optimisticId = `temp-${Date.now()}`;
+                textResult = await sendOrderedStep({
+                    tempId: optimisticId,
+                    optimisticMessage: {
+                        id: optimisticId,
+                        content: textMessage,
+                        tipo: 'text',
+                        from: 'me',
+                        enviado_por_agente: 1,
+                        status: 'pending',
+                        fecha: new Date().toISOString(),
+                        ...contextInfoParams
+                    },
+                    payload: {
+                        candidateId: currentCandidateId,
+                        message: textMessage,
+                        type: 'text',
+                        replyToId: replyId,
+                        senderId,
+                        senderName
+                    }
+                });
+            }
+
+            if (!textResult.ok && queuedImages.length) {
+                showToast && showToast('No envié las imágenes porque falló el texto inicial.', 'error');
+                return;
+            }
+
+            for (let idx = 0; idx < queuedImages.length; idx++) {
+                if (textMessage || idx > 0) await wait(ORDERED_MESSAGE_GAP_MS);
+                const imgUrl = queuedImages[idx];
+                const tempImgId = `temp_img_${Date.now()}_${idx}`;
+                await sendOrderedStep({
+                    tempId: tempImgId,
+                    optimisticMessage: {
+                        id: tempImgId,
+                        from: 'me',
+                        content: '',
+                        mediaUrl: imgUrl,
+                        _serverMediaUrl: imgUrl,
+                        type: 'image',
+                        status: 'queued',
+                        timestamp: new Date().toISOString(),
+                        _sequenceIndex: textMessage ? idx + 1 : idx
+                    },
+                    payload: {
+                        candidateId: currentCandidateId,
+                        message: '',
+                        type: 'image',
+                        mediaUrl: imgUrl,
+                        senderId,
+                        senderName
+                    },
+                    normalizeResponse: (messageData) => ({ ...messageData, status: messageData.status || 'sent' })
+                });
+            }
+        } finally {
+            setSending(false);
+            isSendingRef.current = false;
+            isSendingMediaRef.current = false;
+            messageInputRef.current?.setSendingState?.(false);
+            setTimeout(() => {
+                const input = document.getElementById('chat-msg-input');
+                if (input) input.focus();
+            }, 50);
+        }
     };
 
     const handleSendTemplate = (templateObj) => {
         if (!selectedChat) return;
         autoSilenceBot(selectedChat);
+        markReplyHandledOptimistically(selectedChat.id);
 
         const currentCandidateId = selectedChat.id;
         const optimisticId = 'temp-' + Date.now();
@@ -2295,7 +2665,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
         const _optimisticContent = `⚡ Plantilla oficial: *${_displayName}*\n\n${_bodyText}`.trim();
 
         isSendingRef.current = true;
-        setMessages(prev => [...(prev || []), {
+        setMessages(prev => [...(prev || []), withMessageEntryAnimation({
             id: optimisticId,
             content: _optimisticContent,
             tipo: 'template',
@@ -2303,7 +2673,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
             enviado_por_agente: 1,
             status: 'pending',
             fecha: new Date().toISOString()
-        }]);
+        }, 'outgoing')]);
 
         fetch('/api/chat', {
             method: 'POST',
@@ -2317,7 +2687,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
             })
         }).then(res => res.json()).then(data => {
             if (data.success && data.message) {
-                setMessages(prev => prev.map(m => m.id === optimisticId ? data.message : m));
+                setMessages(prev => mergeOutgoingMessage(prev, data.message, optimisticId));
 
                 if (data.message.status === 'failed') {
                     showToast(`Error de Meta al mandar plantilla: ${data.message.error || 'Desconocido'}`, 'error');
@@ -2342,17 +2712,45 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
     const displayMessages = useMemo(() => {
         if (!Array.isArray(messages)) return [];
         const result = [];
+        const seenOutgoing = [];
         let lastDateKey = null;
-        const unreadCount = selectedChat?.unreadMsgCount || 0;
-        const unreadSepIdx = unreadCount > 0 ? Math.max(0, messages.length - unreadCount) : -1;
+        const orderedMessages = sortMessagesChronologically(messages);
+        const rawUnreadCount = Number(selectedChat?.unreadMsgCount || 0);
+        const incomingCount = orderedMessages.filter(isIncomingAuthor).length;
+        const unreadCount = Math.min(rawUnreadCount, incomingCount);
+        let unreadSepIdx = -1;
+
+        if (unreadCount > 0) {
+            let remainingIncoming = unreadCount;
+            for (let i = orderedMessages.length - 1; i >= 0; i--) {
+                if (!isIncomingAuthor(orderedMessages[i])) continue;
+                remainingIncoming -= 1;
+                if (remainingIncoming === 0) {
+                    unreadSepIdx = i;
+                    break;
+                }
+            }
+        }
+
         let msgIdx = 0;
 
-        for (const msg of messages) {
+        for (const msg of orderedMessages) {
             if (!msg) { msgIdx++; continue; }
             let content = typeof msg.content === 'string' ? msg.content : '';
             if (content.includes('[REACCI')) {
                 content = content.replace(/\[REACCI[OÓ]N:\s*.*?\]/gi, '').trim();
                 if (!content && !msg.mediaUrl) { msgIdx++; continue; }
+            }
+
+            const normalizedMsg = { ...msg, content };
+            if (isOutgoingAuthor(normalizedMsg)) {
+                const duplicate = seenOutgoing.find(previous => areVisuallyDuplicateOutgoingMessages(previous, normalizedMsg));
+                if (duplicate) {
+                    msgIdx++;
+                    continue;
+                }
+                seenOutgoing.push(normalizedMsg);
+                if (seenOutgoing.length > 30) seenOutgoing.shift();
             }
 
             // Separador de no leídos
@@ -2368,7 +2766,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
                     const key = d.toDateString();
                     if (key !== lastDateKey) {
                         lastDateKey = key;
-                        result.push({ id: `date-sep-${key}-${msgIdx}`, type: 'date-separator', date: ts });
+                        result.push({ id: `date-sep-${key}`, _clientKey: `date-sep-${key}`, type: 'date-separator', date: ts });
                     }
                 }
             }
@@ -2377,6 +2775,8 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
                 const parts = content.split('[MSG_SPLIT]').filter(p => p.trim());
                 parts.forEach((part, index) => result.push({
                     ...msg,
+                    id: `${msg.id || msg._clientKey || msgIdx}-split-${index}`,
+                    _clientKey: `${msg._clientKey || msg.id || msgIdx}-split-${index}`,
                     content: part.trim(),
                     mediaUrl: index === 0 ? msg.mediaUrl : null,
                     isSplit: true,
@@ -2410,12 +2810,30 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
             if (!isMe) continue;
             if (item.status === 'seen' || item.status === 'read') {
                 highestStatus = item.status;
-            } else if (highestStatus && item.status !== 'seen' && item.status !== 'read') {
+            } else if (highestStatus && item.ultraMsgId && (item.status === 'sent' || item.status === 'delivered')) {
                 item.status = highestStatus;
             }
         }
 
-        return result;
+        const cache = displayMessageCacheRef.current;
+        return result.map((item, index) => {
+            if (!item || item.type === 'date-separator' || item.type === 'unread-separator') return item;
+            const key = getStableMessageKey(item, index);
+            const signature = [
+                item.content,
+                item.mediaUrl || '',
+                item._displayMediaUrl || '',
+                item.status || '',
+                item.timestamp || item.fecha || '',
+                item._isFirstInSeries ? '1' : '0',
+                item.reactions ? JSON.stringify(item.reactions) : '',
+                item.contextInfo ? JSON.stringify(item.contextInfo) : ''
+            ].join('|');
+            const cached = cache.get(key);
+            if (cached?.signature === signature) return cached.value;
+            cache.set(key, { signature, value: item });
+            return item;
+        });
     }, [messages, selectedChat?.unreadMsgCount]);
 
     return (
@@ -2963,10 +3381,10 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
                 {/* Lista de Contactos — VIRTUALIZADA */}
                 <div className="flex-1 overflow-hidden bg-white dark:bg-[#111b21]">
                         <Virtuoso
-                            data={filteredCandidates}
+                            data={visibleCandidates}
                             overscan={10}
                             computeItemKey={(index, chat) => chat.id}
-                            endReached={loadMore}
+                            endReached={handleChatListEndReached}
                             components={{ Footer: () => loadingMore ? <div className="py-4 text-center text-xs text-gray-400 dark:text-gray-600">Cargando más...</div> : null }}
                             itemContent={(index, chat) => (
                                 <ChatRow
@@ -3426,20 +3844,24 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
                     {/* Mensajes — Virtualized (react-virtuoso: solo renderiza items visibles) */}
                     <div className="flex-1 overflow-hidden z-10 min-h-0" onClick={() => setShowDropdown(null)}>
                         <Virtuoso
-                            key={selectedChat?.id || 'none'}
                             ref={virtuosoRef}
                             scrollerRef={(el) => { virtuosoScrollerRef.current = el; }}
                             style={{ height: '100%' }}
                             data={displayMessages}
                             initialTopMostItemIndex={displayMessages.length > 0 ? displayMessages.length - 1 : 0}
                             followOutput={(isAtBottom) => {
-                                if (isSendingRef.current) return 'smooth';
-                                return isAtBottom ? 'smooth' : false;
+                                if (isSendingRef.current) return 'auto';
+                                return isAtBottom ? 'auto' : false;
                             }}
-                            computeItemKey={(index, msg) => String(msg.id) + '-' + index}
+                            computeItemKey={(index, msg) => getStableMessageKey(msg, index)}
                             overscan={400}
                             atBottomThreshold={150}
                             components={{ Header: MessagesEncryptionHeader }}
+                            totalListHeightChanged={() => {
+                                if (bottomAnchorRef.current || isAtBottomRef.current || isSendingRef.current) {
+                                    scrollToBottom('auto');
+                                }
+                            }}
                             atBottomStateChange={(isAtBottom) => {
                                 setShowScrollBtn(!isAtBottom);
                                 isAtBottomRef.current = isAtBottom;
@@ -3536,7 +3958,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
                                 </div>
                             ))}
                             <span className="text-[11px] text-[#667781] dark:text-[#8696a0]">
-                                {pendingQrImages.length === 1 ? 'Imagen adjunta' : `${pendingQrImages.length} imágenes adjuntas`} · se enviarán con el mensaje
+                                {pendingQrImages.length === 1 ? 'Imagen adjunta' : `${pendingQrImages.length} imágenes adjuntas`} · se enviarán en orden
                             </span>
                         </div>
                     )}

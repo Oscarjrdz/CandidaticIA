@@ -178,34 +178,29 @@ export default async function handler(req, res) {
                 // 'sent' — skip (frontend ya lo maneja con UI optimista).
                 if (statusStr === 'sent') continue;
 
-                // 'delivered' — persiste en Redis (por ultraMsgId) + SSE específico.
-                // 'read' — SSE global: marca todos los enviados como leídos (más robusto
-                //          que buscar por ultraMsgId que puede no estar en Redis).
+                // 'delivered'/'read' — prefer exact message id so pending/queued media
+                // never jumps straight to blue ticks during ordered sends.
                 if ((statusStr === 'delivered' || statusStr === 'read') && recipientPhone.length >= 10) {
-                    (async () => {
-                        try {
-                            const candidateId = await getCandidateIdByPhoneFast(recipientPhone);
-                            if (!candidateId) return;
-                            const { notifyCandidateUpdate } = await import('../utils/sse-notify.js');
-                            if (statusStr === 'delivered') {
-                                const found = await updateMessageStatus(candidateId, msgId, 'delivered');
-                                if (!found) {
-                                    await notifyCandidateUpdate(candidateId, {
-                                        messageStatusUpdate: { id: msgId, status: 'delivered' }
-                                    });
-                                }
-                            } else {
-                                // 'read': persiste timestamp + SSE global
-                                const redis = getRedisClient();
-                                if (redis) {
-                                    await redis.set(`candidate:lastRead:${candidateId}`, Date.now(), 'EX', 86400 * 30);
-                                }
+                    try {
+                        const candidateId = await getCandidateIdByPhoneFast(recipientPhone);
+                        if (!candidateId) continue;
+                        const { notifyCandidateUpdate } = await import('../utils/sse-notify.js');
+                        if (statusStr === 'delivered') {
+                            const found = await updateMessageStatus(candidateId, msgId, 'delivered');
+                            if (!found) {
                                 await notifyCandidateUpdate(candidateId, {
-                                    markAllSentAsRead: true
+                                    messageStatusUpdate: { id: msgId, status: 'delivered' }
                                 });
                             }
-                        } catch (e) { /* silent */ }
-                    })();
+                        } else {
+                            const found = await updateMessageStatus(candidateId, msgId, 'read');
+                            if (!found) {
+                                await notifyCandidateUpdate(candidateId, {
+                                    messageStatusUpdate: { id: msgId, status: 'read' }
+                                });
+                            }
+                        }
+                    } catch (e) { /* silent */ }
                     continue;
                 }
 
@@ -553,10 +548,14 @@ export default async function handler(req, res) {
             await markMessageAsDone(msgId);
             if (redis) await redis.del('stats:bot:last_calc');
 
-            // Marcar mensaje como leído inmediatamente (candidato ve palomitas azules)
-            // El bot también lo hace en process-message.js, pero cuando el bot está
-            // inactivo (modo manual recruiter) nadie lo llamaba → candidato sin azules
-            markMessageAsRead(msgId, metadata?.phone_number_id).catch(() => {});
+            const globalBotSetting = redis ? await redis.get('bot_ia_active').catch(() => null) : null;
+            const isBotGloballyActive = globalBotSetting !== 'false';
+            const shouldAutoReadIncoming = freshCandidate?.blocked !== true && isBotGloballyActive;
+            if (shouldAutoReadIncoming) {
+                // Bot activo: el candidato ve azul inmediato porque la IA sí está atendiendo.
+                // Esto no toca el contador interno de no leídos; sólo manda el read receipt a Meta.
+                await markMessageAsRead(msgId, metadata?.phone_number_id).catch(() => {});
+            }
 
             await logTelemetry('ingress_captured', {
                 msgId, from: phone, type: messageType, isNew: isNewCandidate,
@@ -915,8 +914,7 @@ export default async function handler(req, res) {
                 const agentInput = body;
                 const aiPromise = (async () => {
                     try {
-                        const redis = getRedisClient();
-                        let isBotActive = await redis?.get('bot_ia_active') !== 'false';
+                        let isBotActive = isBotGloballyActive;
 
                         if (!isBotActive || candidate?.blocked === true) return;
 

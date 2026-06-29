@@ -1,3 +1,15 @@
+async function scanKeys(redis, pattern, maxKeys = 1000) {
+    let cursor = '0';
+    const found = [];
+    do {
+        const [nextCursor, keys] = await redis.scan(cursor, 'MATCH', pattern, 'COUNT', 200);
+        cursor = nextCursor;
+        found.push(...keys);
+        if (found.length >= maxKeys) break;
+    } while (cursor !== '0');
+    return found.slice(0, maxKeys);
+}
+
 export default async function handler(req, res) {
     const { validateAdminSession } = await import('./utils/storage.js');
     const userId = await validateAdminSession(req);
@@ -31,7 +43,7 @@ export default async function handler(req, res) {
                 customFields = parsed.filter(f => !BLOCKED.has(f.value));
                 if (parsed.some(f => f.value === 'colonia')) {
                     await redis.set('custom_fields', JSON.stringify(customFields));
-                    const dirKeys = await redis.keys('colonia_dir:*');
+                    const dirKeys = await scanKeys(redis, 'colonia_dir:*');
                     if (dirKeys.length > 0) await redis.del(...dirKeys);
                 }
             }

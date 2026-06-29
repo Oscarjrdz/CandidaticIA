@@ -1,4 +1,5 @@
 import { getOpenAIResponse } from '../utils/openai.js';
+import { estimateJsonBytes, recordUsageMetric } from '../utils/usage-metrics.js';
 
 // Cache en memoria para la lista completa de candidatos (evita re-leer Redis en cada búsqueda)
 let _candidatesCache = null;
@@ -370,13 +371,20 @@ IMPORTANTE: Responde SÓLO con el JSON en bruto, sin backticks (\`\`\`) ni marca
         // Strip chat_summary antes de enviar al browser — el scoring ya ocurrió, el frontend no lo renderiza
         const candidatesForClient = filtered.slice(0, limit).map(({ chat_summary, ...c }) => c);
 
-        return res.status(200).json({
+        const payload = {
             success: true,
             count: filtered.length,
             version: "Titan 8.7 (Zero Leak Pro)",
             candidates: candidatesForClient,
             ai: aiResponse
-        });
+        };
+        recordUsageMetric(redis, '/api/ai/query', {
+            candidateReads: candidates.length,
+            estimatedRedisBytes: estimateJsonBytes(candidates),
+            responseBytes: estimateJsonBytes(payload),
+            fullScan: true
+        }).catch(() => {});
+        return res.status(200).json(payload);
 
     } catch (error) {
         console.error('❌ AI Query ERROR:', error);

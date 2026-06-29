@@ -8,6 +8,14 @@ const MessageInputBox = React.forwardRef(({ onSend, onTyping, fileInputRef, hand
     const [showEmojis, setShowEmojis] = useState(false);
     const [showTemplates, setShowTemplates] = useState(false);
     const textareaRef = useRef(null);
+    const lastTypingRef = useRef(0);
+
+    const emitTyping = () => {
+        const now = Date.now();
+        if (now - lastTypingRef.current < 1200) return;
+        lastTypingRef.current = now;
+        onTyping();
+    };
 
     React.useImperativeHandle(ref, () => ({
         injectText: (newText) => {
@@ -134,7 +142,7 @@ const MessageInputBox = React.forwardRef(({ onSend, onTyping, fileInputRef, hand
                                 className="w-full bg-transparent border-none outline-none py-2.5 px-3 text-[#111b21] dark:text-[#d1d7db] placeholder-[#8696a0] resize-none text-[14px] max-h-24 overflow-y-auto min-h-[36px]"
                                 placeholder="Escribe un mensaje"
                                 value={localMessage}
-                                onChange={(e) => { setLocalMessage(e.target.value); onTyping(); }}
+                                onChange={(e) => { setLocalMessage(e.target.value); emitTyping(); }}
                                 onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmit(e); } }}
                                 onInput={(e) => { e.target.style.height = 'auto'; e.target.style.height = e.target.scrollHeight + 'px'; }}
                             />
@@ -237,7 +245,7 @@ const MessageInputBox = React.forwardRef(({ onSend, onTyping, fileInputRef, hand
                         className="w-full bg-transparent border-none outline-none py-2 px-3 text-[#111b21] dark:text-[#d1d7db] placeholder-[#8696a0] resize-none text-[15px] max-h-36 overflow-y-auto min-h-[36px]"
                         placeholder="Escribe un mensaje"
                         value={localMessage}
-                        onChange={(e) => { setLocalMessage(e.target.value); onTyping(); }}
+                        onChange={(e) => { setLocalMessage(e.target.value); emitTyping(); }}
                         onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmit(e); } }}
                         onInput={(e) => { e.target.style.height = 'auto'; e.target.style.height = e.target.scrollHeight + 'px'; }}
                     />

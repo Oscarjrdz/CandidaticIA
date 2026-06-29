@@ -52,6 +52,8 @@ export default async function handler(req, res) {
             const actPipe = redis.pipeline();
             // Store name/role for stats lookup
             actPipe.set(`recruiter:meta:${userId}`, JSON.stringify({ userName, role: role || 'User' }), 'EX', ttl);
+            actPipe.sadd(`recruiter:ids:${today}`, userId);
+            actPipe.expire(`recruiter:ids:${today}`, ttl);
             // Accumulate active seconds only when user is not idle
             if (!idle) {
                 const seconds = Math.max(0, Math.min(Number(activeSeconds) || 3, 60));

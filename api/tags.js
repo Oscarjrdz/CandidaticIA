@@ -17,12 +17,12 @@ async function getCountsMap(redis) {
             const n = parseInt(v);
             if (n > 0) map[k] = n;
         });
-        return map;
+        return { map, seededCandidateReads: 0 };
     }
 
     // Hash not seeded yet — one-time full scan with stampede protection
     const locked = await redis.set(TAG_COUNTS_INIT_LOCK, '1', 'EX', 120, 'NX');
-    if (!locked) return {}; // another request is seeding — return empty temporarily
+    if (!locked) return { map: {}, seededCandidateReads: 0 }; // another request is seeding — return empty temporarily
 
     try {
         const { getCandidates } = await import('./utils/storage.js');
@@ -42,7 +42,7 @@ async function getCountsMap(redis) {
             const n = parseInt(v);
             if (n > 0) map[k] = n;
         });
-        return map;
+        return { map, seededCandidateReads: candidates.length };
     } finally {
         await redis.del(TAG_COUNTS_INIT_LOCK);
     }
@@ -51,6 +51,7 @@ async function getCountsMap(redis) {
 export default async function handler(req, res) {
     try {
         const { getRedisClient, validateAdminSession } = await import('./utils/storage.js');
+        const { estimateJsonBytes, recordUsageMetric } = await import('./utils/usage-metrics.js');
         const redis = getRedisClient();
         if (!redis) return res.status(500).json({ error: 'Redis no disponible' });
 
@@ -69,10 +70,17 @@ export default async function handler(req, res) {
             ];
             const tags = savedTags.map(t => typeof t === 'string' ? { name: t, color: '#3b82f6' } : t);
 
-            const countsMap = await getCountsMap(redis);
+            const { map: countsMap, seededCandidateReads } = await getCountsMap(redis);
             tags.forEach(t => { t.count = countsMap[t.name] || 0; });
 
-            return res.status(200).json({ success: true, tags });
+            const payload = { success: true, tags };
+            recordUsageMetric(redis, '/api/tags', {
+                candidateReads: seededCandidateReads,
+                estimatedRedisBytes: seededCandidateReads ? estimateJsonBytes(countsMap) : 0,
+                responseBytes: estimateJsonBytes(payload),
+                fullScan: seededCandidateReads > 0
+            }).catch(() => {});
+            return res.status(200).json(payload);
         }
 
         // ── POST — save tag list ───────────────────────────────────────────────

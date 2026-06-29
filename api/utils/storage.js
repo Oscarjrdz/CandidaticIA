@@ -668,7 +668,7 @@ async function _seedUnreadSet(client) {
  * O(1) para el Set + O(recentLimit) pipeline GET. Sin SCAN.
  * Si el Set está vacío (primer deploy), siembra en background y devuelve fallback.
  */
-export const getCandidatesUnreadFirst = async (recentLimit = 50) => {
+export const getCandidatesUnreadFirst = async (recentLimit = 50, offset = 0) => {
     const client = getClient();
     if (!client) return { candidates: [], total: 0 };
 
@@ -689,8 +689,8 @@ export const getCandidatesUnreadFirst = async (recentLimit = 50) => {
     // Todos los IDs no-leídos del Set (O(1))
     const unreadIds = await client.smembers(KEYS.CANDIDATES_UNREAD);
 
-    // Los recentLimit más recientes del ZSET ordenado por ultimoMensaje DESC
-    const recentIds = await client.zrevrange(KEYS.CANDIDATES_LIST, 0, recentLimit - 1);
+    // Los recientes cubren la ventana solicitada para permitir paginación sin recargar cientos.
+    const recentIds = await client.zrevrange(KEYS.CANDIDATES_LIST, 0, offset + recentLimit - 1);
 
     // Unión sin duplicados: no-leídos primero, luego recientes no repetidos
     const unreadSet = new Set(unreadIds);
@@ -707,7 +707,12 @@ export const getCandidatesUnreadFirst = async (recentLimit = 50) => {
         .map(([err, res]) => (err || !res) ? null : JSON.parse(res))
         .filter(Boolean);
 
-    return { candidates, total: candidates.length };
+    candidates.sort((a, b) =>
+        new Date(b.lastUserMessageAt || b.ultimoMensaje || 0).getTime() -
+        new Date(a.lastUserMessageAt || a.ultimoMensaje || 0).getTime()
+    );
+
+    return { candidates: candidates.slice(offset, offset + recentLimit), total: candidates.length };
 };
 
 // Filtro servidor: 'unread' | 'complete' | 'incomplete' — escanea candidates:unread y filtra
@@ -747,7 +752,7 @@ export const getCandidatesFiltered = async (filter, limit = 500, offset = 0) => 
 };
 
 // Unread-first pero filtrado por etiqueta — para la primera página con tag activo
-export const getCandidatesUnreadFirstByTag = async (tagFilter, limit = 33) => {
+export const getCandidatesUnreadFirstByTag = async (tagFilter, limit = 33, offset = 0) => {
     const client = getClient();
     if (!client) return { candidates: [], total: 0 };
 
@@ -757,7 +762,8 @@ export const getCandidatesUnreadFirstByTag = async (tagFilter, limit = 33) => {
     const unreadIds = await client.smembers(KEYS.CANDIDATES_UNREAD);
 
     // 2. Candidatos recientes para completar si hay pocos no-leídos con ese tag
-    const recentIds = await client.zrevrange(KEYS.CANDIDATES_LIST, 0, 499);
+    const recentWindow = Math.min(500, Math.max(offset + limit, limit));
+    const recentIds = await client.zrevrange(KEYS.CANDIDATES_LIST, 0, recentWindow - 1);
 
     // 3. Unión sin duplicados: no-leídos primero
     const unreadSet = new Set(unreadIds);
@@ -787,7 +793,7 @@ export const getCandidatesUnreadFirstByTag = async (tagFilter, limit = 33) => {
     const read = all.filter(c => !unread.includes(c)).sort((a, b) => ts(b) - ts(a));
 
     const matching = [...unread, ...read];
-    return { candidates: matching.slice(0, limit), total: matching.length };
+    return { candidates: matching.slice(offset, offset + limit), total: matching.length };
 };
 
 const _publishGlobalStats = async (client) => {
@@ -1847,14 +1853,44 @@ export const updateMessageStatus = async (candidateId, ultraMsgId, status, addit
             await pipe.exec().catch(() => {});
         };
 
-        const notifyStatus = async () => {
+        const notifyStatus = async (id = ultraMsgId, nextStatus = status, nextAdditionalData = additionalData) => {
             try {
                 const { notifyCandidateUpdate } = await import('./sse-notify.js');
                 await notifyCandidateUpdate(candidateId, {
-                    messageStatusUpdate: { id: ultraMsgId, status, additionalData }
+                    messageStatusUpdate: { id, status: nextStatus, additionalData: nextAdditionalData }
                 });
             } catch (err) {
                 console.error("Could not import sse-notify", err);
+            }
+        };
+
+        const applyPendingStatusIfNewer = async (msg, absoluteIndex) => {
+            const remoteId = msg?.ultraMsgId;
+            if (!remoteId) return msg;
+
+            const pendingRaw = await client.get(`message:pendingStatus:${remoteId}`).catch(() => null);
+            if (!pendingRaw) return msg;
+
+            try {
+                const pending = JSON.parse(pendingRaw);
+                if (pending?.candidateId !== candidateId) return msg;
+
+                const pendingStatus = pending.status;
+                const pendingAdditionalData = pending.additionalData || {};
+                const shouldApply = pendingStatus === 'failed' ||
+                    (STATUS_RANK[pendingStatus] ?? 0) > (STATUS_RANK[msg.status] ?? 0);
+
+                await client.del(`message:pendingStatus:${remoteId}`).catch(() => {});
+                if (!shouldApply) return msg;
+
+                const nextMsg = { ...msg, status: pendingStatus, ...pendingAdditionalData };
+                await client.lset(key, absoluteIndex, JSON.stringify(nextMsg));
+                await persistIndex(nextMsg, absoluteIndex);
+                await notifyStatus(remoteId, pendingStatus, pendingAdditionalData);
+                return nextMsg;
+            } catch {
+                await client.del(`message:pendingStatus:${remoteId}`).catch(() => {});
+                return msg;
             }
         };
 
@@ -1869,15 +1905,17 @@ export const updateMessageStatus = async (candidateId, ultraMsgId, status, addit
                         if (msg.ultraMsgId === ultraMsgId || msg.id === ultraMsgId) {
                             const oldStatus = msg.status;
                             if ((STATUS_RANK[status] ?? 0) <= (STATUS_RANK[oldStatus] ?? 0) && status !== 'failed') {
+                                await applyPendingStatusIfNewer(msg, cachedIndex.index);
                                 return true;
                             }
-                            const nextMsg = { ...msg, status, ...additionalData };
+                            let nextMsg = { ...msg, status, ...additionalData };
                             await client.lset(key, cachedIndex.index, JSON.stringify(nextMsg));
                             await persistIndex(nextMsg, cachedIndex.index);
                             if (nextMsg.campaignId && oldStatus !== status && ['sent', 'delivered', 'read'].includes(status)) {
                                 client.hincrby(`bulk_stats:${nextMsg.campaignId}`, status, 1).catch(() => {});
                             }
                             await notifyStatus();
+                            nextMsg = await applyPendingStatusIfNewer(nextMsg, cachedIndex.index);
                             return true;
                         }
                     }
@@ -1887,7 +1925,7 @@ export const updateMessageStatus = async (candidateId, ultraMsgId, status, addit
         }
 
         // Leer sólo los últimos 50 mensajes — mensaje reciente siempre está al final.
-        // 'read' llega vía SSE-only; 'delivered' y 'failed' persisten aquí.
+        // delivered/read/failed persisten por id exacto cuando Meta manda el status.
         const listLen = await client.llen(key);
         const start = Math.max(0, listLen - 50);
         const raw = await client.lrange(key, start, -1);
@@ -1899,6 +1937,7 @@ export const updateMessageStatus = async (candidateId, ultraMsgId, status, addit
             const oldStatus = messages[localIndex].status;
             // Nunca degradar: si ya es 'read' no volver a 'delivered'
             if ((STATUS_RANK[status] ?? 0) <= (STATUS_RANK[oldStatus] ?? 0) && status !== 'failed') {
+                await applyPendingStatusIfNewer(messages[localIndex], absoluteIndex);
                 return true; // mensaje encontrado, pero no degradamos
             }
             messages[localIndex] = { ...messages[localIndex], status, ...additionalData };
@@ -1912,9 +1951,18 @@ export const updateMessageStatus = async (candidateId, ultraMsgId, status, addit
 
             // 🚀 FIRE SSE! Update Chat UI checks in real time
             await notifyStatus();
+            messages[localIndex] = await applyPendingStatusIfNewer(messages[localIndex], absoluteIndex);
 
             return true;
         } else {
+            if (['delivered', 'read', 'seen', 'failed'].includes(status)) {
+                await client.set(
+                    `message:pendingStatus:${ultraMsgId}`,
+                    JSON.stringify({ candidateId, status, additionalData, at: Date.now() }),
+                    'EX',
+                    60 * 60 * 2
+                ).catch(() => {});
+            }
             if (process.env.DEBUG_MODE === 'true' || Math.random() < 0.01) {
                 console.warn(`⚠️ [Storage] updateMessageStatus: Message ${ultraMsgId} NOT FOUND in ${key}`);
             }

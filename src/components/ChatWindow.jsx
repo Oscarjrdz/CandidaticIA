@@ -146,10 +146,11 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
             if (updates.newMessage && updates.messagePayload) {
                 // Si el candidato mandó este mensaje mientras tenemos el chat abierto → read receipt inmediato
                 if (updates.messagePayload.from === 'user' && candidate?.id) {
+                    const incomingMessageId = updates.messagePayload.id || updates.messagePayload.ultraMsgId;
                     fetch('/api/chat', {
                         method: 'PUT',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ action: 'send_read_receipt', candidateId: candidate.id })
+                        body: JSON.stringify({ action: 'send_read_receipt', candidateId: candidate.id, messageId: incomingMessageId })
                     }).catch(() => {});
                 }
                 setMessages(prev => {
@@ -164,7 +165,7 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
             // Señal global de lectura — marca todos los enviados como leídos
             if (updates.markAllSentAsRead) {
                 setMessages(prev => prev.map(m =>
-                    (m.from === 'me' || m.from === 'bot') && (m.status === 'sent' || m.status === 'delivered' || m.status === 'queued' || m.status === 'pending')
+                    (m.from === 'me' || m.from === 'bot') && m.ultraMsgId && (m.status === 'sent' || m.status === 'delivered')
                         ? { ...m, status: 'read' }
                         : m
                 ));

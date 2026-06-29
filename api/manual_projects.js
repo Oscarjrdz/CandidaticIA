@@ -6,7 +6,7 @@ export default async function handler(req, res) {
     }
 
     try {
-        const { getRedisClient, getCandidateById, updateCandidate, validateAdminSession } = await import('./utils/storage.js');
+        const { getRedisClient, updateCandidate, validateAdminSession } = await import('./utils/storage.js');
 
         const userId = await validateAdminSession(req);
         if (!userId) return res.status(401).json({ error: 'No autorizado' });
@@ -95,19 +95,23 @@ export default async function handler(req, res) {
                     return res.status(200).json({ success: true, candidates: [] });
                 }
 
-                // Fetch all linked candidates
-                const candidates = [];
-                for (const link of links) {
+                // Fetch linked candidates in one Redis pipeline instead of N round trips.
+                const pipe = redis.pipeline();
+                links.forEach(link => pipe.get(`candidate:${link.candidateId}`));
+                const rows = await pipe.exec();
+                const candidates = rows.map(([err, raw], index) => {
+                    if (err || !raw) return null;
                     try {
-                        const cand = await getCandidateById(link.candidateId);
-                        if (cand) {
-                            candidates.push({
-                                ...cand,
-                                crmMeta: { stepId: link.stepId, linkedAt: link.linkedAt }
-                            });
-                        }
-                    } catch (e) { /* candidate deleted, skip */ }
-                }
+                        const cand = JSON.parse(raw);
+                        const link = links[index];
+                        return {
+                            ...cand,
+                            crmMeta: { stepId: link.stepId, linkedAt: link.linkedAt }
+                        };
+                    } catch {
+                        return null;
+                    }
+                }).filter(Boolean);
 
                 return res.status(200).json({ success: true, candidates });
             }

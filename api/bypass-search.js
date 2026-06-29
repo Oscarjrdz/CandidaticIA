@@ -8,6 +8,17 @@
  * 
  * Reuses the same matching logic from the Orchestrator for consistency.
  */
+const bypassSearchCache = new Map();
+const BYPASS_SEARCH_CACHE_TTL_MS = 60 * 1000;
+
+function stableStringify(value) {
+    if (Array.isArray(value)) return `[${value.map(stableStringify).join(',')}]`;
+    if (value && typeof value === 'object') {
+        return `{${Object.keys(value).sort().map(k => `${JSON.stringify(k)}:${stableStringify(value[k])}`).join(',')}}`;
+    }
+    return JSON.stringify(value);
+}
+
 export default async function handler(req, res) {
     if (req.method !== 'POST') {
         return res.status(405).json({ success: false, error: 'Method not allowed' });
@@ -15,11 +26,22 @@ export default async function handler(req, res) {
 
     try {
         const { getCandidates, getRedisClient, validateAdminSession } = await import('./utils/storage.js');
+        const { estimateJsonBytes, recordUsageMetric } = await import('./utils/usage-metrics.js');
 
         const userId = await validateAdminSession(req);
         if (!userId) return res.status(401).json({ success: false, error: 'No autorizado' });
 
         const { minAge, maxAge, municipios, escolaridades, categories, gender, excludedTags } = req.body;
+        const cacheKey = stableStringify({ minAge, maxAge, municipios, escolaridades, categories, gender, excludedTags });
+        const cached = bypassSearchCache.get(cacheKey);
+        if (cached && cached.expiresAt > Date.now()) {
+            recordUsageMetric(getRedisClient(), '/api/bypass-search', {
+                cacheHit: true,
+                responseBytes: estimateJsonBytes(cached.payload)
+            }).catch(() => {});
+            res.setHeader('X-Candidatic-Cache', 'HIT');
+            return res.status(200).json(cached.payload);
+        }
 
         // 1. Fetch ALL candidates — use realistic ceiling to avoid over-fetching
         const { candidates: allCandidates } = await getCandidates(10000, 0, '', false, '');
@@ -108,12 +130,27 @@ export default async function handler(req, res) {
             tags: c.tags || []
         }));
 
-        return res.status(200).json({
+        const payload = {
             success: true,
             count: lightResults.length,
             totalScanned: allCandidates.length,
             candidates: lightResults
-        });
+        };
+
+        if (bypassSearchCache.size > 50) {
+            const firstKey = bypassSearchCache.keys().next().value;
+            if (firstKey) bypassSearchCache.delete(firstKey);
+        }
+        bypassSearchCache.set(cacheKey, { expiresAt: Date.now() + BYPASS_SEARCH_CACHE_TTL_MS, payload });
+        recordUsageMetric(client, '/api/bypass-search', {
+            cacheMiss: true,
+            fullScan: true,
+            candidateReads: allCandidates.length,
+            estimatedRedisBytes: estimateJsonBytes(allCandidates),
+            responseBytes: estimateJsonBytes(payload)
+        }).catch(() => {});
+        res.setHeader('X-Candidatic-Cache', 'MISS');
+        return res.status(200).json(payload);
 
     } catch (error) {
         console.error('❌ ByPass Search Error:', error);

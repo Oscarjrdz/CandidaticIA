@@ -1,5 +1,18 @@
 
 import { getRedisClient } from '../utils/storage.js';
+import { estimateJsonBytes, recordUsageMetric } from '../utils/usage-metrics.js';
+
+async function scanKeys(client, pattern, maxKeys = 1000) {
+    let cursor = '0';
+    const found = [];
+    do {
+        const [nextCursor, keys] = await client.scan(cursor, 'MATCH', pattern, 'COUNT', 200);
+        cursor = nextCursor;
+        found.push(...keys);
+        if (found.length >= maxKeys) break;
+    } while (cursor !== '0');
+    return found.slice(0, maxKeys);
+}
 
 /**
  * API to list files in the Media Library.
@@ -25,7 +38,7 @@ export default async function handler(req, res) {
         if (!ids || ids.length === 0) {
             // Fallback: If set is empty, scan for legacy image:* keys (Safety Migration)
             // This is O(N) but only happens once until the set is populated.
-            const keys = await client.keys('meta:image:*');
+            const keys = await scanKeys(client, 'meta:image:*');
             if (keys.length > 0) {
                 console.log(`[Library] 🛡️ Migrating ${keys.length} legacy keys to index set...`);
                 const pipeline = client.pipeline();
@@ -36,9 +49,11 @@ export default async function handler(req, res) {
                 await pipeline.exec();
                 // Refresh list
                 const refreshedIds = await client.zrevrange(libraryKey, 0, 99);
-                return await returnHydratedMedia(client, refreshedIds, res);
+                return await returnHydratedMedia(client, refreshedIds, res, { fullScan: true });
             }
-            return res.status(200).json({ success: true, files: [] });
+            const payload = { success: true, files: [] };
+            recordUsageMetric(client, '/api/media/list', { responseBytes: estimateJsonBytes(payload) }).catch(() => {});
+            return res.status(200).json(payload);
         }
 
         return await returnHydratedMedia(client, ids, res);
@@ -49,7 +64,7 @@ export default async function handler(req, res) {
     }
 }
 
-async function returnHydratedMedia(client, ids, res) {
+async function returnHydratedMedia(client, ids, res, metric = {}) {
     const pipeline = client.pipeline();
     ids.forEach(id => {
         pipeline.get(`meta:image:${id}`);
@@ -68,5 +83,12 @@ async function returnHydratedMedia(client, ids, res) {
         } catch { return null; }
     }).filter(Boolean);
 
-    return res.status(200).json({ success: true, files });
+    const payload = { success: true, files };
+    recordUsageMetric(client, '/api/media/list', {
+        ...metric,
+        redisReads: ids.length,
+        responseBytes: estimateJsonBytes(payload),
+        estimatedRedisBytes: estimateJsonBytes(files)
+    }).catch(() => {});
+    return res.status(200).json(payload);
 }

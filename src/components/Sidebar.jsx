@@ -261,10 +261,10 @@ const Sidebar = ({ activeSection, onSectionChange, onLogout, isMobileOpen, onClo
                 <div className="relative p-6 mb-2">
                     <div className="flex items-center justify-between">
                         <div className={`flex items-center space-x-3 ${isCollapsed ? 'lg:justify-center lg:w-full lg:space-x-0' : ''}`}>
-                            <div className="relative flex-shrink-0 transition-transform duration-300 hover:scale-105">
+                            <div className="relative flex-shrink-0 transition-transform duration-300 hover:scale-105 candidatic-brand-icon">
                                 <BrainCircuit className="w-8 h-8 text-white stroke-[2] drop-shadow-md rotate-90" />
                             </div>
-                            <h2 className={`text-[20px] font-extrabold text-white tracking-wider flex items-center drop-shadow-sm ml-1 ${isCollapsed ? 'lg:hidden' : ''}`}>
+                            <h2 className={`candidatic-thinking-logo text-[20px] font-extrabold tracking-wider flex items-center drop-shadow-sm ml-1 ${isCollapsed ? 'lg:hidden' : ''}`}>
                                 CANDIDATIC&nbsp;<span className="tracking-tighter">IΛ</span>
                             </h2>
                         </div>

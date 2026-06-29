@@ -1,7 +1,8 @@
-import { getMessages, saveMessage, getCandidateById, updateCandidate, updateMessageStatus, getRedisClient, validateAdminSession } from './utils/storage.js';
+import { getMessages, getRecentMessages, saveMessage, getCandidateById, updateCandidate, updateMessageStatus, getRedisClient, validateAdminSession } from './utils/storage.js';
 import { substituteVariables } from './utils/shortcuts.js';
 import axios from 'axios';
 import { sendUltraMsgMessage, getUltraMsgConfig, buildMetaTemplateComponents } from './whatsapp/utils.js';
+import { estimateJsonBytes, recordUsageMetric } from './utils/usage-metrics.js';
 
 // Candidatic legacy URLs removed as per UltraMsg migration.
 
@@ -55,24 +56,54 @@ export default async function handler(req, res) {
                 }
             }
 
-            return res.status(200).json({ success: true, messages });
+            const payload = { success: true, messages };
+            recordUsageMetric(getRedisClient(), '/api/chat', {
+                messageReads: messages.length,
+                responseBytes: estimateJsonBytes(payload),
+                estimatedRedisBytes: estimateJsonBytes(messages)
+            }).catch(() => {});
+            return res.status(200).json(payload);
         }
 
         // PUT - Lock/Unlock chat (anti-duplication)
         if (req.method === 'PUT') {
-            const { action, candidateId, userName } = req.body;
+            const { action, candidateId, userName, messageId } = req.body;
             if (!candidateId) return res.status(400).json({ error: 'Falta candidateId' });
 
             const redis = getRedisClient();
             if (!redis) return res.status(500).json({ error: 'Redis unavailable' });
 
             const lockKey = `chat_lock:${candidateId}`;
+            const locksIndexKey = 'chat_locks:active';
             const publishLock = (payload) => {
                 redis.publish('channel:sse:updates', JSON.stringify({
                     type: 'chat:lock',
                     candidateId,
                     ...payload,
                 })).catch(() => {});
+            };
+
+            const sendReadReceiptToWhatsApp = async (explicitMessageId = null) => {
+                const { markMessageAsRead } = await import('./whatsapp/utils.js');
+                const candidate = await getCandidateById(candidateId).catch(() => null);
+                const rawPhoneId = candidate?.incomingPhoneNumberId || '';
+                const phoneNumberId = /^\d{10,}$/.test(String(rawPhoneId)) ? rawPhoneId : null;
+
+                if (explicitMessageId) {
+                    await markMessageAsRead(explicitMessageId, phoneNumberId);
+                    return { marked: explicitMessageId, messageReads: 0 };
+                }
+
+                const messages = await getRecentMessages(candidateId, 20);
+                recordUsageMetric(redis, '/api/chat', {
+                    messageReads: messages.length,
+                    estimatedRedisBytes: estimateJsonBytes(messages)
+                }).catch(() => {});
+                const latestIncoming = [...messages].reverse().find(m => m.from !== 'bot' && m.from !== 'me');
+                const msgId = latestIncoming?.id || latestIncoming?.ultraMsgId || null;
+                if (!msgId) return { marked: null, messageReads: messages.length };
+                await markMessageAsRead(msgId, phoneNumberId);
+                return { marked: msgId, messageReads: messages.length };
             };
 
             if (action === 'lock') {
@@ -85,13 +116,20 @@ export default async function handler(req, res) {
                     refreshedAt: new Date(now).toISOString(),
                     expiresAt: now + 60000
                 };
-                await redis.set(lockKey, JSON.stringify(lock), 'EX', 60);
+                const pipe = redis.pipeline();
+                pipe.set(lockKey, JSON.stringify(lock), 'EX', 60);
+                pipe.zadd(locksIndexKey, lock.expiresAt, candidateId);
+                pipe.expire(locksIndexKey, 120);
+                await pipe.exec();
                 publishLock({ action: 'lock', lock });
                 return res.status(200).json({ success: true, locked: true });
             }
 
             if (action === 'unlock') {
-                await redis.del(lockKey);
+                const pipe = redis.pipeline();
+                pipe.del(lockKey);
+                pipe.zrem(locksIndexKey, candidateId);
+                await pipe.exec();
                 publishLock({ action: 'unlock' });
                 return res.status(200).json({ success: true, locked: false });
             }
@@ -113,7 +151,11 @@ export default async function handler(req, res) {
                         refreshedAt: new Date(now).toISOString(),
                         expiresAt: now + 60000
                     };
-                    await redis.set(lockKey, JSON.stringify(lock), 'EX', 60);
+                    const pipe = redis.pipeline();
+                    pipe.set(lockKey, JSON.stringify(lock), 'EX', 60);
+                    pipe.zadd(locksIndexKey, lock.expiresAt, candidateId);
+                    pipe.expire(locksIndexKey, 120);
+                    await pipe.exec();
                     publishLock({ action: 'lock', lock });
                 }
                 return res.status(200).json({ success: true });
@@ -130,36 +172,20 @@ export default async function handler(req, res) {
             }
 
             if (action === 'mark_read') {
-                const messages = await getMessages(candidateId);
                 // Just clear the counter (blue ticks), but DO NOT update botTime so Rule 2 persists
                 try {
                     await updateCandidate(candidateId, { unreadMsgCount: 0 });
                 } catch (e) {}
 
                 // Send blue ticks to WhatsApp
-                const latestIncoming = [...messages].reverse().find(m => m.from !== 'bot' && m.from !== 'me');
-                if (latestIncoming && (latestIncoming.id || latestIncoming.ultraMsgId)) {
-                    const msgId = latestIncoming.id || latestIncoming.ultraMsgId;
-                    import('./whatsapp/utils.js').then(async ({ markMessageAsRead }) => {
-                        await markMessageAsRead(msgId);
-                    }).catch(e => console.error("Error importing markMessageAsRead", e));
-                    return res.status(200).json({ success: true, marked: msgId });
-                }
-                return res.status(200).json({ success: true, marked: null });
+                const receipt = await sendReadReceiptToWhatsApp(messageId || null);
+                return res.status(200).json({ success: true, marked: receipt.marked });
             }
 
             if (action === 'send_read_receipt') {
-                const messages = await getMessages(candidateId);
                 // ONLY send blue ticks to WhatsApp, do NOT touch the database
-                const latestIncoming = [...messages].reverse().find(m => m.from !== 'bot' && m.from !== 'me');
-                if (latestIncoming && (latestIncoming.id || latestIncoming.ultraMsgId)) {
-                    const msgId = latestIncoming.id || latestIncoming.ultraMsgId;
-                    import('./whatsapp/utils.js').then(async ({ markMessageAsRead }) => {
-                        await markMessageAsRead(msgId);
-                    }).catch(e => console.error("Error importing markMessageAsRead", e));
-                    return res.status(200).json({ success: true, marked: msgId });
-                }
-                return res.status(200).json({ success: true, marked: null });
+                const receipt = await sendReadReceiptToWhatsApp(messageId || null);
+                return res.status(200).json({ success: true, marked: receipt.marked });
             }
 
             if (action === 'mark_handled') {
@@ -412,6 +438,8 @@ export default async function handler(req, res) {
                             if (redis2) {
                                 const p = redis2.pipeline();
                                 if (senderName) p.set(`recruiter:meta:${senderId}`, JSON.stringify({ userName: senderName }), 'EX', ttl);
+                                p.sadd(`recruiter:ids:${today}`, senderId);
+                                p.expire(`recruiter:ids:${today}`, ttl);
                                 p.incr(`recruiter:msgs:${senderId}:${today}`);
                                 p.expire(`recruiter:msgs:${senderId}:${today}`, ttl);
                                 p.sadd(`recruiter:chats:${senderId}:${today}`, candidateId);

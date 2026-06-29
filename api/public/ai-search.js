@@ -1,4 +1,5 @@
 import { getOpenAIResponse } from '../utils/openai.js';
+import { estimateJsonBytes, recordUsageMetric } from '../utils/usage-metrics.js';
 
 export default async function handler(req, res) {
     if (req.method === 'OPTIONS') {
@@ -155,12 +156,19 @@ EJEMPLO DE SALIDA:
             skills: [c.categoria, c.municipio].filter(Boolean)
         }));
 
-        return res.status(200).json({
+        const payload = {
             success: true,
             matches_count: filtered.length,
             preview: privacySafePreview,
             search_criteria: aiResponse
-        });
+        };
+        recordUsageMetric(redis, '/api/public/ai-search', {
+            candidateReads: candidates.length,
+            estimatedRedisBytes: estimateJsonBytes(candidates),
+            responseBytes: estimateJsonBytes(payload),
+            fullScan: true
+        }).catch(() => {});
+        return res.status(200).json(payload);
 
     } catch (error) {
         console.error('Public Search Error:', error);
