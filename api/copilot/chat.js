@@ -1,5 +1,11 @@
 import { getOpenAIResponse } from '../utils/openai.js';
 import { getUsers, validateAdminSession } from '../utils/storage.js';
+import {
+    formatPlatformStatsForPrompt,
+    getDirectPlatformStatsReply,
+    getPlatformStats,
+    isPlatformStatsIntent
+} from '../utils/copilot-platform-stats.js';
 import { detectWebSearchIntent, formatSearchResultsForPrompt, searchWeb } from '../utils/web-search.js';
 
 const MAX_INPUT_CHARS = 900;
@@ -157,6 +163,25 @@ export default async function handler(req, res) {
 
     const history = normalizeHistory(req.body?.history);
     const now = getMonterreyNow();
+    const needsPlatformStats = isPlatformStatsIntent(message);
+    let platformStatsContext = '';
+    let platformStats = null;
+
+    if (needsPlatformStats) {
+        platformStats = await getPlatformStats();
+        const directStatsReply = getDirectPlatformStatsReply(message, platformStats);
+        if (directStatsReply) {
+            return res.status(200).json({
+                success: true,
+                reply: directStatsReply,
+                model: 'skill:platform-stats',
+                usage: null,
+                skills: ['platform-stats']
+            });
+        }
+        platformStatsContext = formatPlatformStatsForPrompt(platformStats);
+    }
+
     const commandSearchQuery = getOyeBrendaSearchQuery(message);
     const detectedSearchQuery = commandSearchQuery ? null : detectWebSearchIntent(message);
     const searchQuery = commandSearchQuery || detectedSearchQuery;
@@ -194,6 +219,7 @@ export default async function handler(req, res) {
 - Hora real en Monterrey: ${now.date}, ${now.time}
 - Comando de busqueda "Oye Brenda": ${commandSearchQuery ? 'activado' : 'no activado'}
 ${searchContext ? `\n${searchContext}` : ''}
+${platformStatsContext ? `\n${platformStatsContext}` : ''}
 `;
 
     const messages = [
@@ -217,7 +243,7 @@ ${searchContext ? `\n${searchContext}` : ''}
             reply: sanitizeText(result.content, 2200),
             model: result.model,
             usage: result.usage || null,
-            skills,
+            skills: needsPlatformStats ? [...skills, 'platform-stats'] : skills,
             limits: {
                 maxInputChars: MAX_INPUT_CHARS,
                 maxHistoryMessages: MAX_HISTORY_MESSAGES,

@@ -72,6 +72,8 @@ Responsabilidades:
 - Mostrar consumo de tokens de la ultima respuesta cuando OpenAI lo devuelve.
 - Mantener historial corto solo en memoria del navegador.
 - Saludar de forma personalizada solo cuando tiene sentido.
+- Usar el avatar vertical retocado `public/brenda/avatar-candidatic.png`.
+- Mantener el scroll pegado al ultimo mensaje.
 
 El chat se monta en `src/App.jsx` despues de `InternalChat`:
 
@@ -312,6 +314,51 @@ Funcionamiento:
 - Limita resultados a 3 para controlar tokens.
 - Si no hay API key de busqueda, responde sin llamar OpenAI.
 
+### 4. Metricas De Plataforma
+
+Archivo:
+
+```txt
+api/utils/copilot-platform-stats.js
+```
+
+Objetivo:
+
+Permitir que Brenda responda preguntas como:
+
+```txt
+Cuantos candidatos tenemos?
+Cuantos completos e incompletos?
+Cuantos sin leer?
+Cuantos tags hay?
+Que filtros tenemos?
+Dame estadisticas de la plataforma.
+```
+
+Estrategia de bajo consumo:
+
+- No envia candidatos individuales al modelo.
+- Usa contadores Redis O(1) para candidatos completos, incompletos y sin leer.
+- Usa hash `candidatic:tag_counts` para conteos de tags.
+- Lee blobs compactos para tags configurados, campos, automatizaciones, vacantes, usuarios y roles.
+- Toma solo una muestra reciente de hasta 500 candidatos para distribuciones agregadas.
+- Cachea el resultado 60 segundos en memoria del proceso.
+- Si la pregunta es simple, responde sin GPT.
+- Si la pregunta requiere interpretacion, manda a GPT un resumen agregado compacto.
+
+Datos actuales del motor:
+
+- Candidatos totales, completos, incompletos y sin leer.
+- Mensajes entrantes/salientes.
+- Tags configurados y top tags.
+- Filtros base.
+- Campos personalizados.
+- Vacantes totales y activas.
+- Proyectos.
+- Automatizaciones totales y activas.
+- Usuarios, activos y roles.
+- Distribuciones recientes por origen, categoria, municipio, escolaridad y genero.
+
 ## Validaciones Realizadas
 
 Build de produccion:
@@ -362,6 +409,7 @@ Estado: implementado.
 - Contexto de pantalla.
 - Hora real de Monterrey.
 - Busqueda web por comando `Oye Brenda`.
+- Metricas agregadas de plataforma.
 - Sin acciones de escritura.
 - Limites estrictos de tokens y payload.
 
@@ -423,4 +471,4 @@ Cada accion debe guardar auditoria:
 - No se agrego `Brenda IA` a Usuarios/Roles.
 - El bloqueo principal es por rol `SuperAdmin`, no por permiso configurable.
 - El historial del chat vive en memoria local del componente y se pierde al refrescar.
-- El avatar usa `public/brenda/brenda-avatar.jpeg`.
+- El avatar usa `public/brenda/avatar-candidatic.png`.

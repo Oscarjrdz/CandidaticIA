@@ -1,10 +1,11 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronRight, Loader2, MessageCircle, Minimize2, Send, Sparkles } from 'lucide-react';
 import { useAuthContext } from '../contexts/AuthContext';
 
 const MAX_INPUT_CHARS = 900;
 const MAX_CLIENT_HISTORY = 8;
 const GREETING_COOLDOWN_MS = 15 * 60 * 1000;
+const BRENDA_AVATAR_SRC = '/brenda/avatar-candidatic.png';
 
 const SECTION_LABELS = {
     candidates: 'Candidatos',
@@ -73,6 +74,7 @@ const FloatingCopilot = ({ onOpenSection, activeSection }) => {
     const [loading, setLoading] = useState(false);
     const [usage, setUsage] = useState(null);
     const inputRef = useRef(null);
+    const messagesEndRef = useRef(null);
     const firstName = (user?.name || '').split(' ')[0] || 'Oscar';
     const currentSectionLabel = SECTION_LABELS[activeSection] || 'Candidatic';
 
@@ -85,6 +87,11 @@ const FloatingCopilot = ({ onOpenSection, activeSection }) => {
                 content: String(m.content || '').slice(0, 700)
             }));
     }, [messages]);
+
+    useEffect(() => {
+        if (!open) return;
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    }, [messages, loading, open]);
 
     const sendMessage = async (overrideText) => {
         const clean = String(overrideText ?? input).replace(/\s+/g, ' ').trim().slice(0, MAX_INPUT_CHARS);
@@ -152,7 +159,7 @@ const FloatingCopilot = ({ onOpenSection, activeSection }) => {
                 title="Abrir Brenda IA"
             >
                 <span className="relative w-9 h-9 rounded-full overflow-hidden bg-white/15 flex items-center justify-center">
-                    <img src="/brenda/brenda-avatar.jpeg" alt="" className="w-full h-full object-cover" />
+                    <img src={BRENDA_AVATAR_SRC} alt="" className="w-full h-full object-cover object-[50%_18%]" />
                 </span>
                 <span className="hidden sm:block text-sm font-bold">Brenda IA</span>
                 <MessageCircle className="w-5 h-5" />
@@ -165,7 +172,7 @@ const FloatingCopilot = ({ onOpenSection, activeSection }) => {
             <header className="px-4 py-3 bg-blue-600 text-white flex items-center justify-between">
                 <div className="flex items-center gap-3 min-w-0">
                     <div className="w-9 h-9 rounded-full overflow-hidden bg-white/15 shrink-0">
-                        <img src="/brenda/brenda-avatar.jpeg" alt="" className="w-full h-full object-cover" />
+                        <img src={BRENDA_AVATAR_SRC} alt="" className="w-full h-full object-cover object-[50%_18%]" />
                     </div>
                     <div className="min-w-0">
                         <h3 className="text-sm font-bold truncate">Brenda IA</h3>
@@ -210,6 +217,7 @@ const FloatingCopilot = ({ onOpenSection, activeSection }) => {
                         </div>
                     </div>
                 )}
+                <div ref={messagesEndRef} />
             </div>
 
             <div className="px-4 py-3 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
