@@ -620,6 +620,26 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
     const displayMessageCacheRef = useRef(new Map());
     const bottomAnchorRef = useRef(false);
 
+    const animateScrollToBottom = (duration = 500) => {
+        // Two rAFs so Virtuoso has rendered the new item and scrollHeight is updated
+        requestAnimationFrame(() => requestAnimationFrame(() => {
+            const el = virtuosoScrollerRef.current;
+            if (!el) return;
+            const start = el.scrollTop;
+            const target = el.scrollHeight - el.clientHeight;
+            const delta = target - start;
+            if (delta <= 0) return;
+            const t0 = performance.now();
+            const step = (now) => {
+                const p = Math.min((now - t0) / duration, 1);
+                const eased = 1 - Math.pow(1 - p, 3); // ease-out cubic
+                el.scrollTop = start + delta * eased;
+                if (p < 1) requestAnimationFrame(step);
+            };
+            requestAnimationFrame(step);
+        }));
+    };
+
     const scrollToBottom = (behavior = 'smooth') => {
         const lastIndex = Math.max(0, (displayMessages.length || 1) - 1);
         if (virtuosoRef.current && lastIndex >= 0) {
@@ -1606,7 +1626,11 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
         }
         if (messages.length > prevMessagesLength.current) {
             if (isAtBottomRef.current || isSendingRef.current) {
-                scrollToBottom('auto');
+                if (isSendingRef.current) {
+                    animateScrollToBottom(450);
+                } else {
+                    scrollToBottom('auto');
+                }
             } else {
                 // Count only real incoming messages (not our own optimistic ones)
                 const newMsgs = messages.slice(prevMessagesLength.current);
