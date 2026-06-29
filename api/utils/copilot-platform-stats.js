@@ -85,6 +85,10 @@ function getMonterreyMonth() {
     return Number(month);
 }
 
+function candidateWord(count) {
+    return count === 1 ? 'candidato' : 'candidatos';
+}
+
 function normalizeTag(tag) {
     return String(typeof tag === 'string' ? tag : tag?.name || '').trim();
 }
@@ -376,7 +380,7 @@ function findCandidateMatches(message, candidates, limit = 5) {
         if (digits.length >= 4 && c.phone?.includes(digits)) score += digits.length >= 10 ? 120 : 70;
         if (digits.length >= 4 && c.phoneLast4 === digits.slice(-4)) score += 45;
         for (const word of meaningfulWords) {
-            if (c.nameKey.includes(word)) score += 25;
+            if (String(c.nameKey || '').includes(word)) score += 25;
             if (normalizeText(c.category).includes(word)) score += 8;
             if (normalizeText(c.municipality).includes(word)) score += 8;
             if (c.tags.some(tag => normalizeText(tag).includes(word))) score += 6;
@@ -411,7 +415,7 @@ function formatCandidateDirectReply(candidate, stats) {
 
 function getCandidateQuestionReply(message, stats) {
     const normalized = normalizeText(message);
-    const mentionsCandidate = /candidat|telefono|whatsapp|burbuja|no leido|sin leer|info|informacion/.test(normalized) ||
+    const mentionsCandidate = /\bcandidato\b|\bcandidata\b|telefono|whatsapp|burbuja|no leido|sin leer|info|informacion/.test(normalized) ||
         /\d{4,}/.test(message);
     if (!mentionsCandidate) return null;
 
@@ -515,6 +519,22 @@ function uniqueCandidateValues(candidates, stats) {
 function buildQueryCriteria(message, stats) {
     const normalized = normalizeText(message);
     const criteria = [];
+    let hasExplicitGender = false;
+
+    if (/\bmujer(?:es)?\b|\bmujers\b|\bfemenin[ao]s?\b|\bfem\b/.test(normalized)) {
+        hasExplicitGender = true;
+        criteria.push({
+            label: 'mujeres',
+            test: c => /mujer|femenin|^f$/.test(normalizeText(c.gender))
+        });
+    }
+    if (/\bhombre(?:s)?\b|\bmasculin[ao]s?\b|\bmasc\b/.test(normalized)) {
+        hasExplicitGender = true;
+        criteria.push({
+            label: 'hombres',
+            test: c => /hombre|masculin|^m$/.test(normalizeText(c.gender))
+        });
+    }
 
     const betweenAge = normalized.match(/entre\s+(\d{1,2})\s+y\s+(\d{1,2})/);
     const olderAge = normalized.match(/(?:mayores?\s+de|mas\s+de|más\s+de)\s+(\d{1,2})/);
@@ -538,7 +558,7 @@ function buildQueryCriteria(message, stats) {
 
     const birthdayMonth = getBirthdayMonthFromMessage(message);
     if (birthdayMonth) {
-        criteria.push({ label: `cumplen en ${MONTHS[birthdayMonth - 1]}`, test: c => c.birthMonth === birthdayMonth });
+        criteria.push({ label: `cumpleanos en ${MONTHS[birthdayMonth - 1]}`, test: c => c.birthMonth === birthdayMonth });
     }
 
     if (/sin leer|no leidos|no leido|unread|burbuja/.test(normalized)) {
@@ -557,6 +577,7 @@ function buildQueryCriteria(message, stats) {
     const usedFields = new Set();
     for (const item of uniqueCandidateValues(stats.candidateIndex || [], stats)) {
         if (!normalized.includes(item.normalized)) continue;
+        if (hasExplicitGender && item.field === 'gender') continue;
         if (usedFields.has(item.field) && item.field !== 'tag') continue;
         usedFields.add(item.field);
         criteria.push({
@@ -577,15 +598,18 @@ function buildQueryCriteria(message, stats) {
 
 function getFilteredCountReply(message, stats) {
     const normalized = normalizeText(message);
-    if (!/cuantos|cuantas|total|numero|conteo|gente|personas|candidatos/.test(normalized)) return null;
+    if (!/cuantos|cuantas|total|numero|conteo|gente|personas|candidat|candiad|base/.test(normalized)) return null;
 
     const criteria = buildQueryCriteria(message, stats);
+    if (!criteria.length && /candidat|candiad|base/.test(normalized)) {
+        return `Tenemos ${stats.candidates.total} candidatos en total: ${stats.candidates.complete} completos, ${stats.candidates.incomplete} incompletos y ${stats.candidates.unread} sin leer.`;
+    }
     if (!criteria.length) return null;
 
     const matches = (stats.candidateIndex || []).filter(candidate =>
         criteria.every(criterion => criterion.test(candidate))
     );
-    return `Hay ${matches.length} candidatos con ${criteria.map(c => c.label).join(', ')}.`;
+    return `Hay ${matches.length} ${candidateWord(matches.length)} con ${criteria.map(c => c.label).join(', ')}.`;
 }
 
 export async function getPlatformStats({ forceRefresh = false } = {}) {
@@ -706,7 +730,7 @@ export function isPlatformStatsIntent(message) {
         .replace(/[\u0300-\u036f]/g, '');
 
     if (/\d{4,}/.test(String(message || ''))) return true;
-    if (/candidato|candidata|telefono|whatsapp|burbuja|sin leer|no leido|proyecto|proyectos|kanban|etapa|pipeline|cumple|cumplen|cumpleanos|cumpleaños|anos|años|municipio|categoria|escolaridad|genero|origen|colonia/.test(normalized)) {
+    if (/candidat|candiad|base|telefono|whatsapp|burbuja|sin leer|no leido|proyecto|proyectos|kanban|etapa|pipeline|cumple|cumplen|cumpleanos|cumpleaños|anos|años|municipio|categoria|escolaridad|genero|origen|colonia|mujer|mujers|hombre|femenin|masculin/.test(normalized)) {
         return true;
     }
 
@@ -715,7 +739,8 @@ export function isPlatformStatsIntent(message) {
         'dashboard', 'plataforma', 'datos', 'numeros', 'reporte'
     ];
     const platformWords = [
-        'candidato', 'candidatos', 'completo', 'completos', 'incompleto', 'incompletos',
+        'candidato', 'candidatos', 'candiadtos', 'base', 'mujeres', 'mujers', 'hombres',
+        'completo', 'completos', 'incompleto', 'incompletos',
         'sin leer', 'no leidos', 'unread', 'tag', 'tags', 'etiqueta', 'etiquetas',
         'filtro', 'filtros', 'vacante', 'vacantes', 'proyecto', 'proyectos',
         'automatizacion', 'automatizaciones', 'usuarios', 'mensajes'
@@ -745,7 +770,7 @@ export function getDirectPlatformStatsReply(message, stats) {
     if (projectReply) return projectReply;
 
     const asksCount = /cuantos|cuantas|numero|total/.test(normalized);
-    const asksCandidates = /candidato|candidatos|completo|incompleto|sin leer|no leidos|unread/.test(normalized);
+    const asksCandidates = /candidat|candiad|base|completo|incompleto|sin leer|no leidos|unread|mujer|mujers|hombre|femenin|masculin/.test(normalized);
     const asksTags = /tag|tags|etiqueta|etiquetas/.test(normalized);
     const asksFilters = /filtro|filtros|campos/.test(normalized);
 
