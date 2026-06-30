@@ -517,15 +517,39 @@ function getProjectQuestionReply(message, stats) {
     const projectWords = normalized
         .split(/\s+/)
         .filter(word => word.length >= 3)
-        .filter(word => !['proyecto', 'proyectos', 'candidatos', 'cuantos', 'cuantas', 'etapa', 'etapas', 'tiene'].includes(word));
+        .filter(word => ![
+            'proyecto', 'proyectos', 'candidatos', 'candiatos', 'cuantos', 'cuantas',
+            'etapa', 'etapas', 'paso', 'tiene', 'hay', 'del', 'con', 'los', 'las'
+        ].includes(word));
 
     const projects = stats.projects?.items || [];
-    const matches = projectWords.length
-        ? projects.filter(project => projectWords.some(word => normalizeText(project.name).includes(word))).slice(0, 5)
+    const scoredProjects = projectWords.length
+        ? projects
+            .map(project => {
+                const projectName = normalizeText(project.name);
+                const projectNameWords = projectName.split(/\s+/).filter(Boolean);
+                const score = projectWords.reduce((sum, word) => {
+                    if (!projectName.includes(word)) return sum;
+                    return sum + (projectNameWords.includes(word) ? 3 : 1);
+                }, 0);
+                return { project, score };
+            })
+            .filter(item => item.score > 0)
+            .sort((a, b) => b.score - a.score || b.project.name.length - a.project.name.length)
         : [];
+    const matches = scoredProjects.length > 1 && scoredProjects[0].score > scoredProjects[1].score
+        ? [scoredProjects[0].project]
+        : scoredProjects.slice(0, 5).map(item => item.project);
 
     if (matches.length === 1) {
         const p = matches[0];
+        const stepMatch = (p.stepCounts || [])
+            .filter(step => normalizeText(step.name) && normalized.includes(normalizeText(step.name)))
+            .sort((a, b) => normalizeText(b.name).length - normalizeText(a.name).length)[0];
+        if (stepMatch) {
+            return `${p.name} / ${stepMatch.name}: ${stepMatch.count} candidatos.`;
+        }
+
         const steps = p.stepCounts?.length
             ? p.stepCounts.slice(0, 5).map(step => `${step.name}: ${step.count}`).join(', ')
             : 'sin candidatos por etapa';
@@ -654,8 +678,8 @@ function buildQueryCriteria(message, stats) {
     if (/sin leer|no leidos|no leido|unread|burbuja/.test(normalized)) {
         criteria.push({ label: 'sin leer', test: c => c.unread });
     }
-    const asksComplete = /completos|completo/.test(normalized);
-    const asksIncomplete = /incompletos|incompleto/.test(normalized);
+    const asksComplete = /\bcompletos?\b/.test(normalized);
+    const asksIncomplete = /\bincompletos?\b/.test(normalized);
     if (asksComplete && !asksIncomplete) {
         criteria.push({ label: 'completos', test: c => c.complete });
     }
@@ -682,9 +706,15 @@ function buildQueryCriteria(message, stats) {
 
     const usedFields = new Set();
     const matchedValueGroups = new Map();
-    for (const item of uniqueCandidateValues(stats.candidateIndex || [], stats)) {
+    const availableValues = uniqueCandidateValues(stats.candidateIndex || [], stats);
+    const matchedTags = availableValues.filter(item =>
+        item.field === 'tag' && normalized.includes(item.normalized)
+    );
+
+    for (const item of availableValues) {
         if (!normalized.includes(item.normalized)) continue;
         if (hasExplicitGender && item.field === 'gender') continue;
+        if (item.field !== 'tag' && matchedTags.some(tag => tag.normalized.includes(item.normalized))) continue;
         if (usedFields.has(item.field) && item.field !== 'tag') continue;
         usedFields.add(item.field);
         if (!matchedValueGroups.has(item.normalized)) matchedValueGroups.set(item.normalized, []);
@@ -730,8 +760,8 @@ function getFilteredCountReply(message, stats) {
     const genderBreakdownReply = getGenderBreakdownReply(message, stats);
     if (genderBreakdownReply) return genderBreakdownReply;
 
-    const asksComplete = /completos|completo/.test(normalized);
-    const asksIncomplete = /incompletos|incompleto/.test(normalized);
+    const asksComplete = /\bcompletos?\b/.test(normalized);
+    const asksIncomplete = /\bincompletos?\b/.test(normalized);
     if (asksComplete && asksIncomplete) {
         const matches = criteria.length
             ? (stats.candidateIndex || []).filter(candidate => criteria.every(criterion => criterion.test(candidate)))
