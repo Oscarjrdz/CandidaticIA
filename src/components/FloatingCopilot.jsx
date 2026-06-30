@@ -111,6 +111,11 @@ function clampPosition(position, node) {
     };
 }
 
+function applyNodePosition(node, position) {
+    if (!node) return;
+    node.style.transform = `translate3d(${Math.round(position.x)}px, ${Math.round(position.y)}px, 0)`;
+}
+
 const FloatingCopilot = ({ onOpenSection, activeSection }) => {
     const { user } = useAuthContext();
     const [open, setOpen] = useState(false);
@@ -123,6 +128,7 @@ const FloatingCopilot = ({ onOpenSection, activeSection }) => {
     const messagesEndRef = useRef(null);
     const containerRef = useRef(null);
     const dragStateRef = useRef(null);
+    const rafRef = useRef(null);
     const suppressClickRef = useRef(false);
     const firstName = (user?.name || '').split(' ')[0] || 'Oscar';
     const currentSectionLabel = SECTION_LABELS[activeSection] || 'Candidatic';
@@ -147,6 +153,7 @@ const FloatingCopilot = ({ onOpenSection, activeSection }) => {
             setPosition((current) => {
                 const next = clampPosition(current, containerRef.current);
                 savePosition(next);
+                applyNodePosition(containerRef.current, next);
                 return next;
             });
         };
@@ -159,14 +166,20 @@ const FloatingCopilot = ({ onOpenSection, activeSection }) => {
         };
     }, [open]);
 
+    useEffect(() => {
+        applyNodePosition(containerRef.current, position);
+    }, [position, open]);
+
     const startDrag = (event) => {
         if (event.button !== undefined && event.button !== 0) return;
+        event.currentTarget.setPointerCapture?.(event.pointerId);
         const point = event.touches?.[0] || event;
         dragStateRef.current = {
             pointerId: event.pointerId,
             startX: point.clientX,
             startY: point.clientY,
             origin: position,
+            latest: position,
             moved: false
         };
 
@@ -181,12 +194,17 @@ const FloatingCopilot = ({ onOpenSection, activeSection }) => {
         const dy = event.clientY - drag.startY;
         if (Math.abs(dx) > 3 || Math.abs(dy) > 3) drag.moved = true;
 
-        const next = clampPosition({
+        drag.latest = clampPosition({
             x: drag.origin.x + dx,
             y: drag.origin.y + dy
         }, containerRef.current);
 
-        setPosition(next);
+        if (!rafRef.current) {
+            rafRef.current = requestAnimationFrame(() => {
+                rafRef.current = null;
+                applyNodePosition(containerRef.current, dragStateRef.current?.latest || drag.latest);
+            });
+        }
     };
 
     const stopDrag = () => {
@@ -194,12 +212,15 @@ const FloatingCopilot = ({ onOpenSection, activeSection }) => {
         dragStateRef.current = null;
         window.removeEventListener('pointermove', handleDragMove);
         window.removeEventListener('pointerup', stopDrag);
+        if (rafRef.current) {
+            cancelAnimationFrame(rafRef.current);
+            rafRef.current = null;
+        }
 
-        setPosition((current) => {
-            const next = clampPosition(current, containerRef.current);
-            savePosition(next);
-            return next;
-        });
+        const next = clampPosition(drag?.latest || position, containerRef.current);
+        applyNodePosition(containerRef.current, next);
+        savePosition(next);
+        setPosition(next);
 
         if (drag?.moved) {
             suppressClickRef.current = true;
@@ -276,8 +297,8 @@ const FloatingCopilot = ({ onOpenSection, activeSection }) => {
                     if (suppressClickRef.current) return;
                     handleOpen();
                 }}
-                className="fixed z-[70] flex items-center gap-3 rounded-full bg-blue-600 hover:bg-blue-700 text-white shadow-xl px-4 py-3 transition-all cursor-grab active:cursor-grabbing touch-none select-none"
-                style={{ left: position.x, top: position.y }}
+                className="fixed left-0 top-0 z-[70] flex items-center gap-3 rounded-full bg-blue-600 hover:bg-blue-700 text-white shadow-xl px-4 py-3 transition-colors will-change-transform cursor-grab active:cursor-grabbing touch-none select-none"
+                style={{ transform: `translate3d(${position.x}px, ${position.y}px, 0)` }}
                 title="Abrir Brenda IA"
             >
                 <span className="relative w-9 h-9 rounded-full overflow-hidden bg-white/15 flex items-center justify-center">
@@ -292,8 +313,8 @@ const FloatingCopilot = ({ onOpenSection, activeSection }) => {
     return (
         <section
             ref={containerRef}
-            className="fixed z-[70] w-[min(390px,calc(100vw-2.5rem))] bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-2xl overflow-hidden"
-            style={{ left: position.x, top: position.y }}
+            className="fixed left-0 top-0 z-[70] w-[min(390px,calc(100vw-2.5rem))] bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-2xl overflow-hidden will-change-transform"
+            style={{ transform: `translate3d(${position.x}px, ${position.y}px, 0)` }}
         >
             <header
                 onPointerDown={startDrag}
