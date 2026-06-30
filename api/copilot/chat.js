@@ -4,6 +4,7 @@ import {
     formatPlatformStatsForPrompt,
     getDirectPlatformStatsReply,
     getPlatformStats,
+    isLightweightPlatformStatsIntent,
     isPlatformStatsIntent
 } from '../utils/copilot-platform-stats.js';
 import { detectWebSearchIntent, formatSearchResultsForPrompt, searchWeb } from '../utils/web-search.js';
@@ -164,11 +165,13 @@ export default async function handler(req, res) {
     const history = normalizeHistory(req.body?.history);
     const now = getMonterreyNow();
     const needsPlatformStats = isPlatformStatsIntent(message);
+    const lightweightStats = needsPlatformStats ? isLightweightPlatformStatsIntent(message) : false;
     let platformStatsContext = '';
     let platformStats = null;
 
     if (needsPlatformStats) {
-        platformStats = await getPlatformStats();
+        // Use the light metrics profile for ops questions so Brenda avoids candidate scans.
+        platformStats = await getPlatformStats({ lightweight: lightweightStats });
         const directStatsReply = getDirectPlatformStatsReply(message, platformStats);
         if (directStatsReply) {
             return res.status(200).json({
@@ -176,7 +179,8 @@ export default async function handler(req, res) {
                 reply: directStatsReply,
                 model: 'skill:platform-stats',
                 usage: null,
-                skills: ['platform-stats']
+                skills: [lightweightStats ? 'platform-stats-light' : 'platform-stats'],
+                statsProfile: platformStats.profile || null
             });
         }
         platformStatsContext = formatPlatformStatsForPrompt(platformStats);
@@ -243,7 +247,8 @@ ${platformStatsContext ? `\n${platformStatsContext}` : ''}
             reply: sanitizeText(result.content, 2200),
             model: result.model,
             usage: result.usage || null,
-            skills: needsPlatformStats ? [...skills, 'platform-stats'] : skills,
+            skills: needsPlatformStats ? [...skills, lightweightStats ? 'platform-stats-light' : 'platform-stats'] : skills,
+            statsProfile: platformStats?.profile || null,
             limits: {
                 maxInputChars: MAX_INPUT_CHARS,
                 maxHistoryMessages: MAX_HISTORY_MESSAGES,
