@@ -701,12 +701,35 @@ function buildQueryCriteria(message, stats) {
     return criteria;
 }
 
+function getGenderBreakdownReply(message, stats) {
+    const normalized = normalizeText(message);
+    const asksWomen = /\bmujer(?:es)?\b|\bmujers\b|\bfemenin[ao]s?\b|\bfem\b/.test(normalized);
+    const asksMen = /\bhombre(?:s)?\b|\bmasculin[ao]s?\b|\bmasc\b/.test(normalized);
+    if (!asksWomen || !asksMen) return null;
+
+    const criteria = buildQueryCriteria(message, stats).filter(criterion =>
+        criterion.label !== 'mujeres' && criterion.label !== 'hombres'
+    );
+    const matches = criteria.length
+        ? (stats.candidateIndex || []).filter(candidate => criteria.every(criterion => criterion.test(candidate)))
+        : (stats.candidateIndex || []);
+
+    const women = matches.filter(candidate => /mujer|femenin|^f$/.test(normalizeText(candidate.gender))).length;
+    const men = matches.filter(candidate => /hombre|masculin|^m$/.test(normalizeText(candidate.gender))).length;
+    const filterText = criteria.length ? ` con ${criteria.map(c => c.label).join(', ')}` : ' en toda la base';
+
+    return `Hay ${matches.length} candidatos${filterText}: ${men} hombres y ${women} mujeres.`;
+}
+
 function getFilteredCountReply(message, stats) {
     const normalized = normalizeText(message);
     const asksRecentArrivals = /\bhoy\b/.test(normalized) && /nuevo|nueva|nuevos|nuevas|llegaron|llego|llegó|entraron|entro|entró|registrad|alta|contacto/.test(normalized);
-    if (!/cuantos|cuantas|total|numero|conteo|gente|personas|candid|base/.test(normalized) && !asksRecentArrivals) return null;
+    if (!/cuantos|cuantas|cuantoes|total|numero|conteo|gente|personas|candid|base/.test(normalized) && !asksRecentArrivals) return null;
 
     const criteria = buildQueryCriteria(message, stats);
+    const genderBreakdownReply = getGenderBreakdownReply(message, stats);
+    if (genderBreakdownReply) return genderBreakdownReply;
+
     const asksComplete = /completos|completo/.test(normalized);
     const asksIncomplete = /incompletos|incompleto/.test(normalized);
     if (asksComplete && asksIncomplete) {
@@ -1137,7 +1160,7 @@ function getOperationalStatsReply(message, stats) {
     const normalized = normalizeText(message);
     const ops = stats.operational || {};
 
-    if (/ancho de banda|bandwidth|consumo|gb|mb|redis bytes|servidor/.test(normalized)) {
+    if (/ancho de banda|bandwidth|consumo|\bgb\b|\bmb\b|redis bytes|servidor/.test(normalized)) {
         const used = formatBytes(ops.bandwidth?.usedBytes);
         const today = formatBytes(ops.bandwidth?.todayBytes);
         const limit = formatBytes(ops.bandwidth?.limitBytes);

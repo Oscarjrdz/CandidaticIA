@@ -128,6 +128,29 @@ function getDirectSkillReply(message, appContext) {
     return null;
 }
 
+function isShortGenderFollowUp(message) {
+    const normalized = normalizeForIntent(message)
+        .replace(/[¿?¡!.,;:]/g, '')
+        .trim();
+    return /^(y\s+)?(puras?\s+)?(puros?\s+)?(hombres?|mujeres?|masculinos?|femeninas?|femeninos?|masculinas?)$/.test(normalized);
+}
+
+function enrichStatsFollowUp(message, history) {
+    if (!isShortGenderFollowUp(message)) return message;
+
+    const previousContext = [...(history || [])]
+        .reverse()
+        .filter(item => item.role === 'user')
+        .map(item => sanitizeText(item.content, 220))
+        .find(content => {
+            const normalized = normalizeForIntent(content);
+            if (!normalized || isShortGenderFollowUp(normalized)) return false;
+            return /candidat|base|municipio|apodaca|monterrey|guadalupe|san nicolas|escobedo|santa catarina|garcia|juarez|pesqueria|metalsa|proyecto|tag|categoria|colonia|origen|escolaridad/.test(normalized);
+        });
+
+    return previousContext ? `${previousContext}. ${message}` : message;
+}
+
 export default async function handler(req, res) {
     if (req.method === 'OPTIONS') return res.status(200).end();
     if (req.method !== 'POST') {
@@ -164,15 +187,16 @@ export default async function handler(req, res) {
 
     const history = normalizeHistory(req.body?.history);
     const now = getMonterreyNow();
-    const needsPlatformStats = isPlatformStatsIntent(message);
-    const lightweightStats = needsPlatformStats ? isLightweightPlatformStatsIntent(message) : false;
+    const statsMessage = enrichStatsFollowUp(message, history);
+    const needsPlatformStats = isPlatformStatsIntent(statsMessage);
+    const lightweightStats = needsPlatformStats ? isLightweightPlatformStatsIntent(statsMessage) : false;
     let platformStatsContext = '';
     let platformStats = null;
 
     if (needsPlatformStats) {
         // Use the light metrics profile for ops questions so Brenda avoids candidate scans.
         platformStats = await getPlatformStats({ lightweight: lightweightStats });
-        const directStatsReply = getDirectPlatformStatsReply(message, platformStats);
+        const directStatsReply = getDirectPlatformStatsReply(statsMessage, platformStats);
         if (directStatsReply) {
             return res.status(200).json({
                 success: true,
