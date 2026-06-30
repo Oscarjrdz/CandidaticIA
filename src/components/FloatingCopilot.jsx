@@ -1,11 +1,13 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronRight, Loader2, MessageCircle, Minimize2, Send, Sparkles } from 'lucide-react';
+import { ChevronRight, GripHorizontal, Loader2, MessageCircle, Minimize2, Send, Sparkles } from 'lucide-react';
 import { useAuthContext } from '../contexts/AuthContext';
 
 const MAX_INPUT_CHARS = 900;
 const MAX_CLIENT_HISTORY = 8;
 const GREETING_COOLDOWN_MS = 15 * 60 * 1000;
 const BRENDA_AVATAR_SRC = '/brenda/avatar-candidatic.png';
+const POSITION_STORAGE_KEY = 'brenda_ia_floating_position_v1';
+const EDGE_PADDING = 12;
 
 const SECTION_LABELS = {
     candidates: 'Candidatos',
@@ -66,6 +68,49 @@ function markGreetingShown(user) {
     }
 }
 
+function getDefaultPosition() {
+    if (typeof window === 'undefined') return { x: 20, y: 520 };
+    return {
+        x: EDGE_PADDING + 8,
+        y: Math.max(EDGE_PADDING, window.innerHeight - 88)
+    };
+}
+
+function loadSavedPosition() {
+    try {
+        const raw = localStorage.getItem(POSITION_STORAGE_KEY);
+        const parsed = raw ? JSON.parse(raw) : null;
+        if (Number.isFinite(parsed?.x) && Number.isFinite(parsed?.y)) {
+            return parsed;
+        }
+    } catch {
+        // Position memory is optional.
+    }
+    return getDefaultPosition();
+}
+
+function savePosition(position) {
+    try {
+        localStorage.setItem(POSITION_STORAGE_KEY, JSON.stringify({
+            x: Math.round(position.x),
+            y: Math.round(position.y)
+        }));
+    } catch {
+        // No-op: dragging still works even if storage is blocked.
+    }
+}
+
+function clampPosition(position, node) {
+    if (typeof window === 'undefined') return position;
+    const rect = node?.getBoundingClientRect?.();
+    const width = rect?.width || 220;
+    const height = rect?.height || 80;
+    return {
+        x: Math.min(Math.max(EDGE_PADDING, position.x), Math.max(EDGE_PADDING, window.innerWidth - width - EDGE_PADDING)),
+        y: Math.min(Math.max(EDGE_PADDING, position.y), Math.max(EDGE_PADDING, window.innerHeight - height - EDGE_PADDING))
+    };
+}
+
 const FloatingCopilot = ({ onOpenSection, activeSection }) => {
     const { user } = useAuthContext();
     const [open, setOpen] = useState(false);
@@ -73,8 +118,12 @@ const FloatingCopilot = ({ onOpenSection, activeSection }) => {
     const [input, setInput] = useState('');
     const [loading, setLoading] = useState(false);
     const [usage, setUsage] = useState(null);
+    const [position, setPosition] = useState(loadSavedPosition);
     const inputRef = useRef(null);
     const messagesEndRef = useRef(null);
+    const containerRef = useRef(null);
+    const dragStateRef = useRef(null);
+    const suppressClickRef = useRef(false);
     const firstName = (user?.name || '').split(' ')[0] || 'Oscar';
     const currentSectionLabel = SECTION_LABELS[activeSection] || 'Candidatic';
 
@@ -92,6 +141,73 @@ const FloatingCopilot = ({ onOpenSection, activeSection }) => {
         if (!open) return;
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
     }, [messages, loading, open]);
+
+    useEffect(() => {
+        const clampAndSave = () => {
+            setPosition((current) => {
+                const next = clampPosition(current, containerRef.current);
+                savePosition(next);
+                return next;
+            });
+        };
+
+        const frame = requestAnimationFrame(clampAndSave);
+        window.addEventListener('resize', clampAndSave);
+        return () => {
+            cancelAnimationFrame(frame);
+            window.removeEventListener('resize', clampAndSave);
+        };
+    }, [open]);
+
+    const startDrag = (event) => {
+        if (event.button !== undefined && event.button !== 0) return;
+        const point = event.touches?.[0] || event;
+        dragStateRef.current = {
+            pointerId: event.pointerId,
+            startX: point.clientX,
+            startY: point.clientY,
+            origin: position,
+            moved: false
+        };
+
+        window.addEventListener('pointermove', handleDragMove);
+        window.addEventListener('pointerup', stopDrag);
+    };
+
+    const handleDragMove = (event) => {
+        const drag = dragStateRef.current;
+        if (!drag) return;
+        const dx = event.clientX - drag.startX;
+        const dy = event.clientY - drag.startY;
+        if (Math.abs(dx) > 3 || Math.abs(dy) > 3) drag.moved = true;
+
+        const next = clampPosition({
+            x: drag.origin.x + dx,
+            y: drag.origin.y + dy
+        }, containerRef.current);
+
+        setPosition(next);
+    };
+
+    const stopDrag = () => {
+        const drag = dragStateRef.current;
+        dragStateRef.current = null;
+        window.removeEventListener('pointermove', handleDragMove);
+        window.removeEventListener('pointerup', stopDrag);
+
+        setPosition((current) => {
+            const next = clampPosition(current, containerRef.current);
+            savePosition(next);
+            return next;
+        });
+
+        if (drag?.moved) {
+            suppressClickRef.current = true;
+            setTimeout(() => {
+                suppressClickRef.current = false;
+            }, 0);
+        }
+    };
 
     const sendMessage = async (overrideText) => {
         const clean = String(overrideText ?? input).replace(/\s+/g, ' ').trim().slice(0, MAX_INPUT_CHARS);
@@ -154,8 +270,14 @@ const FloatingCopilot = ({ onOpenSection, activeSection }) => {
     if (!open) {
         return (
             <button
-                onClick={handleOpen}
-                className="fixed left-5 bottom-6 z-[70] flex items-center gap-3 rounded-full bg-blue-600 hover:bg-blue-700 text-white shadow-xl px-4 py-3 transition-all"
+                ref={containerRef}
+                onPointerDown={startDrag}
+                onClick={() => {
+                    if (suppressClickRef.current) return;
+                    handleOpen();
+                }}
+                className="fixed z-[70] flex items-center gap-3 rounded-full bg-blue-600 hover:bg-blue-700 text-white shadow-xl px-4 py-3 transition-all cursor-grab active:cursor-grabbing touch-none select-none"
+                style={{ left: position.x, top: position.y }}
                 title="Abrir Brenda IA"
             >
                 <span className="relative w-9 h-9 rounded-full overflow-hidden bg-white/15 flex items-center justify-center">
@@ -168,8 +290,15 @@ const FloatingCopilot = ({ onOpenSection, activeSection }) => {
     }
 
     return (
-        <section className="fixed left-5 bottom-6 z-[70] w-[min(390px,calc(100vw-2.5rem))] bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-2xl overflow-hidden">
-            <header className="px-4 py-3 bg-blue-600 text-white flex items-center justify-between">
+        <section
+            ref={containerRef}
+            className="fixed z-[70] w-[min(390px,calc(100vw-2.5rem))] bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-2xl overflow-hidden"
+            style={{ left: position.x, top: position.y }}
+        >
+            <header
+                onPointerDown={startDrag}
+                className="px-4 py-3 bg-blue-600 text-white flex items-center justify-between cursor-grab active:cursor-grabbing touch-none select-none"
+            >
                 <div className="flex items-center gap-3 min-w-0">
                     <div className="w-9 h-9 rounded-full overflow-hidden bg-white/15 shrink-0">
                         <img src={BRENDA_AVATAR_SRC} alt="" className="w-full h-full object-cover object-[50%_18%]" />
@@ -178,9 +307,11 @@ const FloatingCopilot = ({ onOpenSection, activeSection }) => {
                         <h3 className="text-sm font-bold truncate">Brenda IA</h3>
                         <p className="text-[11px] text-blue-100 truncate">{currentSectionLabel}</p>
                     </div>
+                    <GripHorizontal className="w-4 h-4 text-blue-100 shrink-0" aria-hidden="true" />
                 </div>
                 <div className="flex items-center gap-1">
                     <button
+                        onPointerDown={(event) => event.stopPropagation()}
                         onClick={onOpenSection}
                         className="p-2 rounded-lg hover:bg-white/15 transition-colors"
                         title="Abrir Brenda IA"
@@ -188,6 +319,7 @@ const FloatingCopilot = ({ onOpenSection, activeSection }) => {
                         <ChevronRight className="w-4 h-4" />
                     </button>
                     <button
+                        onPointerDown={(event) => event.stopPropagation()}
                         onClick={() => setOpen(false)}
                         className="p-2 rounded-lg hover:bg-white/15 transition-colors"
                         title="Minimizar"
