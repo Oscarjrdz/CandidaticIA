@@ -270,7 +270,7 @@ const Sidebar = ({ activeSection, onSectionChange, onLogout, isMobileOpen, onClo
                                 <h2 className="candidatic-thinking-logo text-[20px] font-extrabold tracking-wider flex items-center drop-shadow-sm ml-1">
                                     CANDIDATIC&nbsp;<span className="tracking-tighter">IΛ</span>
                                 </h2>
-                                <span className="text-[18px] text-white font-medium tracking-wide text-right ml-1 -mt-1">by Hr One México</span>
+                                <span className="text-[12px] text-white font-medium tracking-tight text-right ml-1 -mt-1">by Hr One México</span>
                             </div>
                         </div>
                         {/* Mobile close button */}
