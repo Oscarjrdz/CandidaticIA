@@ -266,9 +266,12 @@ const Sidebar = ({ activeSection, onSectionChange, onLogout, isMobileOpen, onClo
                             <div className="relative flex-shrink-0 transition-transform duration-300 hover:scale-105 candidatic-brand-icon">
                                 <BrainCircuit className="w-8 h-8 text-white stroke-[2] drop-shadow-md rotate-90" />
                             </div>
-                            <h2 className={`candidatic-thinking-logo text-[20px] font-extrabold tracking-wider flex items-center drop-shadow-sm ml-1 ${isCollapsed ? 'lg:hidden' : ''}`}>
-                                CANDIDATIC&nbsp;<span className="tracking-tighter">IΛ</span>
-                            </h2>
+                            <div className={`flex flex-col ${isCollapsed ? 'lg:hidden' : ''}`}>
+                                <h2 className="candidatic-thinking-logo text-[20px] font-extrabold tracking-wider flex items-center drop-shadow-sm ml-1">
+                                    CANDIDATIC&nbsp;<span className="tracking-tighter">IΛ</span>
+                                </h2>
+                                <span className="text-[9px] text-white/50 font-medium tracking-wide text-right ml-1">by Hr One México</span>
+                            </div>
                         </div>
                         {/* Mobile close button */}
                         <button
