@@ -65,7 +65,7 @@ export default async function handler(req, res) {
         const hasLabelRestriction = Array.isArray(allowedLabels) && allowedLabels.length > 0;
         const hasRBACRestriction = user.role !== 'SuperAdmin' && user.role !== 'Admin' && (hasCrmRestriction || hasLabelRestriction);
 
-        const counts = { all: 0, complete: 0, incomplete: 0, tags: {}, completeTags: {}, incompleteTags: {}, crmProjects: {} };
+        const counts = { all: 0, complete: 0, incomplete: 0, untagged: 0, completeUntagged: 0, incompleteUntagged: 0, tags: {}, completeTags: {}, incompleteTags: {}, crmProjects: {} };
         if (!unreadSetSize) {
             const payload = { success: true, unreadCount: 0, counts };
             await redis.set(cacheKey, JSON.stringify(payload), 'EX', 8).catch(() => {});
@@ -119,15 +119,22 @@ export default async function handler(req, res) {
                 if (complete) counts.complete++;
                 else counts.incomplete++;
 
-                if (Array.isArray(candidate.tags)) {
-                    for (const tag of candidate.tags) {
-                        const tagName = typeof tag === 'string' ? tag : tag?.name;
-                        const normalized = tagName?.trim().toLowerCase();
-                        if (normalized) {
-                            counts.tags[normalized] = (counts.tags[normalized] || 0) + 1;
-                            if (complete) counts.completeTags[normalized] = (counts.completeTags[normalized] || 0) + 1;
-                            else counts.incompleteTags[normalized] = (counts.incompleteTags[normalized] || 0) + 1;
-                        }
+                const candidateTags = Array.isArray(candidate.tags)
+                    ? candidate.tags
+                        .map(tag => typeof tag === 'string' ? tag : tag?.name)
+                        .map(tag => tag?.trim().toLowerCase())
+                        .filter(Boolean)
+                    : [];
+
+                if (candidateTags.length === 0) {
+                    counts.untagged++;
+                    if (complete) counts.completeUntagged++;
+                    else counts.incompleteUntagged++;
+                } else {
+                    for (const normalized of candidateTags) {
+                        counts.tags[normalized] = (counts.tags[normalized] || 0) + 1;
+                        if (complete) counts.completeTags[normalized] = (counts.completeTags[normalized] || 0) + 1;
+                        else counts.incompleteTags[normalized] = (counts.incompleteTags[normalized] || 0) + 1;
                     }
                 }
 

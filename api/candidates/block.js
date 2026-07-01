@@ -16,8 +16,8 @@ export default async function handler(req, res) {
         }
 
         // 1. Obtener datos del candidato y configuración de UltraMsg
-        const { getCandidateById, updateCandidate } = await import('../utils/storage.js');
-        const { getUltraMsgConfig, blockUltraMsgContact, unblockUltraMsgContact } = await import('../whatsapp/utils.js');
+        const { getCandidateById, updateCandidate, HUMAN_INTERVENTION_SILENCE_MS } = await import('../utils/storage.js');
+        const { getUltraMsgConfig } = await import('../whatsapp/utils.js');
 
         const candidate = await getCandidateById(id);
         if (!candidate) {
@@ -29,13 +29,30 @@ export default async function handler(req, res) {
             return res.status(500).json({ success: false, error: 'Configuración de WhatsApp incompleta' });
         }
 
-        // Solo queremos silenciar la IA (marcar al candidato como bloqueado), 
+        const now = new Date();
+        const silencePatch = block
+            ? {
+                blocked: true,
+                blockedAt: now.toISOString(),
+                blockedExpiresAt: new Date(now.getTime() + HUMAN_INTERVENTION_SILENCE_MS).toISOString(),
+                blockedReason: 'human_intervention'
+            }
+            : {
+                blocked: false,
+                blockedAt: null,
+                blockedExpiresAt: null,
+                blockedExpiredAt: null,
+                blockedReason: null
+            };
+
+        // Solo queremos silenciar la IA (marcar al candidato como bloqueado),
         // NO queremos bloquearlo físicamente en WhatsApp para que el reclutador humano pueda seguir hablando.
-        await updateCandidate(id, { blocked: block });
+        const updatedCandidate = await updateCandidate(id, silencePatch);
 
         return res.status(200).json({
             success: true,
             message: block ? 'Chat silenciado de la IA correctamente' : 'IA reactivada para este chat',
+            candidate: updatedCandidate,
             remote: { success: true }
         });
 

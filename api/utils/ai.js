@@ -462,6 +462,20 @@ Respuesta:`;
 export async function cleanEscolaridadWithAI(escolaridad) {
     if (!escolaridad || escolaridad.length < 1) return escolaridad;
 
+    // Fast path: most candidate answers are simple catalog values or common shorthand.
+    // Avoiding GPT here removes one extra network call from the normal extraction path.
+    const key = normalize(escolaridad);
+    const directMatches = [
+        { pattern: /\b(primaria|prim|elemental)\b/, value: 'Primaria' },
+        { pattern: /\b(secundaria|secund|secu|sec)\b/, value: 'Secundaria' },
+        { pattern: /\b(preparatoria|bachillerato|prepa|prep|cbetis|cbtis|conalep|cecyte|cetis)\b/, value: 'Preparatoria' },
+        { pattern: /\b(licenciatura|licenc|lic|ingenieria|universidad|uni|profesional)\b/, value: 'Licenciatura' },
+        { pattern: /\b(tecnica|tecnico|carrera tecnica)\b/, value: 'Técnica' },
+        { pattern: /\b(posgrado|maestria|doctorado|especialidad)\b/, value: 'Posgrado' }
+    ];
+    const directMatch = directMatches.find(({ pattern }) => pattern.test(key));
+    if (directMatch) return directMatch.value;
+
     try {
         const { getOpenAIResponse } = await import('./openai.js');
         const prompt = `Analiza la siguiente descripción de escolaridad: "${escolaridad}".

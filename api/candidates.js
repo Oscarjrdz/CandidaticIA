@@ -34,6 +34,30 @@ function clearCandidatesListCache() {
     candidatesListCache.clear();
 }
 
+function buildCandidatesListPayload({ candidates = [], total = 0, limit = 100, offset = 0, statsData = null }) {
+    const safeLimit = Math.max(1, parseInt(limit, 10) || 100);
+    const safeOffset = Math.max(0, parseInt(offset, 10) || 0);
+    const safeTotal = Math.max(0, Number(total) || 0);
+    const count = Array.isArray(candidates) ? candidates.length : 0;
+    const nextOffset = safeOffset + count;
+
+    return {
+        success: true,
+        count,
+        total: safeTotal,
+        candidates,
+        hasMore: count > 0 && nextOffset < safeTotal,
+        pagination: {
+            limit: safeLimit,
+            offset: safeOffset,
+            nextOffset,
+            hasMore: count > 0 && nextOffset < safeTotal,
+            total: safeTotal
+        },
+        stats: statsData
+    };
+}
+
 export default async function handler(req, res) {
     // CORS preflight
     if (req.method === 'OPTIONS') {
@@ -125,8 +149,10 @@ export default async function handler(req, res) {
 
             // Modo filtro servidor: unread / complete / incomplete (sin tag ni búsqueda)
             if (['unread', 'complete', 'incomplete'].includes(filter) && !search && !tag) {
-                const { candidates, total } = await getCandidatesFiltered(filter, parseInt(limit) || 500, parseInt(offset) || 0);
-                const payload = { success: true, candidates, total, count: candidates.length };
+                const safeLimit = parseInt(limit, 10) || 500;
+                const safeOffset = parseInt(offset, 10) || 0;
+                const { candidates, total } = await getCandidatesFiltered(filter, safeLimit, safeOffset);
+                const payload = buildCandidatesListPayload({ candidates, total, limit: safeLimit, offset: safeOffset });
                 setCachedCandidatesList(cacheKey, payload);
                 res.setHeader('X-Candidatic-Cache', 'MISS');
                 res.setHeader('Cache-Control', 'private, max-age=10');
@@ -139,14 +165,16 @@ export default async function handler(req, res) {
 
             // Modo unreadFirst sin filtro: no-leídos + N recientes
             if (unreadFirst === 'true' && !search && !tag && excludeLinked !== 'true') {
-                const { candidates, total } = await getCandidatesUnreadFirst(parseInt(limit) || 50, parseInt(offset) || 0);
-                const payload = {
-                    success: true,
-                    count: candidates.length,
-                    total: statsData?.candidates || total,
+                const safeLimit = parseInt(limit, 10) || 50;
+                const safeOffset = parseInt(offset, 10) || 0;
+                const { candidates, total } = await getCandidatesUnreadFirst(safeLimit, safeOffset);
+                const payload = buildCandidatesListPayload({
                     candidates,
-                    stats: statsData
-                };
+                    total: statsData?.candidates || total,
+                    limit: safeLimit,
+                    offset: safeOffset,
+                    statsData
+                });
                 setCachedCandidatesList(cacheKey, payload);
                 res.setHeader('X-Candidatic-Cache', 'MISS');
                 res.setHeader('Cache-Control', 'private, max-age=10');
@@ -159,8 +187,10 @@ export default async function handler(req, res) {
 
             // Modo unreadFirst con tag activo y primera página: no-leídos con ese tag primero
             if (unreadFirst === 'true' && tag && !search && excludeLinked !== 'true') {
-                const { candidates, total } = await getCandidatesUnreadFirstByTag(tag, parseInt(limit) || 33, parseInt(offset) || 0);
-                const payload = { success: true, count: candidates.length, total, candidates };
+                const safeLimit = parseInt(limit, 10) || 33;
+                const safeOffset = parseInt(offset, 10) || 0;
+                const { candidates, total } = await getCandidatesUnreadFirstByTag(tag, safeLimit, safeOffset);
+                const payload = buildCandidatesListPayload({ candidates, total, limit: safeLimit, offset: safeOffset });
                 setCachedCandidatesList(cacheKey, payload);
                 res.setHeader('X-Candidatic-Cache', 'MISS');
                 res.setHeader('Cache-Control', 'private, max-age=10');
@@ -172,25 +202,23 @@ export default async function handler(req, res) {
             }
 
             // Lista de candidatos (modo normal)
+            const safeLimit = parseInt(limit, 10) || 100;
+            const safeOffset = parseInt(offset, 10) || 0;
             const { candidates, total } = await getCandidates(
-                parseInt(limit),
-                parseInt(offset),
+                safeLimit,
+                safeOffset,
                 search,
                 excludeLinked === 'true',
                 tag
             );
 
-            const payload = {
-                success: true,
-                count: candidates.length,
+            const payload = buildCandidatesListPayload({
+                candidates,
                 total: statsData?.candidates || total,
-                candidates: candidates,
-                pagination: {
-                    limit: parseInt(limit),
-                    offset: parseInt(offset)
-                },
-                stats: statsData // Include stats if requested
-            };
+                limit: safeLimit,
+                offset: safeOffset,
+                statsData
+            });
             setCachedCandidatesList(cacheKey, payload);
             res.setHeader('X-Candidatic-Cache', 'MISS');
             res.setHeader('Cache-Control', 'private, max-age=10');

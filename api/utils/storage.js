@@ -94,6 +94,9 @@ const INDEX_KEYS = {
     READY: 'index:candidates:secondary:ready',
     LOCK: 'index:candidates:secondary:lock'
 };
+const UNTAGGED_TAG_FILTER = '__candidatic_untagged__';
+const UNTAGGED_COUNT_KEY = 'candidatic:untagged_count';
+export const HUMAN_INTERVENTION_SILENCE_MS = 5 * 24 * 60 * 60 * 1000;
 
 const indexPart = (value) => Buffer.from(String(value || '').trim().toLowerCase()).toString('base64url');
 const tagIndexKey = (tag) => `${INDEX_KEYS.TAG_PREFIX}${indexPart(typeof tag === 'string' ? tag : tag?.name)}`;
@@ -102,6 +105,24 @@ const cleanTagValues = (tags) => [...new Set((Array.isArray(tags) ? tags : [])
     .map(t => typeof t === 'string' ? t : t?.name)
     .map(t => String(t || '').trim())
     .filter(Boolean))];
+
+function normalizeCandidateSilence(candidate, nowMs = Date.now()) {
+    if (!candidate || candidate.blocked !== true || !candidate.blockedExpiresAt) return candidate;
+    const expiresMs = new Date(candidate.blockedExpiresAt).getTime();
+    if (!Number.isFinite(expiresMs) || expiresMs > nowMs) return candidate;
+
+    return {
+        ...candidate,
+        blocked: false,
+        blockedExpiredAt: new Date(nowMs).toISOString()
+    };
+}
+
+function persistExpiredSilence(client, originalCandidate, normalizedCandidate) {
+    if (!client || !originalCandidate || originalCandidate === normalizedCandidate) return;
+    if (originalCandidate.blocked !== true || normalizedCandidate.blocked === true) return;
+    client.set(`${KEYS.CANDIDATE_PREFIX}${normalizedCandidate.id}`, JSON.stringify(normalizedCandidate)).catch(() => {});
+}
 
 async function syncCandidateSecondaryIndexes(client, oldCandidate = null, newCandidate = null) {
     if (!client) return;
@@ -175,7 +196,7 @@ export async function hydrateCandidateIds(ids, limit = 500) {
     return rows
         .map(([err, raw]) => {
             if (err || !raw) return null;
-            try { return JSON.parse(raw); } catch { return null; }
+            try { return normalizeCandidateSilence(JSON.parse(raw)); } catch { return null; }
         })
         .filter(Boolean);
 }
@@ -251,7 +272,7 @@ const getDistributedItems = async (listKey, itemPrefixPrefix, start = 0, stop = 
         const items = results
             .map(([err, res]) => {
                 if (err || !res) return null;
-                try { return JSON.parse(res); } catch { return null; }
+                try { return normalizeCandidateSilence(JSON.parse(res)); } catch { return null; }
             })
             .filter(i => i !== null);
 
@@ -535,7 +556,7 @@ export const getCandidates = async (limit = 100, offset = 0, search = '', exclud
         const results = await pipeline.exec();
 
         const candidates = results
-            .map(([err, res]) => (err || !res) ? null : JSON.parse(res))
+            .map(([err, res]) => (err || !res) ? null : normalizeCandidateSilence(JSON.parse(res)))
             .filter(Boolean);
 
         const total = await sumCount();
@@ -572,10 +593,18 @@ export const getCandidates = async (limit = 100, offset = 0, search = '', exclud
             if (err || !res) continue;
             
             try {
-                const c = JSON.parse(res);
+                const c = normalizeCandidateSilence(JSON.parse(res));
                 
-                // 1. Tag Filter
-                if (tagFilter && (!Array.isArray(c.tags) || !c.tags.some(t => (typeof t === 'string' ? t : (t?.name || '')).trim().toLowerCase() === tagFilter.trim().toLowerCase()))) continue;
+                // Special tag value used by Chat Web to page candidates with no labels.
+                if (tagFilter) {
+                    const candidateTags = cleanTagValues(c.tags);
+                    const normalizedTagFilter = tagFilter.trim().toLowerCase();
+                    if (normalizedTagFilter === UNTAGGED_TAG_FILTER) {
+                        if (candidateTags.length > 0) continue;
+                    } else if (!candidateTags.some(t => t.toLowerCase() === normalizedTagFilter)) {
+                        continue;
+                    }
+                }
                 
                 // 2. Exclusion Filter (Linked profiles or incomplete profiles)
                 // ✅ META AUDIT: Check projectId inline instead of external hash lookup
@@ -641,7 +670,7 @@ async function _seedUnreadSet(client) {
             for (const [err, res] of results) {
                 if (err || !res) continue;
                 try {
-                    const c = JSON.parse(res);
+                    const c = normalizeCandidateSilence(JSON.parse(res));
                     const ut = c.lastUserMessageAt ? new Date(c.lastUserMessageAt).getTime() : 0;
                     const ht = c.lastHumanMessageAt ? new Date(c.lastHumanMessageAt).getTime() : 0;
                     if (ut > ht) unreadIds.push(c.id);
@@ -682,7 +711,7 @@ export const getCandidatesUnreadFirst = async (recentLimit = 50, offset = 0) => 
         const fp = client.pipeline();
         fallbackIds.forEach(id => fp.get(`${KEYS.CANDIDATE_PREFIX}${id}`));
         const fr = await fp.exec();
-        const candidates = fr.map(([e, r]) => e || !r ? null : JSON.parse(r)).filter(Boolean);
+        const candidates = fr.map(([e, r]) => e || !r ? null : normalizeCandidateSilence(JSON.parse(r))).filter(Boolean);
         return { candidates, total: candidates.length };
     }
 
@@ -704,7 +733,7 @@ export const getCandidatesUnreadFirst = async (recentLimit = 50, offset = 0) => 
     const results = await pipeline.exec();
 
     const candidates = results
-        .map(([err, res]) => (err || !res) ? null : JSON.parse(res))
+        .map(([err, res]) => (err || !res) ? null : normalizeCandidateSilence(JSON.parse(res)))
         .filter(Boolean);
 
     candidates.sort((a, b) =>
@@ -731,7 +760,7 @@ export const getCandidatesFiltered = async (filter, limit = 500, offset = 0) => 
     const results = await pipe.exec();
 
     const candidates = results
-        .map(([err, res]) => (err || !res) ? null : JSON.parse(res))
+        .map(([err, res]) => (err || !res) ? null : normalizeCandidateSilence(JSON.parse(res)))
         .filter(c => {
             if (!c) return false;
             const u = new Date(c.lastUserMessageAt || 0).getTime();
@@ -778,10 +807,13 @@ export const getCandidatesUnreadFirstByTag = async (tagFilter, limit = 33, offse
     const results = await pipeline.exec();
 
     const all = results
-        .map(([err, res]) => (err || !res) ? null : JSON.parse(res))
-        .filter(c => c && Array.isArray(c.tags) && c.tags.some(t =>
-            (typeof t === 'string' ? t : (t?.name || '')).trim().toLowerCase() === tagLower
-        ));
+        .map(([err, res]) => (err || !res) ? null : normalizeCandidateSilence(JSON.parse(res)))
+        .filter(c => {
+            if (!c) return false;
+            const candidateTags = cleanTagValues(c.tags);
+            if (tagLower === UNTAGGED_TAG_FILTER) return candidateTags.length === 0;
+            return candidateTags.some(t => t.toLowerCase() === tagLower);
+        });
 
     // Separar no-leídos de leídos y ordenar cada grupo por último mensaje DESC
     const ts = c => new Date(c.lastUserMessageAt || c.ultimoMensaje || 0).getTime();
@@ -975,6 +1007,9 @@ export const saveCandidate = async (candidate) => {
         }
     }
     syncCandidateSecondaryIndexes(client, previousCandidate, finalCandidate).catch(() => {});
+    if (_isNewCandidate && client && cleanTagValues(finalCandidate.tags).length === 0) {
+        client.incr(UNTAGGED_COUNT_KEY).catch(() => {});
+    }
     if (_isNewCandidate) {
         if (client) _publishGlobalStats(client).catch(() => {});
         import('./sse-notify.js').then(({ notifyNewCandidate }) => {
@@ -1031,10 +1066,17 @@ export const deleteCandidate = async (id) => {
                 const humanTime = c.lastHumanMessageAt ? new Date(c.lastHumanMessageAt).getTime() : 0;
                 wasUnread = !!userTime && userTime > humanTime;
                 // Decrement tag counts
-                if (Array.isArray(c.tags) && c.tags.length > 0) {
+                const deletedTags = cleanTagValues(c.tags);
+                if (deletedTags.length > 0) {
                     const tp = client.pipeline();
-                    c.tags.forEach(t => tp.hincrby('candidatic:tag_counts', t, -1));
+                    deletedTags.forEach(t => tp.hincrby('candidatic:tag_counts', t, -1));
                     tp.exec().catch(() => {});
+                } else {
+                    client.eval(
+                        "local current = tonumber(redis.call('GET', KEYS[1]) or '0'); if current > 0 then return redis.call('DECR', KEYS[1]); end; return current;",
+                        1,
+                        UNTAGGED_COUNT_KEY
+                    ).catch(() => {});
                 }
                 syncCandidateSecondaryIndexes(client, c, null).catch(() => {});
             }
@@ -1120,7 +1162,11 @@ export const getCandidateById = async (id) => {
     const client = getClient();
     if (!client) return null;
     const data = await client.get(`${KEYS.CANDIDATE_PREFIX}${id}`);
-    return data ? JSON.parse(data) : null;
+    if (!data) return null;
+    const candidate = JSON.parse(data);
+    const normalized = normalizeCandidateSilence(candidate);
+    persistExpiredSilence(client, candidate, normalized);
+    return normalized;
 };
 
 // Fast lookup only — no fallback scan. Returns null if not in index.
@@ -1302,16 +1348,26 @@ export const updateCandidate = async (id, data) => {
 
     // ATOMIC TAG COUNTS: keep candidatic:tag_counts hash in sync when tags change
     if ('tags' in data) {
-        const oldSet = new Set(Array.isArray(candidate.tags) ? candidate.tags : []);
-        const newSet = new Set(Array.isArray(data.tags) ? data.tags : []);
+        const oldSet = new Set(cleanTagValues(candidate.tags));
+        const newSet = new Set(cleanTagValues(data.tags));
         const added   = [...newSet].filter(t => !oldSet.has(t));
         const removed = [...oldSet].filter(t => !newSet.has(t));
-        if (added.length || removed.length) {
+        const wasUntagged = oldSet.size === 0;
+        const isUntagged = newSet.size === 0;
+        if (added.length || removed.length || wasUntagged !== isUntagged) {
             const tc = getRedisClient();
             if (tc) {
                 const p = tc.pipeline();
                 added.forEach(t => p.hincrby('candidatic:tag_counts', t, 1));
                 removed.forEach(t => p.hincrby('candidatic:tag_counts', t, -1));
+                if (wasUntagged && !isUntagged) {
+                    p.eval(
+                        "local current = tonumber(redis.call('GET', KEYS[1]) or '0'); if current > 0 then return redis.call('DECR', KEYS[1]); end; return current;",
+                        1,
+                        UNTAGGED_COUNT_KEY
+                    );
+                }
+                if (!wasUntagged && isUntagged) p.incr(UNTAGGED_COUNT_KEY);
                 p.exec().catch(() => {});
             }
         }

@@ -182,6 +182,11 @@ const _SINGLE_HOUR_CTAS = [
     "¿Te parece bien si agendamos tu entrevista? ⏰",
     "¿Quieres que confirme tu asistencia a esta hora? ✨"
 ];
+
+const NEW_CANDIDATE_GREETING = '¡Hola! 😇 Soy Brenda Rodríguez, reclutadora de Candidatic.';
+const NEW_CANDIDATE_NAME_ASK = '¿Me puedes compartir tu Nombre y Apellidos completos? 🌟';
+const buildNewCandidateWelcome = () => `${NEW_CANDIDATE_GREETING}[MSG_SPLIT]${NEW_CANDIDATE_NAME_ASK}`;
+
 const _AMBIGUITY_VARIANTS = [
     'Solo por confirmar, ¿te gustaría agendar tu entrevista? 😊',
     'Disculpa, ¿me confirmas si quieres que te agende la entrevista? 🌸',
@@ -1141,11 +1146,12 @@ const getReengageVacancies = async (candidateData) => {
 
 export const processMessage = async (candidateId, incomingMessage, msgId = null) => {
     const startTime = Date.now();
+    let candidateData = null;
     try {
         const redis = getRedisClient();
 
         // 0. Fetch candidate first to get instance context
-        const candidateData = await getCandidateById(candidateId);
+        candidateData = await getCandidateById(candidateId);
         if (!candidateData) return 'ERROR: No se encontró al candidato';
 
         // 🔄 REAL-TIME INSTANCE RESOLUTION: Use the Redis key set by the webhook
@@ -1823,15 +1829,15 @@ ${safeDnaLines}
                 let skipRecruiterInference = false;
                 // (isHandlingPivot is declared at outer scope — hoisted for FINAL DELIVERY SAFEGUARD)
 
-                // ⚡ FIX 2: Run intent classifier IN PARALLEL with the recruiter LLM
-                // We only need the result if the candidate rejected/pivoted — checked after both resolve
+                // ⚡ Intent classifier guard: only spend an extra GPT call when the text looks
+                // like a rejection/pivot. Normal answers should go straight to recruiter flow.
                 const hasMultiVacancy = project.vacancyIds && project.vacancyIds.length > 0;
-                const intentPromise = hasMultiVacancy
+                const mayNeedIntentClassifier = hasMultiVacancy && /\b(no|nel|paso|otra|otro|diferente|cambiar|cambio|no\s+me\s+interesa|no\s+quiero|no\s+gracias|mejor\s+otra|alguna\s+otra|otra\s+vacante|otro\s+puesto|no\s+esa)\b/i.test(aggregatedText);
+                const intentPromise = mayNeedIntentClassifier
                     ? classifyIntent(candidateId, aggregatedText, historyForGpt.map(h => h.content || '').join('\n'))
                     : Promise.resolve('UNKNOWN');
 
-                // intentPromise runs concurrently — resolved after recruiter call below
-                // We resolve it NOW only when we need it for the rejection check
+                // Resolve only the cheap/necessary classifier result before rejection branching.
                 intent = await intentPromise;
 
                 const isCitaPhase = (currentStep?.name || '').toLowerCase().includes('cita');
@@ -4529,19 +4535,12 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
                 let gptResult = null;
 
                 if (bypassGpt) {
-                    const welcomeName = 'Brenda Rodríguez';
-                    const greetingEmojis = ["👋", "✨", "🌸", "😊", "😇", "💖", "🌟"];
-                    const gEmoji = greetingEmojis[Math.floor(Math.random() * greetingEmojis.length)];
-                    const line1 = `¡Hola! ${gEmoji} Soy ${welcomeName}, reclutadora de Candidatic.`;
-                    const nameAskEmojis = ["😊", "🌸", "✨", "💖", "😇", "🌟"];
-                    const nEmoji = nameAskEmojis[Math.floor(Math.random() * nameAskEmojis.length)];
-                    const line2 = `¿Me puedes compartir tu Nombre y Apellidos completos? ${nEmoji}`;
                     gptResult = {
                         content: JSON.stringify({
-                            response_text: `${line1}[MSG_SPLIT]${line2}`,
+                            response_text: buildNewCandidateWelcome(),
                             extracted_data: {},
                             reaction: '✨',
-                            thought_process: "AUTO_GREETING_BYPASS: Fast initial response for generic greeting."
+                            thought_process: "AUTO_GREETING_BYPASS: Deterministic new-candidate welcome."
                         }),
                         usage: { total_tokens: 0 }
                     };
@@ -4563,6 +4562,13 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
                         }
                         responseTextVal = formatRecruiterMessage(aiResult.response_text, candidateData, { extractedCategoria: aiResult.extracted_data?.categoria });
 
+                        // Nuevo candidato: la primera respuesta debe ser fija y predecible.
+                        // Si viene de Ads, la burbuja de empresa se inserta abajo entre estas dos.
+                        if (isNewFlag) {
+                            responseTextVal = buildNewCandidateWelcome();
+                            aiResult.response_text = responseTextVal;
+                        }
+
                         // ── NUEVO CANDIDATO: forzar 2 burbujas si GPT no usó [MSG_SPLIT] ──
                         // La pregunta del dato faltante siempre va sola en la segunda burbuja.
                         if (isNewFlag && responseTextVal && !responseTextVal.includes('[MSG_SPLIT]')) {
@@ -4576,7 +4582,7 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
                         }
 
                         // ── BURBUJA DE EMPRESA (solo candidatos nuevos de Ads con empresa configurada) ──
-                        if (isNewFlag && candidateData.adId && responseTextVal && responseTextVal.includes('[MSG_SPLIT]')) {
+                        if (isNewFlag && candidateData.adId && responseTextVal) {
                             try {
                                 const _adRedis = getRedisClient();
                                 const _adLabelsRaw = await _adRedis.get('candidatic:ad_labels');
@@ -4587,8 +4593,10 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
                                 );
                                 if (_matchLabel?.company?.trim()) {
                                     const _companyMsg = `Para comenzar con tu proceso de reclutamiento para la vacante de *${_matchLabel.company.trim()}* 🏭`;
-                                    const _splitParts = responseTextVal.split('[MSG_SPLIT]');
-                                    // Insertar entre burbuja 1 (saludo) y burbuja 2 (pregunta del nombre)
+                                    const _splitParts = responseTextVal.includes('[MSG_SPLIT]')
+                                        ? responseTextVal.split('[MSG_SPLIT]').filter(Boolean)
+                                        : [responseTextVal.trim()].filter(Boolean);
+                                    // Insertar después del saludo; si GPT mandó una sola burbuja, crear la segunda.
                                     _splitParts.splice(1, 0, _companyMsg);
                                     responseTextVal = _splitParts.join('[MSG_SPLIT]');
                                 }
@@ -5086,12 +5094,12 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
                     // Stagger delivery text -> media -> CTA priority (Strict sequential await to guarantee WhatsApp arrival order)
                     if (!isSimulatorPhone) {
                         if (messagesToSend.length > 1) {
-                            await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, messagesToSend[0], 'chat', { priority: 1 }).catch(() => { });
-                            await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, mUrl, isPdf ? 'document' : 'image', { filename, priority: 2 }).catch(() => { });
-                            await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, messagesToSend[1], 'chat', { priority: 3 }).catch(() => { });
+                            await sendBotMessageWithRetry(config, candidateData, candidateId, messagesToSend[0], 'chat', { priority: 1 });
+                            await sendBotMessageWithRetry(config, candidateData, candidateId, mUrl, isPdf ? 'document' : 'image', { filename, priority: 2 });
+                            await sendBotMessageWithRetry(config, candidateData, candidateId, messagesToSend[1], 'chat', { priority: 3 });
                         } else {
-                            await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, mUrl, isPdf ? 'document' : 'image', { filename, priority: 1 }).catch(() => { });
-                            await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, messagesToSend[0], 'chat', { priority: 2 }).catch(() => { });
+                            await sendBotMessageWithRetry(config, candidateData, candidateId, mUrl, isPdf ? 'document' : 'image', { filename, priority: 1 });
+                            await sendBotMessageWithRetry(config, candidateData, candidateId, messagesToSend[0], 'chat', { priority: 2 });
                         }
                     }
 
@@ -5103,7 +5111,7 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
                             if (i > 0) {
                                 sendUltraMsgPresence(candidateData.whatsapp, 'composing').catch(() => {});
                             }
-                            await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, messagesToSend[i], 'chat', { priority: i + 1 }).catch(() => { });
+                            await sendBotMessageWithRetry(config, candidateData, candidateId, messagesToSend[i], 'chat', { priority: i + 1 });
                         }
                     }
                 }
@@ -5208,6 +5216,13 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
             })
         ]);
 
+        recordAITelemetry(candidateId, 'brenda_turn_complete', {
+            latency: Date.now() - startTime,
+            mode: isRecruiterMode ? 'recruiter' : (isHostMode ? 'host' : 'capturista'),
+            bubbles: String(_responseWithSplit || responseTextVal || '').split('[MSG_SPLIT]').filter(Boolean).length || 0,
+            hasMedia: !!(aiResult?.media_url && aiResult.media_url !== 'null')
+        }).catch(() => {});
+
         return { 
             text: responseTextVal || aiResult?.simulatorHandoverText || '', 
             mediaUrl: aiResult?.media_url && aiResult.media_url !== 'null' ? aiResult.media_url : null 
@@ -5216,7 +5231,14 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
         console.error('❌ [AI Agent] Fatal Error:', error);
         const fallbackMsg = "¡Ay! Me distraje un segundo. 😅 ¿Qué me decías?";
         if (candidateData && candidateData.whatsapp) {
-            await sendFallback(candidateData, fallbackMsg).catch(() => { });
+            const fallbackResult = await sendFallback(candidateData, fallbackMsg).catch(err => ({ success: false, error: err.message }));
+            if (fallbackResult?.success) {
+                await saveMessage(candidateId, {
+                    from: 'bot',
+                    content: fallbackMsg,
+                    timestamp: new Date().toISOString()
+                }).catch(() => { });
+            }
         }
         return { text: fallbackMsg, mediaUrl: null };
     }
@@ -5225,6 +5247,30 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
 async function sendFallback(cand, text) {
     const config = await getUltraMsgConfig(cand?.incomingPhoneNumberId || cand?.instanceId);
     if (config && cand.whatsapp) {
-        await sendUltraMsgMessage(config.instanceId, config.token, cand.whatsapp, text);
+        return await sendUltraMsgMessage(config.instanceId, config.token, cand.whatsapp, text);
     }
+    return { success: false, error: 'missing_candidate_or_config' };
+}
+
+async function sendBotMessageWithRetry(config, cand, candidateId, body, type = 'chat', extraParams = {}) {
+    const sendOnce = () => sendUltraMsgMessage(config.instanceId, config.token, cand.whatsapp, body, type, extraParams);
+    let result = await sendOnce();
+
+    // Meta/network hiccups are usually transient. Retry only once to avoid slow duplicate storms.
+    if (!result?.success && type === 'chat') {
+        await new Promise(resolve => setTimeout(resolve, 700));
+        result = await sendOnce();
+    }
+
+    if (!result?.success) {
+        try {
+            await logTelemetry('brenda_delivery_failed', {
+                candidateId,
+                type,
+                error: result?.error || 'unknown_send_error'
+            });
+        } catch (_) {}
+    }
+
+    return result;
 }

@@ -55,6 +55,9 @@ const ORDERED_MESSAGE_GAP_MS = 450;
 
 const CHAT_LIST_PAGE_SIZE = 10;
 const CHAT_LIST_LOCAL_FILTER_PAGE_SIZE = 500;
+const UNTAGGED_TAG_FILTER = '__candidatic_untagged__';
+const UNTAGGED_TAG_LABEL = 'Sin Etiqueta';
+const UNTAGGED_TAG_COLOR = '#ef4444';
 const EMPTY_UNREAD_COUNTS = {
     tags: {},
     crmProjects: {},
@@ -63,7 +66,23 @@ const EMPTY_UNREAD_COUNTS = {
     complete: 0,
     incomplete: 0,
     all: 0,
+    untagged: 0,
+    completeUntagged: 0,
+    incompleteUntagged: 0,
     unreadIds: new Set()
+};
+
+const getSelectedTagValues = (value) => (
+    Array.isArray(value)
+        ? value.filter(Boolean)
+        : value
+            ? [value]
+            : []
+);
+
+const formatTagLabel = (value) => {
+    if (value === UNTAGGED_TAG_FILTER) return UNTAGGED_TAG_LABEL;
+    return toTitleCase(value);
 };
 
 const readStoredUnreadCounts = () => {
@@ -718,7 +737,10 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
     const [profileUnreadOnly, setProfileUnreadOnly] = useState(false);
     const [selectedTag, setSelectedTag] = useState(null);
     const selectedTagRef = useRef(null);
+    const selectedTagValues = useMemo(() => getSelectedTagValues(selectedTag), [selectedTag]);
+    const selectedTagValueSet = useMemo(() => new Set(selectedTagValues), [selectedTagValues]);
     const [candidatesTotal, setCandidatesTotal] = useState(0);
+    const [untaggedTotal, setUntaggedTotal] = useState(0);
     const [hasMore, setHasMore] = useState(false);
     const [loadingMore, setLoadingMore] = useState(false);
     const [visibleChatLimit, setVisibleChatLimit] = useState(CHAT_LIST_PAGE_SIZE);
@@ -730,6 +752,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
     const pendingChatIdRef = useRef(null);
     const searchRef = useRef("");
     const candidatesRef = useRef([]);
+    const nextCandidatesOffsetRef = useRef(0);
     const prevSearchRef = useRef(null);
     const sseWasConnectedOnceRef = useRef(false);
 
@@ -780,6 +803,16 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
         setDraggedIcon(null);
     }, []);
     const handleToolbarDragEnd = useCallback(() => setDraggedIcon(null), []);
+    const toggleTagFilter = useCallback((tagName) => {
+        setSelectedTag(current => {
+            const values = getSelectedTagValues(current);
+            const next = values.includes(tagName)
+                ? values.filter(value => value !== tagName)
+                : [...values, tagName];
+            if (next.length === 0) return null;
+            return next.length === 1 ? next[0] : next;
+        });
+    }, []);
 
     useEffect(() => {
         selectedChatRef.current = selectedChat;
@@ -869,7 +902,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
                 .filter(Boolean)
             : [];
 
-        return { complete, tagKeys, projectId: candidate.manualProjectId || null };
+        return { complete, tagKeys, untagged: tagKeys.length === 0, projectId: candidate.manualProjectId || null };
     }, [user, rolePermissions]);
 
     const updateCountMap = (map = {}, key, delta) => {
@@ -887,6 +920,9 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
         next.all = Math.max(0, (Number(next.all) || 0) + delta);
         next.complete = Math.max(0, (Number(next.complete) || 0) + (contribution.complete ? delta : 0));
         next.incomplete = Math.max(0, (Number(next.incomplete) || 0) + (!contribution.complete ? delta : 0));
+        next.untagged = Math.max(0, (Number(next.untagged) || 0) + (contribution.untagged ? delta : 0));
+        next.completeUntagged = Math.max(0, (Number(next.completeUntagged) || 0) + (contribution.untagged && contribution.complete ? delta : 0));
+        next.incompleteUntagged = Math.max(0, (Number(next.incompleteUntagged) || 0) + (contribution.untagged && !contribution.complete ? delta : 0));
 
         let tags = next.tags || {};
         let completeTags = next.completeTags || {};
@@ -1205,6 +1241,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
                     return t;
                 });
                 setAvailableTags(migrated);
+                setUntaggedTotal(Number(data.untaggedCount) || 0);
             }
         } catch (e) { console.error('Error fetching tags', e); }
     };
@@ -1251,7 +1288,9 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
 
     const loadCandidates = async () => {
         try {
-            const tagParam = selectedTagRef.current || "";
+            const selectedTagParams = getSelectedTagValues(selectedTagRef.current);
+            const hasMultiTagFilter = selectedTagParams.length > 1;
+            const tagParam = selectedTagParams.length === 1 ? selectedTagParams[0] : "";
             const searchParam = searchRef.current || "";
             const af = activeFilterRef.current;
             const fv = filterValueRef.current;
@@ -1271,6 +1310,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
                 selectedAges.length > 0 ||
                 selectedGenders.length > 0 ||
                 selectedMunicipalities.length > 0 ||
+                hasMultiTagFilter ||
                 !!manualPipelineFilter ||
                 !!manualStepFilter;
 
@@ -1294,9 +1334,11 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
                 const fetchedCandidates = result.candidates || [];
                 setCandidates(fetchedCandidates);
                 setCandidatesTotal(result.total ?? fetchedCandidates.length);
+                nextCandidatesOffsetRef.current = result.pagination?.nextOffset ?? fetchedCandidates.length;
                 setVisibleChatLimit(CHAT_LIST_PAGE_SIZE);
                 const isPaginated = !hasLocalFilters && !isFilteredTagMode;
-                setHasMore(isPaginated && fetchedCandidates.length === limit);
+                const serverHasMore = result.hasMore ?? result.pagination?.hasMore;
+                setHasMore(isPaginated && (serverHasMore ?? fetchedCandidates.length === limit));
                 if (fetchedCandidates.length > 0) {
                     setSelectedChat(current => { if (!current) return fetchedCandidates[0]; return current; });
                 }
@@ -1310,7 +1352,8 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
 
     const loadMore = useCallback(async () => {
         if (loadingMoreRef.current || !hasMore) return;
-        const tagParam = selectedTagRef.current || "";
+        const selectedTagParams = getSelectedTagValues(selectedTagRef.current);
+        const tagParam = selectedTagParams.length === 1 ? selectedTagParams[0] : "";
         const searchParam = searchRef.current || "";
         const af = activeFilterRef.current;
         const fv = filterValueRef.current;
@@ -1326,7 +1369,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
         loadingMoreRef.current = true;
         setLoadingMore(true);
         try {
-            const nextOffset = candidatesRef.current.length;
+            const nextOffset = nextCandidatesOffsetRef.current;
             let result;
             if (serverFilter) {
                 result = await getCandidates(CHAT_LIST_PAGE_SIZE, nextOffset, searchParam, false, '', false, serverFilter);
@@ -1337,11 +1380,18 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
             }
             if (result.success) {
                 const newCandidates = result.candidates || [];
-                if (newCandidates.length < CHAT_LIST_PAGE_SIZE) setHasMore(false);
+                nextCandidatesOffsetRef.current = result.pagination?.nextOffset ?? (nextOffset + newCandidates.length);
+                const serverHasMore = result.hasMore ?? result.pagination?.hasMore;
+                setHasMore(serverHasMore ?? (newCandidates.length === CHAT_LIST_PAGE_SIZE));
                 if (newCandidates.length > 0) {
                     const existingIds = new Set(candidatesRef.current.map(c => c.id));
                     const unique = newCandidates.filter(c => !existingIds.has(c.id));
-                    if (unique.length > 0) setCandidates(prev => [...prev, ...unique]);
+                    if (unique.length > 0) {
+                        setCandidates(prev => [...prev, ...unique]);
+                        setVisibleChatLimit(current => current + unique.length);
+                    }
+                } else {
+                    setHasMore(false);
                 }
             }
         } catch (e) { console.error(e); }
@@ -1373,10 +1423,19 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
             }
 
             if (activeFilter === 'unread' && !checkIfUnread(c)) return false;
-            if (selectedTag && !(Array.isArray(c?.tags) && c.tags.some(t => {
-                const n = typeof t === 'string' ? t : (t?.name || '');
-                return n.trim().toLowerCase() === selectedTag.trim().toLowerCase();
-            }))) return false;
+            if (selectedTagValues.length > 0) {
+                const tagNames = Array.isArray(c?.tags)
+                    ? c.tags.map(t => (typeof t === 'string' ? t : (t?.name || '')).trim()).filter(Boolean)
+                    : [];
+                const normalizedNames = tagNames.map(n => n.toLowerCase());
+                const matchesSelectedTag = selectedTagValues.some(tagValue => {
+                    if (tagValue === UNTAGGED_TAG_FILTER) return tagNames.length === 0;
+                    return normalizedNames.includes(tagValue.trim().toLowerCase());
+                });
+                if (!matchesSelectedTag) {
+                    return false;
+                }
+            }
             if (activeFilter === 'profile') {
                 const isComplete = isProfileComplete(c);
                 if (filterValue === 'complete' && !isComplete) return false;
@@ -1478,7 +1537,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
     }, [baseCandidates]);
 
     const unreadCounts = useMemo(() => {
-        const counts = { tags: {}, crmProjects: {}, complete: 0, incomplete: 0, all: 0, unreadIds: new Set() };
+        const counts = { tags: {}, crmProjects: {}, complete: 0, incomplete: 0, all: 0, untagged: 0, completeUntagged: 0, incompleteUntagged: 0, unreadIds: new Set() };
         const canSeeIncomplete = canSeeIncompleteChats(user, rolePermissions);
 
         for (const c of baseCandidates) {
@@ -1497,13 +1556,19 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
                     counts.incomplete++;
                 }
 
-                if (c.tags && Array.isArray(c.tags)) {
-                    c.tags.forEach(t => {
-                        const tName = typeof t === 'string' ? t : t.name;
-                        if (tName) {
-                            const normalized = tName.trim().toLowerCase();
-                            counts.tags[normalized] = (counts.tags[normalized] || 0) + 1;
-                        }
+                const candidateTags = Array.isArray(c.tags)
+                    ? c.tags
+                        .map(t => typeof t === 'string' ? t : t.name)
+                        .map(t => t?.trim().toLowerCase())
+                        .filter(Boolean)
+                    : [];
+                if (candidateTags.length === 0) {
+                    counts.untagged++;
+                    if (profComplete) counts.completeUntagged++;
+                    else counts.incompleteUntagged++;
+                } else {
+                    candidateTags.forEach(normalized => {
+                        counts.tags[normalized] = (counts.tags[normalized] || 0) + 1;
                     });
                 }
 
@@ -1515,30 +1580,39 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
         return counts;
     }, [baseCandidates, user, rolePermissions]);
 
+    const refreshGlobalUnreadCounts = useCallback(async () => {
+        const res = await fetch('/api/chat-unread-count');
+        const data = await res.json();
+        if (!res.ok || !data.success) return null;
+        const counts = data.counts || {};
+        const nextCounts = {
+            all: Number(data.unreadCount ?? counts.all) || 0,
+            complete: Number(counts.complete) || 0,
+            incomplete: Number(counts.incomplete) || 0,
+            untagged: Number(counts.untagged) || 0,
+            completeUntagged: Number(counts.completeUntagged) || 0,
+            incompleteUntagged: Number(counts.incompleteUntagged) || 0,
+            tags: counts.tags || {},
+            completeTags: counts.completeTags || {},
+            incompleteTags: counts.incompleteTags || {},
+            crmProjects: counts.crmProjects || {},
+            unreadIds: new Set(),
+        };
+        setGlobalUnreadCounts(nextCounts);
+        try {
+            const { unreadIds, ...serializable } = nextCounts;
+            sessionStorage.setItem('candidatic_unread_counts', JSON.stringify(serializable));
+        } catch {}
+        return nextCounts;
+    }, []);
+
     useEffect(() => {
         if (!user) return;
         let cancelled = false;
         const timer = setTimeout(async () => {
             try {
-                const res = await fetch('/api/chat-unread-count');
-                const data = await res.json();
-                if (cancelled || !res.ok || !data.success) return;
-                const counts = data.counts || {};
-                const nextCounts = {
-                    all: Number(data.unreadCount ?? counts.all) || 0,
-                    complete: Number(counts.complete) || 0,
-                    incomplete: Number(counts.incomplete) || 0,
-                    tags: counts.tags || {},
-                    completeTags: counts.completeTags || {},
-                    incompleteTags: counts.incompleteTags || {},
-                    crmProjects: counts.crmProjects || {},
-                    unreadIds: new Set(),
-                };
-                setGlobalUnreadCounts(nextCounts);
-                try {
-                    const { unreadIds, ...serializable } = nextCounts;
-                    sessionStorage.setItem('candidatic_unread_counts', JSON.stringify(serializable));
-                } catch {}
+                if (cancelled) return;
+                await refreshGlobalUnreadCounts();
             } catch {}
         }, 150);
 
@@ -1555,6 +1629,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
         sseDeletedCandidate?.candidateId,
         sseDeletedCandidate?.id,
         globalStats?.unread,
+        refreshGlobalUnreadCounts,
     ]);
 
     const displayUnreadCounts = globalUnreadCounts || (
@@ -1562,6 +1637,26 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
             ? { ...EMPTY_UNREAD_COUNTS, all: Number(globalStats.unread) || 0 }
             : unreadCounts
     );
+
+    const renderTagUnreadControls = useCallback(({ scope, tagName = null, label, unreadCount }) => {
+        if (!unreadCount || unreadCount <= 0) return null;
+        return (
+            <div className="flex items-center gap-1.5 shrink-0">
+                <button
+                    type="button"
+                    onClick={(e) => handleMarkTagAsRead({ scope, tagName, label, unreadCount }, e)}
+                    className="h-6 px-2 rounded-full border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 text-[10px] font-bold flex items-center gap-1 transition-colors"
+                    title={`Marcar todo como leído: ${label}`}
+                >
+                    <Check className="w-3 h-3" />
+                    <span className="hidden sm:inline">Marcar todo leído</span>
+                </button>
+                <div className="min-w-[20px] h-[20px] px-1.5 rounded-full bg-[#25d366] dark:bg-[#00a884] flex items-center justify-center shrink-0 text-white text-[10px] font-bold shadow-sm">
+                    {unreadCount}
+                </div>
+            </div>
+        );
+    }, [handleMarkTagAsRead]);
 
     // Reportar al padre solo el conteo global exacto. El fallback local depende de la
     // pagina cargada en Chat Web y puede ser parcial (por ejemplo 10 chats visibles).
@@ -2033,11 +2128,12 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
         try {
             const result = await blockCandidate(candidate.id, true);
             if (result.success) {
+                const nextCandidate = result.candidate || { ...candidate, blocked: true };
                 setCandidates(prev => prev.map(c =>
-                    c.id === candidate.id ? { ...c, blocked: true } : c
+                    c.id === candidate.id ? { ...c, ...nextCandidate, blocked: true } : c
                 ));
                 // Only update selectedChat if it's currently selected (though it should be)
-                setSelectedChat(prev => prev?.id === candidate.id ? { ...prev, blocked: true } : prev);
+                setSelectedChat(prev => prev?.id === candidate.id ? { ...prev, ...nextCandidate, blocked: true } : prev);
                 showToast && showToast('IA silenciada automáticamente (intervención humana)', 'success');
             }
         } catch (e) {
@@ -2066,13 +2162,14 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
             const result = await blockCandidate(chatToBlock.id, !isCurrentlyBlocked);
             if (result.success) {
                 showToast && showToast(result.message || `Candidato ${isCurrentlyBlocked ? 'reactivado' : 'silenciado'} con éxito`, 'success');
+                const nextCandidate = result.candidate || { ...chatToBlock, blocked: !isCurrentlyBlocked };
 
                 // Actualizar estado local
                 setCandidates(prev => prev.map(c =>
-                    c.id === chatToBlock.id ? { ...c, blocked: !isCurrentlyBlocked } : c
+                    c.id === chatToBlock.id ? { ...c, ...nextCandidate, blocked: !isCurrentlyBlocked } : c
                 ));
                 if (selectedChat?.id === chatToBlock.id) {
-                    setSelectedChat(prev => ({ ...prev, blocked: !isCurrentlyBlocked }));
+                    setSelectedChat(prev => ({ ...prev, ...nextCandidate, blocked: !isCurrentlyBlocked }));
                 }
             } else {
                 showToast && showToast(`Error al ${isCurrentlyBlocked ? 'reactivar' : 'silenciar'} IA: ${result.error}`, 'error');
@@ -2163,6 +2260,56 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
             console.error('Error marking as unread', err);
         }
     }, [applyCandidateUnreadPatch]);
+
+    const handleMarkTagAsRead = useCallback(async ({ scope = 'tag', tagName = null, label = 'esta etiqueta', unreadCount = 0 }, e) => {
+        if (e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+        if (!unreadCount) return;
+
+        const confirmed = await new Promise(resolve => setConfirmModal({
+            title: 'Marcar como leído',
+            message: `Se marcarán como leídos ${unreadCount} chat${unreadCount === 1 ? '' : 's'} de ${label}. Las burbujas verdes de este filtro se quitarán.`,
+            confirmText: 'Marcar leído',
+            variant: 'success',
+            onConfirm: () => resolve(true),
+            onCancel: () => resolve(false)
+        }));
+        if (!confirmed) return;
+
+        try {
+            const res = await fetch('/api/chat', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'mark_read_by_tag',
+                    tagScope: scope,
+                    tagName
+                })
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || !data.success) {
+                throw new Error(data.error || 'No se pudo marcar como leído');
+            }
+
+            const now = new Date().toISOString();
+            (data.candidateIds || []).forEach(id => {
+                applyCandidateUnreadPatch(id, {
+                    unreadMsgCount: 0,
+                    lastBotMessageAt: now,
+                    ultimoMensajeBot: now,
+                    lastHumanMessageAt: now,
+                });
+            });
+            await refreshGlobalUnreadCounts();
+            showToast && showToast(`${data.marked || 0} chat${(data.marked || 0) === 1 ? '' : 's'} marcados como leídos`, 'success');
+        } catch (err) {
+            console.error('Error marking tag as read', err);
+            showToast && showToast('No se pudieron marcar como leídos', 'error');
+            refreshGlobalUnreadCounts().catch(() => {});
+        }
+    }, [applyCandidateUnreadPatch, refreshGlobalUnreadCounts, showToast]);
 
     const handleSelectChat = useCallback((chat) => {
         pendingChatIdRef.current = chat.id; // guard SSE race before React commits
@@ -3033,31 +3180,41 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
                                 <div className="relative w-full">
                                     <div 
                                         onClick={() => setShowDropdown(showDropdown === 'labels' ? null : 'labels')}
-                                        className={`w-full bg-[#f0f2f5] dark:bg-[#202c33] border ${selectedTag ? 'border-transparent' : 'border-gray-200 dark:border-gray-700'} rounded-lg pl-9 pr-14 py-2 text-xs outline-none font-medium text-left cursor-pointer transition-all flex items-center shadow-sm relative`}
-                                        style={selectedTag ? {
-                                            boxShadow: `0 0 0 2px ${(availableTags.find(t => (typeof t === 'string' ? t : t.name) === selectedTag))?.color || '#3b82f6'}`,
+                                        className={`w-full bg-[#f0f2f5] dark:bg-[#202c33] border ${selectedTagValues.length > 0 ? 'border-transparent' : 'border-gray-200 dark:border-gray-700'} rounded-lg pl-9 pr-14 py-2 text-xs outline-none font-medium text-left cursor-pointer transition-all flex items-center shadow-sm relative`}
+                                        style={selectedTagValues.length > 0 ? {
+                                            boxShadow: `0 0 0 2px ${selectedTagValues[0] === UNTAGGED_TAG_FILTER ? UNTAGGED_TAG_COLOR : ((availableTags.find(t => (typeof t === 'string' ? t : t.name) === selectedTagValues[0]))?.color || '#3b82f6')}`,
                                             borderColor: 'transparent'
                                         } : {}}
                                     >
-                                        <Tag className={`w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 ${selectedTag ? 'text-[#111b21] dark:text-[#e9edef]' : 'text-gray-400 dark:text-gray-500'}`} style={selectedTag ? { color: (availableTags.find(t => (typeof t === 'string' ? t : t.name) === selectedTag))?.color } : {}} />
+                                        <Tag className={`w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 ${selectedTagValues.length > 0 ? 'text-[#111b21] dark:text-[#e9edef]' : 'text-gray-400 dark:text-gray-500'}`} style={selectedTagValues.length > 0 ? { color: selectedTagValues[0] === UNTAGGED_TAG_FILTER ? UNTAGGED_TAG_COLOR : (availableTags.find(t => (typeof t === 'string' ? t : t.name) === selectedTagValues[0]))?.color } : {}} />
                                         <span className="flex-1 truncate text-[#111b21] dark:text-[#e9edef]">
-                                            {selectedTag ? (() => {
+                                            {selectedTagValues.length > 0 ? (() => {
                                                 const hasSubFilters = selectedAges.length > 0 || selectedGenders.length > 0 || selectedMunicipalities.length > 0;
                                                 // "Todos" usa el total real del tag (todos los candidatos).
                                                 // Los otros filtros cargan todo de golpe, filteredCandidates.length es exacto.
-                                                const tagObj = availableTags.find(t => (typeof t === 'string' ? t : t.name) === selectedTag);
+                                                if (selectedTagValues.length > 1) {
+                                                    return `${selectedTagValues.length} Etiquetas (${filteredCandidates.length})`;
+                                                }
+                                                const activeTag = selectedTagValues[0];
+                                                if (activeTag === UNTAGGED_TAG_FILTER) {
+                                                    const count = (!hasSubFilters && activeFilter === 'all')
+                                                        ? untaggedTotal
+                                                        : filteredCandidates.length;
+                                                    return `${UNTAGGED_TAG_LABEL} (${count})`;
+                                                }
+                                                const tagObj = availableTags.find(t => (typeof t === 'string' ? t : t.name) === activeTag);
                                                 const count = (!hasSubFilters && activeFilter === 'all')
                                                     ? (tagObj?.count ?? candidatesTotal)
                                                     : filteredCandidates.length;
-                                                return `${selectedTag} (${count})`;
-                                            })() : 'Todas las etiquetas'}
+                                                return `${formatTagLabel(activeTag)} (${count})`;
+                                            })() : 'Todas Las Etiquetas'}
                                         </span>
                                         <div className={`absolute right-2 top-1/2 -translate-y-1/2 transition-transform ${showDropdown === 'labels' ? 'rotate-180' : ''}`}>
                                             <ChevronIcon />
                                         </div>
                                     </div>
                                     
-                                    {selectedTag && (
+                                    {selectedTagValues.length > 0 && (
                                         <button
                                             onClick={(e) => { e.stopPropagation(); setSelectedTag(null); }}
                                             className="absolute right-8 top-1/2 -translate-y-1/2 p-1 rounded-md bg-red-50 dark:bg-red-900/20 text-red-500 hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors shrink-0 z-10"
@@ -3081,18 +3238,73 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
                                                 />
                                             </div>
                                             <div className="overflow-y-auto custom-scrollbar flex-1">
-                                            {!tagSearch && <div
-                                                onClick={() => { setSelectedTag(null); setShowDropdown(null); setTagSearch(''); }}
-                                                className={`px-4 py-2.5 text-xs cursor-pointer flex items-center gap-2 ${!activeFilter ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 font-bold' : 'text-[#111b21] dark:text-[#e9edef] hover:bg-[#f0f2f5] dark:hover:bg-[#111b21]'}`}
-                                            >
-                                                <div className="w-3 h-3 rounded border border-gray-300 dark:border-gray-600 flex items-center justify-center">
-                                                    {!activeFilter && <div className="w-1.5 h-1.5 rounded-sm bg-indigo-500"></div>}
-                                                </div>
-                                                Todas las etiquetas
-                                            </div>}
+                                            {!tagSearch && (() => {
+                                                const hasSubFilters = selectedAges.length > 0 || selectedGenders.length > 0 || selectedMunicipalities.length > 0;
+                                                const count = hasSubFilters
+                                                    ? filteredCandidates.length
+                                                    : (candidatesTotal || stableStats.total || filteredCandidates.length);
+                                                const unreadCount = activeFilter === 'profile' && filterValue === 'complete'
+                                                    ? displayUnreadCounts.complete
+                                                    : activeFilter === 'profile' && filterValue === 'incomplete'
+                                                        ? displayUnreadCounts.incomplete
+                                                        : displayUnreadCounts.all;
+                                                const isSelected = selectedTagValues.length === 0;
+
+                                                return (
+                                                    <div
+                                                        onClick={() => { setSelectedTag(null); setTagSearch(''); }}
+                                                        className={`px-4 py-2.5 text-xs cursor-pointer flex items-center justify-between ${isSelected ? 'bg-indigo-50 dark:bg-indigo-900/30 text-[#111b21] dark:text-[#e9edef] font-bold' : 'text-[#111b21] dark:text-[#e9edef] hover:bg-[#f0f2f5] dark:hover:bg-[#111b21]'}`}
+                                                    >
+                                                        <div className="flex items-center gap-2 truncate pr-2">
+                                                            <span className="w-3 h-3 rounded-full shrink-0 bg-black dark:bg-white"></span>
+                                                            <span className="truncate flex-1">Todas Las Etiquetas ({count})</span>
+                                                        </div>
+                                                        {renderTagUnreadControls({
+                                                            scope: 'all',
+                                                            label: 'Todas Las Etiquetas',
+                                                            unreadCount
+                                                        })}
+                                                    </div>
+                                                );
+                                            })()}
+                                            {(!tagSearch || UNTAGGED_TAG_LABEL.toLowerCase().includes(tagSearch.toLowerCase())) && (() => {
+                                                // Synthetic option backed by the server's special untagged filter value.
+                                                const _gc = globalUnreadCounts;
+                                                const unreadCount = _gc
+                                                    ? (activeFilter === 'profile' && filterValue === 'complete'
+                                                        ? _gc.completeUntagged
+                                                        : activeFilter === 'profile' && filterValue === 'incomplete'
+                                                            ? _gc.incompleteUntagged
+                                                            : _gc.untagged)
+                                                    : (activeFilter === 'profile' && filterValue === 'complete'
+                                                        ? unreadCounts.completeUntagged
+                                                        : activeFilter === 'profile' && filterValue === 'incomplete'
+                                                            ? unreadCounts.incompleteUntagged
+                                                            : unreadCounts.untagged);
+                                                const isSelected = selectedTagValueSet.has(UNTAGGED_TAG_FILTER);
+
+                                                return (
+                                                    <div
+                                                        key={UNTAGGED_TAG_FILTER}
+                                                        onClick={() => { toggleTagFilter(UNTAGGED_TAG_FILTER); }}
+                                                        className={`px-4 py-2.5 text-xs cursor-pointer flex items-center justify-between ${isSelected ? 'bg-indigo-50 dark:bg-indigo-900/30 text-[#111b21] dark:text-[#e9edef] font-bold' : 'text-[#111b21] dark:text-[#e9edef] hover:bg-[#f0f2f5] dark:hover:bg-[#111b21]'}`}
+                                                    >
+                                                        <div className="flex items-center gap-2 truncate pr-2">
+                                                            <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: UNTAGGED_TAG_COLOR }}></span>
+                                                            <span className="truncate flex-1">{UNTAGGED_TAG_LABEL} ({untaggedTotal})</span>
+                                                        </div>
+                                                        {renderTagUnreadControls({
+                                                            scope: 'untagged',
+                                                            tagName: UNTAGGED_TAG_FILTER,
+                                                            label: UNTAGGED_TAG_LABEL,
+                                                            unreadCount
+                                                        })}
+                                                    </div>
+                                                );
+                                            })()}
                                             {(Array.isArray(availableTags) ? availableTags : []).filter(tagObj => {
                                                 const tSearchName = typeof tagObj === 'string' ? tagObj : tagObj.name;
-                                                if (tagSearch && !tSearchName.toLowerCase().includes(tagSearch.toLowerCase())) return false;
+                                                if (tagSearch && !`${tSearchName} ${formatTagLabel(tSearchName)}`.toLowerCase().includes(tagSearch.toLowerCase())) return false;
                                                 // User-level label filtering
                                                 if (!user || user.role === 'SuperAdmin' || user.role === 'Admin') return true;
                                                 const userLabels = user?.allowed_labels;
@@ -3101,7 +3313,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
                                             }).map(tagObj => {
                                                 const tName = typeof tagObj === 'string' ? tagObj : tagObj.name;
                                                 const tColor = typeof tagObj === 'string' ? '#3b82f6' : tagObj.color;
-                                                const display = tagObj.count !== undefined ? `${tName} (${tagObj.count})` : tName;
+                                                const display = tagObj.count !== undefined ? `${formatTagLabel(tName)} (${tagObj.count})` : formatTagLabel(tName);
                                                 
                                                 // Badge de etiqueta según filtro activo
                                                 const _tagKey = tName.trim().toLowerCase();
@@ -3114,23 +3326,24 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
                                                             : _gc.tags)
                                                     : unreadCounts.tags;
                                                 const unreadCount = (_tagCounts?.[_tagKey]) || 0;
-                                                const isSelected = selectedTag === tName;
+                                                const isSelected = selectedTagValueSet.has(tName);
 
                                                 return (
                                                     <div
                                                         key={tName}
-                                                        onClick={() => { setSelectedTag(tName); setShowDropdown(null); setTagSearch(''); }}
+                                                        onClick={() => { toggleTagFilter(tName); }}
                                                         className={`px-4 py-2.5 text-xs cursor-pointer flex items-center justify-between ${isSelected ? 'bg-indigo-50 dark:bg-indigo-900/30 text-[#111b21] dark:text-[#e9edef] font-bold' : 'text-[#111b21] dark:text-[#e9edef] hover:bg-[#f0f2f5] dark:hover:bg-[#111b21]'}`}
                                                     >
                                                         <div className="flex items-center gap-2 truncate pr-2">
                                                             <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: tColor }}></span>
                                                             <span className="truncate flex-1">{display}</span>
                                                         </div>
-                                                        {unreadCount > 0 && (
-                                                            <div className="min-w-[20px] h-[20px] px-1.5 rounded-full bg-[#25d366] dark:bg-[#00a884] flex items-center justify-center shrink-0 text-white text-[10px] font-bold shadow-sm">
-                                                                {unreadCount}
-                                                            </div>
-                                                        )}
+                                                        {renderTagUnreadControls({
+                                                            scope: 'tag',
+                                                            tagName: tName,
+                                                            label: formatTagLabel(tName),
+                                                            unreadCount
+                                                        })}
                                                     </div>
                                                 );
                                             })}
@@ -3443,11 +3656,11 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
                                             const tColor = tObj ? (tObj.color || '#3b82f6') : '#3b82f6';
                                             return (
                                                 <span key={t} className="group/tag relative inline-flex items-center text-xs px-2.5 py-0.5 rounded-full text-white font-medium whitespace-nowrap opacity-90 shadow-sm cursor-default ml-1.5 align-middle" style={{ backgroundColor: tColor }}>
-                                                    {t}
+                                                    {formatTagLabel(t)}
                                                     <button
                                                         onClick={(e) => { e.stopPropagation(); handleToggleTag(t); }}
                                                         className="absolute -top-1 -right-1.5 w-4 h-4 rounded-full bg-gray-800/80 hover:bg-red-600 text-white flex items-center justify-center opacity-0 group-hover/tag:opacity-100 transition-opacity duration-150 shadow z-10"
-                                                        title={`Desvincular "${t}"`}
+                                                        title={`Desvincular "${formatTagLabel(t)}"`}
                                                     >
                                                         <X className="w-2.5 h-2.5" />
                                                     </button>
@@ -3597,11 +3810,11 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
                                                     {availableTags.filter(tagObj => {
                                                         if (!tagSearch.trim()) return true;
                                                         const n = typeof tagObj === 'string' ? tagObj : tagObj.name;
-                                                        return n.toLowerCase().includes(tagSearch.trim().toLowerCase());
+                                                        return `${n} ${formatTagLabel(n)}`.toLowerCase().includes(tagSearch.trim().toLowerCase());
                                                     }).map(tagObj => {
                                                         const tName = typeof tagObj === 'string' ? tagObj : tagObj.name;
                                                         const tColor = typeof tagObj === 'string' ? '#3b82f6' : tagObj.color;
-                                                        const display = tagObj.count !== undefined ? `${tName} (${tagObj.count})` : tName;
+                                                        const display = tagObj.count !== undefined ? `${formatTagLabel(tName)} (${tagObj.count})` : formatTagLabel(tName);
                                                         const isActive = selectedChat.tags?.includes(tName);
                                                         const isEditing = editingTag === tName;
 

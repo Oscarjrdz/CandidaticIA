@@ -446,29 +446,29 @@ export default async function handler(req, res) {
                 candidateId = candidate.id;
                 isNewCandidate = true;
 
-                // 🏷️ Auto-apply Ad Labels to new CTWA candidates
+                // 🏷️ Auto-apply Ad Labels before AI runs so the first reply has ad/company context.
                 if (candidate.adId) {
-                    (async () => {
-                        try {
-                            const redis = getRedisClient();
-                            const rawLabels = redis ? await redis.get('candidatic:ad_labels') : null;
-                            const adLabels = rawLabels ? JSON.parse(rawLabels) : [];
-                            const candAdId = String(candidate.adId);
-                            const matching = adLabels.filter(l => {
-                                const ids = l.adIds || (l.adId ? [l.adId] : []);
-                                return ids.includes(candAdId);
-                            });
-                            if (matching.length > 0) {
-                                const existingTags = Array.isArray(candidate.tags) ? candidate.tags : [];
-                                const newTags = [...existingTags];
-                                let changed = false;
-                                for (const l of matching) {
-                                    if (!newTags.includes(l.tagName)) { newTags.push(l.tagName); changed = true; }
-                                }
-                                if (changed) await updateCandidate(candidate.id, { tags: newTags });
+                    try {
+                        const redis = getRedisClient();
+                        const rawLabels = redis ? await redis.get('candidatic:ad_labels') : null;
+                        const adLabels = rawLabels ? JSON.parse(rawLabels) : [];
+                        const candAdId = String(candidate.adId);
+                        const matching = adLabels.filter(l => {
+                            const ids = l.adIds || (l.adId ? [l.adId] : []);
+                            return ids.map(String).includes(candAdId);
+                        });
+                        if (matching.length > 0) {
+                            const existingTags = Array.isArray(candidate.tags) ? candidate.tags : [];
+                            const newTags = [...existingTags];
+                            let changed = false;
+                            for (const l of matching) {
+                                if (!newTags.includes(l.tagName)) { newTags.push(l.tagName); changed = true; }
                             }
-                        } catch(e) { /* silent */ }
-                    })();
+                            if (changed) {
+                                candidate = await updateCandidate(candidate.id, { tags: newTags });
+                            }
+                        }
+                    } catch(e) { /* silent */ }
                 }
 
                 // 📊 Meta Conversions API — Lead event for CTWA ad candidates
@@ -916,7 +916,8 @@ export default async function handler(req, res) {
                     try {
                         let isBotActive = isBotGloballyActive;
 
-                        if (!isBotActive || candidate?.blocked === true) return;
+                        const aiCandidate = await getCandidateById(candidateId) || candidate;
+                        if (!isBotActive || aiCandidate?.blocked === true) return;
 
                         let finalAgentInput = agentInput;
 
@@ -937,8 +938,8 @@ export default async function handler(req, res) {
                             const disclaimer = AUDIO_REPLIES[Math.floor(Math.random() * AUDIO_REPLIES.length)];
                             try {
                                 const { sendUltraMsgMessage, getUltraMsgConfig: _getConfig } = await import('./utils.js');
-                                const cleanTo = candidate.whatsapp.replace(/\D/g, '');
-                                const ultraConfig = await _getConfig(candidate.incomingPhoneNumberId || candidate.instanceId);
+                                const cleanTo = aiCandidate.whatsapp.replace(/\D/g, '');
+                                const ultraConfig = await _getConfig(aiCandidate.incomingPhoneNumberId || aiCandidate.instanceId);
                                 await sendUltraMsgMessage(ultraConfig.instanceId, ultraConfig.token, cleanTo, disclaimer, 'chat', {});
                                 const disclaimerMsg = {
                                     id: `msg_${Date.now()}_audio_reply`,

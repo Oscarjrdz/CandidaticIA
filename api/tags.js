@@ -8,41 +8,76 @@
 
 const TAG_COUNTS_KEY      = 'candidatic:tag_counts';
 const TAG_COUNTS_INIT_LOCK = 'candidatic:tag_counts:init_lock';
+const UNTAGGED_COUNT_KEY = 'candidatic:untagged_count';
+const UNTAGGED_COUNT_READY_KEY = 'candidatic:untagged_count:ready';
 
-async function getCountsMap(redis) {
+const cleanTagValues = (tags) => [...new Set((Array.isArray(tags) ? tags : [])
+    .map(t => typeof t === 'string' ? t : t?.name)
+    .map(t => String(t || '').trim())
+    .filter(Boolean))];
+
+async function getCountsSummary(redis) {
     const raw = await redis.hgetall(TAG_COUNTS_KEY);
-    if (raw && Object.keys(raw).length > 0) {
+    const untaggedReady = await redis.get(UNTAGGED_COUNT_READY_KEY);
+    if (untaggedReady === '1') {
         const map = {};
-        Object.entries(raw).forEach(([k, v]) => {
+        Object.entries(raw || {}).forEach(([k, v]) => {
             const n = parseInt(v);
             if (n > 0) map[k] = n;
         });
-        return { map, seededCandidateReads: 0 };
+        const untaggedCount = Math.max(0, parseInt(await redis.get(UNTAGGED_COUNT_KEY)) || 0);
+        return { map, untaggedCount, seededCandidateReads: 0 };
     }
 
-    // Hash not seeded yet — one-time full scan with stampede protection
+    // One-time seed for exact tag and "Sin etiqueta" counts; normal reads stay O(1).
     const locked = await redis.set(TAG_COUNTS_INIT_LOCK, '1', 'EX', 120, 'NX');
-    if (!locked) return { map: {}, seededCandidateReads: 0 }; // another request is seeding — return empty temporarily
+    if (!locked) return { map: {}, untaggedCount: 0, seededCandidateReads: 0 };
 
     try {
-        const { getCandidates } = await import('./utils/storage.js');
-        const { candidates } = await getCandidates(20000, 0, '');
-        if (candidates.length > 0) {
-            const pipeline = redis.pipeline();
-            candidates.forEach(c => {
-                if (Array.isArray(c.tags)) {
-                    c.tags.forEach(t => pipeline.hincrby(TAG_COUNTS_KEY, t, 1));
+        const total = (await redis.scard('stats:list:complete')) + (await redis.scard('stats:list:pending'));
+        const tagCounts = {};
+        let untaggedCount = 0;
+        let seededCandidateReads = 0;
+        const CHUNK = 500;
+
+        for (let offset = 0; offset < total; offset += CHUNK) {
+            const ids = await redis.zrevrange('candidates:list', offset, offset + CHUNK - 1);
+            if (!ids?.length) break;
+            const readPipe = redis.pipeline();
+            ids.forEach(id => readPipe.get(`candidate:${id}`));
+            const rows = await readPipe.exec();
+            seededCandidateReads += rows.length;
+
+            for (const [err, rawCandidate] of rows) {
+                if (err || !rawCandidate) continue;
+                let candidate;
+                try { candidate = JSON.parse(rawCandidate); } catch { continue; }
+                const tags = cleanTagValues(candidate.tags);
+                if (tags.length === 0) {
+                    untaggedCount++;
+                    continue;
                 }
-            });
-            await pipeline.exec();
+                tags.forEach(tag => {
+                    tagCounts[tag] = (tagCounts[tag] || 0) + 1;
+                });
+            }
+            await new Promise(r => setTimeout(r, 2));
         }
+
+        const writePipe = redis.pipeline();
+        writePipe.del(TAG_COUNTS_KEY);
+        Object.entries(tagCounts).forEach(([tag, count]) => writePipe.hset(TAG_COUNTS_KEY, tag, count));
+        writePipe.set(UNTAGGED_COUNT_KEY, String(untaggedCount));
+        writePipe.set(UNTAGGED_COUNT_READY_KEY, '1');
+        await writePipe.exec();
+
         const seeded = await redis.hgetall(TAG_COUNTS_KEY);
         const map = {};
         Object.entries(seeded || {}).forEach(([k, v]) => {
             const n = parseInt(v);
             if (n > 0) map[k] = n;
         });
-        return { map, seededCandidateReads: candidates.length };
+        return { map, untaggedCount, seededCandidateReads };
     } finally {
         await redis.del(TAG_COUNTS_INIT_LOCK);
     }
@@ -70,10 +105,10 @@ export default async function handler(req, res) {
             ];
             const tags = savedTags.map(t => typeof t === 'string' ? { name: t, color: '#3b82f6' } : t);
 
-            const { map: countsMap, seededCandidateReads } = await getCountsMap(redis);
+            const { map: countsMap, untaggedCount, seededCandidateReads } = await getCountsSummary(redis);
             tags.forEach(t => { t.count = countsMap[t.name] || 0; });
 
-            const payload = { success: true, tags };
+            const payload = { success: true, tags, untaggedCount };
             recordUsageMetric(redis, '/api/tags', {
                 candidateReads: seededCandidateReads,
                 estimatedRedisBytes: seededCandidateReads ? estimateJsonBytes(countsMap) : 0,
