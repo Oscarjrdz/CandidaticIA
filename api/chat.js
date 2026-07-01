@@ -1,4 +1,4 @@
-import { getMessages, getRecentMessages, saveMessage, getCandidateById, updateCandidate, updateMessageStatus, getRedisClient, validateAdminSession, getUsers, getRoles } from './utils/storage.js';
+import { getMessages, getRecentMessages, saveMessage, getCandidateById, updateCandidate, updateMessageStatus, getRedisClient, validateAdminSession, getUsers, getRoles, isProfileComplete } from './utils/storage.js';
 import { substituteVariables } from './utils/shortcuts.js';
 import axios from 'axios';
 import { sendUltraMsgMessage, getUltraMsgConfig, buildMetaTemplateComponents } from './whatsapp/utils.js';
@@ -87,7 +87,7 @@ export default async function handler(req, res) {
 
         // PUT - Lock/Unlock chat (anti-duplication)
         if (req.method === 'PUT') {
-            const { action, candidateId, userName, messageId, tagName, tagScope = 'tag' } = req.body;
+            const { action, candidateId, userName, messageId, tagName, tagScope = 'tag', profileScope = 'all' } = req.body;
             const redis = getRedisClient();
             if (!redis) return res.status(500).json({ error: 'Redis unavailable' });
 
@@ -100,14 +100,19 @@ export default async function handler(req, res) {
                     return res.status(400).json({ error: 'Falta tagName' });
                 }
 
-                const [users, roles, unreadIds] = await Promise.all([
+                const normalizedProfileScope = ['complete', 'incomplete'].includes(profileScope) ? profileScope : 'all';
+
+                const [users, roles, unreadIds, customFieldsRaw] = await Promise.all([
                     getUsers().catch(() => []),
                     getRoles().catch(() => []),
-                    redis.smembers('candidates:unread')
+                    redis.smembers('candidates:unread'),
+                    redis.get('custom_fields').catch(() => null)
                 ]);
+                const customFields = customFieldsRaw ? JSON.parse(customFieldsRaw) : [];
                 const user = users.find(u => u.id === userId || u.whatsapp === userId);
                 const role = roles.find(r => r.name === user?.role);
                 const rolePermissions = role?.permissions || {};
+                const allowedWa = Array.isArray(user?.allowed_wa_numbers) ? user.allowed_wa_numbers : [];
                 const allowedLabels = Array.isArray(user?.allowed_labels)
                     ? user.allowed_labels.map(normalizeTagName).filter(Boolean)
                     : [];
@@ -133,7 +138,14 @@ export default async function handler(req, res) {
                         try { candidate = JSON.parse(raw); } catch { continue; }
                         if (!candidate?.id || !isCandidateUnread(candidate)) continue;
 
-                        if (!canSeeIncomplete && candidate.statusAudit !== 'complete') continue;
+                        if (user?.role !== 'SuperAdmin' && user?.role !== 'Admin' && allowedWa.length > 0) {
+                            if (!candidate.incomingPhoneNumberId || !allowedWa.includes(candidate.incomingPhoneNumberId)) continue;
+                        }
+
+                        const complete = candidate.statusAudit === 'complete' || isProfileComplete(candidate, customFields);
+                        if (!canSeeIncomplete && !complete) continue;
+                        if (normalizedProfileScope === 'complete' && !complete) continue;
+                        if (normalizedProfileScope === 'incomplete' && complete) continue;
 
                         const tags = candidateTagNames(candidate);
                         if (hasRBACRestriction) {
@@ -169,6 +181,7 @@ export default async function handler(req, res) {
                     marked: matchedIds.length,
                     candidateIds: matchedIds,
                     scope,
+                    profileScope: normalizedProfileScope,
                     tagName: scope === 'tag' ? tagName : null
                 });
             }

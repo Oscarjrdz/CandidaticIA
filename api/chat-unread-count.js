@@ -37,6 +37,7 @@ export default async function handler(req, res) {
         const unreadVersion = unreadVersionRaw || '0';
         const restrictionSig = JSON.stringify({
             role: user.role || '',
+            wa: Array.isArray(user.allowed_wa_numbers) ? [...user.allowed_wa_numbers].sort() : [],
             crm: Array.isArray(user.allowed_crm_projects) ? [...user.allowed_crm_projects].sort() : [],
             labels: Array.isArray(user.allowed_labels) ? [...user.allowed_labels].sort() : [],
             viewIncomplete: rolePermissions.view_incomplete_candidates === true
@@ -61,6 +62,8 @@ export default async function handler(req, res) {
 
         const allowedCrm = user?.allowed_crm_projects;
         const hasCrmRestriction = Array.isArray(allowedCrm) && allowedCrm.length > 0;
+        const allowedWa = user?.allowed_wa_numbers;
+        const hasWaRestriction = Array.isArray(allowedWa) && allowedWa.length > 0;
         const allowedLabels = user?.allowed_labels;
         const hasLabelRestriction = Array.isArray(allowedLabels) && allowedLabels.length > 0;
         const hasRBACRestriction = user.role !== 'SuperAdmin' && user.role !== 'Admin' && (hasCrmRestriction || hasLabelRestriction);
@@ -102,6 +105,11 @@ export default async function handler(req, res) {
                 const userTime = candidate.lastUserMessageAt ? new Date(candidate.lastUserMessageAt).getTime() : 0;
                 const humanTime = candidate.lastHumanMessageAt ? new Date(candidate.lastHumanMessageAt).getTime() : 0;
                 if (!userTime || userTime <= humanTime) continue;
+
+                if (user.role !== 'SuperAdmin' && user.role !== 'Admin' && hasWaRestriction) {
+                    const phoneId = candidate?.incomingPhoneNumberId;
+                    if (!phoneId || !allowedWa.includes(phoneId)) continue;
+                }
 
                 if (hasRBACRestriction) {
                     const inAllowedCrm = hasCrmRestriction && candidate?.manualProjectId && allowedCrm.includes(candidate.manualProjectId);

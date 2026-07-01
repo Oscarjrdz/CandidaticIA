@@ -1638,7 +1638,14 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
             : unreadCounts
     );
 
-    const handleMarkTagAsRead = useCallback(async ({ scope = 'tag', tagName = null, label = 'esta etiqueta', unreadCount = 0 }, e) => {
+    const getActiveProfileScope = useCallback(() => {
+        if (activeFilter !== 'profile') return 'all';
+        if (filterValue === 'complete') return 'complete';
+        if (filterValue === 'incomplete') return 'incomplete';
+        return 'all';
+    }, [activeFilter, filterValue]);
+
+    const handleMarkTagAsRead = useCallback(async ({ scope = 'tag', tagName = null, label = 'esta etiqueta', unreadCount = 0, profileScope = 'all' }, e) => {
         if (e) {
             e.preventDefault();
             e.stopPropagation();
@@ -1662,7 +1669,8 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
                 body: JSON.stringify({
                     action: 'mark_read_by_tag',
                     tagScope: scope,
-                    tagName
+                    tagName,
+                    profileScope
                 })
             });
             const data = await res.json().catch(() => ({}));
@@ -1690,15 +1698,24 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
 
     const renderTagUnreadControls = useCallback(({ scope, tagName = null, label, unreadCount }) => {
         if (!unreadCount || unreadCount <= 0) return null;
+        if (scope === 'all') {
+            return (
+                <div className="flex items-center gap-1.5 shrink-0">
+                    <div className="min-w-[20px] h-[20px] px-1.5 rounded-full bg-[#25d366] dark:bg-[#00a884] flex items-center justify-center shrink-0 text-white text-[10px] font-bold shadow-sm">
+                        {unreadCount}
+                    </div>
+                </div>
+            );
+        }
+        const profileScope = getActiveProfileScope();
         return (
             <div className="flex items-center gap-1.5 shrink-0">
                 <button
                     type="button"
-                    onClick={(e) => handleMarkTagAsRead({ scope, tagName, label, unreadCount }, e)}
-                    className="h-6 px-2 rounded-full border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 text-[10px] font-bold flex items-center gap-1 transition-colors"
+                    onClick={(e) => handleMarkTagAsRead({ scope, tagName, label, unreadCount, profileScope }, e)}
+                    className="h-5 px-1.5 rounded-full border border-emerald-100 dark:border-emerald-900/50 bg-white/70 dark:bg-[#202c33]/70 text-emerald-600/80 dark:text-emerald-400/80 hover:border-emerald-200 dark:hover:border-emerald-800 hover:bg-emerald-50/60 dark:hover:bg-emerald-900/10 text-[9px] font-semibold flex items-center transition-colors"
                     title={`Marcar todo como leído: ${label}`}
                 >
-                    <Check className="w-3 h-3" />
                     <span className="hidden sm:inline">Marcar todo leído</span>
                 </button>
                 <div className="min-w-[20px] h-[20px] px-1.5 rounded-full bg-[#25d366] dark:bg-[#00a884] flex items-center justify-center shrink-0 text-white text-[10px] font-bold shadow-sm">
@@ -1706,7 +1723,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
                 </div>
             </div>
         );
-    }, [handleMarkTagAsRead]);
+    }, [getActiveProfileScope, handleMarkTagAsRead]);
 
     // Reportar al padre solo el conteo global exacto. El fallback local depende de la
     // pagina cargada en Chat Web y puede ser parcial (por ejemplo 10 chats visibles).
