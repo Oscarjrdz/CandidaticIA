@@ -1638,6 +1638,56 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
             : unreadCounts
     );
 
+    const handleMarkTagAsRead = useCallback(async ({ scope = 'tag', tagName = null, label = 'esta etiqueta', unreadCount = 0 }, e) => {
+        if (e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+        if (!unreadCount) return;
+
+        const confirmed = await new Promise(resolve => setConfirmModal({
+            title: 'Marcar como leído',
+            message: `Se marcarán como leídos ${unreadCount} chat${unreadCount === 1 ? '' : 's'} de ${label}. Las burbujas verdes de este filtro se quitarán.`,
+            confirmText: 'Marcar leído',
+            variant: 'success',
+            onConfirm: () => resolve(true),
+            onCancel: () => resolve(false)
+        }));
+        if (!confirmed) return;
+
+        try {
+            const res = await fetch('/api/chat', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'mark_read_by_tag',
+                    tagScope: scope,
+                    tagName
+                })
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || !data.success) {
+                throw new Error(data.error || 'No se pudo marcar como leído');
+            }
+
+            const now = new Date().toISOString();
+            (data.candidateIds || []).forEach(id => {
+                applyCandidateUnreadPatch(id, {
+                    unreadMsgCount: 0,
+                    lastBotMessageAt: now,
+                    ultimoMensajeBot: now,
+                    lastHumanMessageAt: now,
+                });
+            });
+            await refreshGlobalUnreadCounts();
+            showToast && showToast(`${data.marked || 0} chat${(data.marked || 0) === 1 ? '' : 's'} marcados como leídos`, 'success');
+        } catch (err) {
+            console.error('Error marking tag as read', err);
+            showToast && showToast('No se pudieron marcar como leídos', 'error');
+            refreshGlobalUnreadCounts().catch(() => {});
+        }
+    }, [applyCandidateUnreadPatch, refreshGlobalUnreadCounts, showToast]);
+
     const renderTagUnreadControls = useCallback(({ scope, tagName = null, label, unreadCount }) => {
         if (!unreadCount || unreadCount <= 0) return null;
         return (
@@ -2260,56 +2310,6 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
             console.error('Error marking as unread', err);
         }
     }, [applyCandidateUnreadPatch]);
-
-    const handleMarkTagAsRead = useCallback(async ({ scope = 'tag', tagName = null, label = 'esta etiqueta', unreadCount = 0 }, e) => {
-        if (e) {
-            e.preventDefault();
-            e.stopPropagation();
-        }
-        if (!unreadCount) return;
-
-        const confirmed = await new Promise(resolve => setConfirmModal({
-            title: 'Marcar como leído',
-            message: `Se marcarán como leídos ${unreadCount} chat${unreadCount === 1 ? '' : 's'} de ${label}. Las burbujas verdes de este filtro se quitarán.`,
-            confirmText: 'Marcar leído',
-            variant: 'success',
-            onConfirm: () => resolve(true),
-            onCancel: () => resolve(false)
-        }));
-        if (!confirmed) return;
-
-        try {
-            const res = await fetch('/api/chat', {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    action: 'mark_read_by_tag',
-                    tagScope: scope,
-                    tagName
-                })
-            });
-            const data = await res.json().catch(() => ({}));
-            if (!res.ok || !data.success) {
-                throw new Error(data.error || 'No se pudo marcar como leído');
-            }
-
-            const now = new Date().toISOString();
-            (data.candidateIds || []).forEach(id => {
-                applyCandidateUnreadPatch(id, {
-                    unreadMsgCount: 0,
-                    lastBotMessageAt: now,
-                    ultimoMensajeBot: now,
-                    lastHumanMessageAt: now,
-                });
-            });
-            await refreshGlobalUnreadCounts();
-            showToast && showToast(`${data.marked || 0} chat${(data.marked || 0) === 1 ? '' : 's'} marcados como leídos`, 'success');
-        } catch (err) {
-            console.error('Error marking tag as read', err);
-            showToast && showToast('No se pudieron marcar como leídos', 'error');
-            refreshGlobalUnreadCounts().catch(() => {});
-        }
-    }, [applyCandidateUnreadPatch, refreshGlobalUnreadCounts, showToast]);
 
     const handleSelectChat = useCallback((chat) => {
         pendingChatIdRef.current = chat.id; // guard SSE race before React commits
