@@ -132,9 +132,11 @@ const MobileLandingPage = ({ onLoginSuccess }) => {
     ];
 
     const faqs = [
-        { q: '¿Qué es Candidatic IA?', a: 'Somos una agencia de reclutamiento masivo con inteligencia artificial. Usamos WhatsApp y un bot con IA para buscar, filtrar y contactar candidatos automáticamente.' },
-        { q: '¿Cuánto tiempo tarda?', a: 'Podemos entregar candidatos pre-filtrados en días, no semanas. Nuestro bot trabaja 24/7 contactando y entrevistando.' },
-        { q: '¿Cómo contactan a los candidatos?', a: 'A través de WhatsApp con mensajes personalizados y un bot de IA que los pre-filtra automáticamente.' },
+        { q: '¿Qué es Candidatic IA?', a: 'Somos una agencia de reclutamiento masivo en Monterrey potenciada por inteligencia artificial. Usamos WhatsApp y un bot conversacional inteligente para buscar, filtrar y contactar candidatos, extrayendo datos y agendando citas automáticamente para tu empresa.' },
+        { q: '¿Necesito contratar un reclutador interno?', a: 'No. Nosotros nos encargamos del proceso de reclutamiento por ti. Nuestro equipo y la IA trabajan juntos para encontrar candidatos, filtrar perfiles y reducir la carga operativa de tu empresa.' },
+        { q: '¿Cómo encuentran a los candidatos?', a: 'Utilizamos inteligencia artificial para buscar en nuestra base de datos con lenguaje natural, rankear perfiles por afinidad con tu vacante y contactar candidatos por WhatsApp.' },
+        { q: '¿Cómo contactan a los candidatos?', a: 'A través de WhatsApp con mensajes personalizados, un bot de IA que los pre-filtra automáticamente, y seguimiento en tiempo real. Todo profesional, rápido y con toque humano cuando se necesita.' },
+        { q: '¿Cuánto tiempo tarda el proceso?', a: 'Gracias a nuestra tecnología de IA y WhatsApp, podemos entregar candidatos pre-filtrados en cuestión de días, no semanas. Nuestro bot trabaja 24/7 contactando y entrevistando candidatos por ti.' },
     ];
 
     return (
@@ -334,29 +336,33 @@ const MobileLandingPage = ({ onLoginSuccess }) => {
                         <div className="flex">
                             <div className="marquee-mobile flex items-center gap-8">
                                 {[
-                                    { name: 'CEMEX',            logo: 'https://upload.wikimedia.org/wikipedia/commons/8/85/Cemex_logo_2023.png' },
-                                    { name: 'FEMSA',            logo: 'https://upload.wikimedia.org/wikipedia/commons/8/85/FEMSA_Logo.svg' },
-                                    { name: 'Banorte',          logo: 'https://upload.wikimedia.org/wikipedia/en/1/13/Banorte_%28banking_and_financial_services_holding_company%29_logo.svg' },
-                                    { name: 'ALFA',             logo: 'https://upload.wikimedia.org/wikipedia/commons/f/f5/ALFA_logo.svg' },
-                                    { name: 'Vitro',            logo: 'https://upload.wikimedia.org/wikipedia/commons/0/0d/Logo_Vitro.jpg' },
-                                    { name: 'GRUMA',            logo: 'https://upload.wikimedia.org/wikipedia/en/9/97/Gruma_logo-en.svg' },
-                                    { name: 'Arca Continental', logo: 'https://upload.wikimedia.org/wikipedia/commons/f/ff/Arca_Continental_logo.svg' },
-                                    { name: 'Softtek',          logo: 'https://upload.wikimedia.org/wikipedia/en/b/b7/Softtek_Logo.svg' },
-                                    { name: 'Grupo Bimbo',      logo: 'https://upload.wikimedia.org/wikipedia/commons/d/dd/Logo_Grupo_BIMBO.svg' },
-                                    { name: 'Liverpool',        logo: 'https://upload.wikimedia.org/wikipedia/commons/f/fb/Liverpool_logo_2023.png' },
-                                    { name: 'CEMEX',            logo: 'https://upload.wikimedia.org/wikipedia/commons/8/85/Cemex_logo_2023.png' },
-                                    { name: 'FEMSA',            logo: 'https://upload.wikimedia.org/wikipedia/commons/8/85/FEMSA_Logo.svg' },
-                                    { name: 'Banorte',          logo: 'https://upload.wikimedia.org/wikipedia/en/1/13/Banorte_%28banking_and_financial_services_holding_company%29_logo.svg' },
-                                    { name: 'ALFA',             logo: 'https://upload.wikimedia.org/wikipedia/commons/f/f5/ALFA_logo.svg' },
-                                    { name: 'Vitro',            logo: 'https://upload.wikimedia.org/wikipedia/commons/0/0d/Logo_Vitro.jpg' },
-                                    { name: 'GRUMA',            logo: 'https://upload.wikimedia.org/wikipedia/en/9/97/Gruma_logo-en.svg' },
-                                    { name: 'Arca Continental', logo: 'https://upload.wikimedia.org/wikipedia/commons/f/ff/Arca_Continental_logo.svg' },
-                                    { name: 'Softtek',          logo: 'https://upload.wikimedia.org/wikipedia/en/b/b7/Softtek_Logo.svg' },
-                                    { name: 'Grupo Bimbo',      logo: 'https://upload.wikimedia.org/wikipedia/commons/d/dd/Logo_Grupo_BIMBO.svg' },
-                                    { name: 'Liverpool',        logo: 'https://upload.wikimedia.org/wikipedia/commons/f/fb/Liverpool_logo_2023.png' },
+                                    { name: 'CEMEX',            logo: '/lp/Agencia_de_Reclutamiento_Masivo_8.png' },
+                                    { name: 'FEMSA',            logo: '/lp/Agencia_de_Reclutamiento_Masivo_9.svg' },
+                                    { name: 'Banorte',          logo: '/lp/Agencia_de_Reclutamiento_Masivo_10.svg' },
+                                    { name: 'ALFA',             logo: '/lp/Agencia_de_Reclutamiento_Masivo_11.svg' },
+                                    { name: 'Vitro',            logo: '/lp/Agencia_de_Reclutamiento_Masivo_12.jpg' },
+                                    { name: 'GRUMA',            logo: '/lp/Agencia_de_Reclutamiento_Masivo_13.svg' },
+                                    { name: 'Arca Continental', logo: '/lp/Agencia_de_Reclutamiento_Masivo_14.svg' },
+                                    { name: 'Softtek',          logo: '/lp/Agencia_de_Reclutamiento_Masivo_15.svg' },
+                                    { name: 'Grupo Bimbo',      logo: '/lp/Agencia_de_Reclutamiento_Masivo_16.svg' },
+                                    { name: 'Liverpool',        logo: '/lp/Agencia_de_Reclutamiento_Masivo_17.png' },
+                                    { name: 'CEMEX',            logo: '/lp/Agencia_de_Reclutamiento_Masivo_8.png' },
+                                    { name: 'FEMSA',            logo: '/lp/Agencia_de_Reclutamiento_Masivo_9.svg' },
+                                    { name: 'Banorte',          logo: '/lp/Agencia_de_Reclutamiento_Masivo_10.svg' },
+                                    { name: 'ALFA',             logo: '/lp/Agencia_de_Reclutamiento_Masivo_11.svg' },
+                                    { name: 'Vitro',            logo: '/lp/Agencia_de_Reclutamiento_Masivo_12.jpg' },
+                                    { name: 'GRUMA',            logo: '/lp/Agencia_de_Reclutamiento_Masivo_13.svg' },
+                                    { name: 'Arca Continental', logo: '/lp/Agencia_de_Reclutamiento_Masivo_14.svg' },
+                                    { name: 'Softtek',          logo: '/lp/Agencia_de_Reclutamiento_Masivo_15.svg' },
+                                    { name: 'Grupo Bimbo',      logo: '/lp/Agencia_de_Reclutamiento_Masivo_16.svg' },
+                                    { name: 'Liverpool',        logo: '/lp/Agencia_de_Reclutamiento_Masivo_17.png' },
                                 ].map((co, i) => (
                                     <div key={i} className="flex-shrink-0 opacity-40">
-                                        <img src={co.logo} alt={co.name} className="h-7 w-auto max-w-[90px] object-contain grayscale" />
+                                        <img
+                                            src={co.logo}
+                                            alt={`Logo de ${co.name}, empresa que recluta con Candidatic IA, agencia de reclutamiento masivo en Monterrey`}
+                                            className="h-7 w-auto max-w-[90px] object-contain grayscale"
+                                        />
                                     </div>
                                 ))}
                             </div>
@@ -414,6 +420,19 @@ const MobileLandingPage = ({ onLoginSuccess }) => {
                     </div>
                 </section>
 
+                {/* ── COBERTURA LOCAL ── */}
+                <section className="px-5 py-9 bg-white">
+                    <div className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-5">
+                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-violet-500 mb-2">Cobertura local</p>
+                        <h2 className="text-xl font-extrabold text-gray-900 mb-3">
+                            Reclutamiento masivo en Monterrey y área metropolitana
+                        </h2>
+                        <p className="text-sm text-gray-600 leading-relaxed">
+                            Atendemos empresas en Monterrey, Apodaca, Guadalupe, San Nicolás de los Garza, General Escobedo, Santa Catarina, García y San Pedro Garza García.
+                        </p>
+                    </div>
+                </section>
+
                 {/* ── FAQ ── */}
                 <section className="px-5 py-10">
                     <h2 className="text-xl font-extrabold text-gray-900 text-center mb-6">Preguntas frecuentes</h2>
@@ -462,9 +481,9 @@ const MobileLandingPage = ({ onLoginSuccess }) => {
                         Agencia de reclutamiento potenciada por inteligencia artificial y WhatsApp para el mercado latinoamericano.
                     </p>
                     <div className="flex gap-4 text-xs text-gray-500 mb-4">
-                        <a href="#" className="hover:text-violet-400">Privacidad</a>
-                        <a href="#" className="hover:text-violet-400">Términos</a>
-                        <a href="#" className="hover:text-violet-400">Contacto</a>
+                        <a href="/privacy" className="hover:text-violet-400">Privacidad</a>
+                        <a href="/terms" className="hover:text-violet-400">Términos</a>
+                        <a href="mailto:contacto@candidatic.com" className="hover:text-violet-400">Contacto</a>
                         <button onClick={() => setIsLoginOpen(true)} className="hover:text-violet-400">Ingresar</button>
                     </div>
                     <p className="text-xs text-gray-600">© {new Date().getFullYear()} Candidatic IA. Todos los derechos reservados.</p>

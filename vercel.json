@@ -38,6 +38,10 @@
             "destination": "/api/public/privacy"
         },
         {
+            "source": "/terms",
+            "destination": "/api/public/terms"
+        },
+        {
             "source": "/s/:id",
             "destination": "/api/share?id=:id"
         },
