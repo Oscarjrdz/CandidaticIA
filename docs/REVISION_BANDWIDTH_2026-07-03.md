@@ -5,7 +5,8 @@
 Revisar si las optimizaciones del jueves 2026-07-02 redujeron el consumo diario de Redis sin afectar la experiencia del Chat Web ni los filtros.
 
 Meta operativa:
-- Ideal: acercarse a 500 MB/dia.
+- Objetivo final: 500 MB/dia con 3 usuarios activos.
+- Ideal inmediato: acercarse a 500 MB/dia.
 - Aceptable temporal: menos de 1 GB/dia con uso normal.
 - Alerta: mas de 2 GB/dia sin carga excepcional.
 
@@ -26,6 +27,13 @@ Meta operativa:
    - `GET /api/system/endpoint-usage` ahora suma `redisReads` y `redisWrites` en `totals`.
    - La accion pesada `mark_read_by_tag` queda separada como `/api/chat/mark-read-by-tag`, con `candidateReads`, `redisWrites` y `estimatedRedisBytes`.
 
+4. Deploy adicional para bajar consumo real
+   - `__candidatic_untagged__` ahora tiene indice Redis `index:candidates:untagged` ordenado por actividad.
+   - El filtro "Sin etiqueta" ya no necesita escanear perfiles completos: lee IDs del indice e hidrata solo la pagina visible.
+   - `getCandidatesUnreadFirstByTag` ahora cruza IDs por indice antes de hidratar candidatos; evita cargar todos los no leidos + ventana reciente para filtrar en Node.
+   - `/api/candidates` ya no marca filtros por tag como `fullScan` cuando van por indices.
+   - El medidor debe usarse como ciclo de mejora: medir, ordenar endpoints por bytes/calls, quitar el siguiente full scan, repetir hasta 500 MB/dia.
+
 ## Como revisar el viernes
 
 1. Abrir Configuracion > Redis Telemetry.
@@ -45,6 +53,7 @@ Meta operativa:
      - Debe subir `cacheHitRate` si no cambia `stats:unread:version` constantemente.
    - `/api/candidates`
      - Debe bajar `fullScans` cuando se usen filtros por etiqueta normales.
+     - Debe mantenerse bajo tambien con el filtro "Sin etiqueta".
    - `/api/chat/mark-read-by-tag`
      - Solo debe aparecer cuando se use el boton de marcar como leidos por etiqueta/filtro.
    - `totals.redisReads` y `totals.redisWrites`
@@ -65,8 +74,8 @@ Meta operativa:
 
 Siguiente foco:
 1. Busqueda libre en `/api/candidates`, porque todavia requiere stream/scan para coincidencias generales.
-2. Filtro `__candidatic_untagged__`, porque no tiene indice equivalente al de tags normales.
-3. Bulk `mark_read_by_tag`, si aparece con muchos `candidateReads`.
-4. `/api/chat`, si `messageReads` crece por cargas de historial.
+2. Bulk `mark_read_by_tag`, si aparece con muchos `candidateReads`.
+3. `/api/chat`, si `messageReads` crece por cargas de historial.
+4. Endpoints no instrumentados que aparezcan en logs de Vercel con mucha frecuencia.
 
 No migrar hosting ni Redis antes de medir estos cambios 24 horas. Si el consumo baja, el problema era patron de lectura; si no baja, ampliar instrumentacion a endpoints restantes que aparezcan en logs de Vercel.

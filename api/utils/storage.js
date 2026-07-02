@@ -91,6 +91,9 @@ const KEYS = {
 const INDEX_KEYS = {
     TAG_PREFIX: 'index:candidates:tag:',
     AD_PREFIX: 'index:candidates:ad:',
+    UNTAGGED: 'index:candidates:untagged',
+    UNTAGGED_READY: 'index:candidates:untagged:ready',
+    UNTAGGED_LOCK: 'index:candidates:untagged:lock',
     READY: 'index:candidates:secondary:ready',
     LOCK: 'index:candidates:secondary:lock'
 };
@@ -105,6 +108,10 @@ const cleanTagValues = (tags) => [...new Set((Array.isArray(tags) ? tags : [])
     .map(t => typeof t === 'string' ? t : t?.name)
     .map(t => String(t || '').trim())
     .filter(Boolean))];
+const candidateSortScore = (candidate = {}) => {
+    const score = new Date(candidate.ultimoMensaje || candidate.primerContacto || Date.now()).getTime();
+    return Number.isFinite(score) ? score : Date.now();
+};
 
 function normalizeCandidateSilence(candidate, nowMs = Date.now()) {
     if (!candidate || candidate.blocked !== true || !candidate.blockedExpiresAt) return candidate;
@@ -133,13 +140,67 @@ async function syncCandidateSecondaryIndexes(client, oldCandidate = null, newCan
     const newTags = new Set(cleanTagValues(newCandidate?.tags));
     const oldAd = oldCandidate?.adId ? String(oldCandidate.adId).trim() : '';
     const newAd = newCandidate?.adId ? String(newCandidate.adId).trim() : '';
+    const wasUntagged = oldCandidate && oldTags.size === 0;
+    const isUntagged = newCandidate && newTags.size === 0;
 
     const pipe = client.pipeline();
     for (const tag of oldTags) if (!newTags.has(tag)) pipe.srem(tagIndexKey(tag), id);
     for (const tag of newTags) if (!oldTags.has(tag)) pipe.sadd(tagIndexKey(tag), id);
     if (oldAd && oldAd !== newAd) pipe.srem(adIndexKey(oldAd), id);
     if (newAd && oldAd !== newAd) pipe.sadd(adIndexKey(newAd), id);
+    if (wasUntagged && !isUntagged) pipe.zrem(INDEX_KEYS.UNTAGGED, id);
+    if (isUntagged) pipe.zadd(INDEX_KEYS.UNTAGGED, candidateSortScore(newCandidate), id);
     await pipe.exec().catch(() => {});
+}
+
+async function ensureCandidateUntaggedIndex() {
+    const client = getRedisClient();
+    if (!client) return false;
+    const ready = await client.get(INDEX_KEYS.UNTAGGED_READY).catch(() => null);
+    if (ready === '1') return true;
+
+    const locked = await client.set(INDEX_KEYS.UNTAGGED_LOCK, '1', 'EX', 300, 'NX').catch(() => null);
+    if (!locked) {
+        for (let i = 0; i < 20; i++) {
+            await new Promise(r => setTimeout(r, 250));
+            const nowReady = await client.get(INDEX_KEYS.UNTAGGED_READY).catch(() => null);
+            if (nowReady === '1') return true;
+        }
+        return false;
+    }
+
+    try {
+        await client.del(INDEX_KEYS.UNTAGGED);
+        const total = (await client.scard(KEYS.LIST_COMPLETE)) + (await client.scard(KEYS.LIST_PENDING));
+        const CHUNK = 500;
+        for (let offset = 0; offset < total; offset += CHUNK) {
+            const idsWithScores = await client.zrevrange(KEYS.CANDIDATES_LIST, offset, offset + CHUNK - 1, 'WITHSCORES');
+            if (!idsWithScores?.length) break;
+            const entries = [];
+            for (let i = 0; i < idsWithScores.length; i += 2) {
+                entries.push({ id: idsWithScores[i], score: Number(idsWithScores[i + 1] || 0) });
+            }
+            const readPipe = client.pipeline();
+            entries.forEach(({ id }) => readPipe.get(`${KEYS.CANDIDATE_PREFIX}${id}`));
+            const rows = await readPipe.exec();
+            const writePipe = client.pipeline();
+            rows.forEach(([err, raw], index) => {
+                if (err || !raw) return;
+                try {
+                    const c = JSON.parse(raw);
+                    if (c?.id && cleanTagValues(c.tags).length === 0) {
+                        writePipe.zadd(INDEX_KEYS.UNTAGGED, entries[index].score || candidateSortScore(c), c.id);
+                    }
+                } catch {}
+            });
+            await writePipe.exec();
+            await new Promise(r => setTimeout(r, 2));
+        }
+        await client.set(INDEX_KEYS.UNTAGGED_READY, '1');
+        return true;
+    } finally {
+        await client.del(INDEX_KEYS.UNTAGGED_LOCK).catch(() => {});
+    }
 }
 
 export async function ensureCandidateSecondaryIndexes() {
@@ -173,13 +234,16 @@ export async function ensureCandidateSecondaryIndexes() {
                 let c;
                 try { c = JSON.parse(raw); } catch { continue; }
                 if (!c?.id) continue;
-                cleanTagValues(c.tags).forEach(tag => writePipe.sadd(tagIndexKey(tag), c.id));
+                const tags = cleanTagValues(c.tags);
+                tags.forEach(tag => writePipe.sadd(tagIndexKey(tag), c.id));
+                if (tags.length === 0) writePipe.zadd(INDEX_KEYS.UNTAGGED, candidateSortScore(c), c.id);
                 if (c.adId) writePipe.sadd(adIndexKey(c.adId), c.id);
             }
             await writePipe.exec();
             await new Promise(r => setTimeout(r, 2));
         }
         await client.set(INDEX_KEYS.READY, '1');
+        await client.set(INDEX_KEYS.UNTAGGED_READY, '1');
         return true;
     } finally {
         await client.del(INDEX_KEYS.LOCK).catch(() => {});
@@ -542,8 +606,7 @@ export const getCandidates = async (limit = 100, offset = 0, search = '', exclud
     // ✅ META AUDIT: Removed O(N) HKEYS call for CANDIDATE_PROJECT_LINK hydration.
     // The 'proyecto' virtual field is now derived from the candidate's own projectId field.
 
-    // If searching or filtering untagged profiles, we still stream through candidates.
-    // Plain tag filters can use the maintained tag index and keep candidates:list ordering.
+    // Plain list and indexed tag filters avoid streaming whole candidate payloads.
     if (!search && !tagFilter && !excludeLinked) {
         const sumCount = async () => (await client.scard(KEYS.LIST_COMPLETE)) + (await client.scard(KEYS.LIST_PENDING));
         const stop = offset + limit - 1;
@@ -561,6 +624,18 @@ export const getCandidates = async (limit = 100, offset = 0, search = '', exclud
 
         const total = await sumCount();
         return { candidates, total };
+    }
+
+    if (!search && tagFilter && tagFilter.trim().toLowerCase() === UNTAGGED_TAG_FILTER && !excludeLinked) {
+        const indexed = await ensureCandidateUntaggedIndex();
+        if (indexed) {
+            const total = await client.zcard(INDEX_KEYS.UNTAGGED);
+            const ids = await client.zrevrange(INDEX_KEYS.UNTAGGED, offset, offset + limit - 1);
+            return {
+                candidates: await hydrateCandidateIds(ids, ids.length),
+                total
+            };
+        }
     }
 
     if (!search && tagFilter && tagFilter.trim().toLowerCase() !== UNTAGGED_TAG_FILTER && !excludeLinked) {
@@ -811,46 +886,54 @@ export const getCandidatesUnreadFirstByTag = async (tagFilter, limit = 33, offse
     if (!client) return { candidates: [], total: 0 };
 
     const tagLower = tagFilter.trim().toLowerCase();
-
-    // 1. Todos los no-leídos
     const unreadIds = await client.smembers(KEYS.CANDIDATES_UNREAD);
-
-    // 2. Candidatos recientes para completar si hay pocos no-leídos con ese tag
-    const recentWindow = Math.min(500, Math.max(offset + limit, limit));
-    const recentIds = await client.zrevrange(KEYS.CANDIDATES_LIST, 0, recentWindow - 1);
-
-    // 3. Unión sin duplicados: no-leídos primero
     const unreadSet = new Set(unreadIds);
-    const recentOnly = recentIds.filter(id => !unreadSet.has(id));
-    const allIds = [...unreadIds, ...recentOnly];
+    let matchingWithScores = [];
 
-    if (!allIds.length) return { candidates: [], total: 0 };
+    if (tagLower === UNTAGGED_TAG_FILTER) {
+        const indexed = await ensureCandidateUntaggedIndex();
+        if (!indexed) return { candidates: [], total: 0 };
 
-    // 4. Cargar y filtrar por tag
-    const pipeline = client.pipeline();
-    allIds.forEach(id => pipeline.get(`${KEYS.CANDIDATE_PREFIX}${id}`));
-    const results = await pipeline.exec();
+        const idsWithScores = await client.zrevrange(INDEX_KEYS.UNTAGGED, 0, -1, 'WITHSCORES');
+        for (let i = 0; i < idsWithScores.length; i += 2) {
+            matchingWithScores.push({
+                id: idsWithScores[i],
+                score: Number(idsWithScores[i + 1] || 0)
+            });
+        }
+    } else {
+        await ensureCandidateSecondaryIndexes();
+        const indexedIds = await client.smembers(tagIndexKey(tagFilter));
+        if (!indexedIds?.length) return { candidates: [], total: 0 };
 
-    const all = results
-        .map(([err, res]) => (err || !res) ? null : normalizeCandidateSilence(JSON.parse(res)))
-        .filter(c => {
-            if (!c) return false;
-            const candidateTags = cleanTagValues(c.tags);
-            if (tagLower === UNTAGGED_TAG_FILTER) return candidateTags.length === 0;
-            return candidateTags.some(t => t.toLowerCase() === tagLower);
-        });
+        let scoreRows = [];
+        try {
+            scoreRows = await client.zmscore(KEYS.CANDIDATES_LIST, ...indexedIds);
+        } catch {
+            const scorePipe = client.pipeline();
+            indexedIds.forEach(id => scorePipe.zscore(KEYS.CANDIDATES_LIST, id));
+            scoreRows = (await scorePipe.exec()).map(([err, score]) => err ? null : score);
+        }
 
-    // Separar no-leídos de leídos y ordenar cada grupo por último mensaje DESC
-    const ts = c => new Date(c.lastUserMessageAt || c.ultimoMensaje || 0).getTime();
-    const unread = all.filter(c => {
-        const u = new Date(c.lastUserMessageAt || 0).getTime();
-        const h = new Date(c.lastHumanMessageAt || 0).getTime();
-        return u > 0 && u > h;
-    }).sort((a, b) => ts(b) - ts(a));
-    const read = all.filter(c => !unread.includes(c)).sort((a, b) => ts(b) - ts(a));
+        matchingWithScores = indexedIds
+            .map((id, index) => ({ id, score: Number(scoreRows?.[index] || 0) }))
+            .filter(item => item.score > 0)
+            .sort((a, b) => b.score - a.score);
+    }
 
-    const matching = [...unread, ...read];
-    return { candidates: matching.slice(offset, offset + limit), total: matching.length };
+    const unread = [];
+    const read = [];
+    for (const item of matchingWithScores) {
+        if (unreadSet.has(item.id)) unread.push(item);
+        else read.push(item);
+    }
+
+    const matchingIds = [...unread, ...read].map(item => item.id);
+    const pageIds = matchingIds.slice(offset, offset + limit);
+    return {
+        candidates: await hydrateCandidateIds(pageIds, pageIds.length),
+        total: matchingIds.length
+    };
 };
 
 const _publishGlobalStats = async (client) => {
@@ -1111,7 +1194,8 @@ export const deleteCandidate = async (id) => {
         const multi = client.multi()
             .srem(KEYS.LIST_COMPLETE, id)
             .srem(KEYS.LIST_PENDING, id)
-            .srem(KEYS.CANDIDATES_UNREAD, id);
+            .srem(KEYS.CANDIDATES_UNREAD, id)
+            .zrem(INDEX_KEYS.UNTAGGED, id);
         if (wasUnread) {
             multi.eval(
                 "local current = tonumber(redis.call('GET', KEYS[1]) or '0'); if current > 0 then return redis.call('DECR', KEYS[1]); end; return current;",

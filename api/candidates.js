@@ -226,7 +226,7 @@ export default async function handler(req, res) {
                 cacheMiss: true,
                 candidateReads: candidates.length,
                 estimatedRedisBytes: estimateJsonBytes(candidates),
-                fullScan: !!(search || tag || excludeLinked === 'true')
+                fullScan: !!(search || excludeLinked === 'true')
             });
         }
 
@@ -343,7 +343,7 @@ export default async function handler(req, res) {
 
         return res.status(500).json({
             error: 'Error interno del servidor',
-            message: process.env.NODE_ENV === 'development' ? error.message : 'Error procesando solicitud'
+            message: globalThis.process?.env?.NODE_ENV === 'development' ? error.message : 'Error procesando solicitud'
         });
     }
 }

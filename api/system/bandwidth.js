@@ -2,19 +2,34 @@
  * API: Get Redis Bandwidth Usage
  * Returns the current month's aggregated bandwidth usage + daily breakdown.
  */
-import { getRedisClient } from '../utils/storage.js';
+import { getRedisClient, validateAdminSession } from '../utils/storage.js';
+
+const TZ = 'America/Monterrey';
+const LIMIT_GB = 200;
+
+function todayMty() {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+        timeZone: TZ,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+    }).formatToParts(new Date());
+
+    const values = Object.fromEntries(parts.map(({ type, value }) => [type, value]));
+    return `${values.year}-${values.month}-${values.day}`;
+}
 
 export default async function handler(req, res) {
     if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+
+    const userId = await validateAdminSession(req);
+    if (!userId) return res.status(401).json({ error: 'No autorizado' });
 
     try {
         const redis = getRedisClient();
         if (!redis) return res.status(500).json({ error: 'Redis client not initialized' });
 
-        // All dates in Monterrey time (America/Monterrey = UTC-6, sin DST desde 2023)
-        const now = new Date();
-        const mtyFmt = (opts) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Monterrey', ...opts }).format(now);
-        const yearMonthDay = mtyFmt({ year: 'numeric', month: '2-digit', day: '2-digit' }); // YYYY-MM-DD
+        const yearMonthDay = todayMty();
         const yearMonth = yearMonthDay.substring(0, 7); // YYYY-MM
         const monthKey = `stats:bandwidth:${yearMonth}:total`;
 
@@ -47,15 +62,9 @@ export default async function handler(req, res) {
         }
 
         // Redis Cloud Essentials 1 GB plan includes 200 GB/month network.
-        const LIMIT_GB = 200;
         const limitBytes = LIMIT_GB * 1024 * 1024 * 1024;
 
-        if (usedBytes === 0) {
-            fetch(`https://${req.headers.host || 'localhost:3000'}/api/cron/bandwidth-tracker`, {
-                method: 'GET',
-                headers: { 'x-vercel-cron': '1' }
-            }).catch(() => {});
-        }
+        res.setHeader('Cache-Control', 'private, max-age=60');
 
         return res.status(200).json({
             success: true,
