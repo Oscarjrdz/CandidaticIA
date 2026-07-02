@@ -1039,7 +1039,7 @@ async function loadOperationalStats(redis) {
             month,
             usedBytes: toNumber(val(17)),
             todayBytes: toNumber(val(18)),
-            limitBytes: 100 * 1024 * 1024 * 1024
+            limitBytes: 200 * 1024 * 1024 * 1024
         },
         ads: summarizeAdsCache(val(19), val(20)),
         bolsa: summarizeBolsaJobs(bolsaJobs),

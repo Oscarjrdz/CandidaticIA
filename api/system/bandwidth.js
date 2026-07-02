@@ -46,8 +46,8 @@ export default async function handler(req, res) {
             });
         }
 
-        // Hard limit is 100 GB in bytes
-        const LIMIT_GB = 100;
+        // Redis Cloud Essentials 1 GB plan includes 200 GB/month network.
+        const LIMIT_GB = 200;
         const limitBytes = LIMIT_GB * 1024 * 1024 * 1024;
 
         if (usedBytes === 0) {

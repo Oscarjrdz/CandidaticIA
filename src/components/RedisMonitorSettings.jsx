@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Activity, Server, ArrowUpRight, AlertTriangle, ShieldCheck } from 'lucide-react';
 
+const REDIS_BANDWIDTH_LIMIT_BYTES = 200 * 1024 * 1024 * 1024;
+
 const getMonterreyDateParts = () => {
     const parts = new Intl.DateTimeFormat('en-CA', {
         timeZone: 'America/Monterrey',
@@ -42,7 +44,7 @@ const createInitialBandwidthData = () => {
     const currentMty = getMonterreyDateParts();
     return {
         usedBytes: 0,
-        limitBytes: 107374182400,
+        limitBytes: REDIS_BANDWIDTH_LIMIT_BYTES,
         percentage: 0,
         month: `${currentMty.year}-${String(currentMty.month).padStart(2, '0')}`,
         today: currentMty.day,
@@ -67,7 +69,7 @@ const RedisMonitorSettings = () => {
                     const currentDate = getMonterreyDateParts();
                     setData({
                         usedBytes: result.usedBytes || 0,
-                        limitBytes: result.limitBytes || 107374182400,
+                        limitBytes: result.limitBytes || REDIS_BANDWIDTH_LIMIT_BYTES,
                         percentage: result.percentage || 0,
                         month: result.month || `${currentDate.year}-${String(currentDate.month).padStart(2, '0')}`,
                         today: result.today || currentDate.day,
