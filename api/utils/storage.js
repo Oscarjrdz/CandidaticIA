@@ -542,8 +542,8 @@ export const getCandidates = async (limit = 100, offset = 0, search = '', exclud
     // ✅ META AUDIT: Removed O(N) HKEYS call for CANDIDATE_PROJECT_LINK hydration.
     // The 'proyecto' virtual field is now derived from the candidate's own projectId field.
 
-    // If searching or tagFiltering, we currently have to do a scan (unless we index names too)
-    // For now, if search and tagFilter are empty, we use the ultra-fast F1 Steering.
+    // If searching or filtering untagged profiles, we still stream through candidates.
+    // Plain tag filters can use the maintained tag index and keep candidates:list ordering.
     if (!search && !tagFilter && !excludeLinked) {
         const sumCount = async () => (await client.scard(KEYS.LIST_COMPLETE)) + (await client.scard(KEYS.LIST_PENDING));
         const stop = offset + limit - 1;
@@ -561,6 +561,31 @@ export const getCandidates = async (limit = 100, offset = 0, search = '', exclud
 
         const total = await sumCount();
         return { candidates, total };
+    }
+
+    if (!search && tagFilter && tagFilter.trim().toLowerCase() !== UNTAGGED_TAG_FILTER && !excludeLinked) {
+        await ensureCandidateSecondaryIndexes();
+        const indexedIds = await client.smembers(tagIndexKey(tagFilter));
+        if (!indexedIds?.length) return { candidates: [], total: 0 };
+
+        let scoreRows = [];
+        try {
+            scoreRows = await client.zmscore(KEYS.CANDIDATES_LIST, ...indexedIds);
+        } catch {
+            const scorePipe = client.pipeline();
+            indexedIds.forEach(id => scorePipe.zscore(KEYS.CANDIDATES_LIST, id));
+            scoreRows = (await scorePipe.exec()).map(([err, score]) => err ? null : score);
+        }
+        const orderedIds = indexedIds
+            .map((id, index) => ({ id, score: Number(scoreRows?.[index] || 0) }))
+            .filter(item => item.score > 0)
+            .sort((a, b) => b.score - a.score)
+            .map(item => item.id);
+        const pageIds = orderedIds.slice(offset, offset + limit);
+        return {
+            candidates: await hydrateCandidateIds(pageIds, pageIds.length),
+            total: orderedIds.length
+        };
     }
 
     // SEARCH PATH or EXCLUSION PATH

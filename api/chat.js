@@ -124,16 +124,20 @@ export default async function handler(req, res) {
                 const canSeeIncomplete = user?.role === 'SuperAdmin' || !rolePermissions || Object.keys(rolePermissions).length === 0 || rolePermissions.view_incomplete_candidates === true;
 
                 const matchedIds = [];
+                let scannedUnreadCandidates = 0;
+                let estimatedScanBytes = 0;
                 const CHUNK = 200;
                 for (let i = 0; i < unreadIds.length; i += CHUNK) {
                     const ids = unreadIds.slice(i, i + CHUNK);
                     const pipe = redis.pipeline();
                     ids.forEach(id => pipe.get(`candidate:${id}`));
                     const rows = await pipe.exec();
+                    scannedUnreadCandidates += ids.length;
 
                     for (let idx = 0; idx < rows.length; idx++) {
                         const [err, raw] = rows[idx];
                         if (err || !raw) continue;
+                        estimatedScanBytes += raw.length;
                         let candidate;
                         try { candidate = JSON.parse(raw); } catch { continue; }
                         if (!candidate?.id || !isCandidateUnread(candidate)) continue;
@@ -176,14 +180,22 @@ export default async function handler(req, res) {
                 }
                 await redis.incr('stats:unread:version').catch(() => {});
 
-                return res.status(200).json({
+                const payload = {
                     success: true,
                     marked: matchedIds.length,
                     candidateIds: matchedIds,
                     scope,
                     profileScope: normalizedProfileScope,
                     tagName: scope === 'tag' ? tagName : null
-                });
+                };
+                recordUsageMetric(redis, '/api/chat/mark-read-by-tag', {
+                    candidateReads: scannedUnreadCandidates,
+                    redisWrites: matchedIds.length,
+                    estimatedRedisBytes: estimatedScanBytes,
+                    responseBytes: estimateJsonBytes(payload)
+                }).catch(() => {});
+
+                return res.status(200).json(payload);
             }
 
             if (!candidateId) return res.status(400).json({ error: 'Falta candidateId' });

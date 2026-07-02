@@ -17,6 +17,8 @@ export default async function handler(req, res) {
             acc.calls += row.calls || 0;
             acc.cacheHits += row.cacheHits || 0;
             acc.cacheMisses += row.cacheMisses || 0;
+            acc.redisReads += row.redisReads || 0;
+            acc.redisWrites += row.redisWrites || 0;
             acc.candidateReads += row.candidateReads || 0;
             acc.messageReads += row.messageReads || 0;
             acc.responseBytes += row.responseBytes || 0;
@@ -27,6 +29,8 @@ export default async function handler(req, res) {
             calls: 0,
             cacheHits: 0,
             cacheMisses: 0,
+            redisReads: 0,
+            redisWrites: 0,
             candidateReads: 0,
             messageReads: 0,
             responseBytes: 0,
