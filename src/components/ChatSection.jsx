@@ -3733,6 +3733,15 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
                                         <div className={`absolute w-3 h-3 rounded-full bg-white shadow-sm transition-transform duration-200 ${selectedChat.blocked ? 'translate-x-4' : 'translate-x-0.5'}`}>
                                         </div>
                                     </button>
+                                    <button
+                                        type="button"
+                                        onClick={(e) => { e.stopPropagation(); setReminderModalCandidate(selectedChat); }}
+                                        className="p-2 -mr-1 rounded-full text-[#54656f] dark:text-[#aebac1] hover:text-amber-500 dark:hover:text-amber-400 hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+                                        title="Programar recordatorio"
+                                        aria-label="Programar recordatorio"
+                                    >
+                                        <Bell className="w-5 h-5" />
+                                    </button>
                                 </div>
                             )}
 
