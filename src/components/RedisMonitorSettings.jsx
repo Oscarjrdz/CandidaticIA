@@ -1,8 +1,58 @@
 import React, { useState, useEffect } from 'react';
 import { Activity, Server, ArrowUpRight, AlertTriangle, ShieldCheck } from 'lucide-react';
 
+const getMonterreyDateParts = () => {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'America/Monterrey',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+    }).formatToParts(new Date());
+
+    const values = Object.fromEntries(parts.map(({ type, value }) => [type, value]));
+    return {
+        year: Number(values.year),
+        month: Number(values.month),
+        day: Number(values.day)
+    };
+};
+
+const getDaysInMonth = (year, month) => new Date(year, month, 0).getDate();
+
+const normalizeDailyData = ({ daily = [], month, daysInMonth }) => {
+    const currentMty = getMonterreyDateParts();
+    const [monthYear, monthNumber] = typeof month === 'string'
+        ? month.split('-').map(Number)
+        : [currentMty.year, currentMty.month];
+    const totalDays = daysInMonth || getDaysInMonth(monthYear, monthNumber);
+    const dailyByDay = new Map(
+        daily.map(({ day, bytes }) => [Number(day), Number(bytes) || 0])
+    );
+
+    return Array.from({ length: totalDays }, (_, index) => {
+        const day = index + 1;
+        return {
+            day,
+            bytes: dailyByDay.get(day) || 0
+        };
+    });
+};
+
+const createInitialBandwidthData = () => {
+    const currentMty = getMonterreyDateParts();
+    return {
+        usedBytes: 0,
+        limitBytes: 107374182400,
+        percentage: 0,
+        month: `${currentMty.year}-${String(currentMty.month).padStart(2, '0')}`,
+        today: currentMty.day,
+        daysInMonth: getDaysInMonth(currentMty.year, currentMty.month),
+        daily: []
+    };
+};
+
 const RedisMonitorSettings = () => {
-    const [data, setData] = useState({ usedBytes: 0, limitBytes: 107374182400, percentage: 0, daily: [] });
+    const [data, setData] = useState(createInitialBandwidthData);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(false);
     const [tooltip, setTooltip] = useState(null); // { day, bytes, x, y }
@@ -14,11 +64,15 @@ const RedisMonitorSettings = () => {
                 if (!res.ok) throw new Error('API Error');
                 const result = await res.json();
                 if (result.success) {
+                    const currentDate = getMonterreyDateParts();
                     setData({
                         usedBytes: result.usedBytes || 0,
                         limitBytes: result.limitBytes || 107374182400,
                         percentage: result.percentage || 0,
-                        daily: result.daily || []
+                        month: result.month || `${currentDate.year}-${String(currentDate.month).padStart(2, '0')}`,
+                        today: result.today || currentDate.day,
+                        daysInMonth: result.daysInMonth || getDaysInMonth(currentDate.year, currentDate.month),
+                        daily: normalizeDailyData(result)
                     });
                 } else {
                     throw new Error('API reported failure');
@@ -68,7 +122,7 @@ const RedisMonitorSettings = () => {
 
     // Bar chart helpers
     const maxDayBytes = data.daily.length > 0 ? Math.max(...data.daily.map(d => d.bytes), 1) : 1;
-    const today = new Date().getUTCDate();
+    const today = data.today;
 
     if (loading) {
         return (
@@ -164,8 +218,11 @@ const RedisMonitorSettings = () => {
                                             const CHART_H = 80;
                                             const barH = bytes > 0 ? Math.max((bytes / maxDayBytes) * CHART_H, 4) : 2;
                                             const isToday = day === today;
+                                            const isFuture = day > today;
                                             const barColor = isToday
                                                 ? statusBarColor
+                                                : isFuture
+                                                    ? 'bg-gray-200/50 dark:bg-gray-700/60'
                                                 : bytes > maxDayBytes * 0.7
                                                     ? 'bg-amber-400'
                                                     : 'bg-blue-400/60 dark:bg-blue-500/50';

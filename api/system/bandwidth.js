@@ -18,15 +18,15 @@ export default async function handler(req, res) {
         const yearMonth = yearMonthDay.substring(0, 7); // YYYY-MM
         const monthKey = `stats:bandwidth:${yearMonth}:total`;
 
-        // Build list of days in the current month up to today (Monterrey)
+        // Build list of every day in the current month. Future days resolve to 0
+        // so the chart keeps a stable 28/29/30/31-day layout from day one.
         const year = parseInt(yearMonthDay.substring(0, 4), 10);
         const month = parseInt(yearMonthDay.substring(5, 7), 10) - 1; // 0-indexed
         const today = parseInt(yearMonthDay.substring(8, 10), 10);
         const daysInMonth = new Date(year, month + 1, 0).getDate();
-        const totalDays = Math.min(today, daysInMonth);
 
         const dayKeys = [];
-        for (let d = 1; d <= totalDays; d++) {
+        for (let d = 1; d <= daysInMonth; d++) {
             const dd = String(d).padStart(2, '0');
             const mm = String(month + 1).padStart(2, '0');
             dayKeys.push(`stats:bandwidth:${year}-${mm}-${dd}:total`);
@@ -39,7 +39,7 @@ export default async function handler(req, res) {
         const usedBytes = values[0] ? parseInt(values[0], 10) : 0;
 
         const daily = [];
-        for (let i = 0; i < totalDays; i++) {
+        for (let i = 0; i < daysInMonth; i++) {
             daily.push({
                 day: i + 1,
                 bytes: values[i + 1] ? parseInt(values[i + 1], 10) : 0
@@ -63,6 +63,8 @@ export default async function handler(req, res) {
             limitBytes,
             percentage: usedBytes > 0 ? (usedBytes / limitBytes) * 100 : 0,
             month: yearMonth,
+            today,
+            daysInMonth,
             daily
         });
 
