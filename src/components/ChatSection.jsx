@@ -340,6 +340,25 @@ const CustomSelect = React.memo(({ name, value, options, onChange, placeholder, 
 const MultiSelectDropdown = React.memo(({ label, options, selected, onChange }) => {
     const [isOpen, setIsOpen] = useState(false);
     const dropdownRef = useRef(null);
+    const normalizedOptions = useMemo(() => (options || []).map(opt => {
+        if (opt && typeof opt === 'object') {
+            const value = String(opt.value ?? opt.label ?? '').trim();
+            const labelText = String(opt.label ?? value).trim();
+            const count = Number.isFinite(opt.count) ? opt.count : null;
+            return {
+                value,
+                label: count !== null ? `${labelText} (${count})` : labelText,
+                count
+            };
+        }
+        const value = String(opt || '').trim();
+        return { value, label: value, count: null };
+    }).filter(opt => opt.value), [options]);
+    const optionLabelByValue = useMemo(() => {
+        const map = new Map();
+        normalizedOptions.forEach(opt => map.set(opt.value, opt.label));
+        return map;
+    }, [normalizedOptions]);
 
     useEffect(() => {
         const handleClickOutside = (event) => {
@@ -372,7 +391,7 @@ const MultiSelectDropdown = React.memo(({ label, options, selected, onChange }) 
                 className={`w-full bg-[#f0f2f5] dark:bg-[#202c33] border ${selected.length > 0 ? 'border-blue-500' : 'border-gray-200 dark:border-gray-700'} rounded-lg pl-3 pr-14 py-2 text-xs outline-none font-medium text-left cursor-pointer transition-all flex items-center shadow-sm relative min-h-[34px]`}
             >
                 <span className={`flex-1 truncate ${selected.length > 0 ? 'text-[#111b21] dark:text-[#e9edef] font-bold' : 'text-[#111b21] dark:text-[#e9edef]'}`}>
-                    {selected.length > 0 ? `${label}: ${selected.join(', ')}` : label}
+                    {selected.length > 0 ? `${label}: ${selected.map(value => optionLabelByValue.get(value) || value).join(', ')}` : label}
                 </span>
                 <div className={`absolute right-2 top-1/2 -translate-y-1/2 transition-transform ${isOpen ? 'rotate-180' : ''}`}>
                     <ChevronIcon />
@@ -389,21 +408,21 @@ const MultiSelectDropdown = React.memo(({ label, options, selected, onChange }) 
             )}
             {isOpen && (
                 <div className="absolute top-full left-0 mt-1 w-full bg-white dark:bg-[#202c33] border border-gray-100 dark:border-gray-700 shadow-xl rounded-lg z-[100] py-1 max-h-56 overflow-y-auto custom-scrollbar">
-                    {options.length === 0 ? (
+                    {normalizedOptions.length === 0 ? (
                         <div className="px-4 py-2 text-xs text-gray-500 italic">No hay opciones</div>
                     ) : (
-                        options.map(opt => {
-                            const isSelected = selected.includes(opt);
+                        normalizedOptions.map(opt => {
+                            const isSelected = selected.includes(opt.value);
                             return (
                                 <div 
-                                    key={opt}
-                                    onClick={(e) => toggleOption(opt, e)}
+                                    key={opt.value}
+                                    onClick={(e) => toggleOption(opt.value, e)}
                                     className={`px-3 py-2 text-xs cursor-pointer flex items-center gap-2 hover:bg-[#f0f2f5] dark:hover:bg-[#111b21] ${isSelected ? 'text-[#111b21] dark:text-[#e9edef] font-bold' : 'text-[#111b21] dark:text-[#e9edef]'}`}
                                 >
                                     <div className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${isSelected ? 'bg-blue-500 border-blue-500' : 'border-gray-300 dark:border-gray-600'}`}>
                                         {isSelected && <Check className="w-3 h-3 text-white" />}
                                     </div>
-                                    <span className="truncate">{opt}</span>
+                                    <span className="truncate">{opt.label}</span>
                                 </div>
                             );
                         })
@@ -1512,30 +1531,154 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
     }, [baseCandidates]);
 
     const filterOptions = useMemo(() => {
-        const ages = new Set();
-        const genders = new Set();
-        const municipalities = new Set();
+        const ages = new Map();
+        const genders = new Map();
+        const municipalities = new Map();
+        const increment = (map, rawValue) => {
+            const value = String(rawValue || '').trim();
+            if (!value) return;
+            map.set(value, (map.get(value) || 0) + 1);
+        };
+        const matchesFilters = (c, omit = null) => {
+            if (!passesChatRBACFilter(c, user)) return false;
+
+            if (user?.role !== 'SuperAdmin' &&
+                rolePermissions && Object.keys(rolePermissions).length > 0 &&
+                rolePermissions.view_incomplete_candidates !== true &&
+                !isProfileComplete(c)) return false;
+
+            if (user?.role === 'Viewer' && c?.platform !== 'messenger') return false;
+
+            if (!canSeeFilter('filter_todos') && activeFilter === 'all') {
+                const hasAnyTag = Array.isArray(c?.tags) && c.tags.length > 0;
+                const isRecent = c?.primerContacto && (Date.now() - new Date(c.primerContacto).getTime()) < 86400000;
+                if (!hasAnyTag && !isRecent) return false;
+            }
+
+            if (activeFilter === 'unread' && !checkIfUnread(c)) return false;
+
+            if (selectedTagValues.length > 0) {
+                const tagNames = Array.isArray(c?.tags)
+                    ? c.tags.map(t => (typeof t === 'string' ? t : (t?.name || '')).trim()).filter(Boolean)
+                    : [];
+                const normalizedNames = tagNames.map(n => n.toLowerCase());
+                const matchesSelectedTag = selectedTagValues.some(tagValue => {
+                    if (tagValue === UNTAGGED_TAG_FILTER) return tagNames.length === 0;
+                    return normalizedNames.includes(tagValue.trim().toLowerCase());
+                });
+                if (!matchesSelectedTag) return false;
+            }
+
+            if (activeFilter === 'profile') {
+                const isComplete = isProfileComplete(c);
+                if (filterValue === 'complete' && !isComplete) return false;
+                if (filterValue === 'incomplete' && isComplete) return false;
+                if (profileUnreadOnly && !checkIfUnread(c)) return false;
+            }
+
+            if (omit !== 'age' && selectedAges.length > 0 && (!c.edad || !selectedAges.includes(String(c.edad).trim()))) return false;
+            if (omit !== 'gender' && selectedGenders.length > 0 && (!c.genero || !selectedGenders.includes(String(c.genero).trim()))) return false;
+            if (omit !== 'municipality' && selectedMunicipalities.length > 0 && (!c.municipio || !selectedMunicipalities.includes(String(c.municipio).trim()))) return false;
+
+            if (manualPipelineFilter && c?.manualProjectId !== manualPipelineFilter) return false;
+            if (manualStepFilter && c?.manualProjectStepId !== manualStepFilter) return false;
+
+            return true;
+        };
 
         (baseCandidates || []).forEach(c => {
-            if (c.edad) ages.add(String(c.edad).trim());
-            if (c.genero) genders.add(String(c.genero).trim());
-            if (c.municipio) municipalities.add(String(c.municipio).trim());
+            if (matchesFilters(c, 'age')) increment(ages, c.edad);
+            if (matchesFilters(c, 'gender')) increment(genders, c.genero);
+            if (matchesFilters(c, 'municipality')) increment(municipalities, c.municipio);
         });
 
         // Numeric sort for ages
-        const sortedAges = Array.from(ages).filter(Boolean).sort((a, b) => {
+        const sortedAges = Array.from(ages.keys()).filter(Boolean).sort((a, b) => {
             const numA = parseInt(a, 10);
             const numB = parseInt(b, 10);
             if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
             return a.localeCompare(b);
         });
+        const toCountedOptions = (values, counts) => values.map(value => ({ value, label: value, count: counts.get(value) || 0 }));
 
         return {
-            ages: sortedAges,
-            genders: Array.from(genders).filter(Boolean).sort(),
-            municipalities: Array.from(municipalities).filter(Boolean).sort()
+            ages: toCountedOptions(sortedAges, ages),
+            genders: toCountedOptions(Array.from(genders.keys()).filter(Boolean).sort(), genders),
+            municipalities: toCountedOptions(Array.from(municipalities.keys()).filter(Boolean).sort(), municipalities)
         };
-    }, [baseCandidates]);
+    }, [
+        baseCandidates, user, rolePermissions,
+        activeFilter, filterValue, profileUnreadOnly,
+        selectedTagValues,
+        selectedAges, selectedGenders, selectedMunicipalities,
+        manualPipelineFilter, manualStepFilter
+    ]);
+
+    const manualFilterCounts = useMemo(() => {
+        const projectCounts = {};
+        const stepCounts = {};
+        const matchesNonManualFilters = (c) => {
+            if (!passesChatRBACFilter(c, user)) return false;
+
+            if (user?.role !== 'SuperAdmin' &&
+                rolePermissions && Object.keys(rolePermissions).length > 0 &&
+                rolePermissions.view_incomplete_candidates !== true &&
+                !isProfileComplete(c)) return false;
+
+            if (user?.role === 'Viewer' && c?.platform !== 'messenger') return false;
+
+            if (!canSeeFilter('filter_todos') && activeFilter === 'all') {
+                const hasAnyTag = Array.isArray(c?.tags) && c.tags.length > 0;
+                const isRecent = c?.primerContacto && (Date.now() - new Date(c.primerContacto).getTime()) < 86400000;
+                if (!hasAnyTag && !isRecent) return false;
+            }
+
+            if (activeFilter === 'unread' && !checkIfUnread(c)) return false;
+
+            if (selectedTagValues.length > 0) {
+                const tagNames = Array.isArray(c?.tags)
+                    ? c.tags.map(t => (typeof t === 'string' ? t : (t?.name || '')).trim()).filter(Boolean)
+                    : [];
+                const normalizedNames = tagNames.map(n => n.toLowerCase());
+                const matchesSelectedTag = selectedTagValues.some(tagValue => {
+                    if (tagValue === UNTAGGED_TAG_FILTER) return tagNames.length === 0;
+                    return normalizedNames.includes(tagValue.trim().toLowerCase());
+                });
+                if (!matchesSelectedTag) return false;
+            }
+
+            if (activeFilter === 'profile') {
+                const isComplete = isProfileComplete(c);
+                if (filterValue === 'complete' && !isComplete) return false;
+                if (filterValue === 'incomplete' && isComplete) return false;
+                if (profileUnreadOnly && !checkIfUnread(c)) return false;
+            }
+
+            if (selectedAges.length > 0 && (!c.edad || !selectedAges.includes(String(c.edad).trim()))) return false;
+            if (selectedGenders.length > 0 && (!c.genero || !selectedGenders.includes(String(c.genero).trim()))) return false;
+            if (selectedMunicipalities.length > 0 && (!c.municipio || !selectedMunicipalities.includes(String(c.municipio).trim()))) return false;
+
+            return true;
+        };
+
+        (baseCandidates || []).forEach(c => {
+            if (!matchesNonManualFilters(c)) return;
+            if (c?.manualProjectId) {
+                projectCounts[c.manualProjectId] = (projectCounts[c.manualProjectId] || 0) + 1;
+            }
+            if (manualPipelineFilter && c?.manualProjectId === manualPipelineFilter && c?.manualProjectStepId) {
+                stepCounts[c.manualProjectStepId] = (stepCounts[c.manualProjectStepId] || 0) + 1;
+            }
+        });
+
+        return { projectCounts, stepCounts };
+    }, [
+        baseCandidates, user, rolePermissions,
+        activeFilter, filterValue, profileUnreadOnly,
+        selectedTagValues,
+        selectedAges, selectedGenders, selectedMunicipalities,
+        manualPipelineFilter
+    ]);
 
     const unreadCounts = useMemo(() => {
         const counts = { tags: {}, crmProjects: {}, complete: 0, incomplete: 0, all: 0, untagged: 0, completeUntagged: 0, incompleteUntagged: 0, unreadIds: new Set() };
@@ -3406,7 +3549,10 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
                                             } : {}}
                                         >
                                             <Kanban className={`w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 ${manualPipelineFilter ? 'text-[#111b21] dark:text-[#e9edef]' : 'text-gray-400 dark:text-gray-500'}`} style={manualPipelineFilter ? { color: '#f59e0b' } : {}} />
-                                            <span className="flex-1 truncate text-[#111b21] dark:text-[#e9edef]">{manualPipelineFilter ? (manualProjects.find(p => p.id === manualPipelineFilter)?.name || 'Pipeline') : 'CRM de Proyectos'}</span>
+                                            <span className="flex-1 truncate text-[#111b21] dark:text-[#e9edef]">{manualPipelineFilter ? (() => {
+                                                const activeProject = manualProjects.find(p => p.id === manualPipelineFilter);
+                                                return activeProject ? `${activeProject.name} (${manualFilterCounts.projectCounts[activeProject.id] || 0})` : 'Pipeline';
+                                            })() : 'CRM de Proyectos'}</span>
                                             <div className={`absolute right-2 top-1/2 -translate-y-1/2 transition-transform ${showDropdown === 'manualPipeline' ? 'rotate-180' : ''}`}>
                                                 <ChevronIcon />
                                             </div>
@@ -3427,6 +3573,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
                                                 ) : (
                                                     filteredManualProjects.map(project => {
                                                         const unreadCount = displayUnreadCounts.crmProjects[project.id] || 0;
+                                                        const candidateCount = manualFilterCounts.projectCounts[project.id] || 0;
                                                         const isSelected = manualPipelineFilter === project.id;
                                                         return (
                                                             <div
@@ -3435,7 +3582,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
                                                                 className={`px-4 py-2.5 text-xs cursor-pointer flex items-center justify-between ${isSelected ? 'bg-orange-50 dark:bg-orange-900/30 text-[#111b21] dark:text-[#e9edef] font-bold' : 'text-[#111b21] dark:text-[#e9edef] hover:bg-[#f0f2f5] dark:hover:bg-[#111b21]'}`}
                                                                 title={project.name}
                                                             >
-                                                                <span className="truncate flex-1 pr-2">{project.name}</span>
+                                                                <span className="truncate flex-1 pr-2">{project.name} ({candidateCount})</span>
                                                                 {unreadCount > 0 && (
                                                                     <div className="min-w-[20px] h-[20px] px-1.5 rounded-full bg-[#25d366] dark:bg-[#00a884] flex items-center justify-center shrink-0 text-white text-[10px] font-bold shadow-sm">
                                                                         {unreadCount}
@@ -3453,6 +3600,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
                                     {manualPipelineFilter && (() => {
                                         const activeProject = manualProjects.find(p => p.id === manualPipelineFilter);
                                         if (!activeProject) return null;
+                                        const stepTotal = manualFilterCounts.projectCounts[manualPipelineFilter] || 0;
                                         return (
                                             <div className="relative w-full">
                                                 <div 
@@ -3464,7 +3612,10 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
                                                     } : {}}
                                                 >
                                                     <span className={`flex-1 truncate ${manualStepFilter ? 'text-[#111b21] dark:text-[#e9edef]' : 'text-gray-500 dark:text-gray-400'}`}>
-                                                        {manualStepFilter ? (activeProject.steps?.find(s => s.id === manualStepFilter)?.name || 'Paso') : 'Todos los pasos'}
+                                                        {manualStepFilter ? (() => {
+                                                            const activeStep = activeProject.steps?.find(s => s.id === manualStepFilter);
+                                                            return activeStep ? `${activeStep.name} (${manualFilterCounts.stepCounts[activeStep.id] || 0})` : 'Paso';
+                                                        })() : `Todos los pasos (${stepTotal})`}
                                                     </span>
                                                     <div className={`absolute right-2 top-1/2 -translate-y-1/2 transition-transform ${showDropdown === 'manualStep' ? 'rotate-180' : ''}`}>
                                                         <ChevronIcon />
@@ -3485,13 +3636,14 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
                                                             onClick={() => { setManualStepFilter(null); setShowDropdown(null); }}
                                                             className={`px-4 py-2.5 text-xs cursor-pointer flex items-center justify-between ${!manualStepFilter ? 'bg-orange-50 dark:bg-orange-900/30 text-[#111b21] dark:text-[#e9edef] font-bold' : 'text-[#111b21] dark:text-[#e9edef] hover:bg-[#f0f2f5] dark:hover:bg-[#111b21]'}`}
                                                         >
-                                                            Todos los Pasos
+                                                            Todos los Pasos ({stepTotal})
                                                         </div>
                                                         {activeProject.steps?.length === 0 ? (
                                                             <div className="px-4 py-2.5 text-xs text-gray-500 italic">No hay pasos</div>
                                                         ) : (
                                                             activeProject.steps?.map(step => {
                                                                 const isSelected = manualStepFilter === step.id;
+                                                                const candidateCount = manualFilterCounts.stepCounts[step.id] || 0;
                                                                 return (
                                                                     <div
                                                                         key={step.id}
@@ -3499,7 +3651,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
                                                                         className={`px-4 py-2.5 text-xs cursor-pointer flex items-center gap-2 ${isSelected ? 'bg-orange-50 dark:bg-orange-900/30 text-[#111b21] dark:text-[#e9edef] font-bold' : 'text-[#111b21] dark:text-[#e9edef] hover:bg-[#f0f2f5] dark:hover:bg-[#111b21]'}`}
                                                                         title={step.name}
                                                                     >
-                                                                        <span className="truncate flex-1">{step.name}</span>
+                                                                        <span className="truncate flex-1">{step.name} ({candidateCount})</span>
                                                                     </div>
                                                                 );
                                                             })
