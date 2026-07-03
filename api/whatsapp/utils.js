@@ -539,7 +539,7 @@ export const uploadMediaToMeta = async (buffer, mimeType, filename = 'file') => 
  * @returns {Array} componentsToSend ready for Meta API
  */
 export const buildMetaTemplateComponents = (templateComponents, candidateNameFallback, options = {}) => {
-    const { templateParams, mediaUrl } = options;
+    const { templateParams, mediaUrl, parameterFormat } = options;
     const componentsToSend = [];
 
     (templateComponents || []).forEach(comp => {
@@ -552,6 +552,7 @@ export const buildMetaTemplateComponents = (templateComponents, candidateNameFal
                 let expectedCount = [...new Set(varMatches)].length;
                 const uniqueVars = [...new Set(varMatches)];
                 const uniqueVarNames = uniqueVars.map(v => v.replace(/[{}]/g, ''));
+                const usesNamedParameters = String(parameterFormat || '').toUpperCase() === 'NAMED';
 
                 // Source of truth from Meta's parsed examples — guard against string .length
                 if (cType === 'body' && Array.isArray(comp.example?.body_text?.[0])) {
@@ -571,7 +572,11 @@ export const buildMetaTemplateComponents = (templateComponents, candidateNameFal
                             const numKey = String(pIdx + 1);
                             customVal = templateParams?.[numKey];
                         }
-                        return { type: "text", text: customVal || candidateNameFallback };
+                        const param = { type: "text", text: customVal || candidateNameFallback };
+                        if (usesNamedParameters && uniqueVarNames[pIdx]) {
+                            param.parameter_name = uniqueVarNames[pIdx];
+                        }
+                        return param;
                     });
                     componentsToSend.push({ type: cType, parameters: params });
                 }
