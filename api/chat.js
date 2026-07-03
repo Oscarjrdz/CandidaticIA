@@ -1,6 +1,6 @@
+/* global Buffer */
 import { getMessages, getRecentMessages, saveMessage, getCandidateById, updateCandidate, updateMessageStatus, getRedisClient, validateAdminSession, getUsers, getRoles, isProfileComplete } from './utils/storage.js';
 import { substituteVariables } from './utils/shortcuts.js';
-import axios from 'axios';
 import { sendUltraMsgMessage, getUltraMsgConfig, buildMetaTemplateComponents, renderMetaTemplatePreviewText } from './whatsapp/utils.js';
 import { estimateJsonBytes, recordUsageMetric } from './utils/usage-metrics.js';
 
@@ -301,7 +301,9 @@ export default async function handler(req, res) {
                 if (req.body.status === 'composing') {
                     import('./utils/sse-notify.js').then(({ notifyCandidateUpdate }) => {
                         notifyCandidateUpdate(candidateId, { recruiterTyping: userName || 'Alguien' }).catch(() => {});
-                    }).catch(()=> { });
+                    }).catch(() => {
+                        // Typing notifications are best effort.
+                    });
                 }
                 return res.status(200).json({ success: true });
             }
@@ -310,7 +312,9 @@ export default async function handler(req, res) {
                 // Just clear the counter (blue ticks), but DO NOT update botTime so Rule 2 persists
                 try {
                     await updateCandidate(candidateId, { unreadMsgCount: 0 });
-                } catch (e) {}
+                } catch {
+                    // Best effort: the read receipt still attempts to send below.
+                }
 
                 // Send blue ticks to WhatsApp
                 const receipt = await sendReadReceiptToWhatsApp(messageId || null);
@@ -333,7 +337,9 @@ export default async function handler(req, res) {
                         ultimoMensajeBot: nowStr,
                         lastHumanMessageAt: nowStr
                     });
-                } catch (e) {}
+                } catch {
+                    // Best effort: avoid blocking the explicit handled action response.
+                }
                 return res.status(200).json({ success: true, marked: 'handled' });
             }
 
@@ -342,7 +348,9 @@ export default async function handler(req, res) {
                     await updateCandidate(candidateId, {
                         lastHumanMessageAt: null
                     });
-                } catch (e) {}
+                } catch {
+                    // Best effort: keep UI responsive even if unread flag update fails.
+                }
                 return res.status(200).json({ success: true, marked: 'unread' });
             }
 
@@ -350,7 +358,7 @@ export default async function handler(req, res) {
         }
 
         if (req.method === 'POST') {
-            const { candidateId, message, type = 'text', mediaUrl, base64Data, replyToId, extraParams: incomingExtraParams = {}, senderId, senderName } = req.body;
+            const { candidateId, message, type = 'text', mediaUrl, replyToId, extraParams: incomingExtraParams = {}, senderId, senderName } = req.body;
 
             const typeHasOwnPayload = ['template', 'location', 'contacts', 'interactive'].includes(type);
             if (!candidateId || (!message && !mediaUrl && !typeHasOwnPayload)) {
