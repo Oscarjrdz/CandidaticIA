@@ -6,7 +6,7 @@ export default async function handler(req, res) {
     }
 
     try {
-        const { getRedisClient, updateCandidate, validateAdminSession } = await import('./utils/storage.js');
+        const { getRedisClient, updateCandidate, validateAdminSession, getCandidates } = await import('./utils/storage.js');
 
         const userId = await validateAdminSession(req);
         if (!userId) return res.status(401).json({ error: 'No autorizado' });
@@ -30,6 +30,62 @@ export default async function handler(req, res) {
         const loadProjects = async () => {
             const data = await redis.get(KEY);
             return data ? JSON.parse(data) : [];
+        };
+
+        const parseLinks = (raw) => {
+            if (!raw) return [];
+            try {
+                const parsed = JSON.parse(raw);
+                return Array.isArray(parsed) ? parsed : [];
+            } catch {
+                return [];
+            }
+        };
+
+        const buildProjectCandidatesFromCanonicalRecords = async (projectId, project = null) => {
+            const [result, linksRaw] = await Promise.all([
+                getCandidates(10000, 0, '', false, '', projectId),
+                redis.get(`${LINKS_PREFIX}${projectId}`)
+            ]);
+            const candidates = Array.isArray(result?.candidates) ? result.candidates : [];
+            const links = parseLinks(linksRaw);
+            const linkById = new Map(links.map((link, index) => [String(link.candidateId), { ...link, index }]));
+            const validStepIds = new Set((project?.steps || []).map(step => String(step.id || '').trim()).filter(Boolean));
+
+            const withCrmMeta = candidates.map(candidate => {
+                const link = linkById.get(String(candidate.id));
+                let stepId = String(candidate.manualProjectStepId || '').trim();
+                if (validStepIds.size > 0 && stepId && !validStepIds.has(stepId)) stepId = '';
+                return {
+                    ...candidate,
+                    crmMeta: {
+                        stepId,
+                        linkedAt: link?.linkedAt || candidate.manualProjectLinkedAt || candidate.updatedAt || candidate.primerContacto || new Date().toISOString()
+                    }
+                };
+            });
+
+            withCrmMeta.sort((a, b) => {
+                const aLink = linkById.get(String(a.id));
+                const bLink = linkById.get(String(b.id));
+                if (a.crmMeta?.stepId === b.crmMeta?.stepId && aLink && bLink) return aLink.index - bLink.index;
+                const aTime = new Date(a.ultimoMensaje || a.primerContacto || a.crmMeta?.linkedAt || 0).getTime();
+                const bTime = new Date(b.ultimoMensaje || b.primerContacto || b.crmMeta?.linkedAt || 0).getTime();
+                return (Number.isFinite(bTime) ? bTime : 0) - (Number.isFinite(aTime) ? aTime : 0);
+            });
+
+            const repairedLinks = withCrmMeta.map(candidate => ({
+                candidateId: candidate.id,
+                stepId: candidate.crmMeta.stepId,
+                linkedAt: candidate.crmMeta.linkedAt
+            })).filter(link => link.stepId);
+            const oldSignature = links.map(link => `${link.candidateId}|${link.stepId}`).join(',');
+            const newSignature = repairedLinks.map(link => `${link.candidateId}|${link.stepId}`).join(',');
+            if (oldSignature !== newSignature) {
+                redis.set(`${LINKS_PREFIX}${projectId}`, JSON.stringify(repairedLinks)).catch(() => {});
+            }
+
+            return withCrmMeta;
         };
 
         const unlinkCandidateFromProject = async (projectId, candidateId, { publish = true } = {}) => {
@@ -88,31 +144,9 @@ export default async function handler(req, res) {
 
             // GET candidates for a specific project
             if (id && view === 'candidates') {
-                const linksRaw = await redis.get(`${LINKS_PREFIX}${id}`);
-                const links = linksRaw ? JSON.parse(linksRaw) : [];
-
-                if (links.length === 0) {
-                    return res.status(200).json({ success: true, candidates: [] });
-                }
-
-                // Fetch linked candidates in one Redis pipeline instead of N round trips.
-                const pipe = redis.pipeline();
-                links.forEach(link => pipe.get(`candidate:${link.candidateId}`));
-                const rows = await pipe.exec();
-                const candidates = rows.map(([err, raw], index) => {
-                    if (err || !raw) return null;
-                    try {
-                        const cand = JSON.parse(raw);
-                        const link = links[index];
-                        return {
-                            ...cand,
-                            crmMeta: { stepId: link.stepId, linkedAt: link.linkedAt }
-                        };
-                    } catch {
-                        return null;
-                    }
-                }).filter(Boolean);
-
+                const projects = await loadProjects();
+                const project = projects.find(p => p.id === id) || null;
+                const candidates = await buildProjectCandidatesFromCanonicalRecords(id, project);
                 return res.status(200).json({ success: true, candidates });
             }
 
