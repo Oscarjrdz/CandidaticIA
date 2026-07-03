@@ -9,6 +9,7 @@ import { getRedisClient, getCandidateById, updateCandidate, saveMessage } from '
 import { getUltraMsgConfig, sendUltraMsgMessage } from '../whatsapp/utils.js';
 import { getMissingFields, FIELD_LABELS } from '../reengagement-queue.js';
 import { estimateJsonBytes, recordUsageMetric } from '../utils/usage-metrics.js';
+import { shouldRunHumanGatedJob } from '../utils/human-activity.js';
 
 const SETTINGS_KEY = 'reengagement:settings';
 
@@ -146,6 +147,20 @@ export default async function handler(req, res) {
     if (!settings?.enabled && !forceCandidateId) {
         recordUsageMetric(redis, '/api/cron/reengagement', usageMetrics).catch(() => {});
         return res.json({ success: true, skipped: 'disabled', processed: 0 });
+    }
+
+    if (!forceCandidateId) {
+        const activity = await shouldRunHumanGatedJob(redis);
+        usageMetrics.redisReads += 2;
+        if (!activity.allowed) {
+            recordUsageMetric(redis, '/api/cron/reengagement', usageMetrics).catch(() => {});
+            return res.json({
+                success: true,
+                skipped: 'sleep_mode_no_human_active',
+                processed: 0,
+                activity
+            });
+        }
     }
 
     const activeFromMs  = settings?.activeFrom ? new Date(settings.activeFrom).getTime() : 0;

@@ -10,6 +10,7 @@ export default async function handler(req, res) {
 
     try {
         const { getRedisClient } = await import('./utils/storage.js');
+        const { markHumanActivity } = await import('./utils/human-activity.js');
         const redis = getRedisClient();
 
         if (!redis) {
@@ -38,6 +39,7 @@ export default async function handler(req, res) {
                 userName,
                 role: role || 'User',
                 currentChatId: currentChatId || null,
+                idle: idle === true,
                 lastSeen: now
             });
 
@@ -59,6 +61,7 @@ export default async function handler(req, res) {
                 const seconds = Math.max(0, Math.min(Number(activeSeconds) || 3, 60));
                 actPipe.incrby(`recruiter:time:${userId}:${today}`, seconds);
                 actPipe.expire(`recruiter:time:${userId}:${today}`, ttl);
+                markHumanActivity(redis, now).catch(() => {});
             }
             // Track unique chats visited (opened, not necessarily responded)
             if (currentChatId) {

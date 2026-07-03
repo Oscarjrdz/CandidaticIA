@@ -13,6 +13,7 @@ import { getRedisClient, getCandidateById, getProjectById, saveMessage } from '.
 import { getUltraMsgConfig, sendUltraMsgMessage, buildMetaTemplateComponents, renderMetaTemplatePreviewText } from '../whatsapp/utils.js';
 import { generateTTS } from '../utils/openai.js';
 import { estimateJsonBytes, recordUsageMetric } from '../utils/usage-metrics.js';
+import { shouldRunHumanGatedJob } from '../utils/human-activity.js';
 
 const REDIS_ZSET_KEY = 'scheduled_reminders';
 const DIRECT_REMINDER_TTL_AFTER_SEND_SECONDS = 60 * 60 * 24 * 7;
@@ -89,6 +90,21 @@ export default async function handler(req, res) {
     // Removed global config checking as it evaluates per-candidate now.
 
     const now = Date.now();
+
+    const activity = await shouldRunHumanGatedJob(redis);
+    usageMetrics.redisReads += 2;
+    if (!activity.allowed) {
+        recordUsageMetric(redis, '/api/cron/send-reminders', usageMetrics).catch(() => {});
+        return res.json({
+            success: true,
+            processed: 0,
+            sent: 0,
+            skipped: 'sleep_mode_no_human_active',
+            errors: 0,
+            activity,
+            timestamp: new Date().toISOString()
+        });
+    }
 
     // ZRANGEBYSCORE scheduled_reminders 0 now  →  O(log N + M)
     let members;
