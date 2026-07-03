@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { X, Bell, Plus, Trash2, Clock, Send } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { X, Bell, Trash2, Clock, Send } from 'lucide-react';
 
 const API = '/api/candidate-reminders';
 
@@ -26,8 +26,30 @@ function defaultDatetime() {
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T07:00`;
 }
 
+function extractTemplateVariables(template) {
+    const components = template?.components || [];
+    const vars = [];
+    components.forEach(comp => {
+        const type = (comp.type || '').toUpperCase();
+        if (type !== 'BODY' && type !== 'HEADER') return;
+        const matches = (comp.text || '').match(/\{\{[^}]+\}\}/g) || [];
+        matches.forEach(match => {
+            const key = match.replace(/[{}]/g, '');
+            if (!vars.includes(key)) vars.push(key);
+        });
+    });
+    return vars;
+}
+
+function getTemplateBody(template) {
+    const body = (template?.components || []).find(c => (c.type || '').toUpperCase() === 'BODY');
+    return body?.text || '';
+}
+
 const CandidateReminderModal = ({ candidate, onClose }) => {
     const [reminders, setReminders] = useState([]);
+    const [templates, setTemplates] = useState([]);
+    const [templatesLoading, setTemplatesLoading] = useState(false);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [deleting, setDeleting] = useState(null);
@@ -35,8 +57,12 @@ const CandidateReminderModal = ({ candidate, onClose }) => {
     // New reminder form state
     const [scheduledAt, setScheduledAt] = useState(defaultDatetime());
     const [message, setMessage] = useState('');
+    const [fallbackTemplateId, setFallbackTemplateId] = useState('');
+    const [fallbackTemplateParams, setFallbackTemplateParams] = useState({});
 
     const nombre = candidate.nombreReal || candidate.nombre || candidate.whatsapp;
+    const selectedTemplate = templates.find(t => t.id === fallbackTemplateId) || null;
+    const selectedTemplateVars = extractTemplateVariables(selectedTemplate);
 
     useEffect(() => {
         const handleKey = (e) => { if (e.key === 'Escape') onClose(); };
@@ -44,11 +70,7 @@ const CandidateReminderModal = ({ candidate, onClose }) => {
         return () => document.removeEventListener('keydown', handleKey);
     }, [onClose]);
 
-    useEffect(() => {
-        fetchReminders();
-    }, [candidate.id]);
-
-    const fetchReminders = async () => {
+    const fetchReminders = useCallback(async () => {
         setLoading(true);
         try {
             const res = await fetch(`${API}?candidateId=${candidate.id}`);
@@ -59,7 +81,25 @@ const CandidateReminderModal = ({ candidate, onClose }) => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [candidate.id]);
+
+    useEffect(() => {
+        fetchReminders();
+    }, [fetchReminders]);
+
+    useEffect(() => {
+        setTemplatesLoading(true);
+        fetch('/api/whatsapp/templates')
+            .then(res => res.json())
+            .then(data => {
+                const approved = data.success && Array.isArray(data.data)
+                    ? data.data.filter(t => t.status === 'APPROVED')
+                    : [];
+                setTemplates(approved);
+            })
+            .catch(() => setTemplates([]))
+            .finally(() => setTemplatesLoading(false));
+    }, []);
 
     const handleCreate = async () => {
         if (!message.trim() || !scheduledAt) return;
@@ -74,6 +114,8 @@ const CandidateReminderModal = ({ candidate, onClose }) => {
                     nombre,
                     message: message.trim(),
                     scheduledAt: new Date(scheduledAt).toISOString(),
+                    fallbackTemplateData: selectedTemplate || null,
+                    fallbackTemplateParams: selectedTemplate ? fallbackTemplateParams : null,
                 }),
             });
             if (!res.ok) {
@@ -83,8 +125,10 @@ const CandidateReminderModal = ({ candidate, onClose }) => {
             }
             setMessage('');
             setScheduledAt(defaultDatetime());
+            setFallbackTemplateId('');
+            setFallbackTemplateParams({});
             await fetchReminders();
-        } catch (e) {
+        } catch {
             alert('Error de red');
         } finally {
             setSaving(false);
@@ -151,6 +195,52 @@ const CandidateReminderModal = ({ candidate, onClose }) => {
                                 className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-amber-400 outline-none resize-none text-slate-800 dark:text-slate-200 placeholder-slate-400"
                             />
                         </div>
+                        <div className="space-y-2 rounded-2xl border border-emerald-100 dark:border-emerald-900/40 bg-emerald-50/70 dark:bg-emerald-900/10 p-3">
+                            <div>
+                                <label className="text-[10px] font-black text-emerald-700 dark:text-emerald-400 uppercase tracking-widest">Plan B si Meta cierra la ventana</label>
+                                <p className="text-[11px] text-emerald-700/80 dark:text-emerald-300/80 mt-0.5">
+                                    Primero se intenta el mensaje normal. Si Meta responde que la ventana de 24h está cerrada, se envía esta plantilla.
+                                </p>
+                            </div>
+                            <select
+                                value={fallbackTemplateId}
+                                onChange={e => {
+                                    setFallbackTemplateId(e.target.value);
+                                    setFallbackTemplateParams({});
+                                }}
+                                className="w-full bg-white dark:bg-slate-800 border border-emerald-200 dark:border-emerald-800 rounded-xl px-3 py-2.5 text-sm font-bold focus:ring-2 focus:ring-emerald-400 outline-none text-slate-800 dark:text-slate-200"
+                            >
+                                <option value="">{templatesLoading ? 'Cargando plantillas...' : 'Sin plantilla de respaldo'}</option>
+                                {templates.map(t => (
+                                    <option key={t.id} value={t.id}>{t.name} ({t.language})</option>
+                                ))}
+                            </select>
+
+                            {selectedTemplate && (
+                                <div className="rounded-xl bg-white dark:bg-slate-800 border border-emerald-100 dark:border-emerald-900/40 p-3 space-y-2">
+                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Vista previa</p>
+                                    <p className="text-xs text-slate-600 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">
+                                        {getTemplateBody(selectedTemplate) || '[Plantilla sin cuerpo de texto]'}
+                                    </p>
+                                    {selectedTemplateVars.length > 0 && (
+                                        <div className="space-y-2 pt-1">
+                                            {selectedTemplateVars.map(varKey => (
+                                                <div key={varKey} className="flex items-center gap-2">
+                                                    <span className="text-[10px] font-mono font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-900/40 px-2 py-1 rounded-lg shrink-0">{`{{${varKey}}}`}</span>
+                                                    <input
+                                                        type="text"
+                                                        value={fallbackTemplateParams[varKey] || ''}
+                                                        onChange={e => setFallbackTemplateParams(prev => ({ ...prev, [varKey]: e.target.value }))}
+                                                        placeholder={`Auto: ${nombre.split(' ')[0]}`}
+                                                        className="flex-1 min-w-0 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 dark:text-slate-200 outline-none focus:ring-2 focus:ring-emerald-400"
+                                                    />
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
                         <button
                             onClick={handleCreate}
                             disabled={!message.trim() || !scheduledAt || saving}
@@ -171,6 +261,11 @@ const CandidateReminderModal = ({ candidate, onClose }) => {
                                     <div className="flex-1 min-w-0">
                                         <p className="text-xs font-bold text-amber-700 dark:text-amber-400">{formatLocalDatetime(r.scheduledAt)}</p>
                                         <p className="text-xs text-slate-600 dark:text-slate-300 mt-0.5 leading-relaxed">{r.message}</p>
+                                        {r.fallbackTemplateData?.name && (
+                                            <p className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 mt-1">
+                                                Plan B: {r.fallbackTemplateData.name}
+                                            </p>
+                                        )}
                                     </div>
                                     <button
                                         onClick={() => handleDelete(r.id)}
@@ -180,6 +275,22 @@ const CandidateReminderModal = ({ candidate, onClose }) => {
                                     >
                                         <Trash2 className="w-3.5 h-3.5" />
                                     </button>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    {!loading && reminders.some(r => r.status === 'failed') && (
+                        <div className="space-y-2">
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">No enviados</p>
+                            {reminders.filter(r => r.status === 'failed').map(r => (
+                                <div key={r.id} className="flex items-start gap-3 p-3 rounded-2xl bg-red-50 dark:bg-red-900/15 border border-red-100 dark:border-red-800/30">
+                                    <Clock className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-xs font-bold text-red-600 dark:text-red-400">{formatLocalDatetime(r.scheduledAt)}</p>
+                                        <p className="text-xs text-slate-600 dark:text-slate-300 mt-0.5 leading-relaxed">{r.message}</p>
+                                        <p className="text-[10px] text-red-500 dark:text-red-300 mt-1">{r.failureReason || 'No se pudo enviar'}</p>
+                                    </div>
                                 </div>
                             ))}
                         </div>
@@ -195,6 +306,11 @@ const CandidateReminderModal = ({ candidate, onClose }) => {
                                     <div className="flex-1 min-w-0">
                                         <p className="text-xs font-bold text-slate-500 dark:text-slate-400">{formatLocalDatetime(r.scheduledAt)}</p>
                                         <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed line-clamp-2">{r.message}</p>
+                                        {r.sentVia === 'template_fallback' && (
+                                            <p className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 mt-1">
+                                                Enviado con Plan B: {r.fallbackTemplateData?.name}
+                                            </p>
+                                        )}
                                     </div>
                                 </div>
                             ))}

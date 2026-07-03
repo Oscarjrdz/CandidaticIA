@@ -3,7 +3,7 @@
  * CRUD para recordatorios directos programados por candidato.
  *
  * GET  ?candidateId=xxx  → lista los recordatorios de ese candidato
- * POST { candidateId, whatsapp, nombre, message, scheduledAt }  → crea uno
+ * POST { candidateId, whatsapp, nombre, message, scheduledAt, fallbackTemplateData?, fallbackTemplateParams? }  → crea uno
  * DELETE ?id=xxx         → cancela uno
  */
 import { getRedisClient, validateAdminSession } from './utils/storage.js';
@@ -49,7 +49,7 @@ export default async function handler(req, res) {
 
     // ── POST: crear recordatorio ──────────────────────────────────────────────
     if (req.method === 'POST') {
-        const { candidateId, whatsapp, nombre, message, scheduledAt } = req.body || {};
+        const { candidateId, whatsapp, nombre, message, scheduledAt, fallbackTemplateData = null, fallbackTemplateParams = null } = req.body || {};
         if (!candidateId || !whatsapp || !message || !scheduledAt) {
             return res.status(400).json({ error: 'candidateId, whatsapp, message y scheduledAt son requeridos' });
         }
@@ -68,6 +68,10 @@ export default async function handler(req, res) {
                 nombre: nombre || whatsapp,
                 message,
                 scheduledAt,
+                fallbackTemplateData: fallbackTemplateData?.name ? fallbackTemplateData : null,
+                fallbackTemplateParams: fallbackTemplateData?.name && fallbackTemplateParams && typeof fallbackTemplateParams === 'object'
+                    ? fallbackTemplateParams
+                    : null,
                 createdAt: new Date().toISOString(),
                 status: 'pending',
             };

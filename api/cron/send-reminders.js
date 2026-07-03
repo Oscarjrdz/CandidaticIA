@@ -1,3 +1,4 @@
+/* global process */
 /**
  * /api/cron/send-reminders
  * Runs every 15 minutes via Vercel Cron.
@@ -9,10 +10,11 @@
  */
 
 import { getRedisClient, getCandidateById, getProjectById, saveMessage } from '../utils/storage.js';
-import { getUltraMsgConfig, sendUltraMsgMessage } from '../whatsapp/utils.js';
+import { getUltraMsgConfig, sendUltraMsgMessage, buildMetaTemplateComponents } from '../whatsapp/utils.js';
 import { generateTTS } from '../utils/openai.js';
 
 const REDIS_ZSET_KEY = 'scheduled_reminders';
+const DIRECT_REMINDER_TTL_AFTER_SEND_SECONDS = 60 * 60 * 24 * 7;
 
 // Humanize YYYY-MM-DD → "Jueves 12 de Marzo"
 const MONTH_NAMES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
@@ -30,6 +32,47 @@ function humanizeFecha(isoDate) {
     } catch {
         return isoDate;
     }
+}
+
+function isMeta24hWindowError(result = {}) {
+    const error = result.data?.error || {};
+    const code = Number(error.code || result.code || 0);
+    const text = [
+        result.error,
+        error.message,
+        error.error_data?.details,
+        JSON.stringify(result.data || {})
+    ].filter(Boolean).join(' ').toLowerCase();
+
+    return code === 131047 ||
+        text.includes('131047') ||
+        text.includes('24 hour') ||
+        text.includes('24-hour') ||
+        text.includes('outside the allowed window') ||
+        text.includes('re-engagement');
+}
+
+function candidateFirstName(candidate = {}, fallback = 'Candidato') {
+    const name = candidate.nombreReal || candidate.nombre || fallback;
+    return String(name || fallback).trim().split(/\s+/)[0] || fallback;
+}
+
+function renderTemplateBody(templateData = {}, templateParams = {}, fallbackName = 'Candidato') {
+    const bodyComp = (templateData.components || []).find(c => (c.type || '').toUpperCase() === 'BODY');
+    const bodyText = bodyComp?.text || '';
+    return bodyText.replace(/\{\{[^}]+\}\}/g, (match) => {
+        const key = match.replace(/[{}]/g, '');
+        return templateParams?.[key] || templateParams?.['1'] || fallbackName;
+    });
+}
+
+async function saveDirectReminderStatus(redis, remId, reminder, patch) {
+    await redis.set(
+        `direct_reminder:${remId}`,
+        JSON.stringify({ ...reminder, ...patch }),
+        'EX',
+        DIRECT_REMINDER_TTL_AFTER_SEND_SECONDS
+    ).catch(() => {});
 }
 
 export default async function handler(req, res) {
@@ -169,20 +212,37 @@ export default async function handler(req, res) {
 
     for (const remId of directMembers) {
         await redis.zrem('direct_reminders', remId).catch(() => {});
+        let reminder = null;
 
         try {
             const raw = await redis.get(`direct_reminder:${remId}`);
             if (!raw) { skipped++; continue; }
 
-            const reminder = JSON.parse(raw);
-            if (!reminder.whatsapp || !reminder.message) { skipped++; continue; }
+            reminder = JSON.parse(raw);
+            if (!reminder.whatsapp || !reminder.message) {
+                await saveDirectReminderStatus(redis, remId, reminder, {
+                    status: 'failed',
+                    failedAt: new Date().toISOString(),
+                    failureReason: 'Recordatorio incompleto: falta WhatsApp o mensaje.'
+                });
+                skipped++;
+                continue;
+            }
 
             // Look up candidate to get incomingPhoneNumberId for correct number routing
             const candForReminder = reminder.candidateId ? await getCandidateById(reminder.candidateId) : null;
             const config = await getUltraMsgConfig(candForReminder?.incomingPhoneNumberId || candForReminder?.instanceId);
-            if (!config) { skipped++; continue; }
+            if (!config) {
+                await saveDirectReminderStatus(redis, remId, reminder, {
+                    status: 'failed',
+                    failedAt: new Date().toISOString(),
+                    failureReason: 'No hay configuración de WhatsApp/Meta para enviar este recordatorio.'
+                });
+                skipped++;
+                continue;
+            }
 
-            await sendUltraMsgMessage(
+            const textResult = await sendUltraMsgMessage(
                 config.instanceId,
                 config.token,
                 reminder.whatsapp,
@@ -191,24 +251,94 @@ export default async function handler(req, res) {
                 { priority: 1 }
             );
 
+            let sentVia = 'text';
+            let contentToSave = reminder.message;
+            let finalResult = textResult;
+
+            if (!textResult?.success) {
+                const hasTemplateFallback = reminder.fallbackTemplateData?.name;
+                if (isMeta24hWindowError(textResult) && hasTemplateFallback) {
+                    const fallbackName = candidateFirstName(candForReminder, reminder.nombre || 'Candidato');
+                    const templateData = reminder.fallbackTemplateData;
+                    const templateParams = reminder.fallbackTemplateParams || {};
+                    const extraParams = {
+                        templateName: templateData.name,
+                        languageCode: templateData.language || 'es_MX',
+                        priority: 1
+                    };
+                    const componentsToSend = buildMetaTemplateComponents(
+                        templateData.components,
+                        fallbackName,
+                        { templateParams }
+                    );
+                    if (componentsToSend.length > 0) {
+                        extraParams.components = componentsToSend;
+                    }
+
+                    const templateResult = await sendUltraMsgMessage(
+                        config.instanceId,
+                        config.token,
+                        reminder.whatsapp,
+                        templateData.name,
+                        'template',
+                        extraParams
+                    );
+
+                    finalResult = templateResult;
+                    if (templateResult?.success) {
+                        sentVia = 'template_fallback';
+                        const displayName = templateData.name.replace(/_/g, ' ');
+                        const renderedBody = renderTemplateBody(templateData, templateParams, fallbackName);
+                        contentToSave = `⚡ Plantilla de recordatorio: *${displayName}*\n\n${renderedBody}`.trim();
+                    }
+                }
+
+                if (!finalResult?.success) {
+                    const failureReason = textResult?.success === false && isMeta24hWindowError(textResult) && !reminder.fallbackTemplateData?.name
+                        ? 'Meta rechazó texto libre por ventana de 24h cerrada y no había plantilla Plan B.'
+                        : (finalResult?.error || textResult?.error || 'No se pudo enviar el recordatorio');
+                    await saveDirectReminderStatus(redis, remId, reminder, {
+                        status: 'failed',
+                        failedAt: new Date().toISOString(),
+                        failureReason,
+                        metaError: finalResult?.data?.error || textResult?.data?.error || null
+                    });
+                    errors++;
+                    continue;
+                }
+            }
+
             await saveMessage(reminder.candidateId, {
                 from: 'me',
-                content: reminder.message,
+                content: contentToSave,
+                type: sentVia === 'template_fallback' ? 'template' : 'text',
                 timestamp: new Date().toISOString(),
-                meta: { directReminder: true, reminderId: remId }
+                meta: {
+                    directReminder: true,
+                    reminderId: remId,
+                    sentVia,
+                    usedFallbackTemplate: sentVia === 'template_fallback'
+                }
             }).catch(() => {});
 
             // Marcar como enviado (no eliminar — sirve para historial)
-            await redis.set(
-                `direct_reminder:${remId}`,
-                JSON.stringify({ ...reminder, status: 'sent', sentAt: new Date().toISOString() }),
-                'EX', 60 * 60 * 24 * 7  // conservar 7 días después de enviar
-            ).catch(() => {});
+            await saveDirectReminderStatus(redis, remId, reminder, {
+                status: 'sent',
+                sentAt: new Date().toISOString(),
+                sentVia
+            });
 
-            console.log(`[SEND-REMINDERS] ✅ Direct reminder → ${reminder.nombre} (${reminder.whatsapp})`);
+            console.log(`[SEND-REMINDERS] ✅ Direct reminder (${sentVia}) → ${reminder.nombre} (${reminder.whatsapp})`);
             sent++;
         } catch (e) {
             console.error(`[SEND-REMINDERS] Error in direct reminder "${remId}":`, e.message);
+            if (reminder) {
+                await saveDirectReminderStatus(redis, remId, reminder, {
+                    status: 'failed',
+                    failedAt: new Date().toISOString(),
+                    failureReason: e.message || 'Error inesperado procesando el recordatorio.'
+                });
+            }
             errors++;
         }
     }
