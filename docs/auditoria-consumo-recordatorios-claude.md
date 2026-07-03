@@ -132,3 +132,44 @@ rg -n "setInterval|EventSource|SSE|visibilitychange|beforeunload" src api -g '*.
 - Fallos temporales deben quedar pendientes para reintento.
 - Fallos terminales deben quedar visibles como fallidos, no reintentarse indefinidamente.
 - Ahorro de consumo debe venir de apagar conexiones/UI/presencia/Redis idle, no de pausar mensajes criticos.
+
+---
+
+## Segunda auditoria (Claude) — hallazgos y cambios aplicados
+
+Fecha: 2026-07-03. Auditoria de solo lectura sobre todo lo anterior, verificando cada afirmacion contra el codigo real (no contra la intencion). Todos los hallazgos fueron confirmados leyendo el codigo fuente antes de tocar nada; despues, con aprobacion explicita, se implementaron los fixes de bajo riesgo/alto impacto.
+
+### Confirmado correcto (sin cambios)
+
+- Escenarios 1, 2, 5, 6 de `send-reminders.js` (scheduled reminders): fallo temporal no borra el recordatorio, `done:*` protege contra doble envio si el `zrem` falla, casos terminales se limpian bien.
+- Sesion admin (8h): TTL en Redis y timer en cliente sincronizados; interceptor global de `main.jsx` y cierre de SSE en `useCandidatesSSE.js` limpian sesion y redirigen en 401/`unauthorized`.
+- Presencia: `validateAdminSession` lee el token del header `Authorization` (no son cookies pese a como lo describia la seccion original de este doc); el unico caller (`usePresence.js`) pasa por el interceptor global que inyecta ese header — sin riesgo de 401 por falta de credenciales.
+- Reengagement: `reengagement_attempts` solo se incrementa tras `assertSuccessfulSend` exitoso — un fallo de Meta no cuenta como intento (correcto antes y despues de los cambios de esta pasada).
+- El bot conversacional (`api/whatsapp/webhook.js` → `agent.js`) nunca depende de actividad humana. Su unico gate es el switch manual `bot_ia_active` (Redis) y `candidate.blocked` — confirmado por grep, cero referencias a presencia/sesion en el pipeline de IA.
+
+### Hallazgos nuevos (no estaban en la version original de este doc)
+
+1. **`api/cron/paso2-trigger.js` era codigo muerto.** No estaba en `vercel.json` desde el commit `536c236d` ("disparar paso2 inmediatamente — eliminar cron"); leia llaves `paso2_pendiente:*` que nada en el repo escribia (el flujo real vive en `agent.js:4824`, comentario propio: *"Disparar Paso 2 inmediatamente — sin cron, sin Redis key"*). Tenia ademas un bug latente: si `updateCandidate` fallaba, solo lo logueaba y aun asi borraba las llaves del trigger, dejando al candidato con la pregunta de colonia enviada pero sin estado para interpretarla. **Accion: archivo eliminado (`git rm`).**
+2. **`reengagement.js` no tenia lock de procesamiento** (a diferencia de `send-reminders.js`). Riesgo concreto: el boton "Enviar ya" de la UI pega al mismo endpoint con `forceCandidateId`; un doble clic o retry de red podia disparar dos invocaciones concurrentes y mandar el mensaje dos veces antes de que cualquiera persistiera `reengagement_last_sent`. **Accion: se extrajo el patron de lock de `send-reminders.js` a `api/utils/reminder-lock.js` (compartido) y se aplico a `reengagement.js` — loop principal y loop paso2.**
+3. **Orden de escritura invertido en dos rutas** (riesgo de duplicado si el proceso muere a medias entre awaits): `saveMessage()` corria antes de persistir el estado de "ya enviado" en `reengagement.js` (ambos loops) y en la ruta de **recordatorios directos** de `send-reminders.js`. El punto 7 original de este doc afirmaba que "el zset se remueve antes de guardar historial" — cierto solo para *scheduled reminders*, no para directos. **Accion: se invirtio el orden en las 3 ubicaciones para que el estado se persista antes del historial, igual que ya hacia la ruta de scheduled reminders.**
+4. **Los checks `if (!config)` en `send-reminders.js` y `reengagement.js` eran codigo muerto.** `getUltraMsgConfig()` nunca devuelve falsy — siempre arma un objeto aunque falten las env vars de Meta. El comportamiento correcto ocurria igual, pero via el chequeo interno de `sendMetaMessage()`, no por este check. **Accion: cambiado a `if (!config?.token || !config?.instanceId)` en las 3 ubicaciones (scheduled, directos, reengagement, paso2), igual al patron que ya usaba correctamente el extinto `paso2-trigger.js`.**
+5. **`getHumanActivity()` (`api/utils/human-activity.js`) estaba exportada pero nunca se llamaba en todo el repo.** Solo `markHumanActivity()` se usaba desde `presence.js`, escribiendo una llave (`system:human:last_active_at`) que nadie leia. El indicador de "quien esta en linea" en la UI no depende de este modulo (arma su lista directo de `presence:hash`/`presence:expiry`). **Accion: se elimino el archivo completo y su unica llamada en `presence.js`. Se confirmo con grep que nada mas lo referenciaba y que `npm run build` sigue pasando.**
+6. **Sin corte de vigencia en `send-reminders.js`** para recordatorios programados: si Meta/config fallaba de forma persistente, el cron reintentaba cada 15 min para siempre, y al arreglarse podia mandar un recordatorio de una cita ya pasada dias atras. **Accion: se agrego `STALE_REMINDER_MS` (48h) — un recordatorio que lleva mas de 48h vencido se marca terminal en vez de seguir reintentando.**
+7. **`reengagement.js`: el corte por `maxSilenceHours` puede sacar candidatos del funnel para siempre, en silencio,** si el cron estuvo caido varios dias (el tiempo se mide contra reloj de pared, no contra corridas del cron). No habia forma de detectarlo. **Accion: se agrego contador `agedOut`/`paso2AgedOut`, expuesto en la respuesta JSON del endpoint y logueado con `console.warn` cuando > 0.**
+8. **El heartbeat de presencia (`usePresence.js`) corria cada 45s sin importar si el usuario estaba idle o activo**, gastando el mismo Redis (~10-15 comandos por heartbeat) con una pestaña abierta y abandonada que con un reclutador trabajando activo. Acotado a un maximo de 8h por el TTL de sesion, pero desperdicio real dentro de esa ventana. **Accion: el heartbeat se espacia a cada 4 min una vez que el usuario lleva idle (sin mouse/teclado/scroll/touch) mas de 60s; vuelve a 45s en cuanto hay actividad de nuevo.**
+
+### Cambios de codigo aplicados en esta pasada
+
+- Nuevo: `api/utils/reminder-lock.js` (lock + marcador de completado, compartido entre `send-reminders.js` y `reengagement.js`).
+- Modificado: `api/cron/send-reminders.js` (usa el lock compartido, corte de vigencia 48h, checks de config corregidos, orden de escritura en recordatorios directos).
+- Modificado: `api/cron/reengagement.js` (lock por candidato en ambos loops, orden de escritura corregido, checks de config corregidos, contador `agedOut`).
+- Modificado: `api/presence.js` (se quito la llamada a `markHumanActivity`, ya sin destino).
+- Modificado: `src/hooks/usePresence.js` (heartbeat adaptativo segun idle).
+- Eliminado: `api/cron/paso2-trigger.js` (muerto).
+- Eliminado: `api/utils/human-activity.js` (muerto).
+
+Verificacion realizada: `node --check` en los 5 archivos tocados, `npx eslint` sobre los mismos (limpio salvo errores preexistentes de `usePresence.js` no relacionados con este cambio), `npm run build` exitoso, y grep de confirmacion de que no quedan referencias colgantes a los archivos/funciones eliminados.
+
+### Pendiente (no aplicado en esta pasada, discutido pero de menor prioridad)
+
+- `reengagement.js` muestrea solo 500 pendientes al azar por corrida (`srandmember('stats:list:pending', 500)`) — cobertura probabilistica si el pool supera ese numero. Revisar solo si el volumen de pendientes se acerca a 500 en produccion.

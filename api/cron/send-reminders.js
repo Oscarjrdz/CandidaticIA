@@ -13,13 +13,15 @@ import { getRedisClient, getCandidateById, getProjectById, saveMessage } from '.
 import { getUltraMsgConfig, sendUltraMsgMessage, buildMetaTemplateComponents, renderMetaTemplatePreviewText } from '../whatsapp/utils.js';
 import { generateTTS } from '../utils/openai.js';
 import { estimateJsonBytes, recordUsageMetric } from '../utils/usage-metrics.js';
-import { randomUUID } from 'crypto';
+import { acquireProcessingLock, releaseProcessingLock, markCompleted, isCompleted } from '../utils/reminder-lock.js';
 
 const REDIS_ZSET_KEY = 'scheduled_reminders';
 const DIRECT_REMINDERS_ZSET_KEY = 'direct_reminders';
 const DIRECT_REMINDER_TTL_AFTER_SEND_SECONDS = 60 * 60 * 24 * 7;
-const PROCESSING_LOCK_TTL_SECONDS = 10 * 60;
-const COMPLETION_MARKER_TTL_SECONDS = 60 * 60 * 24 * 30;
+// Scheduled reminders older than this are dropped as terminal instead of retried
+// forever — avoids sending a stale "recuerda tu cita mañana" days after a config
+// outage gets fixed.
+const STALE_REMINDER_MS = 48 * 60 * 60 * 1000;
 
 // Humanize YYYY-MM-DD → "Jueves 12 de Marzo"
 const MONTH_NAMES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
@@ -79,40 +81,8 @@ async function saveDirectReminderStatus(redis, remId, reminder, patch) {
     ).catch(() => {});
 }
 
-function processingLockKey(scope, id) {
-    return `lock:${scope}:${Buffer.from(String(id)).toString('base64url')}`;
-}
-
-function completionMarkerKey(scope, id) {
-    return `done:${scope}:${Buffer.from(String(id)).toString('base64url')}`;
-}
-
-async function acquireProcessingLock(redis, scope, id) {
-    const lock = { key: processingLockKey(scope, id), token: randomUUID() };
-    const result = await redis.set(lock.key, lock.token, 'EX', PROCESSING_LOCK_TTL_SECONDS, 'NX').catch(() => null);
-    return result === 'OK' ? lock : null;
-}
-
-async function releaseProcessingLock(redis, lock) {
-    if (!redis || !lock) return;
-    try {
-        const current = await redis.get(lock.key);
-        if (current === lock.token) await redis.del(lock.key);
-    } catch {
-        // Best-effort lock cleanup only.
-    }
-}
-
 async function removeDueMember(redis, zsetKey, member) {
     await redis.zrem(zsetKey, member).catch(() => {});
-}
-
-async function markCompleted(redis, scope, id, value = 'done') {
-    await redis.set(completionMarkerKey(scope, id), value, 'EX', COMPLETION_MARKER_TTL_SECONDS).catch(() => {});
-}
-
-async function isCompleted(redis, scope, id) {
-    return Boolean(await redis.get(completionMarkerKey(scope, id)).catch(() => null));
 }
 
 export default async function handler(req, res) {
@@ -166,6 +136,19 @@ export default async function handler(req, res) {
                 continue;
             }
 
+            // Drop reminders that have been due for too long (e.g. a prolonged Meta/config
+            // outage) instead of retrying forever — avoids sending a stale reminder for an
+            // appointment that already happened once the outage clears.
+            const dueScore = await redis.zscore(REDIS_ZSET_KEY, member).catch(() => null);
+            usageMetrics.redisReads += 1;
+            if (dueScore && (now - Number(dueScore)) > STALE_REMINDER_MS) {
+                console.warn(`[SEND-REMINDERS] Dropping stale reminder "${member}" (overdue by ${Math.round((now - Number(dueScore)) / 3_600_000)}h)`);
+                await removeDueMember(redis, REDIS_ZSET_KEY, member);
+                usageMetrics.redisWrites += 1;
+                skipped++;
+                continue;
+            }
+
             // member = "{projectId}|{stepId}|{candidateId}|{reminderId}|{citaFecha}"
             const [projectId, stepId, candidateId, reminderId, citaFecha] = member.split('|');
 
@@ -204,7 +187,7 @@ export default async function handler(req, res) {
 
             // ── Load Meta Cloud API Config — use candidate's incomingPhoneNumberId ──
             const config = await getUltraMsgConfig(candidate.incomingPhoneNumberId || candidate.instanceId);
-            if (!config) {
+            if (!config?.token || !config?.instanceId) {
                 console.warn(`[SEND-REMINDERS] No Meta API config — skipping`);
                 throw new Error('No Meta API config');
             }
@@ -342,7 +325,7 @@ export default async function handler(req, res) {
                 usageMetrics.estimatedRedisBytes += estimateJsonBytes(candForReminder);
             }
             const config = await getUltraMsgConfig(candForReminder?.incomingPhoneNumberId || candForReminder?.instanceId);
-            if (!config) {
+            if (!config?.token || !config?.instanceId) {
                 throw new Error('No hay configuración de WhatsApp/Meta para enviar este recordatorio.');
             }
 
@@ -421,6 +404,17 @@ export default async function handler(req, res) {
                 }
             }
 
+            // Marcar como enviado ANTES de guardar el historial: si saveMessage falla o el
+            // proceso muere a medias, el recordatorio ya quedó completo y no se reenvía.
+            await saveDirectReminderStatus(redis, remId, reminder, {
+                status: 'sent',
+                sentAt: new Date().toISOString(),
+                sentVia
+            });
+            await markCompleted(redis, 'direct_reminder', remId, 'sent');
+            await removeDueMember(redis, DIRECT_REMINDERS_ZSET_KEY, remId);
+            usageMetrics.redisWrites += 2;
+
             await saveMessage(reminder.candidateId, {
                 from: 'me',
                 content: contentToSave,
@@ -433,16 +427,6 @@ export default async function handler(req, res) {
                     usedFallbackTemplate: sentVia === 'template_fallback'
                 }
             }).catch(() => {});
-
-            // Marcar como enviado (no eliminar — sirve para historial)
-            await saveDirectReminderStatus(redis, remId, reminder, {
-                status: 'sent',
-                sentAt: new Date().toISOString(),
-                sentVia
-            });
-            await markCompleted(redis, 'direct_reminder', remId, 'sent');
-            await removeDueMember(redis, DIRECT_REMINDERS_ZSET_KEY, remId);
-            usageMetrics.redisWrites += 2;
 
             console.log(`[SEND-REMINDERS] ✅ Direct reminder (${sentVia}) → ${reminder.nombre} (${reminder.whatsapp})`);
             sent++;

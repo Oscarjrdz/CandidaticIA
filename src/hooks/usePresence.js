@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 
 const IDLE_THRESHOLD_MS = 60_000; // 60s without activity = idle, stop counting time
 const HEARTBEAT_INTERVAL_MS = 45_000;
+const IDLE_HEARTBEAT_INTERVAL_MS = 4 * 60_000; // slower heartbeat while idle — same Redis cost shouldn't apply when nobody's actually working
 
 export function usePresence(user, activeSection) {
     const [onlineUsers, setOnlineUsers] = useState([]);
@@ -40,8 +41,11 @@ export function usePresence(user, activeSection) {
     useEffect(() => {
         if (!user) return;
 
+        let timeoutId = null;
+        let stopped = false;
+
         const sendHeartbeat = async ({ hydrate = false } = {}) => {
-            if (!user) return;
+            if (!user) return false;
             const now = Date.now();
             const isIdle = (now - lastActivityRef.current) > IDLE_THRESHOLD_MS;
             const elapsedSeconds = Math.max(0, Math.round((now - lastHeartbeatAtRef.current) / 1000));
@@ -67,17 +71,30 @@ export function usePresence(user, activeSection) {
             } catch (e) {
                 console.error('Presence error:', e);
             }
+            return isIdle;
         };
 
         sendHeartbeatRef.current = sendHeartbeat;
 
+        // Heartbeat cada 45s mientras hay actividad real; se espacía a cada 4min
+        // mientras el usuario queda idle (pestaña abierta pero nadie trabajando) —
+        // mismo costo de Redis no debería aplicar si nadie está usando la app.
+        const scheduleNext = (delayMs) => {
+            if (stopped) return;
+            timeoutId = setTimeout(async () => {
+                const isIdle = await sendHeartbeat();
+                scheduleNext(isIdle ? IDLE_HEARTBEAT_INTERVAL_MS : HEARTBEAT_INTERVAL_MS);
+            }, delayMs);
+        };
+
         // Initial heartbeat
         sendHeartbeat({ hydrate: true });
+        scheduleNext(HEARTBEAT_INTERVAL_MS);
 
-        // Heartbeat every 45s — presence sigue siendo en tiempo real vía SSE pub/sub.
-        // El intervalo sólo actualiza lastSeen y chat activo (no crítico al segundo).
-        const id = setInterval(sendHeartbeat, HEARTBEAT_INTERVAL_MS);
-        return () => clearInterval(id);
+        return () => {
+            stopped = true;
+            if (timeoutId) clearTimeout(timeoutId);
+        };
     }, [user]);
 
     return { onlineUsers };

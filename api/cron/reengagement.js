@@ -10,6 +10,7 @@ import { getRedisClient, getCandidateById, updateCandidate, saveMessage } from '
 import { getUltraMsgConfig, sendUltraMsgMessage } from '../whatsapp/utils.js';
 import { getMissingFields, FIELD_LABELS } from '../reengagement-queue.js';
 import { estimateJsonBytes, recordUsageMetric } from '../utils/usage-metrics.js';
+import { acquireProcessingLock, releaseProcessingLock } from '../utils/reminder-lock.js';
 
 const SETTINGS_KEY = 'reengagement:settings';
 
@@ -197,10 +198,13 @@ export default async function handler(req, res) {
         return res.status(500).json({ error: 'Cannot fetch candidates' });
     }
 
-    let sent = 0, skipped = 0, errors = 0;
+    let sent = 0, skipped = 0, errors = 0, agedOut = 0;
     const log = [];
 
     for (const candidate of candidates) {
+        const lock = await acquireProcessingLock(redis, 'reengagement', candidate.id);
+        if (!lock) { skipped++; continue; }
+
         try {
             const lastMsgTs = candidate.lastUserMessageAt
                 ? new Date(candidate.lastUserMessageAt).getTime()
@@ -223,7 +227,7 @@ export default async function handler(req, res) {
             // Envío forzado omite checks de tiempo — va directo
             if (!forceCandidateId) {
                 if (attempts >= maxAttempts)            { skipped++; continue; }
-                if (silenceElapsed > maxSilenceMs)      { skipped++; continue; }
+                if (silenceElapsed > maxSilenceMs)      { agedOut++; skipped++; continue; }
                 if (lastSentTs === 0) {
                     if (silenceElapsed < silenceMs)     { skipped++; continue; }
                 } else {
@@ -237,7 +241,7 @@ export default async function handler(req, res) {
             const nombre  = candidate.nombreReal || candidate.nombre || candidate.whatsapp;
 
             const waConfig = await getUltraMsgConfig(candidate.incomingPhoneNumberId || candidate.instanceId);
-            if (!waConfig) throw new Error('No hay configuración de WhatsApp/Meta para reengagement');
+            if (!waConfig?.token || !waConfig?.instanceId) throw new Error('No hay configuración de WhatsApp/Meta para reengagement');
             const sendResult = await sendUltraMsgMessage(
                 waConfig.instanceId,
                 waConfig.token,
@@ -248,20 +252,20 @@ export default async function handler(req, res) {
             );
             assertSuccessfulSend(sendResult, 'reengagement');
 
-            // ── Guardar en historial del chat ─────────────────────────────────
+            // ── Actualizar contadores ANTES del historial: si saveMessage falla o el
+            // proceso muere a medias, el intento ya quedó registrado y no se reenvía ──
+            await updateCandidate(candidate.id, {
+                reengagement_attempts: attemptNumber,
+                reengagement_last_sent: new Date().toISOString(),
+            });
+            usageMetrics.redisWrites += 2;
+
             await saveMessage(candidate.id, {
                 from: 'bot',
                 content: message,
                 timestamp: new Date().toISOString(),
                 meta: { reengagement: true, attempt: attemptNumber }
             }).catch(() => {});
-
-            // ── Actualizar contadores en el candidato ─────────────────────────
-            await updateCandidate(candidate.id, {
-                reengagement_attempts: attemptNumber,
-                reengagement_last_sent: new Date().toISOString(),
-            });
-            usageMetrics.redisWrites += 2;
 
             console.log(`[REENGAGEMENT] ✅ Intento ${attemptNumber} → ${nombre} (${candidate.whatsapp})`);
             log.push({ candidateId: candidate.id, nombre, attempt: attemptNumber });
@@ -270,12 +274,18 @@ export default async function handler(req, res) {
         } catch (e) {
             console.error(`[REENGAGEMENT] ❌ Error con candidato ${candidate.id}:`, e.message);
             errors++;
+        } finally {
+            await releaseProcessingLock(redis, lock);
         }
+    }
+
+    if (agedOut > 0) {
+        console.warn(`[REENGAGEMENT] ⚠️ ${agedOut} candidato(s) superaron maxSilenceHours y salieron del funnel en esta corrida — revisar si el cron estuvo caído.`);
     }
 
     // ── PASO 2 RE-ENGAGEMENT ──────────────────────────────────────────────────
     // Finds candidates stuck in esperando_colonia / esperando_experiencia and nudges them
-    let paso2Sent = 0, paso2Skipped = 0, paso2Errors = 0;
+    let paso2Sent = 0, paso2Skipped = 0, paso2Errors = 0, paso2AgedOut = 0;
     const paso2Log = [];
 
     try {
@@ -294,6 +304,9 @@ export default async function handler(req, res) {
                 .filter(Boolean);
 
             for (const candidate of paso2Candidates) {
+                const p2Lock = await acquireProcessingLock(redis, 'reengagement_paso2', candidate.id);
+                if (!p2Lock) { paso2Skipped++; continue; }
+
                 try {
                     const p2Estado = candidate.paso2Estado;
                     if (!p2Estado || !['esperando_colonia', 'esperando_experiencia', 'esperando_meses_experiencia'].includes(p2Estado)) {
@@ -320,6 +333,7 @@ export default async function handler(req, res) {
                         if (p2Attempts >= maxAttempts) { paso2Skipped++; continue; }
                         if (silenceElapsed > maxSilenceMs) {
                             await redis.srem('paso2_waiting', candidate.id);
+                            paso2AgedOut++;
                             paso2Skipped++;
                             continue;
                         }
@@ -365,7 +379,7 @@ export default async function handler(req, res) {
                     }
 
                     const waConfig2 = await getUltraMsgConfig(candidate.incomingPhoneNumberId || candidate.instanceId);
-                    if (!waConfig2) throw new Error('No hay configuración de WhatsApp/Meta para paso2 reengagement');
+                    if (!waConfig2?.token || !waConfig2?.instanceId) throw new Error('No hay configuración de WhatsApp/Meta para paso2 reengagement');
                     const p2SendResult = await sendUltraMsgMessage(
                         waConfig2.instanceId,
                         waConfig2.token,
@@ -376,18 +390,19 @@ export default async function handler(req, res) {
                     );
                     assertSuccessfulSend(p2SendResult, 'paso2 reengagement');
 
+                    // ── Actualizar contadores ANTES del historial (mismo motivo que el loop principal) ──
+                    await updateCandidate(candidate.id, {
+                        paso2_reengagement_attempts: p2Attempts + 1,
+                        paso2_reengagement_last_sent: new Date().toISOString(),
+                    });
+                    usageMetrics.redisWrites += 2;
+
                     await saveMessage(candidate.id, {
                         from: 'bot',
                         content: p2Message,
                         timestamp: new Date().toISOString(),
                         meta: { reengagement: true, paso2: true, attempt: p2Attempts + 1 }
                     }).catch(() => {});
-
-                    await updateCandidate(candidate.id, {
-                        paso2_reengagement_attempts: p2Attempts + 1,
-                        paso2_reengagement_last_sent: new Date().toISOString(),
-                    });
-                    usageMetrics.redisWrites += 2;
 
                     console.log(`[REENGAGEMENT-P2] ✅ → ${nombre || candidate.whatsapp} (${p2Estado})`);
                     paso2Log.push({ candidateId: candidate.id, nombre, estado: p2Estado });
@@ -396,7 +411,13 @@ export default async function handler(req, res) {
                 } catch (e) {
                     console.error(`[REENGAGEMENT-P2] ❌ Error con candidato ${candidate.id}:`, e.message);
                     paso2Errors++;
+                } finally {
+                    await releaseProcessingLock(redis, p2Lock);
                 }
+            }
+
+            if (paso2AgedOut > 0) {
+                console.warn(`[REENGAGEMENT-P2] ⚠️ ${paso2AgedOut} candidato(s) superaron maxSilenceHours y salieron de paso2_waiting en esta corrida.`);
             }
         }
     } catch (e) {
@@ -411,8 +432,9 @@ export default async function handler(req, res) {
         sent,
         skipped,
         errors,
+        agedOut,
         log,
-        paso2: { sent: paso2Sent, skipped: paso2Skipped, errors: paso2Errors, log: paso2Log },
+        paso2: { sent: paso2Sent, skipped: paso2Skipped, errors: paso2Errors, agedOut: paso2AgedOut, log: paso2Log },
         timestamp: new Date().toISOString(),
     });
 }
