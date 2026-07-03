@@ -269,9 +269,6 @@ export const sendMetaMessage = async (to, body, type = 'chat', extraParams = {})
             }
         }
 
-        if (type === 'template') {
-            console.log('[META TEMPLATE SEND] payload:', JSON.stringify(payload, null, 2));
-        }
         const startTime = Date.now();
         const response = await axios.post(url, payload, {
             headers,
@@ -292,7 +289,6 @@ export const sendMetaMessage = async (to, body, type = 'chat', extraParams = {})
                     type,
                     phoneNumberId,
                     fromNumber: phoneNumberId === '1249373631587237' ? 'Hr One México' : phoneNumberId === '1061455557054529' ? 'Candidatic IA' : phoneNumberId,
-                    payload: type === 'template' ? payload : undefined,
                     result: response.data
                 };
                 redis.set(`debug:meta_send:${phone}`, JSON.stringify(debugEntry), 'EX', 3600).catch(() => { });
@@ -544,7 +540,6 @@ export const uploadMediaToMeta = async (buffer, mimeType, filename = 'file') => 
  */
 export const buildMetaTemplateComponents = (templateComponents, candidateNameFallback, options = {}) => {
     const { templateParams, mediaUrl, parameterFormat } = options;
-    console.log('[buildMetaTemplateComponents] parameterFormat:', parameterFormat, '| components:', JSON.stringify(templateComponents?.map(c => ({ type: c.type, format: c.format, text: c.text?.slice(0, 60), example: c.example }))));
     const componentsToSend = [];
 
     (templateComponents || []).forEach(comp => {
@@ -578,7 +573,8 @@ export const buildMetaTemplateComponents = (templateComponents, candidateNameFal
                             customVal = templateParams?.[numKey];
                         }
                         const param = { type: "text", text: customVal || candidateNameFallback };
-                        if (usesNamedParameters && uniqueVarNames[pIdx]) {
+                                        // parameter_name only for body, never header (Meta rejects it in header)
+                        if (usesNamedParameters && cType === 'body' && uniqueVarNames[pIdx]) {
                             param.parameter_name = uniqueVarNames[pIdx];
                         }
                         return param;
