@@ -16,7 +16,9 @@ export const substituteVariables = (text, candidate) => {
         const lowerKey = trimmedKey.toLowerCase();
 
         // prioritize specific field mappings first
+        const _firstName = (candidate.nombreReal || '').trim().split(/\s+/)[0] || (candidate.nombre || '').trim().split(/\s+/)[0] || 'Candidato';
         const mappings = {
+            'candidato': _firstName,
             'nombre': candidate.nombre || candidate.nombreReal || candidate.name || 'Candidato',
             'name': candidate.nombre || candidate.nombreReal || candidate.name || 'Candidato',
             'nombrereal': candidate.nombreReal || candidate.nombre || 'Candidato',

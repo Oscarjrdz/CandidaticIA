@@ -108,9 +108,11 @@ export default async function handler(req, res) {
 
             // ── Build message from template ───────────────────────────────────
             const nombre   = candidate.nombreReal || candidate.nombre || 'Candidato';
+            const primerNombre = nombre.trim().split(/\s+/)[0] || 'Candidato';
             const fechaHuman = humanizeFecha(citaFecha);
 
             const message = reminder.message
+                .replace(/\{\{candidato\}\}/gi, primerNombre)
                 .replace(/\{\{nombre\}\}/gi, nombre)
                 .replace(/\{\{citaFecha\}\}/gi, fechaHuman || citaFecha)
                 .replace(/\{\{citaHora\}\}/gi, citaHora);

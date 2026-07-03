@@ -449,8 +449,8 @@ export default async function handler(req, res) {
 
                 if (type === 'template') {
                     const tData = req.body.templateData;
-                    const _nr = candidate.nombreReal?.trim().split(/\s+/).slice(0, 2).join(' ');
-                    const candidateNameFallback = _nr || candidate.nombre || 'Candidato';
+                    const _nr = candidate.nombreReal?.trim().split(/\s+/)[0];
+                    const candidateNameFallback = _nr || candidate.nombre?.trim().split(/\s+/)[0] || 'Candidato';
                     extraParams.templateName = tData.name;
                     extraParams.languageCode = tData.language || 'es_MX';
                     
