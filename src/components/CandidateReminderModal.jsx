@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { X, Bell, Trash2, Clock, Send } from 'lucide-react';
+import { X, Bell, Trash2, Clock, Send, ChevronDown, Check } from 'lucide-react';
 import { renderMetaTemplatePreviewText } from '../utils/metaTemplatePreview';
 
 const API = '/api/candidate-reminders';
@@ -39,10 +39,16 @@ const CandidateReminderModal = ({ candidate, onClose }) => {
     const [scheduledAt, setScheduledAt] = useState(defaultDatetime());
     const [message, setMessage] = useState('');
     const [fallbackTemplateId, setFallbackTemplateId] = useState('');
+    const [templateMenuOpen, setTemplateMenuOpen] = useState(false);
 
     const nombre = candidate.nombreReal || candidate.nombre || candidate.whatsapp;
     const firstName = String(nombre || '').trim().split(/\s+/)[0] || 'Candidato';
     const selectedTemplate = templates.find(t => t.id === fallbackTemplateId) || null;
+    const templateButtonLabel = templatesLoading
+        ? 'Cargando plantillas...'
+        : selectedTemplate
+            ? `${selectedTemplate.name.replace(/_/g, ' ')} (${selectedTemplate.language})`
+            : 'Sin template para ventana expirada';
 
     useEffect(() => {
         const handleKey = (e) => { if (e.key === 'Escape') onClose(); };
@@ -131,7 +137,7 @@ const CandidateReminderModal = ({ candidate, onClose }) => {
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={onClose}>
-            <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl w-full max-w-lg h-[90vh] max-h-[760px] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden transition-all duration-300 ease-out" onClick={e => e.stopPropagation()}>
 
                 {/* Header */}
                 <div className="flex items-center justify-between p-5 border-b border-slate-100 dark:border-slate-800 flex-shrink-0">
@@ -178,32 +184,70 @@ const CandidateReminderModal = ({ candidate, onClose }) => {
                             <div>
                                 <label className="text-[10px] font-black text-emerald-700 dark:text-emerald-400 uppercase tracking-widest">Elige un template para ventana de 24 horas expirada</label>
                             </div>
-                            <select
-                                value={fallbackTemplateId}
-                                onChange={e => {
-                                    setFallbackTemplateId(e.target.value);
-                                }}
-                                className="w-full bg-white dark:bg-slate-800 border border-emerald-200 dark:border-emerald-800 rounded-xl px-3 py-2.5 text-sm font-bold focus:ring-2 focus:ring-emerald-400 outline-none text-slate-800 dark:text-slate-200"
-                            >
-                                <option value="">{templatesLoading ? 'Cargando plantillas...' : 'Sin template para ventana expirada'}</option>
-                                {templates.map(t => (
-                                    <option key={t.id} value={t.id}>{t.name} ({t.language})</option>
-                                ))}
-                            </select>
+                            <div className="relative">
+                                <button
+                                    type="button"
+                                    onClick={() => setTemplateMenuOpen(prev => !prev)}
+                                    disabled={templatesLoading}
+                                    className="w-full min-h-[46px] bg-white dark:bg-slate-800 border border-emerald-200 dark:border-emerald-800 rounded-xl px-3 py-2.5 text-sm font-bold text-left text-slate-800 dark:text-slate-200 flex items-center justify-between gap-3 shadow-sm hover:border-emerald-300 dark:hover:border-emerald-700 focus:ring-2 focus:ring-emerald-400 outline-none transition-all disabled:opacity-70"
+                                >
+                                    <span className="truncate">{templateButtonLabel}</span>
+                                    <ChevronDown className={`w-4 h-4 text-slate-400 shrink-0 transition-transform duration-200 ${templateMenuOpen ? 'rotate-180' : ''}`} />
+                                </button>
 
-                            {selectedTemplate && (
-                                <div className="rounded-xl bg-white dark:bg-slate-800 border border-emerald-100 dark:border-emerald-900/40 p-3 space-y-2">
-                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Vista previa</p>
-                                    <div className="space-y-2">
-                                        <p className="text-xs font-black text-emerald-700 dark:text-emerald-300">
-                                            {selectedTemplate.name.replace(/_/g, ' ')}
-                                        </p>
-                                        <p className="text-xs text-slate-600 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">
-                                            {renderMetaTemplatePreviewText(selectedTemplate, { candidato: firstName, nombre: firstName, name: firstName, 1: firstName }, firstName)}
-                                        </p>
+                                {templateMenuOpen && (
+                                    <div className="absolute z-20 mt-2 w-full overflow-hidden rounded-xl border border-emerald-100 dark:border-emerald-900/50 bg-white dark:bg-slate-900 shadow-2xl shadow-emerald-900/10">
+                                        <div className="max-h-56 overflow-y-auto py-1">
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setFallbackTemplateId('');
+                                                    setTemplateMenuOpen(false);
+                                                }}
+                                                className="w-full px-3 py-2.5 text-left text-sm font-bold text-slate-700 dark:text-slate-200 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 flex items-center gap-2 transition-colors"
+                                            >
+                                                <Check className={`w-4 h-4 shrink-0 ${!fallbackTemplateId ? 'text-emerald-500' : 'text-transparent'}`} />
+                                                <span className="truncate">Sin template para ventana expirada</span>
+                                            </button>
+                                            {templates.map(t => (
+                                                <button
+                                                    key={t.id}
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setFallbackTemplateId(t.id);
+                                                        setTemplateMenuOpen(false);
+                                                    }}
+                                                    className="w-full px-3 py-2.5 text-left hover:bg-emerald-50 dark:hover:bg-emerald-900/20 flex items-center gap-2 transition-colors"
+                                                >
+                                                    <Check className={`w-4 h-4 shrink-0 ${fallbackTemplateId === t.id ? 'text-emerald-500' : 'text-transparent'}`} />
+                                                    <span className="min-w-0">
+                                                        <span className="block truncate text-sm font-bold text-slate-800 dark:text-slate-100">{t.name.replace(/_/g, ' ')}</span>
+                                                        <span className="block text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500">{t.language}</span>
+                                                    </span>
+                                                </button>
+                                            ))}
+                                        </div>
                                     </div>
+                                )}
+                            </div>
+
+                            <div className={`grid transition-all duration-300 ease-out ${selectedTemplate ? 'grid-rows-[1fr] opacity-100 pt-1' : 'grid-rows-[0fr] opacity-0 pt-0'}`}>
+                                <div className="overflow-hidden">
+                                    {selectedTemplate && (
+                                        <div className="rounded-xl bg-white dark:bg-slate-800 border border-emerald-100 dark:border-emerald-900/40 p-3 space-y-2">
+                                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Vista previa</p>
+                                            <div className="space-y-2">
+                                                <p className="text-xs font-black text-emerald-700 dark:text-emerald-300">
+                                                    {selectedTemplate.name.replace(/_/g, ' ')}
+                                                </p>
+                                                <p className="text-xs text-slate-600 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">
+                                                    {renderMetaTemplatePreviewText(selectedTemplate, { candidato: firstName, nombre: firstName, name: firstName, 1: firstName }, firstName)}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
-                            )}
+                            </div>
                         </div>
                         <button
                             onClick={handleCreate}
