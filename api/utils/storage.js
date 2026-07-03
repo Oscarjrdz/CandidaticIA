@@ -113,6 +113,10 @@ const KEYS = {
 const INDEX_KEYS = {
     TAG_PREFIX: 'index:candidates:tag:',
     AD_PREFIX: 'index:candidates:ad:',
+    MANUAL_PROJECT_PREFIX: 'index:candidates:manual_project:v2:',
+    MANUAL_PROJECT_STEP_PREFIX: 'index:candidates:manual_project_step:v2:',
+    MANUAL_READY: 'index:candidates:manual_project:v2:ready',
+    MANUAL_LOCK: 'index:candidates:manual_project:v2:lock',
     UNTAGGED: 'index:candidates:untagged',
     UNTAGGED_READY: 'index:candidates:untagged:ready',
     UNTAGGED_LOCK: 'index:candidates:untagged:lock',
@@ -121,12 +125,13 @@ const INDEX_KEYS = {
 };
 const UNTAGGED_TAG_FILTER = '__candidatic_untagged__';
 const UNTAGGED_COUNT_KEY = 'candidatic:untagged_count';
-const MANUAL_PROJECT_LINKS_PREFIX = 'crm_links:';
 export const HUMAN_INTERVENTION_SILENCE_MS = 5 * 24 * 60 * 60 * 1000;
 
 const indexPart = (value) => Buffer.from(String(value || '').trim().toLowerCase()).toString('base64url');
 const tagIndexKey = (tag) => `${INDEX_KEYS.TAG_PREFIX}${indexPart(typeof tag === 'string' ? tag : tag?.name)}`;
 const adIndexKey = (adId) => `${INDEX_KEYS.AD_PREFIX}${indexPart(adId)}`;
+const manualProjectIndexKey = (projectId) => `${INDEX_KEYS.MANUAL_PROJECT_PREFIX}${indexPart(projectId)}`;
+const manualProjectStepIndexKey = (projectId, stepId) => `${INDEX_KEYS.MANUAL_PROJECT_STEP_PREFIX}${indexPart(`${projectId}::${stepId}`)}`;
 const cleanTagValues = (tags) => [...new Set((Array.isArray(tags) ? tags : [])
     .map(t => typeof t === 'string' ? t : t?.name)
     .map(t => String(t || '').trim())
@@ -163,6 +168,10 @@ async function syncCandidateSecondaryIndexes(client, oldCandidate = null, newCan
     const newTags = new Set(cleanTagValues(newCandidate?.tags));
     const oldAd = oldCandidate?.adId ? String(oldCandidate.adId).trim() : '';
     const newAd = newCandidate?.adId ? String(newCandidate.adId).trim() : '';
+    const oldManualProject = oldCandidate?.manualProjectId ? String(oldCandidate.manualProjectId).trim() : '';
+    const newManualProject = newCandidate?.manualProjectId ? String(newCandidate.manualProjectId).trim() : '';
+    const oldManualStep = oldCandidate?.manualProjectStepId ? String(oldCandidate.manualProjectStepId).trim() : '';
+    const newManualStep = newCandidate?.manualProjectStepId ? String(newCandidate.manualProjectStepId).trim() : '';
     const wasUntagged = oldCandidate && oldTags.size === 0;
     const isUntagged = newCandidate && newTags.size === 0;
 
@@ -171,9 +180,64 @@ async function syncCandidateSecondaryIndexes(client, oldCandidate = null, newCan
     for (const tag of newTags) if (!oldTags.has(tag)) pipe.sadd(tagIndexKey(tag), id);
     if (oldAd && oldAd !== newAd) pipe.srem(adIndexKey(oldAd), id);
     if (newAd && oldAd !== newAd) pipe.sadd(adIndexKey(newAd), id);
+    if (oldManualProject && oldManualProject !== newManualProject) pipe.srem(manualProjectIndexKey(oldManualProject), id);
+    if (newManualProject && oldManualProject !== newManualProject) pipe.sadd(manualProjectIndexKey(newManualProject), id);
+    if (oldManualProject && oldManualStep && (oldManualProject !== newManualProject || oldManualStep !== newManualStep)) {
+        pipe.srem(manualProjectStepIndexKey(oldManualProject, oldManualStep), id);
+    }
+    if (newManualProject && newManualStep && (oldManualProject !== newManualProject || oldManualStep !== newManualStep)) {
+        pipe.sadd(manualProjectStepIndexKey(newManualProject, newManualStep), id);
+    }
     if (wasUntagged && !isUntagged) pipe.zrem(INDEX_KEYS.UNTAGGED, id);
     if (isUntagged) pipe.zadd(INDEX_KEYS.UNTAGGED, candidateSortScore(newCandidate), id);
     await pipe.exec().catch(() => {});
+}
+
+async function ensureCandidateManualIndexes() {
+    const client = getRedisClient();
+    if (!client) return false;
+    const ready = await client.get(INDEX_KEYS.MANUAL_READY).catch(() => null);
+    if (ready === '1') return true;
+
+    const locked = await client.set(INDEX_KEYS.MANUAL_LOCK, '1', 'EX', 300, 'NX').catch(() => null);
+    if (!locked) {
+        for (let i = 0; i < 20; i++) {
+            await new Promise(r => setTimeout(r, 250));
+            const nowReady = await client.get(INDEX_KEYS.MANUAL_READY).catch(() => null);
+            if (nowReady === '1') return true;
+        }
+        return false;
+    }
+
+    try {
+        const total = (await client.scard(KEYS.LIST_COMPLETE)) + (await client.scard(KEYS.LIST_PENDING));
+        const CHUNK = 500;
+        for (let offset = 0; offset < total; offset += CHUNK) {
+            const ids = await client.zrevrange(KEYS.CANDIDATES_LIST, offset, offset + CHUNK - 1);
+            if (!ids?.length) break;
+            const readPipe = client.pipeline();
+            ids.forEach(id => readPipe.get(`${KEYS.CANDIDATE_PREFIX}${id}`));
+            const rows = await readPipe.exec();
+            const writePipe = client.pipeline();
+            for (const [err, raw] of rows) {
+                if (err || !raw) continue;
+                let c;
+                try { c = JSON.parse(raw); } catch { continue; }
+                if (!c?.id) continue;
+                const projectId = String(c.manualProjectId || '').trim();
+                const stepId = String(c.manualProjectStepId || '').trim();
+                if (!projectId) continue;
+                writePipe.sadd(manualProjectIndexKey(projectId), c.id);
+                if (stepId) writePipe.sadd(manualProjectStepIndexKey(projectId, stepId), c.id);
+            }
+            await writePipe.exec();
+            await new Promise(r => setTimeout(r, 2));
+        }
+        await client.set(INDEX_KEYS.MANUAL_READY, '1');
+        return true;
+    } finally {
+        await client.del(INDEX_KEYS.MANUAL_LOCK).catch(() => {});
+    }
 }
 
 async function ensureCandidateUntaggedIndex() {
@@ -293,17 +357,13 @@ async function getManualProjectCandidateIds(client, manualProjectId, manualStepI
     const stepId = String(manualStepId || '').trim();
     if (!client || !projectId) return [];
 
-    const linksRaw = await client.get(`${MANUAL_PROJECT_LINKS_PREFIX}${projectId}`).catch(() => null);
-    if (linksRaw) {
-        try {
-            const links = JSON.parse(linksRaw);
-            if (Array.isArray(links)) {
-                const ids = links
-                    .filter(link => link?.candidateId && (!stepId || String(link.stepId || '').trim() === stepId))
-                    .map(link => String(link.candidateId));
-                if (ids.length > 0) return ids;
-            }
-        } catch {}
+    const indexed = await ensureCandidateManualIndexes();
+    if (indexed) {
+        const key = stepId
+            ? manualProjectStepIndexKey(projectId, stepId)
+            : manualProjectIndexKey(projectId);
+        const indexedIds = await client.smembers(key);
+        if (indexedIds?.length) return indexedIds;
     }
 
     const total = (await client.scard(KEYS.LIST_COMPLETE)) + (await client.scard(KEYS.LIST_PENDING));
