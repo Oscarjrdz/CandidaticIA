@@ -4,11 +4,11 @@ const IDLE_THRESHOLD_MS = 60_000; // 60s without activity = idle, stop counting 
 const HEARTBEAT_INTERVAL_MS = 45_000;
 const IDLE_HEARTBEAT_INTERVAL_MS = 4 * 60_000; // slower heartbeat while idle — same Redis cost shouldn't apply when nobody's actually working
 
-export function usePresence(user, activeSection) {
+export function usePresence(user) {
     const [onlineUsers, setOnlineUsers] = useState([]);
     const currentChatIdRef = useRef(null);
-    const lastActivityRef = useRef(Date.now());
-    const lastHeartbeatAtRef = useRef(Date.now());
+    const lastActivityRef = useRef(0);
+    const lastHeartbeatAtRef = useRef(0);
     const sendHeartbeatRef = useRef(null);
 
     // Track real user activity — any of these resets the idle timer
@@ -40,6 +40,10 @@ export function usePresence(user, activeSection) {
 
     useEffect(() => {
         if (!user) return;
+
+        const startTime = Date.now();
+        lastActivityRef.current = startTime;
+        lastHeartbeatAtRef.current = startTime;
 
         let timeoutId = null;
         let stopped = false;

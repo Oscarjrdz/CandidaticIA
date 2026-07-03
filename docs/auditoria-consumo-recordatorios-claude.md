@@ -173,3 +173,35 @@ Verificacion realizada: `node --check` en los 5 archivos tocados, `npx eslint` s
 ### Pendiente (no aplicado en esta pasada, discutido pero de menor prioridad)
 
 - `reengagement.js` muestrea solo 500 pendientes al azar por corrida (`srandmember('stats:list:pending', 500)`) — cobertura probabilistica si el pool supera ese numero. Revisar solo si el volumen de pendientes se acerca a 500 en produccion.
+
+---
+
+## Tercera auditoria (Codex) — foco: ahorro real cuando no hay humano activo
+
+Fecha: 2026-07-03. Se revisaron los cambios de Claude contra el objetivo original: bajar consumo de Redis/ancho de banda cuando la app queda abierta pero nadie esta trabajando, sin pausar cron jobs ni mensajes automaticos a candidatos.
+
+### Confirmado
+
+- El commit de Claude `14321efe` esta en `origin/main`.
+- `send-reminders`, `reengagement` y el bot conversacional no dependen de presencia humana para mandar mensajes criticos.
+- `paso2-trigger.js` y `human-activity.js` fueron eliminados y no quedan referencias de codigo productivo.
+- `usePresence.js` ya reduce el heartbeat de presencia de 45s a 4min cuando detecta idle.
+
+### Hallazgos adicionales
+
+1. **TTL de presencia incompatible con heartbeat idle.** El cliente idle late cada 4min, pero `api/presence.js` expiraba usuarios a los 90s. Eso ahorraba consumo, pero hacia que usuarios idle desaparecieran/reaparecieran de la lista en linea. **Accion:** TTL activo queda en 90s y TTL idle sube a 5min.
+2. **Actividad diaria seguia escribiendose aunque el usuario estuviera idle.** Aunque `activeSeconds` fuera 0, el endpoint seguia escribiendo meta/ids/visited. **Accion:** las estadisticas `recruiter:*` solo se escriben cuando `idle=false`.
+3. **El lock del chat seguia latiendo cada 30s aunque no hubiera humano.** Si un reclutador dejaba un candidato abierto toda la noche, `ChatSection.jsx` mantenia `/api/chat` heartbeat y el lock activo. **Accion:** si pasan 60s sin mouse/teclado/click/scroll/touch o la pestana se oculta, el chat se desbloquea y deja de mandar heartbeats; al volver actividad real, se bloquea de nuevo.
+
+### Resultado esperado de consumo
+
+- Pestaña abierta sin uso: presencia baja de 1 llamada cada 45s a 1 cada 4min.
+- Chat abierto sin uso: lock baja de 1 llamada cada 30s a 0 llamadas despues de 60s idle.
+- Cron jobs y mensajes automaticos siguen corriendo, para no perder recordatorios ni candidatos.
+
+### Verificacion
+
+- `node --check api/presence.js` OK.
+- `npx eslint api/presence.js src/hooks/usePresence.js` OK.
+- `npm run build` OK.
+- `git diff --check` OK.

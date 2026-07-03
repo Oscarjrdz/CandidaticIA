@@ -29,7 +29,10 @@ export default async function handler(req, res) {
             // Use whatsapp as the canonical key when available (stable, no prefix ambiguity)
             const stableKey = whatsapp || userId;
             const now = Date.now();
-            const PRESENCE_TTL_MS = 90000; // 90s — heartbeat cada 45s, TTL da margen para lag de red
+            const isIdle = idle === true;
+            const PRESENCE_ACTIVE_TTL_MS = 90_000; // active heartbeat cada 45s, TTL da margen para lag de red
+            const PRESENCE_IDLE_TTL_MS = 5 * 60_000; // idle heartbeat cada 4min; evita parpadeo sin subir frecuencia
+            const PRESENCE_TTL_MS = isIdle ? PRESENCE_IDLE_TTL_MS : PRESENCE_ACTIVE_TTL_MS;
             const expiresAt = now + PRESENCE_TTL_MS;
 
             // ── Write user state into Hash + Sorted Set (replaces individual SET with EX 12) ──
@@ -41,7 +44,7 @@ export default async function handler(req, res) {
                 userName,
                 role: role || 'User',
                 currentChatId: currentChatId || null,
-                idle: idle === true,
+                idle: isIdle,
                 lastSeen: now
             });
 
@@ -51,25 +54,24 @@ export default async function handler(req, res) {
             await writePipe.exec();
 
             // ── Activity tracking (daily stats) ──────────────────────────────
-            const today = new Date().toISOString().split('T')[0];
-            const ttl = 86400 * 30; // keep 30 days
-            const actPipe = redis.pipeline();
-            // Store name/role for stats lookup
-            actPipe.set(`recruiter:meta:${userId}`, JSON.stringify({ userName, role: role || 'User' }), 'EX', ttl);
-            actPipe.sadd(`recruiter:ids:${today}`, userId);
-            actPipe.expire(`recruiter:ids:${today}`, ttl);
-            // Accumulate active seconds only when user is not idle
-            if (!idle) {
+            if (!isIdle) {
+                const today = new Date().toISOString().split('T')[0];
+                const ttl = 86400 * 30; // keep 30 days
+                const actPipe = redis.pipeline();
+                // Store name/role for stats lookup only when there is real activity.
+                actPipe.set(`recruiter:meta:${userId}`, JSON.stringify({ userName, role: role || 'User' }), 'EX', ttl);
+                actPipe.sadd(`recruiter:ids:${today}`, userId);
+                actPipe.expire(`recruiter:ids:${today}`, ttl);
                 const seconds = Math.max(0, Math.min(Number(activeSeconds) || 3, 60));
                 actPipe.incrby(`recruiter:time:${userId}:${today}`, seconds);
                 actPipe.expire(`recruiter:time:${userId}:${today}`, ttl);
+                // Track unique chats visited (opened, not necessarily responded) only while active.
+                if (currentChatId) {
+                    actPipe.sadd(`recruiter:visited:${userId}:${today}`, currentChatId);
+                    actPipe.expire(`recruiter:visited:${userId}:${today}`, ttl);
+                }
+                actPipe.exec().catch(() => {});
             }
-            // Track unique chats visited (opened, not necessarily responded)
-            if (currentChatId) {
-                actPipe.sadd(`recruiter:visited:${userId}:${today}`, currentChatId);
-                actPipe.expire(`recruiter:visited:${userId}:${today}`, ttl);
-            }
-            actPipe.exec().catch(() => {});
 
             // ── Build online users list: prune expired, then read all ─────────
             // Remove members whose expiresAt score < now (they haven't heartbeated in 12s)
@@ -94,7 +96,7 @@ export default async function handler(req, res) {
             // Compare sorted user presence state to detect additions/removals and chat switches.
             const { createHash } = await import('crypto');
             const listHash = createHash('md5')
-                .update(onlineUsers.map(u => `${u.userId}:${u.currentChatId || ''}`).sort().join(','))
+                .update(onlineUsers.map(u => `${u.userId}:${u.currentChatId || ''}:${u.idle === true ? 'idle' : 'active'}`).sort().join(','))
                 .digest('hex');
             const prevHash = await redis.get('presence:last_hash');
 

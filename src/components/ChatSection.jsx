@@ -53,6 +53,8 @@ const scheduleIdleTask = (callback, timeout = 1200) => {
 
 const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 const ORDERED_MESSAGE_GAP_MS = 450;
+const CHAT_LOCK_IDLE_MS = 60_000;
+const CHAT_LOCK_HEARTBEAT_MS = 30_000;
 
 const CHAT_LIST_PAGE_SIZE = 10;
 const CHAT_LIST_LOCAL_FILTER_PAGE_SIZE = 500;
@@ -2264,6 +2266,8 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
     // Load messages
     useEffect(() => {
         if (!selectedChat) return;
+        const chatId = selectedChat.id;
+        const currentUser = user?.name || 'Reclutador';
 
         loadMessages();
         // 🚀 POLLING REMOVED: Trust the SSE `messagePayload` for real-time injection.
@@ -2275,48 +2279,114 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
                 await fetch('/api/chat', {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ action: 'send_read_receipt', candidateId: selectedChat.id })
+                    body: JSON.stringify({ action: 'send_read_receipt', candidateId: chatId })
                 });
-            } catch(e) {}
+            } catch {
+                // Best-effort read receipt only.
+            }
         };
         sendBlueTicks();
 
-        // 🔒 Lock this chat for me
-        const currentUser = user?.name || 'Reclutador';
+        // 🔒 Lock this chat only while a human is actively working it.
+        let stopped = false;
+        let locked = false;
+        let lockInFlight = false;
+        let lastHumanActivityAt = Date.now();
+
         const lockChat = async () => {
+            if (stopped || locked || lockInFlight) return;
+            lockInFlight = true;
+            try {
+                const res = await fetch('/api/chat', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'lock', candidateId: chatId, userName: currentUser })
+                });
+                if (res.ok) {
+                    if (stopped) {
+                        fetch('/api/chat', {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ action: 'unlock', candidateId: chatId })
+                        }).catch(() => {});
+                    } else {
+                        locked = true;
+                    }
+                }
+            } catch {
+                // Lock heartbeat is best effort.
+            }
+            finally {
+                lockInFlight = false;
+            }
+        };
+        const unlockChat = async () => {
+            if (stopped || !locked) return;
+            locked = false;
             try {
                 await fetch('/api/chat', {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ action: 'lock', candidateId: selectedChat.id, userName: currentUser })
+                    body: JSON.stringify({ action: 'unlock', candidateId: chatId })
                 });
-            } catch (e) { /* silent */ }
+            } catch {
+                // Unlock is best effort; Redis TTL will also expire the lock.
+            }
         };
+        const isHumanActive = () => !document.hidden && (Date.now() - lastHumanActivityAt) <= CHAT_LOCK_IDLE_MS;
+        const markHumanActivity = () => {
+            if (document.hidden) return;
+            lastHumanActivityAt = Date.now();
+            lockChat();
+        };
+        const handleVisibilityChange = () => {
+            if (document.hidden) {
+                unlockChat();
+            } else {
+                markHumanActivity();
+            }
+        };
+        const activityEvents = ['mousemove', 'keydown', 'click', 'scroll', 'touchstart'];
+        activityEvents.forEach(eventName => window.addEventListener(eventName, markHumanActivity, { passive: true }));
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+
         lockChat();
 
-        // Heartbeat every 30s
         const heartbeatInterval = setInterval(async () => {
+            if (!isHumanActive()) {
+                await unlockChat();
+                return;
+            }
+            if (!locked) {
+                await lockChat();
+                return;
+            }
             try {
                 await fetch('/api/chat', {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ action: 'heartbeat', candidateId: selectedChat.id })
+                    body: JSON.stringify({ action: 'heartbeat', candidateId: chatId })
                 });
-            } catch (e) { /* silent */ }
-        }, 30000);
+            } catch {
+                // Heartbeat is best effort; Redis TTL will expire the lock.
+            }
+        }, CHAT_LOCK_HEARTBEAT_MS);
 
         // Optimistic UI updates
 
         return () => {
+            stopped = true;
             clearInterval(heartbeatInterval);
+            activityEvents.forEach(eventName => window.removeEventListener(eventName, markHumanActivity));
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
             // Unlock on deselect
             fetch('/api/chat', {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action: 'unlock', candidateId: selectedChat.id })
+                body: JSON.stringify({ action: 'unlock', candidateId: chatId })
             }).catch(() => {});
         };
-    }, [selectedChat?.id]);
+    }, [selectedChat?.id, user?.name]);
 
     const handleToggleTag = async (tag) => {
         if (!selectedChat) return;

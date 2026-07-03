@@ -129,7 +129,7 @@ function AppShell() {
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  const { onlineUsers } = usePresence(user, activeSection);
+  const { onlineUsers } = usePresence(user);
 
   // Cargar tema al iniciar
   useEffect(() => {
