@@ -269,6 +269,9 @@ export const sendMetaMessage = async (to, body, type = 'chat', extraParams = {})
             }
         }
 
+        if (type === 'template') {
+            console.log('[META TEMPLATE SEND] payload:', JSON.stringify(payload, null, 2));
+        }
         const startTime = Date.now();
         const response = await axios.post(url, payload, {
             headers,
@@ -289,6 +292,7 @@ export const sendMetaMessage = async (to, body, type = 'chat', extraParams = {})
                     type,
                     phoneNumberId,
                     fromNumber: phoneNumberId === '1249373631587237' ? 'Hr One México' : phoneNumberId === '1061455557054529' ? 'Candidatic IA' : phoneNumberId,
+                    payload: type === 'template' ? payload : undefined,
                     result: response.data
                 };
                 redis.set(`debug:meta_send:${phone}`, JSON.stringify(debugEntry), 'EX', 3600).catch(() => { });
