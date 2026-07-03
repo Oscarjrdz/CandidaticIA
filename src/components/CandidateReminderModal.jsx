@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { X, Bell, Trash2, Clock, Send, ChevronDown, Check } from 'lucide-react';
 import { renderMetaTemplatePreviewText } from '../utils/metaTemplatePreview';
 
@@ -31,7 +31,7 @@ const CandidateReminderModal = ({ candidate, onClose }) => {
     const [reminders, setReminders] = useState([]);
     const [templates, setTemplates] = useState([]);
     const [templatesLoading, setTemplatesLoading] = useState(false);
-    const [loading, setLoading] = useState(true);
+    const [loading, setLoading] = useState(false);
     const [saving, setSaving] = useState(false);
     const [deleting, setDeleting] = useState(null);
 
@@ -40,6 +40,8 @@ const CandidateReminderModal = ({ candidate, onClose }) => {
     const [message, setMessage] = useState('');
     const [fallbackTemplateId, setFallbackTemplateId] = useState('');
     const [templateMenuOpen, setTemplateMenuOpen] = useState(false);
+    const [templateMenuPosition, setTemplateMenuPosition] = useState(null);
+    const templateButtonRef = useRef(null);
 
     const nombre = candidate.nombreReal || candidate.nombre || candidate.whatsapp;
     const firstName = String(nombre || '').trim().split(/\s+/)[0] || 'Candidato';
@@ -56,8 +58,35 @@ const CandidateReminderModal = ({ candidate, onClose }) => {
         return () => document.removeEventListener('keydown', handleKey);
     }, [onClose]);
 
+    const updateTemplateMenuPosition = useCallback(() => {
+        const button = templateButtonRef.current;
+        if (!button) return;
+        const rect = button.getBoundingClientRect();
+        const estimatedHeight = Math.min(260, ((templates.length || 0) + 1) * 52 + 8);
+        const spaceBelow = window.innerHeight - rect.bottom - 12;
+        const spaceAbove = rect.top - 12;
+        const openUp = spaceBelow < 190 && spaceAbove > spaceBelow;
+        const maxHeight = Math.max(120, Math.min(260, openUp ? spaceAbove - 8 : spaceBelow - 8));
+        setTemplateMenuPosition({
+            left: rect.left,
+            top: openUp ? Math.max(12, rect.top - Math.min(estimatedHeight, maxHeight) - 8) : rect.bottom + 8,
+            width: rect.width,
+            maxHeight
+        });
+    }, [templates.length]);
+
+    useEffect(() => {
+        if (!templateMenuOpen) return;
+        updateTemplateMenuPosition();
+        window.addEventListener('resize', updateTemplateMenuPosition);
+        window.addEventListener('scroll', updateTemplateMenuPosition, true);
+        return () => {
+            window.removeEventListener('resize', updateTemplateMenuPosition);
+            window.removeEventListener('scroll', updateTemplateMenuPosition, true);
+        };
+    }, [templateMenuOpen, updateTemplateMenuPosition]);
+
     const fetchReminders = useCallback(async () => {
-        setLoading(true);
         try {
             const res = await fetch(`${API}?candidateId=${candidate.id}`);
             const data = await res.json();
@@ -137,7 +166,7 @@ const CandidateReminderModal = ({ candidate, onClose }) => {
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={onClose}>
-            <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden transition-all duration-300 ease-out" onClick={e => e.stopPropagation()}>
+            <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
 
                 {/* Header */}
                 <div className="flex items-center justify-between p-5 border-b border-slate-100 dark:border-slate-800 flex-shrink-0">
@@ -186,8 +215,13 @@ const CandidateReminderModal = ({ candidate, onClose }) => {
                             </div>
                             <div className="relative">
                                 <button
+                                    ref={templateButtonRef}
                                     type="button"
-                                    onClick={() => setTemplateMenuOpen(prev => !prev)}
+                                    onClick={() => {
+                                        const next = !templateMenuOpen;
+                                        if (next) updateTemplateMenuPosition();
+                                        setTemplateMenuOpen(next);
+                                    }}
                                     disabled={templatesLoading}
                                     className="w-full min-h-[46px] bg-white dark:bg-slate-800 border border-emerald-200 dark:border-emerald-800 rounded-xl px-3 py-2.5 text-sm font-bold text-left text-slate-800 dark:text-slate-200 flex items-center justify-between gap-3 shadow-sm hover:border-emerald-300 dark:hover:border-emerald-700 focus:ring-2 focus:ring-emerald-400 outline-none transition-all disabled:opacity-70"
                                 >
@@ -195,9 +229,16 @@ const CandidateReminderModal = ({ candidate, onClose }) => {
                                     <ChevronDown className={`w-4 h-4 text-slate-400 shrink-0 transition-transform duration-200 ${templateMenuOpen ? 'rotate-180' : ''}`} />
                                 </button>
 
-                                {templateMenuOpen && (
-                                    <div className="absolute z-20 mt-2 w-full overflow-hidden rounded-xl border border-emerald-100 dark:border-emerald-900/50 bg-white dark:bg-slate-900 shadow-2xl shadow-emerald-900/10">
-                                        <div className="max-h-56 overflow-y-auto py-1">
+                                {templateMenuOpen && templateMenuPosition && (
+                                    <div
+                                        className="fixed z-[80] overflow-hidden rounded-xl border border-emerald-100 dark:border-emerald-900/50 bg-white dark:bg-slate-900 shadow-2xl shadow-emerald-900/10"
+                                        style={{
+                                            left: templateMenuPosition.left,
+                                            top: templateMenuPosition.top,
+                                            width: templateMenuPosition.width
+                                        }}
+                                    >
+                                        <div className="overflow-y-auto py-1" style={{ maxHeight: templateMenuPosition.maxHeight }}>
                                             <button
                                                 type="button"
                                                 onClick={() => {
@@ -325,11 +366,6 @@ const CandidateReminderModal = ({ candidate, onClose }) => {
                         </div>
                     )}
 
-                    {loading && (
-                        <div className="flex justify-center py-4">
-                            <div className="w-5 h-5 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" />
-                        </div>
-                    )}
                 </div>
             </div>
         </div>
