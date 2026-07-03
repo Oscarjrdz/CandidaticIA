@@ -224,8 +224,7 @@ const Sidebar = ({ activeSection, onSectionChange, onLogout, isMobileOpen, onClo
                     });
                     const data = await res.json();
                     if (data.success) {
-                        setUser(data.user);
-                        localStorage.setItem('candidatic_user_session', JSON.stringify(data.user));
+                        setUser(prev => ({ ...prev, ...data.user }));
                     }
                 } catch (e) {
                     console.error('Failed to save sidebar config', e);

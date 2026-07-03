@@ -84,13 +84,11 @@ function _connectSingleton() {
                 const data = JSON.parse(event.data);
 
                 if (data.type === 'unauthorized') {
-                    console.warn('🔒 SSE: token inválido, reconectando con token fresco...');
+                    console.warn('🔒 SSE: sesión expirada o token inválido. Cerrando sesión...');
                     eventSource.close();
                     _singletonES = null;
-                    // Small delay then reconnect — fresh token read from localStorage
-                    if (_subscriberCount > 0) {
-                        setTimeout(() => { if (_subscriberCount > 0) _connectSingleton(); }, 800);
-                    }
+                    localStorage.removeItem('candidatic_user_session');
+                    window.location.replace('/');
                     return;
                 } else if (data.type === 'connected') {
                     console.log('📡 SSE connection established (singleton)');

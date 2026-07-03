@@ -8,6 +8,7 @@
 import { getRedisClient, getCandidateById, updateCandidate, saveMessage } from '../utils/storage.js';
 import { getUltraMsgConfig, sendUltraMsgMessage } from '../whatsapp/utils.js';
 import { getMissingFields, FIELD_LABELS } from '../reengagement-queue.js';
+import { estimateJsonBytes, recordUsageMetric } from '../utils/usage-metrics.js';
 
 const SETTINGS_KEY = 'reengagement:settings';
 
@@ -121,10 +122,19 @@ export default async function handler(req, res) {
     const redis = getRedisClient();
     if (!redis) return res.status(500).json({ error: 'Redis unavailable' });
 
+    const usageMetrics = {
+        redisReads: 0,
+        redisWrites: 0,
+        candidateReads: 0,
+        estimatedRedisBytes: 0
+    };
+
     // ── Leer configuración ────────────────────────────────────────────────────
     let settings;
     try {
         const raw = await redis.get(SETTINGS_KEY);
+        usageMetrics.redisReads += 1;
+        usageMetrics.estimatedRedisBytes += raw ? Buffer.byteLength(raw) : 0;
         settings = raw ? JSON.parse(raw) : null;
     } catch (e) {
         return res.status(500).json({ error: 'Cannot read settings' });
@@ -134,6 +144,7 @@ export default async function handler(req, res) {
     const forceCandidateId = req.body?.forceCandidateId || null;
 
     if (!settings?.enabled && !forceCandidateId) {
+        recordUsageMetric(redis, '/api/cron/reengagement', usageMetrics).catch(() => {});
         return res.json({ success: true, skipped: 'disabled', processed: 0 });
     }
 
@@ -153,16 +164,25 @@ export default async function handler(req, res) {
             // Envío forzado: fetch solo ese candidato
             const c = await getCandidateById(forceCandidateId);
             candidates = c ? [c] : [];
+            if (c) {
+                usageMetrics.candidateReads += 1;
+                usageMetrics.estimatedRedisBytes += estimateJsonBytes(c);
+            }
         } else {
             // Usar el índice de pendientes en lugar de escanear todos
             const pendingIds = await redis.srandmember('stats:list:pending', 500);
+            usageMetrics.redisReads += 1;
             if (!pendingIds.length) { candidates = []; }
             else {
                 const pipeline = redis.pipeline();
                 pendingIds.forEach(id => pipeline.get(`candidate:${id}`));
                 const results = await pipeline.exec();
+                usageMetrics.candidateReads += pendingIds.length;
                 candidates = results
-                    .map(([err, raw]) => { try { return raw ? JSON.parse(raw) : null; } catch { return null; } })
+                    .map(([err, raw]) => {
+                        if (!err && raw) usageMetrics.estimatedRedisBytes += Buffer.byteLength(raw);
+                        try { return raw ? JSON.parse(raw) : null; } catch { return null; }
+                    })
                     .filter(Boolean);
             }
         }
@@ -232,6 +252,7 @@ export default async function handler(req, res) {
                 reengagement_attempts: attemptNumber,
                 reengagement_last_sent: new Date().toISOString(),
             });
+            usageMetrics.redisWrites += 2;
 
             console.log(`[REENGAGEMENT] ✅ Intento ${attemptNumber} → ${nombre} (${candidate.whatsapp})`);
             log.push({ candidateId: candidate.id, nombre, attempt: attemptNumber });
@@ -250,12 +271,17 @@ export default async function handler(req, res) {
 
     try {
         const paso2Ids = await redis.smembers('paso2_waiting');
+        usageMetrics.redisReads += 1;
         if (paso2Ids.length > 0) {
             const p2Pipeline = redis.pipeline();
             paso2Ids.forEach(id => p2Pipeline.get(`candidate:${id}`));
             const p2Results = await p2Pipeline.exec();
+            usageMetrics.candidateReads += paso2Ids.length;
             const paso2Candidates = p2Results
-                .map(([_err, raw]) => { try { return raw ? JSON.parse(raw) : null; } catch { return null; } })
+                .map(([_err, raw]) => {
+                    if (raw) usageMetrics.estimatedRedisBytes += Buffer.byteLength(raw);
+                    try { return raw ? JSON.parse(raw) : null; } catch { return null; }
+                })
                 .filter(Boolean);
 
             for (const candidate of paso2Candidates) {
@@ -263,6 +289,7 @@ export default async function handler(req, res) {
                     const p2Estado = candidate.paso2Estado;
                     if (!p2Estado || !['esperando_colonia', 'esperando_experiencia', 'esperando_meses_experiencia'].includes(p2Estado)) {
                         await redis.srem('paso2_waiting', candidate.id);
+                        usageMetrics.redisWrites += 1;
                         paso2Skipped++;
                         continue;
                     }
@@ -349,6 +376,7 @@ export default async function handler(req, res) {
                         paso2_reengagement_attempts: p2Attempts + 1,
                         paso2_reengagement_last_sent: new Date().toISOString(),
                     });
+                    usageMetrics.redisWrites += 2;
 
                     console.log(`[REENGAGEMENT-P2] ✅ → ${nombre || candidate.whatsapp} (${p2Estado})`);
                     paso2Log.push({ candidateId: candidate.id, nombre, estado: p2Estado });
@@ -363,6 +391,8 @@ export default async function handler(req, res) {
     } catch (e) {
         console.error('[REENGAGEMENT-P2] Fatal:', e.message);
     }
+
+    recordUsageMetric(redis, '/api/cron/reengagement', usageMetrics).catch(() => {});
 
     return res.json({
         success: true,

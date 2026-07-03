@@ -104,7 +104,6 @@ export default function LoginPage({ onLogin }) {
                     if (data.newUser) {
                         setStep('register');
                     } else {
-                        localStorage.setItem('candidatic_user_session', JSON.stringify(data.user));
                         onLogin(data.user);
                     }
                 }

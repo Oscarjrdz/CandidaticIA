@@ -1,6 +1,7 @@
 // NO TOP LEVEL IMPORTS to prevent boot crashes
 
 const ADMIN_NUMBER = '5218116038195';
+const ADMIN_SESSION_TTL_SECONDS = 8 * 60 * 60;
 
 export default async function handler(req, res) {
 
@@ -132,13 +133,29 @@ export default async function handler(req, res) {
                 if (user.status !== 'Active') {
                     return res.status(403).json({ error: 'Cuenta pendiente de activación.' });
                 }
-                // Generar sesión firmada en Redis (24h TTL)
+                // Generar sesión firmada en Redis (8h TTL)
                 const { randomBytes } = await import('crypto');
                 const { getRedisClient } = await import('./utils/storage.js');
                 const sessionToken = randomBytes(32).toString('hex');
+                const issuedAt = new Date();
+                const expiresAt = new Date(issuedAt.getTime() + ADMIN_SESSION_TTL_SECONDS * 1000);
                 const redisCli = getRedisClient();
-                if (redisCli) await redisCli.set(`session:admin:${sessionToken}`, user.id, 'EX', 86400);
-                return res.status(200).json({ success: true, user: { ...user, sessionToken } });
+                if (redisCli) {
+                    await redisCli.set(`session:admin:${sessionToken}`, JSON.stringify({
+                        userId: user.id,
+                        issuedAt: issuedAt.toISOString(),
+                        expiresAt: expiresAt.toISOString()
+                    }), 'EX', ADMIN_SESSION_TTL_SECONDS);
+                }
+                return res.status(200).json({
+                    success: true,
+                    user: {
+                        ...user,
+                        sessionToken,
+                        sessionIssuedAt: issuedAt.toISOString(),
+                        sessionExpiresAt: expiresAt.toISOString()
+                    }
+                });
             }
 
             // No user found — silent reject, no registration allowed

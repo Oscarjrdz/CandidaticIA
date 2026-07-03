@@ -46,9 +46,14 @@ export default async function handler(req, res) {
             const mm = String(month + 1).padStart(2, '0');
             dayKeys.push(`stats:bandwidth:${year}-${mm}-${dd}:total`);
         }
+        const hourKeys = [];
+        for (let h = 0; h < 24; h++) {
+            const hh = String(h).padStart(2, '0');
+            hourKeys.push(`stats:bandwidth:${yearMonthDay}:${hh}:total`);
+        }
 
         // Fetch monthly total and all daily keys in one mget
-        const allKeys = [monthKey, ...dayKeys];
+        const allKeys = [monthKey, ...dayKeys, ...hourKeys];
         const values = await redis.mget(...allKeys);
 
         const usedBytes = values[0] ? parseInt(values[0], 10) : 0;
@@ -58,6 +63,14 @@ export default async function handler(req, res) {
             daily.push({
                 day: i + 1,
                 bytes: values[i + 1] ? parseInt(values[i + 1], 10) : 0
+            });
+        }
+        const hourlyStart = 1 + daysInMonth;
+        const hourly = [];
+        for (let i = 0; i < 24; i++) {
+            hourly.push({
+                hour: i,
+                bytes: values[hourlyStart + i] ? parseInt(values[hourlyStart + i], 10) : 0
             });
         }
 
@@ -74,7 +87,8 @@ export default async function handler(req, res) {
             month: yearMonth,
             today,
             daysInMonth,
-            daily
+            daily,
+            hourly
         });
 
     } catch (error) {

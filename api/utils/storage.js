@@ -13,9 +13,29 @@ import { sendConversionEvent } from './metaConversions.js';
 
 // Initialize Redis client
 let redis;
+let redisIdleTimer = null;
+const REDIS_IDLE_DISCONNECT_MS = Number(process.env.REDIS_IDLE_DISCONNECT_MS || 120_000);
+
+function scheduleRedisIdleDisconnect() {
+    if (!REDIS_IDLE_DISCONNECT_MS || REDIS_IDLE_DISCONNECT_MS < 1_000) return;
+    if (redisIdleTimer) clearTimeout(redisIdleTimer);
+    redisIdleTimer = setTimeout(() => {
+        const client = redis;
+        if (!client) return;
+
+        redis = null;
+        redisIdleTimer = null;
+        client.quit().catch(() => client.disconnect());
+    }, REDIS_IDLE_DISCONNECT_MS);
+    if (typeof redisIdleTimer.unref === 'function') redisIdleTimer.unref();
+}
 
 const getClient = () => {
-    if (!redis) {
+    if (!redis || ['end', 'close'].includes(redis.status)) {
+        if (redisIdleTimer) {
+            clearTimeout(redisIdleTimer);
+            redisIdleTimer = null;
+        }
         const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
         const isTLS = redisUrl.startsWith('rediss://');
 
@@ -26,10 +46,12 @@ const getClient = () => {
                 tls: isTLS ? { rejectUnauthorized: true } : undefined
             });
             redis.on('error', (err) => console.error('❌ Redis Connection Error:', err));
+            redis.on('end', () => { redisIdleTimer = null; });
         } catch (e) {
             console.error('❌ Failed to create Redis client:', e);
         }
     }
+    scheduleRedisIdleDisconnect();
     return redis;
 };
 
@@ -1264,7 +1286,24 @@ export const validateAdminSession = async (req) => {
     if (!token) return null;
     const client = getClient();
     if (!client) return null;
-    return await client.get(`session:admin:${token}`);
+    const key = `session:admin:${token}`;
+    const raw = await client.get(key);
+    if (!raw) return null;
+
+    try {
+        const session = JSON.parse(raw);
+        const expiresMs = new Date(session.expiresAt).getTime();
+        if (!session.userId || !Number.isFinite(expiresMs) || expiresMs <= Date.now()) {
+            await client.del(key).catch(() => {});
+            return null;
+        }
+        return session.userId;
+    } catch {
+        // Legacy 24h sessions did not store expiry metadata. Force re-login so
+        // every active browser moves to the 8h expiry contract immediately.
+        await client.del(key).catch(() => {});
+        return null;
+    }
 };
 
 export const getCandidateById = async (id) => {

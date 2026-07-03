@@ -1,6 +1,33 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 
 const AuthContext = createContext(null);
+const SESSION_STORAGE_KEY = 'candidatic_user_session';
+const SESSION_TTL_MS = 8 * 60 * 60 * 1000;
+
+function getSessionExpiry(userData) {
+    const explicitExpiry = new Date(userData?.sessionExpiresAt || userData?.expiresAt || 0).getTime();
+    if (Number.isFinite(explicitExpiry) && explicitExpiry > 0) return explicitExpiry;
+
+    const issuedAt = new Date(userData?.sessionIssuedAt || userData?.loginAt || 0).getTime();
+    if (Number.isFinite(issuedAt) && issuedAt > 0) return issuedAt + SESSION_TTL_MS;
+
+    return 0;
+}
+
+function normalizeSession(userData) {
+    const now = Date.now();
+    const expiryMs = getSessionExpiry(userData);
+    if (!userData?.sessionToken || !expiryMs || expiryMs <= now) return null;
+
+    return {
+        ...userData,
+        sessionExpiresAt: new Date(expiryMs).toISOString()
+    };
+}
+
+function redirectToLanding() {
+    window.location.replace('/');
+}
 
 /**
  * Global auth context — provides user, rolePermissions, login/logout across the app.
@@ -20,25 +47,48 @@ export const AuthProvider = ({ children }) => {
 
     // Check LocalStorage for session
     useEffect(() => {
-        const savedUser = localStorage.getItem('candidatic_user_session');
+        const savedUser = localStorage.getItem(SESSION_STORAGE_KEY);
         if (savedUser) {
             try {
                 const parsed = JSON.parse(savedUser);
-                if (!parsed?.sessionToken) {
-                    // Legacy session without token — force re-login
-                    localStorage.removeItem('candidatic_user_session');
+                const normalized = normalizeSession(parsed);
+                if (!normalized) {
+                    // Legacy or expired session — force re-login
+                    localStorage.removeItem(SESSION_STORAGE_KEY);
                 } else {
-                    setUser(parsed);
+                    localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(normalized));
+                    setUser(normalized);
                 }
             } catch (e) {
                 console.error('Invalid session', e);
-                localStorage.removeItem('candidatic_user_session');
+                localStorage.removeItem(SESSION_STORAGE_KEY);
             }
         }
         setTimeout(() => {
             setIsAuthChecking(false);
         }, 600);
     }, []);
+
+    useEffect(() => {
+        if (!user?.sessionToken) return undefined;
+
+        const expiryMs = getSessionExpiry(user);
+        const msUntilExpiry = expiryMs - Date.now();
+        if (!expiryMs || msUntilExpiry <= 0) {
+            localStorage.removeItem(SESSION_STORAGE_KEY);
+            setUser(null);
+            redirectToLanding();
+            return undefined;
+        }
+
+        const timer = setTimeout(() => {
+            localStorage.removeItem(SESSION_STORAGE_KEY);
+            setUser(null);
+            redirectToLanding();
+        }, msUntilExpiry);
+
+        return () => clearTimeout(timer);
+    }, [user?.sessionToken, user?.sessionExpiresAt]);
 
     // Validate permissions
     useEffect(() => {
@@ -65,9 +115,11 @@ export const AuthProvider = ({ children }) => {
                 if (usersData.success && usersData.users) {
                     const freshUser = usersData.users.find(u => u.id === user.id || u.whatsapp === user.whatsapp);
                     if (freshUser) {
-                        const merged = { ...user, ...freshUser };
-                        setUser(merged);
-                        localStorage.setItem('candidatic_user_session', JSON.stringify(merged));
+                        const merged = normalizeSession({ ...user, ...freshUser });
+                        if (merged) {
+                            setUser(merged);
+                            localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(merged));
+                        }
                     }
                 }
                 setIsAppReady(true);
@@ -79,20 +131,31 @@ export const AuthProvider = ({ children }) => {
     }, [user?.id]);
 
     const login = useCallback((userData) => {
-        localStorage.setItem('candidatic_user_session', JSON.stringify(userData));
-        setUser(userData);
+        const normalized = normalizeSession({
+            ...userData,
+            sessionIssuedAt: userData.sessionIssuedAt || new Date().toISOString(),
+            sessionExpiresAt: userData.sessionExpiresAt || new Date(Date.now() + SESSION_TTL_MS).toISOString()
+        });
+        if (!normalized) return;
+        localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(normalized));
+        setUser(normalized);
     }, []);
 
     const logout = useCallback(() => {
-        localStorage.removeItem('candidatic_user_session');
+        localStorage.removeItem(SESSION_STORAGE_KEY);
         setUser(null);
     }, []);
 
     const updateUser = useCallback((updater) => {
         setUser(prev => {
             const next = typeof updater === 'function' ? updater(prev) : updater;
-            localStorage.setItem('candidatic_user_session', JSON.stringify(next));
-            return next;
+            const normalized = normalizeSession(next);
+            if (!normalized) {
+                localStorage.removeItem(SESSION_STORAGE_KEY);
+                return null;
+            }
+            localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(normalized));
+            return normalized;
         });
     }, []);
 

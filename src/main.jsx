@@ -8,12 +8,14 @@ import './index.css';
 // usando el sessionToken almacenado en la sesión del usuario.
 (function installAuthInterceptor() {
     const _fetch = window.fetch.bind(window);
-    window.fetch = function (url, options = {}) {
+    window.fetch = async function (url, options = {}) {
         const urlStr = typeof url === 'string' ? url : url?.url ?? '';
+        let hadSession = false;
         if (urlStr.startsWith('/api/')) {
             try {
                 const raw = localStorage.getItem('candidatic_user_session');
                 const session = raw ? JSON.parse(raw) : null;
+                hadSession = Boolean(session?.sessionToken);
                 if (session?.sessionToken && !(options.headers?.['Authorization'])) {
                     options = {
                         ...options,
@@ -25,7 +27,12 @@ import './index.css';
                 }
             } catch { /* si localStorage falla, continuar sin header */ }
         }
-        return _fetch(url, options);
+        const response = await _fetch(url, options);
+        if (hadSession && response.status === 401 && urlStr.startsWith('/api/') && !urlStr.startsWith('/api/auth')) {
+            localStorage.removeItem('candidatic_user_session');
+            window.location.replace('/');
+        }
+        return response;
     };
 })();
 

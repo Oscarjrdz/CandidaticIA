@@ -30,6 +30,20 @@ function todayMty() {
     return `${values.year}-${values.month}-${values.day}`;
 }
 
+function hourMty() {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+        timeZone: TZ,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        hour12: false
+    }).formatToParts(new Date());
+
+    const values = Object.fromEntries(parts.map(({ type, value }) => [type, value]));
+    return `${values.year}-${values.month}-${values.day}:${values.hour}`;
+}
+
 export default async function handler(req, res) {
     if (req.method !== 'GET' && req.method !== 'POST') {
         return res.status(405).json({ error: 'Method not allowed' });
@@ -101,15 +115,18 @@ export default async function handler(req, res) {
 
         const monthKey = `stats:bandwidth:${yearMonth}:total`;
         const dayKey = `stats:bandwidth:${yearMonthDay}:total`;
+        const hourKey = `stats:bandwidth:${hourMty()}:total`;
 
         if (deltaBytes > 0) {
             const pipeline = redis.pipeline();
             pipeline.incrby(monthKey, deltaBytes);
             pipeline.incrby(dayKey, deltaBytes);
+            pipeline.incrby(hourKey, deltaBytes);
             
             // Set TTLs to auto-cleanup old data (keep daily for 60 days, monthly for 365 days)
             pipeline.expire(dayKey, 60 * 24 * 60 * 60);
             pipeline.expire(monthKey, 365 * 24 * 60 * 60);
+            pipeline.expire(hourKey, 14 * 24 * 60 * 60);
             
             await pipeline.exec();
         }
@@ -120,7 +137,8 @@ export default async function handler(req, res) {
                 currentAbsoluteBytes,
                 deltaBytes,
                 monthKey,
-                dayKey
+                dayKey,
+                hourKey
             }
         });
 

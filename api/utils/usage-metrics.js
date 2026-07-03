@@ -75,8 +75,9 @@ export async function readUsageMetrics(redis, day = todayMty()) {
             ...parsed,
             cacheHitRate: calls ? Number(((parsed.cacheHits || 0) / calls).toFixed(3)) : 0,
         };
-    }).sort((a, b) =>
-        (b.estimatedRedisBytes || b.responseBytes || b.calls || 0) -
-        (a.estimatedRedisBytes || a.responseBytes || a.calls || 0)
-    );
+    }).sort((a, b) => {
+        const bBytes = (b.estimatedRedisBytes || 0) + (b.responseBytes || 0);
+        const aBytes = (a.estimatedRedisBytes || 0) + (a.responseBytes || 0);
+        return (bBytes || b.calls || 0) - (aBytes || a.calls || 0);
+    });
 }
