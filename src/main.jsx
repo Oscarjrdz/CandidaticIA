@@ -30,7 +30,9 @@ import './index.css';
         const response = await _fetch(url, options);
         if (hadSession && response.status === 401 && urlStr.startsWith('/api/') && !urlStr.startsWith('/api/auth')) {
             localStorage.removeItem('candidatic_user_session');
-            window.location.replace('/');
+            if (window.location.pathname !== '/' || window.location.search || window.location.hash) {
+                window.location.replace('/');
+            }
         }
         return response;
     };

@@ -26,6 +26,7 @@ function normalizeSession(userData) {
 }
 
 function redirectToLanding() {
+    if (window.location.pathname === '/' && window.location.search === '' && window.location.hash === '') return;
     window.location.replace('/');
 }
 

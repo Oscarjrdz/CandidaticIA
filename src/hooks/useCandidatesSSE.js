@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, useSyncExternalStore } from 'react';
+import { useEffect, useRef, useCallback, useSyncExternalStore } from 'react';
 
 /**
  * React Hook for Server-Sent Events (SSE) real-time updates
@@ -69,7 +69,9 @@ function _connectSingleton() {
         try {
             const raw = localStorage.getItem('candidatic_user_session');
             token = raw ? (JSON.parse(raw)?.sessionToken || '') : '';
-        } catch {}
+        } catch {
+            // Missing or malformed stored session: connect without a token.
+        }
         const eventSource = new EventSource(`/api/sse/candidates?token=${encodeURIComponent(token)}`);
         _singletonES = eventSource;
 
@@ -88,7 +90,9 @@ function _connectSingleton() {
                     eventSource.close();
                     _singletonES = null;
                     localStorage.removeItem('candidatic_user_session');
-                    window.location.replace('/');
+                    if (window.location.pathname !== '/' || window.location.search || window.location.hash) {
+                        window.location.replace('/');
+                    }
                     return;
                 } else if (data.type === 'connected') {
                     console.log('📡 SSE connection established (singleton)');
@@ -192,7 +196,7 @@ function _getSnapshot() {
  * @param {Function} handler - Called with (data) for each SSE update
  * @param {Array} deps - Dependencies for the handler (like useEffect deps)
  */
-export function useSSECandidateUpdate(handler, deps = []) {
+export function useSSECandidateUpdate(handler) {
     const handlerRef = useRef(handler);
     // Keep ref current without re-subscribing
     useEffect(() => { handlerRef.current = handler; });
@@ -208,8 +212,13 @@ export function useSSECandidateUpdate(handler, deps = []) {
  * Main SSE hook — SINGLETON architecture.
  * No matter how many components call this, only ONE EventSource is created.
  */
-export function useCandidatesSSE() {
-    const state = useSyncExternalStore(_subscribe, _getSnapshot);
+export function useCandidatesSSE(enabled = true) {
+    const subscribe = useCallback((listener) => {
+        if (!enabled) return () => {};
+        return _subscribe(listener);
+    }, [enabled]);
+
+    const state = useSyncExternalStore(subscribe, _getSnapshot);
 
     return {
         newCandidate: state.newCandidate,

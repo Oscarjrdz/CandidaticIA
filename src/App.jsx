@@ -71,7 +71,7 @@ function AppShell() {
     const saved = localStorage.getItem('chat_unread_rbac_v2');
     return saved !== null ? Number(saved) : 0;
   });
-  const { newCandidate, updatedCandidate, deletedCandidate, globalStats } = useCandidatesSSE();
+  const { newCandidate, updatedCandidate, deletedCandidate, globalStats } = useCandidatesSSE(Boolean(user?.sessionToken));
 
   // Cuando Chat Web está abierto, recibe el conteo RBAC exacto directo de ChatSection
   const handleUnreadCountChange = useCallback((count) => {
