@@ -286,7 +286,7 @@ export default async function handler(req, res) {
 
                 if (!finalResult?.success) {
                     const failureReason = textResult?.success === false && isMeta24hWindowError(textResult) && !reminder.fallbackTemplateData?.name
-                        ? 'Meta rechazó texto libre por ventana de 24h cerrada y no había plantilla Plan B.'
+                        ? 'Meta rechazó texto libre por ventana de 24h cerrada y no había template para ventana expirada.'
                         : (finalResult?.error || textResult?.error || 'No se pudo enviar el recordatorio');
                     await saveDirectReminderStatus(redis, remId, reminder, {
                         status: 'failed',
