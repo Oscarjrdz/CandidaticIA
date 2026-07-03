@@ -539,7 +539,7 @@ export const uploadMediaToMeta = async (buffer, mimeType, filename = 'file') => 
  * @returns {Array} componentsToSend ready for Meta API
  */
 export const buildMetaTemplateComponents = (templateComponents, candidateNameFallback, options = {}) => {
-    const { templateParams, mediaUrl } = options;
+    const { templateParams, mediaUrl, parameterFormat } = options;
     const componentsToSend = [];
 
     (templateComponents || []).forEach(comp => {
@@ -551,6 +551,9 @@ export const buildMetaTemplateComponents = (templateComponents, candidateNameFal
                 const varMatches = textInfo.match(/\{\{[^}]+\}\}/g) || [];
                 let expectedCount = [...new Set(varMatches)].length;
                 const uniqueVars = [...new Set(varMatches)];
+                const uniqueVarNames = uniqueVars.map(v => v.replace(/[{}]/g, ''));
+                const usesNamedParameters = String(parameterFormat || '').toUpperCase() === 'NAMED'
+                    || uniqueVarNames.some(v => v && !/^\d+$/.test(v));
 
                 // Source of truth from Meta's parsed examples
                 if (cType === 'body' && comp.example?.body_text?.[0]) {
@@ -567,11 +570,15 @@ export const buildMetaTemplateComponents = (templateComponents, candidateNameFal
 
                         // Fallback to searching by named variable at this position
                         if (!customVal && uniqueVars[pIdx]) {
-                            const stringKey = uniqueVars[pIdx].replace(/[{}]/g, '');
+                            const stringKey = uniqueVarNames[pIdx];
                             customVal = templateParams?.[stringKey];
                         }
 
-                        return { type: "text", text: customVal || candidateNameFallback };
+                        const param = { type: "text", text: customVal || candidateNameFallback };
+                        if (usesNamedParameters && uniqueVarNames[pIdx]) {
+                            param.parameter_name = uniqueVarNames[pIdx];
+                        }
+                        return param;
                     });
                     componentsToSend.push({ type: cType, parameters: params });
                 }

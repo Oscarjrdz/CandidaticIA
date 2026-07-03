@@ -269,7 +269,7 @@ export default async function handler(req, res) {
                     const componentsToSend = buildMetaTemplateComponents(
                         templateData.components,
                         fallbackName,
-                        { templateParams }
+                        { templateParams, parameterFormat: templateData.parameter_format }
                     );
                     if (componentsToSend.length > 0) {
                         extraParams.components = componentsToSend;

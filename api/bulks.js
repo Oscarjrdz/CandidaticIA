@@ -160,7 +160,7 @@ const tickEngine = async (state) => {
                                 const componentsToSend = buildMetaTemplateComponents(
                                     state.templateData.components,
                                     candidateNameFallback,
-                                    { templateParams: state.templateParams }
+                                    { templateParams: state.templateParams, parameterFormat: state.templateData.parameter_format }
                                 );
 
                                 if (componentsToSend.length > 0) {

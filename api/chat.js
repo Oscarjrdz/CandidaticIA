@@ -395,7 +395,7 @@ export default async function handler(req, res) {
                     const bodyComp = tData.components.find(c => (c.type || '').toUpperCase() === 'BODY');
                     if (bodyComp && bodyComp.text) {
                         const _nr = candidate.nombreReal?.trim().split(/\s+/).slice(0, 2).join(' ');
-                        realText = bodyComp.text.replace(/\{\{\d+\}\}/g, _nr || candidate.nombre || 'Candidato');
+                        realText = bodyComp.text.replace(/\{\{[^}]+\}\}/g, _nr || candidate.nombre || 'Candidato');
                     }
                 }
                 const displayName = tData.name.replace(/_/g, ' ');
@@ -458,7 +458,7 @@ export default async function handler(req, res) {
                     const componentsToSend = buildMetaTemplateComponents(
                         tData.components,
                         candidateNameFallback,
-                        { mediaUrl: req.body.mediaUrl }
+                        { mediaUrl: req.body.mediaUrl, parameterFormat: tData.parameter_format }
                     );
 
                     if (componentsToSend.length > 0) {

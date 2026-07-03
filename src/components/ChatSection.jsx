@@ -2818,7 +2818,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
         const _bodyComp = (templateObj.components || []).find(c => (c.type || '').toUpperCase() === 'BODY');
         const _candidateName = selectedChat.nombreReal?.trim().split(/\s+/).slice(0, 2).join(' ')
             || selectedChat.nombre || 'Candidato';
-        const _bodyText = _bodyComp?.text ? _bodyComp.text.replace(/\{\{\d+\}\}/g, _candidateName) : '';
+        const _bodyText = _bodyComp?.text ? _bodyComp.text.replace(/\{\{[^}]+\}\}/g, _candidateName) : '';
         const _displayName = templateObj.name.replace(/_/g, ' ');
         const _optimisticContent = `⚡ Plantilla oficial: *${_displayName}*\n\n${_bodyText}`.trim();
 

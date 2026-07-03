@@ -26,6 +26,7 @@ export default async function handler(req, res) {
             category: t.category,
             language: t.language,
             status: t.status,
+            parameter_format: t.parameter_format,
             components: t.components
         }));
 
