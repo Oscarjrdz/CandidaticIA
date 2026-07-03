@@ -139,7 +139,7 @@ export default async function handler(req, res) {
 
         // GET /api/candidates - Obtener lista o estadísticas
         if (req.method === 'GET') {
-            const { limit = '100', offset = '0', search = '', stats, id, excludeLinked = 'false', tag = '', unreadFirst = 'false', filter = '', action = '' } = req.query;
+            const { limit = '100', offset = '0', search = '', stats, id, excludeLinked = 'false', tag = '', unreadFirst = 'false', filter = '', action = '', manualProjectId = '', manualStepId = '' } = req.query;
 
             if (action === 'filter_counts') {
                 const counts = await buildFilterCounts(redisForMetrics);
@@ -202,7 +202,9 @@ export default async function handler(req, res) {
                 excludeLinked: String(excludeLinked || ''),
                 tag: String(tag || ''),
                 unreadFirst: String(unreadFirst || ''),
-                filter: String(filter || '')
+                filter: String(filter || ''),
+                manualProjectId: String(manualProjectId || ''),
+                manualStepId: String(manualStepId || '')
             });
             const cachedPayload = getCachedCandidatesList(cacheKey);
             if (cachedPayload) {
@@ -212,6 +214,30 @@ export default async function handler(req, res) {
             }
 
             // Modo filtro servidor: unread / complete / incomplete (sin tag ni búsqueda)
+            if (manualProjectId) {
+                const safeLimit = parseInt(limit, 10) || 500;
+                const safeOffset = parseInt(offset, 10) || 0;
+                const { candidates, total } = await getCandidates(
+                    safeLimit,
+                    safeOffset,
+                    search,
+                    excludeLinked === 'true',
+                    tag,
+                    manualProjectId,
+                    manualStepId,
+                    filter
+                );
+                const payload = buildCandidatesListPayload({ candidates, total, limit: safeLimit, offset: safeOffset, statsData });
+                setCachedCandidatesList(cacheKey, payload);
+                res.setHeader('X-Candidatic-Cache', 'MISS');
+                res.setHeader('Cache-Control', 'private, max-age=10');
+                return finishCandidatesResponse(200, payload, {
+                    cacheMiss: true,
+                    candidateReads: candidates.length,
+                    estimatedRedisBytes: estimateJsonBytes(candidates)
+                });
+            }
+
             if (['unread', 'complete', 'incomplete'].includes(filter) && !search && !tag) {
                 const safeLimit = parseInt(limit, 10) || 500;
                 const safeOffset = parseInt(offset, 10) || 0;

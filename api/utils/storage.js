@@ -121,6 +121,7 @@ const INDEX_KEYS = {
 };
 const UNTAGGED_TAG_FILTER = '__candidatic_untagged__';
 const UNTAGGED_COUNT_KEY = 'candidatic:untagged_count';
+const MANUAL_PROJECT_LINKS_PREFIX = 'crm_links:';
 export const HUMAN_INTERVENTION_SILENCE_MS = 5 * 24 * 60 * 60 * 1000;
 
 const indexPart = (value) => Buffer.from(String(value || '').trim().toLowerCase()).toString('base64url');
@@ -285,6 +286,47 @@ export async function hydrateCandidateIds(ids, limit = 500) {
             try { return normalizeCandidateSilence(JSON.parse(raw)); } catch { return null; }
         })
         .filter(Boolean);
+}
+
+async function getManualProjectCandidateIds(client, manualProjectId, manualStepId = '') {
+    const projectId = String(manualProjectId || '').trim();
+    const stepId = String(manualStepId || '').trim();
+    if (!client || !projectId) return [];
+
+    const linksRaw = await client.get(`${MANUAL_PROJECT_LINKS_PREFIX}${projectId}`).catch(() => null);
+    if (linksRaw) {
+        try {
+            const links = JSON.parse(linksRaw);
+            if (Array.isArray(links)) {
+                const ids = links
+                    .filter(link => link?.candidateId && (!stepId || String(link.stepId || '').trim() === stepId))
+                    .map(link => String(link.candidateId));
+                if (ids.length > 0) return ids;
+            }
+        } catch {}
+    }
+
+    const total = (await client.scard(KEYS.LIST_COMPLETE)) + (await client.scard(KEYS.LIST_PENDING));
+    const ids = [];
+    const CHUNK_SIZE = 500;
+    for (let offset = 0; offset < total; offset += CHUNK_SIZE) {
+        const pageIds = await client.zrevrange(KEYS.CANDIDATES_LIST, offset, offset + CHUNK_SIZE - 1);
+        if (!pageIds?.length) break;
+        const pipe = client.pipeline();
+        pageIds.forEach(id => pipe.get(`${KEYS.CANDIDATE_PREFIX}${id}`));
+        const rows = await pipe.exec();
+        rows.forEach(([err, raw]) => {
+            if (err || !raw) return;
+            try {
+                const c = JSON.parse(raw);
+                if (String(c?.manualProjectId || '').trim() !== projectId) return;
+                if (stepId && String(c?.manualProjectStepId || '').trim() !== stepId) return;
+                ids.push(c.id);
+            } catch {}
+        });
+        await new Promise(r => setTimeout(r, 2));
+    }
+    return ids;
 }
 
 export async function getCandidatesByAdIds(adIds = [], limit = 500) {
@@ -621,12 +663,84 @@ export const isProfileComplete = (c, customFields = []) => {
 };
 
 // Native Redis Pagination (Page size 100)
-export const getCandidates = async (limit = 100, offset = 0, search = '', excludeLinked = false, tagFilter = '') => {
+export const getCandidates = async (limit = 100, offset = 0, search = '', excludeLinked = false, tagFilter = '', manualProjectId = '', manualStepId = '', statusFilter = '') => {
     const client = getClient();
     if (!client) return { candidates: [], total: 0 };
 
     // ✅ META AUDIT: Removed O(N) HKEYS call for CANDIDATE_PROJECT_LINK hydration.
     // The 'proyecto' virtual field is now derived from the candidate's own projectId field.
+
+    if (manualProjectId && !excludeLinked) {
+        const matchingIds = await getManualProjectCandidateIds(client, manualProjectId, manualStepId);
+        if (!matchingIds.length) return { candidates: [], total: 0 };
+
+        let scoreRows = [];
+        try {
+            scoreRows = await client.zmscore(KEYS.CANDIDATES_LIST, ...matchingIds);
+        } catch {
+            const scorePipe = client.pipeline();
+            matchingIds.forEach(id => scorePipe.zscore(KEYS.CANDIDATES_LIST, id));
+            scoreRows = (await scorePipe.exec()).map(([err, score]) => err ? null : score);
+        }
+
+        const orderedIds = matchingIds
+            .map((id, index) => ({ id, score: Number(scoreRows?.[index] || 0) }))
+            .filter(item => item.score > 0)
+            .sort((a, b) => b.score - a.score)
+            .map(item => item.id);
+
+        const hydrated = await hydrateCandidateIds(orderedIds, orderedIds.length);
+        const lowerSearch = search.toLowerCase();
+        const cleanSearch = search.replace(/\D/g, '');
+        const normalizedTagFilter = String(tagFilter || '').trim().toLowerCase();
+        const projectId = String(manualProjectId || '').trim();
+        const stepId = String(manualStepId || '').trim();
+        const normalizedStatusFilter = String(statusFilter || '').trim().toLowerCase();
+        const needsProfileAudit = normalizedStatusFilter === 'complete' || normalizedStatusFilter === 'incomplete';
+        const customFieldsRaw = needsProfileAudit ? await client.get('custom_fields') : null;
+        const customFields = customFieldsRaw ? JSON.parse(customFieldsRaw) : [];
+        const filtered = hydrated.filter(c => {
+            if (String(c?.manualProjectId || '').trim() !== projectId) return false;
+            if (stepId && String(c?.manualProjectStepId || '').trim() !== stepId) return false;
+
+            if (normalizedStatusFilter === 'unread') {
+                const userTs = c.lastUserMessageAt ? new Date(c.lastUserMessageAt).getTime() : 0;
+                const humanTs = c.lastHumanMessageAt ? new Date(c.lastHumanMessageAt).getTime() : 0;
+                if (!userTs || userTs <= humanTs) return false;
+            } else if (normalizedStatusFilter === 'complete') {
+                if (!isProfileComplete(c, customFields)) return false;
+            } else if (normalizedStatusFilter === 'incomplete') {
+                if (isProfileComplete(c, customFields)) return false;
+            }
+
+            if (normalizedTagFilter) {
+                const candidateTags = cleanTagValues(c.tags);
+                if (normalizedTagFilter === UNTAGGED_TAG_FILTER) {
+                    if (candidateTags.length > 0) return false;
+                } else if (!candidateTags.some(t => t.toLowerCase() === normalizedTagFilter)) {
+                    return false;
+                }
+            }
+
+            if (search) {
+                const foundInFields = Object.values(c).some(val =>
+                    val !== null && val !== undefined && val.toString().toLowerCase().includes(lowerSearch)
+                );
+                if (foundInFields) return true;
+                if (cleanSearch && c.whatsapp) {
+                    return c.whatsapp.replace(/\D/g, '').includes(cleanSearch);
+                }
+                return false;
+            }
+
+            return true;
+        });
+
+        return {
+            candidates: filtered.slice(offset, offset + limit),
+            total: filtered.length
+        };
+    }
 
     // Plain list and indexed tag filters avoid streaming whole candidate payloads.
     if (!search && !tagFilter && !excludeLinked) {

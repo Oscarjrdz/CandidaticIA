@@ -888,6 +888,18 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
     const [manualPipelineFilter, setManualPipelineFilter] = useState(null);
     const [manualStepFilter, setManualStepFilter] = useState(null);
 
+    const prevManualFiltersRef = useRef({ projectId: null, stepId: null, initialized: false });
+    useEffect(() => {
+        const prev = prevManualFiltersRef.current;
+        if (!prev.initialized) {
+            prevManualFiltersRef.current = { projectId: manualPipelineFilter, stepId: manualStepFilter, initialized: true };
+            return;
+        }
+        if (prev.projectId === manualPipelineFilter && prev.stepId === manualStepFilter) return;
+        prevManualFiltersRef.current = { projectId: manualPipelineFilter, stepId: manualStepFilter, initialized: true };
+        loadCandidates();
+    }, [manualPipelineFilter, manualStepFilter]);
+
     const [showDropdown, setShowDropdown] = useState(null);
 
     // New Chat creation
@@ -1328,6 +1340,8 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
             const selectedTagParams = getSelectedTagValues(selectedTagRef.current);
             const hasMultiTagFilter = selectedTagParams.length > 1;
             const tagParam = selectedTagParams.length === 1 ? selectedTagParams[0] : "";
+            const manualProjectParam = manualPipelineFilter || "";
+            const manualStepParam = manualStepFilter || "";
             const searchParam = searchRef.current || "";
             const af = activeFilterRef.current;
             const fv = filterValueRef.current;
@@ -1360,11 +1374,11 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
 
             let result;
             if (serverFilter) {
-                result = await getCandidates(limit, 0, searchParam, false, '', false, serverFilter);
+                result = await getCandidates(limit, 0, searchParam, false, '', false, serverFilter, manualProjectParam, manualStepParam);
             } else if (af === 'all') {
-                result = await getCandidates(limit, 0, searchParam, false, tagParam, false);
+                result = await getCandidates(limit, 0, searchParam, false, tagParam, false, '', manualProjectParam, manualStepParam);
             } else {
-                result = await getCandidates(limit, 0, searchParam, false, tagParam, true);
+                result = await getCandidates(limit, 0, searchParam, false, tagParam, true, '', manualProjectParam, manualStepParam);
             }
 
             if (result.success) {
@@ -1391,6 +1405,8 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
         if (loadingMoreRef.current || !hasMore) return;
         const selectedTagParams = getSelectedTagValues(selectedTagRef.current);
         const tagParam = selectedTagParams.length === 1 ? selectedTagParams[0] : "";
+        const manualProjectParam = manualPipelineFilter || "";
+        const manualStepParam = manualStepFilter || "";
         const searchParam = searchRef.current || "";
         const af = activeFilterRef.current;
         const fv = filterValueRef.current;
@@ -1409,11 +1425,11 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
             const nextOffset = nextCandidatesOffsetRef.current;
             let result;
             if (serverFilter) {
-                result = await getCandidates(CHAT_LIST_PAGE_SIZE, nextOffset, searchParam, false, '', false, serverFilter);
+                result = await getCandidates(CHAT_LIST_PAGE_SIZE, nextOffset, searchParam, false, '', false, serverFilter, manualProjectParam, manualStepParam);
             } else if (af === 'all') {
-                result = await getCandidates(CHAT_LIST_PAGE_SIZE, nextOffset, searchParam, false, tagParam, false);
+                result = await getCandidates(CHAT_LIST_PAGE_SIZE, nextOffset, searchParam, false, tagParam, false, '', manualProjectParam, manualStepParam);
             } else {
-                result = await getCandidates(CHAT_LIST_PAGE_SIZE, nextOffset, searchParam, false, tagParam, true);
+                result = await getCandidates(CHAT_LIST_PAGE_SIZE, nextOffset, searchParam, false, tagParam, true, '', manualProjectParam, manualStepParam);
             }
             if (result.success) {
                 const newCandidates = result.candidates || [];
@@ -1433,7 +1449,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
             }
         } catch (e) { console.error(e); }
         finally { loadingMoreRef.current = false; setLoadingMore(false); }
-    }, [hasMore]);
+    }, [hasMore, manualPipelineFilter, manualStepFilter]);
 
     // Filter and sort candidates (search is handled server-side via loadCandidates)
     const filteredCandidates = useMemo(() => {
