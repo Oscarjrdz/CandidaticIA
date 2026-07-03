@@ -539,7 +539,7 @@ export const uploadMediaToMeta = async (buffer, mimeType, filename = 'file') => 
  * @returns {Array} componentsToSend ready for Meta API
  */
 export const buildMetaTemplateComponents = (templateComponents, candidateNameFallback, options = {}) => {
-    const { templateParams, mediaUrl, parameterFormat } = options;
+    const { templateParams, mediaUrl } = options;
     const componentsToSend = [];
 
     (templateComponents || []).forEach(comp => {
@@ -552,19 +552,18 @@ export const buildMetaTemplateComponents = (templateComponents, candidateNameFal
                 let expectedCount = [...new Set(varMatches)].length;
                 const uniqueVars = [...new Set(varMatches)];
                 const uniqueVarNames = uniqueVars.map(v => v.replace(/[{}]/g, ''));
-                const usesNamedParameters = String(parameterFormat || '').toUpperCase() === 'NAMED';
 
-                // Source of truth from Meta's parsed examples
-                if (cType === 'body' && comp.example?.body_text?.[0]) {
+                // Source of truth from Meta's parsed examples — guard against string .length
+                if (cType === 'body' && Array.isArray(comp.example?.body_text?.[0])) {
                     expectedCount = comp.example.body_text[0].length;
-                } else if (cType === 'header' && comp.example?.header_text) {
+                } else if (cType === 'header' && Array.isArray(comp.example?.header_text)) {
                     expectedCount = comp.example.header_text.length;
                 }
 
                 if (expectedCount > 0) {
                     const params = Array(expectedCount).fill(0).map((_, pIdx) => {
                         let customVal;
-                        if (!customVal && uniqueVars[pIdx]) {
+                        if (uniqueVars[pIdx]) {
                             const stringKey = uniqueVarNames[pIdx];
                             customVal = templateParams?.[stringKey];
                         }
@@ -572,12 +571,7 @@ export const buildMetaTemplateComponents = (templateComponents, candidateNameFal
                             const numKey = String(pIdx + 1);
                             customVal = templateParams?.[numKey];
                         }
-
-                        const param = { type: "text", text: customVal || candidateNameFallback };
-                        if (usesNamedParameters && uniqueVarNames[pIdx]) {
-                            param.parameter_name = uniqueVarNames[pIdx];
-                        }
-                        return param;
+                        return { type: "text", text: customVal || candidateNameFallback };
                     });
                     componentsToSend.push({ type: cType, parameters: params });
                 }
