@@ -581,6 +581,12 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
 
     const [candidates, setCandidates] = useState([]);
     const [globalUnreadCounts, setGlobalUnreadCounts] = useState(() => readStoredUnreadCounts());
+    const [globalFilterCounts, setGlobalFilterCounts] = useState(() => {
+        try {
+            const saved = sessionStorage.getItem('candidatic_filter_counts');
+            return saved ? JSON.parse(saved) : null;
+        } catch { return null; }
+    });
     const [selectedChat, setSelectedChat] = useState(null);
     const [headerImgError, setHeaderImgError] = useState(false);
     const [showVCardModal, setShowVCardModal] = useState(false);
@@ -1072,6 +1078,15 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
                 .then(res => res.json())
                 .then(data => { if (data.success) setChatLocks(data.locks || {}); })
                 .catch(() => {});
+
+            fetch('/api/candidates?action=filter_counts')
+                .then(res => res.json())
+                .then(data => {
+                    if (!data.success) return;
+                    setGlobalFilterCounts(data.counts || null);
+                    try { sessionStorage.setItem('candidatic_filter_counts', JSON.stringify(data.counts || null)); } catch {}
+                })
+                .catch(() => {});
         }, 1600);
 
         return cancelIdleLoads;
@@ -1531,6 +1546,26 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
     }, [baseCandidates]);
 
     const filterOptions = useMemo(() => {
+        if (globalFilterCounts) {
+            const toCountedOptionsFromObject = (counts = {}, numeric = false) => {
+                const values = Object.keys(counts || {}).filter(Boolean).sort((a, b) => {
+                    if (numeric) {
+                        const numA = parseInt(a, 10);
+                        const numB = parseInt(b, 10);
+                        if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+                    }
+                    return a.localeCompare(b);
+                });
+                return values.map(value => ({ value, label: value, count: Number(counts[value]) || 0 }));
+            };
+
+            return {
+                ages: toCountedOptionsFromObject(globalFilterCounts.ages, true),
+                genders: toCountedOptionsFromObject(globalFilterCounts.genders),
+                municipalities: toCountedOptionsFromObject(globalFilterCounts.municipalities)
+            };
+        }
+
         const ages = new Map();
         const genders = new Map();
         const municipalities = new Map();
@@ -1607,6 +1642,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
             municipalities: toCountedOptions(Array.from(municipalities.keys()).filter(Boolean).sort(), municipalities)
         };
     }, [
+        globalFilterCounts,
         baseCandidates, user, rolePermissions,
         activeFilter, filterValue, profileUnreadOnly,
         selectedTagValues,
@@ -1615,6 +1651,15 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
     ]);
 
     const manualFilterCounts = useMemo(() => {
+        if (globalFilterCounts?.projects) {
+            return {
+                projectCounts: globalFilterCounts.projects || {},
+                stepCounts: manualPipelineFilter
+                    ? (globalFilterCounts.stepsByProject?.[manualPipelineFilter] || {})
+                    : {}
+            };
+        }
+
         const projectCounts = {};
         const stepCounts = {};
         const matchesNonManualFilters = (c) => {
@@ -1673,6 +1718,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
 
         return { projectCounts, stepCounts };
     }, [
+        globalFilterCounts,
         baseCandidates, user, rolePermissions,
         activeFilter, filterValue, profileUnreadOnly,
         selectedTagValues,

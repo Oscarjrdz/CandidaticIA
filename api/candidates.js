@@ -7,6 +7,7 @@
 
 // NO TOP LEVEL IMPORTS to prevent boot crashes
 const CANDIDATES_LIST_CACHE_TTL_MS = 15000;
+const FILTER_COUNTS_CACHE_TTL_SECONDS = 60;
 const candidatesListCache = new Map();
 
 function getCachedCandidatesList(key) {
@@ -32,6 +33,61 @@ function setCachedCandidatesList(key, payload) {
 
 function clearCandidatesListCache() {
     candidatesListCache.clear();
+}
+
+function clearFilterCountsCache(redis) {
+    if (!redis) return;
+    redis.del('cache:candidates:filter_counts:v1').catch(() => {});
+}
+
+function incrementCount(map, rawValue) {
+    const value = String(rawValue || '').trim();
+    if (!value) return;
+    map[value] = (map[value] || 0) + 1;
+}
+
+async function buildFilterCounts(redis) {
+    const cached = await redis.get('cache:candidates:filter_counts:v1');
+    if (cached) return JSON.parse(cached);
+
+    const ids = await redis.zrevrange('candidates:list', 0, -1);
+    const counts = {
+        ages: {},
+        genders: {},
+        municipalities: {},
+        projects: {},
+        stepsByProject: {}
+    };
+
+    const CHUNK_SIZE = 500;
+    for (let i = 0; i < ids.length; i += CHUNK_SIZE) {
+        const chunk = ids.slice(i, i + CHUNK_SIZE);
+        const pipe = redis.pipeline();
+        chunk.forEach(id => pipe.get(`candidate:${id}`));
+        const rows = await pipe.exec();
+
+        rows.forEach(([err, raw]) => {
+            if (err || !raw) return;
+            try {
+                const c = JSON.parse(raw);
+                incrementCount(counts.ages, c.edad);
+                incrementCount(counts.genders, c.genero);
+                incrementCount(counts.municipalities, c.municipio);
+
+                if (c.manualProjectId) {
+                    incrementCount(counts.projects, c.manualProjectId);
+                    if (c.manualProjectStepId) {
+                        if (!counts.stepsByProject[c.manualProjectId]) counts.stepsByProject[c.manualProjectId] = {};
+                        incrementCount(counts.stepsByProject[c.manualProjectId], c.manualProjectStepId);
+                    }
+                }
+            } catch {}
+        });
+    }
+
+    const payload = { ...counts, total: ids.length, generatedAt: new Date().toISOString() };
+    await redis.set('cache:candidates:filter_counts:v1', JSON.stringify(payload), 'EX', FILTER_COUNTS_CACHE_TTL_SECONDS).catch(() => {});
+    return payload;
 }
 
 function buildCandidatesListPayload({ candidates = [], total = 0, limit = 100, offset = 0, statsData = null }) {
@@ -83,7 +139,15 @@ export default async function handler(req, res) {
 
         // GET /api/candidates - Obtener lista o estadísticas
         if (req.method === 'GET') {
-            const { limit = '100', offset = '0', search = '', stats, id, excludeLinked = 'false', tag = '', unreadFirst = 'false', filter = '' } = req.query;
+            const { limit = '100', offset = '0', search = '', stats, id, excludeLinked = 'false', tag = '', unreadFirst = 'false', filter = '', action = '' } = req.query;
+
+            if (action === 'filter_counts') {
+                const counts = await buildFilterCounts(redisForMetrics);
+                return finishCandidatesResponse(200, { success: true, counts }, {
+                    cacheScope: 'filter_counts',
+                    estimatedRedisBytes: estimateJsonBytes(counts)
+                });
+            }
 
             // Estadísticas (Optional mixed response)
             let statsData = null;
@@ -259,6 +323,7 @@ export default async function handler(req, res) {
                 ultimoMensaje: new Date().toISOString()
             });
             clearCandidatesListCache();
+            clearFilterCountsCache(redisForMetrics);
 
             return res.status(201).json({ success: true, candidate, existed: false });
         }
@@ -301,6 +366,7 @@ export default async function handler(req, res) {
 
             const updatedCandidate = await updateCandidate(id, updates);
             clearCandidatesListCache();
+            clearFilterCountsCache(redisForMetrics);
             // Trigger stats refresh in background (don't block the UI)
             import('./utils/bot-stats.js').then(m => m.calculateBotStats()).catch(() => { });
 
@@ -323,6 +389,7 @@ export default async function handler(req, res) {
 
             await deleteCandidate(id);
             clearCandidatesListCache();
+            clearFilterCountsCache(redisForMetrics);
             // Non-blocking background sync
             import('./utils/bot-stats.js').then(m => m.calculateBotStats()).catch(() => { });
 
