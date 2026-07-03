@@ -552,8 +552,7 @@ export const buildMetaTemplateComponents = (templateComponents, candidateNameFal
                 let expectedCount = [...new Set(varMatches)].length;
                 const uniqueVars = [...new Set(varMatches)];
                 const uniqueVarNames = uniqueVars.map(v => v.replace(/[{}]/g, ''));
-                const usesNamedParameters = String(parameterFormat || '').toUpperCase() === 'NAMED'
-                    || uniqueVarNames.some(v => v && !/^\d+$/.test(v));
+                const usesNamedParameters = String(parameterFormat || '').toUpperCase() === 'NAMED';
 
                 // Source of truth from Meta's parsed examples
                 if (cType === 'body' && comp.example?.body_text?.[0]) {
