@@ -262,30 +262,38 @@ export default async function handler(req, res) {
             }
 
             if (action === 'heartbeat') {
-                // Renew TTL
+                // Renew TTL. If the lock already expired because a previous heartbeat
+                // failed, recreate it while the client is still actively working.
                 const rawLock = await redis.get(lockKey);
+                const now = Date.now();
+                let lock = {
+                    user: userName || 'Reclutador',
+                    userId,
+                    lockedAt: new Date(now).toISOString(),
+                    refreshedAt: new Date(now).toISOString(),
+                    expiresAt: now + 60000
+                };
                 if (rawLock) {
-                    let lock;
                     try {
                         lock = JSON.parse(rawLock);
                     } catch {
                         lock = { user: rawLock };
                     }
-                    const now = Date.now();
                     lock = {
                         ...lock,
+                        user: lock.user || userName || 'Reclutador',
                         userId: lock.userId || userId,
                         refreshedAt: new Date(now).toISOString(),
                         expiresAt: now + 60000
                     };
-                    const pipe = redis.pipeline();
-                    pipe.set(lockKey, JSON.stringify(lock), 'EX', 60);
-                    pipe.zadd(locksIndexKey, lock.expiresAt, candidateId);
-                    pipe.expire(locksIndexKey, 120);
-                    await pipe.exec();
-                    publishLock({ action: 'lock', lock });
                 }
-                return res.status(200).json({ success: true });
+                const pipe = redis.pipeline();
+                pipe.set(lockKey, JSON.stringify(lock), 'EX', 60);
+                pipe.zadd(locksIndexKey, lock.expiresAt, candidateId);
+                pipe.expire(locksIndexKey, 120);
+                await pipe.exec();
+                publishLock({ action: 'lock', lock });
+                return res.status(200).json({ success: true, locked: true });
             }
 
             if (action === 'presence') {

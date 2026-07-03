@@ -2365,9 +2365,11 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
                 await fetch('/api/chat', {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ action: 'heartbeat', candidateId: chatId })
+                    body: JSON.stringify({ action: 'heartbeat', candidateId: chatId, userName: currentUser })
                 });
+                locked = true;
             } catch {
+                locked = false;
                 // Heartbeat is best effort; Redis TTL will expire the lock.
             }
         }, CHAT_LOCK_HEARTBEAT_MS);
