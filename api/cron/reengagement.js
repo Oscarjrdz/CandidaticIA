@@ -1,3 +1,4 @@
+/* global process, Buffer */
 /**
  * /api/cron/reengagement
  * Vercel Cron — runs every 15 minutes.
@@ -9,9 +10,14 @@ import { getRedisClient, getCandidateById, updateCandidate, saveMessage } from '
 import { getUltraMsgConfig, sendUltraMsgMessage } from '../whatsapp/utils.js';
 import { getMissingFields, FIELD_LABELS } from '../reengagement-queue.js';
 import { estimateJsonBytes, recordUsageMetric } from '../utils/usage-metrics.js';
-import { shouldRunHumanGatedJob } from '../utils/human-activity.js';
 
 const SETTINGS_KEY = 'reengagement:settings';
+
+function assertSuccessfulSend(result, context) {
+    if (!result?.success) {
+        throw new Error(result?.error || `No se pudo enviar ${context}`);
+    }
+}
 
 // ── Horario de negocio (Monterrey CST = UTC-6) ────────────────────────────────
 
@@ -137,7 +143,7 @@ export default async function handler(req, res) {
         usageMetrics.redisReads += 1;
         usageMetrics.estimatedRedisBytes += raw ? Buffer.byteLength(raw) : 0;
         settings = raw ? JSON.parse(raw) : null;
-    } catch (e) {
+    } catch {
         return res.status(500).json({ error: 'Cannot read settings' });
     }
 
@@ -147,20 +153,6 @@ export default async function handler(req, res) {
     if (!settings?.enabled && !forceCandidateId) {
         recordUsageMetric(redis, '/api/cron/reengagement', usageMetrics).catch(() => {});
         return res.json({ success: true, skipped: 'disabled', processed: 0 });
-    }
-
-    if (!forceCandidateId) {
-        const activity = await shouldRunHumanGatedJob(redis);
-        usageMetrics.redisReads += 2;
-        if (!activity.allowed) {
-            recordUsageMetric(redis, '/api/cron/reengagement', usageMetrics).catch(() => {});
-            return res.json({
-                success: true,
-                skipped: 'sleep_mode_no_human_active',
-                processed: 0,
-                activity
-            });
-        }
     }
 
     const activeFromMs  = settings?.activeFrom ? new Date(settings.activeFrom).getTime() : 0;
@@ -201,7 +193,7 @@ export default async function handler(req, res) {
                     .filter(Boolean);
             }
         }
-    } catch (e) {
+    } catch {
         return res.status(500).json({ error: 'Cannot fetch candidates' });
     }
 
@@ -245,7 +237,8 @@ export default async function handler(req, res) {
             const nombre  = candidate.nombreReal || candidate.nombre || candidate.whatsapp;
 
             const waConfig = await getUltraMsgConfig(candidate.incomingPhoneNumberId || candidate.instanceId);
-            await sendUltraMsgMessage(
+            if (!waConfig) throw new Error('No hay configuración de WhatsApp/Meta para reengagement');
+            const sendResult = await sendUltraMsgMessage(
                 waConfig.instanceId,
                 waConfig.token,
                 candidate.whatsapp,
@@ -253,6 +246,7 @@ export default async function handler(req, res) {
                 'chat',
                 { priority: 5 }
             );
+            assertSuccessfulSend(sendResult, 'reengagement');
 
             // ── Guardar en historial del chat ─────────────────────────────────
             await saveMessage(candidate.id, {
@@ -293,7 +287,7 @@ export default async function handler(req, res) {
             const p2Results = await p2Pipeline.exec();
             usageMetrics.candidateReads += paso2Ids.length;
             const paso2Candidates = p2Results
-                .map(([_err, raw]) => {
+                .map(([, raw]) => {
                     if (raw) usageMetrics.estimatedRedisBytes += Buffer.byteLength(raw);
                     try { return raw ? JSON.parse(raw) : null; } catch { return null; }
                 })
@@ -371,7 +365,8 @@ export default async function handler(req, res) {
                     }
 
                     const waConfig2 = await getUltraMsgConfig(candidate.incomingPhoneNumberId || candidate.instanceId);
-                    await sendUltraMsgMessage(
+                    if (!waConfig2) throw new Error('No hay configuración de WhatsApp/Meta para paso2 reengagement');
+                    const p2SendResult = await sendUltraMsgMessage(
                         waConfig2.instanceId,
                         waConfig2.token,
                         candidate.whatsapp,
@@ -379,6 +374,7 @@ export default async function handler(req, res) {
                         'chat',
                         { priority: 5 }
                     );
+                    assertSuccessfulSend(p2SendResult, 'paso2 reengagement');
 
                     await saveMessage(candidate.id, {
                         from: 'bot',

@@ -1,4 +1,4 @@
-/* global process */
+/* global process, Buffer */
 /**
  * /api/cron/send-reminders
  * Runs every 15 minutes via Vercel Cron.
@@ -13,10 +13,13 @@ import { getRedisClient, getCandidateById, getProjectById, saveMessage } from '.
 import { getUltraMsgConfig, sendUltraMsgMessage, buildMetaTemplateComponents, renderMetaTemplatePreviewText } from '../whatsapp/utils.js';
 import { generateTTS } from '../utils/openai.js';
 import { estimateJsonBytes, recordUsageMetric } from '../utils/usage-metrics.js';
-import { shouldRunHumanGatedJob } from '../utils/human-activity.js';
+import { randomUUID } from 'crypto';
 
 const REDIS_ZSET_KEY = 'scheduled_reminders';
+const DIRECT_REMINDERS_ZSET_KEY = 'direct_reminders';
 const DIRECT_REMINDER_TTL_AFTER_SEND_SECONDS = 60 * 60 * 24 * 7;
+const PROCESSING_LOCK_TTL_SECONDS = 10 * 60;
+const COMPLETION_MARKER_TTL_SECONDS = 60 * 60 * 24 * 30;
 
 // Humanize YYYY-MM-DD → "Jueves 12 de Marzo"
 const MONTH_NAMES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
@@ -54,6 +57,14 @@ function isMeta24hWindowError(result = {}) {
         text.includes('re-engagement');
 }
 
+function getMetaErrorCode(result = {}) {
+    return Number(result.data?.error?.code || result.code || 0);
+}
+
+function isTerminalDirectReminderFailure(result = {}) {
+    return getMetaErrorCode(result) === 131026;
+}
+
 function candidateFirstName(candidate = {}, fallback = 'Candidato') {
     const name = candidate.nombreReal || candidate.nombre || fallback;
     return String(name || fallback).trim().split(/\s+/)[0] || fallback;
@@ -66,6 +77,42 @@ async function saveDirectReminderStatus(redis, remId, reminder, patch) {
         'EX',
         DIRECT_REMINDER_TTL_AFTER_SEND_SECONDS
     ).catch(() => {});
+}
+
+function processingLockKey(scope, id) {
+    return `lock:${scope}:${Buffer.from(String(id)).toString('base64url')}`;
+}
+
+function completionMarkerKey(scope, id) {
+    return `done:${scope}:${Buffer.from(String(id)).toString('base64url')}`;
+}
+
+async function acquireProcessingLock(redis, scope, id) {
+    const lock = { key: processingLockKey(scope, id), token: randomUUID() };
+    const result = await redis.set(lock.key, lock.token, 'EX', PROCESSING_LOCK_TTL_SECONDS, 'NX').catch(() => null);
+    return result === 'OK' ? lock : null;
+}
+
+async function releaseProcessingLock(redis, lock) {
+    if (!redis || !lock) return;
+    try {
+        const current = await redis.get(lock.key);
+        if (current === lock.token) await redis.del(lock.key);
+    } catch {
+        // Best-effort lock cleanup only.
+    }
+}
+
+async function removeDueMember(redis, zsetKey, member) {
+    await redis.zrem(zsetKey, member).catch(() => {});
+}
+
+async function markCompleted(redis, scope, id, value = 'done') {
+    await redis.set(completionMarkerKey(scope, id), value, 'EX', COMPLETION_MARKER_TTL_SECONDS).catch(() => {});
+}
+
+async function isCompleted(redis, scope, id) {
+    return Boolean(await redis.get(completionMarkerKey(scope, id)).catch(() => null));
 }
 
 export default async function handler(req, res) {
@@ -91,21 +138,6 @@ export default async function handler(req, res) {
 
     const now = Date.now();
 
-    const activity = await shouldRunHumanGatedJob(redis);
-    usageMetrics.redisReads += 2;
-    if (!activity.allowed) {
-        recordUsageMetric(redis, '/api/cron/send-reminders', usageMetrics).catch(() => {});
-        return res.json({
-            success: true,
-            processed: 0,
-            sent: 0,
-            skipped: 'sleep_mode_no_human_active',
-            errors: 0,
-            activity,
-            timestamp: new Date().toISOString()
-        });
-    }
-
     // ZRANGEBYSCORE scheduled_reminders 0 now  →  O(log N + M)
     let members;
     try {
@@ -122,15 +154,24 @@ export default async function handler(req, res) {
     let errors = 0;
 
     for (const member of members) {
-        // Always remove from set first — prevents re-processing even on error
-        await redis.zrem(REDIS_ZSET_KEY, member).catch(() => { });
-        usageMetrics.redisWrites += 1;
+        const lock = await acquireProcessingLock(redis, 'scheduled_reminder', member);
+        if (!lock) { skipped++; continue; }
 
         try {
+            if (await isCompleted(redis, 'scheduled_reminder', member)) {
+                await removeDueMember(redis, REDIS_ZSET_KEY, member);
+                usageMetrics.redisReads += 1;
+                usageMetrics.redisWrites += 1;
+                skipped++;
+                continue;
+            }
+
             // member = "{projectId}|{stepId}|{candidateId}|{reminderId}|{citaFecha}"
             const [projectId, stepId, candidateId, reminderId, citaFecha] = member.split('|');
 
             if (!candidateId || !reminderId) {
+                await removeDueMember(redis, REDIS_ZSET_KEY, member);
+                usageMetrics.redisWrites += 1;
                 skipped++;
                 continue;
             }
@@ -141,6 +182,8 @@ export default async function handler(req, res) {
             usageMetrics.estimatedRedisBytes += estimateJsonBytes(candidate);
             if (!candidate?.whatsapp) {
                 console.warn(`[SEND-REMINDERS] No WhatsApp for candidate ${candidateId} — skipping`);
+                await removeDueMember(redis, REDIS_ZSET_KEY, member);
+                usageMetrics.redisWrites += 1;
                 skipped++;
                 continue;
             }
@@ -153,6 +196,8 @@ export default async function handler(req, res) {
             const reminder = step?.scheduledReminders?.find(r => r.id === reminderId);
 
             if (!reminder?.enabled || !reminder.message) {
+                await removeDueMember(redis, REDIS_ZSET_KEY, member);
+                usageMetrics.redisWrites += 1;
                 skipped++;
                 continue;
             }
@@ -161,8 +206,7 @@ export default async function handler(req, res) {
             const config = await getUltraMsgConfig(candidate.incomingPhoneNumberId || candidate.instanceId);
             if (!config) {
                 console.warn(`[SEND-REMINDERS] No Meta API config — skipping`);
-                skipped++;
-                continue;
+                throw new Error('No Meta API config');
             }
 
             // ── Load candidate metadata ────────────────────────────────────────
@@ -200,7 +244,7 @@ export default async function handler(req, res) {
                 }
             }
 
-            await sendUltraMsgMessage(
+            const sendResult = await sendUltraMsgMessage(
                 config.instanceId,
                 config.token,
                 candidate.whatsapp,
@@ -208,6 +252,13 @@ export default async function handler(req, res) {
                 messageType,
                 { priority: 1 }
             );
+            if (!sendResult?.success) {
+                throw new Error(sendResult?.error || 'No se pudo enviar el recordatorio programado');
+            }
+
+            await markCompleted(redis, 'scheduled_reminder', member, 'sent');
+            await removeDueMember(redis, REDIS_ZSET_KEY, member);
+            usageMetrics.redisWrites += 2;
 
             // ── Save to chat history ──────────────────────────────────────────
             await saveMessage(candidateId, {
@@ -223,13 +274,15 @@ export default async function handler(req, res) {
         } catch (e) {
             console.error(`[SEND-REMINDERS] Error processing member "${member}":`, e.message);
             errors++;
+        } finally {
+            await releaseProcessingLock(redis, lock);
         }
     }
 
     // ── Recordatorios directos de candidato (direct_reminders ZSET) ──────────
     let directMembers = [];
     try {
-        directMembers = await redis.zrangebyscore('direct_reminders', 0, now);
+        directMembers = await redis.zrangebyscore(DIRECT_REMINDERS_ZSET_KEY, 0, now);
         usageMetrics.redisReads += 1;
         usageMetrics.estimatedRedisBytes += estimateJsonBytes(directMembers);
     } catch (e) {
@@ -237,23 +290,47 @@ export default async function handler(req, res) {
     }
 
     for (const remId of directMembers) {
-        await redis.zrem('direct_reminders', remId).catch(() => {});
-        usageMetrics.redisWrites += 1;
+        const lock = await acquireProcessingLock(redis, 'direct_reminder', remId);
+        if (!lock) { skipped++; continue; }
+
         let reminder = null;
 
         try {
+            if (await isCompleted(redis, 'direct_reminder', remId)) {
+                await removeDueMember(redis, DIRECT_REMINDERS_ZSET_KEY, remId);
+                usageMetrics.redisReads += 1;
+                usageMetrics.redisWrites += 1;
+                skipped++;
+                continue;
+            }
+
             const raw = await redis.get(`direct_reminder:${remId}`);
             usageMetrics.redisReads += 1;
             usageMetrics.estimatedRedisBytes += raw ? Buffer.byteLength(raw) : 0;
-            if (!raw) { skipped++; continue; }
+            if (!raw) {
+                await removeDueMember(redis, DIRECT_REMINDERS_ZSET_KEY, remId);
+                usageMetrics.redisWrites += 1;
+                skipped++;
+                continue;
+            }
 
             reminder = JSON.parse(raw);
+            if (['sent', 'failed'].includes(reminder.status)) {
+                await removeDueMember(redis, DIRECT_REMINDERS_ZSET_KEY, remId);
+                usageMetrics.redisWrites += 1;
+                skipped++;
+                continue;
+            }
+
             if (!reminder.whatsapp || !reminder.message) {
                 await saveDirectReminderStatus(redis, remId, reminder, {
                     status: 'failed',
                     failedAt: new Date().toISOString(),
                     failureReason: 'Recordatorio incompleto: falta WhatsApp o mensaje.'
                 });
+                await markCompleted(redis, 'direct_reminder', remId, 'failed');
+                await removeDueMember(redis, DIRECT_REMINDERS_ZSET_KEY, remId);
+                usageMetrics.redisWrites += 2;
                 skipped++;
                 continue;
             }
@@ -266,13 +343,7 @@ export default async function handler(req, res) {
             }
             const config = await getUltraMsgConfig(candForReminder?.incomingPhoneNumberId || candForReminder?.instanceId);
             if (!config) {
-                await saveDirectReminderStatus(redis, remId, reminder, {
-                    status: 'failed',
-                    failedAt: new Date().toISOString(),
-                    failureReason: 'No hay configuración de WhatsApp/Meta para enviar este recordatorio.'
-                });
-                skipped++;
-                continue;
+                throw new Error('No hay configuración de WhatsApp/Meta para enviar este recordatorio.');
             }
 
             const textResult = await sendUltraMsgMessage(
@@ -330,14 +401,23 @@ export default async function handler(req, res) {
                     const failureReason = textResult?.success === false && isMeta24hWindowError(textResult) && !reminder.fallbackTemplateData?.name
                         ? 'Meta rechazó texto libre por ventana de 24h cerrada y no había template para ventana expirada.'
                         : (finalResult?.error || textResult?.error || 'No se pudo enviar el recordatorio');
-                    await saveDirectReminderStatus(redis, remId, reminder, {
-                        status: 'failed',
-                        failedAt: new Date().toISOString(),
-                        failureReason,
-                        metaError: finalResult?.data?.error || textResult?.data?.error || null
-                    });
-                    errors++;
-                    continue;
+
+                    const terminalFailure = isMeta24hWindowError(textResult) || isTerminalDirectReminderFailure(finalResult) || isTerminalDirectReminderFailure(textResult);
+                    if (terminalFailure) {
+                        await saveDirectReminderStatus(redis, remId, reminder, {
+                            status: 'failed',
+                            failedAt: new Date().toISOString(),
+                            failureReason,
+                            metaError: finalResult?.data?.error || textResult?.data?.error || null
+                        });
+                        await markCompleted(redis, 'direct_reminder', remId, 'failed');
+                        await removeDueMember(redis, DIRECT_REMINDERS_ZSET_KEY, remId);
+                        usageMetrics.redisWrites += 2;
+                        errors++;
+                        continue;
+                    }
+
+                    throw new Error(failureReason);
                 }
             }
 
@@ -360,6 +440,9 @@ export default async function handler(req, res) {
                 sentAt: new Date().toISOString(),
                 sentVia
             });
+            await markCompleted(redis, 'direct_reminder', remId, 'sent');
+            await removeDueMember(redis, DIRECT_REMINDERS_ZSET_KEY, remId);
+            usageMetrics.redisWrites += 2;
 
             console.log(`[SEND-REMINDERS] ✅ Direct reminder (${sentVia}) → ${reminder.nombre} (${reminder.whatsapp})`);
             sent++;
@@ -367,12 +450,14 @@ export default async function handler(req, res) {
             console.error(`[SEND-REMINDERS] Error in direct reminder "${remId}":`, e.message);
             if (reminder) {
                 await saveDirectReminderStatus(redis, remId, reminder, {
-                    status: 'failed',
-                    failedAt: new Date().toISOString(),
+                    status: 'pending',
+                    lastAttemptAt: new Date().toISOString(),
                     failureReason: e.message || 'Error inesperado procesando el recordatorio.'
                 });
             }
             errors++;
+        } finally {
+            await releaseProcessingLock(redis, lock);
         }
     }
 

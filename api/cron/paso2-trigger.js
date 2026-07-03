@@ -1,3 +1,4 @@
+/* global process, Buffer */
 /**
  * /api/cron/paso2-trigger
  * Vercel Cron — runs every minute.
@@ -9,8 +10,35 @@
 import { getRedisClient, updateCandidate, saveMessage } from '../utils/storage.js';
 import { getUltraMsgConfig, sendUltraMsgMessage } from '../whatsapp/utils.js';
 
+const PROGRESS_TTL_SECONDS = 60 * 60 * 24;
+
+function assertSuccessfulSend(result, context) {
+    if (!result?.success) {
+        throw new Error(result?.error || `No se pudo enviar ${context}`);
+    }
+}
+
+function progressKeyForTrigger(key, candidateId) {
+    const id = candidateId || key;
+    return `paso2_trigger_progress:${Buffer.from(String(id)).toString('base64url')}`;
+}
+
+function parseProgress(raw) {
+    if (!raw) return {};
+    try {
+        return JSON.parse(raw) || {};
+    } catch {
+        return {};
+    }
+}
+
 export default async function handler(req, res) {
     if (req.method !== 'GET' && req.method !== 'POST') return res.status(405).end();
+
+    const cronSecret = process.env.CRON_SECRET;
+    if (cronSecret && req.headers.authorization !== `Bearer ${cronSecret}`) {
+        return res.status(401).json({ error: 'Unauthorized' });
+    }
 
     const redis = getRedisClient();
     if (!redis) return res.status(503).json({ error: 'Redis unavailable' });
@@ -46,7 +74,9 @@ export default async function handler(req, res) {
                         const { getCandidateById } = await import('../utils/storage.js');
                         const cand = await getCandidateById(candidateId);
                         if (cand?.incomingPhoneNumberId) resolvedInstanceId = cand.incomingPhoneNumberId;
-                    } catch (e) {}
+                    } catch {
+                        // Best effort: use the instance stored in the trigger if candidate lookup fails.
+                    }
                 }
                 const config = await getUltraMsgConfig(resolvedInstanceId);
                 if (!config?.token) {
@@ -61,8 +91,20 @@ export default async function handler(req, res) {
                     : `Oye, estoy revisando mi sistema y encontré algo para ti 👀`;
                 const burbuja2 = `Compárteme porfi ¿cómo se llama tu colonia? Es para validar si te queda una ruta de transporte 🚌🏘️`;
 
-                await sendUltraMsgMessage(config.instanceId, config.token, phone, burbuja1, 'chat', { priority: 0 });
-                await sendUltraMsgMessage(config.instanceId, config.token, phone, burbuja2, 'chat', { priority: 1 });
+                const progressKey = progressKeyForTrigger(key, candidateId);
+                const progress = parseProgress(await redis.get(progressKey));
+                if (!progress.burbuja1Sent) {
+                    const firstResult = await sendUltraMsgMessage(config.instanceId, config.token, phone, burbuja1, 'chat', { priority: 0 });
+                    assertSuccessfulSend(firstResult, 'paso 2 burbuja 1');
+                    progress.burbuja1Sent = true;
+                    await redis.set(progressKey, JSON.stringify(progress), 'EX', PROGRESS_TTL_SECONDS);
+                }
+                if (!progress.burbuja2Sent) {
+                    const secondResult = await sendUltraMsgMessage(config.instanceId, config.token, phone, burbuja2, 'chat', { priority: 1 });
+                    assertSuccessfulSend(secondResult, 'paso 2 burbuja 2');
+                    progress.burbuja2Sent = true;
+                    await redis.set(progressKey, JSON.stringify(progress), 'EX', PROGRESS_TTL_SECONDS);
+                }
 
                 // Save messages to history
                 const ts = new Date().toISOString();
@@ -77,6 +119,7 @@ export default async function handler(req, res) {
 
                 // Delete the trigger key so cron doesn't fire again
                 await redis.del(key);
+                await redis.del(progressKey);
 
                 fired++;
             } catch (err) {

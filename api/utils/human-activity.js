@@ -1,3 +1,4 @@
+/* global process */
 const HUMAN_ACTIVE_WINDOW_MS = Number(process.env.HUMAN_ACTIVE_WINDOW_MS || 3 * 60 * 1000);
 const HUMAN_WAKE_GRACE_SECONDS = Math.ceil(HUMAN_ACTIVE_WINDOW_MS / 1000) + 60;
 
@@ -48,12 +49,4 @@ export async function getHumanActivity(redis, now = Date.now()) {
     }
 
     return { active: false, activeUsers: 0, reason: 'no_human_active' };
-}
-
-export async function shouldRunHumanGatedJob(redis) {
-    const activity = await getHumanActivity(redis);
-    return {
-        allowed: activity.active,
-        ...activity
-    };
 }

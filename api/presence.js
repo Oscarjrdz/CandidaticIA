@@ -9,7 +9,7 @@ export default async function handler(req, res) {
     if (req.method === 'OPTIONS') return res.status(200).end();
 
     try {
-        const { getRedisClient } = await import('./utils/storage.js');
+        const { getRedisClient, validateAdminSession } = await import('./utils/storage.js');
         const { markHumanActivity } = await import('./utils/human-activity.js');
         const redis = getRedisClient();
 
@@ -18,6 +18,9 @@ export default async function handler(req, res) {
         }
 
         if (req.method === 'POST') {
+            const sessionUserId = await validateAdminSession(req);
+            if (!sessionUserId) return res.status(401).json({ error: 'No autorizado' });
+
             const { userId, whatsapp, userName, role, currentChatId, idle, activeSeconds } = req.body;
 
             if (!userId) {
@@ -82,7 +85,9 @@ export default async function handler(req, res) {
                 const rawValues = await redis.hmget('presence:hash', ...activeKeys);
                 rawValues.forEach(val => {
                     if (val) {
-                        try { onlineUsers.push(JSON.parse(val)); } catch {}
+                        try { onlineUsers.push(JSON.parse(val)); } catch {
+                            // Ignore malformed presence records.
+                        }
                     }
                 });
             }
