@@ -544,6 +544,7 @@ export const uploadMediaToMeta = async (buffer, mimeType, filename = 'file') => 
  */
 export const buildMetaTemplateComponents = (templateComponents, candidateNameFallback, options = {}) => {
     const { templateParams, mediaUrl, parameterFormat } = options;
+    console.log('[buildMetaTemplateComponents] parameterFormat:', parameterFormat, '| components:', JSON.stringify(templateComponents?.map(c => ({ type: c.type, format: c.format, text: c.text?.slice(0, 60), example: c.example }))));
     const componentsToSend = [];
 
     (templateComponents || []).forEach(comp => {
