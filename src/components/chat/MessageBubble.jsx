@@ -296,10 +296,10 @@ const MessageBubble = React.memo(function MessageBubble({
                                     );
                                 }
 
-                                const isTemplate = typeof msg.content === 'string' && msg.content.startsWith('⚡ Plantilla oficial:');
+                                const isTemplate = typeof msg.content === 'string' && msg.content.startsWith('⚡ Plantilla');
                                 if (isTemplate) {
                                     const lines = msg.content.split('\n\n');
-                                    const titleLine = lines[0].replace('⚡ Plantilla oficial:', '').replace(/\*/g, '').trim();
+                                    const titleLine = lines[0].replace(/^⚡\s*Plantilla[^:]*:/, '').replace(/\*/g, '').trim();
                                     const bodyLines = lines.slice(1).join('\n\n');
                                     return (
                                         <div className="flex flex-col w-full min-w-[220px]">

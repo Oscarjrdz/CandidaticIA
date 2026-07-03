@@ -564,14 +564,14 @@ export const buildMetaTemplateComponents = (templateComponents, candidateNameFal
 
                 if (expectedCount > 0) {
                     const params = Array(expectedCount).fill(0).map((_, pIdx) => {
-                        // Try custom param by numeric key
-                        const numKey = String(pIdx + 1);
-                        let customVal = templateParams?.[numKey];
-
-                        // Fallback to searching by named variable at this position
+                        let customVal;
                         if (!customVal && uniqueVars[pIdx]) {
                             const stringKey = uniqueVarNames[pIdx];
                             customVal = templateParams?.[stringKey];
+                        }
+                        if (!customVal) {
+                            const numKey = String(pIdx + 1);
+                            customVal = templateParams?.[numKey];
                         }
 
                         const param = { type: "text", text: customVal || candidateNameFallback };
@@ -616,4 +616,53 @@ export const buildMetaTemplateComponents = (templateComponents, candidateNameFal
     });
 
     return componentsToSend;
+};
+
+const TEMPLATE_MEDIA_LABELS = {
+    image: '[Imagen]',
+    video: '[Video]',
+    document: '[Documento]'
+};
+
+const resolveTemplateDisplayValue = (key, templateParams = {}, candidateNameFallback = 'Candidato') => {
+    const cleanKey = String(key || '').trim();
+    const directValue = templateParams?.[cleanKey];
+    if (directValue) return directValue;
+    if (cleanKey === 'candidato' || cleanKey === 'nombre' || cleanKey === 'name') return candidateNameFallback;
+    return templateParams?.['1'] || candidateNameFallback;
+};
+
+export const renderMetaTemplatePreviewText = (templateData = {}, candidateNameFallback = 'Candidato', options = {}) => {
+    const { templateParams } = options;
+    const components = templateData?.components || [];
+    const parts = [];
+
+    const renderText = (text = '') => text.replace(/\{\{([^}]+)\}\}/g, (_match, key) => {
+        return resolveTemplateDisplayValue(key, templateParams, candidateNameFallback);
+    }).trim();
+
+    const header = components.find(c => (c.type || '').toUpperCase() === 'HEADER');
+    if (header) {
+        if ((header.format || '').toUpperCase() === 'TEXT' && header.text) {
+            parts.push(renderText(header.text));
+        } else if (header.format) {
+            parts.push(TEMPLATE_MEDIA_LABELS[String(header.format).toLowerCase()] || `[${header.format}]`);
+        }
+    }
+
+    const body = components.find(c => (c.type || '').toUpperCase() === 'BODY');
+    if (body?.text) parts.push(renderText(body.text));
+
+    const footer = components.find(c => (c.type || '').toUpperCase() === 'FOOTER');
+    if (footer?.text) parts.push(renderText(footer.text));
+
+    const buttons = components.find(c => (c.type || '').toUpperCase() === 'BUTTONS');
+    const buttonLabels = (buttons?.buttons || [])
+        .map(btn => btn.text || btn.url || btn.phone_number)
+        .filter(Boolean);
+    if (buttonLabels.length > 0) {
+        parts.push(buttonLabels.map(label => `> ${renderText(label)}`).join('\n'));
+    }
+
+    return parts.filter(Boolean).join('\n\n') || '[Plantilla sin texto visible]';
 };

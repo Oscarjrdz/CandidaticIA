@@ -10,7 +10,7 @@
  */
 
 import { getRedisClient, getCandidateById, getProjectById, saveMessage } from '../utils/storage.js';
-import { getUltraMsgConfig, sendUltraMsgMessage, buildMetaTemplateComponents } from '../whatsapp/utils.js';
+import { getUltraMsgConfig, sendUltraMsgMessage, buildMetaTemplateComponents, renderMetaTemplatePreviewText } from '../whatsapp/utils.js';
 import { generateTTS } from '../utils/openai.js';
 
 const REDIS_ZSET_KEY = 'scheduled_reminders';
@@ -55,15 +55,6 @@ function isMeta24hWindowError(result = {}) {
 function candidateFirstName(candidate = {}, fallback = 'Candidato') {
     const name = candidate.nombreReal || candidate.nombre || fallback;
     return String(name || fallback).trim().split(/\s+/)[0] || fallback;
-}
-
-function renderTemplateBody(templateData = {}, templateParams = {}, fallbackName = 'Candidato') {
-    const bodyComp = (templateData.components || []).find(c => (c.type || '').toUpperCase() === 'BODY');
-    const bodyText = bodyComp?.text || '';
-    return bodyText.replace(/\{\{[^}]+\}\}/g, (match) => {
-        const key = match.replace(/[{}]/g, '');
-        return templateParams?.[key] || templateParams?.['1'] || fallbackName;
-    });
 }
 
 async function saveDirectReminderStatus(redis, remId, reminder, patch) {
@@ -288,7 +279,7 @@ export default async function handler(req, res) {
                     if (templateResult?.success) {
                         sentVia = 'template_fallback';
                         const displayName = templateData.name.replace(/_/g, ' ');
-                        const renderedBody = renderTemplateBody(templateData, templateParams, fallbackName);
+                        const renderedBody = renderMetaTemplatePreviewText(templateData, fallbackName, { templateParams });
                         contentToSave = `⚡ Plantilla de recordatorio: *${displayName}*\n\n${renderedBody}`.trim();
                     }
                 }

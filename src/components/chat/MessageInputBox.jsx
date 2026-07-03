@@ -1,8 +1,9 @@
 import React, { useState, useRef, lazy, Suspense } from 'react';
 const EmojiPicker = lazy(() => import('emoji-picker-react'));
 import { MapPin, List as ListIcon, ShoppingBag, UserSquare, MousePointerClick, Plus, Smile, Mic, Send, X, Zap } from 'lucide-react';
+import { renderMetaTemplatePreviewText } from '../../utils/metaTemplatePreview';
 
-const MessageInputBox = React.forwardRef(({ onSend, onTyping, fileInputRef, handleFileUpload, replyingToMsg, onCancelReply, metaTemplates = [], onSendTemplate, onSendVCard, onSendInteractive, onSendLocation, onSendList, onSendProduct, isMobile, hasPendingMedia }, ref) => {
+const MessageInputBox = React.forwardRef(({ onSend, onTyping, fileInputRef, handleFileUpload, replyingToMsg, onCancelReply, metaTemplates = [], onSendTemplate, onSendVCard, onSendInteractive, onSendLocation, onSendList, onSendProduct, isMobile, hasPendingMedia, templatePreviewName = 'Candidato' }, ref) => {
     const [localMessage, setLocalMessage] = useState("");
     const [sending, setSending] = useState(false);
     const [showEmojis, setShowEmojis] = useState(false);
@@ -113,15 +114,14 @@ const MessageInputBox = React.forwardRef(({ onSend, onTyping, fileInputRef, hand
                                             <div className="p-3 text-xs text-gray-400 text-center">Buscando plantillas...</div>
                                         ) : (
                                             metaTemplates.map(t => {
-                                                const bodyComp = (t.components || []).find(c => (c.type || '').toUpperCase() === 'BODY');
-                                                const bodyText = bodyComp?.text || '';
+                                                const previewText = renderMetaTemplatePreviewText(t, {}, templatePreviewName);
                                                 return (
                                                     <button key={t.id} type="button"
                                                         className="w-full text-left p-2.5 hover:bg-gray-50 dark:hover:bg-[#202c33] border-b border-gray-100 dark:border-gray-800 transition-colors"
                                                         onClick={(e) => { e.preventDefault(); onSendTemplate(t); setShowTemplates(false); }}
                                                     >
                                                         <div className="text-xs font-semibold text-gray-800 dark:text-gray-200 truncate">{t.name}</div>
-                                                        {bodyText && <div className="text-[10px] text-gray-500 dark:text-gray-400 truncate mt-0.5" title={bodyText}>{bodyText}</div>}
+                                                        <div className="text-[10px] text-gray-500 dark:text-gray-400 mt-1 whitespace-pre-wrap leading-snug" title={previewText}>{previewText}</div>
                                                     </button>
                                                 );
                                             })
@@ -206,15 +206,14 @@ const MessageInputBox = React.forwardRef(({ onSend, onTyping, fileInputRef, hand
                                 <div className="p-3 text-xs text-gray-400 text-center">Buscando plantillas...</div>
                             ) : (
                                 metaTemplates.map(t => {
-                                    const bodyComp = (t.components || []).find(c => (c.type || '').toUpperCase() === 'BODY');
-                                    const bodyText = bodyComp?.text || '';
+                                    const previewText = renderMetaTemplatePreviewText(t, {}, templatePreviewName);
                                     return (
                                         <button key={t.id} type="button"
                                             className="w-full text-left p-3 hover:bg-gray-50 dark:hover:bg-[#202c33] border-b border-gray-100 dark:border-gray-800 transition-colors"
                                             onClick={(e) => { e.preventDefault(); onSendTemplate(t); setShowTemplates(false); }}
                                         >
                                             <div className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">{t.name}</div>
-                                            {bodyText && <div className="text-[11px] text-gray-500 dark:text-gray-400 truncate mt-0.5" title={bodyText}>{bodyText}</div>}
+                                            <div className="text-[11px] text-gray-500 dark:text-gray-400 mt-1 whitespace-pre-wrap leading-snug" title={previewText}>{previewText}</div>
                                             <div className="text-[10px] text-gray-400 dark:text-gray-500 uppercase tracking-widest mt-1">{t.category}</div>
                                         </button>
                                     );

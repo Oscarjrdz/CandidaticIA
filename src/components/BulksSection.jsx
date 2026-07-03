@@ -3,6 +3,7 @@ import { useConfirmModal } from './ui/ConfirmModal';
 import { Search, Plus, Trash2, Copy, Sparkles, Send, PauseCircle, PlayCircle, XCircle, Tag, X, ChevronDown, CheckCircle2, ArrowUpDown } from 'lucide-react';
 import { getCandidates } from '../services/candidatesService';
 import { useToastContext } from '../contexts/ToastContext';
+import { extractTemplateVariables, renderMetaTemplatePreviewText } from '../utils/metaTemplatePreview';
 
 const getCandidateTimestamp = (c) => {
     // Priority: primerContacto (real creation date) > createdAt > ID-embedded timestamp
@@ -793,24 +794,21 @@ const BulksSection = () => {
                                     <div className="text-base text-gray-800 dark:text-gray-200 whitespace-pre-wrap bg-white dark:bg-[#111b21] p-4 rounded-lg shadow-sm">
                                         {(() => {
                                             const tData = metaTemplates.find(t => t.id === selectedTemplateId);
-                                            const bodyComponent = tData?.components?.find(c => c.type === 'BODY') || tData?.components?.find(c => c.type === 'body');
-                                            return bodyComponent ? bodyComponent.text : '[Sin cuerpo texto]';
+                                            return renderMetaTemplatePreviewText(tData, templateParams, 'Candidato');
                                         })()}
                                     </div>
                                     {(() => {
                                         const tData = metaTemplates.find(t => t.id === selectedTemplateId);
-                                        const bodyComponent = tData?.components?.find(c => c.type === 'BODY') || tData?.components?.find(c => c.type === 'body');
-                                        const hasVars = bodyComponent?.text?.match(/\{\{[^}]+\}\}/g);
-                                        if (hasVars) {
-                                            const uniqueVars = [...new Set(hasVars)];
+                                        const uniqueVars = extractTemplateVariables(tData);
+                                        if (uniqueVars.length > 0) {
                                             return (
                                                 <div className="mt-3 flex flex-col gap-2">
                                                     <div className="text-[11px] font-bold text-gray-500 uppercase">Valores de Variables</div>
                                                     {uniqueVars.map((v, idx) => {
-                                                        const varNum = v.replace(/[{}]/g, '');
+                                                        const varNum = v;
                                                         return (
                                                             <div key={idx} className="flex items-center gap-2">
-                                                                <span className="text-xs font-mono bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-2 py-1 rounded font-bold shrink-0">{v}</span>
+                                                                <span className="text-xs font-mono bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-2 py-1 rounded font-bold shrink-0">{`{{${v}}}`}</span>
                                                                 <input
                                                                     type="text"
                                                                     value={templateParams[varNum] || ''}

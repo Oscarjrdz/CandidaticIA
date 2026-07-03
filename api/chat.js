@@ -1,7 +1,7 @@
 import { getMessages, getRecentMessages, saveMessage, getCandidateById, updateCandidate, updateMessageStatus, getRedisClient, validateAdminSession, getUsers, getRoles, isProfileComplete } from './utils/storage.js';
 import { substituteVariables } from './utils/shortcuts.js';
 import axios from 'axios';
-import { sendUltraMsgMessage, getUltraMsgConfig, buildMetaTemplateComponents } from './whatsapp/utils.js';
+import { sendUltraMsgMessage, getUltraMsgConfig, buildMetaTemplateComponents, renderMetaTemplatePreviewText } from './whatsapp/utils.js';
 import { estimateJsonBytes, recordUsageMetric } from './utils/usage-metrics.js';
 
 // Candidatic legacy URLs removed as per UltraMsg migration.
@@ -390,14 +390,12 @@ export default async function handler(req, res) {
             let contentToSave = finalMessage;
             if (type === 'template' && req.body.templateData) {
                 const tData = req.body.templateData;
-                let realText = '';
-                if (tData.components) {
-                    const bodyComp = tData.components.find(c => (c.type || '').toUpperCase() === 'BODY');
-                    if (bodyComp && bodyComp.text) {
-                        const _nr = candidate.nombreReal?.trim().split(/\s+/).slice(0, 2).join(' ');
-                        realText = bodyComp.text.replace(/\{\{[^}]+\}\}/g, _nr || candidate.nombre || 'Candidato');
-                    }
-                }
+                const _nr = candidate.nombreReal?.trim().split(/\s+/).slice(0, 2).join(' ');
+                const realText = renderMetaTemplatePreviewText(
+                    tData,
+                    _nr || candidate.nombre || 'Candidato',
+                    { templateParams: incomingExtraParams.templateParams }
+                );
                 const displayName = tData.name.replace(/_/g, ' ');
                 contentToSave = `⚡ Plantilla oficial: *${displayName}*\n\n${realText}`.trim();
             } else if (type === 'interactive') {

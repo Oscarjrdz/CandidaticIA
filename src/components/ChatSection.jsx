@@ -11,6 +11,7 @@ import { useToastContext } from '../contexts/ToastContext';
 import { useAuthContext } from '../contexts/AuthContext';
 import { safeFormatTime, toTitleCase, formatWhatsAppText, TAG_COLORS, checkIfUnread } from './chat/chatUtils';
 import { passesChatRBACFilter, canSeeIncompleteChats } from '../utils/chatUnreadCount';
+import { renderMetaTemplatePreviewText } from '../utils/metaTemplatePreview';
 import CandidateReminderModal from './CandidateReminderModal';
 import MessageStatusTicks from './chat/MessageStatusTicks';
 import MessageInputBox from './chat/MessageInputBox';
@@ -2815,10 +2816,9 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
         const optimisticId = 'temp-' + Date.now();
 
         // Optimistic append — build content matching server format so it renders immediately
-        const _bodyComp = (templateObj.components || []).find(c => (c.type || '').toUpperCase() === 'BODY');
         const _candidateName = selectedChat.nombreReal?.trim().split(/\s+/).slice(0, 2).join(' ')
             || selectedChat.nombre || 'Candidato';
-        const _bodyText = _bodyComp?.text ? _bodyComp.text.replace(/\{\{[^}]+\}\}/g, _candidateName) : '';
+        const _bodyText = renderMetaTemplatePreviewText(templateObj, {}, _candidateName);
         const _displayName = templateObj.name.replace(/_/g, ' ');
         const _optimisticContent = `⚡ Plantilla oficial: *${_displayName}*\n\n${_bodyText}`.trim();
 
@@ -4214,6 +4214,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
                         onSendLocation={() => setShowLocationModal(true)}
                         onSendList={() => setShowListModal(true)}
                         onSendProduct={() => setShowProductModal(true)}
+                        templatePreviewName={selectedChat?.nombreReal?.trim().split(/\s+/).slice(0, 2).join(' ') || selectedChat?.nombre || 'Candidato'}
                     />
                 </div>
             ) : (

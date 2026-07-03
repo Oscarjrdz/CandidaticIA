@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { X, Bell, Trash2, Clock, Send } from 'lucide-react';
+import { extractTemplateVariables, renderMetaTemplatePreviewText } from '../utils/metaTemplatePreview';
 
 const API = '/api/candidate-reminders';
 
@@ -24,26 +25,6 @@ function defaultDatetime() {
     d.setHours(7, 0, 0, 0);
     const pad = n => String(n).padStart(2, '0');
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T07:00`;
-}
-
-function extractTemplateVariables(template) {
-    const components = template?.components || [];
-    const vars = [];
-    components.forEach(comp => {
-        const type = (comp.type || '').toUpperCase();
-        if (type !== 'BODY' && type !== 'HEADER') return;
-        const matches = (comp.text || '').match(/\{\{[^}]+\}\}/g) || [];
-        matches.forEach(match => {
-            const key = match.replace(/[{}]/g, '');
-            if (!vars.includes(key)) vars.push(key);
-        });
-    });
-    return vars;
-}
-
-function getTemplateBody(template) {
-    const body = (template?.components || []).find(c => (c.type || '').toUpperCase() === 'BODY');
-    return body?.text || '';
 }
 
 const CandidateReminderModal = ({ candidate, onClose }) => {
@@ -220,7 +201,7 @@ const CandidateReminderModal = ({ candidate, onClose }) => {
                                 <div className="rounded-xl bg-white dark:bg-slate-800 border border-emerald-100 dark:border-emerald-900/40 p-3 space-y-2">
                                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Vista previa</p>
                                     <p className="text-xs text-slate-600 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">
-                                        {getTemplateBody(selectedTemplate) || '[Plantilla sin cuerpo de texto]'}
+                                        {renderMetaTemplatePreviewText(selectedTemplate, fallbackTemplateParams, nombre.split(' ')[0])}
                                     </p>
                                     {selectedTemplateVars.length > 0 && (
                                         <div className="space-y-2 pt-1">

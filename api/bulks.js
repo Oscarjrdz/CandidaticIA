@@ -1,6 +1,6 @@
 import { getCandidateById, saveMessage, updateCandidate, updateMessageStatus } from './utils/storage.js';
 import { substituteVariables } from './utils/shortcuts.js';
-import { sendUltraMsgMessage, getUltraMsgConfig, buildMetaTemplateComponents } from './whatsapp/utils.js';
+import { sendUltraMsgMessage, getUltraMsgConfig, buildMetaTemplateComponents, renderMetaTemplatePreviewText } from './whatsapp/utils.js';
 import axios from 'axios';
 import { getRedisClient } from './utils/storage.js';
 import { getCachedConfig } from './utils/cache.js';
@@ -168,16 +168,11 @@ const tickEngine = async (state) => {
                                 }
                                 
                                 sendType = 'template';
-                                let realText = '';
-                                const bodyComp = (state.templateData.components || []).find(c => (c.type || '').toUpperCase() === 'BODY');
-                                if (bodyComp && bodyComp.text) {
-                                    realText = bodyComp.text.replace(/\{\{[^}]+\}\}/g, (match) => {
-                                        // Extract the var key — could be numeric "1" or named "categoriavac"
-                                        const varKey = match.replace(/[{}]/g, '');
-                                        // Try numeric key first ("1"), then named key
-                                        return state.templateParams?.[varKey] || state.templateParams?.['1'] || candidateNameFallback;
-                                    });
-                                }
+                                const realText = renderMetaTemplatePreviewText(
+                                    state.templateData,
+                                    candidateNameFallback,
+                                    { templateParams: state.templateParams }
+                                );
                                 const displayName = templateName.replace(/_/g, ' ');
                                 msgToSaveStr = `⚡ Plantilla masiva: *${displayName}*\n\n${realText}`.trim();
                             }
