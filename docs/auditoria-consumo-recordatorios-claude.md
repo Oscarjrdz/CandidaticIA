@@ -558,3 +558,45 @@ Durante la captura aparecieron **4 candidatos distintos** (`byghd8t8y`, `mm9zxqg
 - `npx eslint api/utils/storage.js`: sin errores nuevos.
 - `npm run build` exitoso.
 - Prueba funcional contra Redis real: 2/2 casos correctos (arriba).
+
+---
+
+## Doceava auditoria (Claude) — flujo de Brenda nombre→experiencia: por que "tarda" y por que "se quedo callada"
+
+Fecha: 2026-07-04. El usuario reporto dos sintomas del flujo de extraccion de datos (nombre hasta experiencia): (1) siente que tarda en guardar el nombre y responder, y (2) en una prueba anterior el bot se quedo callado un buen rato y luego contesto mucho despues. Pidio revision detallada de todo `agent.js` en ese tramo especifico.
+
+### Arquitectura real descubierta (no documentada antes en este archivo)
+
+`api/whatsapp/webhook.js` **espera la respuesta de IA completa antes de responderle a Meta** (`await Promise.allSettled([aiPromise])`, linea 991) — no es fire-and-forget. Dentro de esa espera:
+
+1. `webhook.js` llama directo (no por HTTP, mismo proceso) a `runTurboEngine()` en `api/workers/process-message.js`.
+2. Ese worker usa un lock por candidato (`isCandidateLocked`) para evitar procesar mensajes del mismo candidato en paralelo. Si el candidato ya tiene un mensaje en proceso, **espera hasta 50 segundos** (poll cada 500ms) a que se libere.
+3. `webhook.js` y el worker tienen `maxDuration = 60` segundos.
+4. El propio codigo del worker ya tiene una advertencia explicita para este caso (`process-message.js:126`): *"Lock never freed after 50000ms... Message may be lost."*
+
+**Conclusion: si la espera del lock (hasta 50s) mas el procesamiento real (llamada a OpenAI + envios a Meta) se pasan de 60s, Vercel mata la funcion a la fuerza sin haber mandado ninguna respuesta.** Esto explica exactamente el sintoma de "se quedo callada un buen rato y contesto mucho despues" — coincide con que un candado tardo en liberarse (dos mensajes muy seguidos, o un OpenAI lento) y la funcion goteando cerca del limite.
+
+**Sobre la teoria del deploy:** se descarto como causa directa — el worker se invoca con `import()` dentro del mismo proceso, no via HTTP self-call, asi que un deploy a mitad de un turno no deberia cortar la ejecucion en curso (Vercel deja terminar las invocaciones en vuelo del deployment anterior). El deploy que coincidio con la prueba probablemente fue casualidad, no la causa.
+
+### Extraccion del nombre especificamente: 1 sola llamada a OpenAI, no varias
+
+Se conto cuantas llamadas a `getOpenAIResponse` ocurren para el turno donde el candidato da su nombre: **una sola** (linea 4548, "Capturista Brain", modelo `gpt-4o-mini`, `max_tokens: 500`, modo JSON). El primer saludo ("Hola") es determinista (`bypassGpt`, sin llamada a IA — de ahi que esa primera respuesta sea casi instantanea, ~358ms medido en la Septima auditoria). La respuesta al nombre si pasa por la IA real, asi que 1-4 segundos de latencia ahi es esperable y normal para un modelo de lenguaje, no un bug.
+
+### Fix real encontrado y aplicado: debug logging bloqueante en cada webhook
+
+`api/whatsapp/webhook.js` (lineas 141-150) guardaba los ultimos 50 webhooks crudos para inspeccion — **en cada llamada al webhook** (no solo mensajes de candidatos; tambien confirmaciones de entrega de Meta, que son mas frecuentes), con **3 escrituras a Redis awaited de forma bloqueante** (`LPUSH` + `LTRIM` + `SET`, sin pipeline, sin interruptor de `DEBUG_MODE` a diferencia de logs similares en `agent.js` que si estan bien apagados por defecto). Esto sumaba latencia real a la respuesta de cada mensaje, incluyendo el turno del nombre.
+
+**Fix:** se combino en un solo `pipeline` y se quito el `await` (fire-and-forget con `.catch(() => {})`) — se preserva la capacidad de debug (los ultimos 50 webhooks siguen guardandose) pero ya no bloquea la respuesta al candidato.
+
+### Verificacion
+
+- `node --check api/whatsapp/webhook.js`: OK.
+- `npx eslint api/whatsapp/webhook.js`: sin errores nuevos (33 preexistentes, confirmado con `git diff` que ninguno esta en la seccion tocada).
+- `npm run build` exitoso.
+
+### Pendiente — riesgo arquitectonico, no corregido en esta pasada
+
+El riesgo real de "mensaje perdido" por el limite de 50s de espera de lock + 60s de `maxDuration` **sigue existiendo** — el fix de esta auditoria (debug logging) reduce la latencia de fondo pero no elimina el riesgo de fondo bajo carga real (mensajes muy seguidos del mismo candidato, o una respuesta de OpenAI inusualmente lenta). Posibles soluciones a futuro, no implementadas:
+- Subir `maxDuration` si el plan de Vercel lo permite (actualmente 60s).
+- Reducir el tiempo maximo de espera del lock (actualmente 50s) para fallar mas rapido y reintentar en vez de arriesgar el timeout duro.
+- Desacoplar la respuesta a Meta del procesamiento de IA (responder 200 OK a Meta inmediatamente, procesar en background) — cambio arquitectonico mayor, mas riesgoso, requiere diseño cuidadoso para no perder mensajes en el camino.

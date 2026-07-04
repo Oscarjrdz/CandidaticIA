@@ -139,13 +139,18 @@ export default async function handler(req, res) {
     const payload = req.body;
 
     // ═══ Debug: save raw webhook for inspection (last 50) ═══
+    // Fire-and-forget — esto corria en cada webhook (mensajes Y confirmaciones de
+    // entrega de Meta) con 3 escrituras awaited de forma bloqueante, sumando latencia
+    // real a cada respuesta del bot. El debug logging no necesita bloquear la respuesta.
     try {
         const redis = getRedisClient();
         if (redis) {
             const entry = JSON.stringify({ ts: new Date().toISOString(), payload });
-            await redis.lpush('debug:webhook_history', entry);
-            await redis.ltrim('debug:webhook_history', 0, 49); // Keep last 50
-            await redis.set('debug:last_webhook_raw', JSON.stringify(payload));
+            const debugPipe = redis.pipeline();
+            debugPipe.lpush('debug:webhook_history', entry);
+            debugPipe.ltrim('debug:webhook_history', 0, 49); // Keep last 50
+            debugPipe.set('debug:last_webhook_raw', JSON.stringify(payload));
+            debugPipe.exec().catch(() => {});
         }
     } catch (e) { }
 
