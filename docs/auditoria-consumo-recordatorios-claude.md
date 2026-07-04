@@ -548,9 +548,9 @@ Se esperaba que `candidatic:phone_index` ya no se reescribiera por mensaje (fix 
 1. Guardar candidato nuevo → se indexa correctamente.
 2. Plantar un valor centinela manual en `phone_index`, luego re-guardar el MISMO candidato (simulando un update) → el valor centinela sobrevive intacto, confirmando que `saveCandidate` ya no lo toca en actualizaciones.
 
-### Pendiente de aclarar con el usuario
+### Aclarado con el usuario: los 4 candidatos eran trafico real
 
-Durante la captura aparecieron **4 candidatos distintos** (`byghd8t8y`, `mm9zxqg6h`, `3d61locli`, `73axocw6x`). Lo mas probable es que sea resultado de probar "candidato nuevo" varias veces durante la sesion de pruebas (cada vez con un numero/candidato distinto) — no hay evidencia de un bug de duplicacion, pero no se investigo a fondo si el flujo genera candidatos fantasma en algun escenario. Queda como punto a vigilar si se repite sin que el usuario este creando candidatos nuevos a proposito.
+Durante la captura aparecieron **4 candidatos distintos** (`byghd8t8y`, `mm9zxqg6h`, `3d61locli`, `73axocw6x`). El usuario confirmo que son candidatos reales llegando organicamente en paralelo a la prueba (no producto de las pruebas de "candidato nuevo" de esta sesion). Cierra sin ser un bug — el sistema simplemente estaba procesando trafico real de produccion al mismo tiempo que se hacia la prueba manual con Brenda.
 
 ### Verificacion
 
