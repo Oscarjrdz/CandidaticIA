@@ -125,6 +125,7 @@ const INDEX_KEYS = {
 };
 const UNTAGGED_TAG_FILTER = '__candidatic_untagged__';
 const UNTAGGED_COUNT_KEY = 'candidatic:untagged_count';
+const MANUAL_PROJECT_LINKS_PREFIX = 'crm_links:';
 export const HUMAN_INTERVENTION_SILENCE_MS = 5 * 24 * 60 * 60 * 1000;
 
 const indexPart = (value) => Buffer.from(String(value || '').trim().toLowerCase()).toString('base64url');
@@ -352,17 +353,36 @@ export async function hydrateCandidateIds(ids, limit = 500) {
         .filter(Boolean);
 }
 
-async function getManualProjectCandidateIds(client, manualProjectId, manualStepId = '') {
+async function getManualProjectCandidateLinks(client, manualProjectId, manualStepId = '') {
     const projectId = String(manualProjectId || '').trim();
     const stepId = String(manualStepId || '').trim();
     if (!client || !projectId) return [];
 
+    const linksRaw = await client.get(`${MANUAL_PROJECT_LINKS_PREFIX}${projectId}`).catch(() => null);
+    let links = [];
+    try {
+        links = linksRaw ? JSON.parse(linksRaw) : [];
+    } catch {
+        links = [];
+    }
+    if (!Array.isArray(links)) return [];
+
+    return links
+        .map(link => ({
+            candidateId: String(link?.candidateId || '').trim(),
+            stepId: String(link?.stepId || '').trim(),
+            linkedAt: link?.linkedAt || null
+        }))
+        .filter(link => link.candidateId && (!stepId || link.stepId === stepId));
+}
+
+async function getManualProjectCandidateIds(client, manualProjectId) {
+    const projectId = String(manualProjectId || '').trim();
+    if (!client || !projectId) return [];
+
     const indexed = await ensureCandidateManualIndexes();
     if (indexed) {
-        const key = stepId
-            ? manualProjectStepIndexKey(projectId, stepId)
-            : manualProjectIndexKey(projectId);
-        const indexedIds = await client.smembers(key);
+        const indexedIds = await client.smembers(manualProjectIndexKey(projectId));
         if (indexedIds?.length) return indexedIds;
     }
 
@@ -379,9 +399,7 @@ async function getManualProjectCandidateIds(client, manualProjectId, manualStepI
             if (err || !raw) return;
             try {
                 const c = JSON.parse(raw);
-                if (String(c?.manualProjectId || '').trim() !== projectId) return;
-                if (stepId && String(c?.manualProjectStepId || '').trim() !== stepId) return;
-                ids.push(c.id);
+                if (String(c?.manualProjectId || '').trim() === projectId) ids.push(c.id);
             } catch {}
         });
         await new Promise(r => setTimeout(r, 2));
@@ -731,8 +749,13 @@ export const getCandidates = async (limit = 100, offset = 0, search = '', exclud
     // The 'proyecto' virtual field is now derived from the candidate's own projectId field.
 
     if (manualProjectId && !excludeLinked) {
-        const matchingIds = await getManualProjectCandidateIds(client, manualProjectId, manualStepId);
+        const stepId = String(manualStepId || '').trim();
+        const matchingLinks = stepId ? await getManualProjectCandidateLinks(client, manualProjectId, stepId) : [];
+        const matchingIds = stepId
+            ? matchingLinks.map(link => link.candidateId)
+            : await getManualProjectCandidateIds(client, manualProjectId);
         if (!matchingIds.length) return { candidates: [], total: 0 };
+        const linkById = new Map(matchingLinks.map(link => [link.candidateId, link]));
 
         let scoreRows = [];
         try {
@@ -749,12 +772,24 @@ export const getCandidates = async (limit = 100, offset = 0, search = '', exclud
             .sort((a, b) => b.score - a.score)
             .map(item => item.id);
 
-        const hydrated = await hydrateCandidateIds(orderedIds, orderedIds.length);
+        const hydrated = (await hydrateCandidateIds(orderedIds, orderedIds.length)).map(candidate => {
+            const link = linkById.get(String(candidate.id));
+            if (!link) return candidate;
+            return {
+                ...candidate,
+                manualProjectId,
+                manualProjectStepId: link.stepId || candidate.manualProjectStepId,
+                crmMeta: {
+                    ...(candidate.crmMeta || {}),
+                    stepId: link.stepId || candidate.manualProjectStepId || '',
+                    linkedAt: link.linkedAt || candidate.crmMeta?.linkedAt || candidate.primerContacto
+                }
+            };
+        });
         const lowerSearch = search.toLowerCase();
         const cleanSearch = search.replace(/\D/g, '');
         const normalizedTagFilter = String(tagFilter || '').trim().toLowerCase();
         const projectId = String(manualProjectId || '').trim();
-        const stepId = String(manualStepId || '').trim();
         const normalizedStatusFilter = String(statusFilter || '').trim().toLowerCase();
         const needsProfileAudit = normalizedStatusFilter === 'complete' || normalizedStatusFilter === 'incomplete';
         const customFieldsRaw = needsProfileAudit ? await client.get('custom_fields') : null;

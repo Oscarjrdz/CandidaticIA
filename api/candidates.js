@@ -9,6 +9,8 @@
 const CANDIDATES_LIST_CACHE_TTL_MS = 15000;
 const FILTER_COUNTS_CACHE_TTL_SECONDS = 60;
 const candidatesListCache = new Map();
+const MANUAL_PROJECTS_KEY = 'candidatic_manual_projects';
+const MANUAL_PROJECT_LINKS_PREFIX = 'crm_links:';
 
 function getCachedCandidatesList(key) {
     const item = candidatesListCache.get(key);
@@ -51,6 +53,7 @@ async function buildFilterCounts(redis) {
     if (cached) return JSON.parse(cached);
 
     const ids = await redis.zrevrange('candidates:list', 0, -1);
+    const existingCandidateIds = new Set();
     const counts = {
         ages: {},
         genders: {},
@@ -70,20 +73,34 @@ async function buildFilterCounts(redis) {
             if (err || !raw) return;
             try {
                 const c = JSON.parse(raw);
+                if (c?.id) existingCandidateIds.add(String(c.id));
                 incrementCount(counts.ages, c.edad);
                 incrementCount(counts.genders, c.genero);
                 incrementCount(counts.municipalities, c.municipio);
-
-                if (c.manualProjectId) {
-                    incrementCount(counts.projects, c.manualProjectId);
-                    if (c.manualProjectStepId) {
-                        if (!counts.stepsByProject[c.manualProjectId]) counts.stepsByProject[c.manualProjectId] = {};
-                        incrementCount(counts.stepsByProject[c.manualProjectId], c.manualProjectStepId);
-                    }
-                }
+                incrementCount(counts.projects, c.manualProjectId);
             } catch {}
         });
     }
+
+    const projectsRaw = await redis.get(MANUAL_PROJECTS_KEY).catch(() => null);
+    const projects = projectsRaw ? JSON.parse(projectsRaw) : [];
+    await Promise.all((Array.isArray(projects) ? projects : []).map(async project => {
+        if (!project?.id) return;
+        const validStepIds = new Set((project.steps || []).map(step => String(step.id || '').trim()).filter(Boolean));
+        const linksRaw = await redis.get(`${MANUAL_PROJECT_LINKS_PREFIX}${project.id}`).catch(() => null);
+        let links = [];
+        try { links = linksRaw ? JSON.parse(linksRaw) : []; } catch { links = []; }
+        links.forEach(link => {
+            const candidateId = String(link?.candidateId || '').trim();
+            const stepId = String(link?.stepId || '').trim();
+            if (!candidateId || !existingCandidateIds.has(candidateId)) return;
+            if (validStepIds.size > 0 && (!stepId || !validStepIds.has(stepId))) return;
+            if (stepId) {
+                if (!counts.stepsByProject[project.id]) counts.stepsByProject[project.id] = {};
+                incrementCount(counts.stepsByProject[project.id], stepId);
+            }
+        });
+    }));
 
     const payload = { ...counts, total: ids.length, generatedAt: new Date().toISOString() };
     await redis.set('cache:candidates:filter_counts:v1', JSON.stringify(payload), 'EX', FILTER_COUNTS_CACHE_TTL_SECONDS).catch(() => {});
