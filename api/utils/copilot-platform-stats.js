@@ -123,14 +123,6 @@ function candidateWord(count) {
     return count === 1 ? 'candidato' : 'candidatos';
 }
 
-function formatBytes(bytes) {
-    const n = toNumber(bytes);
-    if (n <= 0) return '0 MB';
-    const mb = n / (1024 * 1024);
-    if (mb < 1024) return `${Number(mb.toFixed(1))} MB`;
-    return `${Number((mb / 1024).toFixed(2))} GB`;
-}
-
 function normalizeTag(tag) {
     return String(typeof tag === 'string' ? tag : tag?.name || '').trim();
 }
@@ -813,48 +805,6 @@ function summarizeBulkState(state, history) {
     };
 }
 
-function summarizeEndpointUsage(rows) {
-    const totals = rows.reduce((acc, row) => {
-        acc.calls += toNumber(row.calls);
-        acc.cacheHits += toNumber(row.cacheHits);
-        acc.cacheMisses += toNumber(row.cacheMisses);
-        acc.redisReads += toNumber(row.redisReads);
-        acc.candidateReads += toNumber(row.candidateReads);
-        acc.messageReads += toNumber(row.messageReads);
-        acc.responseBytes += toNumber(row.responseBytes);
-        acc.estimatedRedisBytes += toNumber(row.estimatedRedisBytes);
-        acc.fullScans += toNumber(row.fullScans);
-        return acc;
-    }, {
-        calls: 0,
-        cacheHits: 0,
-        cacheMisses: 0,
-        redisReads: 0,
-        candidateReads: 0,
-        messageReads: 0,
-        responseBytes: 0,
-        estimatedRedisBytes: 0,
-        fullScans: 0
-    });
-
-    const top = rows
-        .map(row => ({
-            endpoint: row.endpoint,
-            calls: toNumber(row.calls),
-            responseBytes: toNumber(row.responseBytes),
-            estimatedRedisBytes: toNumber(row.estimatedRedisBytes),
-            candidateReads: toNumber(row.candidateReads),
-            fullScans: toNumber(row.fullScans)
-        }))
-        .sort((a, b) =>
-            (b.estimatedRedisBytes + b.responseBytes + b.candidateReads + b.calls) -
-            (a.estimatedRedisBytes + a.responseBytes + a.candidateReads + a.calls)
-        )
-        .slice(0, 5);
-
-    return { totals, top };
-}
-
 function summarizeAdsCache(rawAds, hiddenCount) {
     const data = safeParse(rawAds, null);
     const ads = safeArray(data?.ads);
@@ -893,19 +843,6 @@ function summarizeRecruiterRows(rows) {
         recruitersWithActivity: rows.length,
         ...totals
     };
-}
-
-async function readEndpointUsage(redis, day) {
-    const endpoints = await redis.smembers(`metrics:endpoint:${day}:index`).catch(() => []);
-    if (!endpoints?.length) return { totals: {}, top: [] };
-
-    const pipe = redis.pipeline();
-    endpoints.slice(0, 80).forEach(endpoint => pipe.hgetall(`metrics:endpoint:${day}:${endpoint}`));
-    const rows = await pipe.exec();
-    return summarizeEndpointUsage(endpoints.slice(0, 80).map((endpoint, index) => ({
-        endpoint,
-        ...(rows[index]?.[1] || {})
-    })));
 }
 
 async function readRecruiterStats(redis, day) {
@@ -983,10 +920,7 @@ async function loadOperationalStats(redis) {
     const empresas = safeParse(val(20), []);
     const botCached = safeParse(val(21), null);
 
-    const [endpointUsage, recruiterStats] = await Promise.all([
-        readEndpointUsage(redis, today),
-        readRecruiterStats(redis, today)
-    ]);
+    const recruiterStats = await readRecruiterStats(redis, today);
 
     return {
         day: today,
@@ -1036,7 +970,6 @@ async function loadOperationalStats(redis) {
         ads: summarizeAdsCache(val(17), val(18)),
         bolsa: summarizeBolsaJobs(bolsaJobs),
         recruitersToday: recruiterStats,
-        endpointUsageToday: endpointUsage,
         bot: botCached ? {
             proactiveToday: toNumber(botCached.today),
             proactiveTotalSent: toNumber(botCached.totalSent),
@@ -1182,17 +1115,8 @@ function getOperationalStatsReply(message, stats) {
     const normalized = normalizeText(message);
     const ops = stats.operational || {};
 
-    if (/ancho de banda|bandwidth|consumo|\bgb\b|\bmb\b|redis bytes|servidor/.test(normalized)) {
-        return 'El monitor interno de ancho de banda fue retirado para evitar datos estimados. El consumo oficial debe revisarse en Redis Cloud > candidatic-kv > Configuration > Monthly network used.';
-    }
-
-    if (/endpoint|endpoints|\bapi\b|llamadas|cache|full scan|fullscan|lecturas/.test(normalized)) {
-        const totals = ops.endpointUsageToday?.totals || {};
-        const top = safeArray(ops.endpointUsageToday?.top)
-            .slice(0, 3)
-            .map(row => `${row.endpoint}: ${row.calls} llamadas`)
-            .join('; ');
-        return `Uso de endpoints hoy: ${totals.calls || 0} llamadas, ${totals.candidateReads || 0} lecturas de candidatos, ${totals.messageReads || 0} lecturas de mensajes, ${totals.fullScans || 0} full scans. Top: ${top || 'sin datos aun'}.`;
+    if (/ancho de banda|bandwidth|consumo|\bgb\b|\bmb\b|redis bytes|servidor|endpoint|endpoints|\bapi\b|llamadas|cache|full scan|fullscan|lecturas/.test(normalized)) {
+        return 'El monitor interno de ancho de banda y uso de endpoints fue retirado para evitar datos estimados/duplicados. El consumo oficial debe revisarse en Redis Cloud > candidatic-kv > Configuration > Monthly network used.';
     }
 
     if (/reclutador|reclutadores|capturista|capturistas|actividad humana|actividad de usuarios/.test(normalized)) {
@@ -1278,7 +1202,7 @@ function getOperationalStatsReply(message, stats) {
         return [
             `Resumen plataforma: ${stats.candidates.total} candidatos (${stats.candidates.complete} completos, ${stats.candidates.incomplete} incompletos, ${stats.candidates.unread} sin leer).`,
             `${stats.projects.total} proyectos, ${stats.vacancies.active}/${stats.vacancies.total} vacantes activas, ${stats.automations.enabled}/${stats.automations.total} automatizaciones activas.`,
-            `Operacion: ${ops.bolsa?.active || 0} vacantes en bolsa, ${ops.media?.libraryItems || 0} medios, ${ops.reminders?.scheduled || 0} recordatorios, ${ops.endpointUsageToday?.totals?.calls || 0} llamadas API hoy.`
+            `Operacion: ${ops.bolsa?.active || 0} vacantes en bolsa, ${ops.media?.libraryItems || 0} medios, ${ops.reminders?.scheduled || 0} recordatorios.`
         ].join(' ');
     }
 
@@ -1440,7 +1364,6 @@ export function formatPlatformStatsForPrompt(stats) {
             ads: stats.operational?.ads,
             bolsa: stats.operational?.bolsa,
             recruitersToday: stats.operational?.recruitersToday,
-            endpointUsageToday: stats.operational?.endpointUsageToday,
             bot: stats.operational?.bot
         },
         recentSample: {

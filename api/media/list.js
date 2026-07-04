@@ -1,6 +1,5 @@
 
 import { getRedisClient } from '../utils/storage.js';
-import { estimateJsonBytes, recordUsageMetric } from '../utils/usage-metrics.js';
 
 async function scanKeys(client, pattern, maxKeys = 1000) {
     let cursor = '0';
@@ -49,10 +48,9 @@ export default async function handler(req, res) {
                 await pipeline.exec();
                 // Refresh list
                 const refreshedIds = await client.zrevrange(libraryKey, 0, 99);
-                return await returnHydratedMedia(client, refreshedIds, res, { fullScan: true });
+                return await returnHydratedMedia(client, refreshedIds, res);
             }
             const payload = { success: true, files: [] };
-            recordUsageMetric(client, '/api/media/list', { responseBytes: estimateJsonBytes(payload) }).catch(() => {});
             return res.status(200).json(payload);
         }
 
@@ -64,7 +62,7 @@ export default async function handler(req, res) {
     }
 }
 
-async function returnHydratedMedia(client, ids, res, metric = {}) {
+async function returnHydratedMedia(client, ids, res) {
     const pipeline = client.pipeline();
     ids.forEach(id => {
         pipeline.get(`meta:image:${id}`);
@@ -84,11 +82,5 @@ async function returnHydratedMedia(client, ids, res, metric = {}) {
     }).filter(Boolean);
 
     const payload = { success: true, files };
-    recordUsageMetric(client, '/api/media/list', {
-        ...metric,
-        redisReads: ids.length,
-        responseBytes: estimateJsonBytes(payload),
-        estimatedRedisBytes: estimateJsonBytes(files)
-    }).catch(() => {});
     return res.status(200).json(payload);
 }

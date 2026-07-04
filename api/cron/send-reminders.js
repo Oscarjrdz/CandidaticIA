@@ -1,4 +1,4 @@
-/* global process, Buffer */
+/* global process */
 /**
  * /api/cron/send-reminders
  * Runs every 15 minutes via Vercel Cron.
@@ -12,8 +12,8 @@
 import { getRedisClient, getCandidateById, getProjectById, saveMessage } from '../utils/storage.js';
 import { getUltraMsgConfig, sendUltraMsgMessage, buildMetaTemplateComponents, renderMetaTemplatePreviewText } from '../whatsapp/utils.js';
 import { generateTTS } from '../utils/openai.js';
-import { estimateJsonBytes, recordUsageMetric } from '../utils/usage-metrics.js';
 import { acquireProcessingLock, releaseProcessingLock, markCompleted, isCompleted } from '../utils/reminder-lock.js';
+import { recordBandwidthSnapshot } from '../utils/redis-bandwidth.js';
 
 const REDIS_ZSET_KEY = 'scheduled_reminders';
 const DIRECT_REMINDERS_ZSET_KEY = 'direct_reminders';
@@ -97,12 +97,7 @@ export default async function handler(req, res) {
         return res.status(500).json({ error: 'Redis unavailable' });
     }
 
-    const usageMetrics = {
-        redisReads: 0,
-        redisWrites: 0,
-        candidateReads: 0,
-        estimatedRedisBytes: 0
-    };
+    recordBandwidthSnapshot(redis).catch(() => {});
 
     // Removed global config checking as it evaluates per-candidate now.
 
@@ -112,8 +107,6 @@ export default async function handler(req, res) {
     let members;
     try {
         members = await redis.zrangebyscore(REDIS_ZSET_KEY, 0, now);
-        usageMetrics.redisReads += 1;
-        usageMetrics.estimatedRedisBytes += estimateJsonBytes(members);
     } catch (e) {
         console.error('[SEND-REMINDERS] Redis ZRANGEBYSCORE error:', e.message);
         return res.status(500).json({ error: 'Redis query failed' });
@@ -130,8 +123,6 @@ export default async function handler(req, res) {
         try {
             if (await isCompleted(redis, 'scheduled_reminder', member)) {
                 await removeDueMember(redis, REDIS_ZSET_KEY, member);
-                usageMetrics.redisReads += 1;
-                usageMetrics.redisWrites += 1;
                 skipped++;
                 continue;
             }
@@ -140,11 +131,9 @@ export default async function handler(req, res) {
             // outage) instead of retrying forever — avoids sending a stale reminder for an
             // appointment that already happened once the outage clears.
             const dueScore = await redis.zscore(REDIS_ZSET_KEY, member).catch(() => null);
-            usageMetrics.redisReads += 1;
             if (dueScore && (now - Number(dueScore)) > STALE_REMINDER_MS) {
                 console.warn(`[SEND-REMINDERS] Dropping stale reminder "${member}" (overdue by ${Math.round((now - Number(dueScore)) / 3_600_000)}h)`);
                 await removeDueMember(redis, REDIS_ZSET_KEY, member);
-                usageMetrics.redisWrites += 1;
                 skipped++;
                 continue;
             }
@@ -154,33 +143,26 @@ export default async function handler(req, res) {
 
             if (!candidateId || !reminderId) {
                 await removeDueMember(redis, REDIS_ZSET_KEY, member);
-                usageMetrics.redisWrites += 1;
                 skipped++;
                 continue;
             }
 
             // ── Load candidate ────────────────────────────────────────────────
             const candidate = await getCandidateById(candidateId);
-            usageMetrics.candidateReads += 1;
-            usageMetrics.estimatedRedisBytes += estimateJsonBytes(candidate);
             if (!candidate?.whatsapp) {
                 console.warn(`[SEND-REMINDERS] No WhatsApp for candidate ${candidateId} — skipping`);
                 await removeDueMember(redis, REDIS_ZSET_KEY, member);
-                usageMetrics.redisWrites += 1;
                 skipped++;
                 continue;
             }
 
             // ── Load step's reminder config ────────────────────────────────────
             const project = await getProjectById(projectId);
-            usageMetrics.redisReads += 1;
-            usageMetrics.estimatedRedisBytes += estimateJsonBytes(project);
             const step    = project?.steps?.find(s => s.id === stepId);
             const reminder = step?.scheduledReminders?.find(r => r.id === reminderId);
 
             if (!reminder?.enabled || !reminder.message) {
                 await removeDueMember(redis, REDIS_ZSET_KEY, member);
-                usageMetrics.redisWrites += 1;
                 skipped++;
                 continue;
             }
@@ -195,8 +177,6 @@ export default async function handler(req, res) {
             // ── Load candidate metadata ────────────────────────────────────────
             const metadataKey = `projects:metadata:${projectId}`;
             const rawMetadata = await redis.hget(metadataKey, candidateId);
-            usageMetrics.redisReads += 1;
-            usageMetrics.estimatedRedisBytes += rawMetadata ? Buffer.byteLength(rawMetadata) : 0;
             const metadata = rawMetadata ? JSON.parse(rawMetadata) : {};
             const citaHora = metadata.citaHora || '';
 
@@ -241,7 +221,6 @@ export default async function handler(req, res) {
 
             await markCompleted(redis, 'scheduled_reminder', member, 'sent');
             await removeDueMember(redis, REDIS_ZSET_KEY, member);
-            usageMetrics.redisWrites += 2;
 
             // ── Save to chat history ──────────────────────────────────────────
             await saveMessage(candidateId, {
@@ -266,8 +245,6 @@ export default async function handler(req, res) {
     let directMembers = [];
     try {
         directMembers = await redis.zrangebyscore(DIRECT_REMINDERS_ZSET_KEY, 0, now);
-        usageMetrics.redisReads += 1;
-        usageMetrics.estimatedRedisBytes += estimateJsonBytes(directMembers);
     } catch (e) {
         console.error('[SEND-REMINDERS] direct_reminders ZRANGEBYSCORE error:', e.message);
     }
@@ -281,18 +258,13 @@ export default async function handler(req, res) {
         try {
             if (await isCompleted(redis, 'direct_reminder', remId)) {
                 await removeDueMember(redis, DIRECT_REMINDERS_ZSET_KEY, remId);
-                usageMetrics.redisReads += 1;
-                usageMetrics.redisWrites += 1;
                 skipped++;
                 continue;
             }
 
             const raw = await redis.get(`direct_reminder:${remId}`);
-            usageMetrics.redisReads += 1;
-            usageMetrics.estimatedRedisBytes += raw ? Buffer.byteLength(raw) : 0;
             if (!raw) {
                 await removeDueMember(redis, DIRECT_REMINDERS_ZSET_KEY, remId);
-                usageMetrics.redisWrites += 1;
                 skipped++;
                 continue;
             }
@@ -300,7 +272,6 @@ export default async function handler(req, res) {
             reminder = JSON.parse(raw);
             if (['sent', 'failed'].includes(reminder.status)) {
                 await removeDueMember(redis, DIRECT_REMINDERS_ZSET_KEY, remId);
-                usageMetrics.redisWrites += 1;
                 skipped++;
                 continue;
             }
@@ -313,17 +284,12 @@ export default async function handler(req, res) {
                 });
                 await markCompleted(redis, 'direct_reminder', remId, 'failed');
                 await removeDueMember(redis, DIRECT_REMINDERS_ZSET_KEY, remId);
-                usageMetrics.redisWrites += 2;
                 skipped++;
                 continue;
             }
 
             // Look up candidate to get incomingPhoneNumberId for correct number routing
             const candForReminder = reminder.candidateId ? await getCandidateById(reminder.candidateId) : null;
-            if (reminder.candidateId) {
-                usageMetrics.candidateReads += 1;
-                usageMetrics.estimatedRedisBytes += estimateJsonBytes(candForReminder);
-            }
             const config = await getUltraMsgConfig(candForReminder?.incomingPhoneNumberId || candForReminder?.instanceId);
             if (!config?.token || !config?.instanceId) {
                 throw new Error('No hay configuración de WhatsApp/Meta para enviar este recordatorio.');
@@ -395,7 +361,6 @@ export default async function handler(req, res) {
                         });
                         await markCompleted(redis, 'direct_reminder', remId, 'failed');
                         await removeDueMember(redis, DIRECT_REMINDERS_ZSET_KEY, remId);
-                        usageMetrics.redisWrites += 2;
                         errors++;
                         continue;
                     }
@@ -413,7 +378,6 @@ export default async function handler(req, res) {
             });
             await markCompleted(redis, 'direct_reminder', remId, 'sent');
             await removeDueMember(redis, DIRECT_REMINDERS_ZSET_KEY, remId);
-            usageMetrics.redisWrites += 2;
 
             await saveMessage(reminder.candidateId, {
                 from: 'me',
@@ -444,8 +408,6 @@ export default async function handler(req, res) {
             await releaseProcessingLock(redis, lock);
         }
     }
-
-    recordUsageMetric(redis, '/api/cron/send-reminders', usageMetrics).catch(() => {});
 
     return res.json({
         success: true,

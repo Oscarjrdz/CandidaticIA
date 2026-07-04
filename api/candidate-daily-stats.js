@@ -1,5 +1,4 @@
 import { getCandidates, validateAdminSession, getRedisClient } from './utils/storage.js';
-import { estimateJsonBytes, recordUsageMetric } from './utils/usage-metrics.js';
 
 const TZ = 'America/Monterrey';
 const HASH_KEY = 'stats:daily:captures';
@@ -56,9 +55,6 @@ export default async function handler(req, res) {
                 const days = buildDayArray(fromStr, toStr, hash);
                 const total = days.reduce((s, d) => s + d.count, 0);
                 const payload = { days, total, from: fromStr, to: toStr, source: 'hash' };
-                recordUsageMetric(redis, '/api/candidate-daily-stats', {
-                    responseBytes: estimateJsonBytes(payload)
-                }).catch(() => {});
                 return res.status(200).json(payload);
             }
         } catch {}
@@ -68,10 +64,6 @@ export default async function handler(req, res) {
     const fallbackCacheKey = `${fromStr}:${toStr}`;
     const cached = fallbackRangeCache.get(fallbackCacheKey);
     if (cached && cached.expiresAt > Date.now()) {
-        recordUsageMetric(redis, '/api/candidate-daily-stats', {
-            cacheHit: true,
-            responseBytes: estimateJsonBytes(cached.payload)
-        }).catch(() => {});
         res.setHeader('X-Candidatic-Cache', 'HIT');
         res.setHeader('Cache-Control', 'private, max-age=60');
         return res.status(200).json(cached.payload);
@@ -97,13 +89,6 @@ export default async function handler(req, res) {
         if (firstKey) fallbackRangeCache.delete(firstKey);
     }
     fallbackRangeCache.set(fallbackCacheKey, { expiresAt: Date.now() + FALLBACK_CACHE_TTL_MS, payload });
-    recordUsageMetric(redis, '/api/candidate-daily-stats', {
-        cacheMiss: true,
-        fullScan: true,
-        candidateReads: candidates.length,
-        estimatedRedisBytes: estimateJsonBytes(candidates),
-        responseBytes: estimateJsonBytes(payload)
-    }).catch(() => {});
     res.setHeader('X-Candidatic-Cache', 'MISS');
     res.setHeader('Cache-Control', 'private, max-age=60');
     return res.status(200).json(payload);

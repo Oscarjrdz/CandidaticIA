@@ -2,6 +2,7 @@ import React from 'react';
 import { Settings } from 'lucide-react';
 import GPTSettings from './GPTSettings';
 import WhatsAppSettings from './WhatsAppSettings';
+import RedisBandwidthSettings from './RedisBandwidthSettings';
 import { useToastContext } from '../contexts/ToastContext';
 
 /**
@@ -30,6 +31,7 @@ const SettingsSection = () => {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <WhatsAppSettings showToast={showToast} />
                 <GPTSettings showToast={showToast} />
+                <RedisBandwidthSettings />
             </div>
         </div>
     );

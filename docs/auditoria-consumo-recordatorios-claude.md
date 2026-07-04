@@ -205,3 +205,79 @@ Fecha: 2026-07-03. Se revisaron los cambios de Claude contra el objetivo origina
 - `npx eslint api/presence.js src/hooks/usePresence.js` OK.
 - `npm run build` OK.
 - `git diff --check` OK.
+
+---
+
+## Cuarta auditoria (Claude) — limpieza de medicion de consumo duplicada
+
+Fecha: 2026-07-04. Contexto: al investigar por que el consumo real de Redis Cloud (12 GB/mes reportados en el panel) no cuadraba con el estimado interno (`api/utils/usage-metrics.js`, ~334 MB en 6 dias), se descubrio que Codex ya habia intentado un reemplazo ("Use Redis Cloud official bandwidth metrics", commit `b64212d4`) y lo revirtio 25 minutos despues ("Remove internal bandwidth monitor", commit `f5fe1f26`), dejando el mensaje explicito en `copilot-platform-stats.js`: *"El monitor interno de ancho de banda fue retirado para evitar datos estimados. El consumo oficial debe revisarse en Redis Cloud > candidatic-kv > Configuration > Monthly network used."*
+
+Decision registrada: **no duplicar la medicion de consumo que Redis Cloud ya hace bien.** Cualquier estimado interno (JSON.stringify de payloads, o incluso una integracion con la API oficial de Redis Cloud) puede desalinearse de la realidad — la fuente de verdad es el panel de Redis Cloud.
+
+### Por que hacia falta una segunda pasada
+
+Codex ya habia convertido `api/utils/usage-metrics.js` en funciones vacias (`recordUsageMetric` retorna `false`, `readUsageMetrics` retorna `[]`), pero **14 archivos seguian importando y llamando esas funciones muertas** (sin efecto, pero como codigo/CPU desperdiciado y ruido de lectura), y `api/utils/copilot-platform-stats.js` seguia calculando `endpointUsageToday` a partir de llaves Redis (`metrics:endpoint:*`) que ya nadie escribe — esa rama del copiloto respondia "0 llamadas, sin datos aun" para siempre.
+
+### Cambios aplicados
+
+- **Eliminado** `api/utils/usage-metrics.js` completo (ya era un stub sin efecto).
+- **Limpiados los 14 archivos** que importaban/llamaban `recordUsageMetric`/`estimateJsonBytes` (import + bloque de llamada + variables que solo alimentaban esas llamadas): `api/tags.js`, `api/image.js`, `api/public/ai-search.js`, `api/ai/query.js`, `api/candidate-daily-stats.js`, `api/bypass-search.js`, `api/media/list.js`, `api/candidates.js`, `api/chat-unread-count.js`, `api/bulks.js`, `api/chat.js`, `api/sse/candidates.js`, `api/cron/send-reminders.js`, `api/cron/reengagement.js`.
+- **`api/utils/copilot-platform-stats.js`**: eliminadas `summarizeEndpointUsage()` y `readEndpointUsage()` (leian llaves `metrics:endpoint:*` que nadie escribe desde que `recordUsageMetric` es un stub), quitada `endpointUsageToday` de todos lados donde se propagaba, y fusionada la pregunta del copiloto sobre "endpoints/llamadas/cache/full scan" con la misma respuesta ya existente sobre ancho de banda (redirige a Redis Cloud). Tambien se elimino `formatBytes()`, que habia quedado sin ningun caller.
+- **Bug encontrado y corregido durante la limpieza**: en `api/cron/send-reminders.js`, la remocion mecanica dejo un `if (reminder.candidateId) { }` vacio (el cuerpo original solo actualizaba el `usageMetrics` eliminado). Se quito el `if` completo — no afectaba el envio, pero era codigo muerto que eslint marco como "empty block statement".
+- Se quito `Buffer` del comentario `/* global process, Buffer */` en `send-reminders.js` y `reengagement.js` porque ya no se usa (todo el uso de `Buffer.byteLength(...)` era para estimar bytes de las metricas eliminadas).
+
+### Que NO se toco (a proposito)
+
+- `api/utils/copilot-platform-stats.js` → `readRecruiterStats()` / `recruiter:*` (tiempo activo, mensajes, chats visitados de reclutadores) — sigue vivo y sirve, `presence.js` todavia escribe esas llaves.
+- El heartbeat de presencia (`usePresence.js`) y su TTL — eso es actividad humana, no medicion de consumo; ya lo ajusto la Tercera auditoria (Codex).
+- El indicador "quien esta en linea" (`presence:hash`/`presence:expiry`) — feature real de UI, no duplica nada de Redis Cloud.
+
+### Verificacion
+
+- `node --check` en los 14 archivos + `copilot-platform-stats.js`: OK.
+- `npx eslint` sobre los mismos: limpio de errores nuevos (los que aparecen son preexistentes — `catch {}`/`catch (_) {}` vacios intencionales, variables sin usar en codigo que no se toco — confirmado comparando contra `git diff` linea por linea).
+- `npm run build`: OK.
+- `grep` de confirmacion: cero referencias a `usage-metrics`, `recordUsageMetric`, `estimateJsonBytes`, `readUsageMetrics`, `endpointUsageToday`, `summarizeEndpointUsage`, `readEndpointUsage` en todo `api/` y `src/`.
+
+### Siguiente paso (pendiente de decision con el usuario)
+
+Con la duplicacion removida, quedaba pendiente decidir si construir un reemplazo real y donde debe vivir la fuente de verdad. Se eligio la Opcion C (ver abajo), implementada en la Quinta auditoria.
+
+- Opcion A: no construir nada — confiar en el panel de Redis Cloud (`Configuration > Monthly network used` y la pestaña `Metrics`) como unica fuente, tal como ya decidio Codex.
+- Opcion B: instrumentar `api/whatsapp/webhook.js` y `api/ai/agent.js` (los dos archivos que reciben/procesan cada mensaje de candidato y que nunca tuvieron ningun tipo de medicion) ya que un analisis con `INFO commandstats` mostro que `GET` es el 94.5% de todos los comandos Redis (226.5M de 239.8M en 167 dias de uptime) y esos dos archivos son los principales sospechosos de generar ese volumen (llaman `getCandidateById` sin cache). **Pendiente, no implementado.**
+- **Opcion C (elegida):** un snapshot periodico de `INFO stats` (bytes reales de red, no comandos) que calcula deltas dia a dia, guardado en Redis, expuesto en un panel de Settings.
+
+---
+
+## Quinta auditoria (Claude) — medidor de ancho de banda real (unico, sin duplicar)
+
+Fecha: 2026-07-04. A peticion explicita del usuario: *"quiero que tu crees el medidor de ancho de banda trayendo... los datos reales... no quiero tener nada que mida que no sea eso"*. O sea: un solo medidor, con datos reales (no heuristicos), y nada mas midiendo consumo en paralelo.
+
+### Diseño
+
+- **Dato real, no estimado:** se usa `INFO stats` de Redis (`total_net_input_bytes`, `total_net_output_bytes`, `total_commands_processed`) — los mismos contadores que usa el motor de Redis internamente. No es un `JSON.stringify().length` de payloads de la app (que fue precisamente el problema de la version anterior, la que se desalineo 27x contra el numero real de Redis Cloud).
+- **Snapshot + delta, no lectura directa:** como esos contadores son acumulados desde que el proceso de Redis arranco (se resetean si Redis reinicia), se guarda una foto (`bandwidth:snapshot:last`) y en cada corrida se calcula el delta contra la foto anterior. Si el valor actual es menor al anterior, se asume reinicio del proceso y el delta se cuenta completo desde cero (evita numeros negativos).
+- **Sin cron nuevo:** el snapshot se llama desde dentro de `api/cron/send-reminders.js` (que ya corre cada 15 min via Vercel Cron), no se agrego ninguna entrada nueva a `vercel.json`.
+- **Acumulacion diaria:** el delta de cada corrida se suma a una llave `bandwidth:daily:<YYYY-MM-DD>` (zona horaria Monterrey, mismo criterio que el resto del proyecto), con TTL de ~95 dias.
+
+### Archivos nuevos
+
+- `api/utils/redis-bandwidth.js` — `recordBandwidthSnapshot(redis)` (guarda snapshot + delta) y `getBandwidthSummary(redis, days)` (lee y suma N dias).
+- `api/system/bandwidth.js` — unico endpoint nuevo (`GET`, protegido por `validateAdminSession`), regresa hoy/rango de dias/totales.
+- `src/components/RedisBandwidthSettings.jsx` — tercer modulo en Configuracion (junto a `WhatsAppSettings` y `GPTSettings`, mismo componente `Card`), muestra hoy / 7 dias / 30 dias, con nota que apunta a Redis Cloud como fuente oficial de facturacion.
+
+### Archivos modificados
+
+- `api/cron/send-reminders.js` — una linea: `recordBandwidthSnapshot(redis).catch(() => {});` justo despues de confirmar que Redis esta disponible.
+- `src/components/SettingsSection.jsx` — se agrego `<RedisBandwidthSettings />` al grid junto a los otros dos modulos.
+
+### Verificacion
+
+- **Prueba real end-to-end contra Redis de produccion** (no solo sintaxis): se corrio `recordBandwidthSnapshot` dos veces con 300 operaciones reales de por medio (100 SET + 100 GET + 100 DEL). El primer snapshot establecio la base en 0: el segundo mostro un delta real de 65,504 bytes de entrada, 329,308 bytes de salida, 286 comandos — numeros correctos y consistentes con el trafico generado. Las llaves de prueba (`bandwidth:snapshot:last`, `bandwidth:daily:2026-07-04`) se borraron despues para no contaminar el primer dia real de medicion.
+- `node --check` y `npx eslint` limpios en los 3 archivos nuevos y los 2 modificados.
+- `npm run build` exitoso.
+- **No verificado:** la vista visual del panel en el navegador — no hay herramienta de control de navegador disponible en este entorno. El componente sigue el mismo patron visual que `GPTSettings.jsx` (mismo `Card`, mismos estilos), pero no se confirmo con captura.
+
+### Que sigue siendo el unico medidor
+
+Se confirmo con grep que no queda ningun otro sistema midiendo/mostrando consumo en `api/` ni `src/` fuera de este (ver Cuarta auditoria). Si en el futuro se decide implementar la Opcion B (instrumentar `webhook.js`/`agent.js` para saber exactamente que candidato/flujo genera mas trafico), deberia integrarse a este mismo modulo (`redis-bandwidth.js`) en vez de crear una fuente de datos paralela.

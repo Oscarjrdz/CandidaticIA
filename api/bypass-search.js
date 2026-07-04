@@ -26,7 +26,6 @@ export default async function handler(req, res) {
 
     try {
         const { getCandidates, getRedisClient, validateAdminSession } = await import('./utils/storage.js');
-        const { estimateJsonBytes, recordUsageMetric } = await import('./utils/usage-metrics.js');
 
         const userId = await validateAdminSession(req);
         if (!userId) return res.status(401).json({ success: false, error: 'No autorizado' });
@@ -35,10 +34,6 @@ export default async function handler(req, res) {
         const cacheKey = stableStringify({ minAge, maxAge, municipios, escolaridades, categories, gender, excludedTags });
         const cached = bypassSearchCache.get(cacheKey);
         if (cached && cached.expiresAt > Date.now()) {
-            recordUsageMetric(getRedisClient(), '/api/bypass-search', {
-                cacheHit: true,
-                responseBytes: estimateJsonBytes(cached.payload)
-            }).catch(() => {});
             res.setHeader('X-Candidatic-Cache', 'HIT');
             return res.status(200).json(cached.payload);
         }
@@ -142,13 +137,6 @@ export default async function handler(req, res) {
             if (firstKey) bypassSearchCache.delete(firstKey);
         }
         bypassSearchCache.set(cacheKey, { expiresAt: Date.now() + BYPASS_SEARCH_CACHE_TTL_MS, payload });
-        recordUsageMetric(client, '/api/bypass-search', {
-            cacheMiss: true,
-            fullScan: true,
-            candidateReads: allCandidates.length,
-            estimatedRedisBytes: estimateJsonBytes(allCandidates),
-            responseBytes: estimateJsonBytes(payload)
-        }).catch(() => {});
         res.setHeader('X-Candidatic-Cache', 'MISS');
         return res.status(200).json(payload);
 

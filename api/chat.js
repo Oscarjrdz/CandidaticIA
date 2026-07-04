@@ -2,7 +2,6 @@
 import { getMessages, getRecentMessages, saveMessage, getCandidateById, updateCandidate, updateMessageStatus, getRedisClient, validateAdminSession, getUsers, getRoles, isProfileComplete } from './utils/storage.js';
 import { substituteVariables } from './utils/shortcuts.js';
 import { sendUltraMsgMessage, getUltraMsgConfig, buildMetaTemplateComponents, renderMetaTemplatePreviewText } from './whatsapp/utils.js';
-import { estimateJsonBytes, recordUsageMetric } from './utils/usage-metrics.js';
 
 // Candidatic legacy URLs removed as per UltraMsg migration.
 
@@ -77,11 +76,6 @@ export default async function handler(req, res) {
             }
 
             const payload = { success: true, messages };
-            recordUsageMetric(getRedisClient(), '/api/chat', {
-                messageReads: messages.length,
-                responseBytes: estimateJsonBytes(payload),
-                estimatedRedisBytes: estimateJsonBytes(messages)
-            }).catch(() => {});
             return res.status(200).json(payload);
         }
 
@@ -124,20 +118,16 @@ export default async function handler(req, res) {
                 const canSeeIncomplete = user?.role === 'SuperAdmin' || !rolePermissions || Object.keys(rolePermissions).length === 0 || rolePermissions.view_incomplete_candidates === true;
 
                 const matchedIds = [];
-                let scannedUnreadCandidates = 0;
-                let estimatedScanBytes = 0;
                 const CHUNK = 200;
                 for (let i = 0; i < unreadIds.length; i += CHUNK) {
                     const ids = unreadIds.slice(i, i + CHUNK);
                     const pipe = redis.pipeline();
                     ids.forEach(id => pipe.get(`candidate:${id}`));
                     const rows = await pipe.exec();
-                    scannedUnreadCandidates += ids.length;
 
                     for (let idx = 0; idx < rows.length; idx++) {
                         const [err, raw] = rows[idx];
                         if (err || !raw) continue;
-                        estimatedScanBytes += raw.length;
                         let candidate;
                         try { candidate = JSON.parse(raw); } catch { continue; }
                         if (!candidate?.id || !isCandidateUnread(candidate)) continue;
@@ -188,13 +178,6 @@ export default async function handler(req, res) {
                     profileScope: normalizedProfileScope,
                     tagName: scope === 'tag' ? tagName : null
                 };
-                recordUsageMetric(redis, '/api/chat/mark-read-by-tag', {
-                    candidateReads: scannedUnreadCandidates,
-                    redisWrites: matchedIds.length,
-                    estimatedRedisBytes: estimatedScanBytes,
-                    responseBytes: estimateJsonBytes(payload)
-                }).catch(() => {});
-
                 return res.status(200).json(payload);
             }
 
@@ -222,10 +205,6 @@ export default async function handler(req, res) {
                 }
 
                 const messages = await getRecentMessages(candidateId, 20);
-                recordUsageMetric(redis, '/api/chat', {
-                    messageReads: messages.length,
-                    estimatedRedisBytes: estimateJsonBytes(messages)
-                }).catch(() => {});
                 const latestIncoming = [...messages].reverse().find(m => m.from !== 'bot' && m.from !== 'me');
                 const msgId = latestIncoming?.id || latestIncoming?.ultraMsgId || null;
                 if (!msgId) return { marked: null, messageReads: messages.length };

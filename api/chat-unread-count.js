@@ -165,7 +165,6 @@ export default async function handler(req, res) {
             validateAdminSession,
             isProfileComplete
         } = await import('./utils/storage.js');
-        const { estimateJsonBytes, recordUsageMetric } = await import('./utils/usage-metrics.js');
 
         const userId = await validateAdminSession(req);
         if (!userId) return res.status(401).json({ error: 'No autorizado' });
@@ -197,10 +196,6 @@ export default async function handler(req, res) {
         const cached = await redis.get(cacheKey);
         if (cached) {
             const payload = JSON.parse(cached);
-            recordUsageMetric(redis, '/api/chat-unread-count', {
-                cacheHit: true,
-                responseBytes: estimateJsonBytes(payload)
-            }).catch(() => {});
             res.setHeader('Cache-Control', 'private, max-age=5');
             return res.status(200).json(payload);
         }
@@ -222,10 +217,6 @@ export default async function handler(req, res) {
         if (!unreadSetSize) {
             const payload = { success: true, unreadCount: 0, counts: createEmptyCounts() };
             await redis.set(cacheKey, JSON.stringify(payload), 'EX', 8).catch(() => {});
-            recordUsageMetric(redis, '/api/chat-unread-count', {
-                cacheMiss: true,
-                responseBytes: estimateJsonBytes(payload)
-            }).catch(() => {});
             res.setHeader('Cache-Control', 'private, max-age=5');
             return res.status(200).json(payload);
         }
@@ -260,13 +251,6 @@ export default async function handler(req, res) {
 
         const payload = { success: true, unreadCount: counts.all, counts };
         await redis.set(cacheKey, JSON.stringify(payload), 'EX', 8).catch(() => {});
-        recordUsageMetric(redis, '/api/chat-unread-count', {
-            cacheHit: aggregate.cacheHit,
-            cacheMiss: !aggregate.cacheHit,
-            candidateReads: aggregate.candidateReads || 0,
-            estimatedRedisBytes: aggregate.estimatedRedisBytes || aggregate.cacheBytes || 0,
-            responseBytes: estimateJsonBytes(payload)
-        }).catch(() => {});
         res.setHeader('Cache-Control', 'private, max-age=5');
         return res.status(200).json(payload);
     } catch (error) {

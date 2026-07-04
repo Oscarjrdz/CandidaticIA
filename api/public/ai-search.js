@@ -1,5 +1,4 @@
 import { getOpenAIResponse } from '../utils/openai.js';
-import { estimateJsonBytes, recordUsageMetric } from '../utils/usage-metrics.js';
 
 export default async function handler(req, res) {
     if (req.method === 'OPTIONS') {
@@ -162,12 +161,6 @@ EJEMPLO DE SALIDA:
             preview: privacySafePreview,
             search_criteria: aiResponse
         };
-        recordUsageMetric(redis, '/api/public/ai-search', {
-            candidateReads: candidates.length,
-            estimatedRedisBytes: estimateJsonBytes(candidates),
-            responseBytes: estimateJsonBytes(payload),
-            fullScan: true
-        }).catch(() => {});
         return res.status(200).json(payload);
 
     } catch (error) {

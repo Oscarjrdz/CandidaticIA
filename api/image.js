@@ -1,5 +1,4 @@
 import { getRedisClient } from './utils/storage.js';
-import { recordUsageMetric } from './utils/usage-metrics.js';
 
 const ONE_YEAR_SECONDS = 31536000;
 
@@ -66,7 +65,6 @@ export default async function handler(req, res) {
         setPublicMediaCacheHeaders(res, etag);
         if (req.headers['if-none-match'] === etag) {
             await trackMediaHit(client, 'not_modified');
-            recordUsageMetric(client, '/api/image', { cacheHit: true }).catch(() => {});
             return res.status(304).end();
         }
 
@@ -78,7 +76,6 @@ export default async function handler(req, res) {
             res.setHeader('Content-Type', headMime);
             res.setHeader('Content-Length', meta.size);
             await trackMediaHit(client, 'head');
-            recordUsageMetric(client, '/api/image', { responseBytes: 0 }).catch(() => {});
             return res.status(200).end();
         }
 
@@ -132,12 +129,6 @@ export default async function handler(req, res) {
         setPublicMediaCacheHeaders(res, etag);
 
         await trackMediaHit(client, source, buffer.length);
-        recordUsageMetric(client, '/api/image', {
-            cacheMiss: source === 'redis',
-            redisReads: source === 'redis' ? 1 : 0,
-            responseBytes: req.method === 'HEAD' ? 0 : buffer.length,
-            estimatedRedisBytes: source === 'redis' ? buffer.length : 0
-        }).catch(() => {});
 
         if (req.method === 'HEAD') return res.status(200).end();
 

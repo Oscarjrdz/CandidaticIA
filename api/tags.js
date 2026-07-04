@@ -86,7 +86,6 @@ async function getCountsSummary(redis) {
 export default async function handler(req, res) {
     try {
         const { getRedisClient, validateAdminSession } = await import('./utils/storage.js');
-        const { estimateJsonBytes, recordUsageMetric } = await import('./utils/usage-metrics.js');
         const redis = getRedisClient();
         if (!redis) return res.status(500).json({ error: 'Redis no disponible' });
 
@@ -105,16 +104,10 @@ export default async function handler(req, res) {
             ];
             const tags = savedTags.map(t => typeof t === 'string' ? { name: t, color: '#3b82f6' } : t);
 
-            const { map: countsMap, untaggedCount, seededCandidateReads } = await getCountsSummary(redis);
+            const { map: countsMap, untaggedCount } = await getCountsSummary(redis);
             tags.forEach(t => { t.count = countsMap[t.name] || 0; });
 
             const payload = { success: true, tags, untaggedCount };
-            recordUsageMetric(redis, '/api/tags', {
-                candidateReads: seededCandidateReads,
-                estimatedRedisBytes: seededCandidateReads ? estimateJsonBytes(countsMap) : 0,
-                responseBytes: estimateJsonBytes(payload),
-                fullScan: seededCandidateReads > 0
-            }).catch(() => {});
             return res.status(200).json(payload);
         }
 

@@ -140,13 +140,8 @@ export default async function handler(req, res) {
     try {
         // DYNAMIC IMPORTS
         const { getCandidates, getCandidatesUnreadFirst, getCandidatesUnreadFirstByTag, getCandidatesFiltered, getCandidateById, deleteCandidate, validateAdminSession, getRedisClient } = await import('./utils/storage.js');
-        const { recordUsageMetric, estimateJsonBytes } = await import('./utils/usage-metrics.js');
         const redisForMetrics = getRedisClient();
-        const finishCandidatesResponse = async (status, payload, metric = {}) => {
-            await recordUsageMetric(redisForMetrics, '/api/candidates', {
-                ...metric,
-                responseBytes: estimateJsonBytes(payload)
-            });
+        const finishCandidatesResponse = async (status, payload) => {
             return res.status(status).json(payload);
         };
 
@@ -160,10 +155,7 @@ export default async function handler(req, res) {
 
             if (action === 'filter_counts') {
                 const counts = await buildFilterCounts(redisForMetrics);
-                return finishCandidatesResponse(200, { success: true, counts }, {
-                    cacheScope: 'filter_counts',
-                    estimatedRedisBytes: estimateJsonBytes(counts)
-                });
+                return finishCandidatesResponse(200, { success: true, counts });
             }
 
             // Estadísticas (Optional mixed response)
@@ -204,9 +196,6 @@ export default async function handler(req, res) {
                 return finishCandidatesResponse(200, {
                     success: true,
                     candidate: candidate
-                }, {
-                    candidateReads: 1,
-                    estimatedRedisBytes: estimateJsonBytes(candidate)
                 });
             }
 
@@ -227,7 +216,7 @@ export default async function handler(req, res) {
             if (cachedPayload) {
                 res.setHeader('X-Candidatic-Cache', 'HIT');
                 res.setHeader('Cache-Control', 'private, max-age=10');
-                return finishCandidatesResponse(200, cachedPayload, { cacheHit: true });
+                return finishCandidatesResponse(200, cachedPayload);
             }
 
             // Modo filtro servidor: unread / complete / incomplete (sin tag ni búsqueda)
@@ -248,11 +237,7 @@ export default async function handler(req, res) {
                 setCachedCandidatesList(cacheKey, payload);
                 res.setHeader('X-Candidatic-Cache', 'MISS');
                 res.setHeader('Cache-Control', 'private, max-age=10');
-                return finishCandidatesResponse(200, payload, {
-                    cacheMiss: true,
-                    candidateReads: candidates.length,
-                    estimatedRedisBytes: estimateJsonBytes(candidates)
-                });
+                return finishCandidatesResponse(200, payload);
             }
 
             if (['unread', 'complete', 'incomplete'].includes(filter) && !search && !tag) {
@@ -263,11 +248,7 @@ export default async function handler(req, res) {
                 setCachedCandidatesList(cacheKey, payload);
                 res.setHeader('X-Candidatic-Cache', 'MISS');
                 res.setHeader('Cache-Control', 'private, max-age=10');
-                return finishCandidatesResponse(200, payload, {
-                    cacheMiss: true,
-                    candidateReads: candidates.length,
-                    estimatedRedisBytes: estimateJsonBytes(candidates)
-                });
+                return finishCandidatesResponse(200, payload);
             }
 
             // Modo unreadFirst sin filtro: no-leídos + N recientes
@@ -285,11 +266,7 @@ export default async function handler(req, res) {
                 setCachedCandidatesList(cacheKey, payload);
                 res.setHeader('X-Candidatic-Cache', 'MISS');
                 res.setHeader('Cache-Control', 'private, max-age=10');
-                return finishCandidatesResponse(200, payload, {
-                    cacheMiss: true,
-                    candidateReads: candidates.length,
-                    estimatedRedisBytes: estimateJsonBytes(candidates)
-                });
+                return finishCandidatesResponse(200, payload);
             }
 
             // Modo unreadFirst con tag activo y primera página: no-leídos con ese tag primero
@@ -301,11 +278,7 @@ export default async function handler(req, res) {
                 setCachedCandidatesList(cacheKey, payload);
                 res.setHeader('X-Candidatic-Cache', 'MISS');
                 res.setHeader('Cache-Control', 'private, max-age=10');
-                return finishCandidatesResponse(200, payload, {
-                    cacheMiss: true,
-                    candidateReads: candidates.length,
-                    estimatedRedisBytes: estimateJsonBytes(candidates)
-                });
+                return finishCandidatesResponse(200, payload);
             }
 
             // Lista de candidatos (modo normal)
@@ -329,12 +302,7 @@ export default async function handler(req, res) {
             setCachedCandidatesList(cacheKey, payload);
             res.setHeader('X-Candidatic-Cache', 'MISS');
             res.setHeader('Cache-Control', 'private, max-age=10');
-            return finishCandidatesResponse(200, payload, {
-                cacheMiss: true,
-                candidateReads: candidates.length,
-                estimatedRedisBytes: estimateJsonBytes(candidates),
-                fullScan: !!(search || excludeLinked === 'true')
-            });
+            return finishCandidatesResponse(200, payload);
         }
 
         // POST /api/candidates - Crear candidato manualmente

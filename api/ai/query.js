@@ -1,5 +1,4 @@
 import { getOpenAIResponse } from '../utils/openai.js';
-import { estimateJsonBytes, recordUsageMetric } from '../utils/usage-metrics.js';
 
 // Cache en memoria para la lista completa de candidatos (evita re-leer Redis en cada búsqueda)
 let _candidatesCache = null;
@@ -378,12 +377,6 @@ IMPORTANTE: Responde SÓLO con el JSON en bruto, sin backticks (\`\`\`) ni marca
             candidates: candidatesForClient,
             ai: aiResponse
         };
-        recordUsageMetric(redis, '/api/ai/query', {
-            candidateReads: candidates.length,
-            estimatedRedisBytes: estimateJsonBytes(candidates),
-            responseBytes: estimateJsonBytes(payload),
-            fullScan: true
-        }).catch(() => {});
         return res.status(200).json(payload);
 
     } catch (error) {
