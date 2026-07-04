@@ -2,6 +2,7 @@ import React, { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallba
 import ConfirmModal from './ui/ConfirmModal';
 import { MapPin, List as ListIcon, ShoppingBag, UserSquare, MousePointerClick, Search, MessageSquare, Plus, Smile, Paperclip, Mic, ArrowLeft, Send, Tag, Pencil, Check, X, Trash2, Briefcase, Kanban, BookOpen, Keyboard, Loader2, Edit2, Reply, Zap, Pin, MessageCirclePlus, Phone, User, Bell } from 'lucide-react';
 import { getCandidates, getCandidateById, blockCandidate, deleteCandidate } from '../services/candidatesService';
+import { substituteVariables } from '../../api/utils/shortcuts.js';
 import ManualProjectsSidepanel from './ManualProjectsSidepanel';
 import { formatRelativeDate } from '../utils/formatters';
 import { useCandidatesSSE, useSSECandidateUpdate } from '../hooks/useCandidatesSSE';
@@ -1233,9 +1234,11 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         if (imgs.length) setPendingQrImages(imgs);
         if (qr.message) {
             const candidatoFresh = candidates.find(c => c.id === selectedChat?.id) || selectedChat;
-            const nombre = (candidatoFresh?.nombreReal?.trim() || '').split(' ')[0];
-            const resolved = qr.message
-                .replace(/\{\{nombre\}\}/gi, nombre)
+            // Misma funcion que usa el backend al enviar (api/utils/shortcuts.js) — antes
+            // esto solo reconocia {{nombre}} exacto (sin espacios internos, y ninguna otra
+            // variable), asi que cualquier otro placeholder o variante de formato quedaba
+            // sin resolver aqui aunque el envio final si lo hubiera resuelto bien.
+            const resolved = substituteVariables(qr.message, candidatoFresh || {})
                 .replace(/[^\S\n]{2,}/g, ' ')
                 .trim();
             messageInputRef.current?.injectText(resolved);
