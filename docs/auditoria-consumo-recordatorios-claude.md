@@ -471,3 +471,57 @@ Se cambio la dependencia del `useEffect` de `[selectedChat]` a `[selectedChat?.i
 - `npx eslint src/components/ChatSection.jsx`: sin errores nuevos.
 - `npm run build` exitoso.
 - **Confirmado post-deploy con `MONITOR` real:** mandando mensajes de nuevo despues de desplegar el fix, las llaves especificas de presencia (`presence:hash`, `presence:expiry`, `presence:last_hash`, `recruiter:ids`, `recruiter:time`, `recruiter:meta`, `recruiter:visited`) bajaron de ~616 hits en 100s (antes del fix) a ~84 hits en 90s — **reduccion del 86%**. (Nota: en el primer vistazo se conto de mas por agrupar junto `recruiter:msgs`/`recruiter:chats`/`recruiter:win24`, que son contadores legitimos de "mensaje enviado", no presencia — no son parte de esta fuga.)
+
+---
+
+## Decima auditoria (Claude) — 20 mensajes de prueba (10 salientes, 10 entrantes): dos fugas mas en `storage.js`
+
+Fecha: 2026-07-04. El usuario pidio mandar 10 mensajes salientes manuales y 10 entrantes manuales (los flujos mas repetitivos del dia a dia) capturando con `MONITOR`, para encontrar mas fugas de las mas comunes.
+
+### Captura: 12,695 comandos para 20 mensajes (~635 por mensaje)
+
+Dos patrones concretos y verificables destacaron:
+
+1. **`candidatic:phone_index` reescrito 40 veces (2 por mensaje)** — el telefono de un candidato no deberia cambiar nunca despues de creado.
+2. **`stats:list:pending`/`stats:list:complete` tocados 108 veces cada uno (~5.4 por mensaje)** — muchas mas veces que candidatos que realmente cambiaron de pendiente a completo o viceversa en esos 20 mensajes.
+
+### Causa raiz y fix 1: `candidatic:phone_index` — escritura siempre redundante
+
+`api/utils/storage.js` → `saveWebhookTransaction()` (la funcion "ATOMIC WEBHOOK TRANSACTION" usada en cada mensaje, entrante y saliente) tenia, en la seccion "3. Update Candidate":
+```js
+if (finalCandidate.whatsapp) {
+    pipeline.hset(KEYS.PHONE_INDEX, cleanPhone, candidateId);
+}
+```
+El comentario original decia "Update Index if it's a new candidate or phone changed (safety)" pero el codigo no verificaba ninguna de las dos condiciones — simplemente lo hacia siempre. Se confirmo que:
+- El telefono se indexa una sola vez, correctamente, al crear el candidato (`saveCandidate`, linea ~1327).
+- Para que `saveWebhookTransaction` reciba un `candidateId`, ese candidato ya tuvo que resolverse via ese mismo indice (o crearse momentos antes en el mismo request) — el indice siempre ya existe y ya es correcto en este punto.
+- Se busco en todo el codebase alguna funcion de "cambiar telefono"/"merge de candidatos" y no existe ninguna.
+
+**Fix:** se elimino el `pipeline.hset(KEYS.PHONE_INDEX, ...)` de `saveWebhookTransaction` — es codigo muerto en la practica, siempre reescribe el mismo valor que ya estaba.
+
+### Causa raiz y fix 2: `syncCandidateStats` — SADD/SREM sin verificar si el estado cambio
+
+`api/utils/storage.js` → `syncCandidateStats()` (llamada desde `saveWebhookTransaction` en cada mensaje, y desde `updateCandidate`/`saveCandidate`) calculaba `wasIncomplete` (estado antes) e `isComplete` (estado ahora) pero **nunca los comparaba** antes de escribir — hacia `SADD`+`SREM` sobre `stats:list:pending`/`stats:list:complete` en every llamada, sin importar si el candidato seguia exactamente en el mismo estado que antes (el caso mas comun, ya que la mayoria de mensajes en una conversacion no cambian el estado pendiente/completo del perfil).
+
+**Fix:** se agrego `const statusChanged = isFirstSync || (wasIncomplete === isComplete);` y se envolvio el bloque de `SADD`/`SREM` (ambas variantes, con y sin pipeline) en `if (statusChanged)`. `isFirstSync` (`c.statusAudit == null`) garantiza que un candidato genuinamente nuevo si se agregue la primera vez.
+
+### Verificacion end-to-end contra Redis real (no solo lint)
+
+Se escribio un script de prueba temporal que llama `syncCandidateStats` directo contra un candidato de prueba desechable en Redis produccion, verificando membresia real en los sets (`SISMEMBER`) antes/despues de cada llamada:
+
+| Caso | Resultado |
+|---|---|
+| 1. Candidato nuevo (sin `statusAudit` previo), incompleto | ✅ Se agrega a `pending` |
+| 2. Mismo estado (sigue incompleto) | ✅ No escribe nada |
+| 3. Cambia a completo (con `paso2Estado: 'completo'` y todos los campos core) | ✅ Se mueve de `pending` a `complete` |
+| 4. Sigue completo (sin cambio) | ✅ No escribe nada |
+
+(Nota: el primer intento de prueba fallo porque el candidato sintetico no incluia `fechaNacimiento` ni `paso2Estado: 'completo'`, campos requeridos reales de `CORE_REQUIRED_FIELDS`/`isProfileComplete` — una vez corregido el dato de prueba, los 4 casos pasaron. El bug estaba en el test, no en el fix.)
+
+### Verificacion
+
+- `node --check api/utils/storage.js`: OK.
+- `npx eslint api/utils/storage.js`: sin errores nuevos (30 preexistentes, confirmado con `git diff` que ninguno esta en lineas tocadas).
+- `npm run build` exitoso.
+- Prueba funcional contra Redis real (arriba): 4/4 casos correctos.

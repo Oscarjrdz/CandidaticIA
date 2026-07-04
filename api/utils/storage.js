@@ -1223,8 +1223,14 @@ export const syncCandidateStats = async (id, candidateData = null, pipeline = nu
         const isComplete = isProfileComplete(c, customFields);
 
         // 2. Denormalize status inside the object
+        const isFirstSync = c.statusAudit == null;
         const wasIncomplete = c.statusAudit !== 'complete';
         c.statusAudit = isComplete ? 'complete' : 'pending';
+        // Did completeness actually flip? (or never synced before) — used below to skip
+        // the SADD/SREM dance on every message when nothing changed. Confirmado con
+        // MONITOR: 108 escrituras a stats:list:pending/complete en solo 20 mensajes,
+        // la gran mayoria sin ningun cambio real de estado.
+        const statusChanged = isFirstSync || (wasIncomplete === isComplete);
 
         // 📊 Meta Conversions API — fire once when profile first becomes complete
         if (isComplete && wasIncomplete && c.adClickId) {
@@ -1241,29 +1247,29 @@ export const syncCandidateStats = async (id, candidateData = null, pipeline = nu
             }).catch(() => {});
         }
 
-        // 3. Update Sets Atomically
-        if (pipeline) {
-            if (isComplete) {
-                pipeline.sadd(KEYS.LIST_COMPLETE, id);
-                pipeline.srem(KEYS.LIST_PENDING, id);
+        // 3. Update Sets Atomically — solo si el estado realmente cambio (o es la
+        // primera vez que se sincroniza este candidato)
+        if (statusChanged) {
+            if (pipeline) {
+                if (isComplete) {
+                    pipeline.sadd(KEYS.LIST_COMPLETE, id);
+                    pipeline.srem(KEYS.LIST_PENDING, id);
+                } else {
+                    pipeline.sadd(KEYS.LIST_PENDING, id);
+                    pipeline.srem(KEYS.LIST_COMPLETE, id);
+                }
             } else {
-                pipeline.sadd(KEYS.LIST_PENDING, id);
-                pipeline.srem(KEYS.LIST_COMPLETE, id);
-            }
-        } else {
-            if (isComplete) {
-                await client.multi()
-                    .sadd(KEYS.LIST_COMPLETE, id)
-                    .srem(KEYS.LIST_PENDING, id)
-                    .exec();
-            } else {
-                await client.multi()
-                    .sadd(KEYS.LIST_PENDING, id)
-                    .srem(KEYS.LIST_COMPLETE, id)
-                    .exec();
-            }
-            // Publish real-time stats update only when completeness actually changed
-            if (wasIncomplete === isComplete) {
+                if (isComplete) {
+                    await client.multi()
+                        .sadd(KEYS.LIST_COMPLETE, id)
+                        .srem(KEYS.LIST_PENDING, id)
+                        .exec();
+                } else {
+                    await client.multi()
+                        .sadd(KEYS.LIST_PENDING, id)
+                        .srem(KEYS.LIST_COMPLETE, id)
+                        .exec();
+                }
                 _publishGlobalStats(client).catch(() => {});
             }
         }
@@ -2473,11 +2479,11 @@ export const saveWebhookTransaction = async ({
 
         pipeline.set(`${KEYS.CANDIDATE_PREFIX}${candidateId}`, JSON.stringify(finalCandidate));
 
-        // Update Index if it's a new candidate or phone changed (safety)
-        if (finalCandidate.whatsapp) {
-            const cleanPhone = finalCandidate.whatsapp.replace(/\D/g, '');
-            pipeline.hset(KEYS.PHONE_INDEX, cleanPhone, candidateId);
-        }
+        // NOTA: el telefono se indexa una sola vez al crear el candidato (saveCandidate,
+        // linea ~1327) — para llegar aqui candidateId ya se resolvio via ese indice o via
+        // creacion reciente, asi que reescribirlo en cada mensaje es siempre redundante
+        // (WhatsApp del candidato no cambia post-creacion). Confirmado con MONITOR: 40
+        // HSET en 20 mensajes de prueba, todos con el mismo valor ya indexado.
 
         // Update Sorting Score in List
         const score = new Date(finalCandidate.ultimoMensaje || finalCandidate.primerContacto || Date.now()).getTime();
