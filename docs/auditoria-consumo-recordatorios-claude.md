@@ -281,3 +281,13 @@ Fecha: 2026-07-04. A peticion explicita del usuario: *"quiero que tu crees el me
 ### Que sigue siendo el unico medidor
 
 Se confirmo con grep que no queda ningun otro sistema midiendo/mostrando consumo en `api/` ni `src/` fuera de este (ver Cuarta auditoria). Si en el futuro se decide implementar la Opcion B (instrumentar `webhook.js`/`agent.js` para saber exactamente que candidato/flujo genera mas trafico), deberia integrarse a este mismo modulo (`redis-bandwidth.js`) en vez de crear una fuente de datos paralela.
+
+### Seed manual de historial (1-3 de julio) — a peticion del usuario
+
+El medidor solo empieza a acumular desde que se desplego (4 de julio). El usuario reporto el numero oficial del panel de Redis Cloud para lo que iba del mes: **12.4 GB** entre el 1 y el 3 de julio (3 dias antes de que el medidor existiera). Pidio repartir ese total de forma estatica entre esos 3 dias y dejar que a partir del 4 de julio el medidor acumule solo, dinamicamente, con datos reales del cron.
+
+Se hizo un seed de un solo uso (script temporal, no queda en el repo) escribiendo directo en Redis:
+- `bandwidth:daily:2026-07-01`, `2026-07-02`, `2026-07-03` → `netOutputBytes` con 12.4 GiB repartidos en partes iguales (4,438,132,872 / 4,438,132,872 / 4,438,132,874 bytes — la diferencia de 2 bytes en el ultimo dia es solo para que la suma sea exacta), `netInputBytes: 0`, `samples: 1`, mismo TTL de ~95 dias que usa el resto del sistema.
+- Se verifico leyendo de vuelta con `getBandwidthSummary(redis, 30)`: el total de 30 dias dio exactamente 12.40 GB, igual al numero que reporto el usuario.
+
+**Importante para el futuro:** los dias 2026-07-01 a 2026-07-03 en `bandwidth:daily:*` son un valor manual fijo, no una medicion real dia por dia (no sabemos cuanto se consumio especificamente cada uno de esos 3 dias, solo el total). A partir de 2026-07-04 todo es medicion real via `recordBandwidthSnapshot`. Si se audita este sistema mas adelante y esos 3 dias se ven sospechosamente parejos entre si, es por esto, no es un bug del snapshot.
