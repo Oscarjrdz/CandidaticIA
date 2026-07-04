@@ -7,7 +7,7 @@ import {
     markMessageAsDone
 } from '../utils/storage.js';
 
-export const maxDuration = 60; // Extend Vercel timeout for LLM bursts
+export const maxDuration = 120; // Subido de 60 a 120s — mas margen antes del kill duro de Vercel
 
 /**
  * 🚀 SERVERLESS TURBO ENGINE v2 — Production-Ready for 500+ candidates/hour
@@ -95,7 +95,7 @@ export async function runTurboEngine(candidateId, from) {
             console.log(`[Serverless Engine] ${candidateId} busy. Waiting for lock to release...`);
             
             // Poll for up to 50 seconds — the agent can hold the lock for 15-25s
-            // (step transition + media sends + delays). 50s < Vercel's 60s maxDuration.
+            // (step transition + media sends + delays). 50s + processing < Vercel's 120s maxDuration.
             let waited = 0;
             const POLL_INTERVAL = 500; // ms — faster reaction when lock frees
             const MAX_WAIT = 50000;    // ms

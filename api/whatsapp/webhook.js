@@ -36,7 +36,10 @@ import { sendMessage } from '../utils/messenger.js';
 import { logTelemetry } from '../utils/telemetry.js';
 import { sendConversionEvent } from '../utils/metaConversions.js';
 
-export const maxDuration = 60;
+// Subido de 60 a 120s: da margen extra a la espera del lock de candidato
+// (hasta 50s en workers/process-message.js) + el procesamiento real de IA,
+// para que un mensaje no se pierda en silencio si ambos coinciden cerca del limite.
+export const maxDuration = 120;
 
 const isDebug = process.env.DEBUG_MODE === 'true';
 if (!isDebug) {

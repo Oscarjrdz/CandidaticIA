@@ -29,7 +29,9 @@ import {
 import { getMessengerProfile, markMessengerMessageAsRead } from './utils.js';
 import { logTelemetry } from '../utils/telemetry.js';
 
-export const maxDuration = 60;
+// Subido de 60 a 120s — mismo motivo que api/whatsapp/webhook.js: margen extra
+// para la espera de lock + procesamiento de IA antes de que Vercel mate la funcion.
+export const maxDuration = 120;
 
 const isDebug = process.env.DEBUG_MODE === 'true';
 if (!isDebug) {

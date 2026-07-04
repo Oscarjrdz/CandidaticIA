@@ -596,7 +596,33 @@ Se conto cuantas llamadas a `getOpenAIResponse` ocurren para el turno donde el c
 
 ### Pendiente — riesgo arquitectonico, no corregido en esta pasada
 
-El riesgo real de "mensaje perdido" por el limite de 50s de espera de lock + 60s de `maxDuration` **sigue existiendo** — el fix de esta auditoria (debug logging) reduce la latencia de fondo pero no elimina el riesgo de fondo bajo carga real (mensajes muy seguidos del mismo candidato, o una respuesta de OpenAI inusualmente lenta). Posibles soluciones a futuro, no implementadas:
-- Subir `maxDuration` si el plan de Vercel lo permite (actualmente 60s).
-- Reducir el tiempo maximo de espera del lock (actualmente 50s) para fallar mas rapido y reintentar en vez de arriesgar el timeout duro.
-- Desacoplar la respuesta a Meta del procesamiento de IA (responder 200 OK a Meta inmediatamente, procesar en background) — cambio arquitectonico mayor, mas riesgoso, requiere diseño cuidadoso para no perder mensajes en el camino.
+El riesgo real de "mensaje perdido" por el limite de 50s de espera de lock + 60s de `maxDuration` **sigue existiendo** — el fix de esta auditoria (debug logging) reduce la latencia de fondo pero no elimina el riesgo de fondo bajo carga real (mensajes muy seguidos del mismo candidato, o una respuesta de OpenAI inusualmente lenta). Posibles soluciones a futuro:
+- Subir `maxDuration` si el plan de Vercel lo permite (actualmente 60s). **Implementado despues, ver Treceava auditoria.**
+- Reducir el tiempo maximo de espera del lock (actualmente 50s) para fallar mas rapido y reintentar en vez de arriesgar el timeout duro. No implementado.
+- Desacoplar la respuesta a Meta del procesamiento de IA (responder 200 OK a Meta inmediatamente, procesar en background) — cambio arquitectonico mayor, mas riesgoso, requiere diseño cuidadoso para no perder mensajes en el camino. No implementado.
+
+---
+
+## Treceava auditoria (Claude) — sube maxDuration de 60s a 120s (mitigacion de la Opcion 1)
+
+Fecha: 2026-07-04. Antes de aplicar este cambio se reviso con el usuario, con datos reales: latencia real de las llamadas a OpenAI (`consolidated_brain`) en las ultimas 100 muestras de telemetria fue minimo 1.5s, mediana 2.3s, **maximo observado 9.3s** — muy por debajo del limite. Ademas, revisando los ultimos 100 eventos de telemetria general no hay ningun `BRENDA_DELIVERY_FAILED` ni rafagas de mensajes agrupados (senal de contencion de lock), y el usuario reviso manualmente 100 chats reales sin encontrar ningun caso de "Brenda muda". **Conclusion: el riesgo es real arquitectonicamente pero no se esta materializando en la practica hoy** — no es una emergencia, pero subir el limite es una mejora de proteccion sin costo de velocidad (confirmado con el usuario: `maxDuration` es solo un techo, no afecta cuanto tarda una respuesta normal).
+
+### Cambio aplicado
+
+Se subio `maxDuration` de 60 a 120 segundos en los 3 archivos donde aplica (los que realmente son invocados por HTTP — `runTurboEngine` se llama por `import()` interno desde estos, nunca por HTTP directo, asi que el limite relevante es el de quien recibe el webhook):
+- `api/whatsapp/webhook.js`
+- `api/messenger/webhook.js`
+- `api/workers/process-message.js` (por si algo mas lo invoca directo en el futuro; hoy no aplica en la practica)
+
+Se actualizaron tambien los comentarios en `process-message.js` que hacian referencia al limite viejo de 60s.
+
+### Nota sobre el plan de Vercel
+
+No se pudo confirmar por CLI si el plan actual soporta 120s (Hobby tope 60s, Pro hasta 300s, Enterprise hasta 900s, segun documentacion general de Vercel). Se decidio intentar el deploy directamente: si el plan no lo soporta, Vercel rechaza el deploy con un error claro y no afecta la produccion actual (sigue sirviendo el ultimo deploy exitoso mientras tanto).
+
+### Verificacion
+
+- `node --check` en los 3 archivos: OK.
+- `npx eslint`: sin errores nuevos (confirmado con `git diff`).
+- `npm run build` exitoso.
+- Resultado del deploy: ver mensaje de seguimiento inmediato despues de esta entrada.
