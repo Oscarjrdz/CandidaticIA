@@ -437,3 +437,37 @@ Se subio `CHAT_LOCK_IDLE_MS` de 60 segundos a **5 minutos** (`src/components/Cha
 
 - `npx eslint src/components/ChatSection.jsx`: sin errores nuevos (los 21 que aparecen son preexistentes en lineas no tocadas).
 - `npm run build` exitoso.
+
+---
+
+## Novena auditoria (Claude) — fuga real: presencia disparaba en cada mensaje, no cada 45s/4min
+
+Fecha: 2026-07-04. El usuario pidio mandar un mensaje normal, uno de plantilla, y uno de banco de mensajes desde el chat, capturando con `MONITOR` para revisar si hay fuga.
+
+### Captura: 9,788 comandos en 100 segundos
+
+De eso, el bloque de presencia/reclutador (`presence:hash`, `presence:expiry`, `presence:last_hash`, `recruiter:ids:*`, `recruiter:time:*`, `recruiter:visited:*`, `recruiter:meta:*`) aparecio **~60-67 veces** en la ventana — un heartbeat cada ~1.5 segundos, cuando el diseño de `usePresence.js` (Segunda/Tercera auditoria) establece 45s activo / 4min idle. Con solo 3 envios manuales de mensaje, esa frecuencia no cuadra con el diseño esperado.
+
+### Causa raiz
+
+`src/components/ChatSection.jsx` (linea ~635, antes de este fix) tenia:
+```js
+useEffect(() => {
+    window.dispatchEvent(new CustomEvent('presence_chat_change', { detail: { chatId: selectedChat?.id || null } }));
+}, [selectedChat]);
+```
+`usePresence.js` escucha ese evento y fuerza un heartbeat **inmediato** (`sendHeartbeatRef.current?.({ hydrate: true })`), sin pasar por el throttle de 45s/4min — diseñado para notificar quien esta viendo un chat cuando el usuario cambia de conversacion.
+
+El problema: la dependencia era `[selectedChat]` (el objeto completo), no `[selectedChat?.id]`. Y `selectedChat` se reemplaza por un objeto **nuevo** en cada actualizacion SSE del candidato activo (`setSelectedChat(prev => ({ ...prev, ...patch }))` en varios sitios de `ChatSection.jsx`, disparado por cada mensaje enviado/recibido, cada cambio de estado de entrega, etc.). Como el efecto compara por referencia, cada mensaje —no solo cada cambio de chat— disparaba un heartbeat de presencia inmediato, saltandose por completo el throttle que se construyo especificamente para bajar este consumo.
+
+### Fix aplicado
+
+Se cambio la dependencia del `useEffect` de `[selectedChat]` a `[selectedChat?.id]` (una palabra). El efecto solo necesita el id (es lo unico que usa en el cuerpo), asi que el comportamiento intencionado (avisar cuando cambias de chat) queda identico, pero ya no dispara con cada mutacion de datos del mismo chat.
+
+**Impacto esperado:** el heartbeat de presencia vuelve a respetar 45s/4min real, en vez de dispararse en cada mensaje enviado o recibido mientras un chat esta abierto — que es exactamente el escenario mas comun de uso (un reclutador respondiendo una conversacion activa).
+
+### Verificacion
+
+- `npx eslint src/components/ChatSection.jsx`: sin errores nuevos.
+- `npm run build` exitoso.
+- Pendiente: repetir la captura con `MONITOR` despues del deploy, mandando mensajes de nuevo, para confirmar que la frecuencia de presencia baja a lo esperado.

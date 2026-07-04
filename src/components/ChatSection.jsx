@@ -631,10 +631,14 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
 
 
 
-    // Broadcast active chat changes back to global Presence (App.jsx)
+    // Broadcast active chat changes back to global Presence (App.jsx).
+    // Depende solo del id (no del objeto completo) — selectedChat se reemplaza
+    // por un objeto nuevo en cada actualizacion SSE del candidato (cada mensaje,
+    // cada cambio de estado), lo que forzaba un heartbeat de presencia inmediato
+    // en cada mensaje, saltandose el throttle de 45s/4min.
     useEffect(() => {
         window.dispatchEvent(new CustomEvent('presence_chat_change', { detail: { chatId: selectedChat?.id || null } }));
-    }, [selectedChat]);
+    }, [selectedChat?.id]);
 
     const [searchQuery, setSearchQuery] = useState("");
     const deferredSearch = useDeferredValue(searchQuery);
