@@ -470,4 +470,4 @@ Se cambio la dependencia del `useEffect` de `[selectedChat]` a `[selectedChat?.i
 
 - `npx eslint src/components/ChatSection.jsx`: sin errores nuevos.
 - `npm run build` exitoso.
-- Pendiente: repetir la captura con `MONITOR` despues del deploy, mandando mensajes de nuevo, para confirmar que la frecuencia de presencia baja a lo esperado.
+- **Confirmado post-deploy con `MONITOR` real:** mandando mensajes de nuevo despues de desplegar el fix, las llaves especificas de presencia (`presence:hash`, `presence:expiry`, `presence:last_hash`, `recruiter:ids`, `recruiter:time`, `recruiter:meta`, `recruiter:visited`) bajaron de ~616 hits en 100s (antes del fix) a ~84 hits en 90s — **reduccion del 86%**. (Nota: en el primer vistazo se conto de mas por agrupar junto `recruiter:msgs`/`recruiter:chats`/`recruiter:win24`, que son contadores legitimos de "mensaje enviado", no presencia — no son parte de esta fuga.)
