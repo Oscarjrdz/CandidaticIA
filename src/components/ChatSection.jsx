@@ -4413,6 +4413,12 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                             totalListHeightChanged={() => {
                                 if (bottomAnchorRef.current || isAtBottomRef.current || isSendingRef.current) {
                                     scrollToBottom();
+                                    // bottomAnchorRef es una bandera de "una sola vez" (se activa al abrir un
+                                    // chat o cargar sus mensajes) — sin este reset se quedaba encendida para
+                                    // siempre, forzando scroll al fondo en CADA cambio de altura de la lista
+                                    // (cualquier mensaje nuevo, imagen cargando, reaccion) sin importar si el
+                                    // usuario habia subido a leer historial. Eso causaba el parpadeo.
+                                    bottomAnchorRef.current = false;
                                 }
                             }}
                             atBottomStateChange={(isAtBottom) => {
