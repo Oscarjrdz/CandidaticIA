@@ -88,14 +88,22 @@ const formatTagLabel = (value) => {
     return toTitleCase(value);
 };
 
-const readStoredUnreadCounts = () => {
+const readStoredUnreadCounts = (unreadCountHint = null) => {
+    const hintedAll = Number(unreadCountHint);
     try {
         const saved = sessionStorage.getItem('candidatic_unread_counts');
-        if (!saved) return null;
+        if (!saved) {
+            return Number.isFinite(hintedAll)
+                ? { ...EMPTY_UNREAD_COUNTS, all: Math.max(0, hintedAll), unreadIds: new Set() }
+                : null;
+        }
         const parsed = JSON.parse(saved);
         return {
             ...EMPTY_UNREAD_COUNTS,
             ...parsed,
+            all: Number.isFinite(hintedAll)
+                ? Math.max(Number(parsed.all) || 0, Math.max(0, hintedAll))
+                : (Number(parsed.all) || 0),
             tags: parsed.tags || {},
             crmProjects: parsed.crmProjects || {},
             completeTags: parsed.completeTags || {},
@@ -103,7 +111,9 @@ const readStoredUnreadCounts = () => {
             unreadIds: new Set(),
         };
     } catch {
-        return null;
+        return Number.isFinite(hintedAll)
+            ? { ...EMPTY_UNREAD_COUNTS, all: Math.max(0, hintedAll), unreadIds: new Set() }
+            : null;
     }
 };
 
@@ -546,7 +556,7 @@ const MessagesEncryptionHeader = () => (
     </div>
 );
 
-export default function ChatSection({ rolePermissions, onlineUsers = [], onUnreadCountChange }) {
+export default function ChatSection({ rolePermissions, onlineUsers = [], unreadCountHint = null, onUnreadCountChange }) {
     const { showToast } = useToastContext();
     const { user } = useAuthContext();
 
@@ -582,7 +592,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], onUnrea
     }, [globalStats]);
 
     const [candidates, setCandidates] = useState([]);
-    const [globalUnreadCounts, setGlobalUnreadCounts] = useState(() => readStoredUnreadCounts());
+    const [globalUnreadCounts, setGlobalUnreadCounts] = useState(() => readStoredUnreadCounts(unreadCountHint));
     const [globalFilterCounts, setGlobalFilterCounts] = useState(() => {
         try {
             const saved = sessionStorage.getItem('candidatic_filter_counts');

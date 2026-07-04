@@ -218,7 +218,7 @@ function AppShell() {
         <main className="flex-1 h-full w-full p-0 overflow-hidden">
           <ErrorBoundary>
             <Suspense fallback={<SectionSkeleton />}>
-              <ChatSection rolePermissions={rolePermissions} onlineUsers={onlineUsers} onUnreadCountChange={handleUnreadCountChange} />
+              <ChatSection rolePermissions={rolePermissions} onlineUsers={onlineUsers} unreadCountHint={chatUnreadCount} onUnreadCountChange={handleUnreadCountChange} />
             </Suspense>
           </ErrorBoundary>
         </main>
@@ -368,7 +368,7 @@ function AppShell() {
           {activeSection === 'candidates' ? (
             <CandidatesSection />
           ) : activeSection === 'chat' ? (
-            <ChatSection rolePermissions={rolePermissions} onlineUsers={onlineUsers} onUnreadCountChange={handleUnreadCountChange} />
+            <ChatSection rolePermissions={rolePermissions} onlineUsers={onlineUsers} unreadCountHint={chatUnreadCount} onUnreadCountChange={handleUnreadCountChange} />
           ) : activeSection === 'bulks' ? (
             <BulksSection />
           ) : activeSection === 'bot-ia' ? (
