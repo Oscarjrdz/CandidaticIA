@@ -408,3 +408,32 @@ Se verifico directo en Redis (`GET candidate:<id>`, `LRANGE messages:<id>`) y **
 **Conclusion: `MONITOR` se perdio la mayoria de esos comandos.** Es una limitacion conocida de Redis Cloud (y la mayoria de Redis administrados/proxeados): `MONITOR` no necesariamente ve el 100% del trafico de todas las conexiones por igual, sobre todo cuando el flujo completo pasa en menos de 1 segundo. **No fue un bug de la aplicacion.**
 
 **Implicacion para las capturas anteriores de esta misma auditoria (candidatos, chat web, reengagement):** si `MONITOR` puede perderse comandos, los numeros reportados ahi (30 toques al candidato, 33 al historial, etc.) son un **piso, no el total exacto** — la actividad real podria ser igual o mayor, nunca menor. Los fixes ya aplicados (`adBody`, lock de reengagement, `custom_fields`) siguen siendo validos porque se confirmaron ademas con evidencia directa independiente de `MONITOR` (tamanos de campo leidos directo de Redis, codigo fuente, conteo de comandos por tipo via `INFO commandstats`). Para futuras investigaciones: cruzar siempre `MONITOR` con una lectura directa del estado final en Redis antes de concluir que "algo no paso".
+
+### Verificacion post-deploy con MONITOR real (candidatos + chat + mensajes)
+
+Despues de subir los 3 fixes de arriba, se repitio la captura en vivo (90s) mientras el usuario entraba a Candidatos, luego a Chat Web, y mandaba mensajes reales (incluyendo un candidato nuevo). 10,232 comandos capturados, sin senales de nada roto: el candidato de prueba se creo y respondio bien, no aparecio ningun `lock:reengagement:*` (el cron no corrio en esa ventana de 90s, nada que ver con el fix). Nota importante: `MONITOR` cuenta comandos, no bytes — el ahorro de `adBody` (65% menos bytes por candidato) no se puede confirmar con este metodo, solo se vera reflejado en el panel de Ancho de Banda comparando dias antes/despues del deploy.
+
+---
+
+## Octava auditoria (Claude) — revision del "motor de apagado por inactividad" completo, riesgo de falso positivo
+
+Fecha: 2026-07-04. El usuario pidio explicitamente revisar todos los mecanismos de ahorro basados en detectar inactividad (los de esta sesion + los de la Tercera auditoria de Codex), con miedo de que un falso positivo ("el sistema cree que no estamos trabajando") apagara algo que si hace falta mientras se esta trabajando activamente.
+
+### Confirmado de nuevo: nada de esto toca el envio de mensajes
+
+Se reconfirmo en codigo que `webhook.js`/`agent.js` solo se detienen por el switch manual `bot_ia_active` o `candidate.blocked` — cero dependencia de actividad humana. Esto ya se habia verificado varias veces en esta auditoria; se revalida aqui porque es la pregunta de fondo detras de la preocupacion del usuario.
+
+### Revision mecanismo por mecanismo
+
+1. **Auto-desbloqueo de chat** (`src/components/ChatSection.jsx`, `CHAT_LOCK_IDLE_MS`) — el de mayor riesgo real. Antes: 60 segundos sin mouse/teclado/scroll/click se consideraba "ya no estas trabajando" y se liberaba el lock del chat. 60s sin tocar nada es comun leyendo o pensando una respuesta — falso positivo plausible. Se reviso el backend (`api/chat.js:216-241`, acciones `lock`/`unlock`/`heartbeat`) y se confirmo que el lock **no bloquea tecnicamente nada** — es un indicador visual en la lista lateral ("Fulano ya esta viendo este chat"), no impide que otro reclutador escriba o mande mensajes. O sea, la severidad de un falso positivo aqui es baja (el indicador parpadea de mas), no hay riesgo de duplicar respuestas por una falla de un candado tecnico que de por si nunca existio.
+2. **Heartbeat de presencia idle** (`usePresence.js`, 60s idle → intervalo pasa de 45s a 4min) — se verifico la matematica de TTLs: TTL idle (5 min, ajustado en la Tercera auditoria) es mayor al intervalo idle (4 min), por lo que no hay hueco de "desaparece de en linea por error". Efecto de un falso positivo: minutos de tiempo activo mal contados en estadisticas de reclutadores, estatus "idle" en pantalla con hasta 4 min de retraso al volver a estar activo — cosmetico, nada se apaga.
+3. **Desconexion de Redis por inactividad** (`storage.js`, 120s sin ningun comando) y **cierre de SSE** — no dependen de actividad humana especificamente (cualquier trafico los resetea), y aunque se disparen, se reconectan solos sin efecto visible. Sin riesgo.
+
+### Fix aplicado
+
+Se subio `CHAT_LOCK_IDLE_MS` de 60 segundos a **5 minutos** (`src/components/ChatSection.jsx:56`) — unico cambio de esta auditoria, a peticion del usuario. El costo de que el indicador de "chat ocupado" tarde un poco mas en desaparecer es mucho menor al costo de que desaparezca mientras el reclutador sigue ahi pensando su respuesta.
+
+### Verificacion
+
+- `npx eslint src/components/ChatSection.jsx`: sin errores nuevos (los 21 que aparecen son preexistentes en lineas no tocadas).
+- `npm run build` exitoso.

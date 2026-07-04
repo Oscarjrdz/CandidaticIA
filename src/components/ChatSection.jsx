@@ -53,7 +53,7 @@ const scheduleIdleTask = (callback, timeout = 1200) => {
 
 const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 const ORDERED_MESSAGE_GAP_MS = 450;
-const CHAT_LOCK_IDLE_MS = 60_000;
+const CHAT_LOCK_IDLE_MS = 5 * 60_000; // 5 min — evita falsos positivos al leer/pensar sin tocar el mouse
 const CHAT_LOCK_HEARTBEAT_MS = 30_000;
 
 const CHAT_LIST_PAGE_SIZE = 10;
