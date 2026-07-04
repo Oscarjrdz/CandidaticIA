@@ -49,7 +49,8 @@ const createInitialBandwidthData = () => {
         month: `${currentMty.year}-${String(currentMty.month).padStart(2, '0')}`,
         today: currentMty.day,
         daysInMonth: getDaysInMonth(currentMty.year, currentMty.month),
-        daily: []
+        daily: [],
+        dataQuality: null
     };
 };
 
@@ -74,7 +75,8 @@ const RedisMonitorSettings = () => {
                         month: result.month || `${currentDate.year}-${String(currentDate.month).padStart(2, '0')}`,
                         today: result.today || currentDate.day,
                         daysInMonth: result.daysInMonth || getDaysInMonth(currentDate.year, currentDate.month),
-                        daily: normalizeDailyData(result)
+                        daily: normalizeDailyData(result),
+                        dataQuality: result.dataQuality || null
                     });
                 } else {
                     throw new Error('API reported failure');
@@ -105,6 +107,7 @@ const RedisMonitorSettings = () => {
     let statusBarColor = 'bg-emerald-500';
     let statusIcon = <ShieldCheck className="w-5 h-5 text-emerald-500" />;
     let statusMessage = "Sistema Operando Óptimamente";
+    const isReconciled = data.dataQuality?.status === 'reconciled';
 
     if (data.percentage > 85) {
         statusColor = 'bg-red-500';
@@ -120,6 +123,10 @@ const RedisMonitorSettings = () => {
         statusBarColor = 'bg-amber-400';
         statusIcon = <Activity className="w-5 h-5 text-amber-500" />;
         statusMessage = "Advertencia: Consumo Elevado";
+    }
+    if (isReconciled) {
+        statusIcon = <Activity className="w-5 h-5 text-blue-500" />;
+        statusMessage = "Telemetría Reconciliada";
     }
 
     // Bar chart helpers
@@ -153,8 +160,8 @@ const RedisMonitorSettings = () => {
                         <div>
                             <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
                                 Redis Telemetry
-                                <span className={`text-[10px] uppercase font-black px-2 py-0.5 rounded-full ${statusBg} ${statusText} tracking-wider`}>
-                                    Live
+                                <span className={`text-[10px] uppercase font-black px-2 py-0.5 rounded-full ${statusBg} ${isReconciled ? 'text-blue-600' : statusText} tracking-wider`}>
+                                    {isReconciled ? 'Estimado' : 'Live'}
                                 </span>
                             </h3>
                             <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
@@ -271,7 +278,7 @@ const RedisMonitorSettings = () => {
 
                         <p className="mt-4 text-xs font-medium text-gray-500 dark:text-gray-400 flex justify-between">
                             <span>{statusMessage}</span>
-                            <span className="text-gray-400">Cron cada hora</span>
+                            <span className="text-gray-400">{isReconciled ? 'Serie horaria' : 'Cron cada hora'}</span>
                         </p>
                     </div>
                 )}

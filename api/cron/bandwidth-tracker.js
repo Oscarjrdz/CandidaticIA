@@ -7,7 +7,9 @@ import { getRedisClient } from '../utils/storage.js';
 import { randomUUID } from 'crypto';
 
 const LAST_ABSOLUTE_BYTES_KEY = 'stats:bandwidth:last_absolute_bytes';
+const LAST_SNAPSHOT_AT_KEY = 'stats:bandwidth:last_snapshot_at';
 const SNAPSHOT_LOCK_KEY = 'stats:bandwidth:snapshot_lock';
+const MAX_REASONABLE_BYTES_PER_HOUR = Number(process.env.BANDWIDTH_MAX_BYTES_PER_HOUR || 600 * 1024 * 1024);
 const TZ = 'America/Monterrey';
 
 function parseRedisInfoNumber(info, field) {
@@ -81,11 +83,13 @@ export default async function handler(req, res) {
         }
 
         // 2. Fetch previous snapshot to calculate delta
-        const prevBytesStr = await redis.get(LAST_ABSOLUTE_BYTES_KEY);
+        const [prevBytesStr, prevSnapshotAtStr] = await redis.mget(LAST_ABSOLUTE_BYTES_KEY, LAST_SNAPSHOT_AT_KEY);
         const prevAbsoluteBytes = prevBytesStr ? parseInt(prevBytesStr, 10) : null;
+        const prevSnapshotAt = prevSnapshotAtStr ? parseInt(prevSnapshotAtStr, 10) : null;
+        const snapshotAt = Date.now();
 
         if (!Number.isFinite(prevAbsoluteBytes)) {
-            await redis.set(LAST_ABSOLUTE_BYTES_KEY, currentAbsoluteBytes);
+            await redis.mset(LAST_ABSOLUTE_BYTES_KEY, currentAbsoluteBytes, LAST_SNAPSHOT_AT_KEY, snapshotAt);
             return res.status(200).json({
                 success: true,
                 initialized: true,
@@ -106,10 +110,17 @@ export default async function handler(req, res) {
             deltaBytes = currentAbsoluteBytes - prevAbsoluteBytes;
         }
 
-        // 3. Persist the new absolute value
-        await redis.set(LAST_ABSOLUTE_BYTES_KEY, currentAbsoluteBytes);
+        const elapsedHours = Number.isFinite(prevSnapshotAt)
+            ? Math.max((snapshotAt - prevSnapshotAt) / (60 * 60 * 1000), 1)
+            : 1;
+        const maxReasonableDelta = MAX_REASONABLE_BYTES_PER_HOUR * Math.ceil(elapsedHours);
+        const suspiciousDelta = deltaBytes > maxReasonableDelta;
 
-        // 4. Update Daily and Monthly aggregations using atomic INCRBY
+        // 3. Persist the new absolute value even for suspicious spikes so one bad
+        // sample does not get charged repeatedly on every cron run.
+        await redis.mset(LAST_ABSOLUTE_BYTES_KEY, currentAbsoluteBytes, LAST_SNAPSHOT_AT_KEY, snapshotAt);
+
+        // 4. Update Daily and Monthly aggregations using atomic INCRBY.
         const yearMonthDay = todayMty();
         const yearMonth = yearMonthDay.substring(0, 7); // YYYY-MM
 
@@ -117,7 +128,7 @@ export default async function handler(req, res) {
         const dayKey = `stats:bandwidth:${yearMonthDay}:total`;
         const hourKey = `stats:bandwidth:${hourMty()}:total`;
 
-        if (deltaBytes > 0) {
+        if (deltaBytes > 0 && !suspiciousDelta) {
             const pipeline = redis.pipeline();
             pipeline.incrby(monthKey, deltaBytes);
             pipeline.incrby(dayKey, deltaBytes);
@@ -129,13 +140,25 @@ export default async function handler(req, res) {
             pipeline.expire(hourKey, 14 * 24 * 60 * 60);
             
             await pipeline.exec();
+        } else if (suspiciousDelta) {
+            const anomalyKey = `stats:bandwidth:anomaly:${yearMonthDay}:${snapshotAt}`;
+            await redis.set(anomalyKey, JSON.stringify({
+                currentAbsoluteBytes,
+                prevAbsoluteBytes,
+                deltaBytes,
+                elapsedHours,
+                maxReasonableDelta,
+                snapshotAt
+            }), 'EX', 60 * 24 * 60 * 60);
         }
 
         return res.status(200).json({
             success: true,
+            skippedAggregation: suspiciousDelta ? 'suspicious_delta' : null,
             snapshot: {
                 currentAbsoluteBytes,
                 deltaBytes,
+                maxReasonableDelta,
                 monthKey,
                 dayKey,
                 hourKey

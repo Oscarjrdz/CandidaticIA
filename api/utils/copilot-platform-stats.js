@@ -1,4 +1,5 @@
 import { getRedisClient } from './storage.js';
+import { readBandwidthTelemetry } from './bandwidth-telemetry.js';
 
 const CACHE_TTL_MS = 60 * 1000;
 const RECENT_SAMPLE_LIMIT = 500;
@@ -985,9 +986,10 @@ async function loadOperationalStats(redis) {
     const empresas = safeParse(val(22), []);
     const botCached = safeParse(val(23), null);
 
-    const [endpointUsage, recruiterStats] = await Promise.all([
+    const [endpointUsage, recruiterStats, bandwidthTelemetry] = await Promise.all([
         readEndpointUsage(redis, today),
-        readRecruiterStats(redis, today)
+        readRecruiterStats(redis, today),
+        readBandwidthTelemetry(redis).catch(() => null)
     ]);
 
     return {
@@ -1037,9 +1039,10 @@ async function loadOperationalStats(redis) {
         },
         bandwidth: {
             month,
-            usedBytes: toNumber(val(17)),
-            todayBytes: toNumber(val(18)),
-            limitBytes: 200 * 1024 * 1024 * 1024
+            usedBytes: toNumber(bandwidthTelemetry?.usedBytes || val(17)),
+            todayBytes: toNumber(bandwidthTelemetry?.dataQuality?.todayDisplayedBytes || val(18)),
+            limitBytes: 200 * 1024 * 1024 * 1024,
+            dataQuality: bandwidthTelemetry?.dataQuality || null
         },
         ads: summarizeAdsCache(val(19), val(20)),
         bolsa: summarizeBolsaJobs(bolsaJobs),

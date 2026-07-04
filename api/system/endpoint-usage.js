@@ -1,5 +1,6 @@
 import { getRedisClient, validateAdminSession } from '../utils/storage.js';
 import { readUsageMetrics } from '../utils/usage-metrics.js';
+import { readBandwidthTelemetry } from '../utils/bandwidth-telemetry.js';
 
 function todayMty() {
     return new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Monterrey' });
@@ -47,12 +48,22 @@ export default async function handler(req, res) {
         });
         totals.measuredBytes = totals.estimatedRedisBytes + totals.responseBytes;
 
-        const [dayBandwidthRaw, monthBandwidthRaw] = await redis.mget(
-            `stats:bandwidth:${day}:total`,
-            `stats:bandwidth:${monthFromDay(day)}:total`
-        );
-        const dayTrackedBytes = Number(dayBandwidthRaw || 0);
-        const monthTrackedBytes = Number(monthBandwidthRaw || 0);
+        let dayTrackedBytes = 0;
+        let monthTrackedBytes = 0;
+        let dataQuality = null;
+        if (day === todayMty()) {
+            const telemetry = await readBandwidthTelemetry(redis);
+            dayTrackedBytes = Number(telemetry.dataQuality?.todayDisplayedBytes || 0);
+            monthTrackedBytes = Number(telemetry.usedBytes || 0);
+            dataQuality = telemetry.dataQuality || null;
+        } else {
+            const [dayBandwidthRaw, monthBandwidthRaw] = await redis.mget(
+                `stats:bandwidth:${day}:total`,
+                `stats:bandwidth:${monthFromDay(day)}:total`
+            );
+            dayTrackedBytes = Number(dayBandwidthRaw || 0);
+            monthTrackedBytes = Number(monthBandwidthRaw || 0);
+        }
         const unexplainedBytes = Math.max(0, dayTrackedBytes - totals.measuredBytes);
 
         return res.status(200).json({
@@ -63,6 +74,7 @@ export default async function handler(req, res) {
                 monthTrackedBytes,
                 endpointMeasuredBytes: totals.measuredBytes,
                 unexplainedBytes,
+                dataQuality,
                 explainedPercentage: dayTrackedBytes > 0
                     ? Number(((totals.measuredBytes / dayTrackedBytes) * 100).toFixed(2))
                     : 0
