@@ -2,6 +2,7 @@
 import { getMessages, getRecentMessages, saveMessage, getCandidateById, updateCandidate, updateMessageStatus, getRedisClient, validateAdminSession, getUsers, getRoles, isProfileComplete } from './utils/storage.js';
 import { substituteVariables } from './utils/shortcuts.js';
 import { sendUltraMsgMessage, getUltraMsgConfig, buildMetaTemplateComponents, renderMetaTemplatePreviewText } from './whatsapp/utils.js';
+import { getCachedConfig } from './utils/cache.js';
 
 // Candidatic legacy URLs removed as per UltraMsg migration.
 
@@ -100,7 +101,7 @@ export default async function handler(req, res) {
                     getUsers().catch(() => []),
                     getRoles().catch(() => []),
                     redis.smembers('candidates:unread'),
-                    redis.get('custom_fields').catch(() => null)
+                    getCachedConfig(redis, 'custom_fields').catch(() => null)
                 ]);
                 const customFields = customFieldsRaw ? JSON.parse(customFieldsRaw) : [];
                 const user = users.find(u => u.id === userId || u.whatsapp === userId);

@@ -1,4 +1,5 @@
 import { getOpenAIResponse } from '../utils/openai.js';
+import { getCachedConfig } from '../utils/cache.js';
 
 // Cache en memoria para la lista completa de candidatos (evita re-leer Redis en cada búsqueda)
 let _candidatesCache = null;
@@ -153,7 +154,7 @@ export default async function handler(req, res) {
 
         let allFields = [...DEFAULT_FIELDS];
         try {
-            const customFieldsJson = await redis.get('custom_fields');
+            const customFieldsJson = await getCachedConfig(redis, 'custom_fields');
             const customFields = customFieldsJson ? JSON.parse(customFieldsJson) : [];
             allFields = [...DEFAULT_FIELDS, ...customFields];
         } catch (e) {

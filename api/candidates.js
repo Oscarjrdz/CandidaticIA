@@ -107,18 +107,33 @@ async function buildFilterCounts(redis) {
     return payload;
 }
 
+// Campos de anuncio (Meta Ads) que solo usa AdsStatisticsSection.jsx (via
+// /api/ads-stats, no via este endpoint) o el backend directo (webhook/conversions).
+// Confirmado con grep que ninguna vista de lista/chat los lee. En candidatos con
+// origen de anuncio pueden pesar mas de la mitad del registro completo (adBody
+// guarda el texto crudo del anuncio) — quitarlos aqui no afecta ninguna UI.
+const LIST_HEAVY_AD_FIELDS = ['adBody', 'adImageUrl', 'adUrl', 'adClickId'];
+
+function stripHeavyListFields(candidate) {
+    if (!candidate || typeof candidate !== 'object') return candidate;
+    const trimmed = { ...candidate };
+    for (const field of LIST_HEAVY_AD_FIELDS) delete trimmed[field];
+    return trimmed;
+}
+
 function buildCandidatesListPayload({ candidates = [], total = 0, limit = 100, offset = 0, statsData = null }) {
     const safeLimit = Math.max(1, parseInt(limit, 10) || 100);
     const safeOffset = Math.max(0, parseInt(offset, 10) || 0);
     const safeTotal = Math.max(0, Number(total) || 0);
-    const count = Array.isArray(candidates) ? candidates.length : 0;
+    const safeCandidates = Array.isArray(candidates) ? candidates.map(stripHeavyListFields) : candidates;
+    const count = Array.isArray(safeCandidates) ? safeCandidates.length : 0;
     const nextOffset = safeOffset + count;
 
     return {
         success: true,
         count,
         total: safeTotal,
-        candidates,
+        candidates: safeCandidates,
         hasMore: count > 0 && nextOffset < safeTotal,
         pagination: {
             limit: safeLimit,

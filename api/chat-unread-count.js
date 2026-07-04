@@ -3,6 +3,7 @@
  * Avoids returning candidate profiles to the shell just to compute a number.
  */
 import { Buffer } from 'node:buffer';
+import { getCachedConfig } from './utils/cache.js';
 
 const AGGREGATE_CACHE_TTL_SECONDS = 60;
 
@@ -68,7 +69,7 @@ async function readOrBuildUnreadAggregate({ redis, unreadIds, unreadVersion, isP
     const summaries = [];
     let candidateReads = 0;
     let estimatedRedisBytes = 0;
-    const customFieldsRaw = await redis.get('custom_fields').catch(() => null);
+    const customFieldsRaw = await getCachedConfig(redis, 'custom_fields').catch(() => null);
     const customFields = customFieldsRaw ? JSON.parse(customFieldsRaw) : [];
 
     const CHUNK = 200;

@@ -1,6 +1,7 @@
 import { getRedisClient, updateCandidate, getMessages, recordAITelemetry, getCandidateById } from './storage.js';
 import { getSchemaByField } from './schema-registry.js';
 import { getOpenAIResponse } from './openai.js';
+import { getCachedConfigBatch } from './cache.js';
 
 /**
  * Intelligent Extractor v1.0
@@ -12,10 +13,14 @@ export async function intelligentExtract(candidateId, historyText) {
     try {
         const redis = getRedisClient();
 
-        // 1. Fetch all Redis config in one round-trip
-        const [rulesJson, customFieldsJson, cats1, cats2] = redis
-            ? await redis.mget('automation_rules', 'custom_fields', 'candidatic_categories', 'bot_categories')
-            : [null, null, null, null];
+        // 1. Fetch all Redis config — cacheado en memoria, evita releer estas
+        // llaves (casi estaticas) en cada mensaje procesado
+        const configKeys = ['automation_rules', 'custom_fields', 'candidatic_categories', 'bot_categories'];
+        const cfg = redis ? await getCachedConfigBatch(redis, configKeys) : {};
+        const rulesJson = cfg.automation_rules ?? null;
+        const customFieldsJson = cfg.custom_fields ?? null;
+        const cats1 = cfg.candidatic_categories ?? null;
+        const cats2 = cfg.bot_categories ?? null;
 
         let rules = rulesJson ? JSON.parse(rulesJson).filter(r => r.enabled) : [];
 

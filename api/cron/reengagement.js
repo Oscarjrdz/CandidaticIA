@@ -184,9 +184,7 @@ export default async function handler(req, res) {
     const log = [];
 
     for (const candidate of candidates) {
-        const lock = await acquireProcessingLock(redis, 'reengagement', candidate.id);
-        if (!lock) { skipped++; continue; }
-
+        let lock = null;
         try {
             const lastMsgTs = candidate.lastUserMessageAt
                 ? new Date(candidate.lastUserMessageAt).getTime()
@@ -216,6 +214,12 @@ export default async function handler(req, res) {
                     if ((now - lastSentTs) < intervalMs){ skipped++; continue; }
                 }
             }
+
+            // Solo hasta aqui, cuando el candidato SI va a recibir mensaje, se toma el
+            // lock — evita ~500 SET+GET+DEL por corrida cuando casi todos se descartan
+            // por elegibilidad antes de llegar aqui (confirmado con MONITOR en vivo).
+            lock = await acquireProcessingLock(redis, 'reengagement', candidate.id);
+            if (!lock) { skipped++; continue; }
 
             // ── Generar y enviar mensaje ──────────────────────────────────────
             const attemptNumber = attempts + 1;
@@ -256,7 +260,7 @@ export default async function handler(req, res) {
             console.error(`[REENGAGEMENT] ❌ Error con candidato ${candidate.id}:`, e.message);
             errors++;
         } finally {
-            await releaseProcessingLock(redis, lock);
+            if (lock) await releaseProcessingLock(redis, lock);
         }
     }
 
@@ -282,9 +286,7 @@ export default async function handler(req, res) {
                 .filter(Boolean);
 
             for (const candidate of paso2Candidates) {
-                const p2Lock = await acquireProcessingLock(redis, 'reengagement_paso2', candidate.id);
-                if (!p2Lock) { paso2Skipped++; continue; }
-
+                let p2Lock = null;
                 try {
                     const p2Estado = candidate.paso2Estado;
                     if (!p2Estado || !['esperando_colonia', 'esperando_experiencia', 'esperando_meses_experiencia'].includes(p2Estado)) {
@@ -355,6 +357,10 @@ export default async function handler(req, res) {
                         p2Message = opts[p2Variant];
                     }
 
+                    // Igual que el loop principal: lock solo cuando ya se decidio enviar.
+                    p2Lock = await acquireProcessingLock(redis, 'reengagement_paso2', candidate.id);
+                    if (!p2Lock) { paso2Skipped++; continue; }
+
                     const waConfig2 = await getUltraMsgConfig(candidate.incomingPhoneNumberId || candidate.instanceId);
                     if (!waConfig2?.token || !waConfig2?.instanceId) throw new Error('No hay configuración de WhatsApp/Meta para paso2 reengagement');
                     const p2SendResult = await sendUltraMsgMessage(
@@ -388,7 +394,7 @@ export default async function handler(req, res) {
                     console.error(`[REENGAGEMENT-P2] ❌ Error con candidato ${candidate.id}:`, e.message);
                     paso2Errors++;
                 } finally {
-                    await releaseProcessingLock(redis, p2Lock);
+                    if (p2Lock) await releaseProcessingLock(redis, p2Lock);
                 }
             }
 

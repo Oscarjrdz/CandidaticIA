@@ -291,3 +291,120 @@ Se hizo un seed de un solo uso (script temporal, no queda en el repo) escribiend
 - Se verifico leyendo de vuelta con `getBandwidthSummary(redis, 30)`: el total de 30 dias dio exactamente 12.40 GB, igual al numero que reporto el usuario.
 
 **Importante para el futuro:** los dias 2026-07-01 a 2026-07-03 en `bandwidth:daily:*` son un valor manual fijo, no una medicion real dia por dia (no sabemos cuanto se consumio especificamente cada uno de esos 3 dias, solo el total). A partir de 2026-07-04 todo es medicion real via `recordBandwidthSnapshot`. Si se audita este sistema mas adelante y esos 3 dias se ven sospechosamente parejos entre si, es por esto, no es un bug del snapshot.
+
+---
+
+## Sexta auditoria (Claude) — encontrar y corregir una fuga real de bandwidth
+
+Fecha: 2026-07-04. Con el medidor ya funcionando, el usuario pidio ir mas alla: no solo medir cuanto, sino encontrar de donde sale el consumo para corregirlo.
+
+### Metodologia: `MONITOR` en vivo en vez de instrumentar codigo a ciegas
+
+En lugar de modificar los 27 sitios que llaman `getCandidateById()` sin saber si esa era siquiera la causa correcta, se uso `redis.monitor()` (ioredis) para capturar el trafico real de comandos durante ventanas cortas (12-30s) contra produccion. Es seguro porque el promedio historico es de solo ~17 comandos/seg (`total_commands_processed` / `uptime_in_days` de una medicion anterior) — una ventana corta de captura no representa riesgo de carga.
+
+Se hicieron 4 capturas coordinadas con el usuario en tiempo real:
+1. Ventana con la pestaña de Configuracion recien recargada: **7,974 comandos en ~17s reales** (~400/seg) — parecia alarmante.
+2. Ventana limpia, usuario con la pestaña de chat abierta sin mandar nada: **~1 comando/seg** — practicamente silencio. Esto descarto que hubiera un drenaje constante de fondo.
+3. Ventana pidiendole al usuario refrescar de nuevo: solo 4 comandos (el refresh en si fue muy rapido/liviano esta vez).
+4. Ventana pidiendole al usuario entrar a la seccion Candidatos mientras se capturaba: **183 comandos en 30s**, de los cuales **100 eran `GET candidate:<id>` — uno por cada uno de los 100 candidatos de la pagina, ninguno repetido**.
+
+Conclusion de esta parte: no hay un "drenaje" constante de fondo con la app idle — el consumo es proporcional a la actividad real (abrir la lista de candidatos), lo cual es esperado. La pregunta correcta paso de "por que se gasta esto estando idle" a "por que pesa tanto cargar 100 candidatos".
+
+### El hallazgo real: 65% del payload es un campo que nadie usa en la lista
+
+Se leyeron los 100 candidatos reales de `candidates:list` directo de Redis y se sumo el tamaño de cada campo JSON a traves de todos ellos:
+
+| Campo | Bytes (100 candidatos) | % del total |
+|---|---|---|
+| `adBody` | 117,190 | 43.3% |
+| `adImageUrl` | 39,326 | 14.5% |
+| `adClickId` | 12,273 | 4.5% |
+| `adUrl` | 2,225 | 0.8% |
+| *(resto de ~40 campos combinados)* | resto | ~36.9% |
+
+**`adBody` + `adImageUrl` + `adUrl` + `adClickId` = 65% de los 264 KB totales de una pagina de 100 candidatos.**
+
+Se verifico con grep en todo `src/` y `api/` que:
+- `adBody`, `adImageUrl`, `adUrl`: solo los usa `src/components/AdsStatisticsSection.jsx`, que **no consume `/api/candidates`** (usa `/api/ads-stats`, `/api/ad-labels`, `/api/ads-comments` — endpoints separados). El backend (`storage.js`, agregacion de stats de ads) tambien los lee, pero directo de Redis, no via este endpoint.
+- `adClickId`: no se usa en ningun componente de frontend; solo en `api/whatsapp/webhook.js` (Meta Conversions API) y `api/utils/storage.js`, ambos leyendo directo de Redis.
+- `adId` y `adHeadline` (mas chicos, ~0.7% y ~0.5%) **si se usan** en `ChatSection.jsx`/`ChatRow.jsx` (badge de "vino de anuncio") — **no se tocaron**, se quedan en la respuesta.
+
+O sea: candidatos que llegaron por un anuncio de Meta cargan el texto completo del anuncio (`adBody`) y la URL de la imagen en cada carga de la lista de candidatos, sin que ninguna pantalla de lista los muestre — se usan solo en la seccion de estadisticas de anuncios, que ya los obtiene por otro camino.
+
+### Fix aplicado
+
+`api/candidates.js` → `buildCandidatesListPayload()` (el unico punto donde se arma la respuesta de lista, usado por los 5 modos de listado: normal, por proyecto manual, por filtro unread/complete/incomplete, unreadFirst, unreadFirst+tag): se agrego `stripHeavyListFields()` que quita `adBody`, `adImageUrl`, `adUrl`, `adClickId` de cada candidato antes de mandarlo al navegador. No se toco `getCandidates()`/`hydrateCandidateIds()` en `storage.js` (siguen leyendo el registro completo de Redis, lo necesitan otros consumidores), ni la respuesta de candidato individual por `?id=` (menor impacto, un solo candidato a la vez, no 100).
+
+**Impacto esperado:** para cualquier pagina de candidatos con mezcla de origenes de anuncio, hasta ~65% menos bytes por carga de lista — sin afectar ninguna pantalla (verificado que ningun componente de lista/chat lee esos 4 campos).
+
+### Verificacion
+
+- Prueba de la funcion `stripHeavyListFields` con un objeto de ejemplo: confirma que quita `adBody`/`adImageUrl` y conserva `adId`/`adHeadline`.
+- `node --check api/candidates.js` OK.
+- `npx eslint api/candidates.js`: sin errores nuevos (el unico error que sale es un `catch {}` preexistente sin relacion a este cambio, confirmado con `git diff`).
+- `npm run build` exitoso.
+
+### Pendiente / siguientes pasos posibles
+
+- No se instrumento `getCandidateById()` con contadores por origen (la Opcion 2 que se habia propuesto) porque `MONITOR` ya dio la respuesta sin necesidad de tocar 27 sitios de codigo — se prioriza esta via (observar antes de instrumentar) para futuras investigaciones similares.
+- Si se quiere seguir bajando el peso de la lista de candidatos, el siguiente candidato a revisar seria `adHeadline`/`adId` si algun dia se puede evitar mandarlos tambien salvo cuando el candidato realmente tiene esos datos (ya son chicos, ~1.2% combinado, no urge).
+- Revisar si `/api/ads-stats` (que si necesita `adBody` etc.) tiene su propio problema de consumo — no se audito en esta pasada.
+
+### Segundo hallazgo (bonus): el propio lock de reengagement de esta sesion generaba de mas
+
+Al pedirle al usuario cambiar a la seccion "Chat Web" para capturar ese flujo con `MONITOR`, la ventana coincidio por casualidad con una corrida del cron `reengagement` (corre cada 15 min). De 2,151 comandos capturados en 30s, **1,590 (74%) eran puro overhead del lock que se agrego en la Segunda auditoria de esta sesion**: `acquireProcessingLock`/`releaseProcessingLock` (SET+GET+DEL, 3 comandos) se ejecutaba para **cada uno de los ~530 candidatos muestreados** (500 del loop principal + 30 de paso2), **antes** de revisar si el candidato siquiera calificaba para recibir un mensaje. La gran mayoria se descarta por elegibilidad (intentos ya agotados, fuera de horario de silencio, etc.) y nunca llega a enviar nada — pero ya habian gastado 3 comandos de Redis en vano.
+
+**Fix:** se movio `acquireProcessingLock`/`releaseProcessingLock` (loop principal y paso2) para que solo envuelvan el envio real — despues de que todos los checks de elegibilidad ya pasaron, justo antes de armar y mandar el mensaje. La proteccion contra duplicados sigue intacta (la seccion critica que importa — decidir enviar + mandar + guardar estado — sigue siendo atomica por candidato), pero ahora solo se paga el costo del lock para los candidatos que de verdad van a recibir un mensaje, no para los ~500 que se descartan en el camino.
+
+**Impacto esperado:** de ~1,590 comandos de lock por corrida a probablemente decenas (solo los que realmente califican), cada 15 minutos, 24/7 — el segundo ahorro mas grande de esta pasada despues del fix de `adBody`.
+
+Verificado: `node --check` y `npx eslint` limpios, `npm run build` exitoso.
+
+---
+
+## Septima auditoria (Claude) — el flujo del bot conversacional (webhook + agent)
+
+Fecha: 2026-07-04. El usuario propuso mandarle un mensaje real al bot de WhatsApp mientras se capturaba con `MONITOR`, para revisar el unico flujo que nunca se habia medido (`api/whatsapp/webhook.js` → `api/ai/agent.js`).
+
+### Captura real: procesar UN mensaje
+
+989 comandos en 40 segundos (mezclado con algo de ruido de fondo del dashboard admin abierto — sesion, presencia). Lo relevante, filtrando ese ruido, para el candidato que mando el mensaje:
+
+- **`candidate:<id>`**: 30 operaciones (lecturas + escrituras) para procesar un solo mensaje.
+- **`messages:<id>`**: 33 operaciones (`LRANGE`, `LLEN`, `RPUSH`, `LTRIM`).
+- **`custom_fields`**: 12 lecturas directas de Redis — el mismo config casi-estatico, releido una y otra vez por funciones distintas en la misma corrida.
+- **`candidatic:phone_index`**: 12 lecturas + 6 escrituras.
+- **`waitlist:candidate:<id>`**: 9 lecturas.
+- Debug (`debug:webhook_history`, `debug:last_webhook_raw`) y telemetria (`telemetry_logs_v4`, `telemetry:ai:events`, `telemetry_stream`): ~30+30 operaciones combinadas de puro registro.
+
+### Causa raiz encontrada y corregida: `custom_fields` sin cache consistente
+
+Se investigo por que `custom_fields` (un array de configuracion que casi no cambia) se releia 12 veces. Ya existia una utilidad de cache en memoria (`api/utils/cache.js`, `getCachedConfig`/`getCachedConfigBatch`, TTL de 10 min para `custom_fields`) — usada correctamente en `agent.js` (detras de `FEATURES.USE_BACKEND_CACHE`, confirmado activo en produccion porque `ENABLE_CACHE` no esta seteado a `'false'` en ningun `.env`) y en `bulks.js`. Pero **8 sitios distintos en 5 archivos** seguian leyendo `client.get('custom_fields')`/`redis.get('custom_fields')` directo, sin pasar por esa cache:
+
+- `api/utils/storage.js`: 4 sitios (dentro de `getCandidatesFiltered`, `getCandidates` con `excludeLinked`, `getCandidatesUnreadFirst`, y la funcion de auditoria de perfil).
+- `api/chat-unread-count.js`, `api/chat.js`, `api/ai/query.js`: 1 sitio cada uno.
+- `api/utils/intelligent-extractor.js`: leia 4 llaves (`automation_rules`, `custom_fields`, `candidatic_categories`, `bot_categories`) con un `MGET` propio — ya era 1 solo viaje de red por invocacion, pero no compartia cache entre invocaciones distintas del mismo warm instance.
+
+**Fix:** los 4 sitios de `storage.js` + los 3 archivos sueltos ahora usan `getCachedConfig(client, 'custom_fields')` en vez de `client.get('custom_fields')`. `intelligent-extractor.js` ahora usa `getCachedConfigBatch(redis, [...])` para las mismas 4 llaves, reusando cache entre invocaciones en vez de solo dentro de la misma.
+
+**Por que esto es seguro:** `getCachedConfig`/`getCachedConfigBatch` ya son parte del codebase (usadas en produccion por `agent.js`/`bulks.js`), TTL de 10 min para `custom_fields` — cualquier cambio real a los campos personalizados tarda maximo 10 min en reflejarse en estos sitios (aceptable, es configuracion que cambia rara vez, no datos de candidato).
+
+### No resuelto en esta pasada: los 30 toques al candidato y 33 al historial de mensajes
+
+`webhook.js` llama `getCandidateById` 3 veces (lineas 422, 511, 919) y `agent.js` 1 vez (linea 1154) — eso son 4 llamadas explicitas, no 30. El resto probablemente viene de funciones auxiliares dentro de `storage.js`/`intelligent-extractor.js`/`orchestrator.js` que cada una vuelve a leer el candidato o el historial de mensajes en vez de recibir el objeto ya cargado como parametro. Esto **no se toco en esta pasada** — `agent.js` tiene 5,276 lineas y es el corazon del bot en produccion; encontrar y corregir cada re-lectura redundante ahi requiere una investigacion mas cuidadosa que los fixes anteriores (que fueron cambios de una sola linea en un solo lugar). Queda pendiente como la siguiente investigacion, ya con `MONITOR` como metodo confirmado para no tener que adivinar.
+
+### Verificacion
+
+- `node --check` en los 5 archivos tocados: OK.
+- `npx eslint`: sin errores nuevos (los que aparecen en `storage.js`/`ai/query.js` son preexistentes en lineas que no se tocaron, confirmado con `git diff`).
+- `npm run build` exitoso.
+
+### Limitacion importante de `MONITOR` descubierta despues
+
+Se probo el flujo de candidato nuevo (usuario se elimino como candidato y mando "Hola" de nuevo) capturando con `MONITOR` durante 45 segundos. La captura mostro solo el dedup inicial del webhook (~0.05s) y despues **nada** relacionado a ese candidato en toda la ventana — parecia que `agent.js` nunca corrio.
+
+Se verifico directo en Redis (`GET candidate:<id>`, `LRANGE messages:<id>`) y **el candidato se creo perfecto, con respuesta del bot correcta, en ~358ms** — confirmado tambien por el usuario, que si recibio el saludo de Brenda pidiendole su nombre. El candidato tambien aparecio correctamente arriba en la seccion Candidatos del dashboard (orden por actividad reciente).
+
+**Conclusion: `MONITOR` se perdio la mayoria de esos comandos.** Es una limitacion conocida de Redis Cloud (y la mayoria de Redis administrados/proxeados): `MONITOR` no necesariamente ve el 100% del trafico de todas las conexiones por igual, sobre todo cuando el flujo completo pasa en menos de 1 segundo. **No fue un bug de la aplicacion.**
+
+**Implicacion para las capturas anteriores de esta misma auditoria (candidatos, chat web, reengagement):** si `MONITOR` puede perderse comandos, los numeros reportados ahi (30 toques al candidato, 33 al historial, etc.) son un **piso, no el total exacto** — la actividad real podria ser igual o mayor, nunca menor. Los fixes ya aplicados (`adBody`, lock de reengagement, `custom_fields`) siguen siendo validos porque se confirmaron ademas con evidencia directa independiente de `MONITOR` (tamanos de campo leidos directo de Redis, codigo fuente, conteo de comandos por tipo via `INFO commandstats`). Para futuras investigaciones: cruzar siempre `MONITOR` con una lectura directa del estado final en Redis antes de concluir que "algo no paso".

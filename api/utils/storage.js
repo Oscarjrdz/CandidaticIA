@@ -10,6 +10,7 @@
  */
 import Redis from 'ioredis';
 import { sendConversionEvent } from './metaConversions.js';
+import { getCachedConfig } from './cache.js';
 
 // Initialize Redis client
 let redis;
@@ -792,7 +793,7 @@ export const getCandidates = async (limit = 100, offset = 0, search = '', exclud
         const projectId = String(manualProjectId || '').trim();
         const normalizedStatusFilter = String(statusFilter || '').trim().toLowerCase();
         const needsProfileAudit = normalizedStatusFilter === 'complete' || normalizedStatusFilter === 'incomplete';
-        const customFieldsRaw = needsProfileAudit ? await client.get('custom_fields') : null;
+        const customFieldsRaw = needsProfileAudit ? await getCachedConfig(client, 'custom_fields') : null;
         const customFields = customFieldsRaw ? JSON.parse(customFieldsRaw) : [];
         const filtered = hydrated.filter(c => {
             if (String(c?.manualProjectId || '').trim() !== projectId) return false;
@@ -899,7 +900,7 @@ export const getCandidates = async (limit = 100, offset = 0, search = '', exclud
     const lowerSearch = search.toLowerCase();
     const cleanSearch = search.replace(/\D/g, '');
 
-    const customFieldsJson = excludeLinked ? await client.get('custom_fields') : null;
+    const customFieldsJson = excludeLinked ? await getCachedConfig(client, 'custom_fields') : null;
     const customFields = customFieldsJson ? JSON.parse(customFieldsJson) : [];
 
     const totalDbCount = async () => (await client.scard(KEYS.LIST_COMPLETE)) + (await client.scard(KEYS.LIST_PENDING));
@@ -1083,7 +1084,7 @@ export const getCandidatesFiltered = async (filter, limit = 500, offset = 0) => 
     const unreadIds = await client.smembers(KEYS.CANDIDATES_UNREAD);
     if (!unreadIds.length) return { candidates: [], total: 0 };
 
-    const customFieldsRaw = await client.get('custom_fields');
+    const customFieldsRaw = await getCachedConfig(client, 'custom_fields');
     const customFields = customFieldsRaw ? JSON.parse(customFieldsRaw) : [];
 
     const pipe = client.pipeline();
@@ -1217,7 +1218,7 @@ export const syncCandidateStats = async (id, candidateData = null, pipeline = nu
         }
 
         // 1. Audit — must check paso2 too, not just paso1
-        const customFieldsJson = await client.get('custom_fields');
+        const customFieldsJson = await getCachedConfig(client, 'custom_fields');
         const customFields = customFieldsJson ? JSON.parse(customFieldsJson) : [];
         const isComplete = isProfileComplete(c, customFields);
 
