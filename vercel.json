@@ -112,10 +112,6 @@
             "schedule": "*/15 * * * *"
         },
         {
-            "path": "/api/cron/redis-cloud-daily-snapshot",
-            "schedule": "5 6 * * *"
-        },
-        {
             "path": "/api/cron/reengagement",
             "schedule": "*/15 * * * *"
         }

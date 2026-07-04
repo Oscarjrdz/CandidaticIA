@@ -1,5 +1,4 @@
 import { getRedisClient } from './storage.js';
-import { readRedisCloudOfficialUsage } from './redis-cloud-official.js';
 
 const CACHE_TTL_MS = 60 * 1000;
 const RECENT_SAMPLE_LIMIT = 500;
@@ -984,10 +983,9 @@ async function loadOperationalStats(redis) {
     const empresas = safeParse(val(20), []);
     const botCached = safeParse(val(21), null);
 
-    const [endpointUsage, recruiterStats, officialBandwidth] = await Promise.all([
+    const [endpointUsage, recruiterStats] = await Promise.all([
         readEndpointUsage(redis, today),
-        readRecruiterStats(redis, today),
-        readRedisCloudOfficialUsage().catch(() => null)
+        readRecruiterStats(redis, today)
     ]);
 
     return {
@@ -1034,15 +1032,6 @@ async function loadOperationalStats(redis) {
         events: {
             webhookEvents: toNumber(val(15)),
             debugWebhookHistory: toNumber(val(16))
-        },
-        bandwidth: {
-            month,
-            usedBytes: toNumber(officialBandwidth?.available ? officialBandwidth.usedBytes : 0),
-            todayBytes: 0,
-            limitBytes: 200 * 1024 * 1024 * 1024,
-            dataQuality: officialBandwidth?.available
-                ? { status: 'official', source: 'redis_cloud_official' }
-                : { status: 'official_unavailable', source: 'redis_cloud_official', reason: officialBandwidth?.reason || 'unavailable' }
         },
         ads: summarizeAdsCache(val(17), val(18)),
         bolsa: summarizeBolsaJobs(bolsaJobs),
@@ -1194,11 +1183,7 @@ function getOperationalStatsReply(message, stats) {
     const ops = stats.operational || {};
 
     if (/ancho de banda|bandwidth|consumo|\bgb\b|\bmb\b|redis bytes|servidor/.test(normalized)) {
-        const used = formatBytes(ops.bandwidth?.usedBytes);
-        const today = formatBytes(ops.bandwidth?.todayBytes);
-        const limit = formatBytes(ops.bandwidth?.limitBytes);
-        const endpointBytes = formatBytes(ops.endpointUsageToday?.totals?.estimatedRedisBytes || ops.endpointUsageToday?.totals?.responseBytes || 0);
-        return `Ancho de banda ${ops.bandwidth?.month || ''}: ${used} de ${limit}. Hoy: ${today}. Uso medido de endpoints hoy: ${ops.endpointUsageToday?.totals?.calls || 0} llamadas, ${endpointBytes} estimados.`;
+        return 'El monitor interno de ancho de banda fue retirado para evitar datos estimados. El consumo oficial debe revisarse en Redis Cloud > candidatic-kv > Configuration > Monthly network used.';
     }
 
     if (/endpoint|endpoints|\bapi\b|llamadas|cache|full scan|fullscan|lecturas/.test(normalized)) {
@@ -1452,12 +1437,6 @@ export function formatPlatformStatsForPrompt(stats) {
             bulks: stats.operational?.bulks,
             reengagement: stats.operational?.reengagement,
             events: stats.operational?.events,
-            bandwidth: {
-                month: stats.operational?.bandwidth?.month,
-                usedBytes: stats.operational?.bandwidth?.usedBytes,
-                todayBytes: stats.operational?.bandwidth?.todayBytes,
-                limitBytes: stats.operational?.bandwidth?.limitBytes
-            },
             ads: stats.operational?.ads,
             bolsa: stats.operational?.bolsa,
             recruitersToday: stats.operational?.recruitersToday,
