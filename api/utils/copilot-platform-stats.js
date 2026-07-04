@@ -1,5 +1,5 @@
 import { getRedisClient } from './storage.js';
-import { readBandwidthTelemetry } from './bandwidth-telemetry.js';
+import { readRedisCloudOfficialUsage } from './redis-cloud-official.js';
 
 const CACHE_TTL_MS = 60 * 1000;
 const RECENT_SAMPLE_LIMIT = 500;
@@ -962,8 +962,6 @@ async function loadOperationalStats(redis) {
     pipe.get('reengagement:settings');
     pipe.llen('webhook:events');
     pipe.llen('debug:webhook_history');
-    pipe.get(`stats:bandwidth:${month}:total`);
-    pipe.get(`stats:bandwidth:${today}:total`);
     pipe.get('stats:ads:cached');
     pipe.scard('ads:hidden');
     pipe.get('candidatic_bolsa_empleo');
@@ -982,14 +980,14 @@ async function loadOperationalStats(redis) {
     const bulkState = safeParse(val(12), null);
     const bulkHistory = safeParse(val(13), []);
     const reengagementSettings = safeParse(val(14), null);
-    const bolsaJobs = safeParse(val(21), []);
-    const empresas = safeParse(val(22), []);
-    const botCached = safeParse(val(23), null);
+    const bolsaJobs = safeParse(val(19), []);
+    const empresas = safeParse(val(20), []);
+    const botCached = safeParse(val(21), null);
 
-    const [endpointUsage, recruiterStats, bandwidthTelemetry] = await Promise.all([
+    const [endpointUsage, recruiterStats, officialBandwidth] = await Promise.all([
         readEndpointUsage(redis, today),
         readRecruiterStats(redis, today),
-        readBandwidthTelemetry(redis).catch(() => null)
+        readRedisCloudOfficialUsage().catch(() => null)
     ]);
 
     return {
@@ -1039,12 +1037,14 @@ async function loadOperationalStats(redis) {
         },
         bandwidth: {
             month,
-            usedBytes: toNumber(bandwidthTelemetry?.usedBytes || val(17)),
-            todayBytes: toNumber(bandwidthTelemetry?.dataQuality?.todayDisplayedBytes || val(18)),
+            usedBytes: toNumber(officialBandwidth?.available ? officialBandwidth.usedBytes : 0),
+            todayBytes: 0,
             limitBytes: 200 * 1024 * 1024 * 1024,
-            dataQuality: bandwidthTelemetry?.dataQuality || null
+            dataQuality: officialBandwidth?.available
+                ? { status: 'official', source: 'redis_cloud_official' }
+                : { status: 'official_unavailable', source: 'redis_cloud_official', reason: officialBandwidth?.reason || 'unavailable' }
         },
-        ads: summarizeAdsCache(val(19), val(20)),
+        ads: summarizeAdsCache(val(17), val(18)),
         bolsa: summarizeBolsaJobs(bolsaJobs),
         recruitersToday: recruiterStats,
         endpointUsageToday: endpointUsage,

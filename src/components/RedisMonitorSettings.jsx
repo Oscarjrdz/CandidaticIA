@@ -107,7 +107,8 @@ const RedisMonitorSettings = () => {
     let statusBarColor = 'bg-emerald-500';
     let statusIcon = <ShieldCheck className="w-5 h-5 text-emerald-500" />;
     let statusMessage = "Sistema Operando Óptimamente";
-    const isReconciled = data.dataQuality?.status === 'reconciled';
+    const isOfficial = data.dataQuality?.status === 'official';
+    const isOfficialUnavailable = data.dataQuality?.status === 'official_unavailable';
 
     if (data.percentage > 85) {
         statusColor = 'bg-red-500';
@@ -124,9 +125,13 @@ const RedisMonitorSettings = () => {
         statusIcon = <Activity className="w-5 h-5 text-amber-500" />;
         statusMessage = "Advertencia: Consumo Elevado";
     }
-    if (isReconciled) {
+    if (isOfficial) {
         statusIcon = <Activity className="w-5 h-5 text-blue-500" />;
-        statusMessage = "Telemetría Reconciliada";
+        statusMessage = "Redis Cloud Oficial";
+    }
+    if (isOfficialUnavailable) {
+        statusIcon = <AlertTriangle className="w-5 h-5 text-amber-500" />;
+        statusMessage = "Configurar Redis Cloud API";
     }
 
     // Bar chart helpers
@@ -160,8 +165,8 @@ const RedisMonitorSettings = () => {
                         <div>
                             <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
                                 Redis Telemetry
-                                <span className={`text-[10px] uppercase font-black px-2 py-0.5 rounded-full ${statusBg} ${isReconciled ? 'text-blue-600' : statusText} tracking-wider`}>
-                                    {isReconciled ? 'Estimado' : 'Live'}
+                                <span className={`text-[10px] uppercase font-black px-2 py-0.5 rounded-full ${statusBg} ${isOfficial ? 'text-blue-600' : statusText} tracking-wider`}>
+                                    {isOfficial ? 'Oficial' : 'Cloud'}
                                 </span>
                             </h3>
                             <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
@@ -278,7 +283,7 @@ const RedisMonitorSettings = () => {
 
                         <p className="mt-4 text-xs font-medium text-gray-500 dark:text-gray-400 flex justify-between">
                             <span>{statusMessage}</span>
-                            <span className="text-gray-400">{isReconciled ? 'Serie horaria' : 'Cron cada hora'}</span>
+                            <span className="text-gray-400">{isOfficial ? 'Snapshot diario' : 'Redis Cloud API'}</span>
                         </p>
                     </div>
                 )}

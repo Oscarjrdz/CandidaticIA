@@ -1,13 +1,9 @@
 import { getRedisClient, validateAdminSession } from '../utils/storage.js';
 import { readUsageMetrics } from '../utils/usage-metrics.js';
-import { readBandwidthTelemetry } from '../utils/bandwidth-telemetry.js';
+import { readRedisCloudOfficialUsage } from '../utils/redis-cloud-official.js';
 
 function todayMty() {
     return new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Monterrey' });
-}
-
-function monthFromDay(day) {
-    return String(day || '').slice(0, 7);
 }
 
 export default async function handler(req, res) {
@@ -51,18 +47,15 @@ export default async function handler(req, res) {
         let dayTrackedBytes = 0;
         let monthTrackedBytes = 0;
         let dataQuality = null;
-        if (day === todayMty()) {
-            const telemetry = await readBandwidthTelemetry(redis);
-            dayTrackedBytes = Number(telemetry.dataQuality?.todayDisplayedBytes || 0);
-            monthTrackedBytes = Number(telemetry.usedBytes || 0);
-            dataQuality = telemetry.dataQuality || null;
-        } else {
-            const [dayBandwidthRaw, monthBandwidthRaw] = await redis.mget(
-                `stats:bandwidth:${day}:total`,
-                `stats:bandwidth:${monthFromDay(day)}:total`
-            );
-            dayTrackedBytes = Number(dayBandwidthRaw || 0);
-            monthTrackedBytes = Number(monthBandwidthRaw || 0);
+        const official = day === todayMty()
+            ? await readRedisCloudOfficialUsage()
+            : null;
+        if (official?.available) {
+            monthTrackedBytes = Number(official.usedBytes || 0);
+            dataQuality = {
+                status: 'official',
+                source: 'redis_cloud_official'
+            };
         }
         const unexplainedBytes = Math.max(0, dayTrackedBytes - totals.measuredBytes);
 
