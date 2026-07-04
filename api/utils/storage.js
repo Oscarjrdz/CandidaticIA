@@ -1327,7 +1327,11 @@ export const saveCandidate = async (candidate) => {
             }
         } catch { }
     }
-    if (client && candidate.whatsapp) {
+    // Solo indexar en la creacion — el telefono no cambia despues, y updateCandidate()
+    // llama saveCandidate() en cada mensaje, así que sin este guard se reescribia la
+    // misma llave una y otra vez (confirmado con MONITOR: 22 HSET en una sola
+    // conversacion con Brenda, todas para candidatos que ya existian).
+    if (client && candidate.whatsapp && _isNewCandidate) {
         const cleanPhone = candidate.whatsapp.replace(/\D/g, '');
         // Store in centralized Hash for atomic O(1) lookups across all instances
         await client.hset(KEYS.PHONE_INDEX, cleanPhone, candidate.id).catch(() => { });

@@ -525,3 +525,36 @@ Se escribio un script de prueba temporal que llama `syncCandidateStats` directo 
 - `npx eslint api/utils/storage.js`: sin errores nuevos (30 preexistentes, confirmado con `git diff` que ninguno esta en lineas tocadas).
 - `npm run build` exitoso.
 - Prueba funcional contra Redis real (arriba): 4/4 casos correctos.
+
+---
+
+## Onceava auditoria (Claude) — flujo completo de Brenda (registro paso1+paso2), y el fix de phone_index estaba incompleto
+
+Fecha: 2026-07-04. El usuario pidio probar "el flujo de Brenda" (la conversacion completa de registro: nombre, fecha de nacimiento, municipio, escolaridad, categoria, colonia, experiencia) — el flujo que mas corre en produccion, y el que vive dentro de `agent.js` (5,276 lineas), marcado como pendiente de revision cuidadosa desde la Septima auditoria.
+
+### Captura: 11,539 comandos en 180s
+
+### Hallazgo 1 (descartado tras investigar): 630 `SCAN`
+
+El numero mas alarmante a primera vista. Se investigo el timeline exacto (cursor de SCAN entre 0 y ~15,700, consistente con recorrer las ~15,500 llaves del Redis completo) y se encontro el origen: `deleteCandidate()` en `storage.js` (linea ~1476-1483) hace un `SCAN` completo del keyspace (`MATCH pipeline:*:*:${id}:*`, `COUNT 50`) para limpiar marcadores de pipeline antes de borrar un candidato. **No es parte del flujo de Brenda** — se disparo porque el usuario se auto-elimino como candidato varias veces durante las pruebas de esta sesion para poder re-probar como "candidato nuevo". Es una operacion de administrador poco frecuente (borrar candidatos), no un costo por mensaje. Queda anotado como optimizable a futuro (bajo prioridad) pero no se toco en esta pasada.
+
+### Hallazgo 2 (real): el fix de `phone_index` de la Decima auditoria estaba incompleto
+
+Se esperaba que `candidatic:phone_index` ya no se reescribiera por mensaje (fix aplicado a `saveWebhookTransaction`), pero la captura mostro **22 `HSET` en una sola conversacion**. Investigando: `updateCandidate()` llama internamente a `saveCandidate()` en cada actualizacion (`storage.js:1789`), y **`saveCandidate()` tiene su propia escritura incondicional a `PHONE_INDEX`** (linea ~1330-1334), separada de la que ya se habia arreglado en `saveWebhookTransaction`. Mismo bug, segunda ubicacion, no detectada en la pasada anterior por revisar solo un call site.
+
+**Fix:** `saveCandidate()` ya calculaba internamente `_isNewCandidate` (via `SET candidate:new:seen:${id} NX`, usado para telemetria de candidatos nuevos) — se reutilizo ese mismo flag para condicionar la escritura a `PHONE_INDEX`: `if (client && candidate.whatsapp && _isNewCandidate)`. Ahora solo se indexa la primera vez que se crea el candidato, nunca en actualizaciones posteriores.
+
+**Verificacion real contra Redis** (script temporal, candidato de prueba desechable):
+1. Guardar candidato nuevo → se indexa correctamente.
+2. Plantar un valor centinela manual en `phone_index`, luego re-guardar el MISMO candidato (simulando un update) → el valor centinela sobrevive intacto, confirmando que `saveCandidate` ya no lo toca en actualizaciones.
+
+### Pendiente de aclarar con el usuario
+
+Durante la captura aparecieron **4 candidatos distintos** (`byghd8t8y`, `mm9zxqg6h`, `3d61locli`, `73axocw6x`). Lo mas probable es que sea resultado de probar "candidato nuevo" varias veces durante la sesion de pruebas (cada vez con un numero/candidato distinto) — no hay evidencia de un bug de duplicacion, pero no se investigo a fondo si el flujo genera candidatos fantasma en algun escenario. Queda como punto a vigilar si se repite sin que el usuario este creando candidatos nuevos a proposito.
+
+### Verificacion
+
+- `node --check api/utils/storage.js`: OK.
+- `npx eslint api/utils/storage.js`: sin errores nuevos.
+- `npm run build` exitoso.
+- Prueba funcional contra Redis real: 2/2 casos correctos (arriba).
