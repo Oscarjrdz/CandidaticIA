@@ -517,7 +517,7 @@ export default function InternalChat({ onlineUsers = [] }) {
     });
 
     return (
-        <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-3">
+        <div className="fixed bottom-6 right-6 z-[150] flex flex-col items-end gap-3">
         {viewing && createPortal(
             <div className="fixed inset-0 z-[200] bg-black/95 flex flex-col">
                 <div className="flex items-center justify-between px-4 py-3 bg-black/60 shrink-0">

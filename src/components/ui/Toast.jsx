@@ -61,7 +61,7 @@ const Toast = ({
 
     return (
         <div className={`
-      fixed ${positions[position]} z-50
+      fixed ${positions[position]} z-[150]
       animate-slide-up
     `}>
             <div className={`

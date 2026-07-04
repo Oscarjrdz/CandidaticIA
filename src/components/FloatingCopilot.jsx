@@ -297,7 +297,7 @@ const FloatingCopilot = ({ onOpenSection, activeSection }) => {
                     if (suppressClickRef.current) return;
                     handleOpen();
                 }}
-                className="fixed left-0 top-0 z-[70] flex items-center gap-3 rounded-full bg-blue-600 hover:bg-blue-700 text-white shadow-xl px-4 py-3 transition-colors will-change-transform cursor-grab active:cursor-grabbing touch-none select-none"
+                className="fixed left-0 top-0 z-[150] flex items-center gap-3 rounded-full bg-blue-600 hover:bg-blue-700 text-white shadow-xl px-4 py-3 transition-colors will-change-transform cursor-grab active:cursor-grabbing touch-none select-none"
                 style={{ transform: `translate3d(${position.x}px, ${position.y}px, 0)` }}
                 title="Abrir Brenda IA"
             >
@@ -313,7 +313,7 @@ const FloatingCopilot = ({ onOpenSection, activeSection }) => {
     return (
         <section
             ref={containerRef}
-            className="fixed left-0 top-0 z-[70] w-[min(390px,calc(100vw-2.5rem))] bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-2xl overflow-hidden will-change-transform"
+            className="fixed left-0 top-0 z-[150] w-[min(390px,calc(100vw-2.5rem))] bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-2xl overflow-hidden will-change-transform"
             style={{ transform: `translate3d(${position.x}px, ${position.y}px, 0)` }}
         >
             <header
