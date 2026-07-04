@@ -559,7 +559,7 @@ const MessagesEncryptionHeader = () => (
 
 export default function ChatSection({ rolePermissions, onlineUsers = [], unreadCountHint = null, onUnreadCountChange }) {
     const { showToast } = useToastContext();
-    const { user } = useAuthContext();
+    const { user, setUser } = useAuthContext();
 
     const [isMobile, setIsMobile] = useState(false);
     useEffect(() => {
@@ -750,8 +750,25 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
     // Quick Replies (Banco de Respuestas)
     const [quickReplies, setQuickReplies] = useState([]);
     const quickRepliesLoadedRef = useRef(false);
-    const [showQuickRepliesPanel, setShowQuickRepliesPanel] = useState(false);
+    // Arranca abierto/cerrado segun la preferencia guardada del reclutador (Redis, perfil de usuario)
+    const [showQuickRepliesPanel, setShowQuickRepliesPanel] = useState(() => !!user?.preferences?.quickRepliesOpen);
     const [editingQuickReply, setEditingQuickReply] = useState(null); // null = creating, object = editing
+
+    // El panel de banco de respuestas ya NO se cierra solo al aplicar una respuesta —
+    // se queda abierto hasta que el reclutador lo cierre a proposito. Esa preferencia
+    // (abierto/cerrado) se guarda en el perfil del reclutador en Redis para recordarla
+    // la proxima vez que entre.
+    const setQuickRepliesPanelOpen = useCallback((open) => {
+        setShowQuickRepliesPanel(open);
+        if (!user?.id) return;
+        const nextPreferences = { ...(user.preferences || {}), quickRepliesOpen: open };
+        setUser(prev => prev ? { ...prev, preferences: nextPreferences } : prev);
+        fetch('/api/users', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: user.id, preferences: nextPreferences })
+        }).catch(() => {});
+    }, [user?.id, user?.preferences, setUser]);
     const [qrForm, setQrForm] = useState({ name: '', message: '', shortcut: '', imageUrl: '', imageUrl2: '', type: 'text', locName: '', locAddress: '', locLat: '', locLng: '' });
     const [qrImageUploading, setQrImageUploading] = useState(false);
     const [pendingQrImages, setPendingQrImages] = useState([]); // imágenes de QR en espera de enviar
@@ -1202,8 +1219,8 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         quickReplyApplyRef.current = { key: applyKey, time: now };
 
         // Tipo ubicación: enviar directamente sin pasar por el input de texto
+        // (el panel ya NO se cierra solo — se queda abierto hasta que el reclutador lo cierre)
         if (qr.type === 'location' && qr.location?.lat && qr.location?.lng) {
-            setShowQuickRepliesPanel(false);
             if (!selectedChat) return;
             autoSilenceBot(selectedChat);
             markReplyHandledOptimistically(selectedChat.id);
@@ -1243,7 +1260,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                 .trim();
             messageInputRef.current?.injectText(resolved);
         }
-        setShowQuickRepliesPanel(false);
+        // El panel se queda abierto a proposito — solo se cierra si el reclutador lo cierra el mismo.
     }, [selectedChat, candidates, user, showToast, markReplyHandledOptimistically]);
 
     useEffect(() => {
@@ -4320,7 +4337,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                                         <button 
                                             key={iconId}
                                             {...dragProps}
-                                            onClick={() => setShowQuickRepliesPanel(!showQuickRepliesPanel)}
+                                            onClick={() => setQuickRepliesPanelOpen(!showQuickRepliesPanel)}
                                             className={`${baseClass} ${showQuickRepliesPanel ? 'bg-green-50 text-green-600 dark:bg-green-500/20 dark:text-green-400' : 'hover:bg-black/5 dark:hover:bg-white/5 text-[#54656f] dark:text-[#aebac1]'}`}
                                             title="Banco de Respuestas"
                                         >
@@ -4556,7 +4573,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                             <BookOpen className="w-5 h-5 text-green-600 dark:text-green-400" />
                             <h3 className="font-bold text-sm text-[#111b21] dark:text-[#e9edef]">Banco de Respuestas</h3>
                         </div>
-                        <button onClick={() => setShowQuickRepliesPanel(false)} className="text-[#54656f] hover:text-[#111b21] dark:text-[#aebac1] dark:hover:text-white">
+                        <button onClick={() => setQuickRepliesPanelOpen(false)} className="text-[#54656f] hover:text-[#111b21] dark:text-[#aebac1] dark:hover:text-white">
                             <X className="w-5 h-5" />
                         </button>
                     </div>

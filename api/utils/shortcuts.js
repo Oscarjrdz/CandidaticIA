@@ -15,13 +15,15 @@ export const substituteVariables = (text, candidate) => {
         const trimmedKey = key.trim();
         const lowerKey = trimmedKey.toLowerCase();
 
-        // prioritize specific field mappings first
-        const _firstName = (candidate.nombreReal || '').trim().split(/\s+/)[0] || (candidate.nombre || '').trim().split(/\s+/)[0] || 'Candidato';
+        // Solo el nombre REAL (registrado), nunca el "from" informal de WhatsApp — ese
+        // suele traer apodos/emojis. Si no hay nombre real guardado, no se inyecta nada
+        // (string vacio) en vez de caer al nombre informal o a un generico "Candidato".
+        const _firstName = (candidate.nombreReal || '').trim().split(/\s+/)[0] || '';
         const mappings = {
             'candidato': _firstName,
-            'nombre': candidate.nombre || candidate.nombreReal || candidate.name || 'Candidato',
-            'name': candidate.nombre || candidate.nombreReal || candidate.name || 'Candidato',
-            'nombrereal': candidate.nombreReal || candidate.nombre || 'Candidato',
+            'nombre': _firstName,
+            'name': _firstName,
+            'nombrereal': (candidate.nombreReal || '').trim(),
             'whatsapp': candidate.whatsapp || '',
             'telefono': candidate.whatsapp || '',
             'phone': candidate.whatsapp || '',
