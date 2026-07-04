@@ -23,6 +23,19 @@ function dayLabel(ymd) {
     return d.toLocaleDateString('es-MX', { timeZone: 'America/Monterrey', day: 'numeric', month: 'short' }).replace('.', '');
 }
 
+// Dia 1 al ultimo dia del mes calendario actual (zona horaria Monterrey) — no
+// una ventana movil de N dias. Los dias futuros dentro del mes se rellenan
+// vacios hasta que el medidor real los alcance.
+function currentMonthDayKeys() {
+    const mtyToday = new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Monterrey' });
+    const [year, month] = mtyToday.split('-').map(Number);
+    const daysInMonth = new Date(year, month, 0).getDate();
+    return Array.from({ length: daysInMonth }, (_, i) => {
+        const day = String(i + 1).padStart(2, '0');
+        return `${year}-${String(month).padStart(2, '0')}-${day}`;
+    });
+}
+
 const RedisBandwidthSettings = () => {
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -31,7 +44,7 @@ const RedisBandwidthSettings = () => {
     useEffect(() => {
         (async () => {
             try {
-                const res = await fetch('/api/system/bandwidth?days=30');
+                const res = await fetch('/api/system/bandwidth?days=31');
                 const json = await res.json();
                 if (json.success) setData(json);
                 else setError(true);
@@ -47,8 +60,12 @@ const RedisBandwidthSettings = () => {
     const last7 = data?.days ? sumLastDays(data.days, 7) : null;
     const last30 = data?.totals || null;
     const hasHistory = data?.days?.some(d => d.samples > 0);
-    // El API regresa hoy -> mas viejo; la grafica se lee de izquierda (mas viejo) a derecha (hoy)
-    const chartDays = data?.days ? [...data.days].reverse() : [];
+    // Vista de mes calendario: dia 1 a la izquierda, ultimo dia del mes a la
+    // derecha. Los dias futuros (aun no alcanzados por el medidor) quedan en 0.
+    const dataByDay = new Map((data?.days || []).map(d => [d.day, d]));
+    const chartDays = currentMonthDayKeys().map(day => dataByDay.get(day) || {
+        day, netInputBytes: 0, netOutputBytes: 0, commandsProcessed: 0, samples: 0
+    });
     const maxDayBytes = Math.max(...chartDays.map(d => d.netInputBytes + d.netOutputBytes), 1);
 
     return (
