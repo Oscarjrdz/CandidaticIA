@@ -28,10 +28,14 @@ const SettingsSection = () => {
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* items-start evita que el grid estire las tarjetas a la altura de la mas alta —
+                cada columna toma solo el alto que su contenido necesita. */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
                 <WhatsAppSettings showToast={showToast} />
-                <GPTSettings showToast={showToast} />
-                <RedisBandwidthSettings />
+                <div className="flex flex-col gap-6">
+                    <GPTSettings showToast={showToast} />
+                    <RedisBandwidthSettings />
+                </div>
             </div>
         </div>
     );
