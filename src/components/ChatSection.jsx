@@ -3983,7 +3983,8 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                             </div>
                             <div className="flex flex-col min-w-0 flex-1 overflow-hidden">
                                 <div className="flex items-center min-w-0 w-full">
-                                    <h2 className="text-[17px] font-medium text-[#111b21] dark:text-[#e9edef] truncate shrink-0 max-w-[45%] whitespace-nowrap">
+                                    {/* Nombre completo siempre visible (sin truncar) — las pestañas toman el espacio restante con su propio scroll */}
+                                    <h2 className="text-[17px] font-medium text-[#111b21] dark:text-[#e9edef] shrink-0 whitespace-nowrap">
                                         {toTitleCase(selectedChat.nombreReal || selectedChat.nombre) || selectedChat.whatsapp}
                                     </h2>
                                     {!isMobile && (
@@ -4034,6 +4035,18 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                                     {(selectedChat.adHeadline || selectedChat.adId) && (
                                         <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap bg-violet-50 dark:bg-violet-500/10 text-violet-500 dark:text-violet-400 border border-violet-200/60 dark:border-violet-500/20 truncate max-w-[180px]" title={selectedChat.adHeadline || selectedChat.adId}>
                                             📢 {selectedChat.adHeadline || `Ad ${selectedChat.adId}`}
+                                        </span>
+                                    )}
+                                    {/* Datos del candidato — mismo formato que la tarjeta de la lista de chats */}
+                                    {(selectedChat.edad || selectedChat.escolaridad || selectedChat.municipio || selectedChat.categoria) && (
+                                        <span className="flex items-center gap-2 text-[10px] text-[#8696a0] dark:text-[#697882] whitespace-nowrap ml-0.5">
+                                            {selectedChat.edad && <span>{selectedChat.edad} años</span>}
+                                            {selectedChat.edad && selectedChat.escolaridad && <span>•</span>}
+                                            {selectedChat.escolaridad && <span>{selectedChat.escolaridad}</span>}
+                                            {(selectedChat.edad || selectedChat.escolaridad) && selectedChat.municipio && <span>•</span>}
+                                            {selectedChat.municipio && <span>{selectedChat.municipio}</span>}
+                                            {(selectedChat.edad || selectedChat.escolaridad || selectedChat.municipio) && selectedChat.categoria && <span>•</span>}
+                                            {selectedChat.categoria && <span>{toTitleCase(selectedChat.categoria)}</span>}
                                         </span>
                                     )}
                                 </div>
