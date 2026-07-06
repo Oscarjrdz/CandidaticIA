@@ -3983,11 +3983,11 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                             </div>
                             <div className="flex flex-col min-w-0 flex-1 overflow-hidden">
                                 <div className="flex items-center min-w-0 w-full">
-                                    <h2 className="text-[17px] font-medium text-[#111b21] dark:text-[#e9edef] truncate shrink whitespace-nowrap">
+                                    <h2 className="text-[17px] font-medium text-[#111b21] dark:text-[#e9edef] truncate shrink-0 max-w-[45%] whitespace-nowrap">
                                         {toTitleCase(selectedChat.nombreReal || selectedChat.nombre) || selectedChat.whatsapp}
                                     </h2>
                                     {!isMobile && (
-                                        <div className="flex items-center shrink-0 ml-1.5 overflow-visible pt-1 pb-1 pr-1">
+                                        <div className="flex items-center min-w-0 shrink ml-1.5 overflow-x-auto overflow-y-hidden pt-1.5 pb-1 pr-1" style={{ scrollbarWidth: 'thin' }}>
                                         {selectedChat.tags && (Array.isArray(selectedChat.tags) ? selectedChat.tags : []).map(t => {
                                             const tObj = availableTags.find(at => (typeof at === 'string' ? at : at.name) === t);
                                             const tColor = tObj ? (tObj.color || '#3b82f6') : '#3b82f6';
@@ -4007,8 +4007,9 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                                         </div>
                                     )}
                                 </div>
-                                <div className="flex items-center gap-2 mt-0.5 min-w-0">
-                                    <p className="text-xs text-[#667781] dark:text-[#8696a0] truncate shrink flex items-center gap-1">
+                                {/* Linea 2: WhatsApp + numero + ultimo mensaje — sin badges, espacio completo para el texto */}
+                                <div className="flex items-center gap-x-2 mt-0.5 min-w-0 flex-wrap">
+                                    <p className="text-xs text-[#667781] dark:text-[#8696a0] flex items-center gap-1 whitespace-nowrap">
                                         <span className="font-semibold" style={{ color: '#25D366' }}>WhatsApp</span>
                                         {(() => {
                                             let p = String(selectedChat.whatsapp || '');
@@ -4019,19 +4020,20 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                                         <span className="mx-0.5 opacity-50">·</span>
                                         Último Mensaje {formatRelativeDate(selectedChat.ultimoMensaje)}
                                     </p>
-                                    {(selectedChat.adHeadline || selectedChat.adId) && (
-                                        <span className="hidden lg:inline-flex items-center gap-1 shrink-0 text-[10px] font-medium text-violet-500 dark:text-violet-400 bg-violet-50 dark:bg-violet-500/10 px-2 py-0.5 rounded-full border border-violet-200/60 dark:border-violet-500/20 truncate max-w-[180px]" title={selectedChat.adHeadline || selectedChat.adId}>
-                                            📢 {selectedChat.adHeadline || `Ad ${selectedChat.adId}`}
-                                        </span>
-                                    )}
                                 </div>
+                                {/* Linea 3: estado + numero de entrada + anuncio — badges uniformes (mismo alto/padding/tipografia) */}
                                 <div className="mt-0.5 flex items-center gap-1.5 flex-wrap">
-                                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${isProfileComplete(selectedChat) ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400' : 'bg-red-100 dark:bg-red-900/30 text-red-500 dark:text-red-400'}`}>
+                                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap ${isProfileComplete(selectedChat) ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400' : 'bg-red-100 dark:bg-red-900/30 text-red-500 dark:text-red-400'}`}>
                                         {isProfileComplete(selectedChat) ? 'Completo' : 'Incompleto'}
                                     </span>
                                     {selectedChat.incomingPhoneNumberId && (
-                                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400">
+                                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400">
                                             {selectedChat.incomingPhoneNumberId === '1249373631587237' ? 'Hr One México' : selectedChat.incomingPhoneNumberId === '1061455557054529' ? 'Candidatic IA' : selectedChat.incomingPhoneNumberId}
+                                        </span>
+                                    )}
+                                    {(selectedChat.adHeadline || selectedChat.adId) && (
+                                        <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap bg-violet-50 dark:bg-violet-500/10 text-violet-500 dark:text-violet-400 border border-violet-200/60 dark:border-violet-500/20 truncate max-w-[180px]" title={selectedChat.adHeadline || selectedChat.adId}>
+                                            📢 {selectedChat.adHeadline || `Ad ${selectedChat.adId}`}
                                         </span>
                                     )}
                                 </div>
