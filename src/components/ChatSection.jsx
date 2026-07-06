@@ -3961,8 +3961,9 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
             {selectedChat ? (
                 <div className={`flex-1 flex flex-col bg-[#efeae2] dark:bg-[#0b141a] h-full relative min-w-0 overflow-hidden ${!selectedChat ? 'hidden md:flex' : 'flex'}`}>
                     
-                    {/* Header Chat */}
-                    <div className="min-h-[59px] px-4 py-2 flex items-center justify-between bg-[#f0f2f5] dark:bg-[#202c33] z-20 shadow-sm">
+                    {/* Header Chat — container query: cuando los paneles laterales (CRM, Banco)
+                        angostan el chat, el texto del toggle IA se oculta para no cortar las etiquetas */}
+                    <div className="min-h-[59px] px-4 py-2 flex items-center justify-between bg-[#f0f2f5] dark:bg-[#202c33] z-20 shadow-sm" style={{ containerType: 'inline-size' }}>
                         <div className="flex items-center cursor-pointer flex-1 min-w-0 pr-4">
                             <button 
                                 className="md:hidden mr-2 p-1 text-[#54656f] dark:text-[#aebac1]"
@@ -4056,7 +4057,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                             {/* Silenciar IA Toggle */}
                             {!isMobile && (
                                 <div className="flex items-center gap-2 mr-2">
-                                    <span className={`text-xs font-medium ${selectedChat.blocked ? 'text-red-500' : 'text-gray-400 dark:text-gray-500'} select-none`}>
+                                    <span className={`text-xs font-medium ${selectedChat.blocked ? 'text-red-500' : 'text-gray-400 dark:text-gray-500'} select-none whitespace-nowrap [@container(max-width:1060px)]:hidden`}>
                                         {selectedChat.blocked ? 'IA Silenciada' : 'IA Dinámica'}
                                     </span>
                                     <button
