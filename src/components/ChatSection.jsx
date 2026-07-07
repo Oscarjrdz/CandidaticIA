@@ -3983,13 +3983,15 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                                 )}
                             </div>
                             <div className="flex flex-col min-w-0 flex-1 overflow-hidden">
-                                <div className="flex items-center min-w-0 w-full">
-                                    {/* Nombre completo siempre visible (sin truncar) — las pestañas toman el espacio restante con su propio scroll */}
+                                {/* flex-wrap: si las pestañas no caben junto al nombre completo, bajan enteras
+                                    a su propia linea en vez de recortarse; el scroll interno solo aplica si ni
+                                    una linea completa les alcanza (muchas pestañas). */}
+                                <div className="flex items-center flex-wrap min-w-0 w-full">
                                     <h2 className="text-[17px] font-medium text-[#111b21] dark:text-[#e9edef] shrink-0 whitespace-nowrap">
                                         {toTitleCase(selectedChat.nombreReal || selectedChat.nombre) || selectedChat.whatsapp}
                                     </h2>
                                     {!isMobile && (
-                                        <div className="flex items-center min-w-0 shrink ml-1.5 overflow-x-auto overflow-y-hidden pt-1.5 pb-1 pr-1" style={{ scrollbarWidth: 'thin' }}>
+                                        <div className="flex items-center min-w-0 max-w-full shrink ml-1.5 overflow-x-auto overflow-y-hidden pt-1.5 pb-1 pr-1" style={{ scrollbarWidth: 'thin' }}>
                                         {selectedChat.tags && (Array.isArray(selectedChat.tags) ? selectedChat.tags : []).map(t => {
                                             const tObj = availableTags.find(at => (typeof at === 'string' ? at : at.name) === t);
                                             const tColor = tObj ? (tObj.color || '#3b82f6') : '#3b82f6';
