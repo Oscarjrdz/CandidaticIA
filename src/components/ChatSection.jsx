@@ -741,7 +741,14 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
     // actualizamos su store para que se vea bien al reabrirlo, sin filtrarse al actual.
     const updateChatMessages = useCallback((chatId, updater) => {
         if (!chatId) return;
-        if (selectedChatRef.current?.id === chatId) {
+        // "Chat activo" tiene que leerse de una senal SINCRONA. selectedChatRef se
+        // actualiza en un effect (post-commit), asi que al cambiar de chat queda un
+        // instante en que messages ya es del chat nuevo pero selectedChatRef aun apunta
+        // al viejo — ahi es donde un .then() diferido inyectaba en el chat equivocado.
+        // pendingChatIdRef se setea sincronamente en handleSelectChat (es la misma
+        // fuente de verdad que ya usa el SSE), asi que no tiene esa ventana de carrera.
+        const activeId = pendingChatIdRef.current ?? selectedChatRef.current?.id;
+        if (String(activeId) === String(chatId)) {
             setMessages(prev => updater(Array.isArray(prev) ? prev : []));
         } else {
             const prev = messagesByChatRef.current.get(chatId) || [];
@@ -2672,6 +2679,9 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         }
         displayMessageCacheRef.current.clear(); // prevent stale cache cross-chat
         setSelectedChat(chat);
+        // Sincroniza el ref de inmediato (el effect lo haria hasta post-commit) para que
+        // cualquier callback diferido vea el chat correcto sin ventana de carrera.
+        selectedChatRef.current = chat;
         setMessages(messagesByChatRef.current.get(chat.id) || []);
         setHeaderImgError(false);
         setPendingQrImages([]); // limpiar imágenes pendientes al cambiar de chat
