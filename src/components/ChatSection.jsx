@@ -3983,29 +3983,22 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                                 )}
                             </div>
                             <div className="flex flex-col min-w-0 flex-1 overflow-hidden">
-                                {/* Nombre completo + etiquetas en la MISMA linea: si no caben, las etiquetas
-                                    hacen scroll horizontal. El mask de degradado hace que el corte del scroll
-                                    se vea como desvanecido intencional en vez de una etiqueta "mocha"; el pr-4
-                                    garantiza que al llegar al final del scroll (o si caben) el borde redondeado
-                                    quede antes de la zona del degradado. */}
-                                <div className="flex items-center min-w-0 w-full">
+                                {/* Nombre completo + etiquetas: las etiquetas usan flex-wrap para bajar de
+                                    linea en vez de recortarse con scroll horizontal + degradado. Asi un tag
+                                    largo (ej. "Metalsa Anuncio") se ve completo aprovechando el espacio que
+                                    el header ya deja libre arriba del toolbar de iconos, en vez de quedar
+                                    truncado. El header crece verticalmente si hace falta (min-h lo permite). */}
+                                <div className="flex items-start min-w-0 w-full flex-wrap gap-y-1">
                                     <h2 className="text-[17px] font-medium text-[#111b21] dark:text-[#e9edef] shrink-0 whitespace-nowrap">
                                         {toTitleCase(selectedChat.nombreReal || selectedChat.nombre) || selectedChat.whatsapp}
                                     </h2>
                                     {!isMobile && (
-                                        <div
-                                            className="flex items-center min-w-0 shrink ml-1.5 overflow-x-auto overflow-y-hidden pt-1.5 pb-1 pr-4"
-                                            style={{
-                                                scrollbarWidth: 'thin',
-                                                WebkitMaskImage: 'linear-gradient(to right, black calc(100% - 14px), transparent)',
-                                                maskImage: 'linear-gradient(to right, black calc(100% - 14px), transparent)'
-                                            }}
-                                        >
+                                        <div className="flex items-center flex-wrap min-w-0 ml-1.5 gap-1.5 pt-1.5 pb-1 pr-4">
                                         {selectedChat.tags && (Array.isArray(selectedChat.tags) ? selectedChat.tags : []).map(t => {
                                             const tObj = availableTags.find(at => (typeof at === 'string' ? at : at.name) === t);
                                             const tColor = tObj ? (tObj.color || '#3b82f6') : '#3b82f6';
                                             return (
-                                                <span key={t} className="group/tag relative inline-flex items-center text-xs px-2.5 py-0.5 rounded-full text-white font-medium whitespace-nowrap opacity-90 shadow-sm cursor-default ml-1.5 align-middle" style={{ backgroundColor: tColor }}>
+                                                <span key={t} className="group/tag relative inline-flex items-center text-xs px-2.5 py-0.5 rounded-full text-white font-medium whitespace-nowrap opacity-90 shadow-sm cursor-default align-middle" style={{ backgroundColor: tColor }}>
                                                     {formatTagLabel(t)}
                                                     <button
                                                         onClick={(e) => { e.stopPropagation(); handleToggleTag(t); }}
