@@ -732,6 +732,23 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         messagesByChatRef.current.set(chatId, messages);
     }, [messages, selectedChat?.id]);
 
+    // Aplica una actualizacion de la lista de mensajes ANCLADA a un chat concreto.
+    // Los envios son asincronos: si en lo que un mensaje va en vuelo el reclutador
+    // cambia de chat (o entra otro candidato y se reabre otro), el callback diferido
+    // NO debe tocar el chat que quedo visible — antes lo hacia y "inyectaba" el mensaje
+    // en el chat equivocado. Aqui: si el chat destino sigue abierto, actualizamos el
+    // estado visible (el effect de arriba lo espeja al store por-chat); si ya no, solo
+    // actualizamos su store para que se vea bien al reabrirlo, sin filtrarse al actual.
+    const updateChatMessages = useCallback((chatId, updater) => {
+        if (!chatId) return;
+        if (selectedChatRef.current?.id === chatId) {
+            setMessages(prev => updater(Array.isArray(prev) ? prev : []));
+        } else {
+            const prev = messagesByChatRef.current.get(chatId) || [];
+            messagesByChatRef.current.set(chatId, updater(prev));
+        }
+    }, []);
+
     const handleTyping = () => {
         if (!selectedChat) return;
         const now = Date.now();
@@ -1223,26 +1240,27 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         if (qr.type === 'location' && qr.location?.lat && qr.location?.lng) {
             if (!selectedChat) return;
             autoSilenceBot(selectedChat);
-            markReplyHandledOptimistically(selectedChat.id);
+            const currentCandidateId = selectedChat.id;
+            markReplyHandledOptimistically(currentCandidateId);
             const optimisticId = 'temp-loc-' + Date.now();
-            setMessages(prev => [...(prev || []), withMessageEntryAnimation({
+            updateChatMessages(currentCandidateId, prev => [...(prev || []), withMessageEntryAnimation({
                 id: optimisticId, content: `[Ubicación: ${qr.location.name || 'Mapa'}]`, tipo: 'location',
                 from: 'me', enviado_por_agente: 1, status: 'pending', fecha: new Date().toISOString()
             }, 'outgoing')]);
             fetch('/api/chat', {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    candidateId: selectedChat.id, message: '', type: 'location',
+                    candidateId: currentCandidateId, message: '', type: 'location',
                     extraParams: { name: qr.location.name, address: qr.location.address, lat: qr.location.lat, lng: qr.location.lng },
                     senderId: user?.id || user?.whatsapp, senderName: user?.name || user?.nombre
                 })
             }).then(r => r.json()).then(data => {
-                setMessages(prev => data.success && data.message
+                updateChatMessages(currentCandidateId, prev => data.success && data.message
                     ? mergeOutgoingMessage(prev, data.message, optimisticId)
                     : prev.map(m => m.id === optimisticId ? { ...m, status: 'failed', error: data.error } : m)
                 );
             }).catch(() => {
-                setMessages(prev => prev.map(m => m.id === optimisticId ? { ...m, status: 'failed' } : m));
+                updateChatMessages(currentCandidateId, prev => prev.map(m => m.id === optimisticId ? { ...m, status: 'failed' } : m));
             });
             return;
         }
@@ -1261,7 +1279,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
             messageInputRef.current?.injectText(resolved);
         }
         // El panel se queda abierto a proposito — solo se cierra si el reclutador lo cierra el mismo.
-    }, [selectedChat, candidates, user, showToast, markReplyHandledOptimistically]);
+    }, [selectedChat, candidates, user, showToast, markReplyHandledOptimistically, updateChatMessages]);
 
     useEffect(() => {
         if (showQuickRepliesPanel) loadQuickReplies();
@@ -2668,7 +2686,8 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
 
         // Auto-silence bot on manual intervention
         autoSilenceBot(selectedChat);
-        markReplyHandledOptimistically(selectedChat.id);
+        const currentCandidateId = selectedChat.id;
+        markReplyHandledOptimistically(currentCandidateId);
 
         // Reset input immediately so user can select the same file again if needed
         e.target.value = null;
@@ -2700,7 +2719,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
             filename: file.name
         };
         isSendingRef.current = true;
-        setMessages(prev => [...prev, withMessageEntryAnimation(tempMsg, 'outgoing')]);
+        updateChatMessages(currentCandidateId, prev => [...prev, withMessageEntryAnimation(tempMsg, 'outgoing')]);
         setSending(true);
         isSendingMediaRef.current = true; // Mute polling during upload
 
@@ -2708,7 +2727,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
             // Upload file to local media store first
             const formData = new FormData();
             formData.append('file', file);
-            formData.append('candidateId', selectedChat.id);
+            formData.append('candidateId', currentCandidateId);
 
             console.log(`📤 [FileUpload] Step 1: Uploading ${file.name} (${file.type}, ${Math.round(file.size/1024)}KB) as ${msgType}`);
 
@@ -2725,7 +2744,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
             const mediaUrl = uploadData.url || uploadData.mediaUrl;
 
             // Keep the local preview visible while tracking the final URL for dedupe/send.
-            setMessages(prev => prev.map(m => m.id === tempId ? { ...m, _serverMediaUrl: mediaUrl } : m));
+            updateChatMessages(currentCandidateId, prev => prev.map(m => m.id === tempId ? { ...m, _serverMediaUrl: mediaUrl } : m));
 
             // Send via Chat API (single attempt — pre-upload makes retries unnecessary)
             console.log(`📤 [FileUpload] Step 3: Sending via /api/chat with type=${msgType}, mediaUrl=${mediaUrl}`);
@@ -2733,7 +2752,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    candidateId: selectedChat.id,
+                    candidateId: currentCandidateId,
                     message: '',
                     type: msgType,
                     mediaUrl,
@@ -2747,17 +2766,17 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
             if (!res.ok) throw new Error(chatData?.error || 'Error al enviar media');
 
             // Update optimistic message in-place (no flicker from loadMessages)
-            setMessages(prev => chatData.message
+            updateChatMessages(currentCandidateId, prev => chatData.message
                 ? mergeOutgoingMessage(prev, { ...chatData.message, status: 'sent' }, tempId)
                 : prev.map(m => m.id === tempId ? { ...m, status: 'sent' } : m)
             );
-            window.dispatchEvent(new CustomEvent('candidate_replied', { detail: { candidateId: selectedChat.id } }));
+            window.dispatchEvent(new CustomEvent('candidate_replied', { detail: { candidateId: currentCandidateId } }));
 
         } catch (err) {
             console.error('❌ [FileUpload] FAILED at:', err.message, err);
             showToast && showToast('Error al mandar archivo: ' + err.message, 'error');
             // Mark as failed instead of removing — so the user sees it didn't go through
-            setMessages(prev => prev.map(m => m.id === tempId ? { ...m, status: 'failed', error: err.message } : m));
+            updateChatMessages(currentCandidateId, prev => prev.map(m => m.id === tempId ? { ...m, status: 'failed', error: err.message } : m));
         } finally {
             setSending(false);
             isSendingMediaRef.current = false;
@@ -2814,11 +2833,12 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
     const handleSendVCard = (name, phone, company, title, email, url) => {
         if (!name || !phone || !selectedChat) return;
         autoSilenceBot(selectedChat);
-        markReplyHandledOptimistically(selectedChat.id);
-        
+        const currentCandidateId = selectedChat.id;
+        markReplyHandledOptimistically(currentCandidateId);
+
         const optimisticId = 'temp-' + Date.now();
         isSendingRef.current = true;
-        setMessages(prev => [...(prev || []), withMessageEntryAnimation({
+        updateChatMessages(currentCandidateId, prev => [...(prev || []), withMessageEntryAnimation({
             id: optimisticId,
             content: `[Tarjeta de Contacto: ${name}]`,
             tipo: 'contacts',
@@ -2832,7 +2852,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                candidateId: selectedChat.id,
+                candidateId: currentCandidateId,
                 message: name,
                 type: 'contacts',
                 extraParams: { contactName: name, contactPhone: phone, company, title, email, url },
@@ -2841,10 +2861,10 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
             })
         }).then(res => res.json()).then(data => {
             if (data.success && data.message) {
-                setMessages(prev => mergeOutgoingMessage(prev, data.message, optimisticId));
-                window.dispatchEvent(new CustomEvent('candidate_replied', { detail: { candidateId: selectedChat.id } }));
+                updateChatMessages(currentCandidateId, prev => mergeOutgoingMessage(prev, data.message, optimisticId));
+                window.dispatchEvent(new CustomEvent('candidate_replied', { detail: { candidateId: currentCandidateId } }));
             } else {
-                setMessages(prev => prev.map(m => m.id === optimisticId ? { ...m, status: 'failed', error: data.error } : m));
+                updateChatMessages(currentCandidateId, prev => prev.map(m => m.id === optimisticId ? { ...m, status: 'failed', error: data.error } : m));
                 showToast && showToast(`Error al enviar vCard: ${data.error || 'Desconocido'}`, 'error');
             }
         });
@@ -2854,71 +2874,75 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
     const handleSendLocation = (name, address, lat, lng) => {
         if (!lat || !lng || !selectedChat) return;
         autoSilenceBot(selectedChat);
-        markReplyHandledOptimistically(selectedChat.id);
+        const currentCandidateId = selectedChat.id;
+        markReplyHandledOptimistically(currentCandidateId);
         const optimisticId = 'temp-' + Date.now();
         isSendingRef.current = true;
-        setMessages(prev => [...(prev || []), withMessageEntryAnimation({
+        updateChatMessages(currentCandidateId, prev => [...(prev || []), withMessageEntryAnimation({
             id: optimisticId, content: `[Ubicación: ${name || 'Mapa'}]`, tipo: 'location', from: 'me', enviado_por_agente: 1, status: 'pending', fecha: new Date().toISOString()
         }, 'outgoing')]);
         fetch('/api/chat', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ candidateId: selectedChat.id, message: '', type: 'location', extraParams: { name, address, lat, lng }, senderId: user?.id || user?.whatsapp, senderName: user?.name || user?.nombre })
+            body: JSON.stringify({ candidateId: currentCandidateId, message: '', type: 'location', extraParams: { name, address, lat, lng }, senderId: user?.id || user?.whatsapp, senderName: user?.name || user?.nombre })
         }).then(res => res.json()).then(data => {
             if (data.success && data.message) {
-                setMessages(prev => mergeOutgoingMessage(prev, data.message, optimisticId));
-                window.dispatchEvent(new CustomEvent('candidate_replied', { detail: { candidateId: selectedChat.id } }));
-            } else setMessages(prev => prev.map(m => m.id === optimisticId ? { ...m, status: 'failed', error: data.error } : m));
+                updateChatMessages(currentCandidateId, prev => mergeOutgoingMessage(prev, data.message, optimisticId));
+                window.dispatchEvent(new CustomEvent('candidate_replied', { detail: { candidateId: currentCandidateId } }));
+            } else updateChatMessages(currentCandidateId, prev => prev.map(m => m.id === optimisticId ? { ...m, status: 'failed', error: data.error } : m));
         });
     };
 
     const handleSendList = (bodyTxt, btnText, section, items) => {
         if (!bodyTxt || items.length === 0 || !selectedChat) return;
         autoSilenceBot(selectedChat);
-        markReplyHandledOptimistically(selectedChat.id);
+        const currentCandidateId = selectedChat.id;
+        markReplyHandledOptimistically(currentCandidateId);
         const optimisticId = 'temp-' + Date.now();
         isSendingRef.current = true;
-        setMessages(prev => [...(prev || []), withMessageEntryAnimation({
+        updateChatMessages(currentCandidateId, prev => [...(prev || []), withMessageEntryAnimation({
             id: optimisticId, content: `${bodyTxt}\n\n[Lista: ${items.map(i=>i.title).join(', ')}]`, tipo: 'interactive', from: 'me', enviado_por_agente: 1, status: 'pending', fecha: new Date().toISOString()
         }, 'outgoing')]);
         fetch('/api/chat', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ candidateId: selectedChat.id, message: bodyTxt, type: 'interactive', extraParams: { interactiveType: 'list', listButtonText: btnText, listSectionTitle: section, listItems: items }, senderId: user?.id || user?.whatsapp, senderName: user?.name || user?.nombre })
+            body: JSON.stringify({ candidateId: currentCandidateId, message: bodyTxt, type: 'interactive', extraParams: { interactiveType: 'list', listButtonText: btnText, listSectionTitle: section, listItems: items }, senderId: user?.id || user?.whatsapp, senderName: user?.name || user?.nombre })
         }).then(res => res.json()).then(data => {
             if (data.success && data.message) {
-                setMessages(prev => mergeOutgoingMessage(prev, data.message, optimisticId));
-                window.dispatchEvent(new CustomEvent('candidate_replied', { detail: { candidateId: selectedChat.id } }));
-            } else setMessages(prev => prev.map(m => m.id === optimisticId ? { ...m, status: 'failed', error: data.error } : m));
+                updateChatMessages(currentCandidateId, prev => mergeOutgoingMessage(prev, data.message, optimisticId));
+                window.dispatchEvent(new CustomEvent('candidate_replied', { detail: { candidateId: currentCandidateId } }));
+            } else updateChatMessages(currentCandidateId, prev => prev.map(m => m.id === optimisticId ? { ...m, status: 'failed', error: data.error } : m));
         });
     };
 
     const handleSendProduct = (bodyTxt, catalogId, productSku) => {
         if (!catalogId || !productSku || !selectedChat) return;
         autoSilenceBot(selectedChat);
-        markReplyHandledOptimistically(selectedChat.id);
+        const currentCandidateId = selectedChat.id;
+        markReplyHandledOptimistically(currentCandidateId);
         const optimisticId = 'temp-' + Date.now();
         isSendingRef.current = true;
-        setMessages(prev => [...(prev || []), withMessageEntryAnimation({
+        updateChatMessages(currentCandidateId, prev => [...(prev || []), withMessageEntryAnimation({
             id: optimisticId, content: `[Producto del Catálogo: ${productSku}]`, tipo: 'interactive', from: 'me', enviado_por_agente: 1, status: 'pending', fecha: new Date().toISOString()
         }, 'outgoing')]);
         fetch('/api/chat', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ candidateId: selectedChat.id, message: bodyTxt, type: 'interactive', extraParams: { interactiveType: 'product', catalogId, productSku }, senderId: user?.id || user?.whatsapp, senderName: user?.name || user?.nombre })
+            body: JSON.stringify({ candidateId: currentCandidateId, message: bodyTxt, type: 'interactive', extraParams: { interactiveType: 'product', catalogId, productSku }, senderId: user?.id || user?.whatsapp, senderName: user?.name || user?.nombre })
         }).then(res => res.json()).then(data => {
             if (data.success && data.message) {
-                setMessages(prev => mergeOutgoingMessage(prev, data.message, optimisticId));
-                window.dispatchEvent(new CustomEvent('candidate_replied', { detail: { candidateId: selectedChat.id } }));
-            } else setMessages(prev => prev.map(m => m.id === optimisticId ? { ...m, status: 'failed', error: data.error } : m));
+                updateChatMessages(currentCandidateId, prev => mergeOutgoingMessage(prev, data.message, optimisticId));
+                window.dispatchEvent(new CustomEvent('candidate_replied', { detail: { candidateId: currentCandidateId } }));
+            } else updateChatMessages(currentCandidateId, prev => prev.map(m => m.id === optimisticId ? { ...m, status: 'failed', error: data.error } : m));
         });
     };
 
     const handleSendInteractive = (bodyTxt, buttons) => {
         if (!bodyTxt || buttons.length === 0 || !selectedChat) return;
         autoSilenceBot(selectedChat);
-        markReplyHandledOptimistically(selectedChat.id);
-        
+        const currentCandidateId = selectedChat.id;
+        markReplyHandledOptimistically(currentCandidateId);
+
         const optimisticId = 'temp-' + Date.now();
         isSendingRef.current = true;
-        setMessages(prev => [...(prev || []), withMessageEntryAnimation({
+        updateChatMessages(currentCandidateId, prev => [...(prev || []), withMessageEntryAnimation({
             id: optimisticId,
             content: `${bodyTxt}\n\n[Botones: ${buttons.join(' | ')}]`,
             tipo: 'interactive',
@@ -2932,7 +2956,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                candidateId: selectedChat.id,
+                candidateId: currentCandidateId,
                 message: bodyTxt,
                 type: 'interactive',
                 extraParams: { buttons },
@@ -2941,10 +2965,10 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
             })
         }).then(res => res.json()).then(data => {
             if (data.success && data.message) {
-                setMessages(prev => mergeOutgoingMessage(prev, data.message, optimisticId));
-                window.dispatchEvent(new CustomEvent('candidate_replied', { detail: { candidateId: selectedChat.id } }));
+                updateChatMessages(currentCandidateId, prev => mergeOutgoingMessage(prev, data.message, optimisticId));
+                window.dispatchEvent(new CustomEvent('candidate_replied', { detail: { candidateId: currentCandidateId } }));
             } else {
-                setMessages(prev => prev.map(m => m.id === optimisticId ? { ...m, status: 'failed', error: data.error } : m));
+                updateChatMessages(currentCandidateId, prev => prev.map(m => m.id === optimisticId ? { ...m, status: 'failed', error: data.error } : m));
                 if (data.error?.includes('131047')) {
                     showToast('Bloqueado por Meta 🛑: Han pasado >24 hrs.', 'error', 8000);
                 } else {
@@ -2997,7 +3021,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         isSendingRef.current = true;
 
         const markFailed = (tempId, error = 'Error al enviar') => {
-            setMessages(prev => prev.map(m => m.id === tempId ? { ...m, status: 'failed', error } : m));
+            updateChatMessages(currentCandidateId, prev => prev.map(m => m.id === tempId ? { ...m, status: 'failed', error } : m));
         };
 
         const showMetaError = (messageData, fallback = 'Error desconocido') => {
@@ -3012,7 +3036,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         };
 
         const sendOrderedStep = async ({ tempId, optimisticMessage, payload, normalizeResponse = (messageData) => messageData }) => {
-            setMessages(prev => [...(prev || []), withMessageEntryAnimation(optimisticMessage, 'outgoing')]);
+            updateChatMessages(currentCandidateId, prev => [...(prev || []), withMessageEntryAnimation(optimisticMessage, 'outgoing')]);
             try {
                 const res = await fetch('/api/chat', {
                     method: 'POST',
@@ -3024,7 +3048,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
 
                 if (data.success && data.message) {
                     const messageData = normalizeResponse(data.message);
-                    setMessages(prev => mergeOutgoingMessage(prev, messageData, tempId));
+                    updateChatMessages(currentCandidateId, prev => mergeOutgoingMessage(prev, messageData, tempId));
                     window.dispatchEvent(new CustomEvent('candidate_replied', { detail: { candidateId: currentCandidateId } }));
 
                     if (messageData.status === 'failed') {
@@ -3134,7 +3158,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         const _optimisticContent = `⚡ Plantilla oficial: *${_displayName}*\n\n${_bodyText}`.trim();
 
         isSendingRef.current = true;
-        setMessages(prev => [...(prev || []), withMessageEntryAnimation({
+        updateChatMessages(currentCandidateId, prev => [...(prev || []), withMessageEntryAnimation({
             id: optimisticId,
             content: _optimisticContent,
             tipo: 'template',
@@ -3156,22 +3180,22 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
             })
         }).then(res => res.json()).then(data => {
             if (data.success && data.message) {
-                setMessages(prev => mergeOutgoingMessage(prev, data.message, optimisticId));
+                updateChatMessages(currentCandidateId, prev => mergeOutgoingMessage(prev, data.message, optimisticId));
 
                 if (data.message.status === 'failed') {
                     showToast(`Error de Meta al mandar plantilla: ${data.message.error || 'Desconocido'}`, 'error');
                 } else {
                     showToast('Plantilla enviada correctamente', 'success');
                 }
-                
+
                 // 🚀 POLLING REMOVED: Trust the SSE `messagePayload` and optimistic UI for injection.
                 window.dispatchEvent(new CustomEvent('candidate_replied', { detail: { candidateId: currentCandidateId } }));
             } else {
-                setMessages(prev => prev.map(m => m.id === optimisticId ? { ...m, status: 'failed', error: data.error || 'API Error' } : m));
+                updateChatMessages(currentCandidateId, prev => prev.map(m => m.id === optimisticId ? { ...m, status: 'failed', error: data.error || 'API Error' } : m));
                 showToast(`Error al enviar plantilla: ${data.error || 'Desconocido'}`, 'error');
             }
         }).catch(error => {
-            setMessages(prev => prev.map(m => m.id === optimisticId ? { ...m, status: 'failed', error: 'Red desconectada' } : m));
+            updateChatMessages(currentCandidateId, prev => prev.map(m => m.id === optimisticId ? { ...m, status: 'failed', error: 'Red desconectada' } : m));
             console.error(error);
             showToast('Error de red al enviar plantilla', 'error');
         });
