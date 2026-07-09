@@ -915,6 +915,19 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         selectedChatRef.current = selectedChat;
     }, [selectedChat]);
 
+    // El silencio de IA expira por reloj, no por un evento (a diferencia de la burbuja de
+    // no leidos que reacciona a un mensaje via SSE). Para que el toggle se voltee EN VIVO
+    // justo al cumplir blockedExpiresAt, programamos un timer que fuerza un re-render en ese
+    // instante — ahi isIaSilenced recalcula y el toggle pasa a "IA Dinamica" sin refresh.
+    const [, forceSilenceTick] = useState(0);
+    useEffect(() => {
+        if (selectedChat?.blocked !== true || !selectedChat?.blockedExpiresAt) return;
+        const delay = new Date(selectedChat.blockedExpiresAt).getTime() - Date.now();
+        if (!Number.isFinite(delay) || delay <= 0) return; // ya expiro: isIaSilenced ya lo refleja
+        const timer = setTimeout(() => forceSilenceTick(v => v + 1), delay + 250);
+        return () => clearTimeout(timer);
+    }, [selectedChat?.id, selectedChat?.blocked, selectedChat?.blockedExpiresAt]);
+
     useEffect(() => {
         activeFilterRef.current = activeFilter;
         filterValueRef.current = filterValue;
