@@ -76,6 +76,9 @@ async function buildFilterCounts(redis) {
         }
     }
 
+    // Monitor: registra que corrio un scan completo de candidatos (dato para el medidor)
+    import('./utils/redis-bandwidth.js').then(m => m.recordScanEvent(redis, 'filter_counts')).catch(() => {});
+
     const ids = await redis.zrevrange('candidates:list', 0, -1);
     const existingCandidateIds = new Set();
     const counts = {

@@ -11,10 +11,22 @@
  * Si el valor actual es menor al de la foto anterior, se asume un reinicio
  * del proceso y el delta completo se cuenta desde cero (evita numeros
  * negativos).
+ *
+ * DESGLOSE "DE DONDE" (todo dato real, no estimado):
+ *  - Por comando: delta de `INFO commandstats` por dia (GET, LRANGE, SCARD...).
+ *    Redis ya lleva esos contadores — cero overhead en el path caliente.
+ *  - Scans caros: contadores por dia de cuantas veces corren las lecturas
+ *    completas (filter-counts, ads-stats) — se incrementan desde el codigo
+ *    que hace el scan (recordScanEvent).
+ *  - Tamano de blob: muestra pequena del peso promedio del candidato, para
+ *    detectar si vuelve a inflarse (regresion).
  */
 
 const SNAPSHOT_KEY = 'bandwidth:snapshot:last';
 const DAILY_KEY_PREFIX = 'bandwidth:daily:';
+const COMMANDS_KEY_PREFIX = 'bandwidth:commands:';
+const SCANS_KEY_PREFIX = 'bandwidth:scans:';
+const BLOBSIZE_KEY_PREFIX = 'bandwidth:blobsize:';
 const DAILY_TTL_SECONDS = 60 * 60 * 24 * 95; // ~95 dias — suficiente para vista mensual con margen
 const TZ = 'America/Monterrey';
 
@@ -36,22 +48,41 @@ function parseInfoStats(raw) {
     };
 }
 
+/** Parsea `INFO commandstats` -> { GET: calls, LRANGE: calls, ... } (mayusculas). */
+function parseCommandStats(raw) {
+    const out = {};
+    if (!raw) return out;
+    for (const line of raw.split('\n')) {
+        const m = line.match(/^cmdstat_([^:]+):calls=(\d+)/);
+        if (m) out[m[1].toUpperCase()] = Number(m[2]);
+    }
+    return out;
+}
+
 /**
- * Toma una foto de INFO stats, calcula el delta real desde la ultima foto,
- * y lo acumula en la llave del dia (zona horaria Monterrey).
+ * Toma una foto de INFO stats + commandstats, calcula el delta real desde la
+ * ultima foto, y lo acumula en la llave del dia (zona horaria Monterrey).
  * Disenado para llamarse periodicamente desde un cron existente — no crea
  * ningun cron nuevo.
  */
 export async function recordBandwidthSnapshot(redis) {
     if (!redis) return;
     try {
-        const raw = await redis.info('stats');
-        const current = parseInfoStats(raw);
+        const [rawStats, rawCmd] = await Promise.all([
+            redis.info('stats'),
+            redis.info('commandstats').catch(() => '')
+        ]);
+        const current = parseInfoStats(rawStats);
+        const currentCmds = parseCommandStats(rawCmd);
 
         const lastRaw = await redis.get(SNAPSHOT_KEY);
         const last = lastRaw ? JSON.parse(lastRaw) : null;
 
-        await redis.set(SNAPSHOT_KEY, JSON.stringify(current), 'EX', DAILY_TTL_SECONDS).catch(() => {});
+        const snapshot = { ...current, commands: currentCmds };
+        await redis.set(SNAPSHOT_KEY, JSON.stringify(snapshot), 'EX', DAILY_TTL_SECONDS).catch(() => {});
+
+        // Muestra ligera del tamano de blob de candidato (regresion de adBody, etc.)
+        sampleBlobSize(redis).catch(() => {});
 
         if (!last) return; // primera corrida: solo establece el punto de partida
 
@@ -66,31 +97,76 @@ export async function recordBandwidthSnapshot(redis) {
         if (delta.netOutputBytes < 0) delta.netOutputBytes = current.netOutputBytes;
         if (delta.commandsProcessed < 0) delta.commandsProcessed = current.commandsProcessed;
 
-        if (!delta.netInputBytes && !delta.netOutputBytes && !delta.commandsProcessed) return;
-
         const dayKey = `${DAILY_KEY_PREFIX}${todayMty()}`;
         const pipe = redis.pipeline();
-        pipe.hincrby(dayKey, 'netInputBytes', Math.round(delta.netInputBytes));
-        pipe.hincrby(dayKey, 'netOutputBytes', Math.round(delta.netOutputBytes));
-        pipe.hincrby(dayKey, 'commandsProcessed', Math.round(delta.commandsProcessed));
-        pipe.hincrby(dayKey, 'samples', 1);
-        pipe.expire(dayKey, DAILY_TTL_SECONDS);
+        if (delta.netInputBytes || delta.netOutputBytes || delta.commandsProcessed) {
+            pipe.hincrby(dayKey, 'netInputBytes', Math.round(delta.netInputBytes));
+            pipe.hincrby(dayKey, 'netOutputBytes', Math.round(delta.netOutputBytes));
+            pipe.hincrby(dayKey, 'commandsProcessed', Math.round(delta.commandsProcessed));
+            pipe.hincrby(dayKey, 'samples', 1);
+            pipe.expire(dayKey, DAILY_TTL_SECONDS);
+        }
+
+        // Delta por comando -> acumular en bandwidth:commands:<dia>
+        const lastCmds = last.commands || {};
+        const cmdDayKey = `${COMMANDS_KEY_PREFIX}${todayMty()}`;
+        let anyCmd = false;
+        for (const [cmd, calls] of Object.entries(currentCmds)) {
+            let d = calls - (lastCmds[cmd] || 0);
+            if (d < 0) d = calls; // reset -> cuenta desde cero
+            if (d > 0) { pipe.hincrby(cmdDayKey, cmd, d); anyCmd = true; }
+        }
+        if (anyCmd) pipe.expire(cmdDayKey, DAILY_TTL_SECONDS);
+
         await pipe.exec();
     } catch {
         // El medidor nunca debe afectar el comportamiento del cron que lo llama.
     }
 }
 
+/** Muestra el peso promedio de una muestra chica de candidatos (bytes reales). */
+async function sampleBlobSize(redis) {
+    const ids = await redis.zrevrange('candidates:list', 0, 24);
+    if (!ids || !ids.length) return;
+    const pipe = redis.pipeline();
+    ids.forEach(id => pipe.get(`candidate:${id}`));
+    const rows = await pipe.exec();
+    const enc = new TextEncoder();
+    let total = 0, n = 0;
+    for (const [err, r] of rows) {
+        if (err || !r) continue;
+        total += enc.encode(r).length; // bytes UTF-8 reales (TextEncoder: global en Node y browser)
+        n++;
+    }
+    if (!n) return;
+    await redis.set(`${BLOBSIZE_KEY_PREFIX}${todayMty()}`, String(Math.round(total / n)), 'EX', DAILY_TTL_SECONDS).catch(() => {});
+}
+
+/**
+ * Registra que corrio una lectura completa cara (fire-and-forget, cero await
+ * en el path que lo llama). `source` ej: 'filter_counts', 'ads_stats'.
+ */
+export function recordScanEvent(redis, source) {
+    if (!redis || !source) return;
+    const key = `${SCANS_KEY_PREFIX}${todayMty()}`;
+    redis.hincrby(key, source, 1).catch(() => {});
+    redis.expire(key, DAILY_TTL_SECONDS).catch(() => {});
+}
+
 /**
  * Regresa el resumen real acumulado de los ultimos `days` dias, mas el total
- * de hoy por separado.
+ * de hoy por separado, mas el desglose "de donde" (comandos, scans, blob) de hoy.
  */
 export async function getBandwidthSummary(redis, days = 30) {
     if (!redis) return { today: null, days: [], totals: null };
 
     const dayStrings = Array.from({ length: days }, (_, i) => todayMty(i));
+    const todayStr = todayMty();
     const pipe = redis.pipeline();
     dayStrings.forEach(day => pipe.hgetall(`${DAILY_KEY_PREFIX}${day}`));
+    pipe.hgetall(`${COMMANDS_KEY_PREFIX}${todayStr}`);
+    pipe.hgetall(`${SCANS_KEY_PREFIX}${todayStr}`);
+    pipe.get(`${BLOBSIZE_KEY_PREFIX}${todayStr}`);
     const rows = await pipe.exec();
 
     const dayData = dayStrings.map((day, i) => {
@@ -111,9 +187,25 @@ export async function getBandwidthSummary(redis, days = 30) {
         return acc;
     }, { netInputBytes: 0, netOutputBytes: 0, commandsProcessed: 0 });
 
+    // Desglose de hoy
+    const cmdRaw = rows[days]?.[1] || {};
+    const commandsToday = Object.entries(cmdRaw)
+        .map(([cmd, calls]) => ({ cmd, calls: Number(calls) }))
+        .sort((a, b) => b.calls - a.calls);
+
+    const scanRaw = rows[days + 1]?.[1] || {};
+    const scansToday = Object.entries(scanRaw)
+        .map(([source, count]) => ({ source, count: Number(count) }))
+        .sort((a, b) => b.count - a.count);
+
+    const avgBlobBytesToday = Number(rows[days + 2]?.[1] || 0);
+
     return {
         today: dayData[0] || null,
         days: dayData,
-        totals
+        totals,
+        commandsToday,
+        scansToday,
+        avgBlobBytesToday
     };
 }

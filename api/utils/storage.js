@@ -11,6 +11,7 @@
 import Redis from 'ioredis';
 import { sendConversionEvent } from './metaConversions.js';
 import { getCachedConfig } from './cache.js';
+import { recordScanEvent } from './redis-bandwidth.js';
 
 // Initialize Redis client
 let redis;
@@ -2953,6 +2954,9 @@ export const getAdsStatistics = async () => {
         const cached = await client.get(ADS_CACHE_KEY);
         if (cached) return JSON.parse(cached);
     } catch { /* cache miss — rebuild */ }
+
+    // Monitor: registra que corrio el scan completo de ads (dato para el medidor)
+    recordScanEvent(client, 'ads_stats');
 
     const totalDbCount = async () => (await client.scard(KEYS.LIST_COMPLETE)) + (await client.scard(KEYS.LIST_PENDING));
     const dbSize = await totalDbCount();

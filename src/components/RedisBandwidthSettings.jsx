@@ -10,6 +10,15 @@ function formatBytes(bytes) {
     return `${(mb / 1024).toFixed(2)} GB`;
 }
 
+function formatNum(n) {
+    n = Number(n) || 0;
+    if (n >= 1e6) return `${(n / 1e6).toFixed(1)}M`;
+    if (n >= 1e3) return `${(n / 1e3).toFixed(1)}K`;
+    return String(n);
+}
+
+const SCAN_LABELS = { filter_counts: 'Scan filtros', ads_stats: 'Scan ads' };
+
 function sumLastDays(days, count) {
     return days.slice(0, count).reduce((acc, d) => {
         acc.netInputBytes += d.netInputBytes;
@@ -130,6 +139,48 @@ const RedisBandwidthSettings = () => {
                             <span className="text-[8px] text-gray-400 dark:text-gray-500">{dayLabel(chartDays[0]?.day)}</span>
                             <span className="text-[8px] text-gray-400 dark:text-gray-500">{dayLabel(chartDays[chartDays.length - 1]?.day)}</span>
                         </div>
+                    </div>
+                )}
+
+                {!loading && !error && data && ((data.commandsToday?.length > 0) || (data.scansToday?.length > 0) || data.avgBlobBytesToday > 0) && (
+                    <div className="border-t border-gray-100 dark:border-gray-700 pt-2 space-y-2">
+                        <div className="flex items-center justify-between text-[10px]">
+                            <span className="font-bold text-gray-400 uppercase">Desglose de hoy (dato real)</span>
+                            {data.avgBlobBytesToday > 0 && (
+                                <span className="text-gray-500 dark:text-gray-400">
+                                    Candidato prom.: <strong className="text-gray-700 dark:text-gray-200">{(data.avgBlobBytesToday / 1024).toFixed(1)} KB</strong>
+                                </span>
+                            )}
+                        </div>
+
+                        {data.scansToday?.length > 0 && (
+                            <div className="flex flex-wrap gap-1.5">
+                                {data.scansToday.map(s => (
+                                    <span key={s.source} className="text-[9px] px-1.5 py-0.5 rounded bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300">
+                                        {SCAN_LABELS[s.source] || s.source}: <strong>{s.count}</strong>
+                                    </span>
+                                ))}
+                            </div>
+                        )}
+
+                        {data.commandsToday?.length > 0 && (
+                            <div className="space-y-1">
+                                <div className="text-[9px] text-gray-400">Comandos más usados hoy (nº de llamadas)</div>
+                                {data.commandsToday.slice(0, 6).map(c => {
+                                    const max = data.commandsToday[0].calls || 1;
+                                    const pct = Math.max((c.calls / max) * 100, 4);
+                                    return (
+                                        <div key={c.cmd} className="flex items-center gap-2">
+                                            <span className="text-[9px] font-mono text-gray-500 dark:text-gray-400 w-16 shrink-0 truncate">{c.cmd}</span>
+                                            <div className="flex-1 h-2 bg-gray-100 dark:bg-gray-700 rounded overflow-hidden">
+                                                <div className="h-full bg-indigo-400 dark:bg-indigo-500" style={{ width: `${pct}%` }} />
+                                            </div>
+                                            <span className="text-[9px] text-gray-400 w-12 text-right shrink-0">{formatNum(c.calls)}</span>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
                     </div>
                 )}
 
