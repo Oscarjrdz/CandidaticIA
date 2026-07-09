@@ -42,6 +42,19 @@ const extractPersistentCandidatePatch = (patch = {}) => {
     );
 };
 
+// Estado EFECTIVO del silencio de IA, calculado en el cliente con la misma regla que
+// normalizeCandidateSilence del backend: un candidato con silencio manual expirado
+// (blockedExpiresAt ya paso) cuenta como NO silenciado, aunque el objeto en memoria
+// todavia traiga blocked:true (pasa si el chat lleva rato abierto sin re-leerse). Asi el
+// toggle refleja la verdad sin esperar un recargue. Sin blockedExpiresAt (Incontactable
+// / silencios legado) se respeta blocked tal cual: esos no se auto-liberan.
+const isIaSilenced = (candidate) => {
+    if (!candidate || candidate.blocked !== true) return false;
+    if (!candidate.blockedExpiresAt) return true;
+    const expiresMs = new Date(candidate.blockedExpiresAt).getTime();
+    return !Number.isFinite(expiresMs) || expiresMs > Date.now();
+};
+
 const scheduleIdleTask = (callback, timeout = 1200) => {
     if (typeof window === 'undefined') return () => {};
     if ('requestIdleCallback' in window) {
@@ -2548,7 +2561,9 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
     const handleBlockToggle = useCallback(async (chatToBlock, e) => {
         if (e) e.stopPropagation();
         if (!chatToBlock) return;
-        const isCurrentlyBlocked = chatToBlock.blocked === true;
+        // Usa el estado efectivo: si el silencio ya expiro, el toggle se ve "IA Dinamica"
+        // y este click debe SILENCIAR de nuevo (no "reactivar").
+        const isCurrentlyBlocked = isIaSilenced(chatToBlock);
         const action = isCurrentlyBlocked ? 'reactivar la IA para' : 'silenciar la IA de';
 
         const confirmed = await new Promise(resolve => setConfirmModal({
@@ -4093,18 +4108,20 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                         </div>
                         <div className="flex space-x-3 text-[#54656f] dark:text-[#aebac1] items-center">
                             {/* Silenciar IA Toggle */}
-                            {!isMobile && (
+                            {!isMobile && (() => {
+                                const iaSilenced = isIaSilenced(selectedChat);
+                                return (
                                 <div className="flex items-center gap-2 mr-2">
-                                    <span className={`text-xs font-medium ${selectedChat.blocked ? 'text-red-500' : 'text-gray-400 dark:text-gray-500'} select-none whitespace-nowrap [@container(max-width:1060px)]:hidden`}>
-                                        {selectedChat.blocked ? 'IA Silenciada' : 'IA Dinámica'}
+                                    <span className={`text-xs font-medium ${iaSilenced ? 'text-red-500' : 'text-gray-400 dark:text-gray-500'} select-none whitespace-nowrap [@container(max-width:1060px)]:hidden`}>
+                                        {iaSilenced ? 'IA Silenciada' : 'IA Dinámica'}
                                     </span>
                                     <button
                                         onClick={(e) => handleBlockToggle(selectedChat, e)}
                                         disabled={blockLoading}
-                                        className={`w-8 h-4 rounded-full relative transition-colors duration-200 focus:outline-none flex items-center ${selectedChat.blocked ? 'bg-red-500' : 'bg-gray-300 dark:bg-gray-600'}`}
-                                        title={selectedChat.blocked ? 'Reactivar Chat IA' : 'Silenciar Chat IA'}
+                                        className={`w-8 h-4 rounded-full relative transition-colors duration-200 focus:outline-none flex items-center ${iaSilenced ? 'bg-red-500' : 'bg-gray-300 dark:bg-gray-600'}`}
+                                        title={iaSilenced ? 'Reactivar Chat IA' : 'Silenciar Chat IA'}
                                     >
-                                        <div className={`absolute w-3 h-3 rounded-full bg-white shadow-sm transition-transform duration-200 ${selectedChat.blocked ? 'translate-x-4' : 'translate-x-0.5'}`}>
+                                        <div className={`absolute w-3 h-3 rounded-full bg-white shadow-sm transition-transform duration-200 ${iaSilenced ? 'translate-x-4' : 'translate-x-0.5'}`}>
                                         </div>
                                     </button>
                                     <button
@@ -4117,7 +4134,8 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                                         <Bell className="w-5 h-5" />
                                     </button>
                                 </div>
-                            )}
+                                );
+                            })()}
 
                             {/* Draggable Icon Toolbar */}
                             {!isMobile && toolbarOrder.map((iconId) => {
