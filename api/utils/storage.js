@@ -2204,8 +2204,12 @@ export const getRecentMessages = async (candidateId, limit = 20) => {
     } catch { return []; }
 };
 
-export const getMessages = async (candidateId) => {
-    return await getRecentMessages(candidateId, 100); // Fetch last 100 for deep history
+export const getMessages = async (candidateId, limit = 100) => {
+    // Respeta el limite que pide quien llama. Antes ignoraba el argumento y SIEMPRE leia
+    // 100 — el agente pide 40 por mensaje (ver agent.js "Memory Boost: 40 messages") pero
+    // recibia 100, leyendo 2.5x mas historial del necesario en cada respuesta (la lectura
+    // mas pesada del path caliente). Los callers sin argumento siguen con 100 (compatibilidad).
+    return await getRecentMessages(candidateId, limit);
 };
 
 export const saveMessage = async (candidateId, message) => {
