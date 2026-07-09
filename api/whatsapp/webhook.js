@@ -455,6 +455,20 @@ export default async function handler(req, res) {
                 candidateId = candidate.id;
                 isNewCandidate = true;
 
+                // 🖼️ Creativo del anuncio (foto/texto) guardado UNA vez por adId — para
+                // Estadisticas Ads, fuera del blob del candidato (que ya no lo trae). NX =
+                // solo el primer candidato de cada anuncio lo establece.
+                if (referral && candidate.adId && (referral.image_url || referral.body || referral.video_url)) {
+                    redis.set(`ad_creative:${candidate.adId}`, JSON.stringify({
+                        adImageUrl: referral.image_url || null,
+                        adBody: referral.body || null,
+                        adUrl: referral.source_url || null,
+                        adHeadline: referral.headline || null,
+                        adMediaType: referral.media_type || null,
+                        adVideoUrl: referral.video_url || null
+                    }), 'NX').catch(() => {});
+                }
+
                 // 🏷️ Auto-apply Ad Labels before AI runs so the first reply has ad/company context.
                 if (candidate.adId) {
                     try {
@@ -536,6 +550,37 @@ export default async function handler(req, res) {
                 if (metaMsg.referral.source_type) updatedCandidate.adSource = metaMsg.referral.source_type;
                 if (metaMsg.referral.ctwa_clid) updatedCandidate.adClickId = metaMsg.referral.ctwa_clid;
                 // adUrl/adBody/adImageUrl no se guardan (bytes pesados no usados) — ver bloque de creacion arriba.
+
+                // Guarda el creativo del anuncio (foto/texto) una vez por adId, tambien para
+                // candidatos existentes que vuelven desde un anuncio (por si aun no existia).
+                if (updatedCandidate.adId && (metaMsg.referral.image_url || metaMsg.referral.body || metaMsg.referral.video_url)) {
+                    redis.set(`ad_creative:${updatedCandidate.adId}`, JSON.stringify({
+                        adImageUrl: metaMsg.referral.image_url || null,
+                        adBody: metaMsg.referral.body || null,
+                        adUrl: metaMsg.referral.source_url || null,
+                        adHeadline: metaMsg.referral.headline || null,
+                        adMediaType: metaMsg.referral.media_type || null,
+                        adVideoUrl: metaMsg.referral.video_url || null
+                    }), 'NX').catch(() => {});
+                }
+
+                // 🏷️ Re-aplica etiquetas de anuncio a candidatos EXISTENTES que vuelven desde
+                // un anuncio (retargeting, o regla agregada despues de su creacion). Antes el
+                // auto-etiquetado solo corria al CREAR el candidato — por eso los que regresaban
+                // se quedaban sin la etiqueta. Solo AGREGA, nunca quita.
+                if (updatedCandidate.adId) {
+                    try {
+                        const rawLabels = await redis.get('candidatic:ad_labels');
+                        const adLabels = rawLabels ? JSON.parse(rawLabels) : [];
+                        const candAdId = String(updatedCandidate.adId);
+                        const matching = adLabels.filter(l => (l.adIds || (l.adId ? [l.adId] : [])).map(String).includes(candAdId));
+                        if (matching.length > 0) {
+                            const tags = Array.isArray(updatedCandidate.tags) ? [...updatedCandidate.tags] : [];
+                            for (const l of matching) if (!tags.includes(l.tagName)) tags.push(l.tagName);
+                            updatedCandidate.tags = tags;
+                        }
+                    } catch { /* silent */ }
+                }
             }
 
             const previousUserTime = freshCandidate?.lastUserMessageAt ? new Date(freshCandidate.lastUserMessageAt).getTime() : 0;

@@ -3054,8 +3054,32 @@ export const getAdsStatistics = async () => {
         currentIndex += CHUNK_SIZE;
     }
 
+    // Fusiona el creativo (foto/texto) guardado UNA sola vez por anuncio en
+    // ad_creative:<adId> — ya no vive en cada blob de candidato (se saco por ahorro de
+    // ancho de banda). Son unas pocas lecturas (una por anuncio unico), no por candidato.
+    const adEntries = [...adsMap.values()].filter(a => a.adId);
+    if (adEntries.length) {
+        try {
+            const cp = client.pipeline();
+            adEntries.forEach(a => cp.get(`ad_creative:${a.adId}`));
+            const crows = await cp.exec();
+            adEntries.forEach((ad, i) => {
+                const raw = crows[i]?.[1];
+                if (!raw) return;
+                try {
+                    const cr = JSON.parse(raw);
+                    ad.adImageUrl = ad.adImageUrl || cr.adImageUrl || null;
+                    ad.adBody = ad.adBody || cr.adBody || null;
+                    ad.adUrl = ad.adUrl || cr.adUrl || null;
+                    ad.adVideoUrl = ad.adVideoUrl || cr.adVideoUrl || null;
+                    ad.adMediaType = ad.adMediaType || cr.adMediaType || null;
+                } catch { /* ignore */ }
+            });
+        } catch { /* ignore — sin creativo la seccion sigue funcionando */ }
+    }
+
     const ads = Array.from(adsMap.values()).sort((a, b) => b.totalLeads - a.totalLeads);
-    
+
     const result = { ads, totalAdsLeads };
 
     // Cache for 10 min (fire-and-forget)
