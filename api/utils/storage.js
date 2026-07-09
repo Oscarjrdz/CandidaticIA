@@ -1084,6 +1084,29 @@ export const getCandidatesFiltered = async (filter, limit = 500, offset = 0) => 
     const unreadIds = await client.smembers(KEYS.CANDIDATES_UNREAD);
     if (!unreadIds.length) return { candidates: [], total: 0 };
 
+    if (filter === 'unread') {
+        let scoreRows = [];
+        try {
+            scoreRows = await client.zmscore(KEYS.CANDIDATES_LIST, ...unreadIds);
+        } catch {
+            const scorePipe = client.pipeline();
+            unreadIds.forEach(id => scorePipe.zscore(KEYS.CANDIDATES_LIST, id));
+            scoreRows = (await scorePipe.exec()).map(([err, score]) => err ? null : score);
+        }
+
+        const orderedIds = unreadIds
+            .map((id, index) => ({ id, score: Number(scoreRows?.[index] || 0) }))
+            .filter(item => item.score > 0)
+            .sort((a, b) => b.score - a.score)
+            .map(item => item.id);
+
+        const pageIds = orderedIds.slice(offset, offset + limit);
+        return {
+            candidates: await hydrateCandidateIds(pageIds, pageIds.length),
+            total: orderedIds.length
+        };
+    }
+
     const customFieldsRaw = await getCachedConfig(client, 'custom_fields');
     const customFields = customFieldsRaw ? JSON.parse(customFieldsRaw) : [];
 

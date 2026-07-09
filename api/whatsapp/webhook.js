@@ -440,15 +440,16 @@ export default async function handler(req, res) {
                     esNuevo: 'SI',
                     primerContacto: new Date().toISOString(),
                     ...(referral && {
+                        // Solo guardamos lo que realmente se usa: adId (etiquetas), adHeadline
+                        // y adClickId (conversiones Meta), + adSource/adMediaType (metadata chica).
+                        // adBody/adImageUrl/adVideoUrl/adUrl NO se guardan: pesaban ~61% del blob
+                        // del candidato y no se usan para nada (solo id + etiqueta). Ver medidor de
+                        // ancho de banda — eran la mayor fuga de lectura de candidate:*.
                         adClickId: referral.ctwa_clid || null,
                         adSource: referral.source_type || null,
                         adId: referral.source_id || null,
-                        adUrl: referral.source_url || null,
                         adHeadline: referral.headline || null,
-                        adBody: referral.body || null,
                         adMediaType: referral.media_type || null,
-                        adImageUrl: referral.image_url || null,
-                        adVideoUrl: referral.video_url || null,
                     })
                 });
                 candidateId = candidate.id;
@@ -532,9 +533,9 @@ export default async function handler(req, res) {
                 updatedCandidate.origen = 'facebook_ctwa';
                 if (metaMsg.referral.source_id) updatedCandidate.adId = metaMsg.referral.source_id;
                 if (metaMsg.referral.headline) updatedCandidate.adHeadline = metaMsg.referral.headline;
-                if (metaMsg.referral.source_url) updatedCandidate.adUrl = metaMsg.referral.source_url;
                 if (metaMsg.referral.source_type) updatedCandidate.adSource = metaMsg.referral.source_type;
                 if (metaMsg.referral.ctwa_clid) updatedCandidate.adClickId = metaMsg.referral.ctwa_clid;
+                // adUrl/adBody/adImageUrl no se guardan (bytes pesados no usados) — ver bloque de creacion arriba.
             }
 
             const previousUserTime = freshCandidate?.lastUserMessageAt ? new Date(freshCandidate.lastUserMessageAt).getTime() : 0;

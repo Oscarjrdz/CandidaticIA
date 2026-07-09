@@ -7,7 +7,11 @@
 
 // NO TOP LEVEL IMPORTS to prevent boot crashes
 const CANDIDATES_LIST_CACHE_TTL_MS = 15000;
-const FILTER_COUNTS_CACHE_TTL_SECONDS = 60;
+const FILTER_COUNTS_CACHE_TTL_SECONDS = 15 * 60;
+const FILTER_COUNTS_STALE_TTL_SECONDS = 24 * 60 * 60;
+const FILTER_COUNTS_CACHE_KEY = 'cache:candidates:filter_counts:v1';
+const FILTER_COUNTS_STALE_KEY = 'cache:candidates:filter_counts:v1:stale';
+const FILTER_COUNTS_LOCK_KEY = 'cache:candidates:filter_counts:v1:lock';
 const candidatesListCache = new Map();
 const MANUAL_PROJECTS_KEY = 'candidatic_manual_projects';
 const MANUAL_PROJECT_LINKS_PREFIX = 'crm_links:';
@@ -39,7 +43,7 @@ function clearCandidatesListCache() {
 
 function clearFilterCountsCache(redis) {
     if (!redis) return;
-    redis.del('cache:candidates:filter_counts:v1').catch(() => {});
+    redis.del(FILTER_COUNTS_CACHE_KEY).catch(() => {});
 }
 
 function incrementCount(map, rawValue) {
@@ -49,8 +53,28 @@ function incrementCount(map, rawValue) {
 }
 
 async function buildFilterCounts(redis) {
-    const cached = await redis.get('cache:candidates:filter_counts:v1');
+    const cached = await redis.get(FILTER_COUNTS_CACHE_KEY);
     if (cached) return JSON.parse(cached);
+
+    const lockValue = `${Date.now()}:${Math.random().toString(36).slice(2)}`;
+    const lockAcquired = await redis.set(FILTER_COUNTS_LOCK_KEY, lockValue, 'EX', 45, 'NX').catch(() => null);
+
+    if (lockAcquired !== 'OK') {
+        const stale = await redis.get(FILTER_COUNTS_STALE_KEY).catch(() => null);
+        if (stale) return JSON.parse(stale);
+
+        for (let i = 0; i < 6; i++) {
+            await new Promise(resolve => setTimeout(resolve, 200));
+            const fresh = await redis.get(FILTER_COUNTS_CACHE_KEY).catch(() => null);
+            if (fresh) return JSON.parse(fresh);
+        }
+    } else {
+        const fresh = await redis.get(FILTER_COUNTS_CACHE_KEY).catch(() => null);
+        if (fresh) {
+            await redis.del(FILTER_COUNTS_LOCK_KEY).catch(() => {});
+            return JSON.parse(fresh);
+        }
+    }
 
     const ids = await redis.zrevrange('candidates:list', 0, -1);
     const existingCandidateIds = new Set();
@@ -78,7 +102,9 @@ async function buildFilterCounts(redis) {
                 incrementCount(counts.genders, c.genero);
                 incrementCount(counts.municipalities, c.municipio);
                 incrementCount(counts.projects, c.manualProjectId);
-            } catch {}
+            } catch {
+                // Ignore malformed candidate payloads while building aggregate filters.
+            }
         });
     }
 
@@ -103,7 +129,12 @@ async function buildFilterCounts(redis) {
     }));
 
     const payload = { ...counts, total: ids.length, generatedAt: new Date().toISOString() };
-    await redis.set('cache:candidates:filter_counts:v1', JSON.stringify(payload), 'EX', FILTER_COUNTS_CACHE_TTL_SECONDS).catch(() => {});
+    const payloadRaw = JSON.stringify(payload);
+    const pipe = redis.pipeline();
+    pipe.set(FILTER_COUNTS_CACHE_KEY, payloadRaw, 'EX', FILTER_COUNTS_CACHE_TTL_SECONDS);
+    pipe.set(FILTER_COUNTS_STALE_KEY, payloadRaw, 'EX', FILTER_COUNTS_STALE_TTL_SECONDS);
+    if (lockAcquired === 'OK') pipe.del(FILTER_COUNTS_LOCK_KEY);
+    await pipe.exec().catch(() => {});
     return payload;
 }
 
