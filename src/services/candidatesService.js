@@ -7,7 +7,7 @@ const API_BASE = import.meta.env.PROD ? '' : 'http://localhost:3000';
 /**
  * Obtiene lista de candidatos
  */
-export const getCandidates = async (limit = 100, offset = 0, search = '', includeStats = false, tag = '', unreadFirst = false, filter = '', manualProjectId = '', manualStepId = '') => {
+export const getCandidates = async (limit = 100, offset = 0, search = '', includeStats = false, tag = '', unreadFirst = false, filter = '', manualProjectId = '', manualStepId = '', unreadOnly = false) => {
     try {
         const params = new URLSearchParams({
             limit: limit.toString(),
@@ -19,6 +19,7 @@ export const getCandidates = async (limit = 100, offset = 0, search = '', includ
         if (tag) params.append('tag', tag);
         if (unreadFirst) params.append('unreadFirst', 'true');
         if (filter) params.append('filter', filter);
+        if (unreadOnly) params.append('unreadOnly', 'true');
         if (manualProjectId) params.append('manualProjectId', manualProjectId);
         if (manualStepId) params.append('manualStepId', manualStepId);
 

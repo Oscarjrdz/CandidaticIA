@@ -1137,7 +1137,7 @@ export const getCandidatesFiltered = async (filter, limit = 500, offset = 0) => 
 };
 
 // Unread-first pero filtrado por etiqueta — para la primera página con tag activo
-export const getCandidatesUnreadFirstByTag = async (tagFilter, limit = 33, offset = 0) => {
+export const getCandidatesUnreadFirstByTag = async (tagFilter, limit = 33, offset = 0, statusFilter = '', unreadOnly = false) => {
     const client = getClient();
     if (!client) return { candidates: [], total: 0 };
 
@@ -1175,6 +1175,25 @@ export const getCandidatesUnreadFirstByTag = async (tagFilter, limit = 33, offse
             .map((id, index) => ({ id, score: Number(scoreRows?.[index] || 0) }))
             .filter(item => item.score > 0)
             .sort((a, b) => b.score - a.score);
+    }
+
+    // 🏎️ Filtro de estado en servidor: intersecta con los MISMOS sets que ya usa
+    // getCandidatesFiltered (stats:list:complete / candidates:unread) e hidrata solo
+    // los que aplican. Antes, con tag + filtro activo, se hidrataba TODO el tag y el
+    // navegador descartaba hasta el 98% (medido: KATCON 231 blobs para mostrar 4).
+    // El frontend re-filtra lo recibido, asi que esto solo puede recortar, nunca
+    // agregar de mas a la vista.
+    if ((statusFilter === 'complete' || statusFilter === 'incomplete') && matchingWithScores.length) {
+        try {
+            const ids = matchingWithScores.map(m => m.id);
+            const flags = await client.smismember(KEYS.LIST_COMPLETE, ...ids);
+            matchingWithScores = matchingWithScores.filter((_, i) =>
+                statusFilter === 'complete' ? flags[i] === 1 : flags[i] !== 1
+            );
+        } catch { /* sin smismember: no filtrar (superconjunto, el frontend recorta) */ }
+    }
+    if (statusFilter === 'unread' || unreadOnly) {
+        matchingWithScores = matchingWithScores.filter(m => unreadSet.has(m.id));
     }
 
     const unread = [];

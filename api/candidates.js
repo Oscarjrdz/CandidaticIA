@@ -200,7 +200,7 @@ export default async function handler(req, res) {
 
         // GET /api/candidates - Obtener lista o estadísticas
         if (req.method === 'GET') {
-            const { limit = '100', offset = '0', search = '', stats, id, excludeLinked = 'false', tag = '', unreadFirst = 'false', filter = '', action = '', manualProjectId = '', manualStepId = '' } = req.query;
+            const { limit = '100', offset = '0', search = '', stats, id, excludeLinked = 'false', tag = '', unreadFirst = 'false', filter = '', unreadOnly = 'false', action = '', manualProjectId = '', manualStepId = '' } = req.query;
 
             if (action === 'filter_counts') {
                 const counts = await buildFilterCounts(redisForMetrics);
@@ -258,6 +258,7 @@ export default async function handler(req, res) {
                 tag: String(tag || ''),
                 unreadFirst: String(unreadFirst || ''),
                 filter: String(filter || ''),
+                unreadOnly: String(unreadOnly || ''),
                 manualProjectId: String(manualProjectId || ''),
                 manualStepId: String(manualStepId || '')
             });
@@ -318,11 +319,14 @@ export default async function handler(req, res) {
                 return finishCandidatesResponse(200, payload);
             }
 
-            // Modo unreadFirst con tag activo y primera página: no-leídos con ese tag primero
+            // Modo unreadFirst con tag activo y primera página: no-leídos con ese tag primero.
+            // Acepta ademas un filtro de estado (unread/complete/incomplete + unreadOnly) que
+            // se intersecta en el servidor — evita hidratar todo el tag para descartar en cliente.
             if (unreadFirst === 'true' && tag && !search && excludeLinked !== 'true') {
                 const safeLimit = parseInt(limit, 10) || 33;
                 const safeOffset = parseInt(offset, 10) || 0;
-                const { candidates, total } = await getCandidatesUnreadFirstByTag(tag, safeLimit, safeOffset);
+                const statusFilter = ['unread', 'complete', 'incomplete'].includes(filter) ? filter : '';
+                const { candidates, total } = await getCandidatesUnreadFirstByTag(tag, safeLimit, safeOffset, statusFilter, unreadOnly === 'true');
                 const payload = buildCandidatesListPayload({ candidates, total, limit: safeLimit, offset: safeOffset });
                 setCachedCandidatesList(cacheKey, payload);
                 res.setHeader('X-Candidatic-Cache', 'MISS');

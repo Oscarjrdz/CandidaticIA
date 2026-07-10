@@ -832,6 +832,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
     const [activeFilter, setActiveFilter] = useState('unread'); // 'all', 'unread', 'profile'
     const [filterValue, setFilterValue] = useState(null);
     const [profileUnreadOnly, setProfileUnreadOnly] = useState(false);
+    const profileUnreadOnlyRef = useRef(false);
     const [selectedTag, setSelectedTag] = useState(null);
     const selectedTagRef = useRef(null);
     const selectedTagValues = useMemo(() => getSelectedTagValues(selectedTag), [selectedTag]);
@@ -955,6 +956,18 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         if (prev === null) return; // primer render
         loadCandidates();
     }, [activeFilter, filterValue]);
+
+    // El toggle "solo no leídos" (burbuja verde del filtro de perfil) también recarga:
+    // con tag activo el servidor intersecta por no-leídos, así que al APAGARLO hay que
+    // volver a pedir el universo completo (el array cargado solo trae los no-leídos).
+    const prevProfileUnreadOnlyRef = useRef(null);
+    useEffect(() => {
+        profileUnreadOnlyRef.current = profileUnreadOnly;
+        if (prevProfileUnreadOnlyRef.current === null) { prevProfileUnreadOnlyRef.current = profileUnreadOnly; return; }
+        if (prevProfileUnreadOnlyRef.current === profileUnreadOnly) return;
+        prevProfileUnreadOnlyRef.current = profileUnreadOnly;
+        loadCandidates();
+    }, [profileUnreadOnly]);
 
     // Server-side search: reload when search query changes (debounced 250ms)
     useEffect(() => {
@@ -1463,7 +1476,16 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
             } else if (af === 'all') {
                 result = await getCandidates(limit, 0, searchParam, false, tagParam, false, '', manualProjectParam, manualStepParam);
             } else {
-                result = await getCandidates(limit, 0, searchParam, false, tagParam, true, '', manualProjectParam, manualStepParam);
+                // Tag activo + filtro de estado: se manda el filtro al servidor para que
+                // intersecte los sets en Redis e hidrate solo los que aplican (antes traía
+                // TODO el tag y el navegador descartaba hasta el 98%). El cliente re-filtra
+                // lo recibido igual que siempre, así que un superconjunto nunca rompe la vista.
+                const tagStatusFilter = (af === 'unread') ? 'unread'
+                    : (af === 'profile' && fv === 'complete') ? 'complete'
+                    : (af === 'profile' && fv === 'incomplete') ? 'incomplete'
+                    : '';
+                const tagUnreadOnly = af === 'profile' && !!tagStatusFilter && !!profileUnreadOnlyRef.current;
+                result = await getCandidates(limit, 0, searchParam, false, tagParam, true, tagStatusFilter, manualProjectParam, manualStepParam, tagUnreadOnly);
             }
 
             if (result.success) {
