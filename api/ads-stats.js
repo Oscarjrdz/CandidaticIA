@@ -10,8 +10,12 @@ const META_FETCH_TIMEOUT_MS = 20000; // lotes de 50 anuncios con insights tardan
 
 // Respuesta ya enriquecida con Meta, cacheada completa: cargas repetidas = 1 GET de Redis.
 // Se guarda ANTES de filtrar ocultos para que ocultar/mostrar un anuncio aplique al instante.
+// STALE: copia de larga vida para responder INSTANTANEO cuando el cache fresco expiro —
+// el frontend detecta stale:true y dispara un refresh en segundo plano (?refresh=true).
 const ENRICHED_CACHE_KEY = 'ads:stats:enriched:v1';
+const ENRICHED_STALE_KEY = 'ads:stats:enriched:stale';
 const ENRICHED_TTL_SECONDS = 5 * 60;
+const ENRICHED_STALE_TTL_SECONDS = 60 * 60 * 24;
 
 // Campos pedidos por anuncio en UNA sola sub-request del Batch API (antes eran 2 llamadas
 // sueltas por anuncio: insights + status = ~146 llamadas para 73 anuncios; ahora ~2 lotes).
@@ -61,19 +65,35 @@ export default async function handler(req, res) {
             const { getAdsStatistics, getRedisClient } = await import('./utils/storage.js');
             const client = getRedisClient();
 
+            const forceRefresh = req.query?.refresh === 'true';
+
             // 1) Cache de respuesta enriquecida completa (5 min): carga repetida = instantanea.
             let data = null;
-            if (client) {
+            let servedStale = false;
+            if (client && !forceRefresh) {
                 try {
                     const cached = await client.get(ENRICHED_CACHE_KEY);
                     if (cached) data = JSON.parse(cached);
                 } catch { /* cache miss */ }
+
+                // 1b) Fresco expirado: servir la copia stale AL INSTANTE (el frontend ve
+                //     stale:true y dispara ?refresh=true en segundo plano). Solo se paga
+                //     la reconstruccion completa cuando ni siquiera hay copia stale.
+                if (!data) {
+                    try {
+                        const stale = await client.get(ENRICHED_STALE_KEY);
+                        if (stale) { data = JSON.parse(stale); servedStale = true; }
+                    } catch { /* sin stale */ }
+                }
             }
 
-            // 2) Miss: agregado local (ya cacheado 10 min) + UN solo Batch API a Meta
+            // 2) Miss total o refresh forzado: agregado local + UN solo Batch API a Meta
             //    (50 anuncios por lote, sub-requests aisladas — un anuncio borrado no
             //    tumba el lote). Antes: 2 llamadas por anuncio (~146 para 73 anuncios).
             if (!data) {
+                // Refresh explicito: tambien renovar el agregado local (leads/conteos),
+                // no solo las metricas de Meta.
+                if (forceRefresh && client) await client.del('stats:ads:cached').catch(() => {});
                 data = await getAdsStatistics();
                 const adsToken = process.env.META_ADS_TOKEN;
                 const adIds = (data.ads || []).map(a => a.adId).filter(Boolean);
@@ -138,7 +158,9 @@ export default async function handler(req, res) {
                         // Solo cachear si Meta respondio algo — un fallo total se reintenta
                         // en la proxima visita en vez de congelar datos sin enriquecer 5 min.
                         if (client && metaById.size > 0) {
-                            client.set(ENRICHED_CACHE_KEY, JSON.stringify(data), 'EX', ENRICHED_TTL_SECONDS).catch(() => {});
+                            const blob = JSON.stringify(data);
+                            client.set(ENRICHED_CACHE_KEY, blob, 'EX', ENRICHED_TTL_SECONDS).catch(() => {});
+                            client.set(ENRICHED_STALE_KEY, blob, 'EX', ENRICHED_STALE_TTL_SECONDS).catch(() => {});
                         }
                     } catch (metaError) {
                         console.error('Meta Marketing API error (non-fatal):', metaError.message);
@@ -179,7 +201,8 @@ export default async function handler(req, res) {
             return res.status(200).json({
                 success: true,
                 ads: data.ads,
-                totalAdsLeads: data.totalAdsLeads
+                totalAdsLeads: data.totalAdsLeads,
+                stale: servedStale
             });
         } catch (error) {
             console.error('Error fetching ads stats:', error);

@@ -3,9 +3,13 @@ const API_BASE = import.meta.env.PROD ? '' : 'http://localhost:3000';
 /**
  * Obtiene las estadísticas agregadas de los anuncios de WhatsApp
  */
-export const getAdsStats = async (includeArchived = false) => {
+export const getAdsStats = async (includeArchived = false, refresh = false) => {
     try {
-        const response = await fetch(`${API_BASE}/api/ads-stats${includeArchived ? '?includeArchived=true' : ''}`);
+        const params = new URLSearchParams();
+        if (includeArchived) params.set('includeArchived', 'true');
+        if (refresh) params.set('refresh', 'true');
+        const qs = params.toString();
+        const response = await fetch(`${API_BASE}/api/ads-stats${qs ? `?${qs}` : ''}`);
         const data = await response.json();
 
         if (!response.ok) {
@@ -15,7 +19,8 @@ export const getAdsStats = async (includeArchived = false) => {
         return {
             success: true,
             ads: data.ads || [],
-            totalAdsLeads: data.totalAdsLeads || 0
+            totalAdsLeads: data.totalAdsLeads || 0,
+            stale: !!data.stale
         };
     } catch (error) {
         return {

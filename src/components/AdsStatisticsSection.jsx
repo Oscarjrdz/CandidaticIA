@@ -565,12 +565,20 @@ const AdsStatisticsSection = () => {
     const [showArchived, setShowArchived] = useState(false);
     const showArchivedRef = useRef(false);
 
-    const loadStats = async (includeArchived = showArchivedRef.current) => {
-        setLoading(true);
-        const data = await getAdsStats(includeArchived);
-        if (data.success) setStats({ ads: data.ads || [], totalAdsLeads: data.totalAdsLeads || 0 });
-        else showToast?.('Error al cargar estadísticas', 'error');
-        setLoading(false);
+    const loadStats = async (includeArchived = showArchivedRef.current, opts = {}) => {
+        if (!opts.silent) setLoading(true);
+        const data = await getAdsStats(includeArchived, !!opts.refresh);
+        if (data.success) {
+            setStats({ ads: data.ads || [], totalAdsLeads: data.totalAdsLeads || 0 });
+            // Respuesta stale (copia instantanea): refrescar en segundo plano sin
+            // bloquear la UI — cuando llegue lo fresco, se actualiza solo.
+            if (data.stale && !opts.refresh) {
+                loadStats(includeArchived, { silent: true, refresh: true });
+            }
+        } else if (!opts.silent) {
+            showToast?.('Error al cargar estadísticas', 'error');
+        }
+        if (!opts.silent) setLoading(false);
     };
 
     useEffect(() => { loadStats(); loadAdLabels(); }, []);
@@ -665,7 +673,7 @@ const AdsStatisticsSection = () => {
                         }`}>
                         <Archive className="w-3.5 h-3.5 mr-1.5" /> {showArchived ? 'Ocultar archivados' : 'Ver archivados'}
                     </button>
-                    <button onClick={() => loadStats()} disabled={loading}
+                    <button onClick={() => loadStats(showArchivedRef.current, { refresh: true })} disabled={loading}
                         className="flex items-center px-3 py-1.5 text-xs bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors shadow-sm disabled:opacity-50">
                         <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${loading ? 'animate-spin' : ''}`} /> Actualizar
                     </button>
@@ -889,7 +897,12 @@ const AdsStatisticsSection = () => {
                                             <span className="text-white text-[10px] font-bold">f</span>
                                         </div>
                                         <div className="min-w-0">
-                                            <p className="text-xs font-bold text-gray-900 dark:text-white truncate leading-tight">{ad.adHeadline}</p>
+                                            {/* Nombre REAL del anuncio en Meta (adName). El referral de CTWA manda
+                                                el nombre de la pagina como headline, por eso 74 tarjetas decian
+                                                "Candidatic IA" — indistinguibles entre si. */}
+                                            <p className="text-xs font-bold text-gray-900 dark:text-white truncate leading-tight" title={ad.adName || ad.adHeadline}>
+                                                {ad.adName || ad.adHeadline}
+                                            </p>
                                             <div className="flex items-center gap-1 text-[9px] text-gray-400">
                                                 <span>{ad.adSource === 'ad' ? '📣' : '📝'}</span>
                                                 {ad.effectiveStatus && <StatusBadge status={ad.effectiveStatus} />}
