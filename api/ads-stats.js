@@ -6,7 +6,18 @@
 
 const GRAPH_API_VERSION = 'v21.0';
 const GRAPH_BASE_URL = `https://graph.facebook.com/${GRAPH_API_VERSION}`;
-const META_FETCH_TIMEOUT_MS = 8000;
+const META_FETCH_TIMEOUT_MS = 20000; // lotes de 50 anuncios con insights tardan mas que una llamada suelta
+
+// Respuesta ya enriquecida con Meta, cacheada completa: cargas repetidas = 1 GET de Redis.
+// Se guarda ANTES de filtrar ocultos para que ocultar/mostrar un anuncio aplique al instante.
+const ENRICHED_CACHE_KEY = 'ads:stats:enriched:v1';
+const ENRICHED_TTL_SECONDS = 5 * 60;
+
+// Campos pedidos por anuncio en UNA sola sub-request del Batch API (antes eran 2 llamadas
+// sueltas por anuncio: insights + status = ~146 llamadas para 73 anuncios; ahora ~2 lotes).
+// creative.thumbnail: imagen fresca del creativo — las URLs de referral guardadas expiran
+// (CDN firmado de Meta), por eso habia imagenes rotas; el thumbnail se renueva en cada lote.
+const AD_FIELDS = 'effective_status,name,creative.thumbnail_width(512).thumbnail_height(512){thumbnail_url},insights.date_preset(maximum){impressions,clicks,spend,cpc,cpm,ctr,reach,frequency,actions,cost_per_action_type}';
 
 export default async function handler(req, res) {
     if (req.method === 'OPTIONS') {
@@ -42,109 +53,56 @@ export default async function handler(req, res) {
     // ─── GET: Return ad statistics ───────────────────────────────────
     if (req.method === 'GET') {
         try {
-            const { getAdsStatistics, getRedisClient, validateAdminSession } = await import('./utils/storage.js');
-            const userId = await validateAdminSession(req);
-            if (!userId) return res.status(401).json({ success: false, error: 'No autorizado' });
-            const data = await getAdsStatistics();
-
-            // Filter out hidden ads
+            const { getAdsStatistics, getRedisClient } = await import('./utils/storage.js');
             const client = getRedisClient();
-            let hiddenAds = new Set();
+
+            // 1) Cache de respuesta enriquecida completa (5 min): carga repetida = instantanea.
+            let data = null;
             if (client) {
                 try {
-                    const hidden = await client.smembers('ads:hidden');
-                    if (hidden && hidden.length > 0) {
-                        hiddenAds = new Set(hidden);
-                    }
-                } catch (e) {
-                    // Non-fatal
-                }
+                    const cached = await client.get(ENRICHED_CACHE_KEY);
+                    if (cached) data = JSON.parse(cached);
+                } catch { /* cache miss */ }
             }
 
-            // Filter hidden from ads and recalculate total
-            if (hiddenAds.size > 0 && data.ads) {
-                const hiddenLeads = data.ads
-                    .filter(a => {
-                        const key = a.adId || a.adHeadline || 'unknown';
-                        return hiddenAds.has(key);
-                    })
-                    .reduce((sum, a) => sum + (a.totalLeads || 0), 0);
+            // 2) Miss: agregado local (ya cacheado 10 min) + UN solo Batch API a Meta
+            //    (50 anuncios por lote, sub-requests aisladas — un anuncio borrado no
+            //    tumba el lote). Antes: 2 llamadas por anuncio (~146 para 73 anuncios).
+            if (!data) {
+                data = await getAdsStatistics();
+                const adsToken = process.env.META_ADS_TOKEN;
+                const adIds = (data.ads || []).map(a => a.adId).filter(Boolean);
 
-                data.ads = data.ads.filter(a => {
-                    const key = a.adId || a.adHeadline || 'unknown';
-                    return !hiddenAds.has(key);
-                });
-                data.totalAdsLeads = Math.max(0, data.totalAdsLeads - hiddenLeads);
-            }
-            
-            // Enrich with Meta Marketing API insights if token is available
-            const adsToken = process.env.META_ADS_TOKEN;
-            if (adsToken && data.ads && data.ads.length > 0) {
-                const adIds = data.ads.map(a => a.adId).filter(Boolean);
-
-                if (adIds.length > 0) {
+                if (adsToken && adIds.length > 0) {
                     try {
-                        const { getRedisClient } = await import('./utils/storage.js');
-                        const redis = getRedisClient();
-                        const INSIGHTS_TTL = 3600; // 1 hora
-                        const STATUS_TTL   = 3600;
+                        const chunks = [];
+                        for (let i = 0; i < adIds.length; i += 50) chunks.push(adIds.slice(i, i + 50));
+                        const batchResponses = await Promise.all(chunks.map(chunk => fetchGraphBatch(chunk, adsToken)));
 
-                        // Fetch insights with bounded concurrency so one large account
-                        // does not spike Graph API calls or exhaust the serverless window.
-                        const insightResults = await allSettledWithConcurrency(
-                            adIds,
-                            5,
-                            async adId => {
-                                const cacheKey = `ads:insights:${adId}`;
-                                const cached = redis ? await redis.get(cacheKey) : null;
-                                if (cached) return { adId, data: JSON.parse(cached) };
-                                const json = await fetchGraphJson(`${GRAPH_BASE_URL}/${adId}/insights?fields=impressions,clicks,spend,cpc,cpm,ctr,reach,frequency,actions,cost_per_action_type&date_preset=maximum&access_token=${encodeURIComponent(adsToken)}`);
-                                const result = json.data?.[0] || null;
-                                if (redis && result) await redis.set(cacheKey, JSON.stringify(result), 'EX', INSIGHTS_TTL);
-                                return { adId, data: result, error: json.error || null };
-                            }
-                        );
-
-                        // Fetch status with the same guardrail.
-                        const statusResults = await allSettledWithConcurrency(
-                            adIds,
-                            5,
-                            async adId => {
-                                const cacheKey = `ads:status:${adId}`;
-                                const cached = redis ? await redis.get(cacheKey) : null;
-                                if (cached) return { adId, ...JSON.parse(cached) };
-                                const json = await fetchGraphJson(`${GRAPH_BASE_URL}/${adId}?fields=effective_status,name&access_token=${encodeURIComponent(adsToken)}`);
-                                const result = { status: json.effective_status || null, name: json.name || null };
-                                if (redis && result.status) await redis.set(cacheKey, JSON.stringify(result), 'EX', STATUS_TTL);
-                                return { adId, ...result };
-                            }
-                        );
-
-                        // Build status map
-                        const statusMap = new Map();
-                        for (const result of statusResults) {
-                            if (result.status === 'fulfilled' && result.value.status) {
-                                statusMap.set(result.value.adId, result.value);
-                            }
-                        }
-
-                        // Merge insights into ads data
-                        const insightsMap = new Map();
-                        for (const result of insightResults) {
-                            if (result.status === 'fulfilled' && result.value.data) {
-                                insightsMap.set(result.value.adId, result.value.data);
-                            }
-                        }
+                        // Las sub-respuestas llegan en el MISMO orden que las sub-requests
+                        // (garantia del Batch API) — mapear por indice, no por body.id.
+                        const metaById = new Map();
+                        batchResponses.forEach((arr, ci) => {
+                            if (!Array.isArray(arr)) return;
+                            arr.forEach((sub, i) => {
+                                if (sub?.code !== 200 || !sub.body) return; // anuncio borrado/sin permiso: aislado
+                                try {
+                                    metaById.set(String(chunks[ci][i]), JSON.parse(sub.body));
+                                } catch { /* sub-request malformada, ignorar */ }
+                            });
+                        });
 
                         for (const ad of data.ads) {
-                            // Merge status
-                            if (ad.adId && statusMap.has(ad.adId)) {
-                                const st = statusMap.get(ad.adId);
-                                ad.effectiveStatus = st.status;
-                                if (st.name) ad.adName = st.name;
-                            }
-                            if (ad.adId && insightsMap.has(ad.adId)) {
-                                const insight = insightsMap.get(ad.adId);
+                            const meta = ad.adId ? metaById.get(String(ad.adId)) : null;
+                            if (!meta) continue;
+                            ad.effectiveStatus = meta.effective_status || null;
+                            if (meta.name) ad.adName = meta.name;
+                            // Imagen fresca del creativo (la URL de referral guardada expira)
+                            const thumb = meta.creative?.thumbnail_url || null;
+                            if (thumb) ad.adImageUrl = thumb;
+
+                            const insight = meta.insights?.data?.[0];
+                            if (insight) {
                                 ad.impressions = insight.impressions || null;
                                 ad.clicks = insight.clicks || null;
                                 ad.spend = insight.spend || null;
@@ -153,46 +111,54 @@ export default async function handler(req, res) {
                                 ad.ctr = insight.ctr || null;
                                 ad.reach = insight.reach || null;
                                 ad.frequency = insight.frequency || null;
-                                
-                                // Extract key actions
+
                                 if (insight.actions) {
                                     for (const action of insight.actions) {
-                                        if (action.action_type === 'onsite_conversion.messaging_first_reply') {
-                                            ad.messagingReplies = action.value;
-                                        }
-                                        if (action.action_type === 'onsite_conversion.total_messaging_connection') {
-                                            ad.messagingConnections = action.value;
-                                        }
-                                        if (action.action_type === 'link_click') {
-                                            ad.linkClicks = action.value;
-                                        }
-                                        if (action.action_type === 'post_engagement') {
-                                            ad.postEngagement = action.value;
-                                        }
-                                        if (action.action_type === 'post_reaction') {
-                                            ad.reactions = action.value;
-                                        }
+                                        if (action.action_type === 'onsite_conversion.messaging_first_reply') ad.messagingReplies = action.value;
+                                        if (action.action_type === 'onsite_conversion.total_messaging_connection') ad.messagingConnections = action.value;
+                                        if (action.action_type === 'link_click') ad.linkClicks = action.value;
+                                        if (action.action_type === 'post_engagement') ad.postEngagement = action.value;
+                                        if (action.action_type === 'post_reaction') ad.reactions = action.value;
                                     }
                                 }
-                                
-                                // Extract cost per messaging connection
                                 if (insight.cost_per_action_type) {
                                     for (const cost of insight.cost_per_action_type) {
-                                        if (cost.action_type === 'onsite_conversion.total_messaging_connection') {
-                                            ad.costPerConversation = cost.value;
-                                        }
-                                        if (cost.action_type === 'link_click') {
-                                            ad.costPerLinkClick = cost.value;
-                                        }
+                                        if (cost.action_type === 'onsite_conversion.total_messaging_connection') ad.costPerConversation = cost.value;
+                                        if (cost.action_type === 'link_click') ad.costPerLinkClick = cost.value;
                                     }
                                 }
                             }
+                        }
+
+                        // Solo cachear si Meta respondio algo — un fallo total se reintenta
+                        // en la proxima visita en vez de congelar datos sin enriquecer 5 min.
+                        if (client && metaById.size > 0) {
+                            client.set(ENRICHED_CACHE_KEY, JSON.stringify(data), 'EX', ENRICHED_TTL_SECONDS).catch(() => {});
                         }
                     } catch (metaError) {
                         console.error('Meta Marketing API error (non-fatal):', metaError.message);
                         // Non-fatal: we still return Redis data even if Meta API fails
                     }
                 }
+            }
+
+            // 3) Filtrar ocultos SIEMPRE al final (sobre el cache o lo fresco), para que
+            //    ocultar/mostrar un anuncio aplique de inmediato sin esperar TTL.
+            let hiddenAds = new Set();
+            if (client) {
+                try {
+                    const hidden = await client.smembers('ads:hidden');
+                    if (hidden && hidden.length > 0) hiddenAds = new Set(hidden);
+                } catch (e) {
+                    // Non-fatal
+                }
+            }
+            if (hiddenAds.size > 0 && data.ads) {
+                const hiddenLeads = data.ads
+                    .filter(a => hiddenAds.has(a.adId || a.adHeadline || 'unknown'))
+                    .reduce((sum, a) => sum + (a.totalLeads || 0), 0);
+                data.ads = data.ads.filter(a => !hiddenAds.has(a.adId || a.adHeadline || 'unknown'));
+                data.totalAdsLeads = Math.max(0, data.totalAdsLeads - hiddenLeads);
             }
 
             res.setHeader('Cache-Control', 'private, max-age=60, stale-while-revalidate=300');
@@ -213,33 +179,29 @@ export default async function handler(req, res) {
     return res.status(405).json({ success: false, error: 'Method not allowed' });
 }
 
-async function fetchGraphJson(url) {
+/**
+ * Meta Graph Batch API: hasta 50 sub-requests (una por anuncio) en UNA llamada HTTP.
+ * Cada sub-request esta aislada — un anuncio borrado regresa su propio code=400 sin
+ * afectar a los demas (verificado contra la API real con un ID falso mezclado).
+ * Regresa el array de sub-respuestas [{ code, body }] en el mismo orden que adIds.
+ */
+async function fetchGraphBatch(adIds, adsToken) {
+    const batch = JSON.stringify(adIds.map(id => ({
+        method: 'GET',
+        relative_url: `${id}?fields=${encodeURIComponent(AD_FIELDS)}`
+    })));
+
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), META_FETCH_TIMEOUT_MS);
-
     try {
-        const response = await fetch(url, { signal: controller.signal });
+        const response = await fetch(`${GRAPH_BASE_URL}/`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({ batch, access_token: adsToken, include_headers: 'false' }),
+            signal: controller.signal
+        });
         return await response.json();
     } finally {
         clearTimeout(timer);
     }
-}
-
-async function allSettledWithConcurrency(items, limit, iteratee) {
-    const results = new Array(items.length);
-    let index = 0;
-
-    async function worker() {
-        while (index < items.length) {
-            const current = index++;
-            try {
-                results[current] = { status: 'fulfilled', value: await iteratee(items[current], current) };
-            } catch (reason) {
-                results[current] = { status: 'rejected', reason };
-            }
-        }
-    }
-
-    await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
-    return results;
 }
