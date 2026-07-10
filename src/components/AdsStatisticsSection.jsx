@@ -423,6 +423,63 @@ const AdsStatisticsSection = () => {
         } catch { /* silent */ }
     };
 
+    /* ── Asignación de etiqueta por anuncio (chip en cada tarjeta) ── */
+    const [labelMenu, setLabelMenu] = useState(null); // { ad, x, y } | null
+
+    const nameOnlyOf = (label) => label.emoji ? label.tagName.replace(label.emoji + ' ', '') : label.tagName;
+    const labelIdsOf = (label) => (label.adIds || (label.adId ? [label.adId] : [])).map(String);
+    const findLabelForAd = (adId) => adLabels.find(l => labelIdsOf(l).includes(String(adId)));
+
+    // Reutiliza el PUT existente de /api/ad-labels: al agregar un adId nuevo, el backend
+    // ademas retro-aplica la etiqueta a los candidatos existentes de ese anuncio.
+    const putLabelAdIds = async (label, newIds, successMsg) => {
+        try {
+            const res = await fetch('/api/ad-labels', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: label.id, adIds: newIds.join(', '), name: nameOnlyOf(label), emoji: label.emoji || '', color: label.color, company: label.company || '' })
+            });
+            const data = await res.json();
+            if (data.success) {
+                setAdLabels(prev => prev.map(l => l.id === label.id ? data.label : l));
+                showToast?.(successMsg(data), 'success');
+                return true;
+            }
+            showToast?.(data.error || 'Error', 'error');
+        } catch { showToast?.('Error de red', 'error'); }
+        return false;
+    };
+
+    const assignAdToLabel = async (ad, label) => {
+        const current = findLabelForAd(ad.adId);
+        setLabelMenu(null);
+        const ids = [...new Set([...labelIdsOf(label), String(ad.adId)])];
+        const ok = await putLabelAdIds(label, ids, (d) => `Asignado a ${label.tagName}${d.renamed ? ` — etiqueta aplicada a ${d.renamed} candidatos` : ''}`);
+        // Si venia de otra etiqueta, es un "mover": quitarlo de la anterior
+        if (ok && current && current.id !== label.id) {
+            const rest = labelIdsOf(current).filter(id => id !== String(ad.adId));
+            if (rest.length) await putLabelAdIds(current, rest, () => `Quitado de ${current.tagName}`);
+        }
+    };
+
+    const unassignAd = async (ad, label) => {
+        setLabelMenu(null);
+        const rest = labelIdsOf(label).filter(id => id !== String(ad.adId));
+        if (!rest.length) {
+            showToast?.('Es el único ID de esa etiqueta — elimínala o edítala desde la tarjeta de etiquetas', 'warning');
+            return;
+        }
+        await putLabelAdIds(label, rest, () => `ID quitado de ${label.tagName} (los candidatos ya etiquetados la conservan)`);
+    };
+
+    const openCreateWithAdId = (ad) => {
+        setLabelMenu(null);
+        setLabelForm({ adIds: String(ad.adId), name: '', emoji: '', color: '#a855f7', company: '' });
+        setEditingLabel(null);
+        setShowLabelForm(true);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
     const resetForm = () => {
         setLabelForm({ adIds: '', name: '', emoji: '', color: '#a855f7', company: '' });
         setEditingLabel(null);
@@ -794,6 +851,26 @@ const AdsStatisticsSection = () => {
                                                         onClick={() => cp(ad.adId)}>{ad.adId}<Copy className="w-2 h-2 inline ml-0.5 opacity-40" /></span>
                                                 )}
                                             </div>
+                                            {/* Etiqueta de Anuncio de este ID: asignada (editable) o aviso de sin asignar */}
+                                            {ad.adId && (() => {
+                                                const lbl = findLabelForAd(ad.adId);
+                                                return (
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            const r = e.currentTarget.getBoundingClientRect();
+                                                            setLabelMenu({ ad, x: r.left, y: r.bottom + 4 });
+                                                        }}
+                                                        className={`mt-1 inline-flex items-center gap-1 text-[9px] font-semibold px-1.5 py-0.5 rounded-full transition-all hover:scale-105 hover:shadow ${
+                                                            lbl ? 'text-white' : 'bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700 border-dashed'
+                                                        }`}
+                                                        style={lbl ? { backgroundColor: lbl.color } : undefined}
+                                                        title={lbl ? `Asignado a ${lbl.tagName} — clic para cambiar` : 'Este ID no está asignado a ninguna etiqueta — clic para asignar'}
+                                                    >
+                                                        {lbl ? <>🏷️ {lbl.tagName}</> : <>⚠️ Sin etiqueta · Asignar</>}
+                                                    </button>
+                                                );
+                                            })()}
                                         </div>
                                     </div>
                                     <div className="flex items-center gap-1 shrink-0">
@@ -899,6 +976,52 @@ const AdsStatisticsSection = () => {
                     ))}
                 </div>
             )}
+
+            {/* Menú de asignación de Etiqueta de Anuncio (fixed: escapa el overflow de la tarjeta) */}
+            {labelMenu && (() => {
+                const current = findLabelForAd(labelMenu.ad.adId);
+                return (
+                    <>
+                        <div className="fixed inset-0 z-[140]" onClick={() => setLabelMenu(null)} />
+                        <div
+                            className="fixed z-[150] w-60 max-h-80 overflow-y-auto bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-2xl py-1.5"
+                            style={{ left: Math.max(8, Math.min(labelMenu.x, window.innerWidth - 250)), top: Math.min(labelMenu.y, window.innerHeight - 320) }}
+                        >
+                            <p className="px-3 py-1 text-[9px] font-bold text-gray-400 uppercase tracking-wide">
+                                {current ? <>Asignado a <span style={{ color: current.color }}>{current.tagName}</span></> : 'No asignado a ninguna etiqueta'}
+                            </p>
+                            <p className="px-3 pb-1 text-[9px] font-mono text-gray-400 truncate">{labelMenu.ad.adId}</p>
+                            <div className="border-t border-gray-100 dark:border-gray-700 my-1" />
+                            {adLabels.filter(l => l.id !== current?.id).map(l => (
+                                <button
+                                    key={l.id}
+                                    onClick={() => assignAdToLabel(labelMenu.ad, l)}
+                                    className="w-full text-left px-3 py-1.5 text-[11px] text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2"
+                                >
+                                    <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: l.color }} />
+                                    <span className="truncate">{current ? 'Mover a' : 'Asignar a'} <strong>{l.tagName}</strong></span>
+                                </button>
+                            ))}
+                            {current && (
+                                <button
+                                    onClick={() => unassignAd(labelMenu.ad, current)}
+                                    className="w-full text-left px-3 py-1.5 text-[11px] text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2"
+                                >
+                                    <span className="w-2.5 h-2.5 shrink-0 text-center leading-none">✕</span>
+                                    Quitar de {current.tagName}
+                                </button>
+                            )}
+                            <div className="border-t border-gray-100 dark:border-gray-700 my-1" />
+                            <button
+                                onClick={() => openCreateWithAdId(labelMenu.ad)}
+                                className="w-full text-left px-3 py-1.5 text-[11px] text-violet-600 dark:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-900/20 font-semibold"
+                            >
+                                ＋ Nueva etiqueta con este ID
+                            </button>
+                        </div>
+                    </>
+                );
+            })()}
 
             {/* Comments Modal */}
             {commentsAd && (
