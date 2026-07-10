@@ -28,10 +28,11 @@ export default async function handler(req, res) {
     const userId = await validateAdminSession(req);
     if (!userId) return res.status(401).json({ error: 'No autorizado' });
 
-    // ─── DELETE: Hide an ad from the dashboard ───────────────────────
+    // ─── DELETE: Archivar (o restaurar) un anuncio del dashboard ─────
+    // El set ads:hidden funciona como archivo: sadd = archivar, srem = restaurar.
     if (req.method === 'DELETE') {
         try {
-            const { adKey } = req.body || {};
+            const { adKey, restore } = req.body || {};
             if (!adKey) {
                 return res.status(400).json({ success: false, error: 'adKey is required' });
             }
@@ -42,11 +43,15 @@ export default async function handler(req, res) {
                 return res.status(500).json({ success: false, error: 'Redis unavailable' });
             }
 
+            if (restore) {
+                await client.srem('ads:hidden', adKey);
+                return res.status(200).json({ success: true, message: 'Ad restored successfully' });
+            }
             await client.sadd('ads:hidden', adKey);
-            return res.status(200).json({ success: true, message: 'Ad hidden successfully' });
+            return res.status(200).json({ success: true, message: 'Ad archived successfully' });
         } catch (error) {
-            console.error('Error hiding ad:', error);
-            return res.status(500).json({ success: false, error: 'Error al ocultar anuncio' });
+            console.error('Error archiving ad:', error);
+            return res.status(500).json({ success: false, error: 'Error al archivar anuncio' });
         }
     }
 
@@ -142,8 +147,11 @@ export default async function handler(req, res) {
                 }
             }
 
-            // 3) Filtrar ocultos SIEMPRE al final (sobre el cache o lo fresco), para que
-            //    ocultar/mostrar un anuncio aplique de inmediato sin esperar TTL.
+            // 3) Archivados SIEMPRE al final (sobre el cache o lo fresco), para que
+            //    archivar/restaurar aplique de inmediato sin esperar TTL.
+            //    - Normal: se excluyen del listado y del total.
+            //    - ?includeArchived=true: se incluyen todos, marcados con archived: true.
+            const includeArchived = req.query?.includeArchived === 'true';
             let hiddenAds = new Set();
             if (client) {
                 try {
@@ -154,11 +162,17 @@ export default async function handler(req, res) {
                 }
             }
             if (hiddenAds.size > 0 && data.ads) {
-                const hiddenLeads = data.ads
-                    .filter(a => hiddenAds.has(a.adId || a.adHeadline || 'unknown'))
-                    .reduce((sum, a) => sum + (a.totalLeads || 0), 0);
-                data.ads = data.ads.filter(a => !hiddenAds.has(a.adId || a.adHeadline || 'unknown'));
-                data.totalAdsLeads = Math.max(0, data.totalAdsLeads - hiddenLeads);
+                if (includeArchived) {
+                    for (const a of data.ads) {
+                        a.archived = hiddenAds.has(a.adId || a.adHeadline || 'unknown');
+                    }
+                } else {
+                    const hiddenLeads = data.ads
+                        .filter(a => hiddenAds.has(a.adId || a.adHeadline || 'unknown'))
+                        .reduce((sum, a) => sum + (a.totalLeads || 0), 0);
+                    data.ads = data.ads.filter(a => !hiddenAds.has(a.adId || a.adHeadline || 'unknown'));
+                    data.totalAdsLeads = Math.max(0, data.totalAdsLeads - hiddenLeads);
+                }
             }
 
             res.setHeader('Cache-Control', 'private, max-age=60, stale-while-revalidate=300');

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Target, TrendingUp, Users, Calendar, Megaphone, Loader2, Clock, Copy, ExternalLink, RefreshCw, Video, DollarSign, Eye, MousePointerClick, Percent, MessageCircle, Heart, ArrowUpRight, Trash2, X, Send, MessageSquare, ChevronDown, ChevronUp, CornerDownRight, Tag, Plus, Check } from 'lucide-react';
+import { Target, TrendingUp, Users, Calendar, Megaphone, Loader2, Clock, Copy, ExternalLink, RefreshCw, Video, DollarSign, Eye, MousePointerClick, Percent, MessageCircle, Heart, ArrowUpRight, Trash2, X, Send, MessageSquare, ChevronDown, ChevronUp, CornerDownRight, Tag, Plus, Check, Archive, ArchiveRestore } from 'lucide-react';
 import { useConfirmModal } from './ui/ConfirmModal';
 import { getAdsStats } from '../services/adsService';
 import { useToastContext } from '../contexts/ToastContext';
@@ -562,9 +562,12 @@ const AdsStatisticsSection = () => {
         } catch { showToast?.('Error de red', 'error'); }
     };
 
-    const loadStats = async () => {
+    const [showArchived, setShowArchived] = useState(false);
+    const showArchivedRef = useRef(false);
+
+    const loadStats = async (includeArchived = showArchivedRef.current) => {
         setLoading(true);
-        const data = await getAdsStats();
+        const data = await getAdsStats(includeArchived);
         if (data.success) setStats({ ads: data.ads || [], totalAdsLeads: data.totalAdsLeads || 0 });
         else showToast?.('Error al cargar estadísticas', 'error');
         setLoading(false);
@@ -572,14 +575,39 @@ const AdsStatisticsSection = () => {
 
     useEffect(() => { loadStats(); loadAdLabels(); }, []);
 
+    const toggleArchivedView = () => {
+        const next = !showArchived;
+        setShowArchived(next);
+        showArchivedRef.current = next;
+        loadStats(next);
+    };
+
+    const handleRestoreAd = async (ad) => {
+        const adKey = ad.adId || ad.adHeadline || 'unknown';
+        try {
+            const res = await fetch('/api/ads-stats', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ adKey, restore: true })
+            });
+            const data = await res.json();
+            if (data.success) {
+                setStats(prev => ({ ...prev, ads: prev.ads.map(a => (a.adId || a.adHeadline || 'unknown') === adKey ? { ...a, archived: false } : a) }));
+                showToast?.('Anuncio restaurado', 'success');
+            } else {
+                showToast?.(data.error || 'Error', 'error');
+            }
+        } catch { showToast?.('Error de red', 'error'); }
+    };
+
     const handleHideAd = async (ad) => {
         const adKey = ad.adId || ad.adHeadline || 'unknown';
         const adName = ad.adHeadline || ad.adName || 'este anuncio';
 
         const ok = await showConfirm({
-            title: 'Ocultar Anuncio',
-            message: `¿Seguro que quieres ocultar "${adName}" del dashboard? Sus ${ad.totalLeads || 0} leads seguirán en la base de datos pero el anuncio ya no aparecerá aquí.`,
-            confirmText: 'Ocultar',
+            title: 'Archivar Anuncio',
+            message: `¿Archivar "${adName}"? Sus ${ad.totalLeads || 0} leads siguen en la base de datos y puedes restaurarlo cuando quieras desde "Ver archivados".`,
+            confirmText: 'Archivar',
             variant: 'warning'
         });
         if (!ok) return;
@@ -592,15 +620,17 @@ const AdsStatisticsSection = () => {
             });
             const data = await res.json();
             if (data.success) {
-                // Optimistic removal
-                setStats(prev => ({
-                    ...prev,
-                    ads: prev.ads.filter(a => (a.adId || a.adHeadline || 'unknown') !== adKey),
-                    totalAdsLeads: Math.max(0, prev.totalAdsLeads - (ad.totalLeads || 0))
-                }));
-                showToast?.('Anuncio ocultado', 'success');
+                // Optimista: en vista normal desaparece; en "ver archivados" solo se marca
+                setStats(prev => showArchivedRef.current
+                    ? { ...prev, ads: prev.ads.map(a => (a.adId || a.adHeadline || 'unknown') === adKey ? { ...a, archived: true } : a) }
+                    : {
+                        ...prev,
+                        ads: prev.ads.filter(a => (a.adId || a.adHeadline || 'unknown') !== adKey),
+                        totalAdsLeads: Math.max(0, prev.totalAdsLeads - (ad.totalLeads || 0))
+                    });
+                showToast?.('Anuncio archivado — puedes restaurarlo desde "Ver archivados"', 'success');
             } else {
-                showToast?.(data.error || 'Error al ocultar', 'error');
+                showToast?.(data.error || 'Error al archivar', 'error');
             }
         } catch (e) {
             showToast?.('Error de red', 'error');
@@ -626,10 +656,20 @@ const AdsStatisticsSection = () => {
                     </h1>
                     <p className="text-gray-400 text-xs mt-0.5">Campañas Click-to-WhatsApp</p>
                 </div>
-                <button onClick={loadStats} disabled={loading}
-                    className="flex items-center px-3 py-1.5 text-xs bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors shadow-sm disabled:opacity-50">
-                    <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${loading ? 'animate-spin' : ''}`} /> Actualizar
-                </button>
+                <div className="flex items-center gap-2">
+                    <button onClick={toggleArchivedView} disabled={loading}
+                        className={`flex items-center px-3 py-1.5 text-xs border rounded-lg transition-colors shadow-sm disabled:opacity-50 ${
+                            showArchived
+                                ? 'bg-amber-50 dark:bg-amber-900/20 border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-300'
+                                : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
+                        }`}>
+                        <Archive className="w-3.5 h-3.5 mr-1.5" /> {showArchived ? 'Ocultar archivados' : 'Ver archivados'}
+                    </button>
+                    <button onClick={() => loadStats()} disabled={loading}
+                        className="flex items-center px-3 py-1.5 text-xs bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors shadow-sm disabled:opacity-50">
+                        <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${loading ? 'animate-spin' : ''}`} /> Actualizar
+                    </button>
+                </div>
             </div>
 
             {/* ── ETIQUETAS ADS ──────────────────────────────────────────────── */}
@@ -832,8 +872,15 @@ const AdsStatisticsSection = () => {
                     {stats.ads.filter(ad => ad.adId || ad.adHeadline !== 'Anuncio sin título' || ad.adBody || ad.adImageUrl).map((ad, i) => {
                         const has = ad.impressions || ad.spend;
                         return (
-                            <div key={i} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-sm overflow-hidden hover:shadow-lg transition-shadow group/card relative"
+                            <div key={i} className={`bg-white dark:bg-gray-800 border rounded-2xl shadow-sm overflow-hidden hover:shadow-lg transition-shadow group/card relative ${
+                                    ad.archived ? 'border-amber-300 dark:border-amber-700 opacity-75' : 'border-gray-200 dark:border-gray-700'
+                                }`}
                                 style={{ maxWidth:'420px', margin:'0 auto', width:'100%' }}>
+                                {ad.archived && (
+                                    <div className="absolute top-2 right-2 z-10 flex items-center gap-1 text-[9px] font-bold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/40 border border-amber-300 dark:border-amber-700 px-1.5 py-0.5 rounded-full">
+                                        <Archive className="w-2.5 h-2.5" /> Archivado
+                                    </div>
+                                )}
                                 
                                 {/* Header */}
                                 <div className="px-3 pt-3 pb-1.5 flex items-center justify-between">
@@ -874,14 +921,24 @@ const AdsStatisticsSection = () => {
                                         </div>
                                     </div>
                                     <div className="flex items-center gap-1 shrink-0">
-                                        {/* Delete button — visible on hover */}
-                                        <button
-                                            onClick={() => handleHideAd(ad)}
-                                            className="p-1.5 rounded-lg opacity-0 group-hover/card:opacity-100 hover:bg-red-50 dark:hover:bg-red-900/20 text-gray-400 hover:text-red-500 transition-all duration-200"
-                                            title="Ocultar anuncio"
-                                        >
-                                            <Trash2 className="w-3.5 h-3.5" />
-                                        </button>
+                                        {/* Archivar / Restaurar — visible on hover */}
+                                        {ad.archived ? (
+                                            <button
+                                                onClick={() => handleRestoreAd(ad)}
+                                                className="p-1.5 rounded-lg opacity-0 group-hover/card:opacity-100 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 text-gray-400 hover:text-emerald-600 transition-all duration-200"
+                                                title="Restaurar anuncio"
+                                            >
+                                                <ArchiveRestore className="w-3.5 h-3.5" />
+                                            </button>
+                                        ) : (
+                                            <button
+                                                onClick={() => handleHideAd(ad)}
+                                                className="p-1.5 rounded-lg opacity-0 group-hover/card:opacity-100 hover:bg-amber-50 dark:hover:bg-amber-900/20 text-gray-400 hover:text-amber-600 transition-all duration-200"
+                                                title="Archivar anuncio"
+                                            >
+                                                <Archive className="w-3.5 h-3.5" />
+                                            </button>
+                                        )}
                                         {ad.adUrl && (
                                             <a href={ad.adUrl} target="_blank" rel="noreferrer" className="text-[9px] text-blue-500 bg-blue-50 dark:bg-blue-900/20 px-1.5 py-0.5 rounded font-medium flex items-center gap-0.5">
                                                 FB<ExternalLink className="w-2.5 h-2.5" />
@@ -890,22 +947,23 @@ const AdsStatisticsSection = () => {
                                     </div>
                                 </div>
 
-                                {/* Body - max 2 lines */}
+                                {/* Body — tamaño uniforme: máx 10 renglones, el resto oculto */}
                                 {ad.adBody && (
-                                    <p className="px-3 pb-1.5 text-[11px] text-gray-600 dark:text-gray-400 leading-snug whitespace-pre-line">{ad.adBody}</p>
+                                    <p className="px-3 pb-1.5 text-[11px] text-gray-600 dark:text-gray-400 leading-snug whitespace-pre-line"
+                                        style={{ display: '-webkit-box', WebkitLineClamp: 10, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{ad.adBody}</p>
                                 )}
 
-                                {/* Image - contained, smaller */}
-                                {(ad.adImageUrl || ad.adVideoUrl) && (
-                                    <div className="w-full bg-gray-50 dark:bg-gray-900 flex items-center justify-center" style={{ height: '200px' }}>
-                                        {ad.adMediaType === 'video' && ad.adVideoUrl ? (
-                                            <Video className="w-10 h-10 text-gray-300" />
-                                        ) : (
-                                            <img src={ad.adImageUrl} alt="" className="max-w-full max-h-full object-contain"
-                                                onError={(e) => { e.target.onerror = null; e.target.style.display='none'; }} />
-                                        )}
-                                    </div>
-                                )}
+                                {/* Imagen — altura fija SIEMPRE (con o sin imagen) para tarjetas uniformes */}
+                                <div className="w-full bg-gray-50 dark:bg-gray-900 flex items-center justify-center" style={{ height: '200px' }}>
+                                    {ad.adMediaType === 'video' && !ad.adImageUrl ? (
+                                        <Video className="w-10 h-10 text-gray-300" />
+                                    ) : ad.adImageUrl ? (
+                                        <img src={ad.adImageUrl} alt="" className="max-w-full max-h-full object-contain"
+                                            onError={(e) => { e.target.onerror = null; e.target.style.display='none'; }} />
+                                    ) : (
+                                        <Megaphone className="w-10 h-10 text-gray-200 dark:text-gray-700" />
+                                    )}
+                                </div>
 
                                 {/* Compact Stats */}
                                 <div className="px-3 py-2.5 space-y-2">

@@ -3,9 +3,9 @@ const API_BASE = import.meta.env.PROD ? '' : 'http://localhost:3000';
 /**
  * Obtiene las estadísticas agregadas de los anuncios de WhatsApp
  */
-export const getAdsStats = async () => {
+export const getAdsStats = async (includeArchived = false) => {
     try {
-        const response = await fetch(`${API_BASE}/api/ads-stats`);
+        const response = await fetch(`${API_BASE}/api/ads-stats${includeArchived ? '?includeArchived=true' : ''}`);
         const data = await response.json();
 
         if (!response.ok) {
