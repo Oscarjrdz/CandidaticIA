@@ -8,6 +8,7 @@ import { formatRelativeDate } from '../utils/formatters';
 import { useCandidatesSSE, useSSECandidateUpdate } from '../hooks/useCandidatesSSE';
 import { Virtuoso } from 'react-virtuoso';
 import { isProfileComplete } from '../utils/profileUtils';
+import { compressImage } from '../utils/imageCompress';
 import { useToastContext } from '../contexts/ToastContext';
 import { useAuthContext } from '../contexts/AuthContext';
 import { safeFormatTime, toTitleCase, formatWhatsAppText, TAG_COLORS, checkIfUnread } from './chat/chatUtils';
@@ -1323,6 +1324,9 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         if (!file) return null;
         setQrImageUploading(true);
         try {
+            // Comprimir antes de subir: el banco guarda el base64 90 dias en Redis,
+            // asi que cada KB ahorrado aqui se multiplica.
+            file = await compressImage(file);
             const formData = new FormData();
             formData.append('file', file);
             formData.append('candidateId', 'quick_reply_asset');
@@ -2847,12 +2851,15 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         isSendingMediaRef.current = true; // Mute polling during upload
 
         try {
+            // Comprimir imagenes en el navegador antes de subir (videos/docs/audio van tal cual)
+            const uploadFile = isImage ? await compressImage(file) : file;
+
             // Upload file to local media store first
             const formData = new FormData();
-            formData.append('file', file);
+            formData.append('file', uploadFile);
             formData.append('candidateId', currentCandidateId);
 
-            console.log(`📤 [FileUpload] Step 1: Uploading ${file.name} (${file.type}, ${Math.round(file.size/1024)}KB) as ${msgType}`);
+            console.log(`📤 [FileUpload] Step 1: Uploading ${uploadFile.name} (${uploadFile.type}, ${Math.round(uploadFile.size/1024)}KB${uploadFile !== file ? `, comprimida de ${Math.round(file.size/1024)}KB` : ''}) as ${msgType}`);
 
             const uploadRes = await fetch('/api/media/upload', {
                 method: 'POST',
