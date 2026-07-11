@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback, useDeferredValue } from 'react';
 import ConfirmModal from './ui/ConfirmModal';
-import { MapPin, List as ListIcon, ShoppingBag, UserSquare, MousePointerClick, Search, MessageSquare, Plus, Smile, Paperclip, Mic, ArrowLeft, Send, Tag, Pencil, Check, X, Trash2, Briefcase, Kanban, BookOpen, Keyboard, Loader2, Edit2, Reply, Zap, Pin, MessageCirclePlus, Phone, User, Bell } from 'lucide-react';
+import { MapPin, List as ListIcon, ShoppingBag, UserSquare, MousePointerClick, Search, MessageSquare, Plus, Smile, Paperclip, Mic, ArrowLeft, Send, Tag, Pencil, Check, X, Trash2, Briefcase, Kanban, BookOpen, Keyboard, Loader2, Edit2, Reply, Zap, Pin, MessageCirclePlus, Phone, User, Bell, GripVertical, ChevronDown, ChevronUp } from 'lucide-react';
 import { getCandidates, getCandidateById, blockCandidate, deleteCandidate } from '../services/candidatesService';
 import { substituteVariables } from '../../api/utils/shortcuts.js';
 import ManualProjectsSidepanel from './ManualProjectsSidepanel';
@@ -806,6 +806,69 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
             body: JSON.stringify({ id: user.id, preferences: nextPreferences })
         }).catch(() => {});
     }, [user?.id, user?.preferences, setUser]);
+    // ── Banco de respuestas: orden por reclutador (drag & drop), form contraible y buscador ──
+    // El orden y el colapso del form se guardan en el perfil del usuario en Redis
+    // (mismo patron que quickRepliesOpen — merge superficial via PUT /api/users).
+    const [qrOrder, setQrOrder] = useState(() => Array.isArray(user?.preferences?.quickRepliesOrder) ? user.preferences.quickRepliesOrder : []);
+    const [qrFormCollapsed, setQrFormCollapsed] = useState(() => user?.preferences?.quickRepliesFormCollapsed !== false); // default: contraido (la lista es lo que se usa todo el dia)
+    const [qrSearch, setQrSearch] = useState('');
+    const [qrDraggedId, setQrDraggedId] = useState(null);
+    const [qrDragOverId, setQrDragOverId] = useState(null);
+
+    const saveQrPreference = useCallback((patch) => {
+        if (!user?.id) return;
+        const nextPreferences = { ...(user.preferences || {}), ...patch };
+        setUser(prev => prev ? { ...prev, preferences: nextPreferences } : prev);
+        fetch('/api/users', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: user.id, preferences: nextPreferences })
+        }).catch(() => {});
+    }, [user?.id, user?.preferences, setUser]);
+
+    const toggleQrFormCollapsed = useCallback(() => {
+        setQrFormCollapsed(prev => {
+            saveQrPreference({ quickRepliesFormCollapsed: !prev });
+            return !prev;
+        });
+    }, [saveQrPreference]);
+
+    const persistQrOrder = useCallback((orderIds) => {
+        setQrOrder(orderIds);
+        saveQrPreference({ quickRepliesOrder: orderIds });
+    }, [saveQrPreference]);
+
+    // Lista mostrada: primero el orden del reclutador (respuestas nuevas/sin posicion al
+    // final, en su orden original), luego el filtro del buscador (sin acentos/mayusculas).
+    const qrNorm = (s) => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    const displayedQuickReplies = useMemo(() => {
+        let list = quickReplies;
+        if (qrOrder.length) {
+            const pos = new Map(qrOrder.map((id, i) => [id, i]));
+            // Sin posicion guardada (respuestas nuevas): al final, conservando su orden original
+            const fallback = new Map(quickReplies.map((qr, i) => [qr.id, qrOrder.length + i]));
+            list = [...quickReplies].sort((a, b) =>
+                (pos.has(a.id) ? pos.get(a.id) : fallback.get(a.id)) - (pos.has(b.id) ? pos.get(b.id) : fallback.get(b.id))
+            );
+        }
+        const q = qrNorm(qrSearch.trim());
+        if (q) list = list.filter(qr => qrNorm(qr.name).includes(q) || qrNorm(qr.message).includes(q) || qrNorm(qr.shortcut).includes(q));
+        return list;
+    }, [quickReplies, qrOrder, qrSearch]);
+
+    const handleQrDrop = useCallback((targetId) => {
+        setQrDragOverId(null);
+        const draggedId = qrDraggedId;
+        setQrDraggedId(null);
+        if (!draggedId || draggedId === targetId) return;
+        const ids = displayedQuickReplies.map(q => q.id);
+        const from = ids.indexOf(draggedId);
+        const to = ids.indexOf(targetId);
+        if (from === -1 || to === -1) return;
+        ids.splice(to, 0, ids.splice(from, 1)[0]);
+        persistQrOrder(ids);
+    }, [qrDraggedId, displayedQuickReplies, persistQrOrder]);
+
     const [qrForm, setQrForm] = useState({ name: '', message: '', shortcut: '', imageUrl: '', imageUrl2: '', type: 'text', locName: '', locAddress: '', locLat: '', locLng: '' });
     const [qrImageUploading, setQrImageUploading] = useState(false);
     const [pendingQrImages, setPendingQrImages] = useState([]); // imágenes de QR en espera de enviar
@@ -4692,8 +4755,21 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                     </div>
                     {/* Panel cont... */}
 
-                    {/* Create / Edit Form */}
+                    {/* Create / Edit Form — contraible; editar una respuesta lo abre solo */}
                     <div className="p-3 border-b border-[#f0f2f5] dark:border-[#222e35] space-y-2">
+                        <button
+                            type="button"
+                            onClick={toggleQrFormCollapsed}
+                            className="w-full flex items-center justify-between text-left group/qrform"
+                        >
+                            <span className="text-xs font-bold text-[#111b21] dark:text-[#e9edef] flex items-center gap-1.5">
+                                {editingQuickReply ? <><Pencil className="w-3.5 h-3.5 text-blue-500" /> Editar respuesta</> : <><Plus className="w-3.5 h-3.5 text-green-600" /> Crear respuesta</>}
+                            </span>
+                            {(qrFormCollapsed && !editingQuickReply)
+                                ? <ChevronDown className="w-4 h-4 text-gray-400 group-hover/qrform:text-gray-600 dark:group-hover/qrform:text-gray-200" />
+                                : <ChevronUp className="w-4 h-4 text-gray-400 group-hover/qrform:text-gray-600 dark:group-hover/qrform:text-gray-200" />}
+                        </button>
+                        {(!qrFormCollapsed || editingQuickReply) && (<>
                         {qrForm.type !== 'location' && (
                             <input
                                 type="text"
@@ -4868,6 +4944,34 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                                 {editingQuickReply ? 'Actualizar' : 'Guardar'}
                             </button>
                         </div>
+                        </>)}
+                    </div>
+
+                    {/* Buscador */}
+                    <div className="px-3 py-2 border-b border-[#f0f2f5] dark:border-[#222e35]">
+                        <div className="relative">
+                            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+                            <input
+                                type="text"
+                                placeholder="Buscar respuesta..."
+                                value={qrSearch}
+                                onChange={(e) => setQrSearch(e.target.value)}
+                                className="w-full text-xs pl-8 pr-8 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#202c33] text-[#111b21] dark:text-[#e9edef] outline-none focus:border-green-500 transition-colors"
+                            />
+                            {qrSearch && (
+                                <button
+                                    onClick={() => setQrSearch('')}
+                                    className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                                >
+                                    <X className="w-3.5 h-3.5" />
+                                </button>
+                            )}
+                        </div>
+                        {qrSearch && (
+                            <p className="mt-1 text-[10px] text-gray-400">
+                                {displayedQuickReplies.length} resultado{displayedQuickReplies.length === 1 ? '' : 's'} — el orden se arrastra sin búsqueda activa
+                            </p>
+                        )}
                     </div>
 
                     {/* List */}
@@ -4877,14 +4981,29 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                                 <BookOpen className="w-10 h-10 mb-3 opacity-30" />
                                 <p className="text-xs text-center">Sin respuestas rápidas. Crea una arriba para empezar.</p>
                             </div>
+                        ) : displayedQuickReplies.length === 0 ? (
+                            <div className="flex flex-col items-center justify-center h-full text-gray-400 dark:text-gray-600 p-6">
+                                <Search className="w-10 h-10 mb-3 opacity-30" />
+                                <p className="text-xs text-center">Sin resultados para "{qrSearch}"</p>
+                            </div>
                         ) : (
-                            quickReplies.map(qr => (
+                            displayedQuickReplies.map(qr => (
                                 <div
                                     key={qr.id}
-                                    className="px-4 py-3 border-b border-[#f0f2f5] dark:border-[#222e35] hover:bg-[#f0f2f5] dark:hover:bg-[#202c33] transition-colors group cursor-pointer"
+                                    draggable={!qrSearch}
+                                    onDragStart={(e) => { setQrDraggedId(qr.id); e.dataTransfer.effectAllowed = 'move'; }}
+                                    onDragOver={(e) => { if (!qrDraggedId) return; e.preventDefault(); e.dataTransfer.dropEffect = 'move'; if (qrDragOverId !== qr.id) setQrDragOverId(qr.id); }}
+                                    onDrop={(e) => { e.preventDefault(); handleQrDrop(qr.id); }}
+                                    onDragEnd={() => { setQrDraggedId(null); setQrDragOverId(null); }}
+                                    className={`px-4 py-3 border-b border-[#f0f2f5] dark:border-[#222e35] hover:bg-[#f0f2f5] dark:hover:bg-[#202c33] transition-colors group cursor-pointer ${
+                                        qrDraggedId === qr.id ? 'opacity-40' : ''
+                                    } ${qrDragOverId === qr.id && qrDraggedId && qrDraggedId !== qr.id ? 'border-t-2 border-t-green-500' : ''}`}
                                     onClick={() => handleApplyQuickReply(qr)}
                                 >
                                     <div className="flex items-start justify-between gap-2">
+                                        {!qrSearch && (
+                                            <GripVertical className="w-3.5 h-3.5 mt-0.5 shrink-0 text-gray-300 dark:text-gray-600 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing" />
+                                        )}
                                         <div className="flex-1 min-w-0">
                                             <div className="flex items-center gap-2 mb-1 min-w-0">
                                                 <span className="text-xs font-bold text-[#111b21] dark:text-[#e9edef] truncate flex-1 min-w-0">{qr.name}</span>
