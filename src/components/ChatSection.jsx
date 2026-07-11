@@ -869,7 +869,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         persistQrOrder(ids);
     }, [qrDraggedId, displayedQuickReplies, persistQrOrder]);
 
-    const [qrForm, setQrForm] = useState({ name: '', message: '', shortcut: '', imageUrl: '', imageUrl2: '', type: 'text', locName: '', locAddress: '', locLat: '', locLng: '' });
+    const [qrForm, setQrForm] = useState({ name: '', message: '', shortcut: '', imageUrl: '', imageUrl2: '', imageUrl3: '', imageUrl4: '', type: 'text', locName: '', locAddress: '', locLat: '', locLng: '' });
     const [qrImageUploading, setQrImageUploading] = useState(false);
     const [pendingQrImages, setPendingQrImages] = useState([]); // imágenes de QR en espera de enviar
     const [qrSaving, setQrSaving] = useState(false);
@@ -4839,8 +4839,8 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                                     className="w-full text-xs px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#202c33] text-[#111b21] dark:text-[#e9edef] outline-none focus:border-green-500 transition-colors resize-y"
                                 />
                                 {/* Image slots */}
-                                <div className="flex gap-2">
-                                    {[{ key: 'imageUrl', label: 'Imagen 1' }, { key: 'imageUrl2', label: 'Imagen 2 (opcional)' }].map(({ key, label }) => (
+                                <div className="grid grid-cols-2 gap-2">
+                                    {[{ key: 'imageUrl', label: 'Imagen 1' }, { key: 'imageUrl2', label: 'Imagen 2 (opcional)' }, { key: 'imageUrl3', label: 'Imagen 3 (opcional)' }, { key: 'imageUrl4', label: 'Imagen 4 (opcional)' }].map(({ key, label }) => (
                                         <div key={key} className="flex-1 relative">
                                             {qrForm[key] ? (
                                                 <div className="relative rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700">
@@ -4902,7 +4902,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                             {editingQuickReply !== null && (
                                 <button
                                     type="button"
-                                    onClick={() => { setEditingQuickReply(null); setQrForm({ name: '', message: '', shortcut: '', imageUrl: '', imageUrl2: '', type: 'text', locName: '', locAddress: '', locLat: '', locLng: '' }); }}
+                                    onClick={() => { setEditingQuickReply(null); setQrForm({ name: '', message: '', shortcut: '', imageUrl: '', imageUrl2: '', imageUrl3: '', imageUrl4: '', type: 'text', locName: '', locAddress: '', locLat: '', locLng: '' }); }}
                                     className="flex-1 text-xs py-2 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-[#202c33] transition-colors font-medium"
                                 >
                                     Cancelar
@@ -4912,7 +4912,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                                 type="button"
                                 disabled={qrForm.type === 'location'
                                     ? (!qrForm.locLat || !qrForm.locLng || !qrForm.locName.trim())
-                                    : (!qrForm.name.trim() || (!qrForm.message.trim() && !qrForm.imageUrl && !qrForm.imageUrl2))
+                                    : (!qrForm.name.trim() || (!qrForm.message.trim() && !qrForm.imageUrl && !qrForm.imageUrl2 && !qrForm.imageUrl3 && !qrForm.imageUrl4))
                                 }
                                 onClick={async () => {
                                     const isLoc = qrForm.type === 'location';
@@ -4925,7 +4925,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                                             location: { lat: parseFloat(qrForm.locLat), lng: parseFloat(qrForm.locLng), name: qrForm.locName.trim(), address: qrForm.locAddress.trim() }
                                         } : {
                                             message: qrForm.message.trim(),
-                                            imageUrls: [qrForm.imageUrl, qrForm.imageUrl2].filter(Boolean)
+                                            imageUrls: [qrForm.imageUrl, qrForm.imageUrl2, qrForm.imageUrl3, qrForm.imageUrl4].filter(Boolean)
                                         })
                                     };
                                     let newList;
@@ -4935,7 +4935,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                                         newList = [...quickReplies, entry];
                                     }
                                     await saveQuickReplies(newList);
-                                    setQrForm({ name: '', message: '', shortcut: '', imageUrl: '', imageUrl2: '', type: 'text', locName: '', locAddress: '', locLat: '', locLng: '' });
+                                    setQrForm({ name: '', message: '', shortcut: '', imageUrl: '', imageUrl2: '', imageUrl3: '', imageUrl4: '', type: 'text', locName: '', locAddress: '', locLat: '', locLng: '' });
                                     setEditingQuickReply(null);
                                     showToast && showToast(editingQuickReply ? 'Respuesta actualizada' : 'Respuesta creada', 'success');
                                 }}
@@ -5027,7 +5027,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                                         </div>
                                         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
                                             <button
-                                                onClick={(e) => { e.stopPropagation(); setEditingQuickReply(qr); const imgs = qr.imageUrls || (qr.imageUrl ? [qr.imageUrl] : []); setQrForm({ name: qr.name, message: qr.message || '', shortcut: qr.shortcut || '', imageUrl: imgs[0] || '', imageUrl2: imgs[1] || '', type: qr.type || 'text', locName: qr.location?.name || '', locAddress: qr.location?.address || '', locLat: qr.location?.lat ? String(qr.location.lat) : '', locLng: qr.location?.lng ? String(qr.location.lng) : '' }); }}
+                                                onClick={(e) => { e.stopPropagation(); setEditingQuickReply(qr); const imgs = qr.imageUrls || (qr.imageUrl ? [qr.imageUrl] : []); setQrForm({ name: qr.name, message: qr.message || '', shortcut: qr.shortcut || '', imageUrl: imgs[0] || '', imageUrl2: imgs[1] || '', imageUrl3: imgs[2] || '', imageUrl4: imgs[3] || '', type: qr.type || 'text', locName: qr.location?.name || '', locAddress: qr.location?.address || '', locLat: qr.location?.lat ? String(qr.location.lat) : '', locLng: qr.location?.lng ? String(qr.location.lng) : '' }); }}
                                                 className="p-1.5 text-gray-400 hover:text-blue-500 transition-colors rounded-full hover:bg-blue-50 dark:hover:bg-blue-900/20"
                                                 title="Editar"
                                             >
