@@ -427,17 +427,23 @@ export default async function handler(req, res) {
                 // mensaje se respondía, nunca qué decía, y el frontend caía siempre en el
                 // texto genérico "Mensaje multimedia" en cuanto la respuesta se confirmaba.
                 let quotedText = '';
+                let quotedMediaUrl = '';
+                let quotedType = '';
                 try {
                     const recentForQuote = await getRecentMessages(candidateId, 50);
                     const quoted = recentForQuote.find(m => m.id === replyToId || m.ultraMsgId === replyToId);
                     if (quoted?.content) quotedText = String(quoted.content).replace(/<[^>]*>?/gm, '').trim().slice(0, 200);
+                    // Sin texto: guardar tambien mediaUrl/type para que la preview pueda
+                    // mostrar una miniatura ("📷 Foto") en vez del generico "Mensaje multimedia".
+                    if (!quotedText && quoted?.mediaUrl) { quotedMediaUrl = quoted.mediaUrl; quotedType = quoted.type || ''; }
                 } catch { /* best-effort: si falla, la preview cae al texto generico */ }
                 msgToSave.contextInfo = {
                     quotedMessage: {
                         stanzaId: replyToId,
                         participant: candidate.whatsapp, // Simplification
                         conversation: '',
-                        text: quotedText
+                        text: quotedText,
+                        ...(quotedMediaUrl && { mediaUrl: quotedMediaUrl, type: quotedType })
                     }
                 };
             }

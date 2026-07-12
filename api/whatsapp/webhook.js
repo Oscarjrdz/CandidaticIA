@@ -537,12 +537,17 @@ export default async function handler(req, res) {
                 // no solo el id — así la vista previa de "respondiendo a..." no depende de
                 // que el mensaje original siga en el historial cargado en el navegador.
                 let quotedText = '';
+                let quotedMediaUrl = '';
+                let quotedType = '';
                 try {
                     const recentForQuote = await getRecentMessages(candidateId, 50);
                     const quoted = recentForQuote.find(m => m.id === metaMsg.context.id || m.ultraMsgId === metaMsg.context.id);
                     if (quoted?.content) quotedText = String(quoted.content).replace(/<[^>]*>?/gm, '').trim().slice(0, 200);
+                    // Sin texto: guardar tambien mediaUrl/type para que la preview pueda
+                    // mostrar una miniatura ("📷 Foto") en vez del generico "Mensaje multimedia".
+                    if (!quotedText && quoted?.mediaUrl) { quotedMediaUrl = quoted.mediaUrl; quotedType = quoted.type || ''; }
                 } catch { /* best-effort: si falla, la preview cae al texto generico */ }
-                msgToSave.contextInfo = { quotedMessage: { stanzaId: metaMsg.context.id, participant: metaMsg.context.from || '', text: quotedText } };
+                msgToSave.contextInfo = { quotedMessage: { stanzaId: metaMsg.context.id, participant: metaMsg.context.from || '', text: quotedText, ...(quotedMediaUrl && { mediaUrl: quotedMediaUrl, type: quotedType }) } };
             }
 
             // Reaction is special — update reaction on existing message, don't save new

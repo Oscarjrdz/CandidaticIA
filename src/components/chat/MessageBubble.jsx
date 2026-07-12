@@ -179,17 +179,32 @@ const MessageBubble = React.memo(function MessageBubble({
                             >
                                 {(msg.contextInfo.quotedMessage.participant && msg.contextInfo.quotedMessage.participant.includes(chatWhatsapp)) ? (chatNombre?.split(' ')[0] || 'Candidato') : 'Tú'}
                             </div>
-                            <div className="line-clamp-3 text-[#111b21]/80 dark:text-[#e9edef]/80 break-words leading-tight">
-                                {(() => {
-                                    const qText = msg.contextInfo.quotedMessage.text;
-                                    if (qText) return qText;
-                                    const quotedMsg = allMessages.find(m => m.id === msg.contextInfo.quotedMessage.stanzaId || m.ultraMsgId === msg.contextInfo.quotedMessage.stanzaId);
-                                    if (quotedMsg && quotedMsg.content) {
-                                        return quotedMsg.content.replace(/<[^>]*>?/gm, '').substring(0, 100);
-                                    }
-                                    return '📄 Mensaje multimedia';
-                                })()}
-                            </div>
+                            {(() => {
+                                const q = msg.contextInfo.quotedMessage;
+                                if (q.text) return <div className="line-clamp-3 text-[#111b21]/80 dark:text-[#e9edef]/80 break-words leading-tight">{q.text}</div>;
+
+                                // Sin texto guardado: buscar mediaUrl/type ya sea en lo persistido
+                                // (mensajes nuevos) o en vivo dentro del historial cargado (mensajes
+                                // viejos, guardados antes de este fix).
+                                const quotedMsg = allMessages.find(m => m.id === q.stanzaId || m.ultraMsgId === q.stanzaId);
+                                if (quotedMsg?.content) {
+                                    return <div className="line-clamp-3 text-[#111b21]/80 dark:text-[#e9edef]/80 break-words leading-tight">{quotedMsg.content.replace(/<[^>]*>?/gm, '').substring(0, 100)}</div>;
+                                }
+
+                                const mediaUrl = q.mediaUrl || quotedMsg?.mediaUrl;
+                                const mediaType = q.type || quotedMsg?.type;
+                                const MEDIA_LABELS = { image: '📷 Foto', sticker: '🖼️ Sticker', video: '🎥 Video', audio: '🎵 Audio', ptt: '🎵 Audio', voice: '🎵 Audio', document: '📄 Documento' };
+                                const label = MEDIA_LABELS[mediaType] || '📄 Mensaje multimedia';
+
+                                return (
+                                    <div className="flex items-center gap-2">
+                                        <div className="flex-1 min-w-0 line-clamp-3 text-[#111b21]/80 dark:text-[#e9edef]/80 break-words leading-tight">{label}</div>
+                                        {mediaUrl && (mediaType === 'image' || mediaType === 'sticker') && (
+                                            <img src={mediaUrl} alt="" className="w-10 h-10 rounded object-cover shrink-0" loading="lazy" />
+                                        )}
+                                    </div>
+                                );
+                            })()}
                         </div>
                     )}
 
