@@ -224,8 +224,14 @@ const mergeOutgoingPayload = (current = {}, incoming = {}) => {
     const incomingMediaUrl = incoming.mediaUrl || '';
 
     if (wasTransient) {
-        if (current.timestamp) merged.timestamp = current.timestamp;
-        if (current.fecha) merged.fecha = current.fecha;
+        // Conservar el tiempo optimista COMPLETO, incluyendo dejar vacío el campo que
+        // el temp no traía: si el temp solo tenía `fecha` y el server responde con
+        // `timestamp`, el sort cronológico saltaba al tiempo del server y la burbuja
+        // brincaba de lugar (texto debajo de sus propias fotos).
+        if (current.timestamp || current.fecha) {
+            merged.timestamp = current.timestamp;
+            merged.fecha = current.fecha;
+        }
         if (incoming.timestamp || incoming.fecha) merged._confirmedAt = incoming.timestamp || incoming.fecha;
     }
 
@@ -3284,7 +3290,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                 from: 'me',
                 enviado_por_agente: 1,
                 status: 'pending',
-                fecha: new Date().toISOString(),
+                fecha: new Date(now).toISOString(),
                 ...contextInfoParams
             }, 'outgoing')]);
             outboxRef.current.queue.push({
@@ -3313,7 +3319,9 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                 _serverMediaUrl: imgUrl,
                 type: 'image',
                 status: 'queued',
-                timestamp: new Date().toISOString(),
+                // +1ms por posición: el grupo entero nace en el mismo instante y el sort
+                // cronológico necesita tiempos estrictamente crecientes (texto → foto 1 → 2 → 3)
+                timestamp: new Date(now + idx + 1).toISOString(),
                 _sequenceIndex: textMessage ? idx + 1 : idx
             }, 'outgoing')]);
             outboxRef.current.queue.push({
