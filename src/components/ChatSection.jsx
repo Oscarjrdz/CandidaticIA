@@ -3556,6 +3556,28 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
     const messagesGrew = displayMessages.length > prevDisplayLengthRef.current;
     prevDisplayLengthRef.current = displayMessages.length;
 
+    // DIAGNÓSTICO TEMPORAL — quitar una vez resuelto el reporte de burbujas de
+    // imagen "reordenándose" en cada cambio de palomita. Solo imprime cuando hay
+    // mensajes en tránsito (queued/pending) del chat activo, para no ensuciar la
+    // consola en uso normal. Ver la pestaña Console del navegador (F12).
+    if (typeof window !== 'undefined') {
+        const inFlight = displayMessages.filter(m => m && (m.status === 'queued' || m.status === 'pending'));
+        if (inFlight.length > 0) {
+            console.log('[DEBUG orden]', displayMessages
+                .filter(m => m && (m.from === 'me' || m.from === 'bot'))
+                .slice(-8)
+                .map(m => ({
+                    key: getStableMessageKey(m, 0),
+                    id: m.id,
+                    ultraMsgId: m.ultraMsgId,
+                    tipo: m.type || m.tipo,
+                    media: (m.mediaUrl || '').slice(-12),
+                    status: m.status,
+                    ts: m.timestamp || m.fecha
+                })));
+        }
+    }
+
     return (
         <div className="flex h-full w-full bg-[#f0f2f5] dark:bg-[#111b21] font-sans overflow-hidden">
             
