@@ -69,19 +69,41 @@ export default async function handler(req, res) {
         const key = `image:${id}`;
         const metaKey = `meta:image:${id}`;
 
+        const isQuickReplyAsset = fields?.candidateId?.[0] === 'quick_reply_asset' ||
+                                   fields?.candidateId === 'quick_reply_asset';
+
+        // 🗄️ Almacenamiento PERMANENTE en Vercel Blob (fotos de banco = para siempre;
+        // fotos de chat = mientras exista el store). Redis y Meta expiran; Blob no.
+        // Sin token configurado, se degrada al comportamiento anterior sin fallar.
+        let blobUrl = null;
+        if (process.env.BLOB_READ_WRITE_TOKEN) {
+            try {
+                const { put } = await import('@vercel/blob');
+                const blob = await put(`media/${id}`, fileBuffer, {
+                    access: 'public',
+                    contentType: mimeType,
+                    addRandomSuffix: false
+                });
+                blobUrl = blob.url;
+                console.log(`[media/upload] ✅ Persisted to Blob → ${blobUrl}`);
+            } catch (e) {
+                console.error('[media/upload] ⚠️ Blob store failed (non-fatal):', e.message);
+            }
+        }
+
         const metaData = {
             mime: mimeType,
             filename: originalFilename,
             size: fileSize,
             createdAt: new Date().toISOString(),
-            metaMediaId: metaMediaId
+            metaMediaId: metaMediaId,
+            blobUrl
         };
 
-        const isQuickReplyAsset = fields?.candidateId?.[0] === 'quick_reply_asset' ||
-                                   fields?.candidateId === 'quick_reply_asset';
-        // Quick reply assets necesitan TTL largo: el metaMediaId de Meta expira y
-        // necesitamos el base64 para re-subirlo. Mensajes normales usan TTL corto (OOM).
-        const metaTTL = isQuickReplyAsset ? 86400 * 90 : 172800; // 90 días vs 48h
+        // TTL del registro (metadata chica, ~250 B):
+        //  - Banco de respuestas: SIN caducidad — son estrategicas y deben durar siempre.
+        //  - Chat: 1 año si hay Blob (la foto vive ahi); 48h si no (comportamiento anterior).
+        const metaTTL = isQuickReplyAsset ? null : (blobUrl ? 86400 * 365 : 172800);
         const needsRedisBlob = isQuickReplyAsset || !metaMediaId;
         let base64Data = null;
 
@@ -95,13 +117,16 @@ export default async function handler(req, res) {
         }
 
         const redisOps = [
-            redis.set(metaKey, JSON.stringify(metaData), 'EX', metaTTL),
+            metaTTL
+                ? redis.set(metaKey, JSON.stringify(metaData), 'EX', metaTTL)
+                : redis.set(metaKey, JSON.stringify(metaData)),
             redis.zadd('candidatic:media_library', Date.now(), id)
         ];
 
         if (isQuickReplyAsset) {
-            // Siempre guardar base64 para quick replies (re-subida cuando metaMediaId expire)
-            redisOps.push(redis.set(key, base64Data, 'EX', metaTTL));
+            // Base64 en Redis 90 dias como via rapida de re-subida a Meta; pasado eso,
+            // la foto sigue viva en Blob (el registro persistente conserva blobUrl).
+            redisOps.push(redis.set(key, base64Data, 'EX', 86400 * 90));
         } else if (!metaMediaId) {
             // Mensajes normales: solo guardar base64 si Meta falló (fallback 10 min)
             redisOps.push(redis.set(key, base64Data, 'EX', 600));

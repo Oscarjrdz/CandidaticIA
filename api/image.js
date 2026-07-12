@@ -85,6 +85,12 @@ export default async function handler(req, res) {
         if (data) {
             // Binary conversion from Redis cache
             buffer = Buffer.from(data, 'base64');
+        } else if (meta.blobUrl) {
+            // 🗄️ Almacenamiento permanente (Vercel Blob): redirigir al CDN del Blob —
+            // cero bytes de Redis y cero payload por esta funcion. El redirect queda
+            // cacheado con los mismos headers inmutables ya puestos arriba.
+            res.setHeader('Location', meta.blobUrl);
+            return res.status(302).end();
         } else if (meta.metaMediaId) {
             // Dynamic fetch from Meta (since we stopped saving huge base64 blobs to Redis to prevent OOM)
             source = 'meta';
@@ -99,6 +105,24 @@ export default async function handler(req, res) {
             } catch (e) {
                 console.error('Error fetching media from Meta:', e.message);
                 return res.status(500).send('Error fetching from Meta');
+            }
+
+            // 🗄️ Persistencia perezosa: Meta borra su media en ~30 dias, asi que cualquier
+            // foto VISTA en el dashboard se respalda a Blob en ese momento (fire-and-forget,
+            // no bloquea la respuesta). Cubre tambien las fotos entrantes de candidatos sin
+            // tocar el webhook. Sin token, no hace nada.
+            if (buffer && process.env.BLOB_READ_WRITE_TOKEN) {
+                const lazyBuffer = buffer;
+                import('@vercel/blob').then(async ({ put }) => {
+                    const blob = await put(`media/${rawId}`, lazyBuffer, {
+                        access: 'public',
+                        contentType: meta.mime || 'image/jpeg',
+                        addRandomSuffix: false
+                    });
+                    meta.blobUrl = blob.url;
+                    // Registro renovado a 1 año: la foto ya vive en Blob
+                    await client.set(metaKey, JSON.stringify(meta), 'EX', 86400 * 365);
+                }).catch(() => {});
             }
         } else {
             return res.status(404).send('Not Found');
