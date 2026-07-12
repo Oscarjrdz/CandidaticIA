@@ -85,22 +85,27 @@ export default async function handler(req, res) {
         if (data) {
             // Binary conversion from Redis cache
             buffer = Buffer.from(data, 'base64');
-        } else if (meta.blobPath && process.env.BLOB_READ_WRITE_TOKEN) {
-            // 🗄️ Almacenamiento permanente (Vercel Blob, store PRIVADO): se sirve el
-            // contenido a traves de esta funcion — el CDN de Vercel lo cachea 1 año
-            // (headers ya puestos arriba), asi que el Blob solo se lee en el primer hit.
-            source = 'blob';
+        }
+
+        // 🗄️ Almacenamiento permanente (Vercel Blob, store PRIVADO). El path es SIEMPRE
+        // media/<id> por convencion, asi que se intenta aunque el registro de Redis ya
+        // haya expirado (chats de años atras) o no traiga blobPath. Se sirve a traves de
+        // esta funcion y el CDN de Vercel lo cachea 1 año (headers ya puestos arriba) —
+        // el Blob solo se lee en el primer hit.
+        if (!buffer && process.env.BLOB_READ_WRITE_TOKEN) {
             try {
                 const { get } = await import('@vercel/blob');
-                const result = await get(meta.blobPath, { access: 'private' });
+                const result = await get(`media/${rawId}`, { access: 'private' });
                 if (result?.stream) {
+                    source = 'blob';
                     buffer = Buffer.from(await new Response(result.stream).arrayBuffer());
+                    const blobMime = result.headers?.get?.('content-type');
+                    if (blobMime && !metaRaw) meta.mime = blobMime; // registro expirado: mime desde el Blob
                 }
-            } catch (e) {
-                console.error('Error fetching from Blob:', e.message);
-            }
-            if (!buffer) return res.status(404).send('Not Found');
-        } else if (meta.metaMediaId) {
+            } catch { /* no esta en Blob: seguir con Meta */ }
+        }
+
+        if (!buffer && meta.metaMediaId) {
             // Dynamic fetch from Meta (since we stopped saving huge base64 blobs to Redis to prevent OOM)
             source = 'meta';
             try {
@@ -133,7 +138,9 @@ export default async function handler(req, res) {
                     await client.set(metaKey, JSON.stringify(meta), 'EX', 86400 * 365);
                 }).catch(() => {});
             }
-        } else {
+        }
+
+        if (!buffer) {
             return res.status(404).send('Not Found');
         }
 

@@ -368,10 +368,25 @@ export default async function handler(req, res) {
                                         mime: mimeType,
                                         filename: `media_${mediaId}`,
                                         size: mediaData.fileSize || base64Data.length,
-                                        createdAt: new Date().toISOString()
-                                    }), 'EX', 86400)
+                                        createdAt: new Date().toISOString(),
+                                        blobPath: process.env.BLOB_READ_WRITE_TOKEN ? `media/${id}` : undefined
+                                    }), 'EX', 86400 * 365) // registro 1 año (chico); el archivo vive en Blob
                                 ]);
-                                
+
+                                // 🗄️ Respaldo PERMANENTE a Vercel Blob en el momento de recibirla
+                                // (el buffer ya esta en memoria — cero descargas extra). Fire-and-forget:
+                                // no bloquea el hot path; /api/image ademas sabe buscar en Blob por
+                                // convencion (media/<id>) aunque este put falle o el registro expire.
+                                if (process.env.BLOB_READ_WRITE_TOKEN) {
+                                    import('@vercel/blob').then(({ put }) =>
+                                        put(`media/${id}`, mediaData.buffer, {
+                                            access: 'private',
+                                            contentType: mimeType,
+                                            addRandomSuffix: false
+                                        })
+                                    ).catch(() => {});
+                                }
+
                                 mediaUrl = `/api/image?id=${id}`;
                                 console.log(`[Webhook] ✅ Media guardada localmente: ${mediaUrl} (${mimeType})`);
                             } else {
