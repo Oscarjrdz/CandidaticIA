@@ -2281,6 +2281,21 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                     }
                 }
             }
+        } else if (sseUpdate.updates?.newMessage && sseUpdate.updates?.messagePayload
+            && messagesByChatRef.current.has(sseUpdate.candidateId)) {
+            // Chat NO activo pero ya visitado en esta sesión: anexar el mensaje a su
+            // caché por-chat. Antes se descartaba y al reabrir ese chat se veía el
+            // caché viejo (sin los mensajes nuevos) hasta que respondía loadMessages.
+            const cachedMsg = sseUpdate.updates.messagePayload;
+            const cachedChatId = sseUpdate.candidateId;
+            const prevCached = messagesByChatRef.current.get(cachedChatId) || [];
+            const alreadyCached = prevCached.some(m => String(m.id) === String(cachedMsg.id)
+                || (m.ultraMsgId && cachedMsg.ultraMsgId && String(m.ultraMsgId) === String(cachedMsg.ultraMsgId)));
+            if (!alreadyCached) {
+                messagesByChatRef.current.set(cachedChatId, isOutgoingAuthor(cachedMsg)
+                    ? mergeOutgoingMessage(prevCached, cachedMsg) // dedup contra optimistas/eco de otros reclutadores
+                    : [...prevCached, withClientMessageKey(cachedMsg)]);
+            }
         }
 
         // --- SURGICAL CANDIDATE PATCH (replaces loadCandidates) ---
@@ -2612,7 +2627,17 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
     // Chats con un envío de media en curso: loadMessages se mutea SOLO para esos chats,
     // para no pisar sus mensajes optimistas. Si fuera una bandera global (como antes),
     // cambiar de chat a mitad de un envío dejaría el chat recién abierto en blanco.
-    const sendingMediaChatIdsRef = useRef(new Set());
+    // Map chatId → contador: con el outbox puede haber varios grupos encolados al mismo chat.
+    const sendingMediaChatIdsRef = useRef(new Map());
+    const addSendingMedia = (chatId) => {
+        const map = sendingMediaChatIdsRef.current;
+        map.set(chatId, (map.get(chatId) || 0) + 1);
+    };
+    const removeSendingMedia = (chatId) => {
+        const map = sendingMediaChatIdsRef.current;
+        const remaining = (map.get(chatId) || 0) - 1;
+        if (remaining > 0) map.set(chatId, remaining); else map.delete(chatId);
+    };
     const loadMessagesAbortRef = useRef(null);
 
     const loadMessages = async () => {
@@ -2804,9 +2829,20 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         setMessages(messagesByChatRef.current.get(chat.id) || []);
         setHeaderImgError(false);
         setPendingQrImages([]); // limpiar imágenes pendientes al cambiar de chat
-        // Restore draft for the new chat (or clear)
+        // Restore draft for the new chat (or clear). Síncrono: con el setTimeout(80)
+        // anterior, un reclutador veloz que tecleaba justo al cambiar de chat veía
+        // su texto reemplazado (o borrado) por el draft al dispararse el timer.
         const draft = draftsRef.current.get(chat.id) || '';
-        setTimeout(() => messageInputRef.current?.setText?.(draft), 80);
+        if (messageInputRef.current?.setText) {
+            messageInputRef.current.setText(draft);
+        } else {
+            // El input aún no está montado (no había ningún chat abierto):
+            // aplicar al montar, sin pisar lo que ya se haya tecleado.
+            setTimeout(() => {
+                const typed = messageInputRef.current?.getText?.() || '';
+                if (!typed.trim()) messageInputRef.current?.setText?.(draft);
+            }, 80);
+        }
     }, []);
 
     const handleFileUpload = async (e) => {
@@ -2850,7 +2886,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         isSendingRef.current = true;
         updateChatMessages(currentCandidateId, prev => [...prev, withMessageEntryAnimation(tempMsg, 'outgoing')]);
         setSending(true);
-        sendingMediaChatIdsRef.current.add(currentCandidateId); // Mute polling during upload (solo este chat)
+        addSendingMedia(currentCandidateId); // Mute polling during upload (solo este chat)
 
         try {
             // Comprimir imagenes en el navegador antes de subir (videos/docs/audio van tal cual)
@@ -2911,7 +2947,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
             updateChatMessages(currentCandidateId, prev => prev.map(m => m.id === tempId ? { ...m, status: 'failed', error: err.message } : m));
         } finally {
             setSending(false);
-            sendingMediaChatIdsRef.current.delete(currentCandidateId);
+            removeSendingMedia(currentCandidateId);
             setTimeout(() => URL.revokeObjectURL(localUrl), 60000);
         }
     };
@@ -2958,8 +2994,10 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         sendReactionToApi(chatId, msg, emoji, showToast, setReactionPopupId);
     }, [showToast]);
 
-    // MED-6: Debounce ref to prevent double-send on rapid clicks
-    const lastSendTimeRef = useRef(0);
+    // Dedup de doble-Enter accidental: bloquea solo el MISMO contenido al MISMO chat
+    // en <600ms. Dos mensajes distintos seguidos (reclutador veloz) pasan sin freno —
+    // antes había un candado ciego de 1s que se tragaba el segundo envío en silencio.
+    const lastSendRef = useRef({ key: '', time: 0 });
 
     
     const handleSendVCard = (name, phone, company, title, email, url) => {
@@ -3110,30 +3148,114 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         });
     };
 
-    const handleSend = async (msg) => {
+    // ── Outbox de envíos ─────────────────────────────────────────────────────
+    // El Enter nunca se bloquea: cada envío pinta sus burbujas optimistas al
+    // instante y encola el trabajo; este worker despacha un POST a la vez para
+    // conservar el orden. Si un mensaje de un grupo falla (ej. ventana de 24h),
+    // el resto del grupo se marca fallido en sus burbujas en vez de enviarse.
+    const outboxRef = useRef({ queue: [], running: false, failedGroups: new Set() });
+
+    const markOutboxFailed = (candidateId, tempId, error = 'Error al enviar') => {
+        updateChatMessages(candidateId, prev => prev.map(m => m.id === tempId ? { ...m, status: 'failed', error } : m));
+    };
+
+    const showMetaError = (messageData, fallback = 'Error desconocido') => {
+        const fallbackErrorStr = String(messageData?.error || fallback || '').toLowerCase();
+        const is24h = messageData?.metaCode === 131047 || String(messageData?.metaCode) === '131047'
+            || fallbackErrorStr.includes('131047') || fallbackErrorStr.includes('24 hour') || fallbackErrorStr.includes('re-engagement');
+        if (is24h) {
+            showToast('⛔ Ventana de 24 hrs cerrada. Toca el Rayito Verde ⚡ abajo para mandar una plantilla oficial.', 'error', 8000);
+        } else {
+            showToast(`⚠️ Meta: ${messageData?.error || fallback}`, 'error');
+        }
+    };
+
+    const deliverOutboxJob = async (job) => {
+        const { candidateId, tempId, payload, normalizeResponse } = job;
+        try {
+            const res = await fetch('/api/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.error || data.details || 'Error al enviar');
+
+            if (data.success && data.message) {
+                const messageData = normalizeResponse ? normalizeResponse(data.message) : data.message;
+                updateChatMessages(candidateId, prev => mergeOutgoingMessage(prev, messageData, tempId));
+                window.dispatchEvent(new CustomEvent('candidate_replied', { detail: { candidateId } }));
+
+                if (messageData.status === 'failed') {
+                    showMetaError(messageData);
+                    return false;
+                }
+                return true;
+            }
+
+            const error = data.error || 'API Error';
+            markOutboxFailed(candidateId, tempId, error);
+            showToast && showToast(`Error al enviar mensaje: ${error}`, 'error');
+            return false;
+        } catch (error) {
+            markOutboxFailed(candidateId, tempId, error.message || 'Red desconectada');
+            console.error(error);
+            showToast && showToast('Error de red al enviar', 'error');
+            return false;
+        }
+    };
+
+    const processOutbox = async () => {
+        const outbox = outboxRef.current;
+        if (outbox.running) return;
+        outbox.running = true;
+        try {
+            while (outbox.queue.length) {
+                const job = outbox.queue.shift();
+                try {
+                    if (job.groupId && outbox.failedGroups.has(job.groupId)) {
+                        markOutboxFailed(job.candidateId, job.tempId, 'No enviado: falló el mensaje anterior del grupo');
+                        continue;
+                    }
+                    // Pausa entre pasos del mismo grupo para que Meta respete el orden texto → fotos
+                    if (job.gapBefore) await wait(ORDERED_MESSAGE_GAP_MS);
+                    const ok = await deliverOutboxJob(job);
+                    if (!ok && job.groupId) outbox.failedGroups.add(job.groupId);
+                } finally {
+                    if (job.isImage) removeSendingMedia(job.candidateId);
+                }
+            }
+        } finally {
+            outbox.running = false;
+            outbox.failedGroups.clear();
+            isSendingRef.current = false;
+            // Defensivo: si algo alcanzó a encolarse en el cierre, reanudar
+            if (outbox.queue.length) processOutbox();
+        }
+    };
+
+    const handleSend = (msg) => {
         const textMessage = (msg || '').trim();
         const queuedImages = [...pendingQrImages];
         if ((!textMessage && !queuedImages.length) || !selectedChat) return;
-        // Prevent double-send within 1 second
-        const now = Date.now();
-        if (now - lastSendTimeRef.current < 1000) return;
-        lastSendTimeRef.current = now;
 
         const currentChat = selectedChat;
         const currentCandidateId = currentChat.id;
         const senderId = user?.id || user?.whatsapp;
         const senderName = user?.name || user?.nombre;
 
+        const now = Date.now();
+        const sendKey = `${currentCandidateId}|${textMessage}|${queuedImages.join(',')}`;
+        if (lastSendRef.current.key === sendKey && now - lastSendRef.current.time < 600) return;
+        lastSendRef.current = { key: sendKey, time: now };
+
         // Auto-silence bot on manual intervention
         autoSilenceBot(currentChat);
         markReplyHandledOptimistically(currentCandidateId);
 
-        // Optimistic clear + focus so the user can immediately type again
+        // El input queda libre de inmediato: el envío real corre en el outbox
         setPendingQrImages([]);
         messageInputRef.current?.clearText();
-        messageInputRef.current?.setSendingState?.(true);
-        setSending(true);
-        if (queuedImages.length) sendingMediaChatIdsRef.current.add(currentCandidateId);
 
         const replyId = replyingToMsg ? (replyingToMsg.ultraMsgId || replyingToMsg.id) : null;
 
@@ -3149,129 +3271,74 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         } : {};
 
         setReplyingToMsg(null);
-
         isSendingRef.current = true;
 
-        const markFailed = (tempId, error = 'Error al enviar') => {
-            updateChatMessages(currentCandidateId, prev => prev.map(m => m.id === tempId ? { ...m, status: 'failed', error } : m));
-        };
+        const groupId = `grp-${now}-${Math.random().toString(36).slice(2, 7)}`;
 
-        const showMetaError = (messageData, fallback = 'Error desconocido') => {
-            const fallbackErrorStr = String(messageData?.error || fallback || '').toLowerCase();
-            const is24h = messageData?.metaCode === 131047 || String(messageData?.metaCode) === '131047'
-                || fallbackErrorStr.includes('131047') || fallbackErrorStr.includes('24 hour') || fallbackErrorStr.includes('re-engagement');
-            if (is24h) {
-                showToast('⛔ Ventana de 24 hrs cerrada. Toca el Rayito Verde ⚡ abajo para mandar una plantilla oficial.', 'error', 8000);
-            } else {
-                showToast(`⚠️ Meta: ${messageData?.error || fallback}`, 'error');
-            }
-        };
-
-        const sendOrderedStep = async ({ tempId, optimisticMessage, payload, normalizeResponse = (messageData) => messageData }) => {
-            updateChatMessages(currentCandidateId, prev => [...(prev || []), withMessageEntryAnimation(optimisticMessage, 'outgoing')]);
-            try {
-                const res = await fetch('/api/chat', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
-                const data = await res.json().catch(() => ({}));
-                if (!res.ok) throw new Error(data.error || data.details || 'Error al enviar');
-
-                if (data.success && data.message) {
-                    const messageData = normalizeResponse(data.message);
-                    updateChatMessages(currentCandidateId, prev => mergeOutgoingMessage(prev, messageData, tempId));
-                    window.dispatchEvent(new CustomEvent('candidate_replied', { detail: { candidateId: currentCandidateId } }));
-
-                    if (messageData.status === 'failed') {
-                        showMetaError(messageData);
-                        return { ok: false, status: 'failed', data: messageData };
-                    }
-                    return { ok: true, data: messageData };
+        if (textMessage) {
+            const optimisticId = `temp-${now}-${Math.random().toString(36).slice(2, 6)}`;
+            updateChatMessages(currentCandidateId, prev => [...(prev || []), withMessageEntryAnimation({
+                id: optimisticId,
+                content: textMessage,
+                tipo: 'text',
+                from: 'me',
+                enviado_por_agente: 1,
+                status: 'pending',
+                fecha: new Date().toISOString(),
+                ...contextInfoParams
+            }, 'outgoing')]);
+            outboxRef.current.queue.push({
+                candidateId: currentCandidateId,
+                groupId,
+                tempId: optimisticId,
+                payload: {
+                    candidateId: currentCandidateId,
+                    message: textMessage,
+                    type: 'text',
+                    replyToId: replyId,
+                    senderId,
+                    senderName
                 }
-
-                const error = data.error || 'API Error';
-                markFailed(tempId, error);
-                showToast && showToast(`Error al enviar mensaje: ${error}`, 'error');
-                return { ok: false, status: 'failed', error };
-            } catch (error) {
-                markFailed(tempId, error.message || 'Red desconectada');
-                console.error(error);
-                showToast && showToast('Error de red al enviar', 'error');
-                return { ok: false, status: 'failed', error: error.message };
-            }
-        };
-
-        try {
-            let textResult = { ok: true };
-            if (textMessage) {
-                const optimisticId = `temp-${Date.now()}`;
-                textResult = await sendOrderedStep({
-                    tempId: optimisticId,
-                    optimisticMessage: {
-                        id: optimisticId,
-                        content: textMessage,
-                        tipo: 'text',
-                        from: 'me',
-                        enviado_por_agente: 1,
-                        status: 'pending',
-                        fecha: new Date().toISOString(),
-                        ...contextInfoParams
-                    },
-                    payload: {
-                        candidateId: currentCandidateId,
-                        message: textMessage,
-                        type: 'text',
-                        replyToId: replyId,
-                        senderId,
-                        senderName
-                    }
-                });
-            }
-
-            if (!textResult.ok && queuedImages.length) {
-                showToast && showToast('No envié las imágenes porque falló el texto inicial.', 'error');
-                return;
-            }
-
-            for (let idx = 0; idx < queuedImages.length; idx++) {
-                if (textMessage || idx > 0) await wait(ORDERED_MESSAGE_GAP_MS);
-                const imgUrl = queuedImages[idx];
-                const tempImgId = `temp_img_${Date.now()}_${idx}`;
-                await sendOrderedStep({
-                    tempId: tempImgId,
-                    optimisticMessage: {
-                        id: tempImgId,
-                        from: 'me',
-                        content: '',
-                        mediaUrl: imgUrl,
-                        _serverMediaUrl: imgUrl,
-                        type: 'image',
-                        status: 'queued',
-                        timestamp: new Date().toISOString(),
-                        _sequenceIndex: textMessage ? idx + 1 : idx
-                    },
-                    payload: {
-                        candidateId: currentCandidateId,
-                        message: '',
-                        type: 'image',
-                        mediaUrl: imgUrl,
-                        senderId,
-                        senderName
-                    },
-                    normalizeResponse: (messageData) => ({ ...messageData, status: messageData.status || 'sent' })
-                });
-            }
-        } finally {
-            setSending(false);
-            isSendingRef.current = false;
-            sendingMediaChatIdsRef.current.delete(currentCandidateId);
-            messageInputRef.current?.setSendingState?.(false);
-            setTimeout(() => {
-                const input = document.getElementById('chat-msg-input');
-                if (input) input.focus();
-            }, 50);
+            });
         }
+
+        queuedImages.forEach((imgUrl, idx) => {
+            const tempImgId = `temp_img_${now}_${idx}`;
+            addSendingMedia(currentCandidateId);
+            updateChatMessages(currentCandidateId, prev => [...(prev || []), withMessageEntryAnimation({
+                id: tempImgId,
+                from: 'me',
+                content: '',
+                mediaUrl: imgUrl,
+                _serverMediaUrl: imgUrl,
+                type: 'image',
+                status: 'queued',
+                timestamp: new Date().toISOString(),
+                _sequenceIndex: textMessage ? idx + 1 : idx
+            }, 'outgoing')]);
+            outboxRef.current.queue.push({
+                candidateId: currentCandidateId,
+                groupId,
+                tempId: tempImgId,
+                isImage: true,
+                gapBefore: Boolean(textMessage) || idx > 0,
+                payload: {
+                    candidateId: currentCandidateId,
+                    message: '',
+                    type: 'image',
+                    mediaUrl: imgUrl,
+                    senderId,
+                    senderName
+                },
+                normalizeResponse: (messageData) => ({ ...messageData, status: messageData.status || 'sent' })
+            });
+        });
+
+        processOutbox().catch(() => {});
+        setTimeout(() => {
+            const input = document.getElementById('chat-msg-input');
+            if (input) input.focus();
+        }, 50);
     };
 
     const handleSendTemplate = (templateObj) => {
