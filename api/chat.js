@@ -421,11 +421,23 @@ export default async function handler(req, res) {
             };
 
             if (replyToId) {
+                // Guardar el TEXTO citado aquí mismo (no solo el stanzaId) — así la vista
+                // previa de "respondiendo a..." sobrevive aunque el mensaje original salga
+                // del historial cargado en el navegador. Antes solo se guardaba a qué
+                // mensaje se respondía, nunca qué decía, y el frontend caía siempre en el
+                // texto genérico "Mensaje multimedia" en cuanto la respuesta se confirmaba.
+                let quotedText = '';
+                try {
+                    const recentForQuote = await getRecentMessages(candidateId, 50);
+                    const quoted = recentForQuote.find(m => m.id === replyToId || m.ultraMsgId === replyToId);
+                    if (quoted?.content) quotedText = String(quoted.content).replace(/<[^>]*>?/gm, '').trim().slice(0, 200);
+                } catch { /* best-effort: si falla, la preview cae al texto generico */ }
                 msgToSave.contextInfo = {
                     quotedMessage: {
                         stanzaId: replyToId,
                         participant: candidate.whatsapp, // Simplification
-                        conversation: ''
+                        conversation: '',
+                        text: quotedText
                     }
                 };
             }

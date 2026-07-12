@@ -250,6 +250,15 @@ const mergeOutgoingPayload = (current = {}, incoming = {}) => {
         merged._displayMediaUrl = current._displayMediaUrl || current._localMediaUrl || currentMediaUrl;
     }
 
+    // El contextInfo del servidor puede llegar sin el texto citado (backend aparte
+    // ya lo guarda, pero por si acaso) — nunca reemplazar un texto citado que sí
+    // tenemos por uno vacío, o la vista "respondiendo a..." se queda en blanco.
+    const currentQuotedText = current.contextInfo?.quotedMessage?.text;
+    const incomingQuotedText = incoming.contextInfo?.quotedMessage?.text;
+    if (currentQuotedText && !incomingQuotedText) {
+        merged.contextInfo = current.contextInfo;
+    }
+
     return merged;
 };
 

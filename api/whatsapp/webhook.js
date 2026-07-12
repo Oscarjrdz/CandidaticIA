@@ -28,7 +28,8 @@ import {
     saveUser,
     saveWebhookTransaction,
     markMessageAsDone,
-    updateMessageReaction
+    updateMessageReaction,
+    getRecentMessages
 } from '../utils/storage.js';
 import { markMessageAsRead, downloadMetaMedia, uploadMediaToMeta } from './utils.js';
 import { FEATURES } from '../utils/feature-flags.js';
@@ -532,7 +533,16 @@ export default async function handler(req, res) {
                 ...(mediaUrl && { mediaUrl })
             };
             if (metaMsg.context?.id) {
-                msgToSave.contextInfo = { quotedMessage: { stanzaId: metaMsg.context.id, participant: metaMsg.context.from || '', text: '' } };
+                // Igual que en el envío manual (api/chat.js): guardar el TEXTO citado aquí,
+                // no solo el id — así la vista previa de "respondiendo a..." no depende de
+                // que el mensaje original siga en el historial cargado en el navegador.
+                let quotedText = '';
+                try {
+                    const recentForQuote = await getRecentMessages(candidateId, 50);
+                    const quoted = recentForQuote.find(m => m.id === metaMsg.context.id || m.ultraMsgId === metaMsg.context.id);
+                    if (quoted?.content) quotedText = String(quoted.content).replace(/<[^>]*>?/gm, '').trim().slice(0, 200);
+                } catch { /* best-effort: si falla, la preview cae al texto generico */ }
+                msgToSave.contextInfo = { quotedMessage: { stanzaId: metaMsg.context.id, participant: metaMsg.context.from || '', text: quotedText } };
             }
 
             // Reaction is special — update reaction on existing message, don't save new
