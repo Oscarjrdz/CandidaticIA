@@ -202,7 +202,11 @@ const areSameOutgoingMessage = (a = {}, b = {}) => {
     const timeA = getMessageTime(a);
     const timeB = getMessageTime(b);
     if (timeA > 0 && timeB > 0) {
-        return Math.abs(timeA - timeB) < 30000;
+        // Ventana amplia a propósito: el optimista usa el reloj de la PC del reclutador
+        // y el eco del server usa el del servidor — con un reloj desfasado (~1-2 min,
+        // común en PCs sin sincronizar), una ventana corta hacía que el eco no matcheara
+        // y se inyectara como burbuja duplicada que luego brincaba de lugar.
+        return Math.abs(timeA - timeB) < 180000;
     }
     return true;
 };
@@ -214,7 +218,7 @@ const areVisuallyDuplicateOutgoingMessages = (a = {}, b = {}) => {
     if (!aIsTransient && !bIsTransient) return false;
     const timeA = getMessageTime(a);
     const timeB = getMessageTime(b);
-    return !timeA || !timeB || Math.abs(timeA - timeB) < 45000;
+    return !timeA || !timeB || Math.abs(timeA - timeB) < 180000;
 };
 
 const mergeOutgoingPayload = (current = {}, incoming = {}) => {
@@ -3281,6 +3285,12 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
 
         const groupId = `grp-${now}-${Math.random().toString(36).slice(2, 7)}`;
 
+        // Tiempo optimista ANCLADO al último mensaje del chat, no solo al reloj de la
+        // PC: con un reloj local atrasado vs el servidor, el grupo se ordenaba a media
+        // conversación ("se inyectaba") en vez de al fondo, donde debe nacer.
+        const lastTs = (messages || []).reduce((mx, m) => Math.max(mx, getMessageTime(m)), 0);
+        const baseTime = Math.max(now, lastTs + 1);
+
         if (textMessage) {
             const optimisticId = `temp-${now}-${Math.random().toString(36).slice(2, 6)}`;
             updateChatMessages(currentCandidateId, prev => [...(prev || []), withMessageEntryAnimation({
@@ -3290,7 +3300,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                 from: 'me',
                 enviado_por_agente: 1,
                 status: 'pending',
-                fecha: new Date(now).toISOString(),
+                fecha: new Date(baseTime).toISOString(),
                 ...contextInfoParams
             }, 'outgoing')]);
             outboxRef.current.queue.push({
@@ -3321,7 +3331,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                 status: 'queued',
                 // +1ms por posición: el grupo entero nace en el mismo instante y el sort
                 // cronológico necesita tiempos estrictamente crecientes (texto → foto 1 → 2 → 3)
-                timestamp: new Date(now + idx + 1).toISOString(),
+                timestamp: new Date(baseTime + idx + 1).toISOString(),
                 _sequenceIndex: textMessage ? idx + 1 : idx
             }, 'outgoing')]);
             outboxRef.current.queue.push({
