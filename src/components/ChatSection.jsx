@@ -238,6 +238,10 @@ const mergeOutgoingPayload = (current = {}, incoming = {}) => {
         }
         if (incoming.timestamp || incoming.fecha) merged._confirmedAt = incoming.timestamp || incoming.fecha;
     }
+    if (typeof window !== 'undefined' && (current.type === 'text' || current.tipo === 'text' || incoming.type === 'text')) {
+        // DIAGNÓSTICO TEMPORAL
+        console.log(`MERGE-PAYLOAD text: wasTransient=${wasTransient} | current{id=${String(current.id).slice(-8)},status=${current.status},fecha=${current.fecha},ts=${current.timestamp}} | incoming{id=${String(incoming.id).slice(-8)},status=${incoming.status},fecha=${incoming.fecha},ts=${incoming.timestamp}} | RESULT{fecha=${merged.fecha},ts=${merged.timestamp}}`);
+    }
 
     if (currentMediaUrl && incomingMediaUrl && currentMediaUrl !== incomingMediaUrl) {
         merged._serverMediaUrl = incomingMediaUrl;
@@ -2252,17 +2256,20 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                         const newMsg = sseUpdate.updates.messagePayload;
                         // Prevent duplicates
                         if (prev.some(m => String(m.id) === String(newMsg.id) || (m.ultraMsgId && String(m.ultraMsgId) === String(newMsg.ultraMsgId)))) {
+                            if (typeof window !== 'undefined' && (newMsg.type === 'text')) console.log(`ECO text: ya existia id=${String(newMsg.id).slice(-8)} -> return prev`);
                             return prev;
                         }
                         // Smart deduplication: swap optimistic temp message
                         if (newMsg.from === 'me') {
                             const pendingIndex = prev.findIndex(m => String(m.id).startsWith('temp') && areSameOutgoingMessage(m, newMsg));
+                            if (typeof window !== 'undefined' && newMsg.type === 'text') console.log(`ECO text: newMsg.id=${String(newMsg.id).slice(-8)} status=${newMsg.status} ts=${newMsg.timestamp} pendingIndex=${pendingIndex}`);
                             if (pendingIndex !== -1) {
                                 const newArr = mergeOutgoingMessage(prev, newMsg, prev[pendingIndex].id);
                                 scrollToBottom();
                                 return newArr;
                             }
-                            if (prev.some(m => areSameOutgoingMessage(m, newMsg))) return prev;
+                            if (prev.some(m => areSameOutgoingMessage(m, newMsg))) { if (typeof window !== 'undefined' && newMsg.type === 'text') console.log('ECO text: matched via areSameOutgoingMessage fallback -> return prev'); return prev; }
+                            if (typeof window !== 'undefined' && newMsg.type === 'text') console.log('ECO text: *** NINGUN MATCH -> SE VA A APPENDEAR COMO NUEVO ***');
                         }
 
                         scrollToBottom();
