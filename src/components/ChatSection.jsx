@@ -710,6 +710,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
     const displayMessageCacheRef = useRef(new Map());
     const bottomAnchorRef = useRef(false);
     const prevDisplayLengthRef = useRef(0);
+    const orderDebugRef = useRef({ seq: 0, lastOrderKey: '' }); // DIAGNÓSTICO TEMPORAL
 
     const animateScrollToBottom = (duration = 500) => {
         // Two rAFs so Virtuoso has rendered the new item and scrollHeight is updated
@@ -3558,23 +3559,25 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
 
     // DIAGNÓSTICO TEMPORAL — quitar una vez resuelto el reporte de burbujas de
     // imagen "reordenándose" en cada cambio de palomita. Solo imprime cuando hay
-    // mensajes en tránsito (queued/pending) del chat activo, para no ensuciar la
-    // consola en uso normal. Ver la pestaña Console del navegador (F12).
+    // mensajes en tránsito (queued/pending), en TEXTO PLANO (copiable directo de
+    // la consola, sin objetos colapsados) y SOLO cuando el orden realmente cambia
+    // respecto al render anterior, para que sea fácil detectar el momento exacto.
     if (typeof window !== 'undefined') {
-        const inFlight = displayMessages.filter(m => m && (m.status === 'queued' || m.status === 'pending'));
-        if (inFlight.length > 0) {
-            console.log('[DEBUG orden]', displayMessages
-                .filter(m => m && (m.from === 'me' || m.from === 'bot'))
-                .slice(-8)
-                .map(m => ({
-                    key: getStableMessageKey(m, 0),
-                    id: m.id,
-                    ultraMsgId: m.ultraMsgId,
-                    tipo: m.type || m.tipo,
-                    media: (m.mediaUrl || '').slice(-12),
-                    status: m.status,
-                    ts: m.timestamp || m.fecha
-                })));
+        const inFlight = displayMessages.some(m => m && (m.status === 'queued' || m.status === 'pending'));
+        if (inFlight) {
+            const relevant = displayMessages.filter(m => m && (m.from === 'me' || m.from === 'bot')).slice(-8);
+            const orderKey = relevant.map(m => getStableMessageKey(m, 0)).join(',');
+            const line = relevant.map(m => {
+                const tipo = (m.type || m.tipo || 'txt');
+                const tag = tipo === 'image' ? (m.mediaUrl || '').slice(-10) : (m.content || '').slice(0, 10);
+                return `[${tipo}:${tag}|st=${m.status}|id=${String(m.id).slice(-8)}|key=${String(getStableMessageKey(m, 0)).slice(-14)}|ts=${String(m.timestamp || m.fecha || '').slice(11, 23)}]`;
+            }).join(' -> ');
+            orderDebugRef.current.seq++;
+            const changed = orderKey !== orderDebugRef.current.lastOrderKey;
+            if (changed) {
+                console.log(`ORDEN #${orderDebugRef.current.seq} *** CAMBIO DE ORDEN *** : ${line}`);
+            }
+            orderDebugRef.current.lastOrderKey = orderKey;
         }
     }
 
