@@ -709,6 +709,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
     const messagesByChatRef = useRef(new Map());
     const displayMessageCacheRef = useRef(new Map());
     const bottomAnchorRef = useRef(false);
+    const prevDisplayLengthRef = useRef(0);
 
     const animateScrollToBottom = (duration = 500) => {
         // Two rAFs so Virtuoso has rendered the new item and scrollHeight is updated
@@ -3546,6 +3547,15 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         });
     }, [messages, selectedChat?.unreadMsgCount]);
 
+    // Detecta si la lista CRECIÓ desde el último render — se usa para no forzar
+    // scroll-to-bottom en re-renders que solo cambian una palomita de estado
+    // (queued→sent→delivered). Antes CUALQUIER cambio de altura medida por Virtuoso
+    // (incluida una remedición de 1px al cambiar el ícono de estado) disparaba
+    // scrollToBottom otra vez — con 3 fotos eso son ~8 "snaps" de scroll en pocos
+    // segundos, y se veía como que las burbujas de imagen "suben y bajan".
+    const messagesGrew = displayMessages.length > prevDisplayLengthRef.current;
+    prevDisplayLengthRef.current = displayMessages.length;
+
     return (
         <div className="flex h-full w-full bg-[#f0f2f5] dark:bg-[#111b21] font-sans overflow-hidden">
             
@@ -4667,7 +4677,11 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                             data={displayMessages}
                             initialTopMostItemIndex={displayMessages.length > 0 ? displayMessages.length - 1 : 0}
                             followOutput={(isAtBottom) => {
-                                if (isSendingRef.current) return 'auto';
+                                // Mismo criterio que totalListHeightChanged: Virtuoso llama esto en
+                                // CUALQUIER cambio de `data` (incluida una palomita de estado), no solo
+                                // cuando llega una burbuja nueva — sin messagesGrew se auto-scrolleaba
+                                // de mas durante todo el envio, aunque nada nuevo hubiera aparecido.
+                                if (isSendingRef.current && messagesGrew) return 'auto';
                                 return isAtBottom ? 'auto' : false;
                             }}
                             computeItemKey={(index, msg) => getStableMessageKey(msg, index)}
@@ -4675,7 +4689,11 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                             atBottomThreshold={150}
                             components={{ Header: MessagesEncryptionHeader, Footer: () => <div style={{ height: 25 }} /> }}
                             totalListHeightChanged={() => {
-                                if (bottomAnchorRef.current || isAtBottomRef.current || isSendingRef.current) {
+                                // isSendingRef solo fuerza scroll si la lista CRECIÓ (llegó una burbuja
+                                // nueva) — sin messagesGrew, cada palomita de estado durante un envío con
+                                // fotos (queued→sent, ~8 veces en 3 fotos) volvía a snapear el scroll,
+                                // aunque el usuario ya estuviera leyendo arriba.
+                                if (bottomAnchorRef.current || isAtBottomRef.current || (isSendingRef.current && messagesGrew)) {
                                     scrollToBottom();
                                     // bottomAnchorRef es una bandera de "una sola vez" (se activa al abrir un
                                     // chat o cargar sus mensajes) — sin este reset se quedaba encendida para
