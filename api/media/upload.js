@@ -74,18 +74,20 @@ export default async function handler(req, res) {
 
         // 🗄️ Almacenamiento PERMANENTE en Vercel Blob (fotos de banco = para siempre;
         // fotos de chat = mientras exista el store). Redis y Meta expiran; Blob no.
+        // El store es PRIVADO: no hay URL publica — todo se sirve via /api/image (que ya
+        // cachea en CDN), asi que guardamos el pathname, no una URL.
         // Sin token configurado, se degrada al comportamiento anterior sin fallar.
-        let blobUrl = null;
+        let blobPath = null;
         if (process.env.BLOB_READ_WRITE_TOKEN) {
             try {
                 const { put } = await import('@vercel/blob');
-                const blob = await put(`media/${id}`, fileBuffer, {
-                    access: 'public',
+                await put(`media/${id}`, fileBuffer, {
+                    access: 'private',
                     contentType: mimeType,
                     addRandomSuffix: false
                 });
-                blobUrl = blob.url;
-                console.log(`[media/upload] ✅ Persisted to Blob → ${blobUrl}`);
+                blobPath = `media/${id}`;
+                console.log(`[media/upload] ✅ Persisted to Blob (private) → ${blobPath}`);
             } catch (e) {
                 console.error('[media/upload] ⚠️ Blob store failed (non-fatal):', e.message);
             }
@@ -97,13 +99,13 @@ export default async function handler(req, res) {
             size: fileSize,
             createdAt: new Date().toISOString(),
             metaMediaId: metaMediaId,
-            blobUrl
+            blobPath
         };
 
         // TTL del registro (metadata chica, ~250 B):
         //  - Banco de respuestas: SIN caducidad — son estrategicas y deben durar siempre.
         //  - Chat: 1 año si hay Blob (la foto vive ahi); 48h si no (comportamiento anterior).
-        const metaTTL = isQuickReplyAsset ? null : (blobUrl ? 86400 * 365 : 172800);
+        const metaTTL = isQuickReplyAsset ? null : (blobPath ? 86400 * 365 : 172800);
         const needsRedisBlob = isQuickReplyAsset || !metaMediaId;
         let base64Data = null;
 

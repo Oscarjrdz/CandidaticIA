@@ -85,12 +85,21 @@ export default async function handler(req, res) {
         if (data) {
             // Binary conversion from Redis cache
             buffer = Buffer.from(data, 'base64');
-        } else if (meta.blobUrl) {
-            // 🗄️ Almacenamiento permanente (Vercel Blob): redirigir al CDN del Blob —
-            // cero bytes de Redis y cero payload por esta funcion. El redirect queda
-            // cacheado con los mismos headers inmutables ya puestos arriba.
-            res.setHeader('Location', meta.blobUrl);
-            return res.status(302).end();
+        } else if (meta.blobPath && process.env.BLOB_READ_WRITE_TOKEN) {
+            // 🗄️ Almacenamiento permanente (Vercel Blob, store PRIVADO): se sirve el
+            // contenido a traves de esta funcion — el CDN de Vercel lo cachea 1 año
+            // (headers ya puestos arriba), asi que el Blob solo se lee en el primer hit.
+            source = 'blob';
+            try {
+                const { get } = await import('@vercel/blob');
+                const result = await get(meta.blobPath, { access: 'private' });
+                if (result?.stream) {
+                    buffer = Buffer.from(await new Response(result.stream).arrayBuffer());
+                }
+            } catch (e) {
+                console.error('Error fetching from Blob:', e.message);
+            }
+            if (!buffer) return res.status(404).send('Not Found');
         } else if (meta.metaMediaId) {
             // Dynamic fetch from Meta (since we stopped saving huge base64 blobs to Redis to prevent OOM)
             source = 'meta';
@@ -114,12 +123,12 @@ export default async function handler(req, res) {
             if (buffer && process.env.BLOB_READ_WRITE_TOKEN) {
                 const lazyBuffer = buffer;
                 import('@vercel/blob').then(async ({ put }) => {
-                    const blob = await put(`media/${rawId}`, lazyBuffer, {
-                        access: 'public',
+                    await put(`media/${rawId}`, lazyBuffer, {
+                        access: 'private',
                         contentType: meta.mime || 'image/jpeg',
                         addRandomSuffix: false
                     });
-                    meta.blobUrl = blob.url;
+                    meta.blobPath = `media/${rawId}`;
                     // Registro renovado a 1 año: la foto ya vive en Blob
                     await client.set(metaKey, JSON.stringify(meta), 'EX', 86400 * 365);
                 }).catch(() => {});
