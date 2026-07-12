@@ -2609,14 +2609,16 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         }
     };
 
-    // Debounce state to avoid collision between optimistic messages and SSE/interval redraws
-    const isSendingMediaRef = useRef(false);
+    // Chats con un envío de media en curso: loadMessages se mutea SOLO para esos chats,
+    // para no pisar sus mensajes optimistas. Si fuera una bandera global (como antes),
+    // cambiar de chat a mitad de un envío dejaría el chat recién abierto en blanco.
+    const sendingMediaChatIdsRef = useRef(new Set());
     const loadMessagesAbortRef = useRef(null);
 
     const loadMessages = async () => {
         const chatId = selectedChatRef.current?.id;
         if (!chatId) return;
-        if (isSendingMediaRef.current) return;
+        if (sendingMediaChatIdsRef.current.has(chatId)) return;
 
         // Cancel any in-flight load from a previous chat switch
         if (loadMessagesAbortRef.current) loadMessagesAbortRef.current.abort();
@@ -2626,7 +2628,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         try {
             const res = await fetch(`/api/chat?candidateId=${chatId}`, { signal });
             const data = await res.json();
-            if (data.success && !isSendingMediaRef.current && selectedChatRef.current?.id === chatId) {
+            if (data.success && !sendingMediaChatIdsRef.current.has(chatId) && selectedChatRef.current?.id === chatId) {
                 bottomAnchorRef.current = true;
                 setMessages(prev => {
                     const merged = mergeMessageList(prev, data.messages || []);
@@ -2848,7 +2850,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         isSendingRef.current = true;
         updateChatMessages(currentCandidateId, prev => [...prev, withMessageEntryAnimation(tempMsg, 'outgoing')]);
         setSending(true);
-        isSendingMediaRef.current = true; // Mute polling during upload
+        sendingMediaChatIdsRef.current.add(currentCandidateId); // Mute polling during upload (solo este chat)
 
         try {
             // Comprimir imagenes en el navegador antes de subir (videos/docs/audio van tal cual)
@@ -2909,7 +2911,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
             updateChatMessages(currentCandidateId, prev => prev.map(m => m.id === tempId ? { ...m, status: 'failed', error: err.message } : m));
         } finally {
             setSending(false);
-            isSendingMediaRef.current = false;
+            sendingMediaChatIdsRef.current.delete(currentCandidateId);
             setTimeout(() => URL.revokeObjectURL(localUrl), 60000);
         }
     };
@@ -3131,7 +3133,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         messageInputRef.current?.clearText();
         messageInputRef.current?.setSendingState?.(true);
         setSending(true);
-        if (queuedImages.length) isSendingMediaRef.current = true;
+        if (queuedImages.length) sendingMediaChatIdsRef.current.add(currentCandidateId);
 
         const replyId = replyingToMsg ? (replyingToMsg.ultraMsgId || replyingToMsg.id) : null;
 
@@ -3263,7 +3265,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         } finally {
             setSending(false);
             isSendingRef.current = false;
-            isSendingMediaRef.current = false;
+            sendingMediaChatIdsRef.current.delete(currentCandidateId);
             messageInputRef.current?.setSendingState?.(false);
             setTimeout(() => {
                 const input = document.getElementById('chat-msg-input');
