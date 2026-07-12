@@ -223,24 +223,26 @@ const areVisuallyDuplicateOutgoingMessages = (a = {}, b = {}) => {
 
 const mergeOutgoingPayload = (current = {}, incoming = {}) => {
     const merged = { ...current, ...incoming };
+    // Dos señales del servidor confirman el MISMO mensaje por rutas separadas: el eco/
+    // respuesta (trae el mensaje completo, pasa por aquí) y el `messageStatusUpdate`
+    // (solo cambia `status` in-place, SIN pasar por este merge). Cuando ese segundo
+    // aviso llega PRIMERO y deja el status en 'sent', un chequeo basado en status
+    // ("¿sigue pendiente/queued?") cree erróneamente que ya no hay nada que proteger,
+    // y deja que la hora real del servidor se cuele aquí — moviendo la burbuja de lugar.
+    // Por eso la protección usa una bandera propia (`_clientAnchoredTime`) que se
+    // propaga en cada merge, en vez de inferirse del status (que otra vía ya mutó).
     const wasTransient = String(current.id || '').startsWith('temp') || ['pending', 'queued'].includes(current.status);
+    const protectTime = current._clientAnchoredTime || wasTransient;
     const currentMediaUrl = current.mediaUrl || '';
     const incomingMediaUrl = incoming.mediaUrl || '';
 
-    if (wasTransient) {
-        // Conservar el tiempo optimista COMPLETO, incluyendo dejar vacío el campo que
-        // el temp no traía: si el temp solo tenía `fecha` y el server responde con
-        // `timestamp`, el sort cronológico saltaba al tiempo del server y la burbuja
-        // brincaba de lugar (texto debajo de sus propias fotos).
+    if (protectTime) {
         if (current.timestamp || current.fecha) {
             merged.timestamp = current.timestamp;
             merged.fecha = current.fecha;
         }
+        if (current._clientAnchoredTime) merged._clientAnchoredTime = true;
         if (incoming.timestamp || incoming.fecha) merged._confirmedAt = incoming.timestamp || incoming.fecha;
-    }
-    if (typeof window !== 'undefined' && (current.type === 'text' || current.tipo === 'text' || incoming.type === 'text')) {
-        // DIAGNÓSTICO TEMPORAL
-        console.log(`MERGE-PAYLOAD text: wasTransient=${wasTransient} | current{id=${String(current.id).slice(-8)},status=${current.status},fecha=${current.fecha},ts=${current.timestamp}} | incoming{id=${String(incoming.id).slice(-8)},status=${incoming.status},fecha=${incoming.fecha},ts=${incoming.timestamp}} | RESULT{fecha=${merged.fecha},ts=${merged.timestamp}}`);
     }
 
     if (currentMediaUrl && incomingMediaUrl && currentMediaUrl !== incomingMediaUrl) {
@@ -714,7 +716,6 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
     const displayMessageCacheRef = useRef(new Map());
     const bottomAnchorRef = useRef(false);
     const prevDisplayLengthRef = useRef(0);
-    const orderDebugRef = useRef({ seq: 0, lastOrderKey: '' }); // DIAGNÓSTICO TEMPORAL
 
     const animateScrollToBottom = (duration = 500) => {
         // Two rAFs so Virtuoso has rendered the new item and scrollHeight is updated
@@ -1374,7 +1375,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
             const optimisticId = 'temp-loc-' + Date.now();
             updateChatMessages(currentCandidateId, prev => [...(prev || []), withMessageEntryAnimation({
                 id: optimisticId, content: `[Ubicación: ${qr.location.name || 'Mapa'}]`, tipo: 'location',
-                from: 'me', enviado_por_agente: 1, status: 'pending', fecha: new Date().toISOString()
+                from: 'me', enviado_por_agente: 1, status: 'pending', fecha: new Date().toISOString(), _clientAnchoredTime: true
             }, 'outgoing')]);
             fetch('/api/chat', {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -2256,20 +2257,17 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                         const newMsg = sseUpdate.updates.messagePayload;
                         // Prevent duplicates
                         if (prev.some(m => String(m.id) === String(newMsg.id) || (m.ultraMsgId && String(m.ultraMsgId) === String(newMsg.ultraMsgId)))) {
-                            if (typeof window !== 'undefined' && (newMsg.type === 'text')) console.log(`ECO text: ya existia id=${String(newMsg.id).slice(-8)} -> return prev`);
                             return prev;
                         }
                         // Smart deduplication: swap optimistic temp message
                         if (newMsg.from === 'me') {
                             const pendingIndex = prev.findIndex(m => String(m.id).startsWith('temp') && areSameOutgoingMessage(m, newMsg));
-                            if (typeof window !== 'undefined' && newMsg.type === 'text') console.log(`ECO text: newMsg.id=${String(newMsg.id).slice(-8)} status=${newMsg.status} ts=${newMsg.timestamp} pendingIndex=${pendingIndex}`);
                             if (pendingIndex !== -1) {
                                 const newArr = mergeOutgoingMessage(prev, newMsg, prev[pendingIndex].id);
                                 scrollToBottom();
                                 return newArr;
                             }
-                            if (prev.some(m => areSameOutgoingMessage(m, newMsg))) { if (typeof window !== 'undefined' && newMsg.type === 'text') console.log('ECO text: matched via areSameOutgoingMessage fallback -> return prev'); return prev; }
-                            if (typeof window !== 'undefined' && newMsg.type === 'text') console.log('ECO text: *** NINGUN MATCH -> SE VA A APPENDEAR COMO NUEVO ***');
+                            if (prev.some(m => areSameOutgoingMessage(m, newMsg))) return prev;
                         }
 
                         scrollToBottom();
@@ -3034,7 +3032,8 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
             from: 'me',
             enviado_por_agente: 1,
             status: 'pending',
-            fecha: new Date().toISOString()
+            fecha: new Date().toISOString(),
+            _clientAnchoredTime: true
         }, 'outgoing')]);
 
         fetch('/api/chat', {
@@ -3068,7 +3067,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         const optimisticId = 'temp-' + Date.now();
         isSendingRef.current = true;
         updateChatMessages(currentCandidateId, prev => [...(prev || []), withMessageEntryAnimation({
-            id: optimisticId, content: `[Ubicación: ${name || 'Mapa'}]`, tipo: 'location', from: 'me', enviado_por_agente: 1, status: 'pending', fecha: new Date().toISOString()
+            id: optimisticId, content: `[Ubicación: ${name || 'Mapa'}]`, tipo: 'location', from: 'me', enviado_por_agente: 1, status: 'pending', fecha: new Date().toISOString(), _clientAnchoredTime: true
         }, 'outgoing')]);
         fetch('/api/chat', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -3089,7 +3088,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         const optimisticId = 'temp-' + Date.now();
         isSendingRef.current = true;
         updateChatMessages(currentCandidateId, prev => [...(prev || []), withMessageEntryAnimation({
-            id: optimisticId, content: `${bodyTxt}\n\n[Lista: ${items.map(i=>i.title).join(', ')}]`, tipo: 'interactive', from: 'me', enviado_por_agente: 1, status: 'pending', fecha: new Date().toISOString()
+            id: optimisticId, content: `${bodyTxt}\n\n[Lista: ${items.map(i=>i.title).join(', ')}]`, tipo: 'interactive', from: 'me', enviado_por_agente: 1, status: 'pending', fecha: new Date().toISOString(), _clientAnchoredTime: true
         }, 'outgoing')]);
         fetch('/api/chat', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -3110,7 +3109,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         const optimisticId = 'temp-' + Date.now();
         isSendingRef.current = true;
         updateChatMessages(currentCandidateId, prev => [...(prev || []), withMessageEntryAnimation({
-            id: optimisticId, content: `[Producto del Catálogo: ${productSku}]`, tipo: 'interactive', from: 'me', enviado_por_agente: 1, status: 'pending', fecha: new Date().toISOString()
+            id: optimisticId, content: `[Producto del Catálogo: ${productSku}]`, tipo: 'interactive', from: 'me', enviado_por_agente: 1, status: 'pending', fecha: new Date().toISOString(), _clientAnchoredTime: true
         }, 'outgoing')]);
         fetch('/api/chat', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -3138,7 +3137,8 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
             from: 'me',
             enviado_por_agente: 1,
             status: 'pending',
-            fecha: new Date().toISOString()
+            fecha: new Date().toISOString(),
+            _clientAnchoredTime: true
         }, 'outgoing')]);
 
         fetch('/api/chat', {
@@ -3310,6 +3310,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                 enviado_por_agente: 1,
                 status: 'pending',
                 fecha: new Date(baseTime).toISOString(),
+                _clientAnchoredTime: true,
                 ...contextInfoParams
             }, 'outgoing')]);
             outboxRef.current.queue.push({
@@ -3341,6 +3342,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                 // +1ms por posición: el grupo entero nace en el mismo instante y el sort
                 // cronológico necesita tiempos estrictamente crecientes (texto → foto 1 → 2 → 3)
                 timestamp: new Date(baseTime + idx + 1).toISOString(),
+                _clientAnchoredTime: true,
                 _sequenceIndex: textMessage ? idx + 1 : idx
             }, 'outgoing')]);
             outboxRef.current.queue.push({
@@ -3391,7 +3393,8 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
             from: 'me',
             enviado_por_agente: 1,
             status: 'pending',
-            fecha: new Date().toISOString()
+            fecha: new Date().toISOString(),
+            _clientAnchoredTime: true
         }, 'outgoing')]);
 
         fetch('/api/chat', {
@@ -3563,30 +3566,6 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
     // segundos, y se veía como que las burbujas de imagen "suben y bajan".
     const messagesGrew = displayMessages.length > prevDisplayLengthRef.current;
     prevDisplayLengthRef.current = displayMessages.length;
-
-    // DIAGNÓSTICO TEMPORAL — quitar una vez resuelto el reporte de burbujas de
-    // imagen "reordenándose" en cada cambio de palomita. Solo imprime cuando hay
-    // mensajes en tránsito (queued/pending), en TEXTO PLANO (copiable directo de
-    // la consola, sin objetos colapsados) y SOLO cuando el orden realmente cambia
-    // respecto al render anterior, para que sea fácil detectar el momento exacto.
-    if (typeof window !== 'undefined') {
-        const inFlight = displayMessages.some(m => m && (m.status === 'queued' || m.status === 'pending'));
-        if (inFlight) {
-            const relevant = displayMessages.filter(m => m && (m.from === 'me' || m.from === 'bot')).slice(-8);
-            const orderKey = relevant.map(m => getStableMessageKey(m, 0)).join(',');
-            const line = relevant.map(m => {
-                const tipo = (m.type || m.tipo || 'txt');
-                const tag = tipo === 'image' ? (m.mediaUrl || '').slice(-10) : (m.content || '').slice(0, 10);
-                return `[${tipo}:${tag}|st=${m.status}|id=${String(m.id).slice(-8)}|key=${String(getStableMessageKey(m, 0)).slice(-14)}|ts=${String(m.timestamp || m.fecha || '').slice(11, 23)}]`;
-            }).join(' -> ');
-            orderDebugRef.current.seq++;
-            const changed = orderKey !== orderDebugRef.current.lastOrderKey;
-            if (changed) {
-                console.log(`ORDEN #${orderDebugRef.current.seq} *** CAMBIO DE ORDEN *** : ${line}`);
-            }
-            orderDebugRef.current.lastOrderKey = orderKey;
-        }
-    }
 
     return (
         <div className="flex h-full w-full bg-[#f0f2f5] dark:bg-[#111b21] font-sans overflow-hidden">
