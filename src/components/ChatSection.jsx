@@ -3416,8 +3416,10 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         const resolved = substituteVariables(qr.message || '', c);
         handleSend(resolved, imgs);                  // envía EXACTO (texto + imágenes); autoSilenceBot → manual
         showToast && showToast(`🤖 Agente envió "${AGENT_BANK_NAME}" a ${c.nombreReal?.split(' ')[0] || c.nombre || 'candidato'} · IA en modo manual`, 'success', 5000);
+        // Deps incluyen la firma de tags y blocked para que el agente reaccione si el
+        // candidato se vuelve elegible con el chat abierto (ej. le agregas el tag ahí mismo).
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [agentMode, selectedChat?.id, quickReplies]);
+    }, [agentMode, selectedChat?.id, (selectedChat?.tags || []).length, selectedChat?.blocked, quickReplies]);
 
     const handleSendTemplate = (templateObj) => {
         if (!selectedChat) return;
