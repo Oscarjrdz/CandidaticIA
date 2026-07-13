@@ -3392,8 +3392,22 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
     const agentHandledRef = useRef(new Set());
 
     useEffect(() => {
-        if (!agentMode) return;
         const c = selectedChat;
+        // DEBUG TEMPORAL: por qué el agente (no) dispara. Quitar cuando quede.
+        if (agentMode && c) {
+            const tg = Array.isArray(c.tags) ? c.tags.map(t => String(typeof t === 'string' ? t : t?.name || '').trim().toUpperCase()) : [];
+            console.log('[AGENTE debug]', {
+                agentMode, chatId: c.id,
+                yaAtendido: agentHandledRef.current.has(c.id),
+                blocked: c.blocked,
+                completo: isProfileComplete(c),
+                statusAudit: c.statusAudit, paso2Estado: c.paso2Estado,
+                tags: tg, tieneTag: tg.includes(AGENT_TAG),
+                quickRepliesCargados: quickReplies.length,
+                tienePuntoKatcon: quickReplies.some(q => String(q.name || '').trim().toUpperCase() === AGENT_BANK_NAME)
+            });
+        }
+        if (!agentMode) return;
         if (!c || agentHandledRef.current.has(c.id)) return;
         if (c.blocked) return;                       // IA ya silenciada / manual → no tocar
         if (!isProfileComplete(c)) return;           // candado 1: perfil completo
