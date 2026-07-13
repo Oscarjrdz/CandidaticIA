@@ -58,16 +58,42 @@ const IACopilotoSection = lazyWithRetry(() => import('./components/IACopilotoSec
  * Separated from providers to avoid re-rendering providers on state change.
  */
 function AppShell() {
-  const { user, isAuthChecking, isAppReady, rolePermissions, login, logout } = useAuthContext();
+  const { user, setUser, isAuthChecking, isAppReady, rolePermissions, login, logout } = useAuthContext();
+
+  // Solo el perfil de Oscar ve el toggle del Agente y la burbuja Brenda Copiloto.
+  // Se gatea por id/WhatsApp específicos (NO por rol: Paty también es SuperAdmin).
+  const isOscar = user?.id === 'user_1768974645880' || String(user?.whatsapp || '') === '5218116038195';
   const { showToast } = useToastContext();
 
   const [theme, setTheme] = useState('light');
   const [activeSection, setActiveSection] = useState('candidates');
-  // Toggle GLOBAL del Agente Claude (Chat Web). Default OFF y NO persiste — por
-  // seguridad, no se queda encendido entre sesiones. Cuando está ON, en un chat
-  // de candidato elegible (perfil completo + tag KATCON ANUNCIO) el agente manda
-  // el PUNTO KATCON del banco. Ver el efecto en ChatSection.jsx.
+  // Toggle GLOBAL del Agente Claude (Chat Web). Se persiste en el perfil de Oscar
+  // en Redis (user.preferences.agentMode). Cuando está ON, en un chat de candidato
+  // elegible (perfil completo + tag KATCON ANUNCIO) el agente manda el PUNTO KATCON
+  // del banco. Ver el efecto en ChatSection.jsx.
   const [agentMode, setAgentMode] = useState(false);
+  // Sincroniza desde las preferencias guardadas al cargar la sesión (solo por login,
+  // dep en user?.id — así el toggle no pelea con la persistencia al prenderlo/apagarlo).
+  useEffect(() => {
+    setAgentMode(!!user?.preferences?.agentMode);
+  }, [user?.id]);
+  // Prende/apaga + persiste en Redis (mismo patrón que las demás preferencias).
+  const toggleAgentMode = useCallback(() => {
+    setAgentMode(prev => {
+      const next = !prev;
+      if (user?.id) {
+        const nextPreferences = { ...(user.preferences || {}), agentMode: next };
+        setUser(u => u ? { ...u, preferences: nextPreferences } : u);
+        fetch('/api/users', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: user.id, preferences: nextPreferences })
+        }).catch(() => {});
+      }
+      return next;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, user?.preferences, setUser]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
 
@@ -332,10 +358,10 @@ function AppShell() {
               </div>
 
               <div className="flex items-center space-x-2 sm:space-x-4 shrink-0">
-                {/* Toggle Agente Claude — solo en Chat Web y solo SuperAdmin */}
-                {activeSection === 'chat' && user?.role === 'SuperAdmin' && (
+                {/* Toggle Agente Claude — solo en Chat Web y SOLO el perfil de Oscar */}
+                {activeSection === 'chat' && isOscar && (
                   <button
-                    onClick={() => setAgentMode(v => !v)}
+                    onClick={toggleAgentMode}
                     title={agentMode ? 'Agente Claude ACTIVO: en candidatos elegibles (perfil completo + KATCON ANUNCIO) manda el PUNTO KATCON al abrir su chat' : 'Activar Agente Claude'}
                     className={`hidden sm:inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${
                       agentMode
@@ -422,7 +448,8 @@ function AppShell() {
         </main>
 
         <InternalChat onlineUsers={onlineUsers} />
-        {user?.role === 'SuperAdmin' && (
+        {/* Brenda Copiloto (burbuja flotante) — SOLO el perfil de Oscar (antes: todos los SuperAdmin, incluida Paty) */}
+        {isOscar && (
           <FloatingCopilot activeSection={activeSection} onOpenSection={() => setActiveSection('ia-copiloto')} />
         )}
         {/* Footer */}
