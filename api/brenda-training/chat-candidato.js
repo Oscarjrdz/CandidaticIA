@@ -4,7 +4,10 @@ import {
     requireSuperAdmin,
     getPersona,
     getTrainingExamples,
-    addTrainingTokens
+    addTrainingTokens,
+    listAgents,
+    listSkills,
+    composeSystemPrompt
 } from '../utils/brenda-training.js';
 
 const MAX_INPUT_CHARS = 900;
@@ -66,6 +69,42 @@ export default async function handler(req, res) {
     }
 
     try {
+        // NUEVO: si el frontend manda agentId/skillId, probamos la composición real
+        // (Agente × Skill = composeSystemPrompt). Si NO los manda, caemos al modo
+        // legado (persona global única) para no romper el panel de prueba viejo.
+        const { agentId, skillId } = req.body || {};
+
+        if (agentId || skillId) {
+            const [agents, skills, examples] = await Promise.all([
+                listAgents(redis),
+                listSkills(redis),
+                getTrainingExamples(redis)
+            ]);
+            const agent = agentId ? agents.find(a => a.id === agentId) : null;
+            const skill = skillId ? skills.find(s => s.id === skillId) : null;
+
+            if (agentId && !agent) {
+                return res.status(200).json({ success: true, reply: 'Ese agente ya no existe. Recarga la lista de agentes.', model: 'skill:no-agent', usage: null });
+            }
+
+            const composed = composeSystemPrompt(agent, skill);
+            const systemPrompt = `${composed}${formatFewShot(examples)}\n\n[NOTA DE SIMULACIÓN] Estás en una prueba dentro del panel SuperAdmin: quien escribe es un reclutador actuando COMO SI fuera candidato. No es real, no mandes nada a ningún canal.`;
+            const history = normalizeHistory(req.body?.history);
+            const messages = [...history, { role: 'user', content: message }];
+
+            const result = await getOpenAIResponse(messages, systemPrompt, 'gpt-4o-mini', null, null, null, MAX_REPLY_TOKENS);
+            await addTrainingTokens(redis, result.usage?.total_tokens);
+
+            return res.status(200).json({
+                success: true,
+                reply: sanitizeText(result.content, 2200),
+                model: result.model,
+                usage: result.usage || null,
+                composedFrom: { agent: agent?.name || null, skill: skill?.name || null }
+            });
+        }
+
+        // ── Modo legado (persona global única) ──
         const [persona, examples] = await Promise.all([
             getPersona(redis),
             getTrainingExamples(redis)
