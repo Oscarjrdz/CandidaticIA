@@ -3393,20 +3393,10 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
 
     useEffect(() => {
         const c = selectedChat;
-        // DEBUG TEMPORAL: por qué el agente (no) dispara. Quitar cuando quede.
-        if (agentMode && c) {
-            const tg = Array.isArray(c.tags) ? c.tags.map(t => String(typeof t === 'string' ? t : t?.name || '').trim().toUpperCase()) : [];
-            console.log('[AGENTE debug]', {
-                agentMode, chatId: c.id,
-                yaAtendido: agentHandledRef.current.has(c.id),
-                blocked: c.blocked,
-                completo: isProfileComplete(c),
-                statusAudit: c.statusAudit, paso2Estado: c.paso2Estado,
-                tags: tg, tieneTag: tg.includes(AGENT_TAG),
-                quickRepliesCargados: quickReplies.length,
-                tienePuntoKatcon: quickReplies.some(q => String(q.name || '').trim().toUpperCase() === AGENT_BANK_NAME)
-            });
-        }
+        // DEBUG TEMPORAL: texto plano copiable (Chrome colapsa los objetos).
+        const tg = c && Array.isArray(c.tags) ? c.tags.map(t => String(typeof t === 'string' ? t : t?.name || '').trim().toUpperCase()) : [];
+        const tienePK = quickReplies.some(q => String(q.name || '').trim().toUpperCase() === AGENT_BANK_NAME);
+        console.log(`AGENTE-DBG agentMode=${agentMode} chat=${c?.id || 'null'} yaAtendido=${c ? agentHandledRef.current.has(c.id) : '-'} blocked=${c?.blocked} completo=${c ? isProfileComplete(c) : '-'} paso2=${c?.paso2Estado} tieneTag=${tg.includes(AGENT_TAG)} tags=[${tg.join(',')}] banco=${quickReplies.length} tienePUNTOKATCON=${tienePK}`);
         if (!agentMode) return;
         if (!c || agentHandledRef.current.has(c.id)) return;
         if (c.blocked) return;                       // IA ya silenciada / manual → no tocar
