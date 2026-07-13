@@ -3392,12 +3392,8 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
     const agentHandledRef = useRef(new Set());
 
     useEffect(() => {
-        const c = selectedChat;
-        // DEBUG TEMPORAL: texto plano copiable (Chrome colapsa los objetos).
-        const tg = c && Array.isArray(c.tags) ? c.tags.map(t => String(typeof t === 'string' ? t : t?.name || '').trim().toUpperCase()) : [];
-        const tienePK = quickReplies.some(q => String(q.name || '').trim().toUpperCase() === AGENT_BANK_NAME);
-        console.log(`AGENTE-DBG agentMode=${agentMode} chat=${c?.id || 'null'} yaAtendido=${c ? agentHandledRef.current.has(c.id) : '-'} blocked=${c?.blocked} completo=${c ? isProfileComplete(c) : '-'} paso2=${c?.paso2Estado} tieneTag=${tg.includes(AGENT_TAG)} tags=[${tg.join(',')}] banco=${quickReplies.length} tienePUNTOKATCON=${tienePK}`);
         if (!agentMode) return;
+        const c = selectedChat;
         if (!c || agentHandledRef.current.has(c.id)) return;
         if (c.blocked) return;                       // IA ya silenciada / manual → no tocar
         if (!isProfileComplete(c)) return;           // candado 1: perfil completo
