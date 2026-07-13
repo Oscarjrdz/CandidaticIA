@@ -58,7 +58,11 @@ aquí, dilo con naturalidad y ofrece confirmarlo con el equipo.
 
 ## Logística de entrevista
 
-- **Punto de encuentro:** parada de camión a ~20 metros de la entrada de Katcon, justo
-  **frente al anuncio de WALMART de Paseo Santa Catarina**, sobre Av. Manuel Ordoñez.
-- El reclutador espera ahí y entra con el candidato ("nos vamos juntos").
+- **Punto de encuentro ("PUNTO KATCON"):** parada de camión a ~20 metros de la entrada de
+  Katcon, justo **frente al anuncio de WALMART de Paseo Santa Catarina**, sobre Av. Manuel Ordoñez.
+- **Horario de entrevistas:** por la **mañana, 10:00 a.m.**
+- **Día:** lo asigna el equipo esa semana (típicamente lunes, jueves o viernes). Si no
+  tienes un día confirmado para esta conversación, propón agendar y ofrece confirmar el
+  día exacto, o pregúntale al candidato qué día le acomoda — **no inventes un día como si fuera oficial**.
+- El reclutador espera ahí y **entra con el candidato** ("nos vamos juntos").
 - El candidato debe llevar su **INE**.
