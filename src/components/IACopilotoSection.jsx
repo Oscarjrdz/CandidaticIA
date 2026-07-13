@@ -1,63 +1,110 @@
 import React, { useEffect, useState } from 'react';
-import { Sparkles, LayoutDashboard, UserRound, Building2, GraduationCap } from 'lucide-react';
-import ArchitectureMap from './brenda-training/ArchitectureMap';
-import AgentsLibrary from './brenda-training/AgentsLibrary';
-import SkillsLibrary from './brenda-training/SkillsLibrary';
-import ComposePanel from './brenda-training/ComposePanel';
-import ChatCandidatoPanel from './brenda-training/ChatCandidatoPanel';
-import ChatTrainingPanel from './brenda-training/ChatTrainingPanel';
-import PersonaPanel from './brenda-training/PersonaPanel';
-import { apiFetch } from './brenda-training/api';
+import { Sparkles, MessageCircle, UserRound, Building2, X, ShieldCheck, ShieldAlert } from 'lucide-react';
+import SkillsBrowser from './brenda-agent/SkillsBrowser';
+import AgentChat from './brenda-agent/AgentChat';
+import { agentFetch } from './brenda-agent/api';
 
 // ════════════════════════════════════════════════════════════════════════════
-// SECCIÓN "Brenda IA" = workspace SKILLS CANDIDATIC.
+// SECCIÓN "Brenda IA" = SKILLS CANDIDATIC, agente NATIVO de Anthropic (Claude).
 //
-// La casa "Skills Candidatic" donde viven los agentes. Modelo de 3 capas:
-//   Brenda (cuenta WhatsApp/Meta, ya existe) → Agentes (reclutadores: estilo)
-//   × Skills (clientes: hechos cerrados).  Ver api/utils/brenda-training.js.
+// Reescrito desde cero sobre el estándar de Anthropic (borrado el sistema casero
+// anterior que corría en GPT + JSON de Redis). Ahora:
+//   - Skills = carpetas SKILL.md en /skills (formato oficial, versionadas en git).
+//   - Agente = SDK oficial @anthropic-ai/sdk, claude-opus-4-8, adaptive thinking,
+//     tool use real (herramienta consultar_vacante).
 //
-// 4 pestañas:
-//   • Arquitectura → el mapa visual + componer/probar (Agente × Skill).
-//   • Agentes      → CRUD de reclutadores (Oscar Agent, Paty Agent…).
-//   • Skills       → CRUD de clientes/vacantes (Skill Katcon, Skill Metalsa…).
-//   • Entrenamiento→ las 3 herramientas originales (chat candidato, enseñar
-//                    ejemplos, y editor/resync de la personalidad legada).
+// Modelo de 3 capas: Brenda (canal WhatsApp/Meta, ya existe) + recruiter-* (estilo)
+// × client-* (hechos del cliente). Solo SuperAdmin.
 //
-// El estado de agents/skills vive aquí (lifted) para que el mapa y el panel de
-// composición reflejen lo que se crea en las otras pestañas sin recargar.
-// NO toca a Brenda Extractora (api/ai/agent.js). Solo SuperAdmin.
+// Para ir en vivo falta configurar ANTHROPIC_API_KEY en Vercel (se avisa en la UI).
 // ════════════════════════════════════════════════════════════════════════════
 
-const TABS = [
-    { id: 'arquitectura', label: 'Arquitectura', icon: LayoutDashboard },
-    { id: 'agentes', label: 'Agentes', icon: UserRound },
-    { id: 'skills', label: 'Skills / Clientes', icon: Building2 },
-    { id: 'entrenamiento', label: 'Entrenamiento', icon: GraduationCap }
-];
+const AGENT_COLOR = '#2563eb';
+const CLIENT_COLOR = '#d97706';
+const BRENDA_COLOR = '#16a34a';
+
+const ArchitectureMap = ({ recruiters, clients }) => (
+    <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-5">
+        <div className="mb-4">
+            <h3 className="text-sm font-bold text-gray-900 dark:text-white">Arquitectura nativa</h3>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                <strong>Brenda</strong> (canal) conduce a un <strong>reclutador</strong> (estilo) que se compone con un <strong>cliente</strong> (hechos). Todo corre sobre el agente nativo de Claude.
+            </p>
+        </div>
+
+        {/* Brenda = canal */}
+        <div className="flex flex-col items-center">
+            <div className="flex items-center gap-3 rounded-2xl border-2 px-5 py-3 shadow-sm" style={{ borderColor: `${BRENDA_COLOR}66`, backgroundColor: `${BRENDA_COLOR}0f` }}>
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${BRENDA_COLOR}22` }}>
+                    <MessageCircle className="w-5 h-5" style={{ color: BRENDA_COLOR }} />
+                </div>
+                <div>
+                    <div className="text-sm font-bold text-gray-900 dark:text-white">Brenda</div>
+                    <div className="text-[11px] text-gray-500 dark:text-gray-400">Cuenta de WhatsApp / Meta · el candidato siempre la ve · ya existe</div>
+                </div>
+            </div>
+            <div className="w-px h-6" style={{ backgroundColor: `${BRENDA_COLOR}66` }} />
+            <div className="text-[10px] uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-2">agente nativo de Claude →</div>
+        </div>
+
+        {/* recruiter × client */}
+        <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_1fr] gap-4 items-stretch">
+            <div className="rounded-xl border border-gray-200 dark:border-gray-700 p-3">
+                <div className="flex items-center gap-2 mb-2">
+                    <UserRound className="w-4 h-4" style={{ color: AGENT_COLOR }} />
+                    <span className="text-xs font-bold" style={{ color: AGENT_COLOR }}>Reclutadores (estilo) · recruiter-*</span>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                    {recruiters.length === 0
+                        ? <span className="text-[11px] text-gray-400">Sin skills recruiter-* aún</span>
+                        : recruiters.map((r) => (
+                            <span key={r.folder} className="text-xs font-semibold px-2.5 py-1 rounded-lg border bg-white dark:bg-gray-800" style={{ borderColor: `${AGENT_COLOR}55`, color: AGENT_COLOR }}>{r.name || r.folder}</span>
+                        ))}
+                </div>
+            </div>
+            <div className="flex items-center justify-center">
+                <div className="w-9 h-9 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center"><X className="w-5 h-5 text-gray-400 dark:text-gray-300" /></div>
+            </div>
+            <div className="rounded-xl border border-gray-200 dark:border-gray-700 p-3">
+                <div className="flex items-center gap-2 mb-2">
+                    <Building2 className="w-4 h-4" style={{ color: CLIENT_COLOR }} />
+                    <span className="text-xs font-bold" style={{ color: CLIENT_COLOR }}>Clientes (hechos) · client-*</span>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                    {clients.length === 0
+                        ? <span className="text-[11px] text-gray-400">Sin skills client-* aún</span>
+                        : clients.map((c) => (
+                            <span key={c.folder} className="text-xs font-semibold px-2.5 py-1 rounded-lg border bg-white dark:bg-gray-800" style={{ borderColor: `${CLIENT_COLOR}55`, color: CLIENT_COLOR }}>{c.name || c.folder}</span>
+                        ))}
+                </div>
+            </div>
+        </div>
+    </div>
+);
 
 const IACopilotoSection = () => {
-    const [activeTab, setActiveTab] = useState('arquitectura');
-    const [agents, setAgents] = useState([]);
     const [skills, setSkills] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [hasApiKey, setHasApiKey] = useState(false);
+    const [model, setModel] = useState('claude-opus-4-8');
 
-    // Carga inicial para que el mapa y el panel de composición tengan datos
-    // aunque el usuario aterrice en la pestaña Arquitectura (donde las librerías
-    // CRUD no están montadas). Silencioso: si falla, las pestañas de CRUD
-    // mostrarán su propio error al abrirlas.
     useEffect(() => {
         (async () => {
             try {
-                const [a, s] = await Promise.all([
-                    apiFetch('/api/brenda-training/agents'),
-                    apiFetch('/api/brenda-training/skills')
-                ]);
-                setAgents(a.agents || []);
-                setSkills(s.skills || []);
+                const data = await agentFetch('/api/brenda-agent/skills');
+                setSkills(data.skills || []);
+                setHasApiKey(Boolean(data.hasApiKey));
+                if (data.model) setModel(data.model);
             } catch {
-                /* las librerías CRUD reportan su propio error al abrir sus pestañas */
+                /* la UI muestra estado vacío si falla */
+            } finally {
+                setLoading(false);
             }
         })();
     }, []);
+
+    const recruiters = skills.filter((s) => s.kind === 'recruiter');
+    const clients = skills.filter((s) => s.kind === 'client');
 
     return (
         <div className="w-full max-w-6xl mx-auto space-y-5">
@@ -72,67 +119,31 @@ const IACopilotoSection = () => {
                             <h2 className="text-xl font-bold text-gray-900 dark:text-white">Brenda IA · Skills Candidatic</h2>
                         </div>
                         <p className="text-sm text-gray-600 dark:text-gray-300 max-w-2xl">
-                            La casa donde viven los agentes reclutadores. Cada <strong>Agente</strong> (Oscar, Paty…) aporta el estilo;
-                            cada <strong>Skill</strong> (Katcon, Metalsa…) aporta los hechos del cliente; <strong>Brenda</strong> (la cuenta de WhatsApp) es la cara que envía. Se componen en vivo.
+                            Agente <strong>nativo de Anthropic (Claude)</strong>. Los skills son carpetas <code className="text-xs">SKILL.md</code> versionadas en git;
+                            el agente corre sobre el SDK oficial con tool use. Cada <strong>reclutador</strong> aporta el estilo, cada <strong>cliente</strong> los hechos, y <strong>Brenda</strong> (WhatsApp) es la cara que envía.
                         </p>
                     </div>
-                    <span className="hidden sm:inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-100 dark:bg-emerald-900/20 dark:text-emerald-300 dark:border-emerald-800">
-                        Solo SuperAdmin
-                    </span>
+                    <div className="flex flex-col items-end gap-2 shrink-0">
+                        <span className="hidden sm:inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-100 dark:bg-emerald-900/20 dark:text-emerald-300 dark:border-emerald-800">
+                            Solo SuperAdmin
+                        </span>
+                        {!loading && (
+                            hasApiKey ? (
+                                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400"><ShieldCheck className="w-3.5 h-3.5" /> Claude conectado</span>
+                            ) : (
+                                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-600 dark:text-amber-400" title="Falta ANTHROPIC_API_KEY en Vercel"><ShieldAlert className="w-3.5 h-3.5" /> Falta API key</span>
+                            )
+                        )}
+                    </div>
                 </div>
             </section>
 
-            {/* Tabs */}
-            <div className="flex flex-wrap gap-1.5 border-b border-gray-200 dark:border-gray-700">
-                {TABS.map((t) => {
-                    const Icon = t.icon;
-                    const active = activeTab === t.id;
-                    return (
-                        <button
-                            key={t.id}
-                            onClick={() => setActiveTab(t.id)}
-                            className={`inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold rounded-t-lg border-b-2 -mb-px transition-colors ${
-                                active
-                                    ? 'border-blue-600 text-blue-600 dark:text-blue-400'
-                                    : 'border-transparent text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200'
-                            }`}
-                        >
-                            <Icon className="w-4 h-4" /> {t.label}
-                        </button>
-                    );
-                })}
+            <ArchitectureMap recruiters={recruiters} clients={clients} />
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
+                <AgentChat skills={skills} hasApiKey={hasApiKey} model={model} />
+                <SkillsBrowser skills={skills} loading={loading} />
             </div>
-
-            {/* Contenido por pestaña */}
-            {activeTab === 'arquitectura' && (
-                <div className="space-y-5">
-                    <ArchitectureMap agents={agents} skills={skills} />
-                    <ComposePanel agents={agents} skills={skills} />
-                </div>
-            )}
-
-            {activeTab === 'agentes' && (
-                <AgentsLibrary onChange={setAgents} />
-            )}
-
-            {activeTab === 'skills' && (
-                <SkillsLibrary onChange={setSkills} />
-            )}
-
-            {activeTab === 'entrenamiento' && (
-                <div className="space-y-3">
-                    <p className="text-xs text-gray-500 dark:text-gray-400">
-                        Herramientas de entrenamiento: prueba la personalidad legada, enséñale ejemplos candidato→reclutador, y edita o
-                        genera la guía de estilo desde tus chats reales. La propuesta que genera "Personalidad" puedes pegarla como
-                        guía de estilo de un <strong>Agente</strong> en la pestaña Agentes.
-                    </p>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-start">
-                        <ChatCandidatoPanel />
-                        <ChatTrainingPanel />
-                        <PersonaPanel />
-                    </div>
-                </div>
-            )}
         </div>
     );
 };

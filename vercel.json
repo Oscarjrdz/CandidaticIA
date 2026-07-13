@@ -104,6 +104,13 @@
         },
         "api/cron/reengagement.js": {
             "maxDuration": 60
+        },
+        "api/brenda-agent/chat.js": {
+            "maxDuration": 60,
+            "includeFiles": "skills/**"
+        },
+        "api/brenda-agent/skills.js": {
+            "includeFiles": "skills/**"
         }
     },
     "crons": [

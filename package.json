@@ -13,6 +13,7 @@
     "ai:turbo": "node api/workers/turbo-consumer.js"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.111.0",
     "@dnd-kit/core": "^6.1.0",
     "@dnd-kit/sortable": "^8.0.0",
     "@dnd-kit/utilities": "^3.2.2",
