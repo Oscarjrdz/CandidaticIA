@@ -63,6 +63,11 @@ function AppShell() {
 
   const [theme, setTheme] = useState('light');
   const [activeSection, setActiveSection] = useState('candidates');
+  // Toggle GLOBAL del Agente Claude (Chat Web). Default OFF y NO persiste — por
+  // seguridad, no se queda encendido entre sesiones. Cuando está ON, en un chat
+  // de candidato elegible (perfil completo + tag KATCON ANUNCIO) el agente manda
+  // el PUNTO KATCON del banco. Ver el efecto en ChatSection.jsx.
+  const [agentMode, setAgentMode] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
 
@@ -218,7 +223,7 @@ function AppShell() {
         <main className="flex-1 h-full w-full p-0 overflow-hidden">
           <ErrorBoundary>
             <Suspense fallback={<SectionSkeleton />}>
-              <ChatSection rolePermissions={rolePermissions} onlineUsers={onlineUsers} unreadCountHint={chatUnreadCount} onUnreadCountChange={handleUnreadCountChange} />
+              <ChatSection rolePermissions={rolePermissions} onlineUsers={onlineUsers} unreadCountHint={chatUnreadCount} onUnreadCountChange={handleUnreadCountChange} agentMode={agentMode} />
             </Suspense>
           </ErrorBoundary>
         </main>
@@ -327,6 +332,24 @@ function AppShell() {
               </div>
 
               <div className="flex items-center space-x-2 sm:space-x-4 shrink-0">
+                {/* Toggle Agente Claude — solo en Chat Web y solo SuperAdmin */}
+                {activeSection === 'chat' && user?.role === 'SuperAdmin' && (
+                  <button
+                    onClick={() => setAgentMode(v => !v)}
+                    title={agentMode ? 'Agente Claude ACTIVO: en candidatos elegibles (perfil completo + KATCON ANUNCIO) manda el PUNTO KATCON al abrir su chat' : 'Activar Agente Claude'}
+                    className={`hidden sm:inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${
+                      agentMode
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/25 dark:text-emerald-300 dark:border-emerald-700'
+                        : 'bg-gray-100 text-gray-500 border-gray-200 dark:bg-gray-700 dark:text-gray-400 dark:border-gray-600'
+                    }`}
+                  >
+                    <span className={`w-8 h-4 rounded-full flex items-center px-0.5 transition-colors ${agentMode ? 'bg-emerald-500 justify-end' : 'bg-gray-300 dark:bg-gray-500 justify-start'}`}>
+                      <span className="w-3 h-3 rounded-full bg-white shadow" />
+                    </span>
+                    Agente {agentMode ? 'ON' : 'OFF'}
+                  </button>
+                )}
+
                 {/* Greeting */}
                 {user && user.name && (
                   <div className="hidden md:flex items-center space-x-2 animate-in fade-in slide-in-from-right-4 duration-700">
@@ -368,7 +391,7 @@ function AppShell() {
           {activeSection === 'candidates' ? (
             <CandidatesSection />
           ) : activeSection === 'chat' ? (
-            <ChatSection rolePermissions={rolePermissions} onlineUsers={onlineUsers} unreadCountHint={chatUnreadCount} onUnreadCountChange={handleUnreadCountChange} />
+            <ChatSection rolePermissions={rolePermissions} onlineUsers={onlineUsers} unreadCountHint={chatUnreadCount} onUnreadCountChange={handleUnreadCountChange} agentMode={agentMode} />
           ) : activeSection === 'bulks' ? (
             <BulksSection />
           ) : activeSection === 'bot-ia' ? (

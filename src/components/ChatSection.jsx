@@ -596,7 +596,7 @@ const MessagesEncryptionHeader = () => (
     </div>
 );
 
-export default function ChatSection({ rolePermissions, onlineUsers = [], unreadCountHint = null, onUnreadCountChange }) {
+export default function ChatSection({ rolePermissions, onlineUsers = [], unreadCountHint = null, onUnreadCountChange, agentMode = false }) {
     const { showToast } = useToastContext();
     const { user, setUser } = useAuthContext();
 
@@ -3262,9 +3262,10 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         }
     };
 
-    const handleSend = (msg) => {
+    const handleSend = (msg, explicitImages) => {
         const textMessage = (msg || '').trim();
-        const queuedImages = [...pendingQrImages];
+        // El agente pasa las imágenes explícitas (evita carrera con el estado pendingQrImages).
+        const queuedImages = explicitImages ? [...explicitImages] : [...pendingQrImages];
         if ((!textMessage && !queuedImages.length) || !selectedChat) return;
 
         const currentChat = selectedChat;
@@ -3378,6 +3379,41 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
             if (input) input.focus();
         }, 50);
     };
+
+    // ═══ AGENTE CLAUDE — auto-envío del Paso 1 (determinista) ═══════════════════
+    // CANDADOS (regla de Oscar): candidato con perfil COMPLETO + etiqueta "KATCON
+    // ANUNCIO" + IA todavía activa (no intervenido) = el agente manda del banco el
+    // mensaje "PUNTO KATCON" (texto + imágenes, EXACTO). Al mandarse entra al flujo
+    // normal → autoSilenceBot lo pone en modo manual (IA desactivada). Oscar audita
+    // el mensaje ya enviado en el chat. Una sola vez por candidato (agentHandledRef).
+    // El envío es DETERMINISTA (no llama al LLM): es literalmente el banco PUNTO KATCON.
+    const AGENT_TAG = 'KATCON ANUNCIO';
+    const AGENT_BANK_NAME = 'PUNTO KATCON';
+    const agentHandledRef = useRef(new Set());
+
+    useEffect(() => {
+        if (!agentMode) return;
+        const c = selectedChat;
+        if (!c || agentHandledRef.current.has(c.id)) return;
+        if (c.blocked) return;                       // IA ya silenciada / manual → no tocar
+        if (!isProfileComplete(c)) return;           // candado 1: perfil completo
+        const tags = Array.isArray(c.tags)
+            ? c.tags.map(t => String(typeof t === 'string' ? t : t?.name || '').trim().toUpperCase())
+            : [];
+        if (!tags.includes(AGENT_TAG)) return;       // candado 2: etiqueta KATCON ANUNCIO
+
+        const qr = quickReplies.find(q => String(q.name || '').trim().toUpperCase() === AGENT_BANK_NAME);
+        if (!qr) {
+            showToast && showToast(`Agente: no encontré el mensaje "${AGENT_BANK_NAME}" en el banco de respuestas`, 'error');
+            return;
+        }
+        agentHandledRef.current.add(c.id);           // marca: no re-enviar a este candidato
+        const imgs = qr.imageUrls?.length ? qr.imageUrls : (qr.imageUrl ? [qr.imageUrl] : []);
+        const resolved = substituteVariables(qr.message || '', c);
+        handleSend(resolved, imgs);                  // envía EXACTO (texto + imágenes); autoSilenceBot → manual
+        showToast && showToast(`🤖 Agente envió "${AGENT_BANK_NAME}" a ${c.nombreReal?.split(' ')[0] || c.nombre || 'candidato'} · IA en modo manual`, 'success', 5000);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [agentMode, selectedChat?.id, quickReplies]);
 
     const handleSendTemplate = (templateObj) => {
         if (!selectedChat) return;
