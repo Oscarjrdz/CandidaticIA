@@ -58,6 +58,9 @@ aquí, dilo con naturalidad y ofrece confirmarlo con el equipo.
 
 ## Logística de entrevista
 
+- **Mensaje de banco para CITAR:** se llama exactamente **`PUNTO KATCON`**. Para agendar
+  la entrevista, envíalo con la herramienta `enviar_mensaje_banco` (nombre: "PUNTO KATCON") —
+  TAL CUAL, no lo reescribas. Ese mensaje ya trae el punto de encuentro, el mapa y las fotos.
 - **Punto de encuentro ("PUNTO KATCON"):** parada de camión a ~20 metros de la entrada de
   Katcon, justo **frente al anuncio de WALMART de Paseo Santa Catarina**, sobre Av. Manuel Ordoñez.
 - **Horario de entrevistas:** por la **mañana, 10:00 a.m.**

@@ -4,6 +4,7 @@ import {
     hasAnthropicKey,
     loadSkill,
     assembleSystemPrompt,
+    getBankMessage,
     AGENT_MODEL
 } from '../utils/brenda-agent.js';
 
@@ -80,21 +81,39 @@ export default async function handler(req, res) {
         const system = assembleSystemPrompt(recruiterFolder);
         const clientSkill = clientFolder ? loadSkill(clientFolder) : null;
 
-        // Herramienta nativa de Claude: consultar los hechos cerrados de la vacante.
-        // El resultado es el cuerpo del SKILL.md del cliente (los datos reales).
-        const tools = [{
-            name: 'consultar_vacante',
-            description: 'Consulta los hechos cerrados de la vacante del cliente activo: sueldo, turno, descansos, ubicación, beneficios y reglas. Úsala cuando el candidato pregunte por condiciones concretas o cuando necesites un dato para persuadir. Devuelve la ficha oficial de la vacante.',
-            input_schema: {
-                type: 'object',
-                properties: {
-                    motivo: { type: 'string', description: 'Qué dato buscas (ej. "sueldo", "horario", "beneficios")' }
-                },
-                required: []
+        // Candidato de prueba: para sustituir {{nombre}} en los mensajes de banco.
+        // En producción esto vendrá del perfil real del candidato.
+        const testCandidate = { nombreReal: sanitize(req.body?.candidateName, 60) };
+
+        // ── Herramientas nativas de Claude ──
+        // 1. consultar_vacante: el LLM PIENSA con los hechos del cliente (SKILL.md).
+        // 2. enviar_mensaje_banco: cuando toca mandar un mensaje del banco (ej. la cita
+        //    "PUNTO KATCON"), NO lo reconstruye — se envía el texto EXACTO del banco.
+        const tools = [
+            {
+                name: 'consultar_vacante',
+                description: 'Consulta los hechos cerrados de la vacante del cliente activo: sueldo, turno, descansos, ubicación, beneficios y reglas. Úsala cuando el candidato pregunte por condiciones concretas o cuando necesites un dato para persuadir/responder. Devuelve la ficha oficial de la vacante.',
+                input_schema: {
+                    type: 'object',
+                    properties: { motivo: { type: 'string', description: 'Qué dato buscas' } },
+                    required: []
+                }
+            },
+            {
+                name: 'enviar_mensaje_banco',
+                description: 'Envía al candidato un mensaje EXACTO del banco de respuestas (plantillas oficiales del reclutador), TAL CUAL, sin reescribirlo. Úsala cuando toca mandar un mensaje de plantilla en vez de redactar: sobre todo para CITAR a entrevista (ej. el mensaje "PUNTO KATCON"). Tú solo decides cuándo enviarlo; el texto y las imágenes salen del banco intactos.',
+                input_schema: {
+                    type: 'object',
+                    properties: {
+                        nombre: { type: 'string', description: 'Nombre exacto del mensaje de banco a enviar, ej. "PUNTO KATCON"' }
+                    },
+                    required: ['nombre']
+                }
             }
-        }];
+        ];
 
         const messages = [...normalizeHistory(req.body?.history), { role: 'user', content: message }];
+        const bankMessages = []; // mensajes de banco enviados verbatim en este turno
 
         let usageTokens = 0;
         let toolCalls = 0;
@@ -126,6 +145,16 @@ export default async function handler(req, res) {
                     result = clientSkill
                         ? `Ficha de la vacante (${clientSkill.name}):\n\n${clientSkill.body}`
                         : 'No hay una vacante/cliente seleccionado en esta conversación. Dile al candidato que confirmarás los datos y ofrece pasarlo con el equipo.';
+                } else if (block.name === 'enviar_mensaje_banco') {
+                    // "Mandar del banco": el texto se toma EXACTO de Redis, no lo genera el LLM.
+                    const nombre = block.input?.nombre || '';
+                    const bank = await getBankMessage(nombre, testCandidate);
+                    if (bank) {
+                        bankMessages.push(bank);
+                        result = `Mensaje de banco "${bank.name}" ENVIADO al candidato tal cual (${bank.imageCount} imágenes adjuntas). Ya quedó enviado — NO lo repitas ni lo reescribas. Si no hace falta agregar nada más, termina el turno.`;
+                    } else {
+                        result = `No encontré un mensaje de banco llamado "${nombre}". Revisa el nombre exacto, o responde tú sin inventar la logística.`;
+                    }
                 } else {
                     result = 'Herramienta desconocida.';
                 }
@@ -148,12 +177,16 @@ export default async function handler(req, res) {
 
         // Claude Fable/Opus pueden devolver stop_reason "refusal" (clasificadores) — manéjalo.
         if (response.stop_reason === 'refusal') {
-            return res.status(200).json({ success: true, reply: 'No puedo ayudar con eso en este momento.', model: response.model, usageTokens });
+            return res.status(200).json({ success: true, reply: 'No puedo ayudar con eso en este momento.', model: response.model, usageTokens, bankMessages });
         }
 
+        // El texto del LLM puede venir vacío si solo mandó un mensaje de banco (eso está
+        // bien). `bankMessages` trae los mensajes de banco enviados verbatim.
+        const llmText = extractText(response.content);
         return res.status(200).json({
             success: true,
-            reply: extractText(response.content) || '(sin texto)',
+            reply: llmText,          // lo que el agente REDACTÓ (puede ir vacío)
+            bankMessages,            // mensajes de banco enviados TAL CUAL (exactos)
             model: response.model,
             usageTokens,
             toolCalls

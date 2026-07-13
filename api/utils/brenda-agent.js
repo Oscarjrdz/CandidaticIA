@@ -22,7 +22,8 @@
 import fs from 'fs';
 import path from 'path';
 import Anthropic from '@anthropic-ai/sdk';
-import { getUsers, validateAdminSession } from './storage.js';
+import { getUsers, validateAdminSession, getRedisClient } from './storage.js';
+import { substituteVariables } from './shortcuts.js';
 
 // Modelo por defecto: el más capaz de Anthropic. Para alto volumen de WhatsApp se
 // puede bajar a claude-sonnet-5 (mucho más económico) — es decisión de costo de Oscar.
@@ -121,6 +122,34 @@ export function listSkills() {
  * aquí — el agente los pide vía la herramienta `consultar_vacante` (progressive
  * disclosure: solo entran al contexto cuando se necesitan).
  */
+/**
+ * Trae un mensaje EXACTO del banco de respuestas (el mismo que usa el reclutador
+ * humano), guardado en Redis `candidatic:quick_replies`. Sustituye variables
+ * ({{nombre}}, etc.) con los datos del candidato. Devuelve {name, message, imageCount}
+ * o null si no existe. ESTO es "mandar del banco": el texto NO lo genera el LLM, se
+ * envía tal cual — el LLM solo DECIDE cuándo mandarlo.
+ */
+export async function getBankMessage(name, candidate) {
+    const redis = getRedisClient();
+    if (!redis) return null;
+    try {
+        const raw = await redis.get('candidatic:quick_replies');
+        const replies = raw ? JSON.parse(raw) : [];
+        const norm = (s) => String(s || '').trim().toUpperCase();
+        const target = norm(name);
+        const q = replies.find((r) => norm(r.name) === target)
+            || replies.find((r) => norm(r.name).includes(target) && target.length > 3);
+        if (!q) return null;
+        const message = substituteVariables(q.message || '', candidate || {});
+        const images = Array.isArray(q.imageUrls) && q.imageUrls.length
+            ? q.imageUrls
+            : [q.imageUrl, q.imageUrl2, q.imageUrl3, q.imageUrl4].filter(Boolean);
+        return { name: q.name, message, imageCount: images.length };
+    } catch {
+        return null;
+    }
+}
+
 export function assembleSystemPrompt(recruiterFolder) {
     const base = loadSkill('brenda-recruiter-base');
     const recruiter = recruiterFolder ? loadSkill(recruiterFolder) : null;

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Send, Loader2, Bot, Wrench } from 'lucide-react';
+import { Send, Loader2, Bot, Wrench, FileText } from 'lucide-react';
 import { agentFetch } from './api';
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -29,6 +29,7 @@ const AgentChat = ({ skills = [], hasApiKey, model }) => {
 
     const [recruiter, setRecruiter] = useState('');
     const [client, setClient] = useState('');
+    const [candidateName, setCandidateName] = useState('');
     const [messages, setMessages] = useState([]);
     const [input, setInput] = useState('');
     const [sending, setSending] = useState(false);
@@ -45,12 +46,20 @@ const AgentChat = ({ skills = [], hasApiKey, model }) => {
         setSending(true);
         setMessages((prev) => [...prev, { role: 'user', content: clean }]);
         try {
-            const history = messages.slice(-MAX_HISTORY).map((m) => ({ role: m.role, content: m.content }));
+            const history = messages.slice(-MAX_HISTORY).flatMap((m) => (
+                m.role === 'bank' ? [{ role: 'assistant', content: m.content }] : [{ role: m.role, content: m.content }]
+            ));
             const data = await agentFetch('/api/brenda-agent/chat', {
                 method: 'POST',
-                body: { message: clean, history, recruiter, client }
+                body: { message: clean, history, recruiter, client, candidateName }
             });
-            setMessages((prev) => [...prev, { role: 'assistant', content: data.reply, toolCalls: data.toolCalls, usageTokens: data.usageTokens, model: data.model }]);
+            // El agente puede: redactar texto (reply), y/o mandar mensajes de banco EXACTOS.
+            const bank = Array.isArray(data.bankMessages) ? data.bankMessages : [];
+            const newMsgs = [];
+            if (data.reply && data.reply.trim()) newMsgs.push({ role: 'assistant', content: data.reply, toolCalls: data.toolCalls, usageTokens: data.usageTokens, model: data.model });
+            for (const b of bank) newMsgs.push({ role: 'bank', content: b.message, bankName: b.name, imageCount: b.imageCount });
+            if (newMsgs.length === 0) newMsgs.push({ role: 'assistant', content: '(sin respuesta)' });
+            setMessages((prev) => [...prev, ...newMsgs]);
         } catch (e) {
             setMessages((prev) => [...prev, { role: 'assistant', content: `No pude responder: ${e.message}` }]);
         } finally {
@@ -87,21 +96,40 @@ const AgentChat = ({ skills = [], hasApiKey, model }) => {
                 </select>
             </div>
 
+            {/* Nombre de prueba: rellena {{nombre}} en los mensajes de banco */}
+            <input
+                value={candidateName}
+                onChange={(e) => setCandidateName(e.target.value)}
+                placeholder="Nombre del candidato (prueba, para {{nombre}} en los mensajes de banco)"
+                className="w-full mb-3 text-sm rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-3 py-2 text-gray-900 dark:text-white outline-none focus:border-purple-500"
+            />
+
             <div className="rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
                 <div className="h-72 overflow-y-auto px-3 py-3 space-y-2 bg-gray-50 dark:bg-gray-950">
                     {messages.length === 0 && (
                         <p className="text-[11px] text-gray-400 text-center pt-8">Escribe como si fueras el candidato. El agente usará el estilo del reclutador y consultará los datos del cliente cuando los necesite.</p>
                     )}
                     {messages.map((m, i) => (
-                        <div key={i} className="space-y-1">
-                            <Bubble role={m.role}>{m.content}</Bubble>
-                            {m.role === 'assistant' && (m.toolCalls > 0 || m.usageTokens) && (
-                                <div className="flex items-center gap-2 text-[10px] text-gray-400 dark:text-gray-500 pl-1">
-                                    {m.toolCalls > 0 && <span className="inline-flex items-center gap-1"><Wrench className="w-3 h-3" /> consultó la vacante ({m.toolCalls})</span>}
-                                    {m.usageTokens ? <span>· {m.usageTokens} tokens</span> : null}
+                        m.role === 'bank' ? (
+                            <div key={i} className="space-y-1">
+                                <div className="flex items-center gap-1.5 pl-1 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
+                                    <FileText className="w-3 h-3" /> Banco · exacto: {m.bankName}{m.imageCount ? ` (+${m.imageCount} imágenes)` : ''}
                                 </div>
-                            )}
-                        </div>
+                                <div className="flex justify-start">
+                                    <div className="max-w-[85%] rounded-lg px-3 py-2 text-sm leading-relaxed border whitespace-pre-wrap bg-emerald-50 dark:bg-emerald-900/15 text-gray-800 dark:text-gray-100 border-emerald-200 dark:border-emerald-800">{m.content}</div>
+                                </div>
+                            </div>
+                        ) : (
+                            <div key={i} className="space-y-1">
+                                <Bubble role={m.role}>{m.content}</Bubble>
+                                {m.role === 'assistant' && (m.toolCalls > 0 || m.usageTokens) && (
+                                    <div className="flex items-center gap-2 text-[10px] text-gray-400 dark:text-gray-500 pl-1">
+                                        {m.toolCalls > 0 && <span className="inline-flex items-center gap-1"><Wrench className="w-3 h-3" /> usó {m.toolCalls} herramienta(s)</span>}
+                                        {m.usageTokens ? <span>· {m.usageTokens} tokens</span> : null}
+                                    </div>
+                                )}
+                            </div>
+                        )
                     ))}
                     {sending && (
                         <Bubble role="assistant"><span className="flex items-center gap-2 text-gray-400"><Loader2 className="w-4 h-4 animate-spin" /> Pensando…</span></Bubble>
