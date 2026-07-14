@@ -82,42 +82,56 @@ la intervención humana. Oscar audita el mensaje ya enviado.
 
 ---
 
-## 4. Dos disparadores (ambos gateados por el toggle de Oscar)
+## 4. El disparador: EVENT-DRIVEN (server-side) + cron de respaldo
 
 El toggle "Agente" vive en el **super header de Chat Web** (App.jsx, junto a "Hola, Oscar",
 solo para el perfil de Oscar). Su estado **persiste** en `user.preferences.agentMode` (Redis,
 vía `PUT /api/users`). Es el **candado maestro**: si está OFF, nada dispara.
 
-### A) On-open (Chat Web) — `ChatSection.jsx`
-Con el toggle ON, al **abrir el chat** de un candidato elegible, el agente manda el PUNTO
-KATCON en ese momento. Latencia = cuando Oscar abre ese chat. Es el modo de auditar
-uno por uno. Implementado en un `useEffect` (deps: agentMode, chat id, tags.length, blocked,
-quickReplies). Envía vía `handleSend(msg, imgs)` con imágenes explícitas.
+Toda la lógica de envío está en un helper compartido: **`api/utils/agent-katcon.js`**
+(`maybeSendKatconOnComplete`, `sendPuntoKatconTo`, `cumpleCandados`, `getToggleState`,
+`getPuntoKatconBank`). Los dos disparadores lo reutilizan — cero duplicación.
 
-### B) Automático (cron) — `api/cron/agent-katcon.js`
-Corre **cada 15 min** (registrado en `vercel.json` crons). NO requiere abrir el chat. Cuando
-el toggle de Oscar está ON, escanea candidatos, filtra por los 3 candados, y manda PUNTO
-KATCON a los elegibles. Envía por el backend (`sendUltraMsgMessage`); imágenes por URL
-absoluta pública (`https://www.candidatic.com/api/media/<id>.jpg` — `/api/image` es público).
+### A) PRINCIPAL — event-driven en el extractor (`api/ai/agent.js`)
+El disparo va **en el instante exacto en que Brenda termina la extracción**: cuando
+`paso2Estado` pasa a `'completo'` EN ESE TURNO. El tag `KATCON ANUNCIO` ya viene puesto
+**desde que el candidato entró por el anuncio de FB** (`webhook.js`); lo único que faltaba
+era completar → por eso el disparo va justo donde se marca completo. Es una llamada
+**fire-and-forget** (`.catch(()=>{})`, sin `await`) tras persistir al candidato: **nunca
+bloquea ni rompe el extractor**.
 
-**Candados de seguridad del cron:**
-- Gateado por el toggle de Oscar (OFF = no hace nada).
-- **NO RETROACTIVO (corte):** al PRENDER el toggle se guarda `agentModeSince` (timestamp) en
-  el perfil de Oscar. El agente solo atiende candidatos con **actividad DESPUÉS de ese corte**
-  (`lastUserMessageAt >= agentModeSince`). Los que ya estaban (backlog viejo) NO se tocan —
-  Oscar los cita a mano; el agente cubre a los que **van entrando** mientras el toggle está ON.
-  Sin `agentModeSince`, el cron no manda nada.
-- **Tope por corrida `BATCH_CAP = 15`**: rampa suave, no bombardea de golpe.
-- **No re-citar:** si el candidato ya tiene la invitación en su historial ("vengas a una"), se salta.
-- Claim atómico `SADD agent:punto_sent:v1 <id>` (evita doble envío entre corridas; si falla
-  el envío, se libera con SREM para reintentar).
+- **No requiere el dashboard abierto.** Es 100% backend. Flujo de Oscar: *"prendo el toggle,
+  me voy a comer, y a todos los que entren y completen que les mande la cita"* — exacto.
+- **Latencia: segundos** (en cuanto completa), no 15 min.
+- **Consumo: cero polling.** Solo corre cuando un candidato realmente completa. Recibe el
+  snapshot ya mergeado del candidato → no re-lee de Redis.
+
+### B) RESPALDO — cron (`api/cron/agent-katcon.js`)
+Corre **cada 15 min** (registrado en `vercel.json` crons) como **red de seguridad** por si el
+evento se perdió (deploy justo al completar, error puntual, toggle prendido después de que
+alguien ya había completado). La mayoría de las veces no manda nada (el evento ya atendió a
+todos y quedaron con el SADD puesto).
+
+- **Consumo mínimo:** `zrevrangebyscore('candidates:list', '+inf', since)` trae SOLO los
+  candidatos con actividad DESPUÉS del corte — no barre miles. Al prender el toggle
+  (`since=ahora`) devuelve 0; solo crece conforme entran nuevos (≈39 tras 2h, 131 en 24h).
+- Mismo helper de envío que el evento; imágenes por URL pública
+  (`https://www.candidatic.com/api/media/<id>.jpg` — `/api/image` es público).
+- **Tope por corrida `BATCH_CAP = 15`**: rampa suave.
+
+**Candados de seguridad (compartidos por AMBOS disparadores, en `agent-katcon.js`):**
+- **Toggle de Oscar** (`getToggleState`): OFF = nada dispara.
+- **NO RETROACTIVO (corte):** al PRENDER el toggle se guarda `agentModeSince` (timestamp).
+  Solo se atienden candidatos con **actividad DESPUÉS del corte**. El backlog viejo NO se
+  toca — Oscar lo cita a mano; el agente cubre a los que **van entrando**.
+- **Perfil completo** + **etiqueta KATCON ANUNCIO** + **humano nunca intervino** (`!blocked`).
+- **Una sola vez por candidato:** claim atómico `SADD agent:punto_sent:v1 <id>` — **esto es lo
+  que impide el doble envío entre el evento y el cron**. Si el envío falla, se libera con SREM.
+- **No re-citar:** si ya tiene la invitación en su historial ("vengas a una"), se salta.
 - Al enviar: `blocked=true` (modo manual) + el mensaje aparece en el chat vía SSE (auditable).
 
-> **Flujo de Oscar:** "yo cito, me voy a comer, prendo el agente, y que conteste a los que van
-> entrando" — NO retroactivo. El corte (`agentModeSince`) hace exactamente eso.
 > Nota histórica: había un backlog de ~77 candidatos viejos (completos + KATCON ANUNCIO,
-> jamás citados, actividad >72h) que el agente NO toca por el corte — son "leídos/atendidos"
-> en el sistema (checkIfUnread=0) pero nunca fueron citados a entrevista; Oscar los considera cerrados.
+> jamás citados, actividad >72h) que el agente NO toca por el corte — Oscar los considera cerrados.
 
 ---
 
@@ -137,10 +151,12 @@ absoluta pública (`https://www.candidatic.com/api/media/<id>.jpg` — `/api/ima
 | `api/utils/brenda-agent.js` | Loader de SKILL.md, cliente Anthropic, `assembleSystemPrompt`, `getBankMessage`, auth |
 | `api/brenda-agent/chat.js` | Agente conversacional (SDK, tool use) — usado por el chat de prueba en Brenda IA |
 | `api/brenda-agent/skills.js` | Lista/lee los SKILL.md para la UI |
-| `api/cron/agent-katcon.js` | **Disparador automático** (cron 15 min) |
+| `api/utils/agent-katcon.js` | **Helper compartido**: candados, envío, toggle, disparador event-driven |
+| `api/ai/agent.js` | **Disparador PRINCIPAL** (event-driven): llama `maybeSendKatconOnComplete` al completar |
+| `api/cron/agent-katcon.js` | **Disparador de RESPALDO** (cron 15 min, red de seguridad) |
 | `src/components/IACopilotoSection.jsx` | Sección "Brenda IA": mapa, navegador de skills, chat de prueba |
 | `src/components/brenda-agent/*` | UI: AgentChat, SkillsBrowser, api |
-| `src/components/ChatSection.jsx` | Efecto del disparador **on-open** + `handleSend(msg, imgs)` |
+| `src/components/ChatSection.jsx` | (El disparador on-open se ELIMINÓ — ahora es server-side) |
 | `src/App.jsx` | Toggle en super header + persistencia + gating `isOscar` |
 | `vercel.json` | `includeFiles` de skills + cron `agent-katcon` |
 
@@ -161,4 +177,5 @@ absoluta pública (`https://www.candidatic.com/api/media/<id>.jpg` — `/api/ima
 - Editor de skills en la UI (para crear reclutadores/clientes sin tocar archivos).
 - Generalizar los candados a otros clientes (hoy el disparador está fijo a KATCON ANUNCIO / PUNTO KATCON).
 - Pasos 2+ de la conversación (donde el LLM sí piensa y responde dudas), no solo el Paso 1 determinista.
-- Disparador instantáneo en el webhook (latencia de segundos) como alternativa al cron de 15 min.
+- ~~Disparador instantáneo (latencia de segundos)~~ ✅ **HECHO**: event-driven en el extractor
+  (`maybeSendKatconOnComplete` al marcar `paso2Estado='completo'`). El cron quedó como respaldo.

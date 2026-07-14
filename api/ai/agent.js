@@ -26,6 +26,7 @@ import { getOpenAIResponse } from '../utils/openai.js';
 import { processRecruiterMessage } from './recruiter-agent.js';
 
 import { inferGender } from '../utils/gender-helper.js';
+import { maybeSendKatconOnComplete } from '../utils/agent-katcon.js';
 import { classifyIntent } from './intent-classifier.js';
 import { FEATURES } from '../utils/feature-flags.js';
 import { AIGuard } from '../utils/ai-guard.js';
@@ -5215,6 +5216,17 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
                 timestamp: new Date().toISOString()
             })
         ]);
+
+        // ── AGENTE KATCON (event-driven): si Brenda ACABA de terminar la extracción
+        // (paso2Estado → 'completo' EN ESTE TURNO) disparamos el PUNTO KATCON al instante.
+        // El tag "KATCON ANUNCIO" ya viene desde el anuncio; "completo" se marca aquí → este
+        // es el momento exacto. Fire-and-forget (no await): jamás bloquea ni rompe el extractor.
+        // Todos los candados (toggle de Oscar, corte no-retroactivo, una-sola-vez) van dentro.
+        const _wasP2Complete = candidateData.paso2Estado === 'completo';
+        const _isP2Complete = (candidateUpdates.paso2Estado || candidateData.paso2Estado) === 'completo';
+        if (!_wasP2Complete && _isP2Complete) {
+            maybeSendKatconOnComplete(candidateId, { ...candidateData, ...candidateUpdates }).catch(() => {});
+        }
 
         recordAITelemetry(candidateId, 'brenda_turn_complete', {
             latency: Date.now() - startTime,

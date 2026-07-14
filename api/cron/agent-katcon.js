@@ -1,55 +1,26 @@
 /* global process */
-import { getRedisClient, getUsers, saveMessage, updateCandidate, isProfileComplete } from '../utils/storage.js';
-import { getUltraMsgConfig, sendUltraMsgMessage } from '../whatsapp/utils.js';
-import { substituteVariables } from '../utils/shortcuts.js';
+import { getRedisClient } from '../utils/storage.js';
+import {
+    BANK_NAME, BATCH_CAP,
+    getToggleState, getPuntoKatconBank, cumpleCandados, sendPuntoKatconTo
+} from '../utils/agent-katcon.js';
 
 // ════════════════════════════════════════════════════════════════════════════
-// CRON: AGENTE KATCON — disparador AUTOMÁTICO del Paso 1 (PUNTO KATCON).
+// CRON: AGENTE KATCON — RED DE SEGURIDAD del disparador event-driven.
 //
-// Corre cada 15 min (registrado en vercel.json). A diferencia del toggle en Chat
-// Web (que dispara al ABRIR el chat), esto es AUTOMÁTICO: no requiere que Oscar
-// abra nada. Manda el mensaje de banco "PUNTO KATCON" (texto + imágenes EXACTO)
-// a los candidatos que cumplen los CANDADOS, y deja la IA en modo manual.
+// El disparador PRINCIPAL ya no vive aquí: es event-driven en el extractor
+// (api/ai/agent.js → maybeSendKatconOnComplete), que manda el PUNTO KATCON en el
+// INSTANTE en que Brenda termina la extracción, sin abrir el chat ni esperar.
 //
-// CANDADOS (regla de Oscar, "estamos de acuerdo"):
-//   1. perfil COMPLETO            → isProfileComplete(c)
-//   2. etiqueta "KATCON ANUNCIO"  → tags incluye el tag exacto
-//   3. humano NUNCA intervino     → !c.blocked (blocked lo pone la intervención manual)
-//   + una sola vez por candidato  → set atómico Redis `agent:punto_sent:v1` (SADD)
+// Este cron es solo el BACKSTOP: barre cada 15 min a los candidatos frescos por si
+// el evento se perdió (deploy justo al completar, error puntual, toggle prendido
+// después de que alguien completó). El claim atómico (SADD) garantiza que nunca haya
+// doble envío entre el evento y el cron.
 //
-// SEGURIDAD (candidato-facing, envío real a personas):
-//   - GATEADO POR EL TOGGLE DE OSCAR: solo corre si su preferencia agentMode está ON
-//     (user.preferences.agentMode del perfil user_1768974645880). Toggle OFF = no hace nada.
-//   - TOPE POR CORRIDA (BATCH_CAP): para no bombardear a cientos de golpe; hace una
-//     rampa suave (máx N cada 15 min). El SADD atómico evita doble envío entre corridas.
-//   - Al enviar: marca blocked=true (modo manual) + registra el envío. El mensaje
-//     aparece en el chat vía SSE → Oscar lo audita.
-//
-// Envío de imágenes: por URL absoluta pública (/api/image es público → Meta la jala).
-// No usa la re-subida a Meta de /api/chat (más simple; suficiente para este flujo).
+// CONSUMO MÍNIMO: solo lee candidatos con actividad DESPUÉS del corte (agentModeSince)
+// vía zrevrangebyscore — no barre miles. La mayoría de las veces no encuentra nada que
+// mandar (el evento ya los atendió y quedaron con SADD puesto).
 // ════════════════════════════════════════════════════════════════════════════
-
-const OSCAR_USER_ID = 'user_1768974645880';   // el toggle vive en su perfil
-const AGENT_TAG = 'KATCON ANUNCIO';
-const BANK_NAME = 'PUNTO KATCON';
-const SENT_SET_KEY = 'agent:punto_sent:v1';   // set de candidatos ya atendidos por el agente
-const HOST = 'https://www.candidatic.com';
-const BATCH_CAP = 15;                          // máx envíos por corrida (rampa suave)
-// CORTE (no retroactivo): el agente solo atiende candidatos con actividad DESPUÉS de que
-// Oscar prendió el toggle (`agentModeSince` en su perfil). Los que ya estaban ahí —incluido
-// el backlog viejo— NO se tocan. Oscar cita esos a mano; el agente cubre a los que van entrando.
-
-function normTag(t) {
-    return String(typeof t === 'string' ? t : t?.name || '').trim().toUpperCase();
-}
-
-// /api/image?id=med_X  →  https://www.candidatic.com/api/media/med_X.jpg  (Meta la jala público)
-function toAbsoluteImageUrl(u) {
-    const m = /[?&]id=([^&]+)/.exec(u || '');
-    if (m) return `${HOST}/api/media/${m[1]}.jpg`;
-    if (u && u.startsWith('/')) return `${HOST}${u}`;
-    return u;
-}
 
 export default async function handler(req, res) {
     // Auth de cron (igual que send-reminders): solo Vercel Cron con el secreto.
@@ -63,34 +34,24 @@ export default async function handler(req, res) {
 
     try {
         // ── CANDADO MAESTRO: el toggle de Oscar ──
-        const users = await getUsers();
-        const oscar = users.find(u => u.id === OSCAR_USER_ID);
-        if (!oscar?.preferences?.agentMode) {
+        const { on, since } = await getToggleState();
+        if (!on) {
             return res.status(200).json({ ok: true, skipped: 'toggle OFF (agentMode del perfil de Oscar)' });
         }
-        // ── CORTE (no retroactivo): solo candidatos con actividad DESPUÉS de que Oscar
-        // prendió el toggle. Sin corte guardado, no manda nada (evita retroactivo). ──
-        const since = Number(oscar.preferences.agentModeSince || 0);
         if (!since) {
             return res.status(200).json({ ok: true, skipped: 'sin agentModeSince (apaga y prende el toggle para fijar el corte)' });
         }
 
         // ── El mensaje de banco PUNTO KATCON (exacto) ──
-        const bankRaw = await redis.get('candidatic:quick_replies');
-        const replies = bankRaw ? JSON.parse(bankRaw) : [];
-        const pk = replies.find(q => String(q.name || '').trim().toUpperCase() === BANK_NAME);
-        if (!pk || !pk.message) {
+        const bank = await getPuntoKatconBank(redis);
+        if (!bank) {
             return res.status(200).json({ ok: true, error: `No encontré el mensaje de banco "${BANK_NAME}"` });
         }
-        const bankImages = Array.isArray(pk.imageUrls) && pk.imageUrls.length
-            ? pk.imageUrls
-            : [pk.imageUrl].filter(Boolean);
 
-        // ── Escaneo de candidatos elegibles — SOLO los frescos (CONSUMO MÍNIMO) ──
-        // El zset candidates:list está ordenado por ultimoMensaje (score). Con
-        // zrevrangebyscore pedimos SOLO los candidatos con actividad >= el corte, en vez
-        // de leer miles de viejos en cada corrida. Al prender el toggle (since=ahora) esto
-        // devuelve 0-poquitos; solo crece conforme entran nuevos. Clave para el ancho de banda.
+        // ── Escaneo de elegibles — SOLO los frescos (CONSUMO MÍNIMO) ──
+        // El zset candidates:list está ordenado por ultimoMensaje (score). zrevrangebyscore
+        // trae SOLO los candidatos con actividad >= el corte, en vez de leer miles de viejos.
+        // Al prender el toggle (since=ahora) devuelve 0-poquitos; solo crece con los nuevos.
         const ids = await redis.zrevrangebyscore('candidates:list', '+inf', since);
         if (!ids.length) {
             return res.status(200).json({ ok: true, elegibles: 0, enviados: 0, nota: 'sin candidatos nuevos desde el corte' });
@@ -104,82 +65,34 @@ export default async function handler(req, res) {
             if (!raw) continue;
             let c;
             try { c = JSON.parse(raw); } catch { continue; }
-            if (!c || !c.id || !c.whatsapp) continue;
-            if (c.blocked) continue;                                  // candado 3: humano nunca intervino
-            if (!isProfileComplete(c)) continue;                     // candado 1: perfil completo
-            const tags = Array.isArray(c.tags) ? c.tags.map(normTag) : [];
-            if (!tags.includes(AGENT_TAG)) continue;                 // candado 2: etiqueta
+            if (!cumpleCandados(c)) continue;                        // completo + tag + !blocked
             const lastAct = new Date(c.lastUserMessageAt || c.ultimoMensaje || c.primerContacto || 0).getTime();
-            if (lastAct < since) continue;                           // candado 4: CORTE (solo posteriores a prender el toggle)
+            if (lastAct < since) continue;                           // corte (solo posteriores a prender el toggle)
             eligible.push(c);
         }
 
-        let sent = 0;
-        let errors = 0;
+        let sent = 0, claimed = 0, yaCitado = 0, errors = 0;
         const detail = [];
 
         for (const c of eligible) {
-            if (sent >= BATCH_CAP) break;                            // tope por corrida
-            // Claim atómico: SADD devuelve 1 si es nuevo (lo reservamos), 0 si ya estaba.
-            const claimed = await redis.sadd(SENT_SET_KEY, c.id);
-            if (claimed === 0) continue;                             // ya atendido → saltar
-
-            // Candado 5: NO citar si ya tiene la invitación en su historial (ej. Oscar lo
-            // citó a mano). Se lee solo para los pocos que pasaron los candados baratos.
-            try {
-                const hist = (await redis.lrange(`messages:${c.id}`, 0, -1))
-                    .map(m => { try { return JSON.parse(m); } catch { return null; } }).filter(Boolean);
-                const yaCitado = hist.some(m => m.from === 'me' && /vengas a una/i.test(String(m.content || '')));
-                if (yaCitado) { continue; }                          // deja el claim puesto (ya no re-checar)
-            } catch { /* si falla la lectura, seguimos con el envío */ }
-
-            try {
-                const config = await getUltraMsgConfig(c.incomingPhoneNumberId || c.instanceId);
-                if (!config) throw new Error('sin credenciales de WhatsApp');
-                const cleanTo = String(c.whatsapp).replace(/\D/g, '');
-
-                // 1) Texto EXACTO del banco (con {{nombre}} resuelto)
-                const text = substituteVariables(pk.message, c);
-                const textRes = await sendUltraMsgMessage(config.instanceId, config.token, cleanTo, text, 'chat', { priority: 1 });
-                if (!textRes?.success) throw new Error(textRes?.error || 'falló el texto');
-                await saveMessage(c.id, {
-                    from: 'me', content: text, timestamp: new Date().toISOString(),
-                    meta: { agent: 'punto-katcon', auto: true }
-                }).catch(() => {});
-
-                // 2) Imágenes del banco (exactas, por URL pública)
-                for (const imgUrl of bankImages) {
-                    const abs = toAbsoluteImageUrl(imgUrl);
-                    const imgRes = await sendUltraMsgMessage(config.instanceId, config.token, cleanTo, abs, 'image', { priority: 1 });
-                    if (imgRes?.success) {
-                        await saveMessage(c.id, {
-                            from: 'me', content: '', type: 'image', mediaUrl: imgUrl,
-                            timestamp: new Date().toISOString(), meta: { agent: 'punto-katcon', auto: true }
-                        }).catch(() => {});
-                    }
-                }
-
-                // 3) Silenciar la IA → modo manual (mismo efecto que la intervención humana).
-                await updateCandidate(c.id, { blocked: true }).catch(() => {});
-
-                sent++;
-                detail.push({ id: c.id, nombre: c.nombreReal || c.nombre });
-                console.log(`[AGENT-KATCON] ✅ PUNTO KATCON → ${c.nombreReal || c.nombre} (${c.whatsapp})`);
-            } catch (e) {
-                errors++;
-                // Falló: liberamos el claim para reintentar en la próxima corrida.
-                await redis.srem(SENT_SET_KEY, c.id).catch(() => {});
-                console.error(`[AGENT-KATCON] ❌ ${c.id}:`, e.message);
-            }
+            if (sent >= BATCH_CAP) break;                            // tope por corrida (rampa suave)
+            const r = await sendPuntoKatconTo(redis, c, bank.pk, bank.bankImages);
+            if (r === 'sent') { sent++; detail.push({ id: c.id, nombre: c.nombreReal || c.nombre }); }
+            else if (r === 'claimed') claimed++;                     // ya atendido (por el evento, normalmente)
+            else if (r === 'yaCitado') yaCitado++;
+            else errors++;
         }
 
         return res.status(200).json({
             ok: true,
             elegibles: eligible.length,
             enviados: sent,
+            yaAtendidos: claimed,
+            yaCitados: yaCitado,
             errores: errors,
             topePorCorrida: BATCH_CAP,
-            detalle: detail
+            detalle: detail,
+            nota: 'red de seguridad; el disparo principal es event-driven en el extractor'
         });
     } catch (error) {
         console.error('[AGENT-KATCON] error general:', error);
