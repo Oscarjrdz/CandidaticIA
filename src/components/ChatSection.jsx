@@ -4208,7 +4208,15 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                 <div className="flex-1 overflow-hidden bg-white dark:bg-[#111b21]">
                         <Virtuoso
                             data={visibleCandidates}
-                            overscan={10}
+                            style={{ height: '100%' }}
+                            // Buffer de render alto (px): antes era overscan={10} (¡10px!) y en scroll
+                            // rápido Virtuoso no alcanzaba a pintar filas por delante → huecos en blanco
+                            // → corrección de golpe = "se traba y brinca". 800px arriba/abajo lo suaviza.
+                            increaseViewportBy={{ top: 800, bottom: 800 }}
+                            // Las filas tienen altura VARIABLE (con/sin etiquetas, badges, lock). Darle una
+                            // altura estimada real (~76px) hace que estime bien el alto total y NO corrija
+                            // la posición del scroll cada vez que mide una fila nueva.
+                            defaultItemHeight={76}
                             computeItemKey={(index, chat) => chat.id}
                             endReached={handleChatListEndReached}
                             components={{ Footer: () => loadingMore ? <div className="py-4 text-center text-xs text-gray-400 dark:text-gray-600">Cargando más...</div> : null }}
