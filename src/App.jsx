@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, Suspense, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { Moon, Sun, Menu } from 'lucide-react';
 import Sidebar from './components/Sidebar';
 import LoadingOverlay from './components/ui/LoadingOverlay';
@@ -382,8 +383,11 @@ function AppShell() {
                   </button>
                 )}
 
-                {/* Confirmación del toggle del Agente — capa crítica z-[9999] (modales) */}
-                {showAgentConfirm && (
+                {/* Confirmación del toggle del Agente — capa crítica z-[9999] (modales).
+                    Se renderiza vía PORTAL a document.body: el header tiene backdrop-blur
+                    (crea contexto de apilamiento/transform) y eso rompería el position:fixed,
+                    dejando el modal "atrapado" dentro del header. El portal lo saca al body. */}
+                {showAgentConfirm && createPortal(
                   <div
                     className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-150"
                     onClick={() => setShowAgentConfirm(false)}
@@ -464,7 +468,8 @@ function AppShell() {
                         </button>
                       </div>
                     </div>
-                  </div>
+                  </div>,
+                  document.body
                 )}
 
                 {/* Greeting */}
