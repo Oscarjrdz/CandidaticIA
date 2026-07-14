@@ -111,6 +111,9 @@
         },
         "api/brenda-agent/skills.js": {
             "includeFiles": "skills/**"
+        },
+        "api/cron/agent-katcon.js": {
+            "maxDuration": 60
         }
     },
     "crons": [
@@ -120,6 +123,10 @@
         },
         {
             "path": "/api/cron/reengagement",
+            "schedule": "*/15 * * * *"
+        },
+        {
+            "path": "/api/cron/agent-katcon",
             "schedule": "*/15 * * * *"
         }
     ]
