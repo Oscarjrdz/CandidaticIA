@@ -36,6 +36,9 @@ const SENT_SET_KEY = 'agent:punto_sent:v1';   // set de candidatos ya atendidos 
 const HOST = 'https://www.candidatic.com';
 const BATCH_CAP = 15;                          // máx envíos por corrida (rampa suave)
 const MAX_SCAN = 3000;                         // cuántos candidatos escanear
+// CORTE (no retroactivo): el agente solo atiende candidatos con actividad DESPUÉS de que
+// Oscar prendió el toggle (`agentModeSince` en su perfil). Los que ya estaban ahí —incluido
+// el backlog viejo— NO se tocan. Oscar cita esos a mano; el agente cubre a los que van entrando.
 
 function normTag(t) {
     return String(typeof t === 'string' ? t : t?.name || '').trim().toUpperCase();
@@ -66,6 +69,12 @@ export default async function handler(req, res) {
         if (!oscar?.preferences?.agentMode) {
             return res.status(200).json({ ok: true, skipped: 'toggle OFF (agentMode del perfil de Oscar)' });
         }
+        // ── CORTE (no retroactivo): solo candidatos con actividad DESPUÉS de que Oscar
+        // prendió el toggle. Sin corte guardado, no manda nada (evita retroactivo). ──
+        const since = Number(oscar.preferences.agentModeSince || 0);
+        if (!since) {
+            return res.status(200).json({ ok: true, skipped: 'sin agentModeSince (apaga y prende el toggle para fijar el corte)' });
+        }
 
         // ── El mensaje de banco PUNTO KATCON (exacto) ──
         const bankRaw = await redis.get('candidatic:quick_replies');
@@ -94,6 +103,8 @@ export default async function handler(req, res) {
             if (!isProfileComplete(c)) continue;                     // candado 1: perfil completo
             const tags = Array.isArray(c.tags) ? c.tags.map(normTag) : [];
             if (!tags.includes(AGENT_TAG)) continue;                 // candado 2: etiqueta
+            const lastAct = new Date(c.lastUserMessageAt || c.ultimoMensaje || c.primerContacto || 0).getTime();
+            if (lastAct < since) continue;                           // candado 4: CORTE (solo posteriores a prender el toggle)
             eligible.push(c);
         }
 
@@ -106,6 +117,15 @@ export default async function handler(req, res) {
             // Claim atómico: SADD devuelve 1 si es nuevo (lo reservamos), 0 si ya estaba.
             const claimed = await redis.sadd(SENT_SET_KEY, c.id);
             if (claimed === 0) continue;                             // ya atendido → saltar
+
+            // Candado 5: NO citar si ya tiene la invitación en su historial (ej. Oscar lo
+            // citó a mano). Se lee solo para los pocos que pasaron los candados baratos.
+            try {
+                const hist = (await redis.lrange(`messages:${c.id}`, 0, -1))
+                    .map(m => { try { return JSON.parse(m); } catch { return null; } }).filter(Boolean);
+                const yaCitado = hist.some(m => m.from === 'me' && /vengas a una/i.test(String(m.content || '')));
+                if (yaCitado) { continue; }                          // deja el claim puesto (ya no re-checar)
+            } catch { /* si falla la lectura, seguimos con el envío */ }
 
             try {
                 const config = await getUltraMsgConfig(c.incomingPhoneNumberId || c.instanceId);

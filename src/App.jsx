@@ -83,6 +83,9 @@ function AppShell() {
       const next = !prev;
       if (user?.id) {
         const nextPreferences = { ...(user.preferences || {}), agentMode: next };
+        // CORTE: al PRENDER, marca el instante. El agente solo atiende candidatos con
+        // actividad DESPUÉS de este momento (los que van entrando), nunca retroactivo.
+        if (next) nextPreferences.agentModeSince = Date.now();
         setUser(u => u ? { ...u, preferences: nextPreferences } : u);
         fetch('/api/users', {
           method: 'PUT',

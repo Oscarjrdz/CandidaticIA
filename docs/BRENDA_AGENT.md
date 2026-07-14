@@ -102,13 +102,22 @@ absoluta pública (`https://www.candidatic.com/api/media/<id>.jpg` — `/api/ima
 
 **Candados de seguridad del cron:**
 - Gateado por el toggle de Oscar (OFF = no hace nada).
+- **NO RETROACTIVO (corte):** al PRENDER el toggle se guarda `agentModeSince` (timestamp) en
+  el perfil de Oscar. El agente solo atiende candidatos con **actividad DESPUÉS de ese corte**
+  (`lastUserMessageAt >= agentModeSince`). Los que ya estaban (backlog viejo) NO se tocan —
+  Oscar los cita a mano; el agente cubre a los que **van entrando** mientras el toggle está ON.
+  Sin `agentModeSince`, el cron no manda nada.
 - **Tope por corrida `BATCH_CAP = 15`**: rampa suave, no bombardea de golpe.
+- **No re-citar:** si el candidato ya tiene la invitación en su historial ("vengas a una"), se salta.
 - Claim atómico `SADD agent:punto_sent:v1 <id>` (evita doble envío entre corridas; si falla
   el envío, se libera con SREM para reintentar).
 - Al enviar: `blocked=true` (modo manual) + el mensaje aparece en el chat vía SSE (auditable).
 
-> ⚠️ **Al 2026-07-13 había 77 candidatos elegibles.** Con el toggle ON, el cron los procesa
-> a 15 por corrida (~1.5 h para los 77). Es envío real a personas reales — el toggle lo controla.
+> **Flujo de Oscar:** "yo cito, me voy a comer, prendo el agente, y que conteste a los que van
+> entrando" — NO retroactivo. El corte (`agentModeSince`) hace exactamente eso.
+> Nota histórica: había un backlog de ~77 candidatos viejos (completos + KATCON ANUNCIO,
+> jamás citados, actividad >72h) que el agente NO toca por el corte — son "leídos/atendidos"
+> en el sistema (checkIfUnread=0) pero nunca fueron citados a entrevista; Oscar los considera cerrados.
 
 ---
 

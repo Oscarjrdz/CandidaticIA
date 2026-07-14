@@ -3401,6 +3401,11 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
             ? c.tags.map(t => String(typeof t === 'string' ? t : t?.name || '').trim().toUpperCase())
             : [];
         if (!tags.includes(AGENT_TAG)) return;       // candado 2: etiqueta KATCON ANUNCIO
+        // candado 4: CORTE (no retroactivo) — solo candidatos con actividad DESPUÉS de que
+        // Oscar prendió el toggle. Los que ya estaban (backlog) no se tocan.
+        const since = Number(user?.preferences?.agentModeSince || 0);
+        const lastAct = new Date(c.lastUserMessageAt || c.ultimoMensaje || c.primerContacto || 0).getTime();
+        if (!since || lastAct < since) return;
 
         const qr = quickReplies.find(q => String(q.name || '').trim().toUpperCase() === AGENT_BANK_NAME);
         if (!qr) {
