@@ -72,6 +72,9 @@ function AppShell() {
   // elegible (perfil completo + tag KATCON ANUNCIO) el agente manda el PUNTO KATCON
   // del banco. Ver el efecto en ChatSection.jsx.
   const [agentMode, setAgentMode] = useState(false);
+  // Modal de confirmación al prender/apagar el agente (acción candidato-facing: manda
+  // mensajes reales por WhatsApp) — pide confirmar con contexto claro antes de aplicar.
+  const [showAgentConfirm, setShowAgentConfirm] = useState(false);
   // Sincroniza desde las preferencias guardadas al cargar la sesión (solo por login,
   // dep en user?.id — así el toggle no pelea con la persistencia al prenderlo/apagarlo).
   useEffect(() => {
@@ -364,8 +367,8 @@ function AppShell() {
                 {/* Toggle Agente Claude — solo en Chat Web y SOLO el perfil de Oscar */}
                 {activeSection === 'chat' && isOscar && (
                   <button
-                    onClick={toggleAgentMode}
-                    title={agentMode ? 'Agente Claude ACTIVO: en candidatos elegibles (perfil completo + KATCON ANUNCIO) manda el PUNTO KATCON al abrir su chat' : 'Activar Agente Claude'}
+                    onClick={() => setShowAgentConfirm(true)}
+                    title={agentMode ? 'Agente ACTIVO: a los candidatos que completen con KATCON ANUNCIO les manda el PUNTO KATCON automáticamente' : 'Activar Agente'}
                     className={`hidden sm:inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${
                       agentMode
                         ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/25 dark:text-emerald-300 dark:border-emerald-700'
@@ -377,6 +380,91 @@ function AppShell() {
                     </span>
                     Agente {agentMode ? 'ON' : 'OFF'}
                   </button>
+                )}
+
+                {/* Confirmación del toggle del Agente — capa crítica z-[9999] (modales) */}
+                {showAgentConfirm && (
+                  <div
+                    className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-150"
+                    onClick={() => setShowAgentConfirm(false)}
+                  >
+                    <div
+                      className="w-full max-w-md rounded-2xl bg-white dark:bg-gray-800 shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden animate-in zoom-in-95 duration-150"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {/* Encabezado con color según acción */}
+                      <div className={`px-6 py-5 ${agentMode ? 'bg-amber-50 dark:bg-amber-900/20' : 'bg-emerald-50 dark:bg-emerald-900/20'}`}>
+                        <div className="flex items-center gap-3">
+                          <span className={`flex h-11 w-11 items-center justify-center rounded-full text-xl ${agentMode ? 'bg-amber-100 dark:bg-amber-800/40' : 'bg-emerald-100 dark:bg-emerald-800/40'}`}>
+                            {agentMode ? '⏸️' : '🤖'}
+                          </span>
+                          <div>
+                            <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">
+                              {agentMode ? 'Apagar el Agente' : 'Activar el Agente'}
+                            </h3>
+                            <p className={`text-xs font-semibold ${agentMode ? 'text-amber-700 dark:text-amber-300' : 'text-emerald-700 dark:text-emerald-300'}`}>
+                              {agentMode ? 'Dejará de citar automáticamente' : 'Citará automáticamente por WhatsApp'}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Cuerpo con lo que va a pasar */}
+                      <div className="px-6 py-5 text-sm text-gray-700 dark:text-gray-300 space-y-3">
+                        {agentMode ? (
+                          <p>
+                            El Agente <strong>dejará de mandar</strong> el <strong>PUNTO KATCON</strong> a los
+                            candidatos nuevos. Los que ya citó siguen igual. Puedes volver a prenderlo cuando quieras.
+                          </p>
+                        ) : (
+                          <>
+                            <p>
+                              A partir de <strong>ahora mismo</strong>, cuando un candidato
+                              <strong> complete su perfil</strong> y tenga la etiqueta
+                              <strong> KATCON ANUNCIO</strong>, el Agente le mandará el
+                              <strong> PUNTO KATCON</strong> por WhatsApp <strong>automáticamente</strong> — sin que
+                              tengas nada abierto.
+                            </p>
+                            <ul className="rounded-lg bg-gray-50 dark:bg-gray-700/40 p-3 space-y-1.5 text-xs">
+                              <li className="flex gap-2"><span>✅</span><span><strong>No es retroactivo:</strong> solo a los que entren y completen de aquí en adelante.</span></li>
+                              <li className="flex gap-2"><span>✅</span><span>Al citar, la IA queda en <strong>modo manual</strong> — tú tomas el chat.</span></li>
+                              <li className="flex gap-2"><span>✅</span><span>Nunca cita dos veces al mismo candidato.</span></li>
+                            </ul>
+                          </>
+                        )}
+                      </div>
+
+                      {/* Botones */}
+                      <div className="px-6 pb-6 flex gap-3">
+                        <button
+                          onClick={() => setShowAgentConfirm(false)}
+                          className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                        >
+                          Cancelar
+                        </button>
+                        <button
+                          onClick={() => {
+                            toggleAgentMode();
+                            setShowAgentConfirm(false);
+                            showToast && showToast(
+                              agentMode
+                                ? '⏸️ Agente apagado — dejará de citar a los nuevos'
+                                : '🤖 Agente activo — citará automáticamente a los que completen',
+                              agentMode ? 'info' : 'success',
+                              5000
+                            );
+                          }}
+                          className={`flex-1 px-4 py-2.5 rounded-xl text-sm font-bold text-white shadow-sm transition-colors ${
+                            agentMode
+                              ? 'bg-amber-500 hover:bg-amber-600'
+                              : 'bg-emerald-500 hover:bg-emerald-600'
+                          }`}
+                        >
+                          {agentMode ? 'Sí, apagar' : 'Sí, activar'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
                 )}
 
                 {/* Greeting */}
