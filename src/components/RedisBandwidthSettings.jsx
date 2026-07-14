@@ -19,13 +19,8 @@ function formatNum(n) {
 
 const SCAN_LABELS = { filter_counts: 'Scan filtros', ads_stats: 'Scan ads' };
 
-function sumLastDays(days, count) {
-    return days.slice(0, count).reduce((acc, d) => {
-        acc.netInputBytes += d.netInputBytes;
-        acc.netOutputBytes += d.netOutputBytes;
-        return acc;
-    }, { netInputBytes: 0, netOutputBytes: 0 });
-}
+const PLAN_GB = 200;
+const PLAN_BYTES = PLAN_GB * 1024 * 1024 * 1024;
 
 function dayLabel(ymd) {
     const d = new Date(`${ymd}T12:00:00.000Z`);
@@ -66,8 +61,6 @@ const RedisBandwidthSettings = () => {
     }, []);
 
     const today = data?.today;
-    const last7 = data?.days ? sumLastDays(data.days, 7) : null;
-    const last30 = data?.totals || null;
     const hasHistory = data?.days?.some(d => d.samples > 0);
     // Vista de mes calendario: dia 1 a la izquierda, ultimo dia del mes a la
     // derecha. Los dias futuros (aun no alcanzados por el medidor) quedan en 0.
@@ -76,6 +69,13 @@ const RedisBandwidthSettings = () => {
         day, netInputBytes: 0, netOutputBytes: 0, commandsProcessed: 0, samples: 0
     });
     const maxDayBytes = Math.max(...chartDays.map(d => d.netInputBytes + d.netOutputBytes), 1);
+    const monthBytes = chartDays.reduce((acc, d) => acc + d.netInputBytes + d.netOutputBytes, 0);
+    const planPct = Math.min((monthBytes / PLAN_BYTES) * 100, 100);
+    const planBarColor = planPct >= 90
+        ? 'bg-red-500'
+        : planPct >= 70
+            ? 'bg-amber-500'
+            : 'bg-emerald-500';
 
     return (
         <Card title="Ancho de Banda" icon={Activity}>
@@ -91,26 +91,44 @@ const RedisBandwidthSettings = () => {
                             : 'Todavía no hay suficientes datos — se acumulan cada 15 minutos desde ahora.'}
                     </p>
                 ) : (
-                    <div className="grid grid-cols-3 gap-2">
-                        <div className="bg-[#f0f2f5] dark:bg-[#202c33] rounded-lg p-2.5 text-center">
-                            <div className="text-[9px] font-bold text-gray-400 uppercase mb-1">Hoy</div>
-                            <div className="text-sm font-bold text-gray-900 dark:text-gray-100">
-                                {formatBytes((today?.netInputBytes || 0) + (today?.netOutputBytes || 0))}
+                    <>
+                        <div className="grid grid-cols-3 gap-2">
+                            <div className="bg-[#f0f2f5] dark:bg-[#202c33] rounded-lg p-2.5 text-center">
+                                <div className="text-[9px] font-bold text-gray-400 uppercase mb-1">Hoy</div>
+                                <div className="text-sm font-bold text-gray-900 dark:text-gray-100">
+                                    {formatBytes((today?.netInputBytes || 0) + (today?.netOutputBytes || 0))}
+                                </div>
+                            </div>
+                            <div className="bg-[#f0f2f5] dark:bg-[#202c33] rounded-lg p-2.5 text-center">
+                                <div className="text-[9px] font-bold text-gray-400 uppercase mb-1">Mes</div>
+                                <div className="text-sm font-bold text-gray-900 dark:text-gray-100">
+                                    {formatBytes(monthBytes)}
+                                </div>
+                            </div>
+                            <div className="bg-[#f0f2f5] dark:bg-[#202c33] rounded-lg p-2.5 text-center">
+                                <div className="text-[9px] font-bold text-gray-400 uppercase mb-1">Plan</div>
+                                <div className="text-sm font-bold text-gray-900 dark:text-gray-100">
+                                    {PLAN_GB} GB
+                                </div>
                             </div>
                         </div>
-                        <div className="bg-[#f0f2f5] dark:bg-[#202c33] rounded-lg p-2.5 text-center">
-                            <div className="text-[9px] font-bold text-gray-400 uppercase mb-1">7 días</div>
-                            <div className="text-sm font-bold text-gray-900 dark:text-gray-100">
-                                {formatBytes(last7.netInputBytes + last7.netOutputBytes)}
+                        <div>
+                            <div className="h-2.5 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
+                                <div
+                                    className={`h-full rounded-full ${planBarColor} transition-all`}
+                                    style={{ width: `${Math.max(planPct, monthBytes > 0 ? 1 : 0)}%` }}
+                                />
+                            </div>
+                            <div className="flex items-center justify-between mt-1">
+                                <span className="text-[9px] text-gray-400 dark:text-gray-500">
+                                    {formatBytes(monthBytes)} de {PLAN_GB} GB
+                                </span>
+                                <span className="text-[9px] font-bold text-gray-500 dark:text-gray-400">
+                                    {planPct.toFixed(1)}%
+                                </span>
                             </div>
                         </div>
-                        <div className="bg-[#f0f2f5] dark:bg-[#202c33] rounded-lg p-2.5 text-center">
-                            <div className="text-[9px] font-bold text-gray-400 uppercase mb-1">30 días</div>
-                            <div className="text-sm font-bold text-gray-900 dark:text-gray-100">
-                                {formatBytes(last30.netInputBytes + last30.netOutputBytes)}
-                            </div>
-                        </div>
-                    </div>
+                    </>
                 )}
 
                 {!loading && !error && hasHistory && (
