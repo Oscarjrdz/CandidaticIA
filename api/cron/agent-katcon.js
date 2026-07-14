@@ -35,7 +35,6 @@ const BANK_NAME = 'PUNTO KATCON';
 const SENT_SET_KEY = 'agent:punto_sent:v1';   // set de candidatos ya atendidos por el agente
 const HOST = 'https://www.candidatic.com';
 const BATCH_CAP = 15;                          // máx envíos por corrida (rampa suave)
-const MAX_SCAN = 3000;                         // cuántos candidatos escanear
 // CORTE (no retroactivo): el agente solo atiende candidatos con actividad DESPUÉS de que
 // Oscar prendió el toggle (`agentModeSince` en su perfil). Los que ya estaban ahí —incluido
 // el backlog viejo— NO se tocan. Oscar cita esos a mano; el agente cubre a los que van entrando.
@@ -87,8 +86,15 @@ export default async function handler(req, res) {
             ? pk.imageUrls
             : [pk.imageUrl].filter(Boolean);
 
-        // ── Escaneo de candidatos elegibles ──
-        const ids = await redis.zrevrange('candidates:list', 0, MAX_SCAN - 1);
+        // ── Escaneo de candidatos elegibles — SOLO los frescos (CONSUMO MÍNIMO) ──
+        // El zset candidates:list está ordenado por ultimoMensaje (score). Con
+        // zrevrangebyscore pedimos SOLO los candidatos con actividad >= el corte, en vez
+        // de leer miles de viejos en cada corrida. Al prender el toggle (since=ahora) esto
+        // devuelve 0-poquitos; solo crece conforme entran nuevos. Clave para el ancho de banda.
+        const ids = await redis.zrevrangebyscore('candidates:list', '+inf', since);
+        if (!ids.length) {
+            return res.status(200).json({ ok: true, elegibles: 0, enviados: 0, nota: 'sin candidatos nuevos desde el corte' });
+        }
         const pipe = redis.pipeline();
         ids.forEach(id => pipe.get(`candidate:${id}`));
         const rows = await pipe.exec();
