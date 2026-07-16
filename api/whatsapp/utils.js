@@ -305,6 +305,20 @@ export const sendMetaMessage = async (to, body, type = 'chat', extraParams = {})
                 incrementMessageStats('outgoing').catch(() => { });
             } catch (e) { }
 
+            // Mapeo wamid → texto enviado, para que la preview de "respondiendo a..."
+            // pueda resolver citas a mensajes del bot (que se guardan en el historial
+            // sin su wamid de Meta). TTL corto: las citas casi siempre son recientes.
+            try {
+                const wamid = response.data?.messages?.[0]?.id;
+                if (wamid && (type === 'chat' || type === 'interactive') && typeof body === 'string' && body.trim()) {
+                    const { getRedisClient } = await import('../utils/storage.js');
+                    const redis = getRedisClient();
+                    if (redis) {
+                        redis.set(`wamid:text:${wamid}`, String(body).slice(0, 300), 'EX', 72 * 3600).catch(() => { });
+                    }
+                }
+            } catch (e) { }
+
             return {
                 success: true,
                 data: response.data,

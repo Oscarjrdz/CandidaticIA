@@ -546,6 +546,13 @@ export default async function handler(req, res) {
                     // Sin texto: guardar tambien mediaUrl/type para que la preview pueda
                     // mostrar una miniatura ("📷 Foto") en vez del generico "Mensaje multimedia".
                     if (!quotedText && quoted?.mediaUrl) { quotedMediaUrl = quoted.mediaUrl; quotedType = quoted.type || ''; }
+                    // Fallback: los mensajes del bot se guardan en el historial sin su wamid,
+                    // asi que la busqueda por id falla para ellos. El envio (sendMetaMessage)
+                    // deja un mapeo wamid:text:<id> → texto con TTL de 72h — usarlo aqui.
+                    if (!quotedText && !quotedMediaUrl && redis) {
+                        const srcText = await redis.get(`wamid:text:${metaMsg.context.id}`).catch(() => null);
+                        if (srcText) quotedText = String(srcText).replace(/<[^>]*>?/gm, '').trim().slice(0, 200);
+                    }
                 } catch { /* best-effort: si falla, la preview cae al texto generico */ }
                 msgToSave.contextInfo = { quotedMessage: { stanzaId: metaMsg.context.id, participant: metaMsg.context.from || '', text: quotedText, ...(quotedMediaUrl && { mediaUrl: quotedMediaUrl, type: quotedType }) } };
             }
