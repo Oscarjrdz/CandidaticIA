@@ -136,6 +136,108 @@ const SortableVacancyCard = ({ vacancy, handleToggleActive, handleEdit, handleCl
 };
 
 /**
+ * Sortable Category Pill Component
+ * El orden de las píldoras define el orden en que Brenda menciona las categorías.
+ */
+const SortableCategoryPill = ({
+    cat,
+    isEditing,
+    editingCategoryName,
+    setEditingCategoryName,
+    handleSaveEditCategory,
+    handleCancelEditCategory,
+    handleStartEditCategory,
+    handleDeleteCategory
+}) => {
+    const {
+        attributes,
+        listeners,
+        setNodeRef,
+        transform,
+        transition,
+        isDragging,
+    } = useSortable({ id: cat.id, disabled: isEditing });
+
+    const style = {
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.5 : 1,
+        zIndex: isDragging ? 50 : 1,
+        position: 'relative'
+    };
+
+    return (
+        <div
+            ref={setNodeRef}
+            style={style}
+            className="group flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-gray-800 border border-blue-100 dark:border-blue-800/50 rounded-full text-xs font-medium text-blue-700 dark:text-blue-300 shadow-sm transition-all"
+        >
+            {isEditing ? (
+                <>
+                    <input
+                        type="text"
+                        value={editingCategoryName}
+                        onChange={(e) => setEditingCategoryName(e.target.value)}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter') handleSaveEditCategory();
+                            if (e.key === 'Escape') handleCancelEditCategory();
+                        }}
+                        className="w-28 px-1.5 py-0.5 text-xs border border-blue-300 dark:border-blue-600 rounded bg-blue-50 dark:bg-gray-900 text-blue-800 dark:text-blue-200 outline-none focus:ring-1 focus:ring-blue-400"
+                        autoFocus
+                    />
+                    <button
+                        onClick={handleSaveEditCategory}
+                        className="p-0.5 hover:bg-green-50 dark:hover:bg-green-900/30 text-green-600 rounded-full transition-all"
+                        title="Guardar"
+                    >
+                        <Save className="w-3 h-3" />
+                    </button>
+                    <button
+                        onClick={handleCancelEditCategory}
+                        className="p-0.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 rounded-full transition-all"
+                        title="Cancelar"
+                    >
+                        <X className="w-3 h-3" />
+                    </button>
+                </>
+            ) : (
+                <>
+                    <span
+                        {...attributes}
+                        {...listeners}
+                        className="cursor-grab active:cursor-grabbing text-blue-300 hover:text-blue-500 transition-colors -ml-1"
+                        title="Arrastra para reordenar"
+                    >
+                        <GripVertical className="w-3 h-3" />
+                    </span>
+                    <span
+                        onDoubleClick={() => handleStartEditCategory(cat)}
+                        className="cursor-default select-none"
+                        title="Doble clic para editar"
+                    >
+                        {cat.name}
+                    </span>
+                    <button
+                        onClick={() => handleStartEditCategory(cat)}
+                        className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-blue-50 dark:hover:bg-blue-900/30 text-blue-500 rounded-full transition-all"
+                        title="Editar"
+                    >
+                        <Pencil className="w-3 h-3" />
+                    </button>
+                    <button
+                        onClick={() => handleDeleteCategory(cat.id)}
+                        className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-red-50 dark:hover:bg-red-900/30 text-red-500 rounded-full transition-all"
+                        title="Eliminar"
+                    >
+                        <Trash2 className="w-3 h-3" />
+                    </button>
+                </>
+            )}
+        </div>
+    );
+};
+
+/**
  * Sección de Gestión de Vacantes
  */
 const VacanciesSection = () => {
@@ -306,6 +408,36 @@ const VacanciesSection = () => {
         }
     };
 
+    const handleCategoryDragEnd = (event) => {
+        const { active, over } = event;
+        if (!over || active.id === over.id) return;
+
+        setCategories((items) => {
+            const oldIndex = items.findIndex(item => item.id === active.id);
+            const newIndex = items.findIndex(item => item.id === over.id);
+            const newArray = arrayMove(items, oldIndex, newIndex);
+
+            saveCategoryOrder(newArray.map(c => c.id));
+
+            return newArray;
+        });
+    };
+
+    const saveCategoryOrder = async (orderedIds) => {
+        try {
+            const res = await fetch('/api/categories', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'reorder', orderedIds })
+            });
+            if (!res.ok) throw new Error('Reorder failed');
+        } catch (error) {
+            console.error('Error saving category order:', error);
+            showToast('Error al guardar el nuevo orden de categorías', 'error');
+            loadCategories();
+        }
+    };
+
     const handleAddCategory = async () => {
         if (!newCategoryName.trim()) return;
         setAddingCategory(true);
@@ -424,7 +556,7 @@ const VacanciesSection = () => {
                                 Gestión de Categorías
                             </h3>
                             <p className="text-xs text-gray-500 dark:text-gray-400">
-                                Clasifica tus vacantes para una mejor organización.
+                                Clasifica tus vacantes. Arrastra las categorías para definir el orden en que Brenda las menciona.
                             </p>
                         </div>
                     </div>
@@ -451,66 +583,30 @@ const VacanciesSection = () => {
 
                 {categories.length > 0 && (
                     <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t border-blue-100/50 dark:border-blue-800/30">
-                        {categories.map(cat => (
-                            <div
-                                key={cat.id}
-                                className="group flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-gray-800 border border-blue-100 dark:border-blue-800/50 rounded-full text-xs font-medium text-blue-700 dark:text-blue-300 shadow-sm transition-all"
+                        <DndContext
+                            sensors={sensors}
+                            collisionDetection={closestCenter}
+                            onDragEnd={handleCategoryDragEnd}
+                        >
+                            <SortableContext
+                                items={categories.map(c => c.id)}
+                                strategy={rectSortingStrategy}
                             >
-                                {editingCategoryId === cat.id ? (
-                                    <>
-                                        <input
-                                            type="text"
-                                            value={editingCategoryName}
-                                            onChange={(e) => setEditingCategoryName(e.target.value)}
-                                            onKeyDown={(e) => {
-                                                if (e.key === 'Enter') handleSaveEditCategory();
-                                                if (e.key === 'Escape') handleCancelEditCategory();
-                                            }}
-                                            className="w-28 px-1.5 py-0.5 text-xs border border-blue-300 dark:border-blue-600 rounded bg-blue-50 dark:bg-gray-900 text-blue-800 dark:text-blue-200 outline-none focus:ring-1 focus:ring-blue-400"
-                                            autoFocus
-                                        />
-                                        <button
-                                            onClick={handleSaveEditCategory}
-                                            className="p-0.5 hover:bg-green-50 dark:hover:bg-green-900/30 text-green-600 rounded-full transition-all"
-                                            title="Guardar"
-                                        >
-                                            <Save className="w-3 h-3" />
-                                        </button>
-                                        <button
-                                            onClick={handleCancelEditCategory}
-                                            className="p-0.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 rounded-full transition-all"
-                                            title="Cancelar"
-                                        >
-                                            <X className="w-3 h-3" />
-                                        </button>
-                                    </>
-                                ) : (
-                                    <>
-                                        <span
-                                            onDoubleClick={() => handleStartEditCategory(cat)}
-                                            className="cursor-default select-none"
-                                            title="Doble clic para editar"
-                                        >
-                                            {cat.name}
-                                        </span>
-                                        <button
-                                            onClick={() => handleStartEditCategory(cat)}
-                                            className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-blue-50 dark:hover:bg-blue-900/30 text-blue-500 rounded-full transition-all"
-                                            title="Editar"
-                                        >
-                                            <Pencil className="w-3 h-3" />
-                                        </button>
-                                        <button
-                                            onClick={() => handleDeleteCategory(cat.id)}
-                                            className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-red-50 dark:hover:bg-red-900/30 text-red-500 rounded-full transition-all"
-                                            title="Eliminar"
-                                        >
-                                            <Trash2 className="w-3 h-3" />
-                                        </button>
-                                    </>
-                                )}
-                            </div>
-                        ))}
+                                {categories.map(cat => (
+                                    <SortableCategoryPill
+                                        key={cat.id}
+                                        cat={cat}
+                                        isEditing={editingCategoryId === cat.id}
+                                        editingCategoryName={editingCategoryName}
+                                        setEditingCategoryName={setEditingCategoryName}
+                                        handleSaveEditCategory={handleSaveEditCategory}
+                                        handleCancelEditCategory={handleCancelEditCategory}
+                                        handleStartEditCategory={handleStartEditCategory}
+                                        handleDeleteCategory={handleDeleteCategory}
+                                    />
+                                ))}
+                            </SortableContext>
+                        </DndContext>
                     </div>
                 )}
             </Card>

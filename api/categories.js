@@ -75,8 +75,34 @@ export default async function handler(req, res) {
             return res.status(200).json({ success: true });
         }
 
-        // PUT - Edit category name
+        // PUT - Edit category name / Reorder
         if (req.method === 'PUT') {
+            // Reorder: el orden del arreglo es el orden en que Brenda lista las categorías
+            if (req.body?.action === 'reorder') {
+                const { orderedIds } = req.body;
+                if (!Array.isArray(orderedIds)) {
+                    return res.status(400).json({ error: 'orderedIds debe ser un arreglo' });
+                }
+
+                const data = await redis.get(KEY);
+                const categories = data ? JSON.parse(data) : [];
+
+                const reordered = [];
+                const remaining = [...categories];
+
+                orderedIds.forEach(id => {
+                    const idx = remaining.findIndex(c => c.id === id);
+                    if (idx !== -1) {
+                        reordered.push(remaining[idx]);
+                        remaining.splice(idx, 1);
+                    }
+                });
+
+                const finalCategories = [...reordered, ...remaining];
+                await redis.set(KEY, JSON.stringify(finalCategories));
+                return res.status(200).json({ success: true, data: finalCategories });
+            }
+
             const { id, name } = req.body;
             if (!id || !name) return res.status(400).json({ error: 'Missing id or name' });
 
