@@ -369,8 +369,13 @@ function formatRecruiterMessage(text, candidateData = null, stepContext = {}) {
                 );
                 _segs.push(_finalNudge.trim());
 
-                // Step 4: Rewrite Bubble 1 to standardized format
-                const _cat = stepContext?.extractedCategoria || candidateData?.categoria;
+                // Step 4: Rewrite Bubble 1 to standardized format — SOLO en la transición real
+                // a escolaridad (primera vez). En repreguntas (la lista 🎒 ya salió en mensajes
+                // recientes del bot) se conserva la burbuja de GPT, que reconoce lo que el
+                // candidato dijo en vez de re-celebrar "Elegiste X" como evento viejo.
+                const _escSentBefore = Array.isArray(stepContext?.recentBotTexts)
+                    && /🎒/.test(stepContext.recentBotTexts.slice(-6).join('\n'));
+                const _cat = stepContext?.extractedCategoria || (!_escSentBefore ? candidateData?.categoria : null);
                 if (_cat) {
                     const _firstName = candidateData?.nombreReal ? getFirstName(candidateData.nombreReal) : null;
                     _segs[0] = _firstName
@@ -499,18 +504,20 @@ function formatRecruiterMessage(text, candidateData = null, stepContext = {}) {
                 const globalIdx = lastEscIdx + escQMatch.index + escQMatch[1].length;
                 const beforeQ = text.substring(0, globalIdx).trimEnd();
                 let question = text.substring(globalIdx).trim();
-                // Inject first name before the closing ?
+                // Inject first name before the closing ? (solo si GPT no lo puso ya — evita "Oscar Oscar")
                 if (candidateData?.nombreReal) {
                     const firstName = candidateData.nombreReal.trim().split(/\s+/)[0];
-                    if (firstName && firstName.length > 1) {
+                    if (firstName && firstName.length > 1 && !question.toLowerCase().includes(firstName.toLowerCase())) {
                         question = question.replace(/(\?)([\s\p{Emoji}\s]*)$/u, (_, q, trail) => ` ${firstName}${q}${trail || ''}`);
                     }
                 }
                 text = `${beforeQ}[MSG_SPLIT]${question}`;
             }
         }
-    } else if (asksAboutEsc) {
-        // GPT asked but forgot the list — inject it before the closing question
+    } else if (asksAboutEsc && !text.includes('👆')) {
+        // GPT asked but forgot the list — inject it before the closing question.
+        // (Si el texto ya refiere la lista de arriba con 👆, NO inyectar: es una repregunta
+        // que el dedup ya procesó — este formateador puede correr dos veces sobre el mismo texto.)
         const lastQ = text.lastIndexOf('\xbf');        // last ¿
         if (lastQ > 0) {
             text = text.substring(0, lastQ).trimEnd() + ESC_LIST + '\n' + text.substring(lastQ).trim();
@@ -560,9 +567,10 @@ function formatRecruiterMessage(text, candidateData = null, stepContext = {}) {
                 let question = text.substring(globalIdx).trim();
 
                 // 5️⃣ Inject candidate first name into the question if available
+                // (solo si GPT no lo puso ya — evita "Oscar Oscar")
                 if (candidateData?.nombreReal) {
                     const firstName = candidateData.nombreReal.trim().split(/\s+/)[0];
-                    if (firstName && firstName.length > 1) {
+                    if (firstName && firstName.length > 1 && !question.toLowerCase().includes(firstName.toLowerCase())) {
                         // "¿Cuál eliges?" → "¿Cuál eliges, Oscar?"
                         // Insert name before the `?` (preserving trailing emojis/spaces after it)
                         // "¿Cuál eliges? 🤭" → "¿Cuál eliges Oscar? 🤭"
@@ -581,6 +589,72 @@ function formatRecruiterMessage(text, candidateData = null, stepContext = {}) {
             if (!/(\?|¿)/.test(_afterLast) && !_afterLast.includes('[MSG_SPLIT]')) {
                 const _fnFb = candidateData?.nombreReal?.trim().split(/\s+/)[0] || '';
                 text = text.trimEnd() + `\n\n[MSG_SPLIT]¿Cu\u00e1l de estas opciones te interesa${_fnFb ? `, ${_fnFb}` : ''}? \ud83d\ude0a`;
+            }
+        }
+    }
+
+    // 🔁 NO-BOT LIST DEDUP: Si la lista (categorías ✅ / escolaridad 🎒..🧠) ya se envió en los
+    // últimos mensajes del bot, NO re-pegarla — un humano no re-manda el menú completo, lo
+    // referencia ("de las opciones de arriba 👆"). GPT tiene la regla en el prompt pero la
+    // ignora seguido; esta es la red determinista.
+    {
+        const _recentBot = Array.isArray(stepContext?.recentBotTexts)
+            ? stepContext.recentBotTexts.slice(-6).join('\n')
+            : '';
+        if (_recentBot) {
+            const _fnDd = candidateData?.nombreReal ? candidateData.nombreReal.trim().split(/\s+/)[0] : '';
+            const _pickDd = (arr) => arr[Math.floor(Math.random() * arr.length)];
+
+            // — CATEGORÍAS (✅) — solo en repreguntas (sin categoría extraída este turno)
+            const _catInText = (text.match(/✅/g) || []).length >= 3;
+            const _catInRecent = (_recentBot.match(/✅/g) || []).length >= 3;
+            if (_catInText && _catInRecent && !stepContext?.extractedCategoria && !_isCitaConfirmation) {
+                let _segs = text.split('[MSG_SPLIT]').map(s => s
+                    .split('\n').filter(l => !l.trim().startsWith('✅') && !/(?:opciones|categor[ií]as)[^\n]*:\s*$/i.test(l.trim())).join('\n')
+                    .replace(/(?:aqu[ií])\s+(?:tienes|est[aá]n|te dejo|te muestro|te comparto)[^:\n]*[::]?\s*/gi, '')
+                    .replace(/(?:estas son|mira)\s+las opciones[^:\n]*[::]?\s*/gi, '')
+                    .replace(/¿qu[eé] categor[ií]a te interesa\??\s*/gi, '')
+                    // Pregunta de cierre vieja incrustada dentro de la burbuja (la nueva la ponemos nosotros)
+                    .replace(/¿[^?\n]*(?:opciones|eliges?|elegir|escoges?|categor[ií]a|te interesa|te animas)[^?\n]*\?\s*/gi, '')
+                    // Líneas sin letras (solo emojis/residuos que dejó la limpieza)
+                    .split('\n').filter(l => !l.trim() || /[a-zà-ÿ0-9¿]/i.test(l)).join('\n')
+                    .replace(/\n{2,}/g, '\n').trim()
+                ).filter(s => s.replace(/[^a-zà-ÿ]/gi, '').length >= 3 && !(s.length < 16 && /\?\s*$/.test(s)));
+                // Quitar preguntas de cierre viejas (referencian "estas opciones" que ya no están)
+                _segs = _segs.filter(s => !(/^[¡¿]/.test(s.trim()) && /(?:opciones|eliges?|elegir|escoges?|te interesa|te animas)/i.test(s) && s.length < 120));
+                _segs.push(_pickDd([
+                    '¿Cuál te late de las opciones que te mandé aquí arriba? 👆😊',
+                    'Échale un ojito a la lista de arriba 👆 y dime cuál va más contigo 😊',
+                    `De las opciones que te pasé arriba 👆 ¿cuál te llama la atención${_fnDd ? `, ${_fnDd}` : ''}?`
+                ]));
+                text = _segs.join('[MSG_SPLIT]');
+            }
+
+            // — ESCOLARIDAD (🎒..🧠) — la primera vez la lista no está en el historial reciente
+            const _escInText = /🎒/.test(text);
+            const _escInRecent = /🎒/.test(_recentBot);
+            if (_escInText && _escInRecent) {
+                let _segs = text.split('[MSG_SPLIT]').map(s => s
+                    .split('\n').filter(l => !/^\s*(?:🎒|🏫|🎓|📚|🛠|🧠)/.test(l.trim()) && !/(?:opciones|escolaridad)[^\n]*:\s*$/i.test(l.trim())).join('\n')
+                    // Corrida inline de emojis de lista ("...perfil. 😊 🎒🏫🎓📚🛠️🧠")
+                    .replace(/(?:\s*(?:🎒|🏫|🎓|📚|🛠️|🛠|🧠)){3,}\s*/g, ' ')
+                    // Emoji de lista huérfano al final del segmento ("Pero cuéntame, 🎒")
+                    .replace(/(?:🎒|🏫|🎓|📚|🛠️|🛠|🧠|✅)\s*$/g, '')
+                    .replace(/mira las opciones[^:\n]*[::]?\s*/gi, '')
+                    // Pregunta de cierre vieja incrustada dentro de la burbuja (la nueva la ponemos nosotros)
+                    .replace(/¿[^?\n]*(?:escolaridad|nivel de estudios|nivel escolar|la tuya)[^?\n]*\?\s*/gi, '')
+                    // Líneas sin letras (solo emojis/residuos que dejó la limpieza)
+                    .split('\n').filter(l => !l.trim() || /[a-zà-ÿ0-9¿]/i.test(l)).join('\n')
+                    .replace(/\n{2,}/g, '\n').trim()
+                ).filter(s => s.replace(/[^a-zà-ÿ]/gi, '').length >= 3 && !(s.length < 16 && /\?\s*$/.test(s)));
+                // Quitar la confirmación de categoría (evento viejo) y preguntas de cierre viejas
+                _segs = _segs.filter(s => !/elegiste/i.test(s) && !(/^[¡¿]/.test(s.trim()) && /(?:escolaridad|nivel de estudios|nivel escolar|la tuya)/i.test(s) && s.length < 120));
+                _segs.push(_pickDd([
+                    '¿Cuál es tu escolaridad? Ahí arriba te dejé las opciones 👆😊',
+                    'Checa la lista que te mandé arriba 👆 ¿cuál es la tuya?',
+                    `De las opciones de arriba 👆 dime cuál es tu nivel de estudios${_fnDd ? `, ${_fnDd}` : ''} 😊`
+                ]));
+                text = _segs.join('[MSG_SPLIT]');
             }
         }
     }
@@ -834,6 +908,28 @@ function formatRecruiterMessage(text, candidateData = null, stepContext = {}) {
             }
         }
     }
+
+    // 🧹 DANGLING CONNECTOR CLEANUP: burbujas que quedan rotas en un conector se ven
+    // claramente de bot ("...🌟 Ahora," / "Así que," sola / "Entonces,\n🎒 Primaria...").
+    if (text.includes('[MSG_SPLIT]')) {
+        let _bubbles = text.split('[MSG_SPLIT]').map(b => b.trim()).filter(Boolean);
+        // 1) Burbuja que ES solo un conector → fuera
+        _bubbles = _bubbles.filter(b => !/^(?:Ahora|Entonces|As[ií] que|Bueno|Pues|Pero)\s*[,.:…]*$/i.test(b));
+        // 2) Burbuja que termina en coma (frase rota: "...🌟 Ahora, dime,") → recortar
+        //    hasta el último cierre de oración; si no hay, quitar la cláusula conectora final.
+        _bubbles = _bubbles.map(b => {
+            // "Pero cuéntame," / "Ahora, dime," al final (con o sin emoji después de la coma)
+            b = b.replace(/\s(?:pero\s+|ahora\s*,?\s*|y\s+)?(?:cu[eé]ntame|dime|oye|a ver)\s*,\s*[\p{Emoji}️\s]*$/iu, '').trimEnd();
+            if (!/,\s*$/.test(b)) return b;
+            const _cut = Math.max(b.lastIndexOf('.'), b.lastIndexOf('!'), b.lastIndexOf('?'));
+            if (_cut > 10) return b.substring(0, _cut + 1);
+            return b.replace(/\s(?:Ahora|Entonces|As[ií] que|Bueno|Pues)\b[^.!?¿\n]{0,30},\s*$/i, '').trimEnd();
+        });
+        // 3) Conector huérfano al INICIO de una burbuja seguido de una lista → recortarlo
+        _bubbles = _bubbles.map(b => b.replace(/^(?:Ahora|Entonces|As[ií] que|Bueno)\s*[,:]?\s*\n(?=\s*(?:✅|🎒|🏫|🎓|📚|🛠|🧠|1️⃣))/i, ''));
+        text = _bubbles.filter(b => b.length > 0).join('[MSG_SPLIT]');
+    }
+
     return text;
 }
 // ─────────────────────────────────────────────────────────────────────────────
@@ -861,10 +957,10 @@ Tu objetivo técnico es obtener: {{faltantes}}.
      {{categorias}}
 
      ¿Cuál de estas opciones te interesa?"
- 4. FORMATO ESCOLARIDAD: Cuando preguntes por el nivel de escolaridad usa EXACTAMENTE 3 burbujas separadas por [MSG_SPLIT]. Burbuja 1: confirma la categoría elegida por el candidato y anuncia que necesitas su escolaridad (ej: "¡Perfecto, [Nombre]! Elegiste [Categoría]. Ahora solo me falta saber tu nivel de escolaridad. Mira las opciones:"). Burbuja 2: la lista vertical con UN solo salto de línea entre cada opción, PROHIBIDO doble salto (\n\n) entre opciones. Burbuja 3: una pregunta corta de cierre (ej: "¿Cuál es la tuya? 🌟"). PROHIBIDO poner las opciones en el mismo renglón separadas por comas.
+ 4. FORMATO ESCOLARIDAD: La PRIMERA vez que preguntes por el nivel de escolaridad usa EXACTAMENTE 3 burbujas separadas por [MSG_SPLIT]. Burbuja 1: confirma la categoría elegida por el candidato y anuncia que necesitas su escolaridad (ej: "¡Perfecto, [Nombre]! Elegiste [Categoría]. Ahora solo me falta saber tu nivel de escolaridad. Mira las opciones:"). Burbuja 2: la lista vertical con UN solo salto de línea entre cada opción, PROHIBIDO doble salto (\n\n) entre opciones. Burbuja 3: una pregunta corta de cierre (ej: "¿Cuál es la tuya? 🌟"). PROHIBIDO poner las opciones en el mismo renglón separadas por comas. Si estás REPREGUNTANDO porque el candidato evadió o preguntó otra cosa: PROHIBIDO repetir "Elegiste [Categoría]" y PROHIBIDO re-enviar la lista — reconoce con gracia lo que dijo y repregunta refiriendo la lista de arriba (ej: "¿Cuál es tu escolaridad? Ahí arriba te dejé las opciones 👆😊").
  5. FECHA DE NACIMIENTO: Pídela SIEMPRE dando el ejemplo exacto: "(ejemplo 19 de mayo de 1988)". No lo olvides.
  5. DINÁMICA: Si responde algo que no sea el dato (ej: "No vivo ahí", "No sé"), SIEMPRE sé empática primero ("Entiendo perfectamente") y luego re-enfoca pidiendo el dato que falta o el siguiente.
- 6. PERSUASIÓN (PREGUNTAS DE VACANTES/SUELDO/LUGAR/ENTREVISTAS): Cuando el candidato pregunta algo sobre vacantes, entrevistas o sueldos, DEBES: (a) Responder BREVEMENTE explicando que necesitas sus datos completos para darle la mejor opción. ESTRICTAMENTE PROHIBIDO inventar respuestas de la vacante, y (b) Redirigir amablemente preguntando el dato faltante: {{faltantes}}. Ejemplo: "😊 Tengo opciones, pero para darte la mejor necesito conocerte primero. ¿Me apoyas con el dato que falta?"
+ 6. PERSUASIÓN (PREGUNTAS DE VACANTES/SUELDO/LUGAR/ENTREVISTAS): Cuando el candidato pregunta algo sobre vacantes, entrevistas o sueldos, DEBES: (a) Responder BREVEMENTE con una PROMESA concreta: en cuanto termine su registro le compartes todos los detalles (ubicación, sueldo, horarios, fechas). ESTRICTAMENTE PROHIBIDO inventar respuestas de la vacante, y (b) Redirigir amablemente preguntando el dato faltante: {{faltantes}}. Ejemplo: "😊 Claro que sí, terminando tu registro te paso todos los detalles de ubicación y fechas. Solo me falta un dato, ¿me ayudas?"
  7. ORDEN ESTRICTO: Siempre debes pedir el PRIMER dato de la lista de {{faltantes}}. ¡PROHIBIDO saltarte al segundo dato si el candidato evadió la pregunta o no respondió con el primero!
  8. LENGUAJE: PROHIBIDO decir "base de datos" o "robot". Di "nuestro sistema" o "tu registro en la plataforma".
  9. CORTESÍA INICIAL: Si te saluda, salúdalo de vuelta amablemente antes de pedir el dato.
@@ -880,7 +976,7 @@ Usa emojis para hacerlo agradable y tierno, no uses los mismos siempre. No uses 
 
 [REGLAS DE ORO]:
 - NUNCA REPITAS MENSAJES. Sé creativa, varía tus palabras.
-- PERSUASIÓN (vacantes/entrevistas/empleo): Si el candidato pregunta por vacantes, sueldos, entrevistas o información de empleo Y el perfil está incompleto: PROHIBIDO inventar o alucinar datos. Responde BREVE (máximo 2 líneas) explicando que primero necesitas sus datos para que el sistema encuentre la mejor opción. Luego redirige a la extracción. Ejemplo: "😊 Tengo opciones disponibles, pero para darte la ideal necesito terminar de registrarte. ¿Me ayudas completando tus datos?"
+- PERSUASIÓN (vacantes/entrevistas/empleo): Si el candidato pregunta por vacantes, sueldos, entrevistas o información de empleo Y el perfil está incompleto: PROHIBIDO inventar o alucinar datos. Responde BREVE (máximo 2 líneas) con una PROMESA concreta: en cuanto termine su registro le compartes todos los detalles (ubicación, sueldo, horarios, fechas). Luego redirige a la extracción. Ejemplo: "😊 Claro, terminando tu registro te paso ubicación, horarios y todos los detalles. ¿Me ayudas con el dato que falta?"
 - Si te ligan o halagan: OBLIGATORIO responder PRIMERO con picardía, gracia y mucha dulzura (ej: "¡Ay, qué lindo! 🤭✨ me chiveas", "Jaja me sonrojas 🙈🌸"). PROHIBIDO ignorar el piropo. Después de reconocerlo, re-enfoca a la extracción con naturalidad (ej: "pero oye, todavía necesito tu municipio. ¿Me lo dices? 😊").
 - CURIOSIDAD DEL USUARIO: Si te preguntan si eres un bot, di que eres una persona real (reclutadora de 25 años viviendo en Monterrey). NUNCA admitas ser IA.
 - MENSAJES CORTOS: Máximo 4 líneas.
@@ -4583,7 +4679,7 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
                                 tokens: gptResult.usage?.total_tokens || 0
                             });
                         }
-                        responseTextVal = formatRecruiterMessage(aiResult.response_text, candidateData, { extractedCategoria: aiResult.extracted_data?.categoria });
+                        responseTextVal = formatRecruiterMessage(aiResult.response_text, candidateData, { extractedCategoria: aiResult.extracted_data?.categoria, recentBotTexts: lastBotMessages });
 
                         // Nuevo candidato: la primera respuesta debe ser fija y predecible.
                         // Si viene de Ads, la burbuja de empresa se inserta abajo entre estas dos.
