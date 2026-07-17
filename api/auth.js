@@ -29,7 +29,7 @@ export default async function handler(req, res) {
         const { sendMessage } = await import('./utils/messenger.js');
         const { sendMetaMessage } = await import('./whatsapp/utils.js');
 
-        const { action, phone, pin, name, role } = req.body;
+        const { action, phone, pin, name, _role } = req.body;
 
         if (!phone) {
             return res.status(400).json({ error: 'Phone is required' });

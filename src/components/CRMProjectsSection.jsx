@@ -3,7 +3,7 @@ import { FolderPlus, Trash2, Plus, Pencil, Users, User, Search, X, Loader2, Mess
 import Card from './ui/Card';
 import Button from './ui/Button';
 import { useConfirmModal } from './ui/ConfirmModal';
-import { formatPhone, formatRelativeDate, calculateAge } from '../utils/formatters';
+import { formatPhone, calculateAge } from '../utils/formatters';
 import ChatWindow from './ChatWindow';
 import CalendarNotesModal from './CalendarNotesModal';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, DragOverlay, useDroppable } from '@dnd-kit/core';
@@ -268,14 +268,14 @@ const CRMProjectsSection = () => {
     const [activeProject, setActiveProject] = useState(null);
     const [candidates, setCandidates] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [loadingCands, setLoadingCands] = useState(false);
+    const [_loadingCands, setLoadingCands] = useState(false);
     const [showCreate, setShowCreate] = useState(false);
     const [projName, setProjName] = useState('');
     const [projDesc, setProjDesc] = useState('');
     const [projColor, setProjColor] = useState('#3b82f6');
     const [editingProject, setEditingProject] = useState(null);
     const [searchOpen, setSearchOpen] = useState(false);
-    const [activeChatCandidate, setActiveChatCandidate] = useState(null);
+    const [_activeChatCandidate, _setActiveChatCandidate] = useState(null);
     
     const [calendarModalConfig, setCalendarModalConfig] = useState({ isOpen: false, projectId: null, projectName: '', candidateId: null, candidateName: '' });
     const [searchQuery, setSearchQuery] = useState('');

@@ -225,7 +225,7 @@ const MUNICIPIO_MAP = new Map(Object.entries({
     'san nicolas': 'San Nicolás de los Garza', 'san nicolas de los garza': 'San Nicolás de los Garza',
     'san nico': 'San Nicolás de los Garza', 'sn nicolas': 'San Nicolás de los Garza',
     'san pedro': 'San Pedro Garza García', 'san pedro garza garcia': 'San Pedro Garza García',
-    'spgg': 'San Pedro Garza García', 'san pedro garza garcia': 'San Pedro Garza García',
+    'spgg': 'San Pedro Garza García',
     'santa catarina': 'Santa Catarina', 'sta catarina': 'Santa Catarina',
     'juarez': 'Benito Juárez', 'benito juarez': 'Benito Juárez', 'ciudad juarez nl': 'Benito Juárez', 'cd juarez nl': 'Benito Juárez',
     'garcia': 'García', 'ciudad garcia': 'García', 'cd garcia': 'García',

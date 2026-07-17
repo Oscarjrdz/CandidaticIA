@@ -99,7 +99,6 @@ function AppShell() {
       }
       return next;
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id, user?.preferences, setUser]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);

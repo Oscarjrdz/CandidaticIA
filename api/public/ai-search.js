@@ -22,7 +22,7 @@ export default async function handler(req, res) {
         }
 
         // DYNAMIC IMPORTS
-        const { getRedisClient, getCandidates, getMessages } = await import('../../utils/storage.js');
+        const { getRedisClient, getCandidates, _getMessages } = await import('../../utils/storage.js');
         const redis = getRedisClient();
 
         // 1. Resolve API Key

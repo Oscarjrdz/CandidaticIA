@@ -647,7 +647,7 @@ const AdsStatisticsSection = () => {
 
     const todayLeadsTotal = stats.ads.reduce((a, ad) => a + (ad.todayLeads || 0), 0);
     const totalSpend = stats.ads.reduce((a, ad) => a + (parseFloat(ad.spend) || 0), 0);
-    const fId = (id) => id || '';
+    const _fId = (id) => id || '';
     const cp = (t) => { navigator.clipboard.writeText(t); showToast?.('Copiado', 'success'); };
     const fD = (d) => !d ? '-' : new Date(d).toLocaleDateString('es-MX', { day:'2-digit', month:'short', timeZone:'America/Monterrey' });
     const f$ = (v) => v ? `$${Number(v).toFixed(2)}` : '-';

@@ -1,5 +1,5 @@
 import { getOpenAIResponse } from '../utils/openai.js';
-import { updateCandidate, moveCandidateStep, recordAITelemetry, recordVacancyInteraction, getVacancyById, getRedisClient } from '../utils/storage.js';
+import { recordAITelemetry, recordVacancyInteraction, getVacancyById, getRedisClient } from '../utils/storage.js';
 
 /**
  * BRENDA RECLUTADORA (Cerebro Reclutador)
@@ -235,11 +235,6 @@ export const processRecruiterMessage = async (candidateData, project, currentSte
         delete vacancyContextForJson.documents; 
         delete vacancyContextForJson.messageDescription;
 
-        // --- DEBUG DIAGNOSTIC ---
-        if (!faqsForPrompt) {
-        } else {
-        }
-
         // ⚡ FIX: Compute future calendar options BEFORE the template literal (IIFEs with regex inside template strings break the parser)
         // [FIX]: Ensure timezone doesn't offset the date. 'en-CA' inherently formats as YYYY-MM-DD.
         const _todayMxDate = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Monterrey' });
@@ -471,7 +466,7 @@ ${alternatives.length > 0
         }
 
 
-        let cleanContent = gptResponse.content.trim();
+        let _cleanContent = gptResponse.content.trim();
         // 4. Parsear respuesta
         let aiResult;
         try {
@@ -491,11 +486,6 @@ ${alternatives.length > 0
                 close_conversation: false,
                 unanswered_question: null
             };
-        }
-
-        // Diagnostic: log unanswered_question result
-        if (aiResult.unanswered_question && aiResult.unanswered_question !== 'null') {
-        } else {
         }
 
         // 🔒 DETERMINISTIC MEDIA_URL INJECTION:

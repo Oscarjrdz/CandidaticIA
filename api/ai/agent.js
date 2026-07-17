@@ -1,5 +1,4 @@
 // [PREMIUM ARCHITECTURE] V_FINAL_STABLE_V1 - Zero-Silence Infrastructure Active | Deploy: 2026-03-13
-/* global process */
 import { processUnansweredQuestion } from './faq-engine.js';
 import {
     getRedisClient,
@@ -21,7 +20,7 @@ import {
 } from '../utils/storage.js';
 import { sendUltraMsgMessage, getUltraMsgConfig, sendUltraMsgReaction, sendUltraMsgPresence } from '../whatsapp/utils.js';
 // schema-registry import removed — getSchemaByField was unused
-import { getCachedConfig, getCachedConfigBatch } from '../utils/cache.js';
+import { getCachedConfigBatch } from '../utils/cache.js';
 import { getOpenAIResponse } from '../utils/openai.js';
 import { processRecruiterMessage } from './recruiter-agent.js';
 
@@ -32,7 +31,6 @@ import { FEATURES } from '../utils/feature-flags.js';
 import { AIGuard } from '../utils/ai-guard.js';
 import { Orchestrator } from '../utils/orchestrator.js';
 import { MediaEngine } from '../utils/media-engine.js';
-import { intelligentExtract } from '../utils/intelligent-extractor.js';
 import { scheduleRemindersForCandidate } from '../utils/reminder-scheduler.js';
 import { cleanMunicipioWithAI, cleanCategoryWithAI, cleanEscolaridadWithAI } from '../utils/ai.js';
 import { getMissingFields } from '../reengagement-queue.js';
@@ -129,7 +127,7 @@ async function incrDayListRejectionCount(redis, candidateId) {
         return newVal;
     } catch (_) { return 1; }
 }
-async function getDayListRejectionCount(redis, candidateId) {
+async function _getDayListRejectionCount(redis, candidateId) {
     if (!redis || !candidateId) return 0;
     try { return parseInt((await redis.get(`day_list_rejection_count:${candidateId}`)) || '0'); } catch (_) { return 0; }
 }
@@ -282,7 +280,7 @@ function formatRecruiterMessage(text, candidateData = null, stepContext = {}) {
 
     // 🔧 DATE-EXAMPLE GUARD: Strip "(ejemplo ...)" from segments NOT about birth date (per-segment).
     {
-        const _DATE_EJ_RE = /\s*\((?:ej\.?|ejemplo)\s*(?:\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}|\d{1,2}\s+de\s+\w+\s+de\s+\d{4})\)/gi;
+        const _DATE_EJ_RE = /\s*\((?:ej\.?|ejemplo)\s*(?:\d{1,2}[/-]\d{1,2}[/-]\d{2,4}|\d{1,2}\s+de\s+\w+\s+de\s+\d{4})\)/gi;
         const _DATE_KEYWORDS = /fecha|nacimiento|cumplea|cu[aá]ndo naciste|nac[íi]|d[íi]a.*mes|cuantos a[nñ]os/i;
         text = text.split('[MSG_SPLIT]').map(seg => _DATE_KEYWORDS.test(seg) ? seg : seg.replace(_DATE_EJ_RE, '')).join('[MSG_SPLIT]');
     }
@@ -290,7 +288,7 @@ function formatRecruiterMessage(text, candidateData = null, stepContext = {}) {
     // 🗓️ DATE FORMAT NORMALIZER: Convert any "(ej. DD/MM/YYYY)" GPT outputs → "(ejemplo DD de MES de YYYY)"
     {
         const _MONTH_NAMES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
-        text = text.replace(/\((?:ej\.?:?\s*|ejemplo\s*)(\d{1,2})\s*[\/\-]\s*(\d{1,2})\s*[\/\-]\s*(\d{4})\)/gi, (_m, d, m, y) => {
+        text = text.replace(/\((?:ej\.?:?\s*|ejemplo\s*)(\d{1,2})\s*[/-]\s*(\d{1,2})\s*[/-]\s*(\d{4})\)/gi, (_m, d, m, y) => {
             const mi = parseInt(m, 10) - 1;
             const monthName = _MONTH_NAMES[mi] || m;
             return `(ejemplo ${parseInt(d, 10)} de ${monthName} de ${y})`;
@@ -323,12 +321,12 @@ function formatRecruiterMessage(text, candidateData = null, stepContext = {}) {
 
     // 🎓 ESCOLARIDAD EMOJIS NORMALIZER: Fix wrong emojis GPT uses for the education list.
     if (/Primaria|Secundaria|Preparatoria|Licenciatura|T[eé]cnica|Posgrado/i.test(text)) {
-        text = text.replace(/^[^\w\n\r\[]*Primaria\b/gm,     '🎒 Primaria');
-        text = text.replace(/^[^\w\n\r\[]*Secundaria\b/gm,   '🏫 Secundaria');
-        text = text.replace(/^[^\w\n\r\[]*Preparatoria\b/gm, '🎓 Preparatoria');
-        text = text.replace(/^[^\w\n\r\[]*Licenciatura\b/gm, '📚 Licenciatura');
-        text = text.replace(/^[^\w\n\r\[]*T[eé]cnica\b/gm,   '🛠️ Técnica');
-        text = text.replace(/^[^\w\n\r\[]*Posgrado\b/gm,     '🧠 Posgrado');
+        text = text.replace(/^[^\w\n\r[]*Primaria\b/gm,     '🎒 Primaria');
+        text = text.replace(/^[^\w\n\r[]*Secundaria\b/gm,   '🏫 Secundaria');
+        text = text.replace(/^[^\w\n\r[]*Preparatoria\b/gm, '🎓 Preparatoria');
+        text = text.replace(/^[^\w\n\r[]*Licenciatura\b/gm, '📚 Licenciatura');
+        text = text.replace(/^[^\w\n\r[]*T[eé]cnica\b/gm,   '🛠️ Técnica');
+        text = text.replace(/^[^\w\n\r[]*Posgrado\b/gm,     '🧠 Posgrado');
     }
 
     // 🔗 ESCOLARIDAD LIST CONSOLIDATOR: If GPT put [MSG_SPLIT] between list items, merge them back.
@@ -610,7 +608,7 @@ function formatRecruiterMessage(text, candidateData = null, stepContext = {}) {
     text = text.replace(/📅\s*(1️⃣|2️⃣|3️⃣|4️⃣|5️⃣|6️⃣|7️⃣|8️⃣|9️⃣)/g, '$1');
     // Step 2: for each date line that has a number emoji but no trailing 📅, add one
     text = text.replace(
-        /^((1️⃣|2️⃣|3️⃣|4️⃣|5️⃣|6️⃣|7️⃣|8️⃣|9️⃣)\s+(?:Lunes|Martes|Mi[eé]rcoles|Jueves|Viernes|S[aá]bado|Domingo)[^\n📅]*?)(?!\s*📅)\s*$/gm,
+        /^((1️⃣|2️⃣|3️⃣|4️⃣|5️⃣|6️⃣|7️⃣|8️⃣|9️⃣)\s+(?:Lunes|Martes|Mi[eé]rcoles|Jueves|Viernes|S[aá]bado|Domingo)[^\n📅]*?)(?!\s*📅)\s*$/gmu,
         '$1 📅'
     );
     // Strip stray 'o' connector words GPT inserts between date items
@@ -925,16 +923,16 @@ function normalizeBirthDate(input) {
     // Try to parse various formats
     const patterns = [
         // DD/MM/YYYY (already correct)
-        /^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})$/,
+        /^(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{4})$/,
         // DD/MM/YY (2-digit year)
-        /^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2})$/,
+        /^(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{2})$/,
     ];
 
     let day, month, year;
     let matched = false;
 
     // 0. Try YYYY-MM-DD or YYYY/MM/DD (ISO/GPT format)
-    const isoPattern = /^(\d{4})[\/\-\.](\d{1,2})[\/\-\.](\d{1,2})$/;
+    const isoPattern = /^(\d{4})[/\-.](\d{1,2})[/\-.](\d{1,2})$/;
     const isoMatch = cleaned.match(isoPattern);
     if (isoMatch) {
         year = isoMatch[1];
@@ -1528,7 +1526,7 @@ SOLO responde al mensaje actual, de forma corta (máximo 2 oraciones). NO mencio
         // Continuity & Session Logic
         const lastBotMsgAt = candidateData.lastBotMessageAt ? new Date(candidateData.lastBotMessageAt) : new Date(0);
         const minSinceLastBot = Math.floor((new Date() - lastBotMsgAt) / 60000);
-        const secSinceLastBot = Math.floor((new Date() - lastBotMsgAt) / 1000);
+        const _secSinceLastBot = Math.floor((new Date() - lastBotMsgAt) / 1000);
 
         // 4. Layered System Instruction Build
         // Simplest check: Does Redis list have any bot/me message?
@@ -1573,7 +1571,7 @@ SOLO responde al mensaje actual, de forma corta (máximo 2 oraciones). NO mencio
         // --- GRACE & SILENCE ARCHITECTURE ---
         const isProfileComplete = audit.paso1Status === 'COMPLETO';
         const hasGratitude = candidateData.gratitudAlcanzada === true || candidateData.gratitudAlcanzada === 'true';
-        const isLongSilence = minSinceLastBot >= 5;
+        const _isLongSilence = minSinceLastBot >= 5;
         const currentIsSilenced = candidateData.silencioActivo === true || candidateData.silencioActivo === 'true';
         const isSimulatorPhone = candidateData.whatsapp.startsWith('sim_') || ['1234567890', '5211234567890'].includes(candidateData.whatsapp);
 
@@ -1841,7 +1839,7 @@ ${safeDnaLines}
                 // Resolve only the cheap/necessary classifier result before rejection branching.
                 intent = await intentPromise;
 
-                const isCitaPhase = (currentStep?.name || '').toLowerCase().includes('cita');
+                const _isCitaPhase = (currentStep?.name || '').toLowerCase().includes('cita');
 
                 if ((intent === 'REJECTION' || intent === 'PIVOT') && hasMultiVacancy) {
                     const isPivot = intent === 'PIVOT';
@@ -2022,7 +2020,7 @@ ${safeDnaLines}
                     // A) Farewell/ack messages (bye, gracias, oki, listo...)
                     // B) Casual greetings or identity questions when cita already confirmed
                     //    (hola, buenas, sabes quien soy — should get a cita reminder, not the recruiter flow)
-                    const FAREWELL_RE = /^(bye|adi[oó]s|hasta luego|chao|gracias|ok gracias|graciass|hasta pronto|nos vemos|cu[ií]date|hasta la pr[oó]xima|👋|🙋|buen[ao]s?\s+d[ií]as|buen[ao]s?\s+tarde|buen[ao]s?\s+noche|ok+i*|oke+y?|okey|de acuerdo|listo|entendido|recibido|perfecto|anotado|ah[ií]\s+estar[eé]|ah[ií]\s+voy|estar[eé]\s+ah[ií]|vale|✅|👍|🙌|💪|😊|🌸|🥰)\s*[!.?🥰😁😄🤗💖✨🌸]*$/i;
+                    const FAREWELL_RE = /^(bye|adi[oó]s|hasta luego|chao|gracias|ok gracias|graciass|hasta pronto|nos vemos|cu[ií]date|hasta la pr[oó]xima|👋|🙋|buen[ao]s?\s+d[ií]as|buen[ao]s?\s+tarde|buen[ao]s?\s+noche|ok+i*|oke+y?|okey|de acuerdo|listo|entendido|recibido|perfecto|anotado|ah[ií]\s+estar[eé]|ah[ií]\s+voy|estar[eé]\s+ah[ií]|vale|✅|👍|🙌|💪|😊|🌸|🥰)\s*[!.?🥰😁😄🤗💖✨🌸]*$/iu;
                     const CASUAL_RE = /^(hola+|hey|buenas|buen d[ií]a|buenos d[ií]as|qu[eé] tal|como est[aá]s|sabes quien soy|me recuerdas|qu[eé] onda|qvo|q tal|ya s[eé] quien eres)\s*[!.?]*$/i;
                     const _rawTrim = aggregatedText.trim();
                     const _isTrivia = FAREWELL_RE.test(_rawTrim) 
@@ -2831,7 +2829,7 @@ ${safeDnaLines}
                         // 🧹 Strip leaked unanswered_question text
                         responseTextVal = aiResult.response_text
                             .replace(/\n?unanswered_question:\s*.+/gi, '')
-                            .replace(/\n?\"unanswered_question\":\s*\".+\"/gi, '')
+                            .replace(/\n?"unanswered_question":\s*".+"/gi, '')
                             .trim();
                         // 📐 Apply shared formatter (hours format, ✅ list normalization)
                         const _isInicioPasoFmt = /filtro|inicio|contacto/i.test(activeStepNameLower);
@@ -2934,8 +2932,8 @@ ${safeDnaLines}
                 // Notice the ".*?" is optional so that `{ move }` works
                 const tpValue = aiResult?.thought_process || '';
                 const rtValue = aiResult?.response_text || '';
-                const advanceBracketsMatch = tpValue.match(/[\{\[]\s*(move.*?)[\}\]]/is) ||
-                    rtValue.match(/[\{\[]\s*(move.*?)[\}\]]/is);
+                const advanceBracketsMatch = tpValue.match(/[{[]\s*(move.*?)[}\]]/is) ||
+                    rtValue.match(/[{[]\s*(move.*?)[}\]]/is);
 
                 let hasMoveTag = false;
                 let hasExitTag = false;
@@ -3160,7 +3158,7 @@ ${safeDnaLines}
                 // 🛡️ CONTEXTUAL SAFETY TRIGGER — META GRADE
                 // isFiltro moves ONLY when cita_pending flag is confirmed in Redis.
                 // This prevents any ambient "Sí" from prematurely advancing the step.
-                let inferredAcceptance = false;
+                let _inferredAcceptance = false;
                 if (!hasMoveTag) {
                     const lastBotMsg = historyForGpt.filter(h => h.role === 'assistant' || h.role === 'model').slice(-1)[0];
                     const botText = (lastBotMsg?.content || '').toLowerCase();
@@ -3201,10 +3199,12 @@ ${safeDnaLines}
                         // Build the available days list from calendarOptions
                         const NUM_EMOJI = _NUM_EMOJIS;
                         let _daysList = '';
+                        // Declarada FUERA del if: el check singular/plural de abajo la lee después
+                        // de cerrar este bloque (antes era ReferenceError cada vez que había días).
+                        let _uniqueDays = [];
                         if (currentStep?.calendarOptions && Array.isArray(currentStep.calendarOptions)) {
                             // Extract unique dates from calendar options (format: "YYYY-MM-DD @ HH:mm ...")
                             const _seenDates = new Set();
-                            const _uniqueDays = [];
                             const _monthsEs = _MONTH_NAMES;
                             const _daysEs = _DAY_NAMES;
                             for (const opt of currentStep.calendarOptions) {
@@ -3241,7 +3241,7 @@ ${safeDnaLines}
                         // Clear the flag — confirmed
                         clearCitaPendingFlag(redis, candidateId).catch(() => {});
                         hasMoveTag = true;
-                        inferredAcceptance = true;
+                        _inferredAcceptance = true;
                     } else if (isFiltro && isUserAffirmative && _citaPending) {
                         // 🛡️ PIVOT GUARD: If the last bot message was offering a new vacancy pivot,
                         // the candidate's "sí" is for SEEING the vacancy — NOT for scheduling.
@@ -3251,7 +3251,7 @@ ${safeDnaLines}
                             // Candidate explicitly confirmed after seeing the CTA
                             clearCitaPendingFlag(redis, candidateId).catch(() => {});
                             hasMoveTag = true;
-                            inferredAcceptance = true;
+                            _inferredAcceptance = true;
                         }
                     } else if (isFiltro && isUserAffirmative && !_citaPending && !hasMoveTag) {
                         // 🎯 Capa 5: DIRECT TRANSITION — candidate said Sí but we never sent the CTA yet
@@ -3264,7 +3264,7 @@ ${safeDnaLines}
                             // Automatically skip the "Solo por confirmar" redundancy and infer acceptance
                             hasMoveTag = true;
                             extractedMoveTarget = 'Cita';
-                            inferredAcceptance = true;
+                            _inferredAcceptance = true;
                         }
                     }
 
@@ -3273,7 +3273,7 @@ ${safeDnaLines}
                     if (!hasMoveTag && isCitadosStep && isUserAffirmative && isInterviewInvite) {
                         hasMoveTag = true;
                         extractedMoveTarget = 'Cita';
-                        inferredAcceptance = true;
+                        _inferredAcceptance = true;
                     }
 
                     // Check THIS bot text for confirmation of appointment
@@ -3285,7 +3285,7 @@ ${safeDnaLines}
                     if (!hasMoveTag && isCitaConfirmation) {
                         hasMoveTag = true;
                         extractedMoveTarget = "Citados";
-                        inferredAcceptance = true;
+                        _inferredAcceptance = true;
 
                         // Attempt to extract date and time from the text as fallback
                         const dateRegex = /(?:para el|el d[íi]a)\s+([a-zA-Z0-9\s]+?)\s+a\s+las/i;
@@ -3328,9 +3328,10 @@ ${safeDnaLines}
 
                     const NUM_EMOJI2 = _NUM_EMOJIS;
                     let _daysList2 = '';
+                    // Fuera del if por la misma razón que _uniqueDays arriba
+                    let _uniqueDays2 = [];
                     if (currentStep?.calendarOptions && Array.isArray(currentStep.calendarOptions)) {
                         const _seenDates2 = new Set();
-                        const _uniqueDays2 = [];
                         const _monthsEs2 = _MONTH_NAMES;
                         const _daysEs2 = _DAY_NAMES;
                         for (const opt of currentStep.calendarOptions) {
@@ -3450,17 +3451,18 @@ ${safeDnaLines}
                     if (hasMoveTag && (isInvalidFecha || isInvalidHora)) {
                         hasMoveTag = false;
                         extractedMoveTarget = null;
-                        inferredAcceptance = false;
-                        isCitaConfirmation = false;
+                        _inferredAcceptance = false;
+                        // (isCitaConfirmation vive en un bloque anterior y nadie la lee después de
+                        // este punto — asignarla aquí era un ReferenceError que rompía el VETO)
                         // 🛡️ ACTUAL MUTISMO FIX: Scrub the raw payload so hasMoveIntent at the bottom evaluates correctly to false
                         if (aiResult?.thought_process) {
-                            aiResult.thought_process = aiResult.thought_process.replace(/[\{\[]\s*move.*?[\}\]]/gi, '');
+                            aiResult.thought_process = aiResult.thought_process.replace(/[{[]\s*move.*?[}\]]/gi, '');
                         }
                         if (aiResult?.response_text) {
-                            aiResult.response_text = aiResult.response_text.replace(/[\{\[]\s*move.*?[\}\]]/gi, '');
+                            aiResult.response_text = aiResult.response_text.replace(/[{[]\s*move.*?[}\]]/gi, '');
                         }
                         if (responseTextVal) {
-                            responseTextVal = responseTextVal.replace(/[\{\[]\s*move.*?[\}\]]/gi, '');
+                            responseTextVal = responseTextVal.replace(/[{[]\s*move.*?[}\]]/gi, '');
                         }
                     }
                     
@@ -3704,7 +3706,7 @@ ${safeDnaLines}
                         if (recruiterFinalSpeech) {
                             cleanSpeech = recruiterFinalSpeech
                                 .replace(/\[\s*(SILENCIO|NULL|UNDEFINED|REACCIÓN.*?|REACCION.*?)\s*\]/gi, '')
-                                .replace(/[\{\[]\s*move(?:[\s:]+\w+)?\s*[\}\]]/gi, '')
+                                .replace(/[{[]\s*move(?:[\s:]+\w+)?\s*[}\]]/gi, '')
                                 .replace(/\[MSG_SPLIT\]/g, '\n\n') // strip bubble-split sentinel before raw send
                                 .trim();
                         }
@@ -3717,7 +3719,7 @@ ${safeDnaLines}
                         // para que el usuario reciba su "Perfecto, agendado a tal hora" ANTES de los
                         // mensajes configurables de appointmentConfirmation.
                         const originStepName = (currentStep?.name || '').toLowerCase();
-                        const isCitaStepOrigin = originStepName.includes('cita') && !originStepName.includes('citado');
+                        const _isCitaStepOrigin = originStepName.includes('cita') && !originStepName.includes('citado');
 
                         // 🧹 DOUBLE PROMPT FIX: GPT in Inicio often hallucinates "¿Te gustaría agendar?" when firing { move }.
                         // Intercept this hallucinated question and replace it with a declarative transition.
@@ -3823,10 +3825,6 @@ ${safeDnaLines}
                                                 priority: 1
                                             });
                                             await saveMessage(candidateId, { from: 'bot', content: `[Ubicación: ${item.data.address} (${item.data.lat}, ${item.data.lng})]`, timestamp: new Date().toISOString() }).catch(() => { });
-                                        }
-
-                                        // Stagger between messages to guarantee WhatsApp delivery order
-                                        if (i < confArray.length - 1) {
                                         }
                                     } catch (err) {
                                         console.error(`[RECRUITER BRAIN] ❌ Error enviando confirmación (${item?.type}):`, err.message);
@@ -4036,7 +4034,7 @@ ${safeDnaLines}
                                         }
                                         
                                         // Sweep text leaks again just in case
-                                        chainText = chainText.replace(/!\[.*?\]\(.*?\)/g, '').replace(/https?:\/\/[^\s\)]+/g, '').trim();
+                                        chainText = chainText.replace(/!\[.*?\]\(.*?\)/g, '').replace(/https?:\/\/[^\s)]+/g, '').trim();
                                     }
 
                                     // 📅 INTERVIEW DATES FORMATTER: Detect and reformat the cita dates message
@@ -4044,7 +4042,7 @@ ${safeDnaLines}
                                     if (isDateMsg) {
                                         // Step 1: Normalize header
                                         chainText = chainText.replace(/Tengo entrevistas disponibles (?:para el|(?:los días)?):?/gi, 'Tengo entrevistas los días:');
-                                        chainText = chainText.replace(/(¡Listo[^!¡\n]*!?\s*[⏬⬇️]*)\s+(Tengo\b)/i, '$1\n$2');
+                                        chainText = chainText.replace(/(¡Listo[^!¡\n]*!?\s*(?:⏬|⬇|\ufe0f)*)\s+(Tengo\b)/i, '$1\n$2');
 
                                         // Step 2: If dates are inline prose (no 1️⃣/2️⃣), convert to numbered list
                                         const NUM_D = ['1️⃣','2️⃣','3️⃣','4️⃣','5️⃣'];
@@ -4465,7 +4463,7 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
                         // Bypass works with or without customPrompt — faster (no GPT call) + 2 bubbles
                         bypassGpt = true;
                     } else {
-                        const welcomeName = 'Brenda Rodríguez';
+                        const _welcomeName = 'Brenda Rodríguez';
                         // If it's a specific question (not just "hola"), inject full CEREBRO1 rules
                         // so the PERSUASIÓN rule applies and the question is answered before asking for name
                         const isSpecificQuestion = !isGenericStart && /\?|vacante|empleo|trabajo|sueldo|horario|turno|beneficio|pagan|salar/i.test(aggregatedText);
@@ -4622,7 +4620,7 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
 
 
                     if (ext.nombreReal && ext.nombreReal.trim().length > 1) {
-                        const previousName = candidateData.nombreReal || '';
+                        const _previousName = candidateData.nombreReal || '';
 
                         // We trust the AI validation from the prompt above
                         ext.nombreReal = coalesceName(candidateData.nombreReal, ext.nombreReal);
@@ -4893,8 +4891,8 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
         let resText = String(responseTextVal || '').replace(/\[MSG_SPLIT\]/g, '').trim();
 
         // 🧹 MOVE TAG SANITIZER: Strip internal move tags from outbound messages
-        const moveTagPattern = /[\{\[]\s*move(?::\s*(?:exit|no_interesa|\w+))?\s*[\}\]]/i;
-        const moveTagPatternGlobal = /[\{\[]\s*move(?::\s*(?:exit|no_interesa|\w+))?\s*[\}\]]/gi;
+        const moveTagPattern = /[{[]\s*move(?::\s*(?:exit|no_interesa|\w+))?\s*[}\]]/i;
+        const moveTagPatternGlobal = /[{[]\s*move(?::\s*(?:exit|no_interesa|\w+))?\s*[}\]]/gi;
         const hasMoveIntent = moveTagPattern.test(String(aiResult?.thought_process || '')) || moveTagPattern.test(resText);
 
         if (moveTagPattern.test(resText)) {
@@ -4911,7 +4909,7 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
                     if (!aiResult) aiResult = {};
                     aiResult.media_url = tagMatch[1];
                 } else {
-                    const mediaPattern = /https?:\/\/[^/]+\/api\/(image\?id=|media\/)([^\s\)]+)/i;
+                    const mediaPattern = /https?:\/\/[^/]+\/api\/(image\?id=|media\/)([^\s)]+)/i;
                     const match = responseTextVal.match(mediaPattern);
                     if (match) {
                         if (!aiResult) aiResult = {};
@@ -4944,7 +4942,7 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
 
                 // Failsafe: Remove any leaked media URLs to prevent duplicate display natively vs text
                 // 🛡️ IMPORTANT: Temporarily protect [MSG_SPLIT] so it survives the whitespace collapse
-                const leakedUrlRegex = /https?:\/\/[^\s\)]*\/api\/(image|media)[^\s\)]*/gi;
+                const leakedUrlRegex = /https?:\/\/[^\s)]*\/api\/(image|media)[^\s)]*/gi;
                 const markdownImageRegex = /!\[.*?\]\(.*?\)/g;
                 responseTextVal = responseTextVal
                     .replace(markdownImageRegex, '')  // strip markdown images ![...](url)
@@ -4953,6 +4951,7 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
                     .replace(/\[MSG_SPLIT\]/g, '\u0000SPLIT\u0000') // protect sentinel
                     .replace(/[^\S\n]+/g, ' ')         // collapse horizontal whitespace only (preserve \n)
                     .replace(/\n{3,}/g, '\n\n')        // cap excessive newlines to max 2
+                    // eslint-disable-next-line no-control-regex -- centinela \u0000 intencional (imposible en texto de WhatsApp)
                     .replace(/\u0000SPLIT\u0000/g, '[MSG_SPLIT]') // restore sentinel
                     .trim();
             }
@@ -5276,8 +5275,7 @@ async function sendBotMessageWithRetry(config, cand, candidateId, body, type = '
 
     if (!result?.success) {
         try {
-            await logTelemetry('brenda_delivery_failed', {
-                candidateId,
+            await recordAITelemetry(candidateId, 'brenda_delivery_failed', {
                 type,
                 error: result?.error || 'unknown_send_error'
             });

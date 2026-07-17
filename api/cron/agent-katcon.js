@@ -1,4 +1,3 @@
-/* global process */
 import { getRedisClient } from '../utils/storage.js';
 import {
     BANK_NAME, BATCH_CAP,

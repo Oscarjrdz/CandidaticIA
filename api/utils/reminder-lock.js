@@ -1,4 +1,3 @@
-/* global Buffer */
 /**
  * Shared per-item processing lock + completion marker for cron jobs that send
  * messages to candidates. Prevents duplicate sends when two invocations

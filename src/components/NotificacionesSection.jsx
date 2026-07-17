@@ -7,14 +7,14 @@ const TARGET_OPTIONS = [
   { value: 'recruiters', label: 'Reclutadores',   desc: 'Solo app de reclutadores',   color: '#2563eb' },
 ];
 
-function fmtDate(d) {
+function _fmtDate(d) {
   if (!d) return '';
   return new Date(d).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
 }
 
 export default function NotificacionesSection() {
   const [stats, setStats] = useState({ candidates: 0, recruiters: 0, total: 0 });
-  const [history, setHistory] = useState([]);
+  const [_history, _setHistory] = useState([]);
   const [loadingStats, setLoadingStats] = useState(true);
 
   const [title, setTitle] = useState('');

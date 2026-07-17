@@ -68,7 +68,7 @@ export default async function handler(req, res) {
             pendingIds.forEach(id => pipeline.get(`candidate:${id}`));
             const pResults = await pipeline.exec();
             candidates = pResults
-                .map(([err, raw]) => { try { return raw ? JSON.parse(raw) : null; } catch { return null; } })
+                .map(([_err, raw]) => { try { return raw ? JSON.parse(raw) : null; } catch { return null; } })
                 .filter(Boolean);
         }
         const now = Date.now();

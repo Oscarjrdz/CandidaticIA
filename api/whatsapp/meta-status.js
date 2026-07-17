@@ -66,7 +66,7 @@ export default async function handler(req, res) {
                 let totalConversations = 0;
                 let freeMessages = 0;
                 let paidMessages = 0;
-                const byCategory = {};
+                const _byCategory = {};
                 let estimatedCostMXN = 0;
 
                 // ── Strategy 1: analytics (messaging counts - PMP model) ──
@@ -98,7 +98,7 @@ export default async function handler(req, res) {
 
                 // ── Strategy 2: pricing_analytics (real cost from Meta billing) ──
                 let totalCost = 0;
-                let paidVolume = 0;
+                let _paidVolume = 0;
                 try {
                     const priceRes = await axios.get(
                         `https://graph.facebook.com/v25.0/${wabaId}`,
@@ -116,7 +116,7 @@ export default async function handler(req, res) {
                         for (const dp of dataPoints) {
                             const vol = dp.volume || 0;
                             const cost = dp.cost || 0;
-                            paidVolume += vol;
+                            _paidVolume += vol;
                             totalCost += cost;
                             if (cost > 0) paidMessages += vol;
                             else freeMessages += vol;

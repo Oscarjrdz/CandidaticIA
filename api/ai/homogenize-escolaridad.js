@@ -31,13 +31,13 @@ export default async function handler(req, res) {
         const CLEAN_TERMS = ['Primaria', 'Secundaria', 'Prepa', 'Licenciatura', 'Técnica', 'Posgrado', 'N/A'];
 
         let targetCandidate = null;
-        let finalGlobalTotal = 0;
+        let _finalGlobalTotal = 0;
         let skippedCount = 0;
 
         // We try to find 1 candidate that needs work in a window of 20
         const searchWindow = 20;
         const { candidates, total } = await getCandidates(searchWindow, currentOffset);
-        finalGlobalTotal = total;
+        _finalGlobalTotal = total;
 
         for (let i = 0; i < candidates.length; i++) {
             const cand = candidates[i];

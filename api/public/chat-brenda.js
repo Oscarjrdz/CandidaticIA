@@ -140,7 +140,7 @@ ${formatState(extractedState)}
  * Scan conversation history to build a simulated extracted state
  * (mimics what the real bot does with Redis/DB, but from chat history alone)
  */
-function buildExtractedState(history) {
+function buildExtractedState(_history) {
     const state = {
         nombreReal: null,
         genero: null,

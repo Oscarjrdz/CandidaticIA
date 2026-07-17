@@ -105,14 +105,14 @@ export default async function handler(req, res) {
             try { body = JSON.parse(body); } catch (e) { }
         }
 
-        const { query, excludeLinked = false } = body || {};
+        const { query, _excludeLinked = false } = body || {};
 
         if (!query) {
             return res.status(400).json({ error: 'Falta el parámetro "query"' });
         }
 
         // DYNAMIC IMPORTS
-        const { getRedisClient, getCandidates, getMessages, validateAdminSession } = await import('../utils/storage.js');
+        const { getRedisClient, getCandidates, _getMessages, validateAdminSession } = await import('../utils/storage.js');
 
         const userId = await validateAdminSession(req);
         if (!userId) return res.status(401).json({ error: 'No autorizado' });
@@ -135,7 +135,7 @@ export default async function handler(req, res) {
             });
         }
 
-        const maskedKey = `${apiKey.substring(0, 6)}...${apiKey.substring(apiKey.length - 4)}`;
+        const _maskedKey = `${apiKey.substring(0, 6)}...${apiKey.substring(apiKey.length - 4)}`;
 
         // 2. Obtener campos disponibles para que la IA sepa qué buscar
         const DEFAULT_FIELDS = [
@@ -152,11 +152,11 @@ export default async function handler(req, res) {
             { value: 'proyecto', label: 'Está en un proyecto (1=Si, 0=No)' }
         ];
 
-        let allFields = [...DEFAULT_FIELDS];
+        let _allFields = [...DEFAULT_FIELDS];
         try {
             const customFieldsJson = await getCachedConfig(redis, 'custom_fields');
             const customFields = customFieldsJson ? JSON.parse(customFieldsJson) : [];
-            allFields = [...DEFAULT_FIELDS, ...customFields];
+            _allFields = [...DEFAULT_FIELDS, ...customFields];
         } catch (e) {
             console.warn('⚠️ No se pudieron cargar los campos personalizados:', e.message);
         }

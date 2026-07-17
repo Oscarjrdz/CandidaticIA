@@ -22,7 +22,8 @@ async function pulse() {
             console.log(`[${now}] 💤 Pulso silencioso (sin coincidencias).`);
         }
     } catch (e) {
-        console.error(`[${now}] ❌ Error en el pulso:`, e.message);
+        // `now` se declara dentro del try — aquí ya no existe
+        console.error(`[${new Date().toLocaleTimeString()}] ❌ Error en el pulso:`, e.message);
     }
 }
 

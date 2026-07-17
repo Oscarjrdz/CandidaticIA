@@ -1,13 +1,4 @@
-import {
-    getRedisClient,
-    getMessages,
-    getCandidates,
-    saveMessage,
-    getCandidateByPhone,
-    updateCandidate,
-    auditProfile,
-    recordAITelemetry
-} from './storage.js';
+import { getRedisClient } from './storage.js';
 import { getOpenAIResponse } from './openai.js';
 import { sendUltraMsgMessage, getUltraMsgConfig } from '../whatsapp/utils.js';
 
@@ -20,8 +11,8 @@ const COOLDOWN_HOURS = 24;
  */
 export async function runAIAutomations(isManual = false, manualConfig = null) {
     const logs = [];
-    let messagesSent = 0;
-    let evaluatedCount = 0;
+    let _messagesSent = 0;
+    let _evaluatedCount = 0;
     let processedCount = 0;
 
     try {
@@ -76,7 +67,7 @@ export async function runAIAutomations(isManual = false, manualConfig = null) {
  * Procesa los candidatos que están "estacionados" en un paso activo.
  */
 async function processProjectPipelines(redis, openAiKey, logs, manualConfig = null) {
-    const { getProjects, getProjectById, getProjectCandidates, getProjectCandidateMetadata, getVacancyById } = await import('./storage.js');
+    const { getProjects, getProjectById, getProjectCandidates, _getProjectCandidateMetadata, getVacancyById } = await import('./storage.js');
 
     let projects = [];
     if (manualConfig?.projectId) {
@@ -129,7 +120,7 @@ async function processProjectPipelines(redis, openAiKey, logs, manualConfig = nu
         for (const step of activeSteps) {
             const stepIndex = proj.steps.findIndex(s => s.id === step.id);
             const nextStep = proj.steps[stepIndex + 1];
-            const isNextStepActive = nextStep?.aiConfig?.enabled; // Not strictly needed for wait msg logic, but good context
+            const _isNextStepActive = nextStep?.aiConfig?.enabled; // Not strictly needed for wait msg logic, but good context
 
             // For wait logic: We actually need to know if *current* step has a goal to move to next. 
             // The "Wait Message" logic requested by user is: "If un paso esta apagado... el bot de disculparse en que paso se quedo".

@@ -5,7 +5,6 @@ import Card from './ui/Card';
 import Button from './ui/Button';
 import Input from './ui/Input';
 import Skeleton from './ui/Skeleton';
-import { useToast } from '../hooks/useToast';
 import { useToastContext } from '../contexts/ToastContext';
 
 const BotIASection = () => {
@@ -32,7 +31,7 @@ const BotIASection = () => {
     // Advanced Internal Protocols
     const [extractionRules, setExtractionRules] = useState('');
     const [cerebro1Rules, setCerebro1Rules] = useState('');
-    const [showAdvanced, setShowAdvanced] = useState(false);
+    const [_showAdvanced, _setShowAdvanced] = useState(false);
 
     useEffect(() => {
         const loadSettings = async () => {

@@ -30,7 +30,6 @@ export const saveCredentials = async (instanceId, token) => {
 
             if (!response.ok) {
                 console.warn('⚠️ Failed to save credentials to Redis, using localStorage only');
-            } else {
             }
         } catch (error) {
             console.warn('⚠️ Failed to save credentials to Redis:', error);

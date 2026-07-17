@@ -61,7 +61,7 @@ export const generateChatHistoryText = (candidate) => {
             }
 
             const messageText = msg.content || msg.body || msg.text || '';
-            const paddedIndex = (index + 1).toString().padStart(3, '0');
+            const _paddedIndex = (index + 1).toString().padStart(3, '0');
 
             return `[${time}] ${sender}: ${messageText}`;
         })
@@ -70,13 +70,13 @@ export const generateChatHistoryText = (candidate) => {
     return header + messages;
 };
 
-export const exportChatToFile = async (candidate, credentials) => {
+export const exportChatToFile = async (_candidate, _credentials) => {
     // Cloud upload disabled for now.
     // This function can be used for local processing or future cloud features.
     return { success: false, error: 'Cloud export no disponible' };
 };
 
-export const deleteOldChatFile = async (fileId, credentials) => {
+export const deleteOldChatFile = async (_fileId, _credentials) => {
     // Cloud delete from Candidatic removed.
     return true;
 };

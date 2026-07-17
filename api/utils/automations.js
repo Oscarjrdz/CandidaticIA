@@ -1,6 +1,6 @@
 
 import { getRedisClient, updateCandidate } from './storage.js';
-import { cleanNameWithAI, cleanMunicipioWithAI, cleanCategoryWithAI, detectGender, cleanEmploymentStatusWithAI, cleanDateWithAI } from './ai.js';
+import { cleanNameWithAI, cleanMunicipioWithAI, cleanCategoryWithAI, detectGender, cleanDateWithAI } from './ai.js';
 
 /**
  * Processes a bot message to extract and save candidate data based on automation rules.
@@ -88,7 +88,6 @@ export async function processBotResponse(candidateId, botMessage) {
             if (extraTasks.length > 0) {
                 await Promise.all(extraTasks).catch(err => console.error('❌ [Automations] AI tasks error:', err));
             }
-        } else {
         }
 
     } catch (error) {

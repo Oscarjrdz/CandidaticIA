@@ -18,7 +18,6 @@
  * REQUIERE la variable de entorno ANTHROPIC_API_KEY para funcionar en vivo.
  * Sin ella, getAnthropicClient() devuelve null y el endpoint responde un aviso claro.
  */
-/* global process */
 import fs from 'fs';
 import path from 'path';
 import Anthropic from '@anthropic-ai/sdk';

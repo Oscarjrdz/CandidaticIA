@@ -270,7 +270,7 @@ export default async function handler(req, res) {
             return res.status(400).json({ error: 'Ya hay un envío en curso. Aborta primero.' });
         }
 
-        const { candidates, messages, bulkType, templateData, templateParams, minDelay, maxDelay, pauseEvery, pauseFor, campaignName } = req.body;
+        const { candidates, messages, bulkType, templateData, templateParams, _minDelay, _maxDelay, _pauseEvery, _pauseFor, campaignName } = req.body;
 
         if (!candidates?.length) {
             return res.status(400).json({ error: 'Faltan candidatos.' });

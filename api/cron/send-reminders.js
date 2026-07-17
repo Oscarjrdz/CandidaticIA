@@ -1,4 +1,3 @@
-/* global process */
 /**
  * /api/cron/send-reminders
  * Runs every 15 minutes via Vercel Cron.

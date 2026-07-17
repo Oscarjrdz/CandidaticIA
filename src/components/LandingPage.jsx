@@ -144,17 +144,17 @@ const LandingPage = ({ onLoginSuccess }) => {
     };
 
     /* ─── WHATSAPP CONTACT LOGIC ─── */
-    const [showWhatsAppInput, setShowWhatsAppInput] = useState(false);
+    const [_showWhatsAppInput, _setShowWhatsAppInput] = useState(false);
     const [contactPhone, setContactPhone] = useState('');
-    const [contactLoading, setContactLoading] = useState(false);
-    const [contactStatus, setContactStatus] = useState(''); // 'success' | 'error' | ''
-    const [contactError, setContactError] = useState('');
+    const [_contactLoading, setContactLoading] = useState(false);
+    const [_contactStatus, setContactStatus] = useState(''); // 'success' | 'error' | ''
+    const [_contactError, setContactError] = useState('');
     const [infoForm, setInfoForm] = useState({ nombre: '', empresa: '', wapp: '', correo: '' });
     const [infoFormStatus, setInfoFormStatus] = useState(''); // '' | 'loading' | 'success' | 'error'
     const [ctaForm, setCtaForm] = useState({ nombre: '', empresa: '', wapp: '', correo: '' });
     const [ctaFormStatus, setCtaFormStatus] = useState(''); // '' | 'loading' | 'success' | 'error'
 
-    const sendWhatsAppContact = async (e) => {
+    const _sendWhatsAppContact = async (e) => {
         e?.preventDefault();
         const cleanPhone = contactPhone.replace(/\D/g, '');
         if (cleanPhone.length < 10) {

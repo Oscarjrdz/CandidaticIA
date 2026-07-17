@@ -77,12 +77,12 @@ export default async function handler(req, res) {
 
         // Batch execution
         const BATCH_SIZE = 50;
-        let processed = 0;
+        let _processed = 0;
 
         for (let i = 0; i < updates.length; i += BATCH_SIZE) {
             const batch = updates.slice(i, i + BATCH_SIZE);
             await Promise.all(batch.map(u => updateCandidate(u.id, { genero: u.genero })));
-            processed += batch.length;
+            _processed += batch.length;
         }
 
         return res.status(200).json({

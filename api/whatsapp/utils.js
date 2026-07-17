@@ -273,7 +273,7 @@ export const sendMetaMessage = async (to, body, type = 'chat', extraParams = {})
         const response = await axios.post(url, payload, {
             headers,
             timeout: 30000,
-            validateStatus: (status) => true
+            validateStatus: (_status) => true
         });
         const duration = Date.now() - startTime;
 

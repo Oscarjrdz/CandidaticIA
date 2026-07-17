@@ -1,4 +1,4 @@
-import { getRedisClient, getMessages, updateCandidate, getCandidates } from '../utils/storage.js';
+import { getRedisClient, getMessages, getCandidates } from '../utils/storage.js';
 import { intelligentExtract } from '../utils/intelligent-extractor.js';
 
 export default async function handler(req, res) {

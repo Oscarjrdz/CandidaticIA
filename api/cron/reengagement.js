@@ -1,4 +1,3 @@
-/* global process */
 /**
  * /api/cron/reengagement
  * Vercel Cron — runs every 15 minutes.

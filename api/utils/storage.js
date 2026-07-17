@@ -461,7 +461,7 @@ export const getActiveBypassRules = async () => {
  * GENERIC HELPERS 
  * ==========================================
  */
-const getDistributedItems = async (listKey, itemPrefixPrefix, start = 0, stop = -1) => {
+const _getDistributedItems = async (listKey, itemPrefixPrefix, start = 0, stop = -1) => {
     const client = getClient();
     if (!client) return [];
 
@@ -2786,7 +2786,7 @@ export const getProjectCandidates = async (projectId) => {
 
     const results = await pipeline.exec();
     const metadata = results.pop()[1] || {};
-    const candidates = results.map(([err, d]) => d ? JSON.parse(d) : null).filter(Boolean);
+    const candidates = results.map(([_err, d]) => d ? JSON.parse(d) : null).filter(Boolean);
 
     // Attach metadata (like origin) to each candidate
     return candidates.map(c => ({

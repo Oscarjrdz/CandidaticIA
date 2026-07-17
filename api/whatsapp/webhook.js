@@ -18,10 +18,7 @@ import {
     updateMessageStatus,
     isMessageProcessed,
     unlockMessage,
-    isCandidateLocked,
-    unlockCandidate,
     addToWaitlist,
-    getWaitlist,
     getCandidateById,
     deleteCandidate,
     getUsers,
@@ -784,7 +781,7 @@ export default async function handler(req, res) {
                             }
                         }
 
-                        const timeStr = now.toLocaleTimeString('es-MX', { timeZone: 'America/Monterrey', hour: '2-digit', minute: '2-digit' });
+                        const _timeStr = now.toLocaleTimeString('es-MX', { timeZone: 'America/Monterrey', hour: '2-digit', minute: '2-digit' });
                         await sendCmd(phone,
                             `📊 *Candidatos Nuevos de Ayer*\n` +
                             `📅 ${yesterdayStr} (día completo)\n\n` +

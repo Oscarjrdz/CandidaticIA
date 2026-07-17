@@ -107,7 +107,7 @@ const CampaignHistoryItem = ({ h, reuseCampaign, deleteCampaign }) => {
 
 const BulksSection = () => {
     const { showToast } = useToastContext();
-    const { confirmModalJSX, showConfirm } = useConfirmModal();
+    const { _confirmModalJSX, showConfirm } = useConfirmModal();
     // Col 1: Candidates
     const [candidates, setCandidates] = useState([]);
     const [searchQuery, setSearchQuery] = useState("");

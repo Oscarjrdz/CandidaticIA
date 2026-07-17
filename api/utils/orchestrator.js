@@ -11,7 +11,6 @@ import {
     getProjects,
     getActiveBypassRules
 } from './storage.js';
-import { runAIAutomations } from './automation-engine.js';
 import { MediaEngine } from './media-engine.js';
 import { sendUltraMsgMessage } from '../whatsapp/utils.js';
 
@@ -298,6 +297,7 @@ export class Orchestrator {
      */
     static async handleStepTransition(candidateId, projectId, nextStepId, config) {
         // Logic for moving within project steps
+        const { moveCandidateStep } = await import('./storage.js');
         await moveCandidateStep(projectId, candidateId, nextStepId);
 
         // Resolve bridge sticker

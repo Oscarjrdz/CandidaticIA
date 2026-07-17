@@ -18,7 +18,7 @@ const extractPersistentCandidatePatch = (patch = {}) => {
     );
 };
 
-const CustomProjectDropdown = ({ activeProjectId, projects, onChange, candidates = [] }) => {
+const CustomProjectDropdown = ({ activeProjectId, projects, onChange, _candidates = [] }) => {
     const [isOpen, setIsOpen] = useState(false);
     
     const activeProject = projects.find(p => p.id === activeProjectId);

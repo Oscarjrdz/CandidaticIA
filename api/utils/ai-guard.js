@@ -103,7 +103,7 @@ export class AIGuard {
         const isCompliment = lastInput && /hermosa|guapa|linda|bella|preciosa|chula|hermoso|guapo|novio|salir conmigo|casamos/i.test(lastInput.toLowerCase());
         if (isCompliment && aiResult.response_text && !aiResult.response_text.includes('cosas preguntas')) {
             let cleanedText = aiResult.response_text
-                .replace(/^(?:Gracias por|Eso suena|Entiendo|Me halagas|Agradezco|Vamos a|No es posible|Soy una IA|Soy un asistente|soy un bot)[^\.]*(?:\.|,)/i, '')
+                .replace(/^(?:Gracias por|Eso suena|Entiendo|Me halagas|Agradezco|Vamos a|No es posible|Soy una IA|Soy un asistente|soy un bot)[^.]*(?:\.|,)/i, '')
                 .trim();
 
             // Strip trailing connectors uncapitalized

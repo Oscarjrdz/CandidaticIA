@@ -1,4 +1,3 @@
-/* global process, console */
 import { getRedisClient, getUsers, saveMessage, updateCandidate, isProfileComplete } from './storage.js';
 import { getUltraMsgConfig, sendUltraMsgMessage } from '../whatsapp/utils.js';
 import { substituteVariables } from './shortcuts.js';

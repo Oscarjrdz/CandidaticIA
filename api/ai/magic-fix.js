@@ -1,4 +1,4 @@
-import { getMessages, updateCandidate, getRedisClient } from '../utils/storage.js';
+import { getMessages, updateCandidate } from '../utils/storage.js';
 import { intelligentExtract } from '../utils/intelligent-extractor.js';
 import { cleanEscolaridadWithAI, cleanCategoryWithAI, cleanNameWithAI, cleanMunicipioWithAI } from '../utils/ai.js';
 

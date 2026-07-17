@@ -143,7 +143,7 @@ const VacanciesSection = () => {
     const [vacancies, setVacancies] = useState([]);
     const [loading, setLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
-    const [saving, setSaving] = useState(false);
+    const [_saving, _setSaving] = useState(false);
     const [editingId, setEditingId] = useState(null);
     const { confirmModalJSX, showConfirm } = useConfirmModal();
 

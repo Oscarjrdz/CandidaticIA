@@ -145,7 +145,7 @@ export default async function handler(req, res) {
 
         // DELETE - Remove vacancy OR Purge All Files
         if (req.method === 'DELETE') {
-            const { id, purge } = req.query;
+            const { id, _purge } = req.query;
 
             // Manual Purge Action
             // Purge legacy Candidatic files removed

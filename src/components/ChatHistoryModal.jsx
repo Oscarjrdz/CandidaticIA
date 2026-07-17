@@ -1,7 +1,6 @@
 import React, { useEffect } from 'react';
 import { X, Download, FileText } from 'lucide-react';
 import Button from './ui/Button';
-import { downloadChatHistory } from '../services/chatExportService';
 
 const ChatHistoryModal = ({ isOpen, onClose, candidate, chatContent }) => {
     useEffect(() => {

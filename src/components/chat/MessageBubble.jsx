@@ -101,7 +101,7 @@ const MessageBubble = React.memo(function MessageBubble({
     msg,
     chatWhatsapp,
     chatNombre,
-    chatId,
+    _chatId,
     reactionPopupId,
     onReaction,
     onReply,

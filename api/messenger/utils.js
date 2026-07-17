@@ -74,7 +74,7 @@ export const getPageToken = async () => {
  * @param {Object} extra — Additional params (caption, filename, etc.)
  * @returns {{ success: boolean, messageId?: string, error?: string }}
  */
-export const sendMessengerMessage = async (psid, body, type = 'text', extra = {}) => {
+export const sendMessengerMessage = async (psid, body, type = 'text', _extra = {}) => {
     const pageToken = await getPageToken();
     if (!pageToken) {
         return { success: false, error: 'No Page Token available for Messenger' };

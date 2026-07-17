@@ -49,10 +49,10 @@ const PANEL_CLASS = 'h-auto xl:h-[520px] bg-white dark:bg-gray-900 rounded-2xl b
 const PANEL_HEADER_CLASS = 'h-16 px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between gap-3 shrink-0';
 const PANEL_BODY_CLASS = 'flex-1 min-h-0 overflow-y-auto';
 
-const PanelTitle = ({ icon: Icon, title }) => (
+const PanelTitle = ({ icon: _Icon, title }) => (
     <div className="flex items-center space-x-3 min-w-0">
         <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-blue-100 dark:bg-blue-900/30 shrink-0">
-            <Icon className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+            <_Icon className="w-5 h-5 text-blue-600 dark:text-blue-400" />
         </div>
         <h2 className="text-sm font-bold text-gray-900 dark:text-white truncate">
             {title}
@@ -321,9 +321,9 @@ const ReengagementPanel = ({ templatesPanel = null }) => {
                             { label: 'Pendientes', value: pendingCount, icon: Clock },
                             { label: 'Listos ahora', value: readyCount, icon: Zap },
                             { label: 'Enviados hoy', value: sentToday, icon: CheckCircle },
-                        ].map(({ label, value, icon: Icon }) => (
+                        ].map(({ label, value, icon: _Icon }) => (
                             <div key={label} className="rounded-xl p-3 text-center bg-gray-50 dark:bg-gray-800/70 border border-gray-100 dark:border-gray-800">
-                                <Icon className="w-4 h-4 text-blue-600 dark:text-blue-400 mx-auto mb-1" />
+                                <_Icon className="w-4 h-4 text-blue-600 dark:text-blue-400 mx-auto mb-1" />
                                 <p className="text-lg font-black text-gray-900 dark:text-white">{value}</p>
                                 <p className="text-[10px] text-gray-500 dark:text-gray-400">{label}</p>
                             </div>
@@ -597,9 +597,9 @@ const ReengagementPanel = ({ templatesPanel = null }) => {
     );
 };
 
-const EmptyState = ({ icon: Icon, text }) => (
+const EmptyState = ({ icon: _Icon, text }) => (
     <div className="py-10 flex flex-col items-center gap-2 text-gray-400">
-        <Icon className="w-8 h-8 opacity-30" />
+        <_Icon className="w-8 h-8 opacity-30" />
         <p className="text-sm">{text}</p>
     </div>
 );

@@ -2,25 +2,26 @@ import React, { useState } from 'react';
 import { User, Calendar, MapPin, GraduationCap, Briefcase, ChevronDown, ChevronUp, Sparkles, Binary } from 'lucide-react';
 import { calculateAge, formatValue } from '../utils/formatters';
 
+// A nivel de módulo: un componente definido dentro del render se re-monta en cada
+// render del padre (misma clase de bug que el temblor del chat con el Footer de Virtuoso)
+const ProfileItem = ({ icon: _Icon, label, value, colorClass = "text-blue-500" }) => (
+    <div className="flex items-center space-x-2 bg-gray-50 dark:bg-gray-700/50 p-2 rounded-lg border border-gray-100 dark:border-gray-700/50">
+        <div className={`p-1.5 rounded-md bg-white dark:bg-gray-800 shadow-sm ${colorClass}`}>
+            <_Icon className="w-3.5 h-3.5" />
+        </div>
+        <div className="flex flex-col">
+            <span className="text-[8px] font-black uppercase tracking-widest text-gray-400 leading-none mb-0.5">{label}</span>
+            <span className="text-[11px] font-bold text-gray-900 dark:text-white truncate max-w-[120px]">
+                {formatValue(value)}
+            </span>
+        </div>
+    </div>
+);
+
 const CandidateADNCard = ({ candidate }) => {
     const [expanded, setExpanded] = useState(false);
 
     if (!candidate) return null;
-
-    // Helper to render profile items with icons
-    const ProfileItem = ({ icon: Icon, label, value, colorClass = "text-blue-500" }) => (
-        <div className="flex items-center space-x-2 bg-gray-50 dark:bg-gray-700/50 p-2 rounded-lg border border-gray-100 dark:border-gray-700/50">
-            <div className={`p-1.5 rounded-md bg-white dark:bg-gray-800 shadow-sm ${colorClass}`}>
-                <Icon className="w-3.5 h-3.5" />
-            </div>
-            <div className="flex flex-col">
-                <span className="text-[8px] font-black uppercase tracking-widest text-gray-400 leading-none mb-0.5">{label}</span>
-                <span className="text-[11px] font-bold text-gray-900 dark:text-white truncate max-w-[120px]">
-                    {formatValue(value)}
-                </span>
-            </div>
-        </div>
-    );
 
     return (
         <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm">

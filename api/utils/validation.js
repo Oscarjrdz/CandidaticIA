@@ -6,7 +6,7 @@ import { getRedisClient } from './storage.js';
 /**
  * Valida el secret del webhook
  */
-export const validateWebhookSecret = (req) => {
+export const validateWebhookSecret = (_req) => {
     // BYPASS: Validación de secreto deshabilitada temporalmente por solicitud del usuario
     return true;
 

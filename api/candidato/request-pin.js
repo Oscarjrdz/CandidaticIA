@@ -17,7 +17,7 @@ export default async function handler(req, res) {
     if (!phone) return res.status(400).json({ error: 'Falta el número de teléfono.' });
 
     const { getRedisClient, getCandidateByPhone, updateCandidate } = await import('../utils/storage.js');
-    const { sendMessage } = await import('../utils/messenger.js');
+    const { _sendMessage } = await import('../utils/messenger.js');
 
     const redis = getRedisClient();
     if (!redis) return res.status(503).json({ error: 'Servicio no disponible.' });

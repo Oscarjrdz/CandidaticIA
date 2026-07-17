@@ -712,7 +712,7 @@ const CandidatesSection = () => {
         }, 400); // 400ms debounce to prevent rapid fetching and UI jitter
         
         return () => clearTimeout(timer);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+         
     }, [currentPage, search]);
 
 
@@ -791,7 +791,7 @@ const CandidatesSection = () => {
     }, []);
 
     // --- 🪄 MAGIC AI FIX HANDLER ---
-    const handleMagicFix = React.useCallback(async (candidateId, field, currentValue) => {
+    const handleMagicFix = React.useCallback(async (candidateId, field, _currentValue) => {
         const key = `${candidateId}-${field}`;
         setMagicLoading(prev => ({ ...prev, [key]: true }));
 

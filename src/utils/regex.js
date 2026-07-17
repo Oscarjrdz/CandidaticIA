@@ -59,7 +59,7 @@ export function patternToPhrases(pattern) {
                 // Check what's before the paren
                 const prefix = core.substring(0, lastParenIndex);
                 // remove trailing \s*[:]?\s*
-                core = prefix.replace(/\\s\*\[\:\?\]\?\\s\*$/, '').trim();
+                core = prefix.replace(/\\s\*\[:\?\]\?\\s\*$/, '').trim();
             }
         }
 
@@ -87,29 +87,29 @@ export function patternToPhrases(pattern) {
             let s = p;
 
             // Handle double escaped patterns first (common in JSON/Storage)
-            s = s.replace(/\\\\s[\*\+]?/g, ' '); // \\s* -> space
+            s = s.replace(/\\\\s[*+]?/g, ' '); // \\s* -> space
             s = s.replace(/\\\\b/g, '');          // \\b -> empty
 
             // Handle single escaped patterns
-            s = s.replace(/\\s[\*\+]?/g, ' ');    // \s* -> space
+            s = s.replace(/\\s[*+]?/g, ' ');    // \s* -> space
             s = s.replace(/\\b/g, '');            // \b -> empty
             s = s.replace(/\\./g, '.');           // \. -> .
 
             // Remove specific regex constructs
-            s = s.replace(/\(\?\:/g, '');         // (?:
-            s = s.replace(/\[\:\?\]\??/g, '');    // [:?]? or [:?]
-            s = s.replace(/\[\^.*?\][\+\*]/g, ''); // [^...]+ or [^...]*
+            s = s.replace(/\(\?:/g, '');         // (?:
+            s = s.replace(/\[:\?\]\??/g, '');    // [:?]? or [:?]
+            s = s.replace(/\[\^.*?\][+*]/g, ''); // [^...]+ or [^...]*
             s = s.replace(/\(\.\*\)/g, '');       // (.*)
             s = s.replace(/\(\.\+\)/g, '');       // (.+)
 
             // Remove common capturing group artifacts if they differ
-            s = s.replace(/\(\?\=.*?\)/g, '');    // (?=...) Lookahead
+            s = s.replace(/\(\?=.*?\)/g, '');    // (?=...) Lookahead
 
             // Remove remaining brackets, braces, parens
-            s = s.replace(/[\[\]\{\}\(\)\^\$\|]/g, '');
+            s = s.replace(/[[\]{}()^$|]/g, '');
 
             // Remove qualifiers that might remain if not caught above
-            s = s.replace(/[\?\+\*]/g, '');
+            s = s.replace(/[?+*]/g, '');
 
             // Remove backslashes last
             s = s.replace(/\\/g, '');

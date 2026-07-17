@@ -9,7 +9,7 @@ export default async function handler(req, res) {
     if (!userId) return res.status(401).json({ error: 'No autorizado' });
 
     try {
-        const { image, type: requestedType, filename } = req.body; // Expects base64 string
+        const { image, type: _requestedType, filename } = req.body; // Expects base64 string
 
         if (!image) {
             return res.status(400).json({ error: 'No image data provided' });

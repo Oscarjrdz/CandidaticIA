@@ -57,8 +57,8 @@ const formatWhatsAppText = (text) => {
 const ChatWindow = ({ isOpen, onClose, candidate }) => {
     const [messages, setMessages] = useState([]);
     const [newMessage, setNewMessage] = useState('');
-    const [sending, setSending] = useState(false);
-    const [availableFields, setAvailableFields] = useState([]);
+    const [_sending, setSending] = useState(false);
+    const [_availableFields, setAvailableFields] = useState([]);
     const [replyToMsg, setReplyToMsg] = useState(null);
 
 
@@ -459,10 +459,10 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
         }
     };
 
-    const handleMouseMove = (e) => {
+    const _handleMouseMove = (e) => {
         if (isDragging) {
-            const x = e.clientX - dragOffset.x;
-            const y = e.clientY - dragOffset.y;
+            const _x = e.clientX - dragOffset.x;
+            const _y = e.clientY - dragOffset.y;
 
             // Convertir a posición relativa al centro inicial o usar posición absoluta
             // Aquí usaremos fixed positioning básico.
@@ -488,7 +488,7 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
     // Global drag listeners
     useEffect(() => {
         if (isDragging) {
-            const onMove = (e) => {
+            const _onMove = (_e) => {
                 // Calcular nueva posición (left/top)
                 // Usamos estado 'position' para controlar style={{ left, top }}
                 // Pero inicialmente está centrado.

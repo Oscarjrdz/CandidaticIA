@@ -100,11 +100,11 @@ const UsersSection = () => {
     });
 
     // Tag Manager inline state
-    const [tagManagerOpen, setTagManagerOpen] = useState(false);
-    const [editingTagIndex, setEditingTagIndex] = useState(null);
+    const [_tagManagerOpen, _setTagManagerOpen] = useState(false);
+    const [_editingTagIndex, setEditingTagIndex] = useState(null);
     const [newTagName, setNewTagName] = useState('');
     const [newTagColor, setNewTagColor] = useState('#3b82f6');
-    const [savingTag, setSavingTag] = useState(false);
+    const [_savingTag, setSavingTag] = useState(false);
 
     const TAG_PALETTE = ['#ef4444','#f97316','#eab308','#22c55e','#3b82f6','#8b5cf6','#ec4899','#06b6d4','#14b8a6','#64748b'];
 
@@ -160,7 +160,7 @@ const UsersSection = () => {
         }
     };
 
-    const handleCreateTag = async () => {
+    const _handleCreateTag = async () => {
         const trimmed = newTagName.trim();
         if (!trimmed) return;
         if (allTags.some(t => (typeof t === 'string' ? t : t.name).toLowerCase() === trimmed.toLowerCase())) {
@@ -173,7 +173,7 @@ const UsersSection = () => {
         setNewTagColor('#3b82f6');
     };
 
-    const handleUpdateTag = async (index) => {
+    const _handleUpdateTag = async (index) => {
         const trimmed = newTagName.trim();
         if (!trimmed) return;
         const updated = allTags.map((t, i) => {
@@ -186,7 +186,7 @@ const UsersSection = () => {
         setNewTagColor('#3b82f6');
     };
 
-    const handleDeleteTag = async (index) => {
+    const _handleDeleteTag = async (index) => {
         const tagName = typeof allTags[index] === 'string' ? allTags[index] : allTags[index].name;
         const ok = await showConfirm({
             title: 'Eliminar Etiqueta',
@@ -199,7 +199,7 @@ const UsersSection = () => {
         await saveTagsToApi(updated);
     };
 
-    const startEditTag = (index) => {
+    const _startEditTag = (index) => {
         const t = allTags[index];
         setEditingTagIndex(index);
         setNewTagName(typeof t === 'string' ? t : t.name);
@@ -208,7 +208,7 @@ const UsersSection = () => {
 
     useEffect(() => {
         loadData();
-        const refreshTags = () => fetch('/api/tags').then(r => r.json()).then(d => { if (d.success && d.tags) setAllTags(d.tags); }).catch(() => {});
+        const _refreshTags = () => fetch('/api/tags').then(r => r.json()).then(d => { if (d.success && d.tags) setAllTags(d.tags); }).catch(() => {});
     }, []);
 
     // Close tag dropdown on outside click

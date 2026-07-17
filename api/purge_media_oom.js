@@ -7,7 +7,7 @@ export default async function handler(req, res) {
         
         let cursor = '0';
         let deletedKeys = 0;
-        let freedMemoryApprox = 0;
+        let _freedMemoryApprox = 0;
         
         do {
             const [nextCursor, keys] = await client.scan(cursor, 'MATCH', 'image:*', 'COUNT', 100);

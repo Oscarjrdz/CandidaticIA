@@ -15,7 +15,6 @@
  */
 import crypto from 'crypto';
 import {
-    saveMessage,
     getCandidateById,
     saveCandidate,
     updateCandidate,

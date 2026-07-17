@@ -59,7 +59,7 @@ const SortableCategoryItem = ({ faq, isSelected, onSelect, onDelete, onEdit }) =
     );
 };
 
-const SortableQuestionItem = ({ text, stats, index, onDelete, onEdit, onMove }) => {
+const SortableQuestionItem = ({ text, stats, _index, onDelete, onEdit, onMove }) => {
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: text });
     
     const style = {

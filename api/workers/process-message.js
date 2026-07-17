@@ -23,7 +23,7 @@ export const maxDuration = 120; // Subido de 60 a 120s — mas margen antes del 
  * This eliminates the wasteful 15s polling that would burn serverless compute at scale.
  */
 
-async function drainWaitlist(candidateId, fromPhone) {
+async function drainWaitlist(candidateId, _fromPhone) {
     let loopSafety = 0;
     while (loopSafety < 10) {
         const pendingMsgs = await getWaitlist(candidateId);
