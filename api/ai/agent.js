@@ -4229,9 +4229,33 @@ Responde ÚNICAMENTE con el número entero de meses. Si evade o no menciona ning
                     responseTextVal = `¡Listo${p2CloseName}! 🌟 Ya tengo todo lo que necesitaba.[MSG_SPLIT]Deja termino de subir tu información al sistema y te contacto para darte más info de la vacante 🌸✨[MSG_SPLIT]🙏 porfi no desesperes si tardo un poquito en contactarte, ok cuídate y platicamos pronto 😊`;
                     await MediaEngine.sendCongratsPack(config, candidateData.whatsapp, 'bot_paso2_sticker', candidateId);
                 } else {
-                    // Evasión — pedir de nuevo
+                    // Evasión — GPT reconoce con gracia (sin seguir la corriente); la repregunta
+                    // la agrega el código SIEMPRE para garantizar que se reconduce la plática.
                     const _mName = p2FirstName ? `${p2FirstName}, ` : '';
-                    responseTextVal = `${_mName}no te preocupes, solo dime un aproximado 😊[MSG_SPLIT]¿Cuántos meses o años llevas trabajando en fábrica? 🏭`;
+                    const fallbackEvasion = `${_mName}no te preocupes, solo dime un aproximado 😊[MSG_SPLIT]¿Cuántos meses o años llevas trabajando en fábrica? 🏭`;
+                    const evasionSys = `${promptAvanzado ? promptAvanzado + '\n\n' : ''}Eres Brenda Rodríguez, reclutadora de Candidatic. Ya le preguntaste al candidato cuánto tiempo de experiencia tiene en fábrica y en vez de responder evadió (broma, coqueteo, pregunta, tema distinto). Genera UNA sola línea MUY corta (máximo 15 palabras) que reconozca con gracia y calidez lo que acaba de decir. REGLAS CRÍTICAS: NUNCA le sigas la corriente (no coquetees, no respondas su juego, no desarrolles su tema) — solo reconócelo con simpatía y deja claro que estás trabajando. PROHIBIDO hacer preguntas o mencionar la pregunta de experiencia — esa la agrega el sistema después de tu línea. NUNCA digas que ya tienes el dato ni inventes información. Sin markdown.\n[ADN]: ${JSON.stringify(cleanAdnBase)}`;
+                    const EVASION_QUESTION_VARIANTS = [
+                        '¿Cuántos meses o años llevas trabajando en fábrica? 🏭 Un aproximado basta 😊',
+                        'Dime, ¿como cuánto tiempo llevas trabajando en fábrica? 🏭 No tiene que ser exacto 😊',
+                        '¿Cuántos meses o años de experiencia tienes en fábrica? 🏭 Un aproximado me sirve 😊'
+                    ];
+                    try {
+                        const evasionGpt = await getOpenAIResponse(
+                            [{ from: 'user', content: aggregatedText }],
+                            evasionSys,
+                            modelAvanzado,
+                            activeAiConfig.openaiApiKey
+                        );
+                        let ack = (evasionGpt?.content || '').replace(/\*/g, '').split(/\[MSG_SPLIT\]/)[0].trim();
+                        // Guardas: el ack nunca trae preguntas (la repregunta la ponemos nosotros)
+                        // ni se alarga de más.
+                        if (ack.includes('¿')) ack = ack.split('¿')[0].trim();
+                        if (ack.length > 150) ack = '';
+                        const evasionQ = EVASION_QUESTION_VARIANTS[Math.floor(Math.random() * EVASION_QUESTION_VARIANTS.length)];
+                        responseTextVal = ack ? `${ack}[MSG_SPLIT]${evasionQ}` : fallbackEvasion;
+                    } catch (_e) {
+                        responseTextVal = fallbackEvasion;
+                    }
                 }
 
             } else if (p2Estado === 'esperando_experiencia') {
