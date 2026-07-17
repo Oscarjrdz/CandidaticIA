@@ -11,7 +11,7 @@ import { isProfileComplete } from '../utils/profileUtils';
 import { compressImage } from '../utils/imageCompress';
 import { useToastContext } from '../contexts/ToastContext';
 import { useAuthContext } from '../contexts/AuthContext';
-import { safeFormatTime, toTitleCase, formatWhatsAppText, TAG_COLORS, checkIfUnread } from './chat/chatUtils';
+import { toTitleCase, formatWhatsAppText, TAG_COLORS, checkIfUnread } from './chat/chatUtils';
 import { passesChatRBACFilter, canSeeIncompleteChats } from '../utils/chatUnreadCount';
 import { renderMetaTemplatePreviewText } from '../utils/metaTemplatePreview';
 import CandidateReminderModal from './CandidateReminderModal';
@@ -513,7 +513,7 @@ const ProfileModal = React.memo(({ candidate, onClose, onSave }) => {
                     setBotCategories(["Operativo", "Administrativo", "Otro"]);
                 }
             })
-            .catch(err => setBotCategories(["Operativo", "Administrativo", "Otro"]));
+            .catch(_err => setBotCategories(["Operativo", "Administrativo", "Otro"]));
     }, []);
 
     const GENERO_OPTIONS = ["Hombre", "Mujer"];
@@ -596,7 +596,22 @@ const MessagesEncryptionHeader = () => (
     </div>
 );
 
-export default function ChatSection({ rolePermissions, onlineUsers = [], unreadCountHint = null, onUnreadCountChange, agentMode = false }) {
+// El Footer TAMBIÉN debe vivir fuera del componente: un `Footer: () => <div/>` inline
+// es un tipo de componente NUEVO en cada render de ChatSection → React lo desmonta y
+// remonta → la altura total de la lista baja/sube 25px → Virtuoso corrige el scroll.
+// Con muchos chats en la lista (muchos re-renders por SSE durante un envío con fotos)
+// eso se veía como un temblor "arriba y abajo" de las burbujas recién inyectadas.
+const MessagesListFooter = () => <div style={{ height: 25 }} />;
+const MESSAGES_VIRTUOSO_COMPONENTS = { Header: MessagesEncryptionHeader, Footer: MessagesListFooter };
+
+// Mismo caso para la lista de chats: el estado (loadingMore) llega vía el prop
+// `context` de Virtuoso para que el tipo del componente sea estable entre renders.
+const ChatListFooter = ({ context }) => context?.loadingMore
+    ? <div className="py-4 text-center text-xs text-gray-400 dark:text-gray-600">Cargando más...</div>
+    : null;
+const CHAT_LIST_VIRTUOSO_COMPONENTS = { Footer: ChatListFooter };
+
+export default function ChatSection({ rolePermissions, onlineUsers = [], unreadCountHint = null, onUnreadCountChange, _agentMode = false }) {
     const { showToast } = useToastContext();
     const { user, setUser } = useAuthContext();
 
@@ -686,7 +701,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
     const [showRightPanel, setShowRightPanel] = useState(true);
     const [messages, setMessages] = useState([]);
     const messageInputRef = useRef(null);
-    const [sending, setSending] = useState(false);
+    const [_sending, setSending] = useState(false);
     const [loadingChats, setLoadingChats] = useState(true);
     const [availableTags, setAvailableTags] = useState([]);
     const [manualProjects, setManualProjects] = useState([]);
@@ -707,15 +722,15 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
 
     // Typing Indicators
 
-    const [recruiterTypingName, setRecruiterTypingName] = useState('');
+    const [_recruiterTypingName, setRecruiterTypingName] = useState('');
     const [metaTemplates, setMetaTemplates] = useState([]);
     const typingTimersRef = useRef({});
 
     // ═══ INSTANCE MAP for I01/I02 badges ═══
 
 
-    const messagesEndRef = useRef(null);
-    const messagesContainerRef = useRef(null);
+    const _messagesEndRef = useRef(null);
+    const _messagesContainerRef = useRef(null);
     const virtuosoRef = useRef(null);
     const isSendingRef = useRef(false);
     const isAtBottomRef = useRef(true);
@@ -726,7 +741,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
     const bottomAnchorRef = useRef(false);
     const prevDisplayLengthRef = useRef(0);
 
-    const animateScrollToBottom = (duration = 500) => {
+    const _animateScrollToBottom = (duration = 500) => {
         // Two rAFs so Virtuoso has rendered the new item and scrollHeight is updated
         requestAnimationFrame(() => requestAnimationFrame(() => {
             const el = virtuosoScrollerRef.current;
@@ -759,7 +774,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
     const [unseenCount, setUnseenCount] = useState(0);
     const [chatSearch, setChatSearch] = useState('');
     const [showChatSearch, setShowChatSearch] = useState(false);
-    const [chatSearchIdx, setChatSearchIdx] = useState(0);
+    const [_chatSearchIdx, setChatSearchIdx] = useState(0);
     const chatSearchInputRef = useRef(null);
     // ✅ META AUDIT: Ghost guard — prevents SSE re-insertion after delete (same pattern as CandidatesSection)
     const recentlyDeletedRef = useRef(new Set());
@@ -899,7 +914,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
     const [qrForm, setQrForm] = useState({ name: '', message: '', shortcut: '', imageUrl: '', imageUrl2: '', imageUrl3: '', imageUrl4: '', type: 'text', locName: '', locAddress: '', locLat: '', locLng: '' });
     const [qrImageUploading, setQrImageUploading] = useState(false);
     const [pendingQrImages, setPendingQrImages] = useState([]); // imágenes de QR en espera de enviar
-    const [qrSaving, setQrSaving] = useState(false);
+    const [_qrSaving, _setQrSaving] = useState(false);
     const [capturingShortcut, setCapturingShortcut] = useState(false);
 
     // Toolbar icon order (drag & drop)
@@ -934,7 +949,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
     const [visibleChatLimit, setVisibleChatLimit] = useState(CHAT_LIST_PAGE_SIZE);
     const loadingMoreRef = useRef(false);
     const activeFilterRef = useRef('unread');
-    const hasSetInitialFilter = useRef(false);
+    const _hasSetInitialFilter = useRef(false);
     const filterValueRef = useRef(null);
     const selectedChatRef = useRef(null);
     const pendingChatIdRef = useRef(null);
@@ -4219,7 +4234,8 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                             defaultItemHeight={76}
                             computeItemKey={(index, chat) => chat.id}
                             endReached={handleChatListEndReached}
-                            components={{ Footer: () => loadingMore ? <div className="py-4 text-center text-xs text-gray-400 dark:text-gray-600">Cargando más...</div> : null }}
+                            context={{ loadingMore }}
+                            components={CHAT_LIST_VIRTUOSO_COMPONENTS}
                             itemContent={(index, chat) => (
                                 <ChatRow
                                     key={chat.id}
@@ -4726,7 +4742,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                             computeItemKey={(index, msg) => getStableMessageKey(msg, index)}
                             overscan={400}
                             atBottomThreshold={150}
-                            components={{ Header: MessagesEncryptionHeader, Footer: () => <div style={{ height: 25 }} /> }}
+                            components={MESSAGES_VIRTUOSO_COMPONENTS}
                             totalListHeightChanged={() => {
                                 // isSendingRef solo fuerza scroll si la lista CRECIÓ (llegó una burbuja
                                 // nueva) — sin messagesGrew, cada palomita de estado durante un envío con
@@ -4771,7 +4787,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
 
                             // Prevenir renderizado de burbujas fantasma (eventos de sistema sin texto ni multimedia)
                             if (!msg.content && !msg.mediaUrl) return <div style={{ height: 0 }} />;
-                            const isLast = index === displayMessages.length - 1;
+                            const _isLast = index === displayMessages.length - 1;
 
                             return (
                                 <div>
