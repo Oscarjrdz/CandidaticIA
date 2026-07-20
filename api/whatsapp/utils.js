@@ -120,7 +120,20 @@ export const sendMetaMessage = async (to, body, type = 'chat', extraParams = {})
 
             case 'audio': {
                 payload.type = 'audio';
-                payload.audio = { link: body };
+                if (extraParams.mediaId) {
+                    payload.audio = { id: extraParams.mediaId };
+                } else {
+                    let audioUrl = String(body).trim();
+                    if (!audioUrl || audioUrl === 'null' || audioUrl === 'N/A') {
+                        return { success: true, data: { status: 'filtered_empty_media' } };
+                    }
+                    payload.audio = { link: audioUrl };
+                }
+                // Nota de voz nativa (onditas/waveform): Meta la renderiza SOLO si el audio es
+                // .ogg con codec OPUS y se manda con voice:true. Cualquier otro formato cae a
+                // "archivo de audio" descargable. El flag lo decide el llamador (chat.js) según
+                // el mime real del asset. Ver docs: cloud-api/messages/audio-messages.
+                if (extraParams.voice) payload.audio.voice = true;
                 break;
             }
 

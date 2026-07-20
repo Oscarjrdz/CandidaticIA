@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback, useDeferredValue } from 'react';
 import ConfirmModal from './ui/ConfirmModal';
-import { MapPin, List as ListIcon, ShoppingBag, UserSquare, MousePointerClick, Search, MessageSquare, Plus, Smile, Paperclip, Mic, ArrowLeft, Send, Tag, Pencil, Check, X, Trash2, Briefcase, Kanban, BookOpen, Keyboard, Loader2, Edit2, Reply, Zap, Pin, MessageCirclePlus, Phone, User, Bell, GripVertical, ChevronDown, ChevronUp } from 'lucide-react';
+import { MapPin, List as ListIcon, ShoppingBag, UserSquare, MousePointerClick, Search, MessageSquare, Plus, Smile, Paperclip, Mic, Square, ArrowLeft, Send, Tag, Pencil, Check, X, Trash2, Briefcase, Kanban, BookOpen, Keyboard, Loader2, Edit2, Reply, Zap, Pin, MessageCirclePlus, Phone, User, Bell, GripVertical, ChevronDown, ChevronUp } from 'lucide-react';
 import { getCandidates, getCandidateById, blockCandidate, deleteCandidate } from '../services/candidatesService';
 import { substituteVariables } from '../../api/utils/shortcuts.js';
 import ManualProjectsSidepanel from './ManualProjectsSidepanel';
@@ -911,8 +911,15 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         persistQrOrder(ids);
     }, [qrDraggedId, displayedQuickReplies, persistQrOrder]);
 
-    const [qrForm, setQrForm] = useState({ name: '', message: '', shortcut: '', imageUrl: '', imageUrl2: '', imageUrl3: '', imageUrl4: '', type: 'text', locName: '', locAddress: '', locLat: '', locLng: '' });
+    const [qrForm, setQrForm] = useState({ name: '', message: '', shortcut: '', imageUrl: '', imageUrl2: '', imageUrl3: '', imageUrl4: '', type: 'text', locName: '', locAddress: '', locLat: '', locLng: '', audioUrl: '', audioMime: '', audioVoice: false, audioDurationMs: 0 });
     const [qrImageUploading, setQrImageUploading] = useState(false);
+    // Grabación de audio para banco de respuestas (nota de voz nativa ogg/opus)
+    const [qrRecording, setQrRecording] = useState(false);
+    const [qrRecordSecs, setQrRecordSecs] = useState(0);
+    const [qrAudioUploading, setQrAudioUploading] = useState(false);
+    const qrRecorderRef = useRef(null);
+    const qrRecordTimerRef = useRef(null);
+    const qrRecordStartRef = useRef(0);
     const [pendingQrImages, setPendingQrImages] = useState([]); // imágenes de QR en espera de enviar
     const [_qrSaving, _setQrSaving] = useState(false);
     const [capturingShortcut, setCapturingShortcut] = useState(false);
@@ -1383,6 +1390,90 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         }
     };
 
+    // Sube un blob/archivo de audio al banco (base64 90d + Blob permanente, igual que imágenes).
+    // Devuelve { url, mime } o null. voice=true solo si el mime es ogg/opus (requisito de Meta
+    // para que WhatsApp lo pinte como nota de voz con onditas).
+    const handleQrAudioUpload = async (fileOrBlob, filename) => {
+        if (!fileOrBlob) return null;
+        setQrAudioUploading(true);
+        try {
+            const formData = new FormData();
+            const fname = filename || (fileOrBlob.name) || `nota-voz-${Date.now()}.ogg`;
+            formData.append('file', fileOrBlob, fname);
+            formData.append('candidateId', 'quick_reply_asset');
+            const res = await fetch('/api/media/upload', { method: 'POST', body: formData });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Error al subir audio');
+            return { url: data.url || data.mediaUrl || null, mime: data.mime || fileOrBlob.type || '' };
+        } catch (e) {
+            showToast && showToast('Error al subir audio: ' + e.message, 'error');
+            return null;
+        } finally {
+            setQrAudioUploading(false);
+        }
+    };
+
+    const isOggOpus = (mime) => /ogg/i.test(mime || '');
+
+    const stopQrRecording = useCallback(() => {
+        try { qrRecorderRef.current?.stop(); } catch { /* noop */ }
+        if (qrRecordTimerRef.current) { clearInterval(qrRecordTimerRef.current); qrRecordTimerRef.current = null; }
+    }, []);
+
+    const startQrRecording = useCallback(async () => {
+        if (qrRecording) return;
+        try {
+            // Carga diferida: el worker/WASM del encoder (~385KB) solo se baja al grabar.
+            const _mod = await import('opus-recorder');
+            const Recorder = _mod.default || _mod;
+            if (!Recorder.isRecordingSupported || !Recorder.isRecordingSupported()) {
+                showToast && showToast('Tu navegador no soporta grabación de audio', 'error');
+                return;
+            }
+            const rec = new Recorder({
+                encoderPath: '/opus/encoderWorker.min.js',
+                encoderApplication: 2048,   // VOIP — optimizado para voz
+                encoderSampleRate: 16000,   // 16kHz mono: nota de voz ligera y clara
+                numberOfChannels: 1,
+                recordingGain: 1,
+                streamPages: false          // un solo blob .ogg completo al parar
+            });
+            let oggData = null;
+            rec.ondataavailable = (typedArray) => { oggData = typedArray; };
+            rec.onstop = async () => {
+                setQrRecording(false);
+                const durationMs = Date.now() - qrRecordStartRef.current;
+                try { rec.stream?.getTracks?.().forEach(t => t.stop()); } catch { /* noop */ }
+                if (!oggData || !oggData.length) return;
+                // MIME sin el sufijo "; codecs=opus": Meta valida el tipo del archivo al subirlo
+                // y el parámetro extra puede tumbar la validación. Los bytes ya son ogg/opus.
+                const blob = new Blob([oggData], { type: 'audio/ogg' });
+                const uploaded = await handleQrAudioUpload(blob, `nota-voz-${Date.now()}.ogg`);
+                if (uploaded?.url) {
+                    setQrForm(prev => ({ ...prev, audioUrl: uploaded.url, audioMime: uploaded.mime || 'audio/ogg', audioVoice: isOggOpus(uploaded.mime || 'audio/ogg'), audioDurationMs: durationMs }));
+                }
+            };
+            await rec.start();
+            qrRecorderRef.current = rec;
+            qrRecordStartRef.current = Date.now();
+            setQrRecordSecs(0);
+            setQrRecording(true);
+            qrRecordTimerRef.current = setInterval(() => {
+                setQrRecordSecs(Math.floor((Date.now() - qrRecordStartRef.current) / 1000));
+            }, 250);
+        } catch (e) {
+            setQrRecording(false);
+            const denied = /denied|permission/i.test(e?.message || '');
+            showToast && showToast(denied ? 'Permiso de micrófono denegado' : ('No se pudo iniciar la grabación: ' + (e?.message || '')), 'error');
+        }
+    }, [qrRecording]);
+
+    // Limpieza: si el componente se desmonta grabando, detener el micrófono.
+    useEffect(() => () => {
+        try { qrRecorderRef.current?.stop(); } catch { /* noop */ }
+        if (qrRecordTimerRef.current) clearInterval(qrRecordTimerRef.current);
+    }, []);
+
     const handleApplyQuickReply = useCallback(async (qr) => {
         const now = Date.now();
         const applyKey = `${selectedChat?.id || 'no-chat'}:${qr.id || qr.name || qr.shortcut || qr.message || qr.type}`;
@@ -1406,6 +1497,33 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                 body: JSON.stringify({
                     candidateId: currentCandidateId, message: '', type: 'location',
                     extraParams: { name: qr.location.name, address: qr.location.address, lat: qr.location.lat, lng: qr.location.lng },
+                    senderId: user?.id || user?.whatsapp, senderName: user?.name || user?.nombre
+                })
+            }).then(r => r.json()).then(data => {
+                updateChatMessages(currentCandidateId, prev => data.success && data.message
+                    ? mergeOutgoingMessage(prev, data.message, optimisticId)
+                    : prev.map(m => m.id === optimisticId ? { ...m, status: 'failed', error: data.error } : m)
+                );
+            }).catch(() => {
+                updateChatMessages(currentCandidateId, prev => prev.map(m => m.id === optimisticId ? { ...m, status: 'failed' } : m));
+            });
+            return;
+        }
+        // Tipo audio: enviar directo como nota de voz nativa (no pasa por el input)
+        if (qr.type === 'audio' && qr.audioUrl) {
+            if (!selectedChat) return;
+            autoSilenceBot(selectedChat);
+            const currentCandidateId = selectedChat.id;
+            markReplyHandledOptimistically(currentCandidateId);
+            const optimisticId = 'temp-audio-' + Date.now();
+            updateChatMessages(currentCandidateId, prev => [...(prev || []), withMessageEntryAnimation({
+                id: optimisticId, content: qr.voice ? '🎤 Nota de voz' : '🎵 Audio', type: qr.voice ? 'ptt' : 'audio', mediaUrl: qr.audioUrl,
+                from: 'me', enviado_por_agente: 1, status: 'pending', fecha: new Date().toISOString(), _clientAnchoredTime: true
+            }, 'outgoing')]);
+            fetch('/api/chat', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    candidateId: currentCandidateId, message: '', type: 'audio', mediaUrl: qr.audioUrl, voice: !!qr.voice,
                     senderId: user?.id || user?.whatsapp, senderName: user?.name || user?.nombre
                 })
             }).then(r => r.json()).then(data => {
@@ -4950,8 +5068,13 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                         <div className="flex rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden text-xs">
                             <button type="button"
                                 onClick={() => setQrForm(prev => ({ ...prev, type: 'text' }))}
-                                className={`flex-1 py-1.5 font-medium transition-colors ${qrForm.type !== 'location' ? 'bg-green-600 text-white' : 'bg-white dark:bg-[#202c33] text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-[#2a3942]'}`}>
+                                className={`flex-1 py-1.5 font-medium transition-colors ${(qrForm.type !== 'location' && qrForm.type !== 'audio') ? 'bg-green-600 text-white' : 'bg-white dark:bg-[#202c33] text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-[#2a3942]'}`}>
                                 📝 Texto / Imagen
+                            </button>
+                            <button type="button"
+                                onClick={() => setQrForm(prev => ({ ...prev, type: 'audio' }))}
+                                className={`flex-1 py-1.5 font-medium transition-colors border-x border-gray-200 dark:border-gray-700 ${qrForm.type === 'audio' ? 'bg-green-600 text-white' : 'bg-white dark:bg-[#202c33] text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-[#2a3942]'}`}>
+                                🎤 Audio
                             </button>
                             <button type="button"
                                 onClick={() => setQrForm(prev => ({ ...prev, type: 'location' }))}
@@ -4960,7 +5083,68 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                             </button>
                         </div>
 
-                        {qrForm.type === 'location' ? (
+                        {qrForm.type === 'audio' ? (
+                            <div className="space-y-2">
+                                {qrForm.audioUrl ? (
+                                    <div className="flex items-center gap-2 p-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-[#202c33]">
+                                        <audio src={qrForm.audioUrl} controls className="flex-1 h-9 min-w-0" />
+                                        <button
+                                            type="button"
+                                            onClick={() => setQrForm(prev => ({ ...prev, audioUrl: '', audioMime: '', audioVoice: false, audioDurationMs: 0 }))}
+                                            className="shrink-0 p-1.5 text-gray-400 hover:text-red-500 rounded-full hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                                            title="Quitar audio"
+                                        >
+                                            <Trash2 className="w-4 h-4" />
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <div className="flex items-center gap-2">
+                                        {qrRecording ? (
+                                            <button
+                                                type="button"
+                                                onClick={stopQrRecording}
+                                                className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-bold transition-colors"
+                                            >
+                                                <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
+                                                <Square className="w-3.5 h-3.5" /> Detener ({String(Math.floor(qrRecordSecs / 60)).padStart(2, '0')}:{String(qrRecordSecs % 60).padStart(2, '0')})
+                                            </button>
+                                        ) : (
+                                            <button
+                                                type="button"
+                                                onClick={startQrRecording}
+                                                disabled={qrAudioUploading}
+                                                className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg bg-green-600 hover:bg-green-700 text-white text-xs font-bold transition-colors disabled:opacity-50"
+                                            >
+                                                {qrAudioUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mic className="w-4 h-4" />}
+                                                {qrAudioUploading ? 'Subiendo...' : 'Grabar nota de voz'}
+                                            </button>
+                                        )}
+                                        <label className={`shrink-0 flex items-center justify-center gap-1 px-3 py-2.5 rounded-lg border border-dashed border-gray-300 dark:border-gray-600 cursor-pointer hover:border-green-500 transition-colors text-[11px] text-gray-500 dark:text-gray-400 ${(qrRecording || qrAudioUploading) ? 'opacity-50 pointer-events-none' : ''}`} title="Subir archivo de audio">
+                                            <Paperclip className="w-3.5 h-3.5" /> Subir
+                                            <input type="file" accept="audio/*" className="hidden" onChange={async (e) => {
+                                                const f = e.target.files?.[0];
+                                                e.target.value = '';
+                                                if (!f) return;
+                                                const uploaded = await handleQrAudioUpload(f, f.name);
+                                                if (uploaded?.url) setQrForm(prev => ({ ...prev, audioUrl: uploaded.url, audioMime: uploaded.mime || f.type, audioVoice: isOggOpus(uploaded.mime || f.type), audioDurationMs: 0 }));
+                                            }} />
+                                        </label>
+                                    </div>
+                                )}
+                                {qrForm.audioUrl && (
+                                    <p className={`text-[10px] leading-relaxed ${qrForm.audioVoice ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400'}`}>
+                                        {qrForm.audioVoice
+                                            ? '✅ Se enviará como nota de voz nativa (con onditas).'
+                                            : '⚠️ Este formato se enviará como archivo de audio descargable (sin onditas). Para nota de voz nativa, graba con el botón 🎤.'}
+                                    </p>
+                                )}
+                                {!qrForm.audioUrl && !qrRecording && (
+                                    <p className="text-[10px] text-gray-400 dark:text-gray-500 leading-relaxed">
+                                        🎤 Graba directamente (sale como nota de voz con onditas) o sube un archivo. Al hacer clic en la respuesta, se envía al instante.
+                                    </p>
+                                )}
+                            </div>
+                        ) : qrForm.type === 'location' ? (
                             <div className="space-y-2">
                                 <input
                                     type="text"
@@ -5069,7 +5253,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                             {editingQuickReply !== null && (
                                 <button
                                     type="button"
-                                    onClick={() => { setEditingQuickReply(null); setQrForm({ name: '', message: '', shortcut: '', imageUrl: '', imageUrl2: '', imageUrl3: '', imageUrl4: '', type: 'text', locName: '', locAddress: '', locLat: '', locLng: '' }); }}
+                                    onClick={() => { setEditingQuickReply(null); setQrForm({ name: '', message: '', shortcut: '', imageUrl: '', imageUrl2: '', imageUrl3: '', imageUrl4: '', type: 'text', locName: '', locAddress: '', locLat: '', locLng: '', audioUrl: '', audioMime: '', audioVoice: false, audioDurationMs: 0 }); }}
                                     className="flex-1 text-xs py-2 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-[#202c33] transition-colors font-medium"
                                 >
                                     Cancelar
@@ -5079,10 +5263,13 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                                 type="button"
                                 disabled={qrForm.type === 'location'
                                     ? (!qrForm.locLat || !qrForm.locLng || !qrForm.locName.trim())
+                                    : qrForm.type === 'audio'
+                                    ? (!qrForm.name.trim() || !qrForm.audioUrl || qrRecording || qrAudioUploading)
                                     : (!qrForm.name.trim() || (!qrForm.message.trim() && !qrForm.imageUrl && !qrForm.imageUrl2 && !qrForm.imageUrl3 && !qrForm.imageUrl4))
                                 }
                                 onClick={async () => {
                                     const isLoc = qrForm.type === 'location';
+                                    const isAudio = qrForm.type === 'audio';
                                     const entry = {
                                         id: editingQuickReply?.id || `qr_${Date.now()}`,
                                         name: qrForm.name.trim() || qrForm.locName.trim(),
@@ -5090,6 +5277,11 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                                         type: qrForm.type || 'text',
                                         ...(isLoc ? {
                                             location: { lat: parseFloat(qrForm.locLat), lng: parseFloat(qrForm.locLng), name: qrForm.locName.trim(), address: qrForm.locAddress.trim() }
+                                        } : isAudio ? {
+                                            audioUrl: qrForm.audioUrl,
+                                            audioMime: qrForm.audioMime,
+                                            voice: !!qrForm.audioVoice,
+                                            audioDurationMs: qrForm.audioDurationMs || 0
                                         } : {
                                             message: qrForm.message.trim(),
                                             imageUrls: [qrForm.imageUrl, qrForm.imageUrl2, qrForm.imageUrl3, qrForm.imageUrl4].filter(Boolean)
@@ -5102,7 +5294,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                                         newList = [...quickReplies, entry];
                                     }
                                     await saveQuickReplies(newList);
-                                    setQrForm({ name: '', message: '', shortcut: '', imageUrl: '', imageUrl2: '', imageUrl3: '', imageUrl4: '', type: 'text', locName: '', locAddress: '', locLat: '', locLng: '' });
+                                    setQrForm({ name: '', message: '', shortcut: '', imageUrl: '', imageUrl2: '', imageUrl3: '', imageUrl4: '', type: 'text', locName: '', locAddress: '', locLat: '', locLng: '', audioUrl: '', audioMime: '', audioVoice: false, audioDurationMs: 0 });
                                     setEditingQuickReply(null);
                                     showToast && showToast(editingQuickReply ? 'Respuesta actualizada' : 'Respuesta creada', 'success');
                                 }}
@@ -5185,6 +5377,11 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                                                     <MapPin className="w-3 h-3 shrink-0" />
                                                     <span className="line-clamp-1">{qr.location.name || qr.location.address || 'Ubicación'}</span>
                                                 </div>
+                                            ) : qr.type === 'audio' && qr.audioUrl ? (
+                                                <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                                                    <Mic className={`w-3 h-3 shrink-0 ${qr.voice ? 'text-green-600 dark:text-green-400' : 'text-amber-500'}`} />
+                                                    <audio src={qr.audioUrl} controls className="h-8 max-w-[220px] flex-1 min-w-0" />
+                                                </div>
                                             ) : (
                                                 <>
                                                     {qr.imageUrl && <img src={qr.imageUrl} alt="img" className="mb-1 rounded-md max-h-20 object-cover border border-gray-200 dark:border-gray-700" />}
@@ -5194,7 +5391,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                                         </div>
                                         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
                                             <button
-                                                onClick={(e) => { e.stopPropagation(); setEditingQuickReply(qr); const imgs = qr.imageUrls || (qr.imageUrl ? [qr.imageUrl] : []); setQrForm({ name: qr.name, message: qr.message || '', shortcut: qr.shortcut || '', imageUrl: imgs[0] || '', imageUrl2: imgs[1] || '', imageUrl3: imgs[2] || '', imageUrl4: imgs[3] || '', type: qr.type || 'text', locName: qr.location?.name || '', locAddress: qr.location?.address || '', locLat: qr.location?.lat ? String(qr.location.lat) : '', locLng: qr.location?.lng ? String(qr.location.lng) : '' }); }}
+                                                onClick={(e) => { e.stopPropagation(); setEditingQuickReply(qr); const imgs = qr.imageUrls || (qr.imageUrl ? [qr.imageUrl] : []); setQrForm({ name: qr.name, message: qr.message || '', shortcut: qr.shortcut || '', imageUrl: imgs[0] || '', imageUrl2: imgs[1] || '', imageUrl3: imgs[2] || '', imageUrl4: imgs[3] || '', type: qr.type || 'text', locName: qr.location?.name || '', locAddress: qr.location?.address || '', locLat: qr.location?.lat ? String(qr.location.lat) : '', locLng: qr.location?.lng ? String(qr.location.lng) : '', audioUrl: qr.audioUrl || '', audioMime: qr.audioMime || '', audioVoice: !!qr.voice, audioDurationMs: qr.audioDurationMs || 0 }); }}
                                                 className="p-1.5 text-gray-400 hover:text-blue-500 transition-colors rounded-full hover:bg-blue-50 dark:hover:bg-blue-900/20"
                                                 title="Editar"
                                             >

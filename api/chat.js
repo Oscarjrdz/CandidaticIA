@@ -406,6 +406,8 @@ export default async function handler(req, res) {
                 contentToSave = `[Tarjeta de Contacto: ${incomingExtraParams.contactName || 'N/A'}]`;
             } else if (type === 'location') {
                 contentToSave = `[Ubicación: ${incomingExtraParams.name || 'Mapa'}]`;
+            } else if (type === 'audio') {
+                contentToSave = (req.body.voice || incomingExtraParams.voice) ? '🎤 Nota de voz' : '🎵 Audio';
             }
 
             // 1. Transactional Save
@@ -551,7 +553,13 @@ export default async function handler(req, res) {
                         deliveryContent = makeAbsoluteUrl(mediaUrl, null, type);
                     }
 
-                    extraParams.caption = finalMessage;
+                    // El audio de WhatsApp NO admite caption (Meta lo rechaza). Además, si es
+                    // nota de voz nativa (ogg/opus), marcamos voice:true para que salga con onditas.
+                    if (type === 'audio') {
+                        if (req.body.voice || incomingExtraParams.voice) extraParams.voice = true;
+                    } else {
+                        extraParams.caption = finalMessage;
+                    }
                     sendResult = await sendUltraMsgMessage(ultraConfig.instanceId, ultraConfig.token, cleanTo, deliveryContent, type, extraParams);
                 }
 
