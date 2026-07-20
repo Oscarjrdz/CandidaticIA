@@ -33,6 +33,22 @@ export const SENT_SET_KEY = 'agent:punto_sent:v1';   // candidatos ya atendidos 
 export const BATCH_CAP = 15;                          // tope del cron por corrida (rampa suave)
 const HOST = 'https://www.candidatic.com';
 
+// ── MODO PRUEBA ──────────────────────────────────────────────────────────────
+// Si esta lista tiene números, el agente SOLO actúa para ellos (se compara por los
+// ÚLTIMOS 10 dígitos, así da igual el prefijo país/1 de WhatsApp: 8116038195 =
+// 528116038195 = 5218116038195). Deja la lista VACÍA ([]) para volver al
+// comportamiento normal (todos los que cumplan candados).
+export const TEST_ONLY_PHONES = ['8116038195'];
+
+function last10(phone) {
+    return String(phone || '').replace(/\D/g, '').slice(-10);
+}
+
+function isAllowedTestPhone(c) {
+    if (!TEST_ONLY_PHONES.length) return true;                       // sin whitelist → normal
+    return TEST_ONLY_PHONES.map(last10).includes(last10(c?.whatsapp));
+}
+
 export function normTag(t) {
     return String(typeof t === 'string' ? t : t?.name || '').trim().toUpperCase();
 }
@@ -71,6 +87,7 @@ export async function getPuntoKatconBank(redis) {
 // El corte (since) y "una sola vez" (SADD) se checan aparte según el disparador.
 export function cumpleCandados(c) {
     if (!c || !c.id || !c.whatsapp) return false;
+    if (!isAllowedTestPhone(c)) return false;                    // MODO PRUEBA: solo el/los número(s) de la whitelist
     if (c.blocked) return false;                                 // candado 3: humano nunca intervino
     if (!isProfileComplete(c)) return false;                     // candado 1: perfil completo
     const tags = Array.isArray(c.tags) ? c.tags.map(normTag) : [];
