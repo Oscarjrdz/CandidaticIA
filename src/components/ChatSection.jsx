@@ -1516,8 +1516,12 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
             const currentCandidateId = selectedChat.id;
             markReplyHandledOptimistically(currentCandidateId);
             const optimisticId = 'temp-audio-' + Date.now();
+            // ⚠️ El tipo DEBE ser 'audio' (lo que guarda el server), no 'ptt': getMessageKind
+            // compara type y, si difieren, el eco por SSE no deduplica contra el optimista y
+            // aparece una burbuja doble que luego brinca al reconciliar. El reproductor rinde
+            // igual con 'audio'. La distinción de nota de voz la maneja el flag voice al enviar.
             updateChatMessages(currentCandidateId, prev => [...(prev || []), withMessageEntryAnimation({
-                id: optimisticId, content: qr.voice ? '🎤 Nota de voz' : '🎵 Audio', type: qr.voice ? 'ptt' : 'audio', mediaUrl: qr.audioUrl,
+                id: optimisticId, content: qr.voice ? '🎤 Nota de voz' : '🎵 Audio', type: 'audio', mediaUrl: qr.audioUrl,
                 from: 'me', enviado_por_agente: 1, status: 'pending', fecha: new Date().toISOString(), _clientAnchoredTime: true
             }, 'outgoing')]);
             fetch('/api/chat', {
