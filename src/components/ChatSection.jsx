@@ -911,6 +911,46 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         persistQrOrder(ids);
     }, [qrDraggedId, displayedQuickReplies, persistQrOrder]);
 
+    // ── Orden de etiquetas por reclutador (drag & drop, guardado en SU perfil) ──
+    // Mismo patrón que qrOrder: se persiste en user.preferences.tagOrder (merge superficial
+    // via PUT /api/users). Es una preferencia de VISTA personal: cada reclutador acomoda las
+    // etiquetas del selector a su gusto; el orden NO es global (no toca /api/tags).
+    const [tagOrder, setTagOrder] = useState(() => Array.isArray(user?.preferences?.tagOrder) ? user.preferences.tagOrder : []);
+    const [tagDraggedName, setTagDraggedName] = useState(null);
+    const [tagDragOverName, setTagDragOverName] = useState(null);
+
+    const persistTagOrder = useCallback((names) => {
+        setTagOrder(names);
+        saveQrPreference({ tagOrder: names });   // saveQrPreference = merge superficial genérico de preferences
+    }, [saveQrPreference]);
+
+    // availableTags ordenado según la preferencia del reclutador. Las etiquetas nuevas (sin
+    // posición guardada) van al final, conservando su orden original.
+    const orderedAvailableTags = useMemo(() => {
+        const list = Array.isArray(availableTags) ? availableTags : [];
+        if (!tagOrder.length) return list;
+        const nameOf = (t) => (typeof t === 'string' ? t : t.name);
+        const pos = new Map(tagOrder.map((n, i) => [n, i]));
+        const fallback = new Map(list.map((t, i) => [nameOf(t), tagOrder.length + i]));
+        return [...list].sort((a, b) => {
+            const an = nameOf(a), bn = nameOf(b);
+            return (pos.has(an) ? pos.get(an) : fallback.get(an)) - (pos.has(bn) ? pos.get(bn) : fallback.get(bn));
+        });
+    }, [availableTags, tagOrder]);
+
+    const handleTagDrop = useCallback((targetName) => {
+        setTagDragOverName(null);
+        const dragged = tagDraggedName;
+        setTagDraggedName(null);
+        if (!dragged || dragged === targetName) return;
+        const names = orderedAvailableTags.map(t => (typeof t === 'string' ? t : t.name));
+        const from = names.indexOf(dragged);
+        const to = names.indexOf(targetName);
+        if (from === -1 || to === -1) return;
+        names.splice(to, 0, names.splice(from, 1)[0]);
+        persistTagOrder(names);
+    }, [tagDraggedName, orderedAvailableTags, persistTagOrder]);
+
     const [qrForm, setQrForm] = useState({ name: '', message: '', shortcut: '', imageUrl: '', imageUrl2: '', imageUrl3: '', imageUrl4: '', type: 'text', locName: '', locAddress: '', locLat: '', locLng: '', audioUrl: '', audioMime: '', audioVoice: false, audioDurationMs: 0 });
     const [qrImageUploading, setQrImageUploading] = useState(false);
     // Grabación de audio para banco de respuestas (nota de voz nativa ogg/opus)
@@ -4604,7 +4644,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                                                     </div>
                                                 </div>
                                                 <div className="max-h-52 overflow-y-auto custom-scrollbar">
-                                                    {availableTags.filter(tagObj => {
+                                                    {orderedAvailableTags.filter(tagObj => {
                                                         if (!tagSearch.trim()) return true;
                                                         const n = typeof tagObj === 'string' ? tagObj : tagObj.name;
                                                         return `${n} ${formatTagLabel(n)}`.toLowerCase().includes(tagSearch.trim().toLowerCase());
@@ -4676,15 +4716,23 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                                                         }
 
                                                         return (
-                                                            <div 
-                                                                key={tName} 
-                                                                className="px-3 py-2 text-sm text-[#111b21] dark:text-[#e9edef] hover:bg-gray-50 dark:hover:bg-[#202c33] flex items-center justify-between group/item cursor-pointer"
+                                                            <div
+                                                                key={tName}
+                                                                draggable={!tagSearch}
+                                                                onDragStart={(e) => { setTagDraggedName(tName); e.dataTransfer.effectAllowed = 'move'; }}
+                                                                onDragOver={(e) => { if (!tagDraggedName) return; e.preventDefault(); e.dataTransfer.dropEffect = 'move'; if (tagDragOverName !== tName) setTagDragOverName(tName); }}
+                                                                onDrop={(e) => { e.preventDefault(); handleTagDrop(tName); }}
+                                                                onDragEnd={() => { setTagDraggedName(null); setTagDragOverName(null); }}
+                                                                className={`px-3 py-2 text-sm text-[#111b21] dark:text-[#e9edef] hover:bg-gray-50 dark:hover:bg-[#202c33] flex items-center justify-between group/item cursor-pointer ${tagDraggedName === tName ? 'opacity-40' : ''} ${tagDragOverName === tName && tagDraggedName && tagDraggedName !== tName ? 'border-t-2 border-t-green-500' : ''}`}
                                                                 onClick={() => handleToggleTag(tName)}
                                                             >
-                                                                <div className="flex-1 flex items-center gap-2">
-                                                                    <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: tColor }}></span>
+                                                                <div className="flex-1 flex items-center gap-2 min-w-0">
+                                                                    {!tagSearch && (
+                                                                        <GripVertical className="w-3 h-3 shrink-0 text-gray-300 dark:text-gray-600 opacity-0 group-hover/item:opacity-100 transition-opacity cursor-grab active:cursor-grabbing" />
+                                                                    )}
+                                                                    <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: tColor }}></span>
                                                                     <span className="truncate">{display}</span>
-                                                                    {isActive && <Check className="w-4 h-4 text-blue-500 ml-1" />}
+                                                                    {isActive && <Check className="w-4 h-4 text-blue-500 ml-1 shrink-0" />}
                                                                 </div>
                                                                 {canManageTags && (
                                                                 <div className="flex items-center gap-1 opacity-0 group-hover/item:opacity-100 transition-opacity">
