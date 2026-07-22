@@ -5007,48 +5007,55 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                         </button>
                     )}
 
-                    {/* Preview imágenes pendientes de QR */}
-                    {pendingQrImages.length > 0 && (
-                        <div className="px-3 pt-2 pb-1 bg-[#f0f2f5] dark:bg-[#202c33] border-t border-[#d1d7db] dark:border-[#222e35] flex items-center gap-2">
-                            {pendingQrImages.map((imgUrl, idx) => (
-                                <div key={idx} className="relative shrink-0">
-                                    <img src={imgUrl} alt="preview" className="w-14 h-14 object-cover rounded-lg border border-gray-300 dark:border-gray-600" />
-                                    <button
-                                        type="button"
-                                        onClick={() => setPendingQrImages(prev => prev.filter((_, i) => i !== idx))}
-                                        className="absolute -top-1.5 -right-1.5 bg-gray-600 hover:bg-red-500 text-white rounded-full p-0.5 transition-colors"
-                                        title="Quitar imagen"
-                                    >
-                                        <X className="w-3 h-3" />
-                                    </button>
-                                </div>
-                            ))}
-                            <span className="text-[11px] text-[#667781] dark:text-[#8696a0]">
-                                {pendingQrImages.length === 1 ? 'Imagen adjunta' : `${pendingQrImages.length} imágenes adjuntas`} · se enviarán en orden
-                            </span>
-                        </div>
-                    )}
+                    {/* Input Area + preview de imágenes pendientes de QR.
+                        La tira de preview va como OVERLAY absoluto (bottom-full) sobre el input,
+                        NO en el flujo flex: si estuviera en flujo, al enviar (setPendingQrImages([]))
+                        se desmontaba en el mismo commit que inyecta las burbujas → la lista flex-1
+                        crecía ~72px → Virtuoso re-anclaba su scroll → micro-parpadeo de las burbujas
+                        recién inyectadas (solo visible en envíos CON imágenes del banco). Al sacarla
+                        del flujo, montarla/desmontarla ya no cambia la altura de la lista. */}
+                    <div className="relative shrink-0">
+                        {pendingQrImages.length > 0 && (
+                            <div className="absolute bottom-full inset-x-0 z-20 px-3 pt-2 pb-1 bg-[#f0f2f5] dark:bg-[#202c33] border-t border-[#d1d7db] dark:border-[#222e35] shadow-[0_-1px_2px_rgba(11,20,26,.08)] flex items-center gap-2">
+                                {pendingQrImages.map((imgUrl, idx) => (
+                                    <div key={idx} className="relative shrink-0">
+                                        <img src={imgUrl} alt="preview" className="w-14 h-14 object-cover rounded-lg border border-gray-300 dark:border-gray-600" />
+                                        <button
+                                            type="button"
+                                            onClick={() => setPendingQrImages(prev => prev.filter((_, i) => i !== idx))}
+                                            className="absolute -top-1.5 -right-1.5 bg-gray-600 hover:bg-red-500 text-white rounded-full p-0.5 transition-colors"
+                                            title="Quitar imagen"
+                                        >
+                                            <X className="w-3 h-3" />
+                                        </button>
+                                    </div>
+                                ))}
+                                <span className="text-[11px] text-[#667781] dark:text-[#8696a0]">
+                                    {pendingQrImages.length === 1 ? 'Imagen adjunta' : `${pendingQrImages.length} imágenes adjuntas`} · se enviarán en orden
+                                </span>
+                            </div>
+                        )}
 
-                    {/* Input Area */}
-                    <MessageInputBox
-                        ref={messageInputRef}
-                        isMobile={isMobile}
-                        onSend={handleSend}
-                        hasPendingMedia={pendingQrImages.length > 0}
-                        onTyping={handleTyping}
-                        fileInputRef={fileInputRef}
-                        handleFileUpload={handleFileUpload}
-                        replyingToMsg={replyingToMsg}
-                        onCancelReply={() => setReplyingToMsg(null)}
-                        metaTemplates={metaTemplates}
-                        onSendTemplate={handleSendTemplate}
-                        onSendVCard={() => setShowVCardModal(true)}
-                        onSendInteractive={() => setShowInteractiveModal(true)}
-                        onSendLocation={() => setShowLocationModal(true)}
-                        onSendList={() => setShowListModal(true)}
-                        onSendProduct={() => setShowProductModal(true)}
-                        templatePreviewName={selectedChat?.nombreReal?.trim().split(/\s+/).slice(0, 2).join(' ') || selectedChat?.nombre || 'Candidato'}
-                    />
+                        <MessageInputBox
+                            ref={messageInputRef}
+                            isMobile={isMobile}
+                            onSend={handleSend}
+                            hasPendingMedia={pendingQrImages.length > 0}
+                            onTyping={handleTyping}
+                            fileInputRef={fileInputRef}
+                            handleFileUpload={handleFileUpload}
+                            replyingToMsg={replyingToMsg}
+                            onCancelReply={() => setReplyingToMsg(null)}
+                            metaTemplates={metaTemplates}
+                            onSendTemplate={handleSendTemplate}
+                            onSendVCard={() => setShowVCardModal(true)}
+                            onSendInteractive={() => setShowInteractiveModal(true)}
+                            onSendLocation={() => setShowLocationModal(true)}
+                            onSendList={() => setShowListModal(true)}
+                            onSendProduct={() => setShowProductModal(true)}
+                            templatePreviewName={selectedChat?.nombreReal?.trim().split(/\s+/).slice(0, 2).join(' ') || selectedChat?.nombre || 'Candidato'}
+                        />
+                    </div>
                 </div>
             ) : (
                 <div className="hidden md:flex flex-1 flex-col items-center justify-center bg-[#f0f2f5] dark:bg-[#222e35] border-l border-[#d1d7db] dark:border-[#222e35]">
