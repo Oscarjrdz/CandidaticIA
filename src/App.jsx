@@ -506,7 +506,11 @@ function AppShell() {
           </div>
         </header>
 
-        <main className={`flex-1 overflow-y-auto overflow-x-hidden flex flex-col min-h-0 ${activeSection === 'chat' || activeSection === 'bulks' ? 'p-0' : 'px-3 sm:px-8 py-4 sm:py-8'}`}>
+        {/* scrollbar-gutter:stable reserva el ancho de la barra de scroll SIEMPRE, para que
+            el contenido no se ensanche/encoja (brinco horizontal) cuando aparece/desaparece
+            la barra al cambiar la altura del contenido (p.ej. contraer/expandir tarjetas).
+            Solo en secciones normales; chat/bulks tienen su propio scroll interno. */}
+        <main className={`flex-1 overflow-y-auto overflow-x-hidden flex flex-col min-h-0 ${activeSection === 'chat' || activeSection === 'bulks' ? 'p-0' : 'px-3 sm:px-8 py-4 sm:py-8 [scrollbar-gutter:stable]'}`}>
           <ErrorBoundary>
           <Suspense fallback={<SectionSkeleton />}>
           {activeSection === 'candidates' ? (
