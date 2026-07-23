@@ -4900,6 +4900,14 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                             scrollerRef={(el) => { virtuosoScrollerRef.current = el; }}
                             style={{ height: '100%' }}
                             data={displayMessages}
+                            // Con pocos mensajes (lista mas corta que el viewport) Virtuoso alinea
+                            // arriba por defecto: las burbujas quedan pegadas al tope y el hueco vacio
+                            // abajo, junto al input. Al inyectar del banco algo con imagenes (~520px),
+                            // la lista cruzaba de "cabe" a "se desborda" de golpe y scrollToBottom
+                            // saltaba el scroll de 0 al fondo = brinco. alignToBottom ancla los mensajes
+                            // ABAJO (estilo WhatsApp) para que la inyeccion se extienda suave desde el
+                            // fondo tanto con pocos como con muchos mensajes.
+                            alignToBottom
                             initialTopMostItemIndex={displayMessages.length > 0 ? displayMessages.length - 1 : 0}
                             followOutput={(isAtBottom) => {
                                 // Mismo criterio que totalListHeightChanged: Virtuoso llama esto en
