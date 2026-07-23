@@ -4598,7 +4598,16 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                             {!isMobile && toolbarOrder.map((iconId) => {
                                 const dragProps = {
                                     draggable: true,
-                                    onDragStart: (e) => handleToolbarDragStart(iconId, e),
+                                    // Los dropdowns de vacantes/etiquetas viven DENTRO de este contenedor
+                                    // arrastrable. Con el dropdown ABIERTO, agarrar su panel (buscador,
+                                    // colores, área vacía) arrastraba el icono completo y sacaba la ventana
+                                    // de su lugar. Si el dropdown de este icono está abierto, no arrastres
+                                    // el icono. Las filas de etiqueta/vacante hacen stopPropagation en su
+                                    // propio onDragStart, así que su reordenamiento nunca llega hasta aquí.
+                                    onDragStart: (e) => {
+                                        if (showDropdown === iconId) { e.preventDefault(); return; }
+                                        handleToolbarDragStart(iconId, e);
+                                    },
                                     onDragOver: handleToolbarDragOver,
                                     onDrop: (e) => handleToolbarDrop(iconId, e),
                                     onDragEnd: handleToolbarDragEnd,
@@ -4628,7 +4637,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                                                             return (
                                                                 <div key={vac.id}
                                                                     draggable
-                                                                    onDragStart={(e) => { setVacancyDraggedId(vac.id); e.dataTransfer.effectAllowed = 'move'; }}
+                                                                    onDragStart={(e) => { e.stopPropagation(); setVacancyDraggedId(vac.id); e.dataTransfer.effectAllowed = 'move'; }}
                                                                     onDragOver={(e) => { if (!vacancyDraggedId) return; e.preventDefault(); e.dataTransfer.dropEffect = 'move'; if (vacancyDragOverId !== vac.id) setVacancyDragOverId(vac.id); }}
                                                                     onDrop={(e) => { e.preventDefault(); handleVacancyDrop(vac.id); }}
                                                                     onDragEnd={() => { setVacancyDraggedId(null); setVacancyDragOverId(null); }}
@@ -4763,7 +4772,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                                                             <div
                                                                 key={tName}
                                                                 draggable={!tagSearch}
-                                                                onDragStart={(e) => { setTagDraggedName(tName); e.dataTransfer.effectAllowed = 'move'; }}
+                                                                onDragStart={(e) => { e.stopPropagation(); setTagDraggedName(tName); e.dataTransfer.effectAllowed = 'move'; }}
                                                                 onDragOver={(e) => { if (!tagDraggedName) return; e.preventDefault(); e.dataTransfer.dropEffect = 'move'; if (tagDragOverName !== tName) setTagDragOverName(tName); }}
                                                                 onDrop={(e) => { e.preventDefault(); handleTagDrop(tName); }}
                                                                 onDragEnd={() => { setTagDraggedName(null); setTagDragOverName(null); }}
