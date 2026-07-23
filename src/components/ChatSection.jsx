@@ -951,6 +951,44 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         persistTagOrder(names);
     }, [tagDraggedName, orderedAvailableTags, persistTagOrder]);
 
+    // ── Orden de vacantes por reclutador (drag & drop, guardado en SU perfil) ──
+    // Mismo patrón que tagOrder/qrOrder: se persiste en user.preferences.vacancyOrder
+    // (merge superficial via PUT /api/users). Preferencia de VISTA personal del selector
+    // "Inyectar Info de Vacante" (maletín); NO es global (no toca /api/vacancies).
+    const [vacancyOrder, setVacancyOrder] = useState(() => Array.isArray(user?.preferences?.vacancyOrder) ? user.preferences.vacancyOrder : []);
+    const [vacancyDraggedId, setVacancyDraggedId] = useState(null);
+    const [vacancyDragOverId, setVacancyDragOverId] = useState(null);
+
+    const persistVacancyOrder = useCallback((ids) => {
+        setVacancyOrder(ids);
+        saveQrPreference({ vacancyOrder: ids });
+    }, [saveQrPreference]);
+
+    // vacancies ordenado según la preferencia del reclutador. Las vacantes nuevas (sin
+    // posición guardada) van al final, conservando su orden original.
+    const orderedVacancies = useMemo(() => {
+        const list = Array.isArray(vacancies) ? vacancies : [];
+        if (!vacancyOrder.length) return list;
+        const pos = new Map(vacancyOrder.map((id, i) => [id, i]));
+        const fallback = new Map(list.map((v, i) => [v.id, vacancyOrder.length + i]));
+        return [...list].sort((a, b) =>
+            (pos.has(a.id) ? pos.get(a.id) : fallback.get(a.id)) - (pos.has(b.id) ? pos.get(b.id) : fallback.get(b.id))
+        );
+    }, [vacancies, vacancyOrder]);
+
+    const handleVacancyDrop = useCallback((targetId) => {
+        setVacancyDragOverId(null);
+        const dragged = vacancyDraggedId;
+        setVacancyDraggedId(null);
+        if (!dragged || dragged === targetId) return;
+        const ids = orderedVacancies.map(v => v.id);
+        const from = ids.indexOf(dragged);
+        const to = ids.indexOf(targetId);
+        if (from === -1 || to === -1) return;
+        ids.splice(to, 0, ids.splice(from, 1)[0]);
+        persistVacancyOrder(ids);
+    }, [vacancyDraggedId, orderedVacancies, persistVacancyOrder]);
+
     const [qrForm, setQrForm] = useState({ name: '', message: '', shortcut: '', imageUrl: '', imageUrl2: '', imageUrl3: '', imageUrl4: '', type: 'text', locName: '', locAddress: '', locLat: '', locLng: '', audioUrl: '', audioMime: '', audioVoice: false, audioDurationMs: 0 });
     const [qrImageUploading, setQrImageUploading] = useState(false);
     // Grabación de audio para banco de respuestas (nota de voz nativa ogg/opus)
@@ -4586,16 +4624,22 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                                                             No hay vacantes configuradas con "Info para el bot"
                                                         </div>
                                                     ) : (
-                                                        vacancies.map(vac => {
+                                                        orderedVacancies.map(vac => {
                                                             return (
                                                                 <div key={vac.id}
+                                                                    draggable
+                                                                    onDragStart={(e) => { setVacancyDraggedId(vac.id); e.dataTransfer.effectAllowed = 'move'; }}
+                                                                    onDragOver={(e) => { if (!vacancyDraggedId) return; e.preventDefault(); e.dataTransfer.dropEffect = 'move'; if (vacancyDragOverId !== vac.id) setVacancyDragOverId(vac.id); }}
+                                                                    onDrop={(e) => { e.preventDefault(); handleVacancyDrop(vac.id); }}
+                                                                    onDragEnd={() => { setVacancyDraggedId(null); setVacancyDragOverId(null); }}
                                                                     className={`px-3 py-2 text-xs transition-colors flex items-center justify-between group/vacitem ${
                                                                         selectedChat?.currentVacancyId === vac.id
                                                                         ? 'bg-blue-50 dark:bg-blue-900/20'
                                                                         : 'hover:bg-gray-50 dark:hover:bg-[#111b21]'
-                                                                    }`}
+                                                                    } ${vacancyDraggedId === vac.id ? 'opacity-40' : ''} ${vacancyDragOverId === vac.id && vacancyDraggedId && vacancyDraggedId !== vac.id ? 'shadow-[inset_0_2px_0_0_#22c55e]' : ''}`}
                                                                 >
                                                                     <div onClick={(e) => { e.stopPropagation(); injectVacancy(vac); }} className="flex items-center gap-2 cursor-pointer flex-1 overflow-hidden">
+                                                                        <GripVertical className="w-3 h-3 shrink-0 text-gray-300 dark:text-gray-600 opacity-0 group-hover/vacitem:opacity-100 transition-opacity cursor-grab active:cursor-grabbing" />
                                                                         <Briefcase className="w-3.5 h-3.5 shrink-0 text-[#111b21] dark:text-[#e9edef]" />
                                                                         <span className={`truncate flex-1 ${selectedChat?.currentVacancyId === vac.id ? 'text-blue-600 font-bold' : 'text-[#111b21] dark:text-[#e9edef]'}`}>{vac.name}</span>
                                                                         {selectedChat?.currentVacancyId === vac.id && <Check className="w-3.5 h-3.5 text-blue-500 shrink-0" />}
@@ -4723,7 +4767,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                                                                 onDragOver={(e) => { if (!tagDraggedName) return; e.preventDefault(); e.dataTransfer.dropEffect = 'move'; if (tagDragOverName !== tName) setTagDragOverName(tName); }}
                                                                 onDrop={(e) => { e.preventDefault(); handleTagDrop(tName); }}
                                                                 onDragEnd={() => { setTagDraggedName(null); setTagDragOverName(null); }}
-                                                                className={`px-3 py-2 text-sm text-[#111b21] dark:text-[#e9edef] hover:bg-gray-50 dark:hover:bg-[#202c33] flex items-center justify-between group/item cursor-pointer ${tagDraggedName === tName ? 'opacity-40' : ''} ${tagDragOverName === tName && tagDraggedName && tagDraggedName !== tName ? 'border-t-2 border-t-green-500' : ''}`}
+                                                                className={`px-3 py-2 text-sm text-[#111b21] dark:text-[#e9edef] hover:bg-gray-50 dark:hover:bg-[#202c33] flex items-center justify-between group/item cursor-pointer ${tagDraggedName === tName ? 'opacity-40' : ''} ${tagDragOverName === tName && tagDraggedName && tagDraggedName !== tName ? 'shadow-[inset_0_2px_0_0_#22c55e]' : ''}`}
                                                                 onClick={() => handleToggleTag(tName)}
                                                             >
                                                                 <div className="flex-1 flex items-center gap-2 min-w-0">
@@ -5423,7 +5467,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                                     onDragEnd={() => { setQrDraggedId(null); setQrDragOverId(null); }}
                                     className={`px-4 py-3 border-b border-[#f0f2f5] dark:border-[#222e35] hover:bg-[#f0f2f5] dark:hover:bg-[#202c33] transition-colors group cursor-pointer ${
                                         qrDraggedId === qr.id ? 'opacity-40' : ''
-                                    } ${qrDragOverId === qr.id && qrDraggedId && qrDraggedId !== qr.id ? 'border-t-2 border-t-green-500' : ''}`}
+                                    } ${qrDragOverId === qr.id && qrDraggedId && qrDraggedId !== qr.id ? 'shadow-[inset_0_2px_0_0_#22c55e]' : ''}`}
                                     onClick={() => handleApplyQuickReply(qr)}
                                 >
                                     <div className="flex items-start justify-between gap-2">
