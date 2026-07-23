@@ -414,6 +414,15 @@ const AdsStatisticsSection = () => {
     const [editingLabel, setEditingLabel] = useState(null); // null = crear, object = editar
     const [labelForm, setLabelForm] = useState({ adIds: '', name: '', emoji: '', color: '#a855f7', company: '' });
     const [labelSaving, setLabelSaving] = useState(false);
+    // La tarjeta de etiquetas ocupa mucho alto (todos los Ad IDs). Se puede contraer para
+    // ahorrar espacio; el estado se recuerda en localStorage. Default: contraída.
+    const [labelsCollapsed, setLabelsCollapsed] = useState(() => {
+        try { return localStorage.getItem('adLabelsCollapsed') !== 'false'; } catch { return true; }
+    });
+    const persistLabelsCollapsed = (next) => {
+        setLabelsCollapsed(next);
+        try { localStorage.setItem('adLabelsCollapsed', String(next)); } catch { /* ignore */ }
+    };
 
     const loadAdLabels = async () => {
         try {
@@ -683,17 +692,23 @@ const AdsStatisticsSection = () => {
             {/* ── ETIQUETAS ADS ──────────────────────────────────────────────── */}
             <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-sm overflow-hidden">
                 <div className="px-5 py-3.5 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
+                    <button
+                        onClick={() => persistLabelsCollapsed(!labelsCollapsed)}
+                        className="flex items-center gap-2 min-w-0 group"
+                        title={labelsCollapsed ? 'Expandir etiquetas' : 'Contraer etiquetas'}
+                    >
+                        <ChevronDown className={`w-4 h-4 text-gray-400 group-hover:text-violet-500 transition-transform ${labelsCollapsed ? '-rotate-90' : ''}`} />
                         <Tag className="w-4 h-4 text-violet-500" />
                         <h2 className="font-bold text-sm text-gray-900 dark:text-white">Etiquetas de Anuncios</h2>
                         {adLabels.length > 0 && <span className="text-[10px] font-bold text-violet-600 bg-violet-50 dark:bg-violet-500/10 px-2 py-0.5 rounded-full">{adLabels.length}</span>}
-                    </div>
-                    <button onClick={() => { if (editingLabel) resetForm(); else setShowLabelForm(v => !v); }}
+                    </button>
+                    <button onClick={() => { persistLabelsCollapsed(false); if (editingLabel) resetForm(); else setShowLabelForm(v => !v); }}
                         className="flex items-center gap-1.5 text-xs font-semibold text-violet-600 hover:text-violet-700 dark:text-violet-400 bg-violet-50 dark:bg-violet-500/10 hover:bg-violet-100 dark:hover:bg-violet-500/20 px-3 py-1.5 rounded-lg transition-colors">
                         <Plus className="w-3.5 h-3.5" /> Nueva Etiqueta
                     </button>
                 </div>
 
+                {!labelsCollapsed && (<>
                 {/* Form */}
                 {showLabelForm && (
                     <form onSubmit={handleSubmitLabel} className="px-5 py-4 bg-violet-50/50 dark:bg-violet-500/5 border-b border-violet-100 dark:border-violet-500/20">
@@ -835,6 +850,7 @@ const AdsStatisticsSection = () => {
                         ))
                     )}
                 </div>
+                </>)}
             </div>
 
             {/* KPI Row */}
