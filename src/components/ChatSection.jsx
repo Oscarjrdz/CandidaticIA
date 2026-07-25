@@ -136,6 +136,18 @@ const normalizeOutgoingContent = (value = '') => String(value || '').replace(/\s
 
 const getMessageKind = (message = {}) => message.type || message.tipo || (message.mediaUrl ? 'image' : 'text');
 
+// Encabezado de una plantilla oficial: "⚡ Plantilla oficial: *NOMBRE*" (primera línea).
+// El cliente y el servidor construyen ese encabezado idéntico (mismo displayName), pero el
+// CUERPO lo generan dos implementaciones distintas de renderMetaTemplatePreviewText, así que
+// puede diferir. Se usa para deduplicar el optimista contra su eco por SSE sin depender del
+// cuerpo exacto ni del `kind` (que puede venir como 'template' o 'text' según la vía).
+const TEMPLATE_CONTENT_PREFIX = '⚡ Plantilla oficial:';
+const templateHeaderOf = (content = '') => {
+    const s = String(content || '').trim();
+    if (!s.startsWith(TEMPLATE_CONTENT_PREFIX)) return null;
+    return s.split('\n')[0].trim();
+};
+
 const isOutgoingAuthor = (message = {}) => message.from === 'me' || message.from === 'bot';
 
 const isIncomingAuthor = (message = {}) => !!message && !isOutgoingAuthor(message);
@@ -186,6 +198,19 @@ const areSameOutgoingMessage = (a = {}, b = {}) => {
     if (aIsTemp && bIsTemp) return false; // two distinct pending sends
     if (!aIsTemp && !bIsTemp && a.id && b.id) return false; // two different confirmed server IDs
     if (a.ultraMsgId && b.ultraMsgId && String(a.ultraMsgId) === String(b.ultraMsgId)) return true;
+
+    // Plantillas oficiales: deduplica por el encabezado (nombre), no por el cuerpo ni el
+    // kind. El preview optimista del cliente y el texto guardado por el servidor pueden
+    // diferir en el cuerpo (dos renders distintos) y en el tipo, lo que hacía que el eco
+    // por SSE NO se reconociera como el mismo mensaje → burbuja duplicada que parpadeaba.
+    const tplA = templateHeaderOf(a.content);
+    const tplB = templateHeaderOf(b.content);
+    if (tplA || tplB) {
+        if (tplA !== tplB) return false; // plantillas distintas, o plantilla vs no-plantilla
+        const tA = getMessageTime(a);
+        const tB = getMessageTime(b);
+        return !tA || !tB || Math.abs(tA - tB) < 180000;
+    }
 
     const kindA = getMessageKind(a);
     const kindB = getMessageKind(b);
