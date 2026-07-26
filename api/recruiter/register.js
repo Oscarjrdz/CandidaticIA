@@ -35,6 +35,7 @@ export default async function handler(req, res) {
       logo: logo || '',
       telefono: String(telefono).replace(/\D/g, ''),
       wapp: String(wapp || telefono).replace(/\D/g, ''),
+      status: 'pausado', // nace pausada — el admin la activa manualmente desde candidatic.com
     };
 
     const recruiterData = {

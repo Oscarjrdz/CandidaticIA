@@ -247,6 +247,21 @@ export default async function handler(req, res) {
                 return res.status(400).json({ error: 'Missing required fields (title, company, recruiterPhone)' });
             }
 
+            // La vacante nace pausada si la empresa del reclutador está pausada.
+            // Empresas viejas sin campo status se tratan como activas (no se afectan).
+            const recruiterDigits = String(recruiterPhone).replace(/\D/g, '').slice(-10);
+            let empresaPausada = false;
+            try {
+                const empRaw = await redis.get('candidatic_empresas');
+                const empList = empRaw ? JSON.parse(empRaw) : [];
+                const emp = empList.find(e =>
+                    [e.telefono, e.wapp].filter(Boolean)
+                        .map(p => String(p).replace(/\D/g, '').slice(-10))
+                        .includes(recruiterDigits)
+                );
+                if (emp && emp.status === 'pausado') empresaPausada = true;
+            } catch { /* si falla, la vacante nace activa */ }
+
             const newJob = {
                 id: randomUUID(),
                 title,
@@ -264,7 +279,7 @@ export default async function handler(req, res) {
                 applications: [],
                 requests: [],
                 createdAt: new Date().toISOString(),
-                active: true
+                active: !empresaPausada
             };
 
             const jobs = await getJobs();

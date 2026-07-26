@@ -28,7 +28,21 @@ export default async function handler(req, res) {
         const saveEmpresas = async (list) => redis.set(KEY, JSON.stringify(list));
 
         if (req.method === 'GET') {
-            return res.status(200).json({ success: true, data: await getEmpresas() });
+            const empresas = await getEmpresas();
+            // Enriquecer cada empresa con lastLogin del registro del reclutador (recruiter:<tel10>)
+            const enriched = await Promise.all(empresas.map(async (e) => {
+                try {
+                    const tel10 = String(e.telefono || '').replace(/\D/g, '').slice(-10);
+                    if (!tel10) return e;
+                    const rraw = await redis.get(`recruiter:${tel10}`);
+                    if (rraw) {
+                        const r = JSON.parse(rraw);
+                        return { ...e, lastLogin: r.lastLogin || null, createdAt: e.createdAt || r.createdAt || null };
+                    }
+                } catch { /* si falla, se devuelve la empresa sin enriquecer */ }
+                return e;
+            }));
+            return res.status(200).json({ success: true, data: enriched });
         }
 
         if (req.method === 'POST') {
@@ -39,6 +53,7 @@ export default async function handler(req, res) {
                 nombre,
                 logo: logo || '',
                 telefono: String(telefono).replace(/\D/g, ''),
+                status: 'activo', // creada por el admin → activa por defecto
                 createdAt: new Date().toISOString(),
             };
             const list = await getEmpresas();
@@ -56,6 +71,28 @@ export default async function handler(req, res) {
             if (updates.telefono) updates.telefono = String(updates.telefono).replace(/\D/g, '');
             list[idx] = { ...list[idx], ...updates };
             await saveEmpresas(list);
+
+            // Cascade: al cambiar el status de la empresa, activar/pausar TODAS sus vacantes.
+            // Después el admin puede pausar/activar vacantes individuales cuando quiera.
+            if (updates.status === 'activo' || updates.status === 'pausado') {
+                const emp = list[idx];
+                const phones = [emp.telefono, emp.wapp].filter(Boolean)
+                    .map(p => String(p).replace(/\D/g, '').slice(-10));
+                const wantActive = updates.status === 'activo';
+                const JOBS_KEY = 'candidatic_bolsa_empleo';
+                const jobsRaw = await redis.get(JOBS_KEY);
+                const jobs = jobsRaw ? JSON.parse(jobsRaw) : [];
+                let changed = false;
+                jobs.forEach(j => {
+                    const jp = String(j.recruiterPhone || '').replace(/\D/g, '').slice(-10);
+                    if (phones.includes(jp) && j.active !== wantActive) {
+                        j.active = wantActive;
+                        changed = true;
+                    }
+                });
+                if (changed) await redis.set(JOBS_KEY, JSON.stringify(jobs));
+            }
+
             return res.status(200).json({ success: true, data: list[idx] });
         }
 
