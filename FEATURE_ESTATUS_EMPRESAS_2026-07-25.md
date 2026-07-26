@@ -63,6 +63,20 @@ solo controla **el valor por defecto de `active` al crear vacantes** y el **casc
 - ❌ Notificaciones de postulación/solicitud por WhatsApp en `bolsa.js` (intactas).
 - ❌ La app móvil del candidato — **no requiere actualización**; ya filtra por `active`.
 
+## Borrado profundo de empresas (2026-07-26)
+
+Al eliminar una empresa desde el admin (`DELETE /api/empresas?id=`), ahora se borra en profundidad:
+1. La empresa del catálogo `candidatic_empresas`.
+2. El/los registro(s) del reclutador `recruiter:<tel10>` (por `telefono` y `wapp`).
+3. **Todas las vacantes** de esa empresa en `candidatic_bolsa_empleo` (match por `telefono`/`wapp`, últimos 10 dígitos).
+
+Nota: la sesión guardada en la app (AsyncStorage) es local del dispositivo; para reflejar el borrado
+el reclutador debe **cerrar sesión** (o reinstalar). Tras eso, al volver a entrar con su número ya
+no encontrará su registro y entrará al flujo de registro nuevo.
+
+El borrado de una **vacante** (`DELETE /api/bolsa?id=`) ya era profundo: la vacante solo vive en
+`candidatic_bolsa_empleo` (con sus postulaciones/solicitudes embebidas), no hay caché aparte.
+
 ## Cómo usarlo (admin)
 
 1. candidatic.com → **Bolsa App → Empresas**.

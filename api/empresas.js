@@ -99,8 +99,37 @@ export default async function handler(req, res) {
         if (req.method === 'DELETE') {
             const { id } = req.query;
             if (!id) return res.status(400).json({ error: 'Falta id' });
+
             const list = await getEmpresas();
+            const emp = list.find(e => e.id === id);
+
+            // 1. Quitar la empresa del catálogo
             await saveEmpresas(list.filter(e => e.id !== id));
+
+            // ── Borrado profundo: registro del reclutador + sus vacantes ──
+            if (emp) {
+                const phones = [emp.telefono, emp.wapp].filter(Boolean)
+                    .map(p => String(p).replace(/\D/g, '').slice(-10));
+
+                // 2. Borrar el/los registro(s) del reclutador (recruiter:<tel10>)
+                for (const p of phones) {
+                    await redis.del(`recruiter:${p}`);
+                }
+
+                // 3. Borrar TODAS las vacantes de esa empresa (match por telefono o wapp)
+                if (phones.length) {
+                    const JOBS_KEY = 'candidatic_bolsa_empleo';
+                    const jobsRaw = await redis.get(JOBS_KEY);
+                    const jobs = jobsRaw ? JSON.parse(jobsRaw) : [];
+                    const remaining = jobs.filter(j =>
+                        !phones.includes(String(j.recruiterPhone || '').replace(/\D/g, '').slice(-10))
+                    );
+                    if (remaining.length !== jobs.length) {
+                        await redis.set(JOBS_KEY, JSON.stringify(remaining));
+                    }
+                }
+            }
+
             return res.status(200).json({ success: true });
         }
 
