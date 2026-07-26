@@ -28,8 +28,8 @@ export default async function handler(req, res) {
 
         const cleanPhone = String(phone).replace(/\D/g, '');
         
-        // ── MASTER PIN BYPASS FOR DEV ──
-        if (String(pin) !== '1234') {
+        // ── Cuenta demo App Store review (0000000000/1234) omite validación; el resto valida contra Redis ──
+        if (!(cleanPhone === '0000000000' && String(pin) === '1234')) {
             const savedPin = await redis.get(`app_login_pin:${cleanPhone}`);
 
             if (!savedPin) {

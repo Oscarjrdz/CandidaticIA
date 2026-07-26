@@ -34,13 +34,11 @@ export default async function handler(req, res) {
       return res.status(200).json({ success: true, token: 'demo-token-recruiter', recruiter: { ...demoRecruiter, phone: '0000000000' }, isNew: false });
     }
 
-    // Master PIN bypass para desarrollo
-    if (String(pin) !== '1234') {
-      const savedPin = await redis.get(`app_login_pin:${cleanPhone}`);
-      if (!savedPin) return res.status(400).json({ error: 'PIN expirado o inexistente.' });
-      if (savedPin !== String(pin)) return res.status(401).json({ error: 'PIN incorrecto.' });
-      await redis.del(`app_login_pin:${cleanPhone}`);
-    }
+    // Validar el PIN real contra Redis (la cuenta demo 0000000000/1234 ya se resolvió arriba)
+    const savedPin = await redis.get(`app_login_pin:${cleanPhone}`);
+    if (!savedPin) return res.status(400).json({ error: 'PIN expirado o inexistente.' });
+    if (savedPin !== String(pin)) return res.status(401).json({ error: 'PIN incorrecto.' });
+    await redis.del(`app_login_pin:${cleanPhone}`);
 
     const token = randomBytes(32).toString('hex');
     await redis.set(`session:rec:${token}`, cleanPhone, 'EX', SESSION_TTL);
