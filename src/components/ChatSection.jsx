@@ -2046,6 +2046,44 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         v.scrollToIndex({ index: newIndex, align: 'start', offset: -anchor.offset });
     }, [visibleCandidates]);
 
+    // ── Entrada por CAMBIO DE ESTATUS: detecta tarjetas que RECIÉN pasan a matchear el
+    // filtro actual (p.ej. un chat leído recibe mensaje → entra a "no leídos") para animar
+    // su entrada con el mismo fade. Se calcula DURANTE el render (patrón usePrevious: se lee
+    // el estado del commit anterior desde refs actualizados en un effect) para que el prop
+    // esté listo cuando la fila monta. Guardas anti-cascadeo:
+    //   • filtro sin cambiar (si cambió el filtro → set nuevo entero → NO animar)
+    //   • sin paginar (visibleChatLimit no creció → no animar la tanda de abajo)
+    //   • solo cerca del tope (las entradas por estatus llegan arriba; tope acota un bulk)
+    //   • nunca los leads nuevos (esos animan por _newCardAt)
+    const chatFilterSignature = useMemo(() => JSON.stringify([
+        activeFilter, filterValue, profileUnreadOnly, selectedTag,
+        manualPipelineFilter, manualStepFilter, selectedAges, selectedGenders, selectedMunicipalities
+    ]), [activeFilter, filterValue, profileUnreadOnly, selectedTag, manualPipelineFilter, manualStepFilter, selectedAges, selectedGenders, selectedMunicipalities]);
+    const entryPrevIdsRef = useRef(null);
+    const entryPrevFilterSigRef = useRef(null);
+    const entryPrevLimitRef = useRef(0);
+    const enteredFilterIds = useMemo(() => {
+        const result = new Set();
+        const prevIds = entryPrevIdsRef.current;
+        const filterSame = entryPrevFilterSigRef.current !== null && chatFilterSignature === entryPrevFilterSigRef.current;
+        const noPagination = visibleChatLimit <= entryPrevLimitRef.current;
+        if (prevIds && filterSame && noPagination) {
+            const N = Math.min(visibleCandidates.length, 8); // solo cerca del tope
+            for (let i = 0; i < N; i++) {
+                const c = visibleCandidates[i];
+                if (c && !prevIds.has(c.id) && !c._newCardAt) result.add(c.id);
+            }
+        }
+        return result;
+    }, [visibleCandidates, chatFilterSignature, visibleChatLimit]);
+    useEffect(() => {
+        const curIds = new Set();
+        for (const c of visibleCandidates) curIds.add(c.id);
+        entryPrevIdsRef.current = curIds;
+        entryPrevFilterSigRef.current = chatFilterSignature;
+        entryPrevLimitRef.current = visibleChatLimit;
+    }, [visibleCandidates, chatFilterSignature, visibleChatLimit]);
+
     const handleChatListEndReached = useCallback(() => {
         if (visibleChatLimit < filteredCandidates.length) {
             setVisibleChatLimit(current => Math.min(current + CHAT_LIST_PAGE_SIZE, filteredCandidates.length));
@@ -4554,6 +4592,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                                     onScheduleReminder={setReminderModalCandidate}
                                     tagColorMap={tagColorMap}
                                     lock={chatLocks[chat.id] || null}
+                                    isEnteringFilter={enteredFilterIds.has(chat.id)}
                                 />
                             )}
                         />

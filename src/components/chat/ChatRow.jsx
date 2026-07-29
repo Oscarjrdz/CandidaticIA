@@ -26,7 +26,7 @@ const rememberCardEntry = (id) => {
     }
 };
 
-const ChatRow = React.memo(({ chat, isSelected, isPinned, onSelect, onBlock, onDelete, onTogglePin, onlineReaders, blockLoading, userId, onOpenProfileModal, onMarkAsRead, onMarkAsUnread, onScheduleReminder, tagColorMap, lock }) => {
+const ChatRow = React.memo(({ chat, isSelected, isPinned, onSelect, onBlock, onDelete, onTogglePin, onlineReaders, blockLoading, userId, onOpenProfileModal, onMarkAsRead, onMarkAsUnread, onScheduleReminder, tagColorMap, lock, isEnteringFilter }) => {
     const isUnread = checkIfUnread(chat);
     const profileComplete = isProfileComplete(chat);
     const avatarColor = AVATAR_COLORS[((chat.nombre||'C').charCodeAt(0)*7)%10];
@@ -37,12 +37,15 @@ const ChatRow = React.memo(({ chat, isSelected, isPinned, onSelect, onBlock, onD
 
     // Decisión de animar entrada: se fija UNA vez por tarjeta (ref) para que no cambie en
     // re-renders. Solo true si la tarjeta acaba de llegar (_newCardAt reciente) y no animó.
-    const entryDecisionRef = React.useRef({ id: null, value: false });
+    const entryDecisionRef = React.useRef({ id: null, value: false, isNewLead: false });
     if (entryDecisionRef.current.id !== chat.id) {
-        entryDecisionRef.current = {
-            id: chat.id,
-            value: Boolean(chat._newCardAt && (Date.now() - chat._newCardAt < NEW_CARD_ANIM_WINDOW_MS) && !playedCardEntry.has(chat.id))
-        };
+        const isNewLead = Boolean(chat._newCardAt && (Date.now() - chat._newCardAt < NEW_CARD_ANIM_WINDOW_MS) && !playedCardEntry.has(chat.id));
+        // isEnteringFilter: el padre detecta (con guardas) que esta tarjeta RECIÉN pasó a
+        // matchear el filtro actual (cambio de estatus). Se evalúa al montar la fila, que es
+        // justo cuando entra a la vista → anima con el mismo fade. No usa el Set permanente:
+        // una tarjeta puede re-entrar al filtro varias veces y debe animar cada vez.
+        const isStatusEntry = !isNewLead && !!isEnteringFilter;
+        entryDecisionRef.current = { id: chat.id, value: isNewLead || isStatusEntry, isNewLead };
     }
     // entryPlayed: al terminar la animación se retira la clase para SIEMPRE. Sin esto,
     // cuando Virtuoso re-inserta el nodo al re-medir (p.ej. al llegar el primer mensaje del
@@ -51,7 +54,9 @@ const ChatRow = React.memo(({ chat, isSelected, isPinned, onSelect, onBlock, onD
     const [entryPlayed, setEntryPlayed] = React.useState(false);
     const shouldAnimateEntry = entryDecisionRef.current.value && !entryPlayed;
     React.useEffect(() => {
-        if (entryDecisionRef.current.value) rememberCardEntry(chat.id);
+        // Solo el lead NUEVO se recuerda en el Set permanente (nace una vez). La entrada por
+        // cambio de estatus va por timestamp para poder re-animar en cada re-entrada.
+        if (entryDecisionRef.current.isNewLead) rememberCardEntry(chat.id);
     }, [chat.id]);
 
     return (
