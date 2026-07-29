@@ -2006,7 +2006,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
             if (r.bottom > vTop + 4) { // primera tarjeta visible en el borde superior
                 const idx = Number(card.getAttribute('data-index'));
                 const id = visibleCandidatesRef.current[idx]?.id;
-                if (id != null) chatListAnchorRef.current = { id, offset: Math.round(r.top - vTop) };
+                if (id != null) chatListAnchorRef.current = { id, index: idx, offset: Math.round(r.top - vTop) };
                 return;
             }
         }
@@ -2034,6 +2034,10 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         if (Math.abs(visibleCandidates.length - prevLen) > 3) return;    // cambio grande (filtro): no anclar
         const newIndex = visibleCandidates.findIndex(c => c.id === anchor.id);
         if (newIndex < 0) return;                                        // el ancla ya no está: no pelear
+        // Si el ANCLA misma saltó al tope (su índice bajó mucho), NO la sigas hacia arriba:
+        // deja que se vaya de la vista (comportamiento nativo). Solo compensamos cuando el
+        // reorden ocurrió en OTRAS tarjetas (el índice del ancla se mantiene o sube).
+        if (typeof anchor.index === 'number' && newIndex < anchor.index - 2) return;
         v.scrollToIndex({ index: newIndex, align: 'start', offset: -anchor.offset });
     }, [visibleCandidates]);
 
