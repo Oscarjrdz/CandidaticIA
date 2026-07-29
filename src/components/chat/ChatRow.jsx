@@ -44,14 +44,20 @@ const ChatRow = React.memo(({ chat, isSelected, isPinned, onSelect, onBlock, onD
             value: Boolean(chat._newCardAt && (Date.now() - chat._newCardAt < NEW_CARD_ANIM_WINDOW_MS) && !playedCardEntry.has(chat.id))
         };
     }
-    const shouldAnimateEntry = entryDecisionRef.current.value;
+    // entryPlayed: al terminar la animación se retira la clase para SIEMPRE. Sin esto,
+    // cuando Virtuoso re-inserta el nodo al re-medir (p.ej. al llegar el primer mensaje del
+    // lead ~1-2s después), el navegador REINICIABA la animación con la clase aún puesta →
+    // "re-fade". Con el retiro tras animationend, la entrada corre exactamente una vez.
+    const [entryPlayed, setEntryPlayed] = React.useState(false);
+    const shouldAnimateEntry = entryDecisionRef.current.value && !entryPlayed;
     React.useEffect(() => {
-        if (shouldAnimateEntry) rememberCardEntry(chat.id);
-    }, [shouldAnimateEntry, chat.id]);
+        if (entryDecisionRef.current.value) rememberCardEntry(chat.id);
+    }, [chat.id]);
 
     return (
         <div
             onClick={() => onSelect(chat)}
+            onAnimationEnd={(e) => { if (e.animationName === 'chat-card-enter') setEntryPlayed(true); }}
             className={`group flex items-center px-3 py-3 cursor-pointer hover:bg-[#f5f6f6] dark:hover:bg-[#202c33] transition-colors duration-100 border-l-0 md:border-l-4 ${shouldAnimateEntry ? 'chat-card-enter' : ''} ${isSelected ? 'bg-[#f0f2f5] dark:bg-[#2a3942] border-[#25d366] dark:border-[#00a884] md:shadow-sm md:relative md:z-10' : 'border-transparent'}`}
         >
             <div className={`w-12 h-12 rounded-full flex-shrink-0 flex items-center justify-center mr-3 relative overflow-hidden ${isEmptyChat ? 'ring-2 ring-blue-500 ring-offset-2 ring-offset-[#ffffff] dark:ring-offset-[#111b21]' : ''}`}>
