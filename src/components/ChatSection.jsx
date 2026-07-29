@@ -1977,6 +1977,66 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         [filteredCandidates, visibleChatLimit]
     );
 
+    // ── Anclaje de scroll de la lista de chats (evita el "brinco" al reordenar) ──
+    // Medido en vivo: al entrar actividad (mensaje/lead) estando scrolleado ABAJO, la lista
+    // brincaba ~159px (≈2 tarjetas) porque el scroll no compensa el reorden que ocurre
+    // arriba de la vista. Aquí mantenemos anclada la tarjeta que está arriba de tu vista:
+    // mientras se scrollea guardamos cuál es (id + offset en px), y al cambiar la lista la
+    // reponemos en el mismo lugar con scrollToIndex de Virtuoso dentro de un useLayoutEffect
+    // (corre ANTES del pintado → el brinco intermedio nunca se ve). Salvaguardas para no
+    // romper nada: si estás hasta arriba (scrollTop<40) NO se toca (leads nuevos siguen
+    // apareciendo arriba como hoy); si el cambio es grande (filtro/búsqueda) o el ancla ya
+    // no está en la lista, no se pelea.
+    const chatListVirtuosoRef = useRef(null);
+    const chatListScrollerRef = useRef(null);
+    const chatListAnchorRef = useRef(null);
+    const visibleCandidatesRef = useRef([]);
+    visibleCandidatesRef.current = visibleCandidates;
+    const prevVisibleLenRef = useRef(0);
+    const anchorRafRef = useRef(0);
+
+    const captureChatListAnchor = useCallback(() => {
+        const sc = chatListScrollerRef.current;
+        if (!sc) return;
+        if (sc.scrollTop < 40) { chatListAnchorRef.current = null; return; }
+        const vTop = sc.getBoundingClientRect().top;
+        const cards = sc.querySelectorAll('[data-index]');
+        for (const card of cards) {
+            const r = card.getBoundingClientRect();
+            if (r.bottom > vTop + 4) { // primera tarjeta visible en el borde superior
+                const idx = Number(card.getAttribute('data-index'));
+                const id = visibleCandidatesRef.current[idx]?.id;
+                if (id != null) chatListAnchorRef.current = { id, offset: Math.round(r.top - vTop) };
+                return;
+            }
+        }
+    }, []);
+
+    const handleChatListScrollerRef = useCallback((el) => {
+        chatListScrollerRef.current = el;
+        if (el && !el.__anchorHooked) {
+            el.__anchorHooked = true;
+            el.addEventListener('scroll', () => {
+                if (anchorRafRef.current) return;
+                anchorRafRef.current = requestAnimationFrame(() => { anchorRafRef.current = 0; captureChatListAnchor(); });
+            }, { passive: true });
+        }
+    }, [captureChatListAnchor]);
+
+    useLayoutEffect(() => {
+        const sc = chatListScrollerRef.current;
+        const v = chatListVirtuosoRef.current;
+        const anchor = chatListAnchorRef.current;
+        const prevLen = prevVisibleLenRef.current;
+        prevVisibleLenRef.current = visibleCandidates.length;
+        if (!sc || !v || !anchor) return;
+        if (sc.scrollTop < 40) return;                                   // al tope: dejar fluir (como hoy)
+        if (Math.abs(visibleCandidates.length - prevLen) > 3) return;    // cambio grande (filtro): no anclar
+        const newIndex = visibleCandidates.findIndex(c => c.id === anchor.id);
+        if (newIndex < 0) return;                                        // el ancla ya no está: no pelear
+        v.scrollToIndex({ index: newIndex, align: 'start', offset: -anchor.offset });
+    }, [visibleCandidates]);
+
     const handleChatListEndReached = useCallback(() => {
         if (visibleChatLimit < filteredCandidates.length) {
             setVisibleChatLimit(current => Math.min(current + CHAT_LIST_PAGE_SIZE, filteredCandidates.length));
@@ -4447,6 +4507,8 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                 {/* Lista de Contactos — VIRTUALIZADA */}
                 <div className="flex-1 overflow-hidden bg-white dark:bg-[#111b21]">
                         <Virtuoso
+                            ref={chatListVirtuosoRef}
+                            scrollerRef={handleChatListScrollerRef}
                             data={visibleCandidates}
                             style={{ height: '100%' }}
                             // Buffer de render alto (px): antes era overscan={10} (¡10px!) y en scroll
@@ -4574,14 +4636,16 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                                         </span>
                                     )}
                                     {/* Datos del candidato — mismo formato que la tarjeta de la lista de chats */}
-                                    {(selectedChat.edad || selectedChat.escolaridad || selectedChat.municipio || selectedChat.categoria) && (
+                                    {(selectedChat.edad || selectedChat.escolaridad || selectedChat.municipio || selectedChat.colonia || selectedChat.categoria) && (
                                         <span className="flex items-center gap-2 text-[10px] text-[#8696a0] dark:text-[#697882] whitespace-nowrap ml-0.5">
                                             {selectedChat.edad && <span>{selectedChat.edad} años</span>}
                                             {selectedChat.edad && selectedChat.escolaridad && <span>•</span>}
                                             {selectedChat.escolaridad && <span>{selectedChat.escolaridad}</span>}
                                             {(selectedChat.edad || selectedChat.escolaridad) && selectedChat.municipio && <span>•</span>}
                                             {selectedChat.municipio && <span>{selectedChat.municipio}</span>}
-                                            {(selectedChat.edad || selectedChat.escolaridad || selectedChat.municipio) && selectedChat.categoria && <span>•</span>}
+                                            {(selectedChat.edad || selectedChat.escolaridad || selectedChat.municipio) && selectedChat.colonia && <span>•</span>}
+                                            {selectedChat.colonia && <span>{toTitleCase(selectedChat.colonia)}</span>}
+                                            {(selectedChat.edad || selectedChat.escolaridad || selectedChat.municipio || selectedChat.colonia) && selectedChat.categoria && <span>•</span>}
                                             {selectedChat.categoria && <span>{toTitleCase(selectedChat.categoria)}</span>}
                                         </span>
                                     )}
