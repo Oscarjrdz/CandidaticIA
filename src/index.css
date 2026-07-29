@@ -262,12 +262,29 @@ body {
   100% { opacity: 1; transform: translate3d(0, 0, 0); }
 }
 
+/* Entrada de una TARJETA nueva en la lista de chats (lead/chat recién llegado):
+   fade + slide sutil desde arriba. Solo transform+opacity → no cambia la altura del
+   item ni afecta la medición de Virtuoso ni el anclaje del scroll de la lista. */
+.chat-card-enter {
+  -webkit-animation: chat-card-enter 280ms cubic-bezier(0.2, 0, 0.2, 1) both;
+  animation: chat-card-enter 280ms cubic-bezier(0.2, 0, 0.2, 1) both;
+}
+@-webkit-keyframes chat-card-enter {
+  0%   { opacity: 0; -webkit-transform: translate3d(0, -8px, 0); }
+  100% { opacity: 1; -webkit-transform: translate3d(0, 0, 0); }
+}
+@keyframes chat-card-enter {
+  0%   { opacity: 0; transform: translate3d(0, -8px, 0); }
+  100% { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .candidatic-thinking-logo,
   .candidatic-brand-icon,
   .chat-message-row-enter,
   .chat-message-enter-outgoing,
-  .chat-message-enter-incoming {
+  .chat-message-enter-incoming,
+  .chat-card-enter {
     animation: none;
   }
 }

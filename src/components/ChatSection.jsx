@@ -2713,7 +2713,10 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         if (recentlyDeletedRef.current.has(sseNewCandidate.id)) return;
         setCandidates(prev => {
             if (prev.some(c => c.id === sseNewCandidate.id)) return prev; // already exists
-            return [sseNewCandidate, ...prev];
+            // _newCardAt: sello de tiempo para animar la ENTRADA de la tarjeta (fade+slide).
+            // ChatRow solo anima si es reciente (<2.5s) y no se animó antes → no anima al
+            // hacer scroll ni en la carga inicial. Ver ChatRow.jsx.
+            return [{ ...sseNewCandidate, _newCardAt: Date.now() }, ...prev];
         });
     }, [sseNewCandidate]);
 

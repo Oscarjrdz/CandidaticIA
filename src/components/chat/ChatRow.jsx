@@ -8,6 +8,24 @@ import MessageStatusTicks from './MessageStatusTicks';
 const readersSignature = (readers = []) =>
     readers.map(r => `${r.userId || ''}:${r.userName || ''}`).join('|');
 
+// ── Animación de entrada de tarjeta nueva (mismo patrón anti-replay que los mensajes) ──
+// Un Set a nivel de módulo recuerda qué tarjetas YA animaron, para no re-animar al
+// re-renderizar ni al hacer scroll (Virtuoso monta/desmonta filas al scrollear). Solo
+// anima una tarjeta que (a) llegó recién por SSE (_newCardAt < 2.5s) y (b) no animó antes.
+const playedCardEntry = new Set();
+const playedCardEntryOrder = [];
+const MAX_PLAYED_CARDS = 400;
+const NEW_CARD_ANIM_WINDOW_MS = 2500;
+const rememberCardEntry = (id) => {
+    if (!id || playedCardEntry.has(id)) return;
+    playedCardEntry.add(id);
+    playedCardEntryOrder.push(id);
+    while (playedCardEntryOrder.length > MAX_PLAYED_CARDS) {
+        const oldest = playedCardEntryOrder.shift();
+        if (oldest) playedCardEntry.delete(oldest);
+    }
+};
+
 const ChatRow = React.memo(({ chat, isSelected, isPinned, onSelect, onBlock, onDelete, onTogglePin, onlineReaders, blockLoading, userId, onOpenProfileModal, onMarkAsRead, onMarkAsUnread, onScheduleReminder, tagColorMap, lock }) => {
     const isUnread = checkIfUnread(chat);
     const profileComplete = isProfileComplete(chat);
@@ -17,10 +35,24 @@ const ChatRow = React.memo(({ chat, isSelected, isPinned, onSelect, onBlock, onD
     const lockText = lockUser ? `${lock.userId === userId ? 'Tú' : lockUser} atendiendo` : '';
     const [imgError, setImgError] = React.useState(false);
 
+    // Decisión de animar entrada: se fija UNA vez por tarjeta (ref) para que no cambie en
+    // re-renders. Solo true si la tarjeta acaba de llegar (_newCardAt reciente) y no animó.
+    const entryDecisionRef = React.useRef({ id: null, value: false });
+    if (entryDecisionRef.current.id !== chat.id) {
+        entryDecisionRef.current = {
+            id: chat.id,
+            value: Boolean(chat._newCardAt && (Date.now() - chat._newCardAt < NEW_CARD_ANIM_WINDOW_MS) && !playedCardEntry.has(chat.id))
+        };
+    }
+    const shouldAnimateEntry = entryDecisionRef.current.value;
+    React.useEffect(() => {
+        if (shouldAnimateEntry) rememberCardEntry(chat.id);
+    }, [shouldAnimateEntry, chat.id]);
+
     return (
         <div
             onClick={() => onSelect(chat)}
-            className={`group flex items-center px-3 py-3 cursor-pointer hover:bg-[#f5f6f6] dark:hover:bg-[#202c33] transition-colors duration-100 border-l-0 md:border-l-4 ${isSelected ? 'bg-[#f0f2f5] dark:bg-[#2a3942] border-[#25d366] dark:border-[#00a884] md:shadow-sm md:relative md:z-10' : 'border-transparent'}`}
+            className={`group flex items-center px-3 py-3 cursor-pointer hover:bg-[#f5f6f6] dark:hover:bg-[#202c33] transition-colors duration-100 border-l-0 md:border-l-4 ${shouldAnimateEntry ? 'chat-card-enter' : ''} ${isSelected ? 'bg-[#f0f2f5] dark:bg-[#2a3942] border-[#25d366] dark:border-[#00a884] md:shadow-sm md:relative md:z-10' : 'border-transparent'}`}
         >
             <div className={`w-12 h-12 rounded-full flex-shrink-0 flex items-center justify-center mr-3 relative overflow-hidden ${isEmptyChat ? 'ring-2 ring-blue-500 ring-offset-2 ring-offset-[#ffffff] dark:ring-offset-[#111b21]' : ''}`}>
                 {chat.profilePic && !imgError ? (
