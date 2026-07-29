@@ -30,6 +30,19 @@ export default defineConfig({
       workbox: {
         // Cache static assets and limit sizes
         maximumFileSizeToCacheInBytes: 5000000,
+        // Rutas servidas por el BACKEND (serverless), NO por el SPA. Sin esto, el service
+        // worker de la PWA servía el app shell (index.html → landing) para estas navegaciones
+        // y nunca llegaban al servidor. Ej.: /app (liga inteligente de descarga) mostraba el
+        // landing en vez de redirigir al App Store. Se excluyen del navigateFallback.
+        navigateFallbackDenylist: [
+          /^\/api\//,
+          /^\/app$/,
+          /^\/lp\//,
+          /^\/support$/,
+          /^\/privacy$/,
+          /^\/terms$/,
+          /^\/s\//,
+        ],
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
