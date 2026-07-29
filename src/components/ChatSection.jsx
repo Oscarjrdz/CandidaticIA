@@ -2034,6 +2034,11 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         if (Math.abs(visibleCandidates.length - prevLen) > 3) return;    // cambio grande (filtro): no anclar
         const newIndex = visibleCandidates.findIndex(c => c.id === anchor.id);
         if (newIndex < 0) return;                                        // el ancla ya no está: no pelear
+        // Si el ancla NO cambió de posición, no hay nada que compensar. Sin esto, cada
+        // actualización de fondo del SSE (presencia, otros candidatos) disparaba un
+        // scrollToIndex "no-op" que, por redondeo, arrastraba el scroll hacia arriba
+        // solito estando idle (micro-drift). Solo se corrige ante un reorden real.
+        if (newIndex === anchor.index) return;
         // Si el ANCLA misma saltó al tope (su índice bajó mucho), NO la sigas hacia arriba:
         // deja que se vaya de la vista (comportamiento nativo). Solo compensamos cuando el
         // reorden ocurrió en OTRAS tarjetas (el índice del ancla se mantiene o sube).
