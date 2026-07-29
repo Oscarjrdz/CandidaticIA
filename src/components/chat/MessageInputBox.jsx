@@ -3,7 +3,7 @@ const EmojiPicker = lazy(() => import('emoji-picker-react'));
 import { MapPin, List as ListIcon, ShoppingBag, UserSquare, MousePointerClick, Plus, Smile, Mic, Send, X, Zap } from 'lucide-react';
 import { renderMetaTemplatePreviewText } from '../../utils/metaTemplatePreview';
 
-const MessageInputBox = React.forwardRef(({ onSend, onTyping, fileInputRef, handleFileUpload, replyingToMsg, onCancelReply, metaTemplates = [], onSendTemplate, onSendVCard, onSendInteractive, onSendLocation, onSendList, onSendProduct, isMobile, hasPendingMedia, templatePreviewName = 'Candidato' }, ref) => {
+const MessageInputBox = React.forwardRef(({ onSend, onTyping, fileInputRef, handleFileUpload, replyingToMsg, onCancelReply, metaTemplates = [], onSendTemplate, onSendVCard, onSendInteractive, onSendLocation, onSendList, onSendProduct, isMobile, hasPendingMedia, templatePreviewName = 'Candidato', onHeightChange }, ref) => {
     const [localMessage, setLocalMessage] = useState("");
     const [sending, setSending] = useState(false);
     const [showEmojis, setShowEmojis] = useState(false);
@@ -31,6 +31,7 @@ const MessageInputBox = React.forwardRef(({ onSend, onTyping, fileInputRef, hand
                     input.style.height = 'auto';
                     input.style.height = input.scrollHeight + 'px';
                 }
+                onHeightChange?.(); // el input pudo crecer → el padre re-ancla al fondo si estaba abajo
             }, 50);
         },
         clearText: () => {
@@ -50,6 +51,7 @@ const MessageInputBox = React.forwardRef(({ onSend, onTyping, fileInputRef, hand
                         input.focus();
                     }
                 }
+                onHeightChange?.();
             }, 50);
         },
         setSendingState: (state) => setSending(state)
@@ -144,7 +146,7 @@ const MessageInputBox = React.forwardRef(({ onSend, onTyping, fileInputRef, hand
                                 value={localMessage}
                                 onChange={(e) => { setLocalMessage(e.target.value); emitTyping(); }}
                                 onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmit(e); } }}
-                                onInput={(e) => { e.target.style.height = 'auto'; e.target.style.height = e.target.scrollHeight + 'px'; }}
+                                onInput={(e) => { e.target.style.height = 'auto'; e.target.style.height = e.target.scrollHeight + 'px'; onHeightChange?.(); }}
                             />
                             {localMessage && (
                                 <button type="button" title="Limpiar texto"

@@ -188,21 +188,24 @@ body {
     animation: candidatic-icon-breathe 5.8s ease-in-out infinite;
   }
 
-  /* Phase 1 — row clip opens the space */
+  /* Phase 1 — row clip opens the space (snappy, estilo WhatsApp nativo).
+     Solo se retocó el TIMING: 400ms → 200ms. El keyframe (clip-path) queda igual,
+     así que sigue siendo Virtuoso-safe (no cambia layout). */
   .chat-message-row-enter {
-    -webkit-animation: chat-row-enter 400ms cubic-bezier(0.1, 0, 0.4, 1) forwards;
-    animation: chat-row-enter 400ms cubic-bezier(0.1, 0, 0.4, 1) forwards;
+    -webkit-animation: chat-row-enter 200ms cubic-bezier(0.1, 0, 0.4, 1) forwards;
+    animation: chat-row-enter 200ms cubic-bezier(0.1, 0, 0.4, 1) forwards;
   }
 
-  /* Phase 2 — bubble appears almost instantly */
+  /* Phase 2 — el globo entra deslizando temprano (delay 400→90ms) y con una duración
+     legible (60→200ms), en vez de un "parpadeo" tras esperar 400ms. Total ≈ 290ms. */
   .chat-message-enter-outgoing {
-    -webkit-animation: chat-message-enter-outgoing 60ms ease-out 400ms forwards;
-    animation: chat-message-enter-outgoing 60ms ease-out 400ms forwards;
+    -webkit-animation: chat-message-enter-outgoing 200ms ease-out 90ms forwards;
+    animation: chat-message-enter-outgoing 200ms ease-out 90ms forwards;
   }
 
   .chat-message-enter-incoming {
-    -webkit-animation: chat-message-enter-incoming 60ms ease-out 400ms forwards;
-    animation: chat-message-enter-incoming 60ms ease-out 400ms forwards;
+    -webkit-animation: chat-message-enter-incoming 200ms ease-out 90ms forwards;
+    animation: chat-message-enter-incoming 200ms ease-out 90ms forwards;
   }
 }
 

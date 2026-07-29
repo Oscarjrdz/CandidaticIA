@@ -5128,6 +5128,11 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                             onSend={handleSend}
                             hasPendingMedia={pendingQrImages.length > 0}
                             onTyping={handleTyping}
+                            // Al crecer el input (tecleo multilínea o inyección de banco/vacante) el
+                            // viewport de mensajes se encoge; si el reclutador ya estaba al fondo,
+                            // re-anclamos para que el último mensaje no quede tapado por el input.
+                            // Protegido por isAtBottomRef → NO jala a quien está leyendo historial.
+                            onHeightChange={() => { if (isAtBottomRef.current) scrollToBottom(); }}
                             fileInputRef={fileInputRef}
                             handleFileUpload={handleFileUpload}
                             replyingToMsg={replyingToMsg}
