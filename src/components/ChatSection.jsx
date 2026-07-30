@@ -2774,20 +2774,6 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                                 return newArr;
                             }
                             if (prev.some(m => areSameOutgoingMessage(m, newMsg))) return prev;
-                            // Nuestro propio envío EN VUELO: el banco manda una URL y el server devuelve
-                            // OTRA de la MISMA foto → el eco por SSE no matchea la burbuja optimista por
-                            // URL. Si lo agregamos, aparece una 2ª burbuja de la misma foto que ANIMA y
-                            // luego se fusiona = "dos veces la animación sobre la misma foto". Si ya hay un
-                            // temp saliente del MISMO kind pendiente, el eco es redundante (la respuesta del
-                            // outbox lo confirmará por su tempId), así que lo omitimos. No afecta mensajes de
-                            // otro reclutador de kind distinto ni cuando no tenemos nada en vuelo.
-                            const echoKind = getMessageKind(newMsg);
-                            const hasPendingSameKind = prev.some(m =>
-                                String(m.id).startsWith('temp') &&
-                                (m.from === 'me' || m.from === 'bot') &&
-                                getMessageKind(m) === echoKind
-                            );
-                            if (hasPendingSameKind) return prev;
                         }
 
                         scrollToBottom();
