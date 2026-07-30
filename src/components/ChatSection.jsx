@@ -2033,6 +2033,12 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         const anchor = chatListAnchorRef.current;
         const prevLen = prevVisibleLenRef.current;
         prevVisibleLenRef.current = visibleCandidates.length;
+        // ⛔ DESACTIVADO: el anclaje compensaba el reordenamiento con scrollToIndex, pero bajo
+        // TRÁFICO real (muchos bumps al tope por segundo) disparaba un ajuste por cada reorden
+        // → la lista "subía y bajaba sola". No aguanta el alto tráfico. Se deja el código por si
+        // se retoma una versión coalescida/robusta. Ver regla feedback_chatweb_alto_trafico.
+        return;
+        // eslint-disable-next-line no-unreachable
         if (!sc || !v || !anchor) return;
         if (sc.scrollTop < 40) return;                                   // al tope: dejar fluir (como hoy)
         if (Math.abs(visibleCandidates.length - prevLen) > 3) return;    // cambio grande (filtro): no anclar
