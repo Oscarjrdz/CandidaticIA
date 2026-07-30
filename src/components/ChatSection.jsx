@@ -3730,6 +3730,25 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         }, 50);
     };
 
+    // ── Envío DIRECTO (botón verde del banco / vacantes): inyecta y manda al chat abierto,
+    // sin pasar por el campo de texto. Reusa handleSend (optimista + outbox + dedup). ──
+    const sendBankReplyDirect = (qr) => {
+        if (!selectedChat) { showToast && showToast('Abre un chat primero', 'info'); return; }
+        // Ubicación y audio ya se envían por su propia vía (POST directo) en handleApplyQuickReply.
+        if (qr.type === 'location' || qr.type === 'audio') { handleApplyQuickReply(qr); return; }
+        const candidatoFresh = candidates.find(c => c.id === selectedChat?.id) || selectedChat;
+        const resolved = substituteVariables(qr.message || '', candidatoFresh || {}).replace(/[^\S\n]{2,}/g, ' ').trim();
+        const imgs = qr.imageUrls?.length ? qr.imageUrls : (qr.imageUrl ? [qr.imageUrl] : []);
+        if (!resolved && !imgs.length) return;
+        handleSend(resolved, imgs);
+    };
+    const sendVacancyDirect = (vac) => {
+        if (!vac?.messageDescription) return;
+        if (!selectedChat) { showToast && showToast('Abre un chat primero', 'info'); return; }
+        handleSend(`*${vac.name}*\n\n${vac.messageDescription}`, []);
+        setShowDropdown(null);
+    };
+
     // ═══ AGENTE KATCON — ahora es SERVER-SIDE (event-driven) ════════════════════
     // El auto-envío del Paso 1 (PUNTO KATCON) ya NO vive en el navegador: se disparaba
     // al ABRIR el chat (requería el dashboard abierto). Ahora se dispara en el backend,
@@ -4790,7 +4809,14 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                                                                     <div onClick={(e) => { e.stopPropagation(); injectVacancy(vac); }} className="flex items-center gap-2 cursor-pointer flex-1 overflow-hidden">
                                                                         <GripVertical className="w-3 h-3 shrink-0 text-gray-300 dark:text-gray-600 opacity-0 group-hover/vacitem:opacity-100 transition-opacity cursor-grab active:cursor-grabbing" />
                                                                         <Briefcase className="w-3.5 h-3.5 shrink-0 text-[#111b21] dark:text-[#e9edef]" />
-                                                                        <span className={`truncate flex-1 ${selectedChat?.currentVacancyId === vac.id ? 'text-blue-600 font-bold' : 'text-[#111b21] dark:text-[#e9edef]'}`}>{vac.name}</span>
+                                                                        <span className={`truncate min-w-0 ${selectedChat?.currentVacancyId === vac.id ? 'text-blue-600 font-bold' : 'text-[#111b21] dark:text-[#e9edef]'}`}>{vac.name}</span>
+                                                                        <button
+                                                                            onClick={(e) => { e.stopPropagation(); sendVacancyDirect(vac); }}
+                                                                            title="Enviar directo al chat"
+                                                                            className="p-0.5 shrink-0 rounded-full text-gray-400 hover:text-white hover:bg-[#25d366] transition-colors"
+                                                                        >
+                                                                            <Send className="w-3 h-3" />
+                                                                        </button>
                                                                         {selectedChat?.currentVacancyId === vac.id && <Check className="w-3.5 h-3.5 text-blue-500 shrink-0" />}
                                                                     </div>
                                                                     
@@ -5629,10 +5655,17 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                                             <GripVertical className="w-3.5 h-3.5 mt-0.5 shrink-0 text-gray-300 dark:text-gray-600 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing" />
                                         )}
                                         <div className="flex-1 min-w-0">
-                                            <div className="flex items-center gap-2 mb-1 min-w-0">
-                                                <span className="text-xs font-bold text-[#111b21] dark:text-[#e9edef] truncate flex-1 min-w-0">{qr.name}</span>
+                                            <div className="flex items-center gap-1.5 mb-1 min-w-0">
+                                                <span className="text-xs font-bold text-[#111b21] dark:text-[#e9edef] truncate min-w-0">{qr.name}</span>
+                                                <button
+                                                    onClick={(e) => { e.stopPropagation(); sendBankReplyDirect(qr); }}
+                                                    title="Enviar directo al chat"
+                                                    className="p-1 shrink-0 rounded-full text-gray-400 hover:text-white hover:bg-[#25d366] transition-colors"
+                                                >
+                                                    <Send className="w-3 h-3" />
+                                                </button>
                                                 {qr.shortcut && (
-                                                    <span className="shrink-0 text-[10px] font-mono bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 px-1.5 py-0.5 rounded border border-gray-200 dark:border-gray-700">
+                                                    <span className="ml-auto shrink-0 text-[10px] font-mono bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 px-1.5 py-0.5 rounded border border-gray-200 dark:border-gray-700">
                                                         {qr.shortcut}
                                                     </span>
                                                 )}
@@ -5657,6 +5690,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                                         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
                                             <button
                                                 onClick={(e) => { e.stopPropagation(); setEditingQuickReply(qr); const imgs = qr.imageUrls || (qr.imageUrl ? [qr.imageUrl] : []); setQrForm({ name: qr.name, message: qr.message || '', shortcut: qr.shortcut || '', imageUrl: imgs[0] || '', imageUrl2: imgs[1] || '', imageUrl3: imgs[2] || '', imageUrl4: imgs[3] || '', type: qr.type || 'text', locName: qr.location?.name || '', locAddress: qr.location?.address || '', locLat: qr.location?.lat ? String(qr.location.lat) : '', locLng: qr.location?.lng ? String(qr.location.lng) : '', audioUrl: qr.audioUrl || '', audioMime: qr.audioMime || '', audioVoice: !!qr.voice, audioDurationMs: qr.audioDurationMs || 0 }); }}
+                                                className="p-1.5 text-gray-400 hover:text-blue-500 transition-colors rounded-full hover:bg-blue-50 dark:hover:bg-blue-900/20"
                                                 className="p-1.5 text-gray-400 hover:text-blue-500 transition-colors rounded-full hover:bg-blue-50 dark:hover:bg-blue-900/20"
                                                 title="Editar"
                                             >
