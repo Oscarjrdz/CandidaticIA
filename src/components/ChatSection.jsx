@@ -765,6 +765,12 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
     const displayMessageCacheRef = useRef(new Map());
     const bottomAnchorRef = useRef(false);
     const prevDisplayLengthRef = useRef(0);
+    // Ventana "acabo de enviar" (~2s): durante ella, la lista de mensajes SOLO hace scroll al
+    // fondo cuando CRECE (llega una burbuja nueva), no en re-mediciones (palomita de estado,
+    // carga de imagen con marco fijo). Sin esto, enviar texto+2 fotos disparaba ~8 "snaps" de
+    // scroll que enmascaraban la animación de entrada y se veían como brinco. isSendingRef no
+    // basta: se apaga apenas tocas el fondo, antes de que carguen las imágenes.
+    const sendScrollHoldUntilRef = useRef(0);
 
     const _animateScrollToBottom = (duration = 500) => {
         // Two rAFs so Virtuoso has rendered the new item and scrollHeight is updated
@@ -3767,6 +3773,8 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         setReplyingToMsg(null);
         isSendingRef.current = true;
         freezeListForSend(); // que TU envío no reordene/brinque la lista izquierda
+        // grupo con imágenes: 1 solo scroll al montar, sin snaps por carga/estado
+        sendScrollHoldUntilRef.current = Date.now() + 2000;
 
         const groupId = `grp-${now}-${Math.random().toString(36).slice(2, 7)}`;
 
@@ -3892,6 +3900,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
 
         isSendingRef.current = true;
         freezeListForSend(); // que la plantilla no reordene/brinque la lista izquierda
+        sendScrollHoldUntilRef.current = Date.now() + 2000;
         updateChatMessages(currentCandidateId, prev => [...(prev || []), withMessageEntryAnimation({
             id: optimisticId,
             content: _optimisticContent,
@@ -5283,11 +5292,15 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                             atBottomThreshold={150}
                             components={MESSAGES_VIRTUOSO_COMPONENTS}
                             totalListHeightChanged={() => {
-                                // isSendingRef solo fuerza scroll si la lista CRECIÓ (llegó una burbuja
-                                // nueva) — sin messagesGrew, cada palomita de estado durante un envío con
-                                // fotos (queued→sent, ~8 veces en 3 fotos) volvía a snapear el scroll,
-                                // aunque el usuario ya estuviera leyendo arriba.
-                                if (bottomAnchorRef.current || isAtBottomRef.current || (isSendingRef.current && messagesGrew)) {
+                                // Durante la ventana "acabo de enviar" (~2s), SOLO scrollear si la lista
+                                // CRECIÓ (burbuja nueva) — así enviar texto+2 fotos hace UN solo scroll al
+                                // montar el grupo, no ~8 snaps por cada re-medición (palomita de estado,
+                                // marco de imagen). Eso enmascaraba la animación y se veía como brinco.
+                                // Fuera de esa ventana, el comportamiento normal (anclar al fondo si estás
+                                // abajo) se conserva para el flujo de mensajes entrantes.
+                                const inSendHold = Date.now() < sendScrollHoldUntilRef.current;
+                                const atBottomTrigger = inSendHold ? messagesGrew : isAtBottomRef.current;
+                                if (bottomAnchorRef.current || atBottomTrigger) {
                                     scrollToBottom();
                                     // bottomAnchorRef es una bandera de "una sola vez" (se activa al abrir un
                                     // chat o cargar sus mensajes) — sin este reset se quedaba encendida para
