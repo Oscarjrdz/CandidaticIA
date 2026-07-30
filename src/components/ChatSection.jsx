@@ -3837,6 +3837,21 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         const seenOutgoing = [];
         let lastDateKey = null;
         const orderedMessages = sortMessagesChronologically(messages);
+        // Índice id/ultraMsgId → mensaje, para resolver el mensaje CITADO ("respondiendo a…")
+        // UNA sola vez aquí, en vez de pasarle `allMessages={messages}` a cada burbuja (eso
+        // re-renderizaba TODAS las burbujas visibles en cada mensaje SSE → parpadeo bajo tráfico).
+        const msgById = new Map();
+        for (const m of orderedMessages) {
+            if (m?.id) msgById.set(String(m.id), m);
+            if (m?.ultraMsgId) msgById.set(String(m.ultraMsgId), m);
+        }
+        const resolveQuoted = (msg) => {
+            const q = msg?.contextInfo?.quotedMessage;
+            if (!q || q.text || q.stanzaId == null) return undefined; // con texto ya no hace falta
+            const qm = msgById.get(String(q.stanzaId));
+            if (!qm) return undefined;
+            return { content: qm.content || '', mediaUrl: qm.mediaUrl || '', type: qm.type || '' };
+        };
         const rawUnreadCount = Number(selectedChat?.unreadMsgCount || 0);
         const incomingCount = orderedMessages.filter(isIncomingAuthor).length;
         const unreadCount = Math.min(rawUnreadCount, incomingCount);
@@ -3893,6 +3908,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                 }
             }
 
+            const _quotedResolved = resolveQuoted(msg);
             if (content && content.includes('[MSG_SPLIT]')) {
                 const parts = content.split('[MSG_SPLIT]').filter(p => p.trim());
                 parts.forEach((part, index) => result.push({
@@ -3902,10 +3918,11 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                     content: part.trim(),
                     mediaUrl: index === 0 ? msg.mediaUrl : null,
                     isSplit: true,
-                    _formattedHtml: formatWhatsAppText(part.trim())
+                    _formattedHtml: formatWhatsAppText(part.trim()),
+                    ...(_quotedResolved ? { _quotedResolved } : {})
                 }));
             } else {
-                result.push({ ...msg, content, _formattedHtml: formatWhatsAppText(content) });
+                result.push({ ...msg, content, _formattedHtml: formatWhatsAppText(content), ...(_quotedResolved ? { _quotedResolved } : {}) });
             }
             msgIdx++;
         }
@@ -3949,7 +3966,8 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                 item.timestamp || item.fecha || '',
                 item._isFirstInSeries ? '1' : '0',
                 item.reactions ? JSON.stringify(item.reactions) : '',
-                item.contextInfo ? JSON.stringify(item.contextInfo) : ''
+                item.contextInfo ? JSON.stringify(item.contextInfo) : '',
+                item._quotedResolved ? JSON.stringify(item._quotedResolved) : ''
             ].join('|');
             const cached = cache.get(key);
             if (cached?.signature === signature) return cached.value;
@@ -5208,7 +5226,6 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                                     onReaction={setReactionPopupId}
                                     onReply={setReplyingToMsg}
                                     onSendReaction={handleSendReaction}
-                                    allMessages={messages}
                                 />
                                 </div>
                             );

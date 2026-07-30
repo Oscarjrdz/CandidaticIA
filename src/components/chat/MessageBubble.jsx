@@ -106,7 +106,6 @@ const MessageBubble = React.memo(function MessageBubble({
     onReaction,
     onReply,
     onSendReaction,
-    allMessages,
 }) {
     const isMe = msg.from === 'me' || msg.from === 'bot';
     const isFirstInSeries = msg._isFirstInSeries;
@@ -183,10 +182,10 @@ const MessageBubble = React.memo(function MessageBubble({
                                 const q = msg.contextInfo.quotedMessage;
                                 if (q.text) return <div className="line-clamp-3 text-[#111b21]/80 dark:text-[#e9edef]/80 break-words leading-tight">{q.text}</div>;
 
-                                // Sin texto guardado: buscar mediaUrl/type ya sea en lo persistido
-                                // (mensajes nuevos) o en vivo dentro del historial cargado (mensajes
-                                // viejos, guardados antes de este fix).
-                                const quotedMsg = allMessages.find(m => m.id === q.stanzaId || m.ultraMsgId === q.stanzaId);
+                                // Sin texto guardado: el padre ya resolvió la cita en el memo de
+                                // displayMessages (_quotedResolved) para NO pasar allMessages a cada
+                                // burbuja (eso re-renderizaba todas en cada mensaje SSE → parpadeo).
+                                const quotedMsg = msg._quotedResolved;
                                 if (quotedMsg?.content) {
                                     return <div className="line-clamp-3 text-[#111b21]/80 dark:text-[#e9edef]/80 break-words leading-tight">{quotedMsg.content.replace(/<[^>]*>?/gm, '').substring(0, 100)}</div>;
                                 }
