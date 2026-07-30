@@ -1999,6 +1999,10 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         const sc = chatListScrollerRef.current;
         if (!sc) return;
         if (sc.scrollTop < 40) { chatListAnchorRef.current = null; return; }
+        // Cerca del FONDO no anclamos: ahí no hay nada que compensar y el anclaje solo
+        // estorba a la paginación (cargar más al llegar al final) → parpadeo. Mismo criterio
+        // que la guardia de arriba, pero para el borde inferior.
+        if (sc.scrollHeight - sc.clientHeight - sc.scrollTop < 150) { chatListAnchorRef.current = null; return; }
         const vTop = sc.getBoundingClientRect().top;
         const cards = sc.querySelectorAll('[data-index]');
         for (const card of cards) {
@@ -2084,7 +2088,14 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         entryPrevLimitRef.current = visibleChatLimit;
     }, [visibleCandidates, chatFilterSignature, visibleChatLimit]);
 
+    // Throttle: al empujar contra el fondo, Virtuoso dispara endReached en ráfaga. Sin freno,
+    // crecía visibleChatLimit sin parar (la lista se inflaba de golpe → parpadeo/inestabilidad
+    // al final). Limitamos a un avance cada 250ms: sigue cargando al scrollear, pero pausado.
+    const endReachedCooldownRef = useRef(0);
     const handleChatListEndReached = useCallback(() => {
+        const now = Date.now();
+        if (now - endReachedCooldownRef.current < 250) return;
+        endReachedCooldownRef.current = now;
         if (visibleChatLimit < filteredCandidates.length) {
             setVisibleChatLimit(current => Math.min(current + CHAT_LIST_PAGE_SIZE, filteredCandidates.length));
             return;
