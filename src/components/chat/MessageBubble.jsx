@@ -29,6 +29,19 @@ const SmoothMediaImage = React.memo(function SmoothMediaImage({ src, previewSrc,
     const visibleSrcRef = React.useRef(initialSrc);
     const transitionTimerRef = React.useRef(null);
 
+    // Fade-in al cargar: las imágenes del BANCO son URLs de red (sin preview local como al
+    // subir desde el teléfono), así que la burbuja entra con el marco gris y la imagen
+    // "aparece de golpe" ~100-300ms después = parpadeo. Con esto la imagen entra con un fade
+    // suave sobre el marco. Las que ya están en caché/completas se marcan cargadas sin fade
+    // (no re-parpadean al re-renderizar).
+    const primaryImgRef = React.useRef(null);
+    const [primaryLoaded, setPrimaryLoaded] = React.useState(false);
+    React.useEffect(() => {
+        const el = primaryImgRef.current;
+        if (el && el.complete && el.naturalWidth > 0) { setPrimaryLoaded(true); return; }
+        setPrimaryLoaded(false);
+    }, [visibleSrc]);
+
     React.useEffect(() => {
         if (!src || src === visibleSrcRef.current) return undefined;
 
@@ -70,6 +83,7 @@ const SmoothMediaImage = React.memo(function SmoothMediaImage({ src, previewSrc,
     return (
         <span className="relative block h-full w-full overflow-hidden">
             <img
+                ref={primaryImgRef}
                 src={visibleSrc || src}
                 alt={alt}
                 loading={loading}
@@ -78,7 +92,8 @@ const SmoothMediaImage = React.memo(function SmoothMediaImage({ src, previewSrc,
                 width={width}
                 height={height}
                 draggable={false}
-                className={className}
+                onLoad={() => setPrimaryLoaded(true)}
+                className={`${className} transition-opacity duration-300 ease-out ${primaryLoaded ? 'opacity-100' : 'opacity-0'}`}
             />
             {overlaySrc && (
                 <img
