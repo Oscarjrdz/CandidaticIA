@@ -127,10 +127,17 @@ const MessageBubble = React.memo(function MessageBubble({
         : msg.type === 'sticker'
             ? 'w-[100px] h-[100px]'
             : '';
+    // entryDone: al terminar la animación se RETIRAN las clases + el opacity:0 para siempre.
+    // Sin esto, cuando Virtuoso re-inserta el nodo de la burbuja para re-medir (frecuente bajo
+    // TRÁFICO, y más en burbujas largas como la info de vacante), el navegador REINICIABA la
+    // animación con la clase aún puesta → parpadeo repetido ("estática de TV"). Igual que el
+    // fix del doble-fade en ChatRow.
+    const [entryDone, setEntryDone] = React.useState(false);
+    const playEntry = shouldPlayEntryAnimation && !entryDone;
     // Phase 1: row clip-path opens the space (no layout change → Virtuoso-safe)
-    const rowEntryClass = shouldPlayEntryAnimation ? 'chat-message-row-enter' : '';
+    const rowEntryClass = playEntry ? 'chat-message-row-enter' : '';
     // Phase 2: bubble slides in from side after delay
-    const bubbleEntryClass = shouldPlayEntryAnimation
+    const bubbleEntryClass = playEntry
         ? (isMe ? 'chat-message-enter-outgoing' : 'chat-message-enter-incoming')
         : '';
 
@@ -146,11 +153,13 @@ const MessageBubble = React.memo(function MessageBubble({
         return () => window.clearTimeout(timer);
     }, [shouldPlayEntryAnimation, entryAnimationKey, isMe]);
 
-    // Bubble starts invisible; CSS animation overrides once it fires.
-    const bubbleEntryStyle = shouldPlayEntryAnimation ? { opacity: 0 } : undefined;
+    // Bubble starts invisible; CSS animation overrides once it fires. Se retira con entryDone.
+    const bubbleEntryStyle = playEntry ? { opacity: 0 } : undefined;
 
     return (
-        <div className={`px-[5%] flex ${isMe ? 'justify-end' : 'justify-start'} group max-w-full relative ${!isFirstInSeries ? 'mt-0.5' : 'mt-2'} ${(msg.reactions && msg.reactions.length > 0) ? 'pb-5' : ''} ${rowEntryClass}`}>
+        <div
+            onAnimationEnd={(e) => { if (e.animationName === 'chat-message-enter-outgoing' || e.animationName === 'chat-message-enter-incoming') setEntryDone(true); }}
+            className={`px-[5%] flex ${isMe ? 'justify-end' : 'justify-start'} group max-w-full relative ${!isFirstInSeries ? 'mt-0.5' : 'mt-2'} ${(msg.reactions && msg.reactions.length > 0) ? 'pb-5' : ''} ${rowEntryClass}`}>
             <div style={bubbleEntryStyle} className={`
                 max-w-[75%] rounded-[7.5px] px-2 pt-1.5 pb-1 shadow-[0_1px_0.5px_rgba(11,20,26,.13)] relative text-[14.2px] z-10
                 ${bubbleEntryClass}
