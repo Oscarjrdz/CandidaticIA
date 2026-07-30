@@ -3836,41 +3836,61 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
             });
         }
 
+        // ── Inyección ESCALONADA del grupo (texto → foto 1 → foto 2 …) ──
+        // Antes las 3 burbujas del "Punto Yageo" (texto + 2 fotos) montaban en el MISMO render
+        // → 3 burbujas altas de golpe → al mandar rápido, en el 3º/4º envío saturaba el layout y
+        // se veía parpadeo/freeze. Ahora cada imagen se inyecta ~150ms después de la anterior:
+        // el texto entra ya, y las fotos caen una por una dándole aire al layout/scroll para
+        // asentarse (cada una hace su fade + pin suave por su cuenta). El orden cronológico se
+        // mantiene por timestamp (baseTime+idx+1), así que el escalonado no lo altera. Los envíos
+        // reales siguen por el outbox (con su pausa de orden), pareado a cada burbuja para
+        // que el dedup optimista↔servidor nunca se rompa.
+        const IMAGE_STAGGER_MS = 150;
         queuedImages.forEach((imgUrl, idx) => {
             const tempImgId = `temp_img_${now}_${idx}`;
-            addSendingMedia(currentCandidateId);
-            updateChatMessages(currentCandidateId, prev => [...(prev || []), withMessageEntryAnimation({
-                id: tempImgId,
-                from: 'me',
-                content: '',
-                mediaUrl: imgUrl,
-                _serverMediaUrl: imgUrl,
-                type: 'image',
-                status: 'queued',
-                // +1ms por posición: el grupo entero nace en el mismo instante y el sort
-                // cronológico necesita tiempos estrictamente crecientes (texto → foto 1 → 2 → 3)
-                timestamp: new Date(baseTime + idx + 1).toISOString(),
-                _clientAnchoredTime: true,
-                _sequenceIndex: textMessage ? idx + 1 : idx
-            }, 'outgoing')]);
-            outboxRef.current.queue.push({
-                candidateId: currentCandidateId,
-                groupId,
-                tempId: tempImgId,
-                isImage: true,
-                gapBefore: Boolean(textMessage) || idx > 0,
-                payload: {
-                    candidateId: currentCandidateId,
-                    message: '',
-                    type: 'image',
+            const enqueueImage = () => {
+                addSendingMedia(currentCandidateId);
+                updateChatMessages(currentCandidateId, prev => [...(prev || []), withMessageEntryAnimation({
+                    id: tempImgId,
+                    from: 'me',
+                    content: '',
                     mediaUrl: imgUrl,
-                    senderId,
-                    senderName
-                },
-                normalizeResponse: (messageData) => ({ ...messageData, status: messageData.status || 'sent' })
-            });
+                    _serverMediaUrl: imgUrl,
+                    type: 'image',
+                    status: 'queued',
+                    // +1ms por posición: el grupo entero nace en el mismo instante y el sort
+                    // cronológico necesita tiempos estrictamente crecientes (texto → foto 1 → 2 → 3)
+                    timestamp: new Date(baseTime + idx + 1).toISOString(),
+                    _clientAnchoredTime: true,
+                    _sequenceIndex: textMessage ? idx + 1 : idx
+                }, 'outgoing')]);
+                outboxRef.current.queue.push({
+                    candidateId: currentCandidateId,
+                    groupId,
+                    tempId: tempImgId,
+                    isImage: true,
+                    gapBefore: Boolean(textMessage) || idx > 0,
+                    payload: {
+                        candidateId: currentCandidateId,
+                        message: '',
+                        type: 'image',
+                        mediaUrl: imgUrl,
+                        senderId,
+                        senderName
+                    },
+                    normalizeResponse: (messageData) => ({ ...messageData, status: messageData.status || 'sent' })
+                });
+                // renueva la ventana de scroll suave para que ESTA foto también baje sin brinco
+                sendScrollHoldUntilRef.current = Date.now() + 1200;
+                processOutbox().catch(() => {});
+            };
+            // slot 0 = inmediato (el texto, si existe, ya ocupa ese instante); el resto escalonado
+            const slot = idx + (textMessage ? 1 : 0);
+            if (slot === 0) enqueueImage();
+            else setTimeout(enqueueImage, IMAGE_STAGGER_MS * slot);
         });
 
+        // Arranca el envío del texto de inmediato (las fotos se autoencolan al inyectarse)
         processOutbox().catch(() => {});
         setTimeout(() => {
             const input = document.getElementById('chat-msg-input');
