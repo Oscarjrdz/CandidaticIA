@@ -1977,6 +1977,52 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         [filteredCandidates, visibleChatLimit]
     );
 
+    // ── Congelar el ORDEN de la lista mientras estás scrolleado ABAJO (anti "sube y baja") ──
+    // Raíz medida EN VIVO: bajo tráfico real cada mensaje reordena chats al tope y cada lock/
+    // badge cambia la altura de una fila (medido: 98/114/121/137px). Si estás leyendo abajo,
+    // Virtuoso re-mide y recorre el contenido → la lista brinca sola, aunque no toques nada.
+    // Solución tipo WhatsApp, robusta a tráfico: mientras NO estás cerca del tope, mantenemos
+    // el orden MOSTRADO congelado — las tarjetas siguen actualizando su contenido/badge EN SU
+    // LUGAR (no se mueven) y los chats nuevos se acumulan al final SIN empujar tu vista. Al
+    // volver al tope (donde vive el reclutador normalmente) se libera y la lista vuelve al
+    // orden vivo cronológico; ahí scrollTop≈0, así que el reacomodo no se siente como brinco.
+    // Con hysteresis (congela >80px, libera <20px) para no titilar en el borde.
+    const listFrozenRef = useRef(false);
+    const frozenOrderRef = useRef(null); // array de ids en orden congelado
+    const [freezeVersion, setFreezeVersion] = useState(0);
+    const displayCandidatesRef = useRef([]);
+    const applyFreezeState = useCallback((shouldFreeze) => {
+        if (shouldFreeze === listFrozenRef.current) return;
+        listFrozenRef.current = shouldFreeze;
+        // Al congelar, fotografiamos el orden mostrado ACTUAL (que es el orden vivo, porque aún
+        // no estábamos congelados). Al liberar, se descarta para volver al orden vivo.
+        frozenOrderRef.current = shouldFreeze
+            ? (displayCandidatesRef.current || []).map(c => c.id)
+            : null;
+        setFreezeVersion(v => v + 1);
+    }, []);
+
+    const displayCandidates = useMemo(() => {
+        const frozenOrder = frozenOrderRef.current;
+        if (!listFrozenRef.current || !frozenOrder || frozenOrder.length === 0) return visibleCandidates;
+        const byId = new Map();
+        for (const c of visibleCandidates) byId.set(c.id, c);
+        const ordered = [];
+        const seen = new Set();
+        // 1) respeta el orden congelado para los ids que siguen presentes
+        for (const id of frozenOrder) {
+            const c = byId.get(id);
+            if (c) { ordered.push(c); seen.add(id); }
+        }
+        // 2) chats nuevos (no estaban al congelar) → al FINAL, sin empujar la vista de arriba
+        for (const c of visibleCandidates) {
+            if (!seen.has(c.id)) ordered.push(c);
+        }
+        return ordered;
+        // freezeVersion fuerza recomputo al (des)congelar; visibleCandidates al cambiar datos
+    }, [visibleCandidates, freezeVersion]);
+    displayCandidatesRef.current = displayCandidates;
+
     // ── Anclaje de scroll de la lista de chats (evita el "brinco" al reordenar) ──
     // Medido en vivo: al entrar actividad (mensaje/lead) estando scrolleado ABAJO, la lista
     // brincaba ~159px (≈2 tarjetas) porque el scroll no compensa el reorden que ocurre
@@ -2021,11 +2067,17 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         if (el && !el.__anchorHooked) {
             el.__anchorHooked = true;
             el.addEventListener('scroll', () => {
+                // Congelar/liberar el orden según la posición (hysteresis para no titilar):
+                // congela al alejarte del tope (>80px), libera al volver (<20px). Barato: solo
+                // compara scrollTop y, si cambia el estado, dispara un único setState.
+                const st = el.scrollTop;
+                if (st > 80) { if (!listFrozenRef.current) applyFreezeState(true); }
+                else if (st < 20) { if (listFrozenRef.current) applyFreezeState(false); }
                 if (anchorRafRef.current) return;
                 anchorRafRef.current = requestAnimationFrame(() => { anchorRafRef.current = 0; captureChatListAnchor(); });
             }, { passive: true });
         }
-    }, [captureChatListAnchor]);
+    }, [captureChatListAnchor, applyFreezeState]);
 
     useLayoutEffect(() => {
         const sc = chatListScrollerRef.current;
@@ -2099,6 +2151,17 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         entryPrevFilterSigRef.current = chatFilterSignature;
         entryPrevLimitRef.current = visibleChatLimit;
     }, [visibleCandidates, chatFilterSignature, visibleChatLimit]);
+
+    // Al cambiar de filtro/búsqueda, soltar el congelado: el orden congelado del filtro anterior
+    // no aplica al nuevo conjunto (dejaría casi todo "apilado al final"). Se libera para mostrar
+    // el orden vivo correcto del nuevo filtro.
+    useEffect(() => {
+        if (listFrozenRef.current) {
+            listFrozenRef.current = false;
+            frozenOrderRef.current = null;
+            setFreezeVersion(v => v + 1);
+        }
+    }, [chatFilterSignature]);
 
     // Throttle: al empujar contra el fondo, Virtuoso dispara endReached en ráfaga. Sin freno,
     // crecía visibleChatLimit sin parar (la lista se inflaba de golpe → parpadeo/inestabilidad
@@ -4630,7 +4693,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                         <Virtuoso
                             ref={chatListVirtuosoRef}
                             scrollerRef={handleChatListScrollerRef}
-                            data={visibleCandidates}
+                            data={displayCandidates}
                             style={{ height: '100%' }}
                             // Buffer de render alto (px): antes era overscan={10} (¡10px!) y en scroll
                             // rápido Virtuoso no alcanzaba a pintar filas por delante → huecos en blanco
