@@ -271,8 +271,24 @@ const mergeOutgoingPayload = (current = {}, incoming = {}) => {
     }
 
     if (currentMediaUrl && incomingMediaUrl && currentMediaUrl !== incomingMediaUrl) {
-        merged._serverMediaUrl = incomingMediaUrl;
-        merged._displayMediaUrl = current._displayMediaUrl || current._localMediaUrl || currentMediaUrl;
+        // ¿La imagen que YA se ve es un preview LOCAL temporal (blob/data al subir del teléfono)?
+        // Solo en ese caso vale la pena el crossfade a la URL del servidor (reemplaza el blob por
+        // la imagen hospedada — misma foto, swap suave). Para el BANCO la URL optimista ya es una
+        // URL hospedada buena; el servidor solo devuelve OTRA dirección de la MISMA imagen, así que
+        // un crossfade se veía como "la foto se manda 2 veces, una más tenue". Ahí conservamos la
+        // que ya se ve (sin cambiar src → SmoothMediaImage no hace crossfade), y guardamos la del
+        // servidor por referencia.
+        const currentIsLocalPreview =
+            currentMediaUrl.startsWith('blob:') ||
+            currentMediaUrl.startsWith('data:') ||
+            (current._localMediaUrl && current._localMediaUrl === currentMediaUrl);
+        if (currentIsLocalPreview) {
+            merged._serverMediaUrl = incomingMediaUrl;
+            merged._displayMediaUrl = current._displayMediaUrl || current._localMediaUrl || currentMediaUrl;
+        } else {
+            merged.mediaUrl = currentMediaUrl;      // conservar la imagen ya visible (sin crossfade)
+            merged._serverMediaUrl = incomingMediaUrl;
+        }
     }
 
     // El contextInfo del servidor puede llegar sin el texto citado (backend aparte
