@@ -30,6 +30,13 @@ export default defineConfig({
       workbox: {
         // Cache static assets and limit sizes
         maximumFileSizeToCacheInBytes: 5000000,
+        // 🔄 Actualización confiable del bundle: durante toda una sesión, el service worker
+        // servía el precache VIEJO tras un deploy (el reclutador seguía viendo código viejo y
+        // "los fixes no servían"). Con esto el SW nuevo toma control de inmediato y purga los
+        // precaches anteriores, así el bundle nuevo entra al recargar sin quedar atrapado.
+        skipWaiting: true,
+        clientsClaim: true,
+        cleanupOutdatedCaches: true,
         // Rutas servidas por el BACKEND (serverless), NO por el SPA. Sin esto, el service
         // worker de la PWA servía el app shell (index.html → landing) para estas navegaciones
         // y nunca llegaban al servidor. Ej.: /app (liga inteligente de descarga) mostraba el

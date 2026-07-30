@@ -1991,6 +1991,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
     const frozenOrderRef = useRef(null); // array de ids en orden congelado
     const [freezeVersion, setFreezeVersion] = useState(0);
     const displayCandidatesRef = useRef([]);
+    const sendFreezeUntilRef = useRef(0);
     const applyFreezeState = useCallback((shouldFreeze) => {
         if (shouldFreeze === listFrozenRef.current) return;
         listFrozenRef.current = shouldFreeze;
@@ -2001,6 +2002,23 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
             : null;
         setFreezeVersion(v => v + 1);
     }, []);
+
+    // ── Freeze-on-send: al ENVIAR, el chat abierto salta al tope y la lista "se corre" bajo el
+    // cursor del reclutador (reportado). Congelamos el orden ~2.5s alrededor del envío para que
+    // TU propio mensaje no reordene la lista en el momento del clic. Si estás scrolleado abajo,
+    // el congelado por scroll ya la sostiene; si estás arriba, se libera sola al expirar (salto
+    // desacoplado del clic, calmado) o cuando vuelves al tope. Cubre banco/vacante/manual/plantilla.
+    const freezeListForSend = useCallback(() => {
+        sendFreezeUntilRef.current = Date.now() + 2500;
+        if (!listFrozenRef.current) applyFreezeState(true);
+        setTimeout(() => {
+            const sc = chatListScrollerRef.current;
+            // libera solo si ya venció el hold y NO estás scrolleado abajo (ahí manda el scroll)
+            if (Date.now() >= sendFreezeUntilRef.current && listFrozenRef.current && (!sc || sc.scrollTop < 80)) {
+                applyFreezeState(false);
+            }
+        }, 2600);
+    }, [applyFreezeState]);
 
     const displayCandidates = useMemo(() => {
         const frozenOrder = frozenOrderRef.current;
@@ -2072,7 +2090,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                 // compara scrollTop y, si cambia el estado, dispara un único setState.
                 const st = el.scrollTop;
                 if (st > 80) { if (!listFrozenRef.current) applyFreezeState(true); }
-                else if (st < 20) { if (listFrozenRef.current) applyFreezeState(false); }
+                else if (st < 20) { if (listFrozenRef.current && Date.now() >= sendFreezeUntilRef.current) applyFreezeState(false); }
                 if (anchorRafRef.current) return;
                 anchorRafRef.current = requestAnimationFrame(() => { anchorRafRef.current = 0; captureChatListAnchor(); });
             }, { passive: true });
@@ -3748,6 +3766,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
 
         setReplyingToMsg(null);
         isSendingRef.current = true;
+        freezeListForSend(); // que TU envío no reordene/brinque la lista izquierda
 
         const groupId = `grp-${now}-${Math.random().toString(36).slice(2, 7)}`;
 
@@ -3872,6 +3891,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         const _optimisticContent = `⚡ Plantilla oficial: *${_displayName}*\n\n${_bodyText}`.trim();
 
         isSendingRef.current = true;
+        freezeListForSend(); // que la plantilla no reordene/brinque la lista izquierda
         updateChatMessages(currentCandidateId, prev => [...(prev || []), withMessageEntryAnimation({
             id: optimisticId,
             content: _optimisticContent,
