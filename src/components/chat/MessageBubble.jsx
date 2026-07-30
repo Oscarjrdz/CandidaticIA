@@ -149,10 +149,17 @@ const MessageBubble = React.memo(function MessageBubble({
     // fix del doble-fade en ChatRow.
     const [entryDone, setEntryDone] = React.useState(false);
     const playEntry = shouldPlayEntryAnimation && !entryDone;
+    // Las burbujas con MEDIA (imagen/sticker) NO usan la entrada de fila+globo: el clip-path de
+    // fila revela la imagen alta de arriba-abajo (efecto "persiana") y el fade del globo se suma
+    // al fade-in propio de la imagen (doble fade + parpadeo). Para media dejamos UNA sola
+    // animación: el fade-in de la imagen (en SmoothMediaImage). El texto conserva su entrada
+    // fila+slide (que se ve bien).
+    const hasMedia = Boolean(msg.mediaUrl);
+    const playBubbleEntry = playEntry && !hasMedia;
     // Phase 1: row clip-path opens the space (no layout change → Virtuoso-safe)
-    const rowEntryClass = playEntry ? 'chat-message-row-enter' : '';
+    const rowEntryClass = playBubbleEntry ? 'chat-message-row-enter' : '';
     // Phase 2: bubble slides in from side after delay
-    const bubbleEntryClass = playEntry
+    const bubbleEntryClass = playBubbleEntry
         ? (isMe ? 'chat-message-enter-outgoing' : 'chat-message-enter-incoming')
         : '';
 
@@ -169,7 +176,8 @@ const MessageBubble = React.memo(function MessageBubble({
     }, [shouldPlayEntryAnimation, entryAnimationKey, isMe]);
 
     // Bubble starts invisible; CSS animation overrides once it fires. Se retira con entryDone.
-    const bubbleEntryStyle = playEntry ? { opacity: 0 } : undefined;
+    // Solo para burbujas SIN media (las de media no animan el globo → no deben nacer invisibles).
+    const bubbleEntryStyle = playBubbleEntry ? { opacity: 0 } : undefined;
 
     return (
         <div
