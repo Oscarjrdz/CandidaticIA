@@ -21,6 +21,24 @@ const rememberEntryAnimation = (key) => {
     }
 };
 
+// Fade-in de imagen: se corre EXACTAMENTE UNA VEZ por URL. Sin esto, cuando la burbuja se
+// re-renderiza/re-monta (merge del eco optimista↔servidor, Virtuoso re-insertando el nodo,
+// palomita de estado) el estado de "cargada" se reiniciaba y la imagen hacía fade OTRA VEZ →
+// "se ve dos veces la animación sobre la misma foto". Un Set a nivel de módulo (como el de las
+// entradas de burbuja) recuerda qué imágenes ya aparecieron: la 2ª vez se muestran al instante.
+const fadedInImages = new Set();
+const fadedInImagesOrder = [];
+const MAX_FADED_IN_IMAGES = 600;
+const rememberFadedInImage = (url) => {
+    if (!url || fadedInImages.has(url)) return;
+    fadedInImages.add(url);
+    fadedInImagesOrder.push(url);
+    while (fadedInImagesOrder.length > MAX_FADED_IN_IMAGES) {
+        const oldest = fadedInImagesOrder.shift();
+        if (oldest) fadedInImages.delete(oldest);
+    }
+};
+
 const SmoothMediaImage = React.memo(function SmoothMediaImage({ src, previewSrc, alt, className, width, height, loading = 'lazy', fetchPriority = 'auto' }) {
     const initialSrc = previewSrc || src;
     const [visibleSrc, setVisibleSrc] = React.useState(initialSrc);
@@ -35,12 +53,18 @@ const SmoothMediaImage = React.memo(function SmoothMediaImage({ src, previewSrc,
     // suave sobre el marco. Las que ya están en caché/completas se marcan cargadas sin fade
     // (no re-parpadean al re-renderizar).
     const primaryImgRef = React.useRef(null);
-    const [primaryLoaded, setPrimaryLoaded] = React.useState(false);
-    React.useEffect(() => {
-        const el = primaryImgRef.current;
-        if (el && el.complete && el.naturalWidth > 0) { setPrimaryLoaded(true); return; }
-        setPrimaryLoaded(false);
+    // Arranca "cargada" (sin fade) si esta URL YA hizo su fade antes → nunca re-anima.
+    const [primaryLoaded, setPrimaryLoaded] = React.useState(() => fadedInImages.has(visibleSrc));
+    const markPrimaryLoaded = React.useCallback(() => {
+        rememberFadedInImage(visibleSrc);
+        setPrimaryLoaded(true);
     }, [visibleSrc]);
+    React.useEffect(() => {
+        if (fadedInImages.has(visibleSrc)) { setPrimaryLoaded(true); return; }
+        const el = primaryImgRef.current;
+        if (el && el.complete && el.naturalWidth > 0) { markPrimaryLoaded(); return; }
+        setPrimaryLoaded(false);
+    }, [visibleSrc, markPrimaryLoaded]);
 
     React.useEffect(() => {
         if (!src || src === visibleSrcRef.current) return undefined;
@@ -92,7 +116,7 @@ const SmoothMediaImage = React.memo(function SmoothMediaImage({ src, previewSrc,
                 width={width}
                 height={height}
                 draggable={false}
-                onLoad={() => setPrimaryLoaded(true)}
+                onLoad={markPrimaryLoaded}
                 className={`${className} transition-opacity duration-300 ease-out ${primaryLoaded ? 'opacity-100' : 'opacity-0'}`}
             />
             {overlaySrc && (
