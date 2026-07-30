@@ -2074,6 +2074,12 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
     const entryPrevLimitRef = useRef(0);
     const enteredFilterIds = useMemo(() => {
         const result = new Set();
+        // ⛔ DESACTIVADO: la animación de entrada por CAMBIO DE ESTATUS (chat que entra al filtro)
+        // bajo tráfico + acciones (enviar en "no leídos" → el chat sale y re-entra) hacía saltar
+        // las tarjetas ("sube y baja"). Se deja la de leads NUEVOS (_newCardAt), que sí es estable.
+        // Ver regla feedback_chatweb_alto_trafico. Código conservado por si se retoma coalescido.
+        return result;
+        // eslint-disable-next-line no-unreachable
         const prevIds = entryPrevIdsRef.current;
         const filterSame = entryPrevFilterSigRef.current !== null && chatFilterSignature === entryPrevFilterSigRef.current;
         const noPagination = visibleChatLimit <= entryPrevLimitRef.current;
