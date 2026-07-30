@@ -799,6 +799,23 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
             if (el) el.scrollTop = el.scrollHeight;
         });
     };
+    // Pin suave al fondo por unos frames. Para inyectar un mensaje ALTO (info de vacante /
+    // "maletita"): un solo scrollTop=scrollHeight salta antes de que Virtuoso mida la burbuja
+    // alta → aterriza corto y luego corrige = brinco. Aquí re-anclamos al fondo cada frame
+    // durante ~380ms, así el scroll SIGUE la medición del mensaje alto hasta el fondo real de
+    // forma continua (se ve como un desplazamiento suave, no un salto seco). Idempotente una vez
+    // que la altura se estabiliza (scrollTop ya == scrollHeight → no-op).
+    const pinToBottomBriefly = (ms = 380) => {
+        if (scrollFrameRef.current) cancelAnimationFrame(scrollFrameRef.current);
+        const start = performance.now();
+        const step = () => {
+            const el = virtuosoScrollerRef.current;
+            if (el) el.scrollTop = el.scrollHeight;
+            if (performance.now() - start < ms) scrollFrameRef.current = requestAnimationFrame(step);
+            else scrollFrameRef.current = null;
+        };
+        scrollFrameRef.current = requestAnimationFrame(step);
+    };
     const fileInputRef = useRef(null);
     const lastPresenceTimeRef = useRef(0);
     const [showScrollBtn, setShowScrollBtn] = useState(false);
@@ -5301,7 +5318,10 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                                 const inSendHold = Date.now() < sendScrollHoldUntilRef.current;
                                 const atBottomTrigger = inSendHold ? messagesGrew : isAtBottomRef.current;
                                 if (bottomAnchorRef.current || atBottomTrigger) {
-                                    scrollToBottom();
+                                    // En envío: pin SUAVE que sigue la medición del mensaje alto hasta el
+                                    // fondo (se ve el fade y no brinca). Fuera de envío: scroll normal.
+                                    if (inSendHold && atBottomTrigger) pinToBottomBriefly();
+                                    else scrollToBottom();
                                     // bottomAnchorRef es una bandera de "una sola vez" (se activa al abrir un
                                     // chat o cargar sus mensajes) — sin este reset se quedaba encendida para
                                     // siempre, forzando scroll al fondo en CADA cambio de altura de la lista
