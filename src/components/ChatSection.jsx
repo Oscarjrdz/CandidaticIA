@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback, useDeferredValue } from 'react';
 import ConfirmModal from './ui/ConfirmModal';
-import { MapPin, List as ListIcon, ShoppingBag, UserSquare, MousePointerClick, Search, MessageSquare, Plus, Smile, Paperclip, Mic, Square, ArrowLeft, Send, Tag, Pencil, Check, X, Trash2, Briefcase, Kanban, BookOpen, Keyboard, Loader2, Edit2, Reply, Zap, Pin, MessageCirclePlus, Phone, User, Bell, GripVertical, ChevronDown, ChevronUp } from 'lucide-react';
+import { MapPin, List as ListIcon, ShoppingBag, UserSquare, MousePointerClick, Search, MessageSquare, Plus, Smile, Paperclip, Mic, Square, ArrowLeft, Send, Tag, Pencil, Check, X, Trash2, Briefcase, Kanban, BookOpen, Keyboard, Loader2, Edit2, Reply, Zap, Pin, MessageCirclePlus, Phone, User, Bell, GripVertical, ChevronDown, ChevronUp, Snowflake } from 'lucide-react';
 import { getCandidates, getCandidateById, blockCandidate, deleteCandidate } from '../services/candidatesService';
 import { substituteVariables } from '../../api/utils/shortcuts.js';
 import ManualProjectsSidepanel from './ManualProjectsSidepanel';
@@ -3339,10 +3339,21 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         }
     };
 
+    // "Fijar" (copo de nieve) el dropdown de vacantes: cuando está fijado, inyectar/enviar NO
+    // lo cierra, para hacerlo repetido sin reabrirlo. Se recuerda en localStorage.
+    const [vacancyPinned, setVacancyPinned] = useState(() => {
+        try { return localStorage.getItem('vacancyDropdownPinned') === '1'; } catch { return false; }
+    });
+    const toggleVacancyPinned = () => setVacancyPinned(v => {
+        const nv = !v;
+        try { localStorage.setItem('vacancyDropdownPinned', nv ? '1' : '0'); } catch { /* ignore */ }
+        return nv;
+    });
+
     const injectVacancy = (vac) => {
         if (!vac || !vac.messageDescription) return;
         messageInputRef.current?.injectText(`*${vac.name}*\n\n${vac.messageDescription}`);
-        setShowDropdown(null);
+        if (!vacancyPinned) setShowDropdown(null); // fijado → se queda abierto
     };
 
     const sendReactionToApi = async (candidateId, msg, emoji, showToast, setReactionPopupId) => {
@@ -3757,7 +3768,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         if (!vac?.messageDescription) return;
         if (!selectedChat) { showToast && showToast('Abre un chat primero', 'info'); return; }
         handleSend(`*${vac.name}*\n\n${vac.messageDescription}`, []);
-        setShowDropdown(null);
+        if (!vacancyPinned) setShowDropdown(null); // fijado → se queda abierto
     };
 
     // ═══ AGENTE KATCON — ahora es SERVER-SIDE (event-driven) ════════════════════
@@ -4812,8 +4823,15 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                                                 <Briefcase className="w-5 h-5 text-gray-500 hover:text-blue-500 transition-colors" />
                                             </button>
                                             <div className={`absolute right-0 top-full mt-1 w-64 bg-white dark:bg-[#202c33] rounded-lg shadow-xl transition-all z-50 border border-gray-100 dark:border-gray-700 overflow-hidden flex flex-col ${showDropdown === 'vacancies' ? 'opacity-100 pointer-events-auto translate-y-0' : 'opacity-0 pointer-events-none -translate-y-2'}`}>
-                                                <div className="px-3 py-2 text-xs font-bold text-[#8696a0] border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-[#111b21]">
-                                                    Inyectar Info de Vacante
+                                                <div className="px-3 py-2 text-xs font-bold text-[#8696a0] border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-[#111b21] flex items-center justify-between">
+                                                    <span>Inyectar Info de Vacante</span>
+                                                    <button
+                                                        onClick={(e) => { e.stopPropagation(); toggleVacancyPinned(); }}
+                                                        title={vacancyPinned ? 'Ventana fijada (clic para soltar)' : 'Mantener esta ventana abierta'}
+                                                        className={`p-1 rounded-full transition-colors shrink-0 ${vacancyPinned ? 'text-sky-500 bg-sky-500/10' : 'text-gray-400 hover:text-sky-400 hover:bg-sky-400/10'}`}
+                                                    >
+                                                        <Snowflake className="w-3.5 h-3.5" />
+                                                    </button>
                                                 </div>
                                                 <div className="max-h-60 overflow-y-auto custom-scrollbar">
                                                     {vacancies.length === 0 ? (
