@@ -2046,8 +2046,14 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
     const displayCandidates = useMemo(() => {
         const frozenOrder = frozenOrderRef.current;
         if (!listFrozenRef.current || !frozenOrder || frozenOrder.length === 0) return visibleCandidates;
+        // ⚠️ Resolvemos desde el conjunto COMPLETO (filteredCandidates), NO desde el rebanado
+        // visibleCandidates. Bug medido: estando HASTA ABAJO y enviando, el chat abierto salta al
+        // tope del orden real → otro chat cae fuera del slice(0, visibleChatLimit) → desaparecía
+        // del map → se caía de la lista congelada → la cola se encogía → "la lista se va arriba".
+        // Con el set completo, un reordenamiento nunca puede tirar un chat congelado; solo sale si
+        // de verdad dejó de existir/matchear el filtro.
         const byId = new Map();
-        for (const c of visibleCandidates) byId.set(c.id, c);
+        for (const c of filteredCandidates) byId.set(c.id, c);
         const ordered = [];
         const seen = new Set();
         // 1) respeta el orden congelado para los ids que siguen presentes
@@ -2055,13 +2061,14 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
             const c = byId.get(id);
             if (c) { ordered.push(c); seen.add(id); }
         }
-        // 2) chats nuevos (no estaban al congelar) → al FINAL, sin empujar la vista de arriba
+        // 2) chats que ENTRARON al top-N visible y no estaban congelados → al FINAL, sin empujar
+        //    la vista de arriba (chats nuevos aparecen abajo, no reordenan lo que estás viendo)
         for (const c of visibleCandidates) {
             if (!seen.has(c.id)) ordered.push(c);
         }
         return ordered;
-        // freezeVersion fuerza recomputo al (des)congelar; visibleCandidates al cambiar datos
-    }, [visibleCandidates, freezeVersion]);
+        // freezeVersion fuerza recomputo al (des)congelar; los datos al cambiar filtered/visible
+    }, [visibleCandidates, filteredCandidates, freezeVersion]);
     displayCandidatesRef.current = displayCandidates;
 
     // ── Anclaje de scroll de la lista de chats (evita el "brinco" al reordenar) ──
