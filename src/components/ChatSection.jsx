@@ -2032,7 +2032,9 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
     const frozenOrderRef = useRef(null); // array de ids en orden congelado
     const [freezeVersion, setFreezeVersion] = useState(0);
     const displayCandidatesRef = useRef([]);
-    const sendFreezeUntilRef = useRef(0);
+    // id del candidato cuyo eco SSE de confirmación estamos esperando tras un envío propio
+    // (ver freezeListForSend). null = no hay ningún envío pendiente de confirmar.
+    const sendFreezeCandidateIdRef = useRef(null);
     const applyFreezeState = useCallback((shouldFreeze) => {
         if (shouldFreeze === listFrozenRef.current) return;
         listFrozenRef.current = shouldFreeze;
@@ -2045,25 +2047,21 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
     }, []);
 
     // ── Freeze-on-send: al ENVIAR, el chat abierto salta al tope y la lista "se corre" bajo el
-    // cursor del reclutador (reportado). Congelamos el orden ~2.5s alrededor del envío para que
-    // TU propio mensaje no reordene la lista en el momento del clic. Si estás scrolleado abajo,
-    // el congelado por scroll ya la sostiene; si estás arriba, se libera sola al expirar (salto
-    // desacoplado del clic, calmado) o cuando vuelves al tope. Cubre banco/vacante/manual/plantilla.
-    const freezeListForSend = useCallback(() => {
-        // 4 s cubre: el envío optimista + el eco SSE del servidor (~200-800ms) +
-        // los patches de badge/unread que llegan en cadena tras el mensaje.
-        // Con 2.5 s el eco del servidor llegaba justo fuera de la ventana y
-        // disparaba el sort → la lista brincaba ~1 tarjeta hacia arriba.
-        sendFreezeUntilRef.current = Date.now() + 4000;
+    // cursor del reclutador (reportado). Congelamos el orden mientras confirmamos TU propio
+    // envío para que no reordene la lista en el momento del clic. Si estás scrolleado abajo,
+    // el congelado por scroll ya la sostiene; si estás arriba, se libera en cuanto llega el eco
+    // real del servidor para este candidato (ver el patch SSE más abajo) — no un timer a ciegas.
+    // El setTimeout de aquí es solo la RED DE SEGURIDAD si el eco nunca llega (falla de red):
+    // sin ella, un freeze podría quedarse pegado para siempre. Cubre banco/vacante/manual/plantilla.
+    const freezeListForSend = useCallback((candidateId) => {
+        sendFreezeCandidateIdRef.current = candidateId;
         if (!listFrozenRef.current) applyFreezeState(true);
         setTimeout(() => {
+            if (sendFreezeCandidateIdRef.current !== candidateId) return; // el eco ya llegó y liberó
+            sendFreezeCandidateIdRef.current = null;
             const sc = chatListScrollerRef.current;
-            // Libera solo si ya venció el hold y el reclutador está cerca del tope
-            // (si sigue scrolleado, el listener de scroll ya maneja la liberación).
-            if (Date.now() >= sendFreezeUntilRef.current && listFrozenRef.current && (!sc || sc.scrollTop < 80)) {
-                applyFreezeState(false);
-            }
-        }, 4100);
+            if (listFrozenRef.current && (!sc || sc.scrollTop < 80)) applyFreezeState(false);
+        }, 4000);
     }, [applyFreezeState]);
 
     const displayCandidates = useMemo(() => {
@@ -2094,90 +2092,36 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
     }, [visibleCandidates, filteredCandidates, freezeVersion]);
     displayCandidatesRef.current = displayCandidates;
 
-    // ── Anclaje de scroll de la lista de chats (evita el "brinco" al reordenar) ──
-    // Medido en vivo: al entrar actividad (mensaje/lead) estando scrolleado ABAJO, la lista
-    // brincaba ~159px (≈2 tarjetas) porque el scroll no compensa el reorden que ocurre
-    // arriba de la vista. Aquí mantenemos anclada la tarjeta que está arriba de tu vista:
-    // mientras se scrollea guardamos cuál es (id + offset en px), y al cambiar la lista la
-    // reponemos en el mismo lugar con scrollToIndex de Virtuoso dentro de un useLayoutEffect
-    // (corre ANTES del pintado → el brinco intermedio nunca se ve). Salvaguardas para no
-    // romper nada: si estás hasta arriba (scrollTop<40) NO se toca (leads nuevos siguen
-    // apareciendo arriba como hoy); si el cambio es grande (filtro/búsqueda) o el ancla ya
-    // no está en la lista, no se pelea.
+    // ── Compensación de scroll de la lista de chats ──
+    // Antes había aquí un sistema casero que leía el DOM interno de Virtuoso
+    // (`querySelectorAll('[data-index]')`, un detalle de implementación no público de la
+    // librería) para "anclar" la tarjeta superior y reponer el scroll a mano con
+    // scrollToIndex. Bajo tráfico real ese ajuste manual competía por el mismo scrollTop
+    // contra la compensación NATIVA de Virtuoso (mide cada fila con ResizeObserver y la
+    // sigue por `computeItemKey`, que aquí ya es `chat.id`) — dos sistemas corrigiendo lo
+    // mismo a la vez es lo que se sentía como "sube y baja". Se eliminó por completo en vez
+    // de dejarlo desactivado: Virtuoso ya resuelve esto por su cuenta si nadie le estorba.
     const chatListVirtuosoRef = useRef(null);
     const chatListScrollerRef = useRef(null);
-    const chatListAnchorRef = useRef(null);
-    const visibleCandidatesRef = useRef([]);
-    visibleCandidatesRef.current = visibleCandidates;
-    const prevVisibleLenRef = useRef(0);
-    const anchorRafRef = useRef(0);
-
-    const captureChatListAnchor = useCallback(() => {
-        const sc = chatListScrollerRef.current;
-        if (!sc) return;
-        if (sc.scrollTop < 40) { chatListAnchorRef.current = null; return; }
-        // Cerca del FONDO no anclamos: ahí no hay nada que compensar y el anclaje solo
-        // estorba a la paginación (cargar más al llegar al final) → parpadeo. Mismo criterio
-        // que la guardia de arriba, pero para el borde inferior.
-        if (sc.scrollHeight - sc.clientHeight - sc.scrollTop < 150) { chatListAnchorRef.current = null; return; }
-        const vTop = sc.getBoundingClientRect().top;
-        const cards = sc.querySelectorAll('[data-index]');
-        for (const card of cards) {
-            const r = card.getBoundingClientRect();
-            if (r.bottom > vTop + 4) { // primera tarjeta visible en el borde superior
-                const idx = Number(card.getAttribute('data-index'));
-                const id = visibleCandidatesRef.current[idx]?.id;
-                if (id != null) chatListAnchorRef.current = { id, index: idx, offset: Math.round(r.top - vTop) };
-                return;
-            }
-        }
-    }, []);
 
     const handleChatListScrollerRef = useCallback((el) => {
         chatListScrollerRef.current = el;
-        if (el && !el.__anchorHooked) {
-            el.__anchorHooked = true;
+        if (el && !el.__scrollListenerHooked) {
+            el.__scrollListenerHooked = true;
             el.addEventListener('scroll', () => {
-                // Congelar/liberar el orden según la posición (hysteresis para no titilar):
+                // Congelar/liberar el ORDEN según la posición (hysteresis para no titilar):
                 // congela al alejarte del tope (>80px), libera al volver (<20px). Barato: solo
                 // compara scrollTop y, si cambia el estado, dispara un único setState.
                 const st = el.scrollTop;
                 if (st > 80) { if (!listFrozenRef.current) applyFreezeState(true); }
-                else if (st < 20) { if (listFrozenRef.current && Date.now() >= sendFreezeUntilRef.current) applyFreezeState(false); }
-                if (anchorRafRef.current) return;
-                anchorRafRef.current = requestAnimationFrame(() => { anchorRafRef.current = 0; captureChatListAnchor(); });
+                else if (st < 20) {
+                    // No liberes por scroll mientras sigues esperando el eco de TU propio envío
+                    // (lo maneja freezeListForSend con su propia confirmación/respaldo).
+                    if (listFrozenRef.current && !sendFreezeCandidateIdRef.current) applyFreezeState(false);
+                }
             }, { passive: true });
         }
-    }, [captureChatListAnchor, applyFreezeState]);
-
-    useLayoutEffect(() => {
-        const sc = chatListScrollerRef.current;
-        const v = chatListVirtuosoRef.current;
-        const anchor = chatListAnchorRef.current;
-        const prevLen = prevVisibleLenRef.current;
-        prevVisibleLenRef.current = visibleCandidates.length;
-        // ⛔ DESACTIVADO: el anclaje compensaba el reordenamiento con scrollToIndex, pero bajo
-        // TRÁFICO real (muchos bumps al tope por segundo) disparaba un ajuste por cada reorden
-        // → la lista "subía y bajaba sola". No aguanta el alto tráfico. Se deja el código por si
-        // se retoma una versión coalescida/robusta. Ver regla feedback_chatweb_alto_trafico.
-        return;
-        // eslint-disable-next-line no-unreachable
-        if (!sc || !v || !anchor) return;
-        if (sc.scrollTop < 40) return;                                   // al tope: dejar fluir (como hoy)
-        if (Math.abs(visibleCandidates.length - prevLen) > 3) return;    // cambio grande (filtro): no anclar
-        const newIndex = visibleCandidates.findIndex(c => c.id === anchor.id);
-        if (newIndex < 0) return;                                        // el ancla ya no está: no pelear
-        // Si el ancla NO cambió de posición, no hay nada que compensar. Sin esto, cada
-        // actualización de fondo del SSE (presencia, otros candidatos) disparaba un
-        // scrollToIndex "no-op" que, por redondeo, arrastraba el scroll hacia arriba
-        // solito estando idle (micro-drift). Solo se corrige ante un reorden real.
-        if (newIndex === anchor.index) return;
-        // Si el ANCLA misma saltó al tope (su índice bajó mucho), NO la sigas hacia arriba:
-        // deja que se vaya de la vista (comportamiento nativo). Solo compensamos cuando el
-        // reorden ocurrió en OTRAS tarjetas (el índice del ancla se mantiene o sube).
-        if (typeof anchor.index === 'number' && newIndex < anchor.index - 2) return;
-        v.scrollToIndex({ index: newIndex, align: 'start', offset: -anchor.offset });
-    }, [visibleCandidates]);
+    }, [applyFreezeState]);
 
     // ── Entrada por CAMBIO DE ESTATUS: detecta tarjetas que RECIÉN pasan a matchear el
     // filtro actual (p.ej. un chat leído recibe mensaje → entra a "no leídos") para animar
@@ -2877,6 +2821,18 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                         }
                     })
                     .catch(() => {});
+            }
+
+            // Libera el freeze-on-send en cuanto llega la confirmación real del propio envío:
+            // `ultimoMensaje` es el campo que de verdad mueve el orden (ver el sort de
+            // filteredCandidates), así que su llegada para ESTE candidato es la prueba de que
+            // el servidor ya procesó el mensaje — no hace falta esperar al timer de respaldo.
+            if (sendFreezeCandidateIdRef.current === sseUpdate.candidateId && patch.ultimoMensaje) {
+                sendFreezeCandidateIdRef.current = null;
+                const sc = chatListScrollerRef.current;
+                if (listFrozenRef.current && (!sc || sc.scrollTop < 80)) {
+                    requestAnimationFrame(() => applyFreezeState(false));
+                }
             }
 
             // Also update selectedChat if it's the one that changed
@@ -3821,7 +3777,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
 
         setReplyingToMsg(null);
         isSendingRef.current = true;
-        freezeListForSend(); // que TU envío no reordene/brinque la lista izquierda
+        freezeListForSend(currentCandidateId); // que TU envío no reordene/brinque la lista izquierda
         // grupo con imágenes: 1 solo scroll al montar, sin snaps por carga/estado
         sendScrollHoldUntilRef.current = Date.now() + 2000;
 
@@ -3968,7 +3924,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         const _optimisticContent = `⚡ Plantilla oficial: *${_displayName}*\n\n${_bodyText}`.trim();
 
         isSendingRef.current = true;
-        freezeListForSend(); // que la plantilla no reordene/brinque la lista izquierda
+        freezeListForSend(currentCandidateId); // que la plantilla no reordene/brinque la lista izquierda
         sendScrollHoldUntilRef.current = Date.now() + 2000;
         updateChatMessages(currentCandidateId, prev => [...(prev || []), withMessageEntryAnimation({
             id: optimisticId,
