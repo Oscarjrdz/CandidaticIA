@@ -196,27 +196,26 @@ body {
     animation: chat-row-enter 200ms cubic-bezier(0.1, 0, 0.4, 1) forwards;
   }
 
-  /* Igual que arriba pero más lento (350ms) — solo para burbujas con MEDIA. Una imagen del
-     banco casi siempre ya está en caché (se vio en el preview antes de mandarla), así que
-     carga opaca desde el primer frame. Con 200ms el "se abre el espacio" pasaba
-     desapercibido — 350ms lo hace perceptible sin sentirse lento. Dura más que su propia
-     fase 2 (abajo, 290ms) a propósito: así el reveal siempre termina de último y nunca se
-     interrumpe a medias. */
+  /* Igual que arriba pero MÁS LENTA — solo para burbujas con MEDIA (700ms, el doble de la
+     versión anterior). Una imagen del banco casi siempre ya está en caché (se vio en el
+     preview antes de mandarla), así que carga opaca desde el primer frame. Dura más que su
+     propia fase 2 (abajo, 580ms) a propósito: así el reveal siempre termina de último y
+     nunca se interrumpe a medias. */
   .chat-message-row-enter-media {
-    -webkit-animation: chat-row-enter 350ms cubic-bezier(0.1, 0, 0.4, 1) forwards;
-    animation: chat-row-enter 350ms cubic-bezier(0.1, 0, 0.4, 1) forwards;
+    -webkit-animation: chat-row-enter 700ms cubic-bezier(0.1, 0, 0.4, 1) forwards;
+    animation: chat-row-enter 700ms cubic-bezier(0.1, 0, 0.4, 1) forwards;
   }
 
-  /* Phase 2 para MEDIA: mismo deslice (timing) que el texto, pero SOLO transform — sin
-     opacity, porque la imagen ya trae su propio fade (SmoothMediaImage) y duplicarlo ahí
-     era el parpadeo original. Le da a la burbuja de imagen el mismo "vivo" que el texto. */
+  /* Phase 2 para MEDIA: mismo deslice que el texto pero al doble de duración (igual que la
+     fase 1 de arriba), SOLO transform — sin opacity, porque la imagen ya trae su propio
+     fade (SmoothMediaImage) y duplicarlo ahí era el parpadeo original. */
   .chat-message-enter-media-outgoing {
-    -webkit-animation: chat-message-enter-media-outgoing 200ms ease-out 90ms forwards;
-    animation: chat-message-enter-media-outgoing 200ms ease-out 90ms forwards;
+    -webkit-animation: chat-message-enter-media-outgoing 400ms ease-out 180ms forwards;
+    animation: chat-message-enter-media-outgoing 400ms ease-out 180ms forwards;
   }
   .chat-message-enter-media-incoming {
-    -webkit-animation: chat-message-enter-media-incoming 200ms ease-out 90ms forwards;
-    animation: chat-message-enter-media-incoming 200ms ease-out 90ms forwards;
+    -webkit-animation: chat-message-enter-media-incoming 400ms ease-out 180ms forwards;
+    animation: chat-message-enter-media-incoming 400ms ease-out 180ms forwards;
   }
 
   /* Phase 2 — el globo entra deslizando temprano (delay 400→90ms) y con una duración

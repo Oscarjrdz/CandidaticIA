@@ -202,7 +202,7 @@ const MessageBubble = React.memo(function MessageBubble({
     const hasMedia = Boolean(msg.mediaUrl);
     // Fase 1 (fila abre el espacio, clip-path) aplica a CUALQUIER burbuja con entrada nueva,
     // media o no — no cambia layout, así que es Virtuoso-safe también para media. Para media
-    // usa la variante MÁS LENTA (350ms vs 200ms, ver index.css): una foto del banco casi
+    // usa la variante MÁS LENTA (700ms vs 200ms, ver index.css): una foto del banco casi
     // siempre ya está en caché y opaca desde el primer frame, sin el fade propio que sí
     // acompaña al texto — con 200ms el "se abre el espacio" pasaba desapercibido.
     const playRowEntry = playEntry;
@@ -248,8 +248,8 @@ const MessageBubble = React.memo(function MessageBubble({
                     // Avisa a quien esté esperando (p.ej. el envío escalonado del banco de
                     // respuestas en ChatSection.jsx) que ESTA burbuja ya terminó de entrar.
                     window.dispatchEvent(new CustomEvent(ENTRY_REVEALED_EVENT, { detail: { key: entryAnimationKey } }));
-                    // Para MEDIA, entryDone se marca AQUÍ (fin de fase 1, 350ms) y no con el fin
-                    // de su fase 2 (deslice, 290ms) — la fase 1 dura más a propósito (ver
+                    // Para MEDIA, entryDone se marca AQUÍ (fin de fase 1, 700ms) y no con el fin
+                    // de su fase 2 (deslice, 580ms) — la fase 1 dura más a propósito (ver
                     // index.css) para que sea SIEMPRE la última en terminar; si entryDone se
                     // marcara con la fase 2 más corta, rowEntryClass se quitaría a media
                     // animación e interrumpiría el reveal. Sin marcar entryDone en algún punto,
