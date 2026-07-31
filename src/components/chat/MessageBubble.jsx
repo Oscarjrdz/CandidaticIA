@@ -257,23 +257,22 @@ const MessageBubble = React.memo(function MessageBubble({
         <div
             ref={mediaRowRef}
             onAnimationEnd={(e) => {
-                if (e.animationName === 'chat-message-enter-outgoing' || e.animationName === 'chat-message-enter-incoming') setEntryDone(true);
+                // Fase 2 (deslice) es SIEMPRE la más larga — texto y media — así que es la
+                // que de verdad marca "esta burbuja ya terminó de entrar" y retira las clases.
+                // Si se marcara con la fase 1 (más corta, el espacio) se interrumpiría el
+                // deslice a medias. Sin marcar entryDone en algún punto, la clase se queda
+                // pegada → si Virtuoso remonta el nodo (frecuente bajo tráfico) el navegador
+                // reinicia la animación con la clase todavía puesta → parpadeo repetido.
+                if (e.animationName === 'chat-message-enter-outgoing' || e.animationName === 'chat-message-enter-incoming'
+                    || e.animationName === 'chat-message-enter-media-outgoing' || e.animationName === 'chat-message-enter-media-incoming') {
+                    setEntryDone(true);
+                }
                 // chat-row-enter = texto (clip-path); chat-row-grow = media (alto real, ver arriba)
+                // Solo avisa a quien esté esperando (p.ej. el envío escalonado del banco de
+                // respuestas en ChatSection.jsx) que el ESPACIO de esta burbuja ya está listo —
+                // no espera a que termine el deslice del contenido, igual que ya hacía texto.
                 if (e.animationName === 'chat-row-enter' || e.animationName === 'chat-row-grow') {
-                    // Avisa a quien esté esperando (p.ej. el envío escalonado del banco de
-                    // respuestas en ChatSection.jsx) que ESTA burbuja ya terminó de entrar.
                     window.dispatchEvent(new CustomEvent(ENTRY_REVEALED_EVENT, { detail: { key: entryAnimationKey } }));
-                    // Para MEDIA, entryDone se marca AQUÍ (fin de fase 1, 700ms) y no con el fin
-                    // de su fase 2 (deslice, 580ms) — la fase 1 dura más a propósito (ver
-                    // index.css) para que sea SIEMPRE la última en terminar; si entryDone se
-                    // marcara con la fase 2 más corta, rowEntryClass se quitaría a media
-                    // animación e interrumpiría el reveal (y dejaría el max-height a medio
-                    // crecer, pegado, para siempre). Sin marcar entryDone en algún punto, la
-                    // clase se queda pegada → si Virtuoso remonta el nodo (frecuente bajo
-                    // tráfico) el navegador reinicia la animación con la clase todavía puesta →
-                    // parpadeo repetido. Para texto esto NO aplica: su fase 2 (arriba) es la más
-                    // larga, así que ahí sí es la que de verdad lo termina.
-                    if (hasMedia) setEntryDone(true);
                 }
             }}
             className={`px-[5%] flex ${isMe ? 'justify-end' : 'justify-start'} group max-w-full relative ${!isFirstInSeries ? 'mt-0.5' : 'mt-2'} ${(msg.reactions && msg.reactions.length > 0) ? 'pb-5' : ''} ${rowEntryClass}`}>

@@ -201,14 +201,14 @@ body {
      MessageBubble.jsx — ver mediaRowRef). Con clip-path el espacio ya estaba reservado
      completo desde el primer frame (solo el CONTENIDO se veía animado), así que el mensaje
      de arriba se recorría de golpe al insertarse la fila. Creciendo el alto de verdad, lo
-     de arriba sube suave, empujado por el crecimiento — igual que WhatsApp real. 700ms (el
-     doble de la versión con clip-path), dura más que su propia fase 2 (abajo, 580ms) a
-     propósito: así el crecimiento siempre termina de último y nunca se interrumpe a medias
-     dejando el alto pegado a la mitad. overflow:hidden necesario para que max-height recorte
-     visualmente durante el crecimiento. */
+     de arriba sube suave, empujado por el crecimiento — igual que WhatsApp real. 350ms:
+     rápido a propósito (el "se abre el espacio" debe sentirse ágil) — TERMINA ANTES que su
+     propia fase 2 (abajo, 580ms), que es la que de verdad cierra la animación (ver
+     MessageBubble.jsx). overflow:hidden necesario para que max-height recorte visualmente
+     durante el crecimiento. */
   .chat-message-row-enter-media {
-    -webkit-animation: chat-row-grow 700ms cubic-bezier(0.1, 0, 0.4, 1) forwards;
-    animation: chat-row-grow 700ms cubic-bezier(0.1, 0, 0.4, 1) forwards;
+    -webkit-animation: chat-row-grow 350ms cubic-bezier(0.1, 0, 0.4, 1) forwards;
+    animation: chat-row-grow 350ms cubic-bezier(0.1, 0, 0.4, 1) forwards;
     overflow: hidden;
   }
 

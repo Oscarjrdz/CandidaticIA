@@ -163,9 +163,9 @@ const withMessageEntryAnimation = (message = {}, direction = null) => ({
 // banco de respuestas) en secuencia de verdad, no con un temporizador adivinado. El
 // fallback de tiempo es solo una red de seguridad (reduced-motion, o cualquier caso raro
 // donde el evento no dispare) para que el grupo nunca se quede atorado esperando — debe
-// quedar por ENCIMA de la fase 1 más lenta que existe (700ms para burbujas con media, ver
+// quedar por ENCIMA de la fase 1 más lenta que existe (350ms para burbujas con media, ver
 // MessageBubble.jsx/index.css), si no se adelanta siempre a la señal real.
-const BUBBLE_REVEAL_FALLBACK_MS = 800;
+const BUBBLE_REVEAL_FALLBACK_MS = 420;
 const waitForBubbleReveal = (key, fallbackMs = BUBBLE_REVEAL_FALLBACK_MS) => new Promise(resolve => {
     if (!key) { resolve(); return; }
     let done = false;
