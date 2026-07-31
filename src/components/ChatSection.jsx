@@ -20,7 +20,7 @@ import MessageInputBox from './chat/MessageInputBox';
 import AudioPlayer from './chat/AudioPlayer';
 import DateSeparator from './chat/DateSeparator';
 import ChatRow from './chat/ChatRow';
-import MessageBubble from './chat/MessageBubble';
+import MessageBubble, { ENTRY_REVEALED_EVENT } from './chat/MessageBubble';
 
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -156,6 +156,27 @@ const isIncomingAuthor = (message = {}) => !!message && !isOutgoingAuthor(messag
 const withMessageEntryAnimation = (message = {}, direction = null) => ({
     ...message,
     _animateIn: direction || (isOutgoingAuthor(message) ? 'outgoing' : 'incoming')
+});
+
+// Espera la señal REAL (ENTRY_REVEALED_EVENT desde MessageBubble.jsx) de que la burbuja
+// `key` terminó su fase 1 de entrada — usado para encolar un grupo (texto + fotos del
+// banco de respuestas) en secuencia de verdad, no con un temporizador adivinado. El
+// fallback de tiempo es solo una red de seguridad (reduced-motion, o cualquier caso raro
+// donde el evento no dispare) para que el grupo nunca se quede atorado esperando.
+const BUBBLE_REVEAL_FALLBACK_MS = 260;
+const waitForBubbleReveal = (key, fallbackMs = BUBBLE_REVEAL_FALLBACK_MS) => new Promise(resolve => {
+    if (!key) { resolve(); return; }
+    let done = false;
+    const finish = () => {
+        if (done) return;
+        done = true;
+        window.removeEventListener(ENTRY_REVEALED_EVENT, onEvent);
+        window.clearTimeout(fallbackTimer);
+        resolve();
+    };
+    const onEvent = (e) => { if (e.detail?.key === key) finish(); };
+    window.addEventListener(ENTRY_REVEALED_EVENT, onEvent);
+    const fallbackTimer = window.setTimeout(finish, fallbackMs);
 });
 
 const getMessageMediaCandidates = (message = {}) => [
@@ -3776,10 +3797,11 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         const lastTs = (messages || []).reduce((mx, m) => Math.max(mx, getMessageTime(m)), 0);
         const baseTime = Math.max(now, lastTs + 1);
 
+        let textOptimisticId = null;
         if (textMessage) {
-            const optimisticId = `temp-${now}-${Math.random().toString(36).slice(2, 6)}`;
+            textOptimisticId = `temp-${now}-${Math.random().toString(36).slice(2, 6)}`;
             updateChatMessages(currentCandidateId, prev => [...(prev || []), withMessageEntryAnimation({
-                id: optimisticId,
+                id: textOptimisticId,
                 content: textMessage,
                 tipo: 'text',
                 from: 'me',
@@ -3792,7 +3814,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
             outboxRef.current.queue.push({
                 candidateId: currentCandidateId,
                 groupId,
-                tempId: optimisticId,
+                tempId: textOptimisticId,
                 payload: {
                     candidateId: currentCandidateId,
                     message: textMessage,
@@ -3804,59 +3826,58 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
             });
         }
 
-        // ── Inyección ESCALONADA del grupo (texto → foto 1 → foto 2 …) ──
-        // Antes las 3 burbujas del "Punto Yageo" (texto + 2 fotos) montaban en el MISMO render
-        // → 3 burbujas altas de golpe → al mandar rápido, en el 3º/4º envío saturaba el layout y
-        // se veía parpadeo/freeze. Ahora cada imagen se inyecta ~150ms después de la anterior:
-        // el texto entra ya, y las fotos caen una por una dándole aire al layout/scroll para
-        // asentarse (cada una hace su fade + pin suave por su cuenta). El orden cronológico se
-        // mantiene por timestamp (baseTime+idx+1), así que el escalonado no lo altera. Los envíos
-        // reales siguen por el outbox (con su pausa de orden), pareado a cada burbuja para
-        // que el dedup optimista↔servidor nunca se rompa.
-        const IMAGE_STAGGER_MS = 150;
-        queuedImages.forEach((imgUrl, idx) => {
-            const tempImgId = `temp_img_${now}_${idx}`;
-            const enqueueImage = () => {
-                addSendingMedia(currentCandidateId);
-                updateChatMessages(currentCandidateId, prev => [...(prev || []), withMessageEntryAnimation({
-                    id: tempImgId,
-                    from: 'me',
-                    content: '',
-                    mediaUrl: imgUrl,
-                    _serverMediaUrl: imgUrl,
-                    type: 'image',
-                    status: 'queued',
-                    // +1ms por posición: el grupo entero nace en el mismo instante y el sort
-                    // cronológico necesita tiempos estrictamente crecientes (texto → foto 1 → 2 → 3)
-                    timestamp: new Date(baseTime + idx + 1).toISOString(),
-                    _clientAnchoredTime: true,
-                    _sequenceIndex: textMessage ? idx + 1 : idx
-                }, 'outgoing')]);
-                outboxRef.current.queue.push({
-                    candidateId: currentCandidateId,
-                    groupId,
-                    tempId: tempImgId,
-                    isImage: true,
-                    gapBefore: Boolean(textMessage) || idx > 0,
-                    payload: {
-                        candidateId: currentCandidateId,
-                        message: '',
-                        type: 'image',
+        // ── Inyección SECUENCIAL del grupo (texto → foto 1 → foto 2 …) ──
+        // Cada burbuja espera la señal REAL de que la anterior terminó de entrar (evento
+        // ENTRY_REVEALED_EVENT que dispara MessageBubble.jsx al terminar su fase 1) antes de
+        // inyectar la siguiente — no un temporizador adivinado. Si mandas rápido varias veces,
+        // cada burbuja sigue teniendo su entrada completa y visible, nunca a medias. El orden
+        // cronológico se mantiene por timestamp (baseTime+idx+1); los envíos reales siguen por
+        // el outbox (con su pausa de orden), pareado a cada burbuja para que el dedup
+        // optimista↔servidor nunca se rompa.
+        if (queuedImages.length > 0) {
+            (async () => {
+                if (textOptimisticId) await waitForBubbleReveal(textOptimisticId);
+                for (let idx = 0; idx < queuedImages.length; idx++) {
+                    const imgUrl = queuedImages[idx];
+                    const tempImgId = `temp_img_${now}_${idx}`;
+                    addSendingMedia(currentCandidateId);
+                    updateChatMessages(currentCandidateId, prev => [...(prev || []), withMessageEntryAnimation({
+                        id: tempImgId,
+                        from: 'me',
+                        content: '',
                         mediaUrl: imgUrl,
-                        senderId,
-                        senderName
-                    },
-                    normalizeResponse: (messageData) => ({ ...messageData, status: messageData.status || 'sent' })
-                });
-                // renueva la ventana de scroll suave para que ESTA foto también baje sin brinco
-                sendScrollHoldUntilRef.current = Date.now() + 1200;
-                processOutbox().catch(() => {});
-            };
-            // slot 0 = inmediato (el texto, si existe, ya ocupa ese instante); el resto escalonado
-            const slot = idx + (textMessage ? 1 : 0);
-            if (slot === 0) enqueueImage();
-            else setTimeout(enqueueImage, IMAGE_STAGGER_MS * slot);
-        });
+                        _serverMediaUrl: imgUrl,
+                        type: 'image',
+                        status: 'queued',
+                        // +1ms por posición: el grupo entero nace en el mismo instante y el sort
+                        // cronológico necesita tiempos estrictamente crecientes (texto → foto 1 → 2 → 3)
+                        timestamp: new Date(baseTime + idx + 1).toISOString(),
+                        _clientAnchoredTime: true,
+                        _sequenceIndex: textMessage ? idx + 1 : idx
+                    }, 'outgoing')]);
+                    outboxRef.current.queue.push({
+                        candidateId: currentCandidateId,
+                        groupId,
+                        tempId: tempImgId,
+                        isImage: true,
+                        gapBefore: Boolean(textMessage) || idx > 0,
+                        payload: {
+                            candidateId: currentCandidateId,
+                            message: '',
+                            type: 'image',
+                            mediaUrl: imgUrl,
+                            senderId,
+                            senderName
+                        },
+                        normalizeResponse: (messageData) => ({ ...messageData, status: messageData.status || 'sent' })
+                    });
+                    // renueva la ventana de scroll suave para que ESTA foto también baje sin brinco
+                    sendScrollHoldUntilRef.current = Date.now() + 1200;
+                    processOutbox().catch(() => {});
+                    if (idx < queuedImages.length - 1) await waitForBubbleReveal(tempImgId);
+                }
+            })();
+        }
 
         // Arranca el envío del texto de inmediato (las fotos se autoencolan al inyectarse)
         processOutbox().catch(() => {});
