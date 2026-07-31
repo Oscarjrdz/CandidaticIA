@@ -1994,13 +1994,15 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
             tsCache.set(c.id, c.ultimoMensaje ? new Date(c.ultimoMensaje).getTime() : 0);
         }
 
-        // WhatsApp-Native Sort: Pinned first → then strictly chronological
+        // WhatsApp-Native Sort: Pinned first → then strictly chronological (with deterministic tie-breaker)
         return result.sort((a, b) => {
             const aPinned = pinnedChats.includes(a.id);
             const bPinned = pinnedChats.includes(b.id);
             if (aPinned && !bPinned) return -1;
             if (!aPinned && bPinned) return 1;
-            return (tsCache.get(b.id) || 0) - (tsCache.get(a.id) || 0);
+            const diff = (tsCache.get(b.id) || 0) - (tsCache.get(a.id) || 0);
+            if (diff !== 0) return diff;
+            return String(b.id || '').localeCompare(String(a.id || ''));
         });
     }, [
         candidates, user,
@@ -2048,15 +2050,20 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
     // el congelado por scroll ya la sostiene; si estás arriba, se libera sola al expirar (salto
     // desacoplado del clic, calmado) o cuando vuelves al tope. Cubre banco/vacante/manual/plantilla.
     const freezeListForSend = useCallback(() => {
-        sendFreezeUntilRef.current = Date.now() + 2500;
+        // 4 s cubre: el envío optimista + el eco SSE del servidor (~200-800ms) +
+        // los patches de badge/unread que llegan en cadena tras el mensaje.
+        // Con 2.5 s el eco del servidor llegaba justo fuera de la ventana y
+        // disparaba el sort → la lista brincaba ~1 tarjeta hacia arriba.
+        sendFreezeUntilRef.current = Date.now() + 4000;
         if (!listFrozenRef.current) applyFreezeState(true);
         setTimeout(() => {
             const sc = chatListScrollerRef.current;
-            // libera solo si ya venció el hold y NO estás scrolleado abajo (ahí manda el scroll)
+            // Libera solo si ya venció el hold y el reclutador está cerca del tope
+            // (si sigue scrolleado, el listener de scroll ya maneja la liberación).
             if (Date.now() >= sendFreezeUntilRef.current && listFrozenRef.current && (!sc || sc.scrollTop < 80)) {
                 applyFreezeState(false);
             }
-        }, 2600);
+        }, 4100);
     }, [applyFreezeState]);
 
     const displayCandidates = useMemo(() => {
@@ -2848,11 +2855,13 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                         if (patch.lastHumanMessageAt !== undefined) updated.lastHumanMessageAt = patch.lastHumanMessageAt;
                         return updated;
                     });
-                    // Bubble to top on new message so chat list stays sorted like WhatsApp
-                    if (patch.newMessage) {
-                        const idx = mapped.findIndex(c => c.id === sseUpdate.candidateId);
-                        if (idx > 0) return [mapped[idx], ...mapped.slice(0, idx), ...mapped.slice(idx + 1)];
-                    }
+                    // ⚠️ Bubble-up manual ELIMINADO: antes se movía el candidato al
+                    // índice 0 del array base aquí mismo. Pero filteredCandidates ya
+                    // aplica un .sort() cronológico sobre ese array, así que el
+                    // reordenamiento ocurría DOS VECES en rápida sucesión (una aquí y
+                    // otra en el sort) → dos renders → brinco visible en la lista.
+                    // El sort de filteredCandidates lo maneja solo con el ultimoMensaje
+                    // actualizado; no es necesario preordenar el array base.
                     return mapped;
                 });
             } else if (patch.lastUserMessageAt || patch.ultimoMensaje) {

@@ -57,7 +57,11 @@ const ChatRow = React.memo(({ chat, isSelected, isPinned, onSelect, onBlock, onD
         // Solo el lead NUEVO se recuerda en el Set permanente (nace una vez). La entrada por
         // cambio de estatus va por timestamp para poder re-animar en cada re-entrada.
         if (entryDecisionRef.current.isNewLead) rememberCardEntry(chat.id);
-    }, [chat.id]);
+        if (shouldAnimateEntry) {
+            const timer = setTimeout(() => setEntryPlayed(true), 320);
+            return () => clearTimeout(timer);
+        }
+    }, [chat.id, shouldAnimateEntry]);
 
     return (
         <div
@@ -234,7 +238,8 @@ const ChatRow = React.memo(({ chat, isSelected, isPinned, onSelect, onBlock, onD
         readersSignature(prevProps.onlineReaders) === readersSignature(nextProps.onlineReaders) &&
         prevProps.userId === nextProps.userId &&
         prevProps.tagColorMap === nextProps.tagColorMap &&
-        prevProps.lock === nextProps.lock
+        prevProps.lock === nextProps.lock &&
+        prevProps.isEnteringFilter === nextProps.isEnteringFilter
     );
 });
 
