@@ -207,16 +207,19 @@ const MessageBubble = React.memo(function MessageBubble({
     // acompaña al texto — con 200ms el "se abre el espacio" pasaba desapercibido.
     const playRowEntry = playEntry;
     const rowEntryClass = playRowEntry ? (hasMedia ? 'chat-message-row-enter-media' : 'chat-message-row-enter') : '';
-    // Fase 2 (el globo ENTERO se desliza+fade) solo para SIN media: una burbuja con imagen ya
-    // tiene su propio fade en SmoothMediaImage, y animar el globo completo ENCIMA de eso (dos
-    // transiciones de opacidad apiladas en elementos distintos) era el doble-fade/parpadeo de
-    // antes. La fase 1 (fila, clip-path) NO es una animación de opacidad — es una máscara que
-    // revela — así que corre EN PARALELO con el fade propio de la imagen, no antes: el marco se
-    // abre mientras la foto se desvanece hacia adentro, como un solo movimiento (igual que en
-    // texto se ve la fila abrirse Y el contenido aparecer juntos, no en dos pasos separados).
-    const playBubbleEntry = playEntry && !hasMedia;
+    // Fase 2 aplica a CUALQUIER burbuja, pero distinta según media o no:
+    //   • SIN media: desliza + fade (opacity incluida) — como siempre.
+    //   • CON media: SOLO desliza (transform, sin opacity) — la imagen ya tiene su propio
+    //     fade en SmoothMediaImage, y animar opacidad AQUÍ TAMBIÉN era el doble-fade/parpadeo
+    //     de antes. Así la burbuja de imagen se siente igual de "viva" que la de texto (mismo
+    //     movimiento) sin duplicar el fundido. La fase 1 (fila, clip-path) corre en paralelo
+    //     con el fade propio de la imagen — el marco se abre mientras la foto se desvanece
+    //     hacia adentro, como un solo movimiento coordinado.
+    const playBubbleEntry = playEntry;
     const bubbleEntryClass = playBubbleEntry
-        ? (isMe ? 'chat-message-enter-outgoing' : 'chat-message-enter-incoming')
+        ? (hasMedia
+            ? (isMe ? 'chat-message-enter-media-outgoing' : 'chat-message-enter-media-incoming')
+            : (isMe ? 'chat-message-enter-outgoing' : 'chat-message-enter-incoming'))
         : '';
 
     React.useEffect(() => {
@@ -232,8 +235,10 @@ const MessageBubble = React.memo(function MessageBubble({
     }, [shouldPlayEntryAnimation, entryAnimationKey, isMe]);
 
     // Bubble starts invisible; CSS animation overrides once it fires. Se retira con entryDone.
-    // Solo para burbujas SIN media (las de media no animan el globo → no deben nacer invisibles).
-    const bubbleEntryStyle = playBubbleEntry ? { opacity: 0 } : undefined;
+    // Solo para burbujas SIN media: la de media no anima opacidad en este nivel (la maneja
+    // SmoothMediaImage por su cuenta) — arrancar en opacity:0 aquí ocultaría también el marco
+    // gris de fondo, que sí debe verse desde el primer frame de la fase 1.
+    const bubbleEntryStyle = (playBubbleEntry && !hasMedia) ? { opacity: 0 } : undefined;
 
     return (
         <div
@@ -243,12 +248,15 @@ const MessageBubble = React.memo(function MessageBubble({
                     // Avisa a quien esté esperando (p.ej. el envío escalonado del banco de
                     // respuestas en ChatSection.jsx) que ESTA burbuja ya terminó de entrar.
                     window.dispatchEvent(new CustomEvent(ENTRY_REVEALED_EVENT, { detail: { key: entryAnimationKey } }));
-                    // Para MEDIA no hay fase 2 de burbuja (bubbleEntryClass nunca se aplica) —
-                    // chat-row-enter ES toda la animación de entrada. Sin marcar entryDone aquí,
-                    // rowEntryClass se quedaba pegado para siempre → si Virtuoso remonta el nodo
+                    // Para MEDIA, entryDone se marca AQUÍ (fin de fase 1, 350ms) y no con el fin
+                    // de su fase 2 (deslice, 290ms) — la fase 1 dura más a propósito (ver
+                    // index.css) para que sea SIEMPRE la última en terminar; si entryDone se
+                    // marcara con la fase 2 más corta, rowEntryClass se quitaría a media
+                    // animación e interrumpiría el reveal. Sin marcar entryDone en algún punto,
+                    // la clase se queda pegada para siempre → si Virtuoso remonta el nodo
                     // (frecuente bajo tráfico) el navegador reinicia la animación con la clase
-                    // todavía puesta → parpadeo repetido. Para texto esto NO aplica: su entryDone
-                    // sigue esperando la fase 2 (arriba), que es la que de verdad lo termina.
+                    // todavía puesta → parpadeo repetido. Para texto esto NO aplica: su fase 2
+                    // (arriba) es la más larga, así que ahí sí es la que de verdad lo termina.
                     if (hasMedia) setEntryDone(true);
                 }
             }}
