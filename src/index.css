@@ -202,26 +202,27 @@ body {
      completo desde el primer frame (solo el CONTENIDO se veía animado), así que el mensaje
      de arriba se recorría de golpe al insertarse la fila. Creciendo el alto de verdad, lo
      de arriba sube suave, empujado por el crecimiento — igual que WhatsApp real. 350ms:
-     rápido a propósito (el "se abre el espacio" debe sentirse ágil) — TERMINA ANTES que su
-     propia fase 2 (abajo, 580ms), que es la que de verdad cierra la animación (ver
-     MessageBubble.jsx). overflow:hidden necesario para que max-height recorte visualmente
-     durante el crecimiento. */
+     rápido a propósito (el "se abre el espacio" debe sentirse ágil) — la fase 2 (abajo)
+     arranca EXACTO cuando esta termina (delay = 350ms, no antes) y es la que de verdad
+     cierra la animación (ver MessageBubble.jsx). overflow:hidden necesario para que
+     max-height recorte visualmente durante el crecimiento. */
   .chat-message-row-enter-media {
     -webkit-animation: chat-row-grow 350ms cubic-bezier(0.1, 0, 0.4, 1) forwards;
     animation: chat-row-grow 350ms cubic-bezier(0.1, 0, 0.4, 1) forwards;
     overflow: hidden;
   }
 
-  /* Phase 2 para MEDIA: mismo deslice que el texto pero al doble de duración (igual que la
-     fase 1 de arriba), SOLO transform — sin opacity, porque la imagen ya trae su propio
-     fade (SmoothMediaImage) y duplicarlo ahí era el parpadeo original. */
+  /* Phase 2 para MEDIA: SOLO transform — sin opacity, porque la imagen ya trae su propio
+     fade (SmoothMediaImage) y duplicarlo ahí era el parpadeo original. Delay = 350ms, EXACTO
+     a la duración de la fase 1 (arriba): la imagen no empieza a entrar hasta que el espacio
+     terminó de abrirse al 100%, en vez de traslaparse con el crecimiento. */
   .chat-message-enter-media-outgoing {
-    -webkit-animation: chat-message-enter-media-outgoing 400ms ease-out 180ms forwards;
-    animation: chat-message-enter-media-outgoing 400ms ease-out 180ms forwards;
+    -webkit-animation: chat-message-enter-media-outgoing 400ms ease-out 350ms forwards;
+    animation: chat-message-enter-media-outgoing 400ms ease-out 350ms forwards;
   }
   .chat-message-enter-media-incoming {
-    -webkit-animation: chat-message-enter-media-incoming 400ms ease-out 180ms forwards;
-    animation: chat-message-enter-media-incoming 400ms ease-out 180ms forwards;
+    -webkit-animation: chat-message-enter-media-incoming 400ms ease-out 350ms forwards;
+    animation: chat-message-enter-media-incoming 400ms ease-out 350ms forwards;
   }
 
   /* Phase 2 — el globo entra deslizando temprano (delay 400→90ms) y con una duración
