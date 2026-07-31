@@ -254,6 +254,13 @@ const MessageBubble = React.memo(function MessageBubble({
                     // Avisa a quien esté esperando (p.ej. el envío escalonado del banco de
                     // respuestas en ChatSection.jsx) que ESTA burbuja ya terminó de entrar.
                     window.dispatchEvent(new CustomEvent(ENTRY_REVEALED_EVENT, { detail: { key: entryAnimationKey } }));
+                    // Para MEDIA no hay fase 2 de burbuja (bubbleEntryClass nunca se aplica) —
+                    // chat-row-enter ES toda la animación de entrada. Sin marcar entryDone aquí,
+                    // rowEntryClass se quedaba pegado para siempre → si Virtuoso remonta el nodo
+                    // (frecuente bajo tráfico) el navegador reinicia la animación con la clase
+                    // todavía puesta → parpadeo repetido. Para texto esto NO aplica: su entryDone
+                    // sigue esperando la fase 2 (arriba), que es la que de verdad lo termina.
+                    if (hasMedia) setEntryDone(true);
                 }
             }}
             className={`px-[5%] flex ${isMe ? 'justify-end' : 'justify-start'} group max-w-full relative ${!isFirstInSeries ? 'mt-0.5' : 'mt-2'} ${(msg.reactions && msg.reactions.length > 0) ? 'pb-5' : ''} ${rowEntryClass}`}>

@@ -70,7 +70,12 @@ const ChatRow = React.memo(({ chat, isSelected, isPinned, onSelect, onBlock, onD
 
     return (
         <div
-            data-pivot={isSelected ? 'true' : undefined}
+            // Un pivote que está SALIENDO (isLeaving) deja de marcarse como pivote: su
+            // colapso es intencional (lo disparó tu propio envío, no hace falta ancla — ver
+            // ChatSection.jsx) y si el efecto de ancla lo siguiera tratando como pivote,
+            // pelearía contra la animación de colapso intentando "corregir" un encogimiento
+            // que no es un reordenamiento real → temblor.
+            data-pivot={isSelected && !isLeaving ? 'true' : undefined}
             onClick={() => { if (!isLeaving) onSelect(chat); }}
             onAnimationEnd={(e) => { if (e.animationName === 'chat-card-enter') setEntryPlayed(true); }}
             className={`group flex items-center px-3 py-3 cursor-pointer hover:bg-[#f5f6f6] dark:hover:bg-[#202c33] transition-colors duration-100 border-l-0 md:border-l-4 ${isLeaving ? 'chat-card-exit pointer-events-none' : (shouldAnimateEntry ? 'chat-card-enter' : '')} ${isSelected ? 'bg-[#f0f2f5] dark:bg-[#2a3942] border-[#25d366] dark:border-[#00a884] md:shadow-sm md:relative md:z-10' : 'border-transparent'}`}
