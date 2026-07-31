@@ -200,13 +200,26 @@ const MessageBubble = React.memo(function MessageBubble({
     const [entryDone, setEntryDone] = React.useState(false);
     const playEntry = shouldPlayEntryAnimation && !entryDone;
     const hasMedia = Boolean(msg.mediaUrl);
-    // Fase 1 (fila abre el espacio, clip-path) aplica a CUALQUIER burbuja con entrada nueva,
-    // media o no — no cambia layout, así que es Virtuoso-safe también para media. Para media
-    // usa la variante MÁS LENTA (700ms vs 200ms, ver index.css): una foto del banco casi
-    // siempre ya está en caché y opaca desde el primer frame, sin el fade propio que sí
-    // acompaña al texto — con 200ms el "se abre el espacio" pasaba desapercibido.
+    // Fase 1 (fila abre el espacio) aplica a CUALQUIER burbuja con entrada nueva, con dos
+    // técnicas distintas:
+    //   • SIN media: clip-path (no cambia el layout, solo revela) — como siempre.
+    //   • CON media: el ESPACIO REAL crece (max-height 0 → alto real medido). Con clip-path
+    //     el alto de la fila ya estaba reservado completo desde el primer frame (es una
+    //     máscara, no layout), así que lo de ARRIBA se recorría de golpe al insertarse la
+    //     fila — solo el contenido adentro se veía animado. Creciendo el alto de verdad, lo
+    //     de arriba sube suave, empujado por el crecimiento (igual que WhatsApp real).
     const playRowEntry = playEntry;
     const rowEntryClass = playRowEntry ? (hasMedia ? 'chat-message-row-enter-media' : 'chat-message-row-enter') : '';
+    // Mide el alto REAL del contenido (no se adivina un número fijo — así nunca se corta ni
+    // sobra espacio según lo que traiga la burbuja) y lo pasa como variable CSS para que la
+    // animación de crecimiento (arriba) sepa a qué alto final animar. scrollHeight mide el
+    // contenido real aunque esté clippeado por el max-height:0 inicial de la animación.
+    const mediaRowRef = React.useRef(null);
+    React.useLayoutEffect(() => {
+        if (!hasMedia || !playRowEntry) return;
+        const el = mediaRowRef.current;
+        if (el) el.style.setProperty('--row-target-height', `${el.scrollHeight}px`);
+    }, []);
     // Fase 2 aplica a CUALQUIER burbuja, pero distinta según media o no:
     //   • SIN media: desliza + fade (opacity incluida) — como siempre.
     //   • CON media: SOLO desliza (transform, sin opacity) — la imagen ya tiene su propio
@@ -242,9 +255,11 @@ const MessageBubble = React.memo(function MessageBubble({
 
     return (
         <div
+            ref={mediaRowRef}
             onAnimationEnd={(e) => {
                 if (e.animationName === 'chat-message-enter-outgoing' || e.animationName === 'chat-message-enter-incoming') setEntryDone(true);
-                if (e.animationName === 'chat-row-enter') {
+                // chat-row-enter = texto (clip-path); chat-row-grow = media (alto real, ver arriba)
+                if (e.animationName === 'chat-row-enter' || e.animationName === 'chat-row-grow') {
                     // Avisa a quien esté esperando (p.ej. el envío escalonado del banco de
                     // respuestas en ChatSection.jsx) que ESTA burbuja ya terminó de entrar.
                     window.dispatchEvent(new CustomEvent(ENTRY_REVEALED_EVENT, { detail: { key: entryAnimationKey } }));
@@ -252,11 +267,12 @@ const MessageBubble = React.memo(function MessageBubble({
                     // de su fase 2 (deslice, 580ms) — la fase 1 dura más a propósito (ver
                     // index.css) para que sea SIEMPRE la última en terminar; si entryDone se
                     // marcara con la fase 2 más corta, rowEntryClass se quitaría a media
-                    // animación e interrumpiría el reveal. Sin marcar entryDone en algún punto,
-                    // la clase se queda pegada para siempre → si Virtuoso remonta el nodo
-                    // (frecuente bajo tráfico) el navegador reinicia la animación con la clase
-                    // todavía puesta → parpadeo repetido. Para texto esto NO aplica: su fase 2
-                    // (arriba) es la más larga, así que ahí sí es la que de verdad lo termina.
+                    // animación e interrumpiría el reveal (y dejaría el max-height a medio
+                    // crecer, pegado, para siempre). Sin marcar entryDone en algún punto, la
+                    // clase se queda pegada → si Virtuoso remonta el nodo (frecuente bajo
+                    // tráfico) el navegador reinicia la animación con la clase todavía puesta →
+                    // parpadeo repetido. Para texto esto NO aplica: su fase 2 (arriba) es la más
+                    // larga, así que ahí sí es la que de verdad lo termina.
                     if (hasMedia) setEntryDone(true);
                 }
             }}

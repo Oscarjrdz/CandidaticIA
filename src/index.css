@@ -196,14 +196,20 @@ body {
     animation: chat-row-enter 200ms cubic-bezier(0.1, 0, 0.4, 1) forwards;
   }
 
-  /* Igual que arriba pero MÁS LENTA — solo para burbujas con MEDIA (700ms, el doble de la
-     versión anterior). Una imagen del banco casi siempre ya está en caché (se vio en el
-     preview antes de mandarla), así que carga opaca desde el primer frame. Dura más que su
-     propia fase 2 (abajo, 580ms) a propósito: así el reveal siempre termina de último y
-     nunca se interrumpe a medias. */
+  /* Fase 1 para MEDIA: a diferencia de chat-row-enter (clip-path, no cambia layout), esta
+     anima el ALTO REAL de la fila (0 → --row-target-height, medida por JS en
+     MessageBubble.jsx — ver mediaRowRef). Con clip-path el espacio ya estaba reservado
+     completo desde el primer frame (solo el CONTENIDO se veía animado), así que el mensaje
+     de arriba se recorría de golpe al insertarse la fila. Creciendo el alto de verdad, lo
+     de arriba sube suave, empujado por el crecimiento — igual que WhatsApp real. 700ms (el
+     doble de la versión con clip-path), dura más que su propia fase 2 (abajo, 580ms) a
+     propósito: así el crecimiento siempre termina de último y nunca se interrumpe a medias
+     dejando el alto pegado a la mitad. overflow:hidden necesario para que max-height recorte
+     visualmente durante el crecimiento. */
   .chat-message-row-enter-media {
-    -webkit-animation: chat-row-enter 700ms cubic-bezier(0.1, 0, 0.4, 1) forwards;
-    animation: chat-row-enter 700ms cubic-bezier(0.1, 0, 0.4, 1) forwards;
+    -webkit-animation: chat-row-grow 700ms cubic-bezier(0.1, 0, 0.4, 1) forwards;
+    animation: chat-row-grow 700ms cubic-bezier(0.1, 0, 0.4, 1) forwards;
+    overflow: hidden;
   }
 
   /* Phase 2 para MEDIA: mismo deslice que el texto pero al doble de duración (igual que la
@@ -262,6 +268,19 @@ body {
 @keyframes chat-row-enter {
   0%   { clip-path: inset(0 0 100% 0); }
   100% { clip-path: none; }
+}
+
+/* Phase 1 para MEDIA: crece el alto REAL de la fila (0 → medido por JS), en vez de solo
+   revelar con máscara — ver .chat-message-row-enter-media arriba. --row-target-height la
+   pone MessageBubble.jsx antes de que arranque la animación; 340px es el respaldo por si
+   ese JS no llegó a tiempo (no debería pasar, pero así nunca se queda en 0). */
+@-webkit-keyframes chat-row-grow {
+  from { max-height: 0; }
+  to   { max-height: var(--row-target-height, 340px); }
+}
+@keyframes chat-row-grow {
+  from { max-height: 0; }
+  to   { max-height: var(--row-target-height, 340px); }
 }
 
 /* Phase 2: bubble slides in from the right (outgoing) */
