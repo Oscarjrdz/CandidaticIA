@@ -2032,52 +2032,87 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
     const leavingCandidatesRef = useRef(leavingCandidates);
     leavingCandidatesRef.current = leavingCandidates;
     const prevFilteredIdsRef = useRef(null);
+    const prevFilterSigRef = useRef(null);
 
-    // Cambio de filtro/búsqueda: no es un candidato "dejando de cumplir", es un conjunto
-    // nuevo completo — se limpia cualquier salida en curso y no se animan salidas masivas.
-    useEffect(() => {
-        prevFilteredIdsRef.current = null;
-        setLeavingCandidates(prev => (prev.size === 0 ? prev : new Map()));
-    }, [chatFilterSignature]);
-
-    useEffect(() => {
-        const currentIds = new Set(filteredCandidates.map(c => c.id));
+    // Detecta CAMBIO DE FILTRO y salidas/reingresos, los dos DURANTE el render (patrón
+    // oficial de React "adjusting state while rendering"), no en un useEffect posterior.
+    // Las dos cosas deben resolverse en el MISMO paso: si el reset por cambio de filtro
+    // viviera en un efecto aparte (como antes), en el primer render tras cambiar de filtro
+    // esta comparación ya vería el conjunto nuevo completo contra la referencia VIEJA (el
+    // efecto de reset aún no corrió) y marcaría salidas masivas falsas por una fracción de
+    // segundo, hasta que el efecto las corrigiera — un parpadeo visible aparte. Y sin
+    // detectar la salida real AQUÍ (en vez de en un efecto), había otro parpadeo: el
+    // candidato ya desaparecía de filteredCandidates en este render, pero el "fantasma"
+    // recién se creaba en el SIGUIENTE — muy notorio en listas cortas (filtro angosto tipo
+    // No leídos + una etiqueta). Solo el TEMPORIZADOR de retiro final (abajo) sigue en un
+    // efecto — eso sí es seguro después del render, ya decide CUÁNDO, no SI aparece.
+    const currentFilteredIds = useMemo(() => new Set(filteredCandidates.map(c => c.id)), [filteredCandidates]);
+    const filterJustChanged = prevFilterSigRef.current !== null && prevFilterSigRef.current !== chatFilterSignature;
+    if (filterJustChanged) {
+        // Cambio de filtro/búsqueda: no es un candidato "dejando de cumplir", es un
+        // conjunto nuevo completo — se limpia cualquier salida en curso sin animar de más.
+        if (leavingCandidatesRef.current.size > 0) {
+            leavingCandidatesRef.current = new Map();
+            setLeavingCandidates(new Map());
+        }
+    } else if (prevFilteredIdsRef.current && prevFilteredIdsRef.current !== currentFilteredIds) {
         const prevIds = prevFilteredIdsRef.current;
-        if (prevIds) {
-            const departed = [];
-            prevIds.forEach(id => { if (!currentIds.has(id)) departed.push(id); });
-            if (departed.length > 0) {
-                setLeavingCandidates(prev => {
-                    const next = new Map(prev);
-                    let changed = false;
-                    departed.forEach(id => {
-                        if (next.has(id)) return;
-                        const snap = candidatesRef.current.find(c => c.id === id);
-                        if (snap) { next.set(id, snap); changed = true; }
-                    });
-                    return changed ? next : prev;
-                });
-                departed.forEach(id => {
-                    setTimeout(() => {
-                        setLeavingCandidates(prev => {
-                            if (!prev.has(id)) return prev;
-                            const next = new Map(prev);
-                            next.delete(id);
-                            return next;
-                        });
-                    }, CHAT_EXIT_ANIM_MS);
-                });
-            }
+        const departed = [];
+        prevIds.forEach(id => { if (!currentFilteredIds.has(id)) departed.push(id); });
+
+        if (departed.length > 0 || leavingCandidatesRef.current.size > 0) {
+            const next = new Map(leavingCandidatesRef.current);
+            let changed = false;
+            departed.forEach(id => {
+                if (next.has(id)) return;
+                const snap = candidates.find(c => c.id === id);
+                if (snap) { next.set(id, snap); changed = true; }
+            });
             // Reingresó antes de terminar la animación (p.ej. te volvió a escribir) → cancelar salida
-            if (leavingCandidatesRef.current.size > 0) {
-                let reentered = false;
-                const next = new Map(leavingCandidatesRef.current);
-                next.forEach((_candidate, id) => { if (currentIds.has(id)) { next.delete(id); reentered = true; } });
-                if (reentered) setLeavingCandidates(next);
+            next.forEach((_candidate, id) => {
+                if (currentFilteredIds.has(id)) { next.delete(id); changed = true; }
+            });
+            if (changed) {
+                leavingCandidatesRef.current = next;
+                setLeavingCandidates(next);
             }
         }
-        prevFilteredIdsRef.current = currentIds;
-    }, [filteredCandidates]);
+    }
+    // Se actualizan SIEMPRE, sin importar qué rama corrió arriba (o ninguna, en el primer
+    // render) — así la próxima comparación siempre parte de una referencia real, nunca null.
+    prevFilteredIdsRef.current = currentFilteredIds;
+    prevFilterSigRef.current = chatFilterSignature;
+
+    // Temporizador de retiro final — sí puede vivir en un efecto: solo decide CUÁNDO se
+    // quita del todo la burbuja fantasma, no si aparece (eso ya se decidió arriba, en el
+    // mismo render). Un ref evita reprogramar el mismo id dos veces y cancela el timer
+    // huérfano si el candidato reingresó antes de que disparara.
+    const leavingTimersRef = useRef(new Map());
+    useEffect(() => {
+        leavingCandidates.forEach((_candidate, id) => {
+            if (leavingTimersRef.current.has(id)) return;
+            const timer = setTimeout(() => {
+                leavingTimersRef.current.delete(id);
+                setLeavingCandidates(prev => {
+                    if (!prev.has(id)) return prev;
+                    const next = new Map(prev);
+                    next.delete(id);
+                    return next;
+                });
+            }, CHAT_EXIT_ANIM_MS);
+            leavingTimersRef.current.set(id, timer);
+        });
+        leavingTimersRef.current.forEach((timer, id) => {
+            if (!leavingCandidates.has(id)) {
+                clearTimeout(timer);
+                leavingTimersRef.current.delete(id);
+            }
+        });
+    }, [leavingCandidates]);
+    useEffect(() => () => {
+        leavingTimersRef.current.forEach(timer => clearTimeout(timer));
+        leavingTimersRef.current.clear();
+    }, []);
 
     // Los candidatos "saliendo" se intercalan con el mismo criterio de orden (pineados +
     // fecha) para que aparezcan donde ya estaban en vez de saltar a un lugar random
