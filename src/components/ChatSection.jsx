@@ -789,49 +789,21 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
     // basta: se apaga apenas tocas el fondo, antes de que carguen las imágenes.
     const sendScrollHoldUntilRef = useRef(0);
 
-    const _animateScrollToBottom = (duration = 500) => {
-        // Two rAFs so Virtuoso has rendered the new item and scrollHeight is updated
-        requestAnimationFrame(() => requestAnimationFrame(() => {
-            const el = virtuosoScrollerRef.current;
-            if (!el) return;
-            const start = el.scrollTop;
-            const target = el.scrollHeight - el.clientHeight;
-            const delta = target - start;
-            if (delta <= 0) return;
-            const t0 = performance.now();
-            const step = (now) => {
-                const p = Math.min((now - t0) / duration, 1);
-                const eased = 1 - Math.pow(1 - p, 3); // ease-out cubic
-                el.scrollTop = start + delta * eased;
-                if (p < 1) requestAnimationFrame(step);
-            };
-            requestAnimationFrame(step);
-        }));
-    };
-
+    // Un solo requestAnimationFrame no basta para una burbuja ALTA (info de vacante /
+    // "maletita", texto largo): React ya comprometió el DOM, pero Virtuoso todavía no
+    // termina su propia pasada de medición interna (mide vía ResizeObserver, que corre
+    // en un frame propio) — leer scrollHeight en ese punto da la altura ESTIMADA, no la
+    // real, y el scroll aterriza corto. Un segundo rAF le da a Virtuoso ese frame de
+    // margen antes de leer scrollHeight, así que aterriza en el fondo REAL a la primera
+    // — igual que un mensaje corto, sin pin continuo ni corrección visible después.
     const scrollToBottom = () => {
         if (scrollFrameRef.current) cancelAnimationFrame(scrollFrameRef.current);
         scrollFrameRef.current = requestAnimationFrame(() => {
-            const el = virtuosoScrollerRef.current;
-            if (el) el.scrollTop = el.scrollHeight;
+            scrollFrameRef.current = requestAnimationFrame(() => {
+                const el = virtuosoScrollerRef.current;
+                if (el) el.scrollTop = el.scrollHeight;
+            });
         });
-    };
-    // Pin suave al fondo por unos frames. Para inyectar un mensaje ALTO (info de vacante /
-    // "maletita"): un solo scrollTop=scrollHeight salta antes de que Virtuoso mida la burbuja
-    // alta → aterriza corto y luego corrige = brinco. Aquí re-anclamos al fondo cada frame
-    // durante ~380ms, así el scroll SIGUE la medición del mensaje alto hasta el fondo real de
-    // forma continua (se ve como un desplazamiento suave, no un salto seco). Idempotente una vez
-    // que la altura se estabiliza (scrollTop ya == scrollHeight → no-op).
-    const pinToBottomBriefly = (ms = 380) => {
-        if (scrollFrameRef.current) cancelAnimationFrame(scrollFrameRef.current);
-        const start = performance.now();
-        const step = () => {
-            const el = virtuosoScrollerRef.current;
-            if (el) el.scrollTop = el.scrollHeight;
-            if (performance.now() - start < ms) scrollFrameRef.current = requestAnimationFrame(step);
-            else scrollFrameRef.current = null;
-        };
-        scrollFrameRef.current = requestAnimationFrame(step);
     };
     const fileInputRef = useRef(null);
     const lastPresenceTimeRef = useRef(0);
@@ -5341,10 +5313,10 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                                 const inSendHold = Date.now() < sendScrollHoldUntilRef.current;
                                 const atBottomTrigger = inSendHold ? messagesGrew : isAtBottomRef.current;
                                 if (bottomAnchorRef.current || atBottomTrigger) {
-                                    // En envío: pin SUAVE que sigue la medición del mensaje alto hasta el
-                                    // fondo (se ve el fade y no brinca). Fuera de envío: scroll normal.
-                                    if (inSendHold && atBottomTrigger) pinToBottomBriefly();
-                                    else scrollToBottom();
+                                    // Mismo scrollToBottom() para cualquier tamaño de mensaje — ya espera
+                                    // el frame que Virtuoso necesita para medir burbujas altas (ver arriba),
+                                    // así que un texto largo (vacante/maletita) no necesita mecanismo aparte.
+                                    scrollToBottom();
                                     // bottomAnchorRef es una bandera de "una sola vez" (se activa al abrir un
                                     // chat o cargar sus mensajes) — sin este reset se quedaba encendida para
                                     // siempre, forzando scroll al fondo en CADA cambio de altura de la lista
