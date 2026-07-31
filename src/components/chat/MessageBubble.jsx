@@ -11,10 +11,8 @@ const OUTGOING_STATUS_REVEAL_MS = 800;
 // Evento que avisa que la FASE 1 (fila abriendo el espacio, .chat-row-enter) de una
 // burbuja terminó — lo escucha ChatSection.jsx para encolar la siguiente burbuja de un
 // grupo (texto + fotos del banco) recién cuando la anterior de verdad terminó de entrar,
-// en vez de un setTimeout a ciegas. Ver MEDIA_REVEAL_FALLBACK_MS más abajo para el caso
-// sin animación (prefers-reduced-motion) donde este evento nunca dispara solo.
+// en vez de un setTimeout a ciegas.
 export const ENTRY_REVEALED_EVENT = 'chat-bubble-entry-revealed';
-const MEDIA_REVEAL_FALLBACK_MS = 260;
 
 const rememberEntryAnimation = (key) => {
     if (!key || playedEntryAnimations.has(key)) return;
@@ -44,7 +42,7 @@ const rememberFadedInImage = (url) => {
     }
 };
 
-const SmoothMediaImage = React.memo(function SmoothMediaImage({ src, previewSrc, alt, className, width, height, loading = 'lazy', fetchPriority = 'auto', revealReady = true }) {
+const SmoothMediaImage = React.memo(function SmoothMediaImage({ src, previewSrc, alt, className, width, height, loading = 'lazy', fetchPriority = 'auto' }) {
     const initialSrc = previewSrc || src;
     const [visibleSrc, setVisibleSrc] = React.useState(initialSrc);
     const [overlaySrc, setOverlaySrc] = React.useState(null);
@@ -145,7 +143,7 @@ const SmoothMediaImage = React.memo(function SmoothMediaImage({ src, previewSrc,
                 height={height}
                 draggable={false}
                 onLoad={markPrimaryLoaded}
-                className={`${className} transition-opacity duration-300 ease-out ${primaryLoaded && revealReady ? 'opacity-100' : 'opacity-0'}`}
+                className={`${className} transition-opacity duration-300 ease-out ${primaryLoaded ? 'opacity-100' : 'opacity-0'}`}
             />
             {overlaySrc && (
                 <img
@@ -206,28 +204,17 @@ const MessageBubble = React.memo(function MessageBubble({
     // media o no — no cambia layout, así que es Virtuoso-safe también para media.
     const playRowEntry = playEntry;
     const rowEntryClass = playRowEntry ? 'chat-message-row-enter' : '';
-    // Fase 2 (el globo entero se desliza+fade) solo para SIN media: una burbuja con imagen ya
-    // tiene su propio fade en SmoothMediaImage — animar el globo completo ENCIMA de eso era
-    // el doble-fade/parpadeo que había antes. Ahora se coordinan en SECUENCIA (no se quita
-    // ninguna): la fase 1 revela el marco vacío, y solo CUANDO ESA termina (mediaRevealReady,
-    // más abajo) se le permite a SmoothMediaImage empezar su propio fade — nunca al mismo tiempo.
+    // Fase 2 (el globo ENTERO se desliza+fade) solo para SIN media: una burbuja con imagen ya
+    // tiene su propio fade en SmoothMediaImage, y animar el globo completo ENCIMA de eso (dos
+    // transiciones de opacidad apiladas en elementos distintos) era el doble-fade/parpadeo de
+    // antes. La fase 1 (fila, clip-path) NO es una animación de opacidad — es una máscara que
+    // revela — así que corre EN PARALELO con el fade propio de la imagen, no antes: el marco se
+    // abre mientras la foto se desvanece hacia adentro, como un solo movimiento (igual que en
+    // texto se ve la fila abrirse Y el contenido aparecer juntos, no en dos pasos separados).
     const playBubbleEntry = playEntry && !hasMedia;
     const bubbleEntryClass = playBubbleEntry
         ? (isMe ? 'chat-message-enter-outgoing' : 'chat-message-enter-incoming')
         : '';
-
-    // Arranca en false SOLO si esta burbuja tiene media Y va a animar su entrada — en ese caso
-    // SmoothMediaImage debe esperar a que la fase 1 (fila) termine antes de mostrar la foto. Si
-    // no hay media o no hay animación de entrada (mensaje histórico), no hay nada que esperar.
-    const [mediaRevealReady, setMediaRevealReady] = React.useState(() => !(hasMedia && playRowEntry));
-    // Red de seguridad: si el navegador nunca dispara el animationend de la fase 1 (usuario con
-    // prefers-reduced-motion, donde la animación CSS se desactiva por completo — ver index.css),
-    // la imagen se quedaría invisible para siempre esperando un evento que nunca llega.
-    React.useEffect(() => {
-        if (mediaRevealReady) return undefined;
-        const timer = window.setTimeout(() => setMediaRevealReady(true), MEDIA_REVEAL_FALLBACK_MS);
-        return () => window.clearTimeout(timer);
-    }, [mediaRevealReady]);
 
     React.useEffect(() => {
         if (!shouldPlayEntryAnimation) return undefined;
@@ -250,7 +237,6 @@ const MessageBubble = React.memo(function MessageBubble({
             onAnimationEnd={(e) => {
                 if (e.animationName === 'chat-message-enter-outgoing' || e.animationName === 'chat-message-enter-incoming') setEntryDone(true);
                 if (e.animationName === 'chat-row-enter') {
-                    setMediaRevealReady(true);
                     // Avisa a quien esté esperando (p.ej. el envío escalonado del banco de
                     // respuestas en ChatSection.jsx) que ESTA burbuja ya terminó de entrar.
                     window.dispatchEvent(new CustomEvent(ENTRY_REVEALED_EVENT, { detail: { key: entryAnimationKey } }));
@@ -323,10 +309,10 @@ const MessageBubble = React.memo(function MessageBubble({
                     {msg.mediaUrl && (
                         <div className={`${mediaFrameClass} mb-0.5 rounded overflow-hidden mt-1 cursor-pointer`}>
                             {msg.type === 'image' && (
-                                <SmoothMediaImage src={msg.mediaUrl} previewSrc={msg._displayMediaUrl || msg._localMediaUrl} alt="media" loading={isMe ? 'eager' : 'lazy'} fetchPriority={isMe ? 'high' : 'auto'} width="260" height="260" className="h-full w-full object-cover rounded shadow-sm bg-gray-100 dark:bg-gray-800" revealReady={mediaRevealReady} />
+                                <SmoothMediaImage src={msg.mediaUrl} previewSrc={msg._displayMediaUrl || msg._localMediaUrl} alt="media" loading={isMe ? 'eager' : 'lazy'} fetchPriority={isMe ? 'high' : 'auto'} width="260" height="260" className="h-full w-full object-cover rounded shadow-sm bg-gray-100 dark:bg-gray-800" />
                             )}
                             {msg.type === 'sticker' && (
-                                <SmoothMediaImage src={msg.mediaUrl} previewSrc={msg._displayMediaUrl || msg._localMediaUrl} alt="sticker" loading={isMe ? 'eager' : 'lazy'} fetchPriority={isMe ? 'high' : 'auto'} width="100" height="100" className="h-full w-full object-contain" revealReady={mediaRevealReady} />
+                                <SmoothMediaImage src={msg.mediaUrl} previewSrc={msg._displayMediaUrl || msg._localMediaUrl} alt="sticker" loading={isMe ? 'eager' : 'lazy'} fetchPriority={isMe ? 'high' : 'auto'} width="100" height="100" className="h-full w-full object-contain" />
                             )}
                             {msg.type === 'video' && (
                                 <video src={msg.mediaUrl} controls width="260" className="w-[260px] aspect-video rounded shadow-sm bg-black" />
