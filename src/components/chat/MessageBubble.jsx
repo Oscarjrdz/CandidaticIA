@@ -53,17 +53,40 @@ const SmoothMediaImage = React.memo(function SmoothMediaImage({ src, previewSrc,
     // suave sobre el marco. Las que ya están en caché/completas se marcan cargadas sin fade
     // (no re-parpadean al re-renderizar).
     const primaryImgRef = React.useRef(null);
-    // Arranca "cargada" (sin fade) si esta URL YA hizo su fade antes → nunca re-anima.
-    const [primaryLoaded, setPrimaryLoaded] = React.useState(() => fadedInImages.has(visibleSrc));
+    // Arranca "cargada" (sin fade) si:
+    //   a) ya hizo fade en esta sesión (Set), o
+    //   b) el browser ya la tiene en caché (complete+naturalWidth): sucede con imágenes del
+    //      banco que el reclutador ya vio en el panel de preview antes de inyectarlas → el
+    //      primer render nace directamente en opacity-100, sin marco gris ni parpadeo.
+    const [primaryLoaded, setPrimaryLoaded] = React.useState(() => {
+        if (fadedInImages.has(visibleSrc)) return true;
+        // Probe de caché síncrono: funciona sólo en el browser (no SSR).
+        if (typeof document !== 'undefined' && visibleSrc) {
+            const probe = new window.Image();
+            probe.src = visibleSrc;
+            if (probe.complete && probe.naturalWidth > 0) {
+                rememberFadedInImage(visibleSrc);
+                return true;
+            }
+        }
+        return false;
+    });
+    // Usamos un ref para la URL visible activa, así markPrimaryLoaded no recrea la referencia
+    // (y no vuelve a disparar el useEffect) cada vez que visibleSrc cambia. Esto elimina un
+    // ciclo extra de setPrimaryLoaded(false) → re-render opaco → parpadeo en imágenes del banco.
+    const visibleSrcForCallbackRef = React.useRef(visibleSrc);
+    React.useLayoutEffect(() => { visibleSrcForCallbackRef.current = visibleSrc; }, [visibleSrc]);
     const markPrimaryLoaded = React.useCallback(() => {
-        rememberFadedInImage(visibleSrc);
+        rememberFadedInImage(visibleSrcForCallbackRef.current);
         setPrimaryLoaded(true);
-    }, [visibleSrc]);
+    }, []); // estable — no depende de visibleSrc directamente
     React.useEffect(() => {
-        if (fadedInImages.has(visibleSrc)) { setPrimaryLoaded(true); return; }
+        if (fadedInImages.has(visibleSrc)) { setPrimaryLoaded(prev => prev ? prev : true); return; }
         const el = primaryImgRef.current;
         if (el && el.complete && el.naturalWidth > 0) { markPrimaryLoaded(); return; }
-        setPrimaryLoaded(false);
+        // Solo bajar a "no cargada" si aún no estamos en false (evita el re-render extra que
+        // provoca el parpadeo gris en las imágenes de banco sin previewSrc local).
+        setPrimaryLoaded(prev => prev ? false : prev);
     }, [visibleSrc, markPrimaryLoaded]);
 
     React.useEffect(() => {
