@@ -196,6 +196,16 @@ body {
     animation: chat-row-enter 200ms cubic-bezier(0.1, 0, 0.4, 1) forwards;
   }
 
+  /* Igual que arriba pero más lento (350ms) — solo para burbujas con MEDIA. Una imagen del
+     banco casi siempre ya está en caché (el reclutador la vio en el preview antes de
+     mandarla), así que carga opaca desde el primer frame: no tiene fade propio que la
+     acompañe como el texto tiene su fase 2 (deslizar+fade). Con 200ms el "se abre el
+     espacio" pasaba desapercibido — 350ms lo hace perceptible sin sentirse lento. */
+  .chat-message-row-enter-media {
+    -webkit-animation: chat-row-enter 350ms cubic-bezier(0.1, 0, 0.4, 1) forwards;
+    animation: chat-row-enter 350ms cubic-bezier(0.1, 0, 0.4, 1) forwards;
+  }
+
   /* Phase 2 — el globo entra deslizando temprano (delay 400→90ms) y con una duración
      legible (60→200ms), en vez de un "parpadeo" tras esperar 400ms. Total ≈ 290ms. */
   .chat-message-enter-outgoing {
@@ -302,6 +312,7 @@ body {
   .candidatic-thinking-logo,
   .candidatic-brand-icon,
   .chat-message-row-enter,
+  .chat-message-row-enter-media,
   .chat-message-enter-outgoing,
   .chat-message-enter-incoming,
   .chat-card-enter,

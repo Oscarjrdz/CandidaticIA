@@ -201,9 +201,12 @@ const MessageBubble = React.memo(function MessageBubble({
     const playEntry = shouldPlayEntryAnimation && !entryDone;
     const hasMedia = Boolean(msg.mediaUrl);
     // Fase 1 (fila abre el espacio, clip-path) aplica a CUALQUIER burbuja con entrada nueva,
-    // media o no — no cambia layout, así que es Virtuoso-safe también para media.
+    // media o no — no cambia layout, así que es Virtuoso-safe también para media. Para media
+    // usa la variante MÁS LENTA (350ms vs 200ms, ver index.css): una foto del banco casi
+    // siempre ya está en caché y opaca desde el primer frame, sin el fade propio que sí
+    // acompaña al texto — con 200ms el "se abre el espacio" pasaba desapercibido.
     const playRowEntry = playEntry;
-    const rowEntryClass = playRowEntry ? 'chat-message-row-enter' : '';
+    const rowEntryClass = playRowEntry ? (hasMedia ? 'chat-message-row-enter-media' : 'chat-message-row-enter') : '';
     // Fase 2 (el globo ENTERO se desliza+fade) solo para SIN media: una burbuja con imagen ya
     // tiene su propio fade en SmoothMediaImage, y animar el globo completo ENCIMA de eso (dos
     // transiciones de opacidad apiladas en elementos distintos) era el doble-fade/parpadeo de
