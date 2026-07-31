@@ -73,6 +73,7 @@ const CHAT_LOCK_HEARTBEAT_MS = 30_000;
 
 const CHAT_LIST_PAGE_SIZE = 10;
 const CHAT_LIST_LOCAL_FILTER_PAGE_SIZE = 500;
+const CHAT_EXIT_ANIM_MS = 260; // debe coincidir con la duración de .chat-card-exit en index.css
 const UNTAGGED_TAG_FILTER = '__candidatic_untagged__';
 const UNTAGGED_TAG_LABEL = 'Sin Etiqueta';
 const UNTAGGED_TAG_COLOR = '#ef4444';
@@ -2018,135 +2019,170 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         [filteredCandidates, visibleChatLimit]
     );
 
-    // ── Congelar el ORDEN de la lista mientras estás scrolleado ABAJO (anti "sube y baja") ──
-    // Raíz medida EN VIVO: bajo tráfico real cada mensaje reordena chats al tope y cada lock/
-    // badge cambia la altura de una fila (medido: 98/114/121/137px). Si estás leyendo abajo,
-    // Virtuoso re-mide y recorre el contenido → la lista brinca sola, aunque no toques nada.
-    // Solución tipo WhatsApp, robusta a tráfico: mientras NO estás cerca del tope, mantenemos
-    // el orden MOSTRADO congelado — las tarjetas siguen actualizando su contenido/badge EN SU
-    // LUGAR (no se mueven) y los chats nuevos se acumulan al final SIN empujar tu vista. Al
-    // volver al tope (donde vive el reclutador normalmente) se libera y la lista vuelve al
-    // orden vivo cronológico; ahí scrollTop≈0, así que el reacomodo no se siente como brinco.
-    // Con hysteresis (congela >80px, libera <20px) para no titilar en el borde.
-    const listFrozenRef = useRef(false);
-    const frozenOrderRef = useRef(null); // array de ids en orden congelado
-    const [freezeVersion, setFreezeVersion] = useState(0);
-    const displayCandidatesRef = useRef([]);
-    // id del candidato cuyo eco SSE de confirmación estamos esperando tras un envío propio
-    // (ver freezeListForSend). null = no hay ningún envío pendiente de confirmar.
-    const sendFreezeCandidateIdRef = useRef(null);
-    const applyFreezeState = useCallback((shouldFreeze) => {
-        if (shouldFreeze === listFrozenRef.current) return;
-        listFrozenRef.current = shouldFreeze;
-        // Al congelar, fotografiamos el orden mostrado ACTUAL (que es el orden vivo, porque aún
-        // no estábamos congelados). Al liberar, se descarta para volver al orden vivo.
-        frozenOrderRef.current = shouldFreeze
-            ? (displayCandidatesRef.current || []).map(c => c.id)
-            : null;
-        setFreezeVersion(v => v + 1);
-    }, []);
-
-    // ── Freeze-on-send: al ENVIAR, el chat abierto salta al tope y la lista "se corre" bajo el
-    // cursor del reclutador (reportado). Congelamos el orden mientras confirmamos TU propio
-    // envío para que no reordene la lista en el momento del clic. Si estás scrolleado abajo,
-    // el congelado por scroll ya la sostiene; si estás arriba, se libera en cuanto llega el eco
-    // real del servidor para este candidato (ver el patch SSE más abajo) — no un timer a ciegas.
-    // El setTimeout de aquí es solo la RED DE SEGURIDAD si el eco nunca llega (falla de red):
-    // sin ella, un freeze podría quedarse pegado para siempre. Cubre banco/vacante/manual/plantilla.
-    const freezeListForSend = useCallback((candidateId) => {
-        sendFreezeCandidateIdRef.current = candidateId;
-        if (!listFrozenRef.current) applyFreezeState(true);
-        setTimeout(() => {
-            if (sendFreezeCandidateIdRef.current !== candidateId) return; // el eco ya llegó y liberó
-            sendFreezeCandidateIdRef.current = null;
-            const sc = chatListScrollerRef.current;
-            if (listFrozenRef.current && (!sc || sc.scrollTop < 80)) applyFreezeState(false);
-        }, 4000);
-    }, [applyFreezeState]);
-
-    const displayCandidates = useMemo(() => {
-        const frozenOrder = frozenOrderRef.current;
-        if (!listFrozenRef.current || !frozenOrder || frozenOrder.length === 0) return visibleCandidates;
-        // ⚠️ Resolvemos desde el conjunto COMPLETO (filteredCandidates), NO desde el rebanado
-        // visibleCandidates. Bug medido: estando HASTA ABAJO y enviando, el chat abierto salta al
-        // tope del orden real → otro chat cae fuera del slice(0, visibleChatLimit) → desaparecía
-        // del map → se caía de la lista congelada → la cola se encogía → "la lista se va arriba".
-        // Con el set completo, un reordenamiento nunca puede tirar un chat congelado; solo sale si
-        // de verdad dejó de existir/matchear el filtro.
-        const byId = new Map();
-        for (const c of filteredCandidates) byId.set(c.id, c);
-        const ordered = [];
-        const seen = new Set();
-        // 1) respeta el orden congelado para los ids que siguen presentes
-        for (const id of frozenOrder) {
-            const c = byId.get(id);
-            if (c) { ordered.push(c); seen.add(id); }
-        }
-        // 2) chats que ENTRARON al top-N visible y no estaban congelados → al FINAL, sin empujar
-        //    la vista de arriba (chats nuevos aparecen abajo, no reordenan lo que estás viendo)
-        for (const c of visibleCandidates) {
-            if (!seen.has(c.id)) ordered.push(c);
-        }
-        return ordered;
-        // freezeVersion fuerza recomputo al (des)congelar; los datos al cambiar filtered/visible
-    }, [visibleCandidates, filteredCandidates, freezeVersion]);
-    displayCandidatesRef.current = displayCandidates;
-
-    // ── Compensación de scroll de la lista de chats ──
-    // Antes había aquí un sistema casero que leía el DOM interno de Virtuoso
-    // (`querySelectorAll('[data-index]')`, un detalle de implementación no público de la
-    // librería) para "anclar" la tarjeta superior y reponer el scroll a mano con
-    // scrollToIndex. Bajo tráfico real ese ajuste manual competía por el mismo scrollTop
-    // contra la compensación NATIVA de Virtuoso (mide cada fila con ResizeObserver y la
-    // sigue por `computeItemKey`, que aquí ya es `chat.id`) — dos sistemas corrigiendo lo
-    // mismo a la vez es lo que se sentía como "sube y baja". Se eliminó por completo en vez
-    // de dejarlo desactivado: Virtuoso ya resuelve esto por su cuenta si nadie le estorba.
-    const chatListVirtuosoRef = useRef(null);
-    const chatListScrollerRef = useRef(null);
-
-    const handleChatListScrollerRef = useCallback((el) => {
-        chatListScrollerRef.current = el;
-        if (el && !el.__scrollListenerHooked) {
-            el.__scrollListenerHooked = true;
-            el.addEventListener('scroll', () => {
-                // Congelar/liberar el ORDEN según la posición (hysteresis para no titilar):
-                // congela al alejarte del tope (>80px), libera al volver (<20px). Barato: solo
-                // compara scrollTop y, si cambia el estado, dispara un único setState.
-                const st = el.scrollTop;
-                if (st > 80) { if (!listFrozenRef.current) applyFreezeState(true); }
-                else if (st < 20) {
-                    // No liberes por scroll mientras sigues esperando el eco de TU propio envío
-                    // (lo maneja freezeListForSend con su propia confirmación/respaldo).
-                    if (listFrozenRef.current && !sendFreezeCandidateIdRef.current) applyFreezeState(false);
-                }
-            }, { passive: true });
-        }
-    }, [applyFreezeState]);
-
-    // ── Entrada por CAMBIO DE ESTATUS: detecta tarjetas que RECIÉN pasan a matchear el
-    // filtro actual (p.ej. un chat leído recibe mensaje → entra a "no leídos") para animar
-    // su entrada con el mismo fade. Se calcula DURANTE el render (patrón usePrevious: se lee
-    // el estado del commit anterior desde refs actualizados en un effect) para que el prop
-    // esté listo cuando la fila monta. Guardas anti-cascadeo:
-    //   • filtro sin cambiar (si cambió el filtro → set nuevo entero → NO animar)
-    //   • sin paginar (visibleChatLimit no creció → no animar la tanda de abajo)
-    //   • solo cerca del tope (las entradas por estatus llegan arriba; tope acota un bulk)
-    //   • nunca los leads nuevos (esos animan por _newCardAt)
+    // Firma del filtro activo — se usa para distinguir "un candidato dejó de cumplir el
+    // filtro" (animar salida) de "cambiaste de filtro/búsqueda" (mostrar el conjunto nuevo
+    // de una vez, sin animar salidas masivas de candidatos que ni siquiera se fueron).
     const chatFilterSignature = useMemo(() => JSON.stringify([
         activeFilter, filterValue, profileUnreadOnly, selectedTag,
         manualPipelineFilter, manualStepFilter, selectedAges, selectedGenders, selectedMunicipalities
     ]), [activeFilter, filterValue, profileUnreadOnly, selectedTag, manualPipelineFilter, manualStepFilter, selectedAges, selectedGenders, selectedMunicipalities]);
+
+    // ── Salida elegante ──
+    // Cuando un candidato deja de cumplir el filtro activo (se marca leído, pierde la
+    // etiqueta seleccionada, etc.) no desaparece de golpe: se queda renderizado
+    // CHAT_EXIT_ANIM_MS más con la animación .chat-card-exit (ChatRow + index.css) y solo
+    // entonces se retira de verdad. Si vuelve a matchear el filtro ANTES de que termine
+    // (p.ej. te vuelve a escribir) se cancela la salida y sigue de largo, sin duplicarse.
+    const [leavingCandidates, setLeavingCandidates] = useState(() => new Map());
+    const leavingCandidatesRef = useRef(leavingCandidates);
+    leavingCandidatesRef.current = leavingCandidates;
+    const prevFilteredIdsRef = useRef(null);
+
+    // Cambio de filtro/búsqueda: no es un candidato "dejando de cumplir", es un conjunto
+    // nuevo completo — se limpia cualquier salida en curso y no se animan salidas masivas.
+    useEffect(() => {
+        prevFilteredIdsRef.current = null;
+        setLeavingCandidates(prev => (prev.size === 0 ? prev : new Map()));
+    }, [chatFilterSignature]);
+
+    useEffect(() => {
+        const currentIds = new Set(filteredCandidates.map(c => c.id));
+        const prevIds = prevFilteredIdsRef.current;
+        if (prevIds) {
+            const departed = [];
+            prevIds.forEach(id => { if (!currentIds.has(id)) departed.push(id); });
+            if (departed.length > 0) {
+                setLeavingCandidates(prev => {
+                    const next = new Map(prev);
+                    let changed = false;
+                    departed.forEach(id => {
+                        if (next.has(id)) return;
+                        const snap = candidatesRef.current.find(c => c.id === id);
+                        if (snap) { next.set(id, snap); changed = true; }
+                    });
+                    return changed ? next : prev;
+                });
+                departed.forEach(id => {
+                    setTimeout(() => {
+                        setLeavingCandidates(prev => {
+                            if (!prev.has(id)) return prev;
+                            const next = new Map(prev);
+                            next.delete(id);
+                            return next;
+                        });
+                    }, CHAT_EXIT_ANIM_MS);
+                });
+            }
+            // Reingresó antes de terminar la animación (p.ej. te volvió a escribir) → cancelar salida
+            if (leavingCandidatesRef.current.size > 0) {
+                let reentered = false;
+                const next = new Map(leavingCandidatesRef.current);
+                next.forEach((_candidate, id) => { if (currentIds.has(id)) { next.delete(id); reentered = true; } });
+                if (reentered) setLeavingCandidates(next);
+            }
+        }
+        prevFilteredIdsRef.current = currentIds;
+    }, [filteredCandidates]);
+
+    // Los candidatos "saliendo" se intercalan con el mismo criterio de orden (pineados +
+    // fecha) para que aparezcan donde ya estaban en vez de saltar a un lugar random
+    // mientras se desvanecen — no altera el filtro real, solo dónde se ve la animación.
+    const renderedCandidates = useMemo(() => {
+        if (leavingCandidates.size === 0) return visibleCandidates;
+        const extra = [];
+        leavingCandidates.forEach((cand, id) => {
+            if (visibleCandidates.some(c => c.id === id)) return; // ya volvió a matchear
+            extra.push({ ...cand, _leaving: true });
+        });
+        if (extra.length === 0) return visibleCandidates;
+        return [...visibleCandidates, ...extra].sort((a, b) => {
+            const aPinned = pinnedChats.includes(a.id);
+            const bPinned = pinnedChats.includes(b.id);
+            if (aPinned && !bPinned) return -1;
+            if (!aPinned && bPinned) return 1;
+            const at = a.ultimoMensaje ? new Date(a.ultimoMensaje).getTime() : 0;
+            const bt = b.ultimoMensaje ? new Date(b.ultimoMensaje).getTime() : 0;
+            const diff = bt - at;
+            if (diff !== 0) return diff;
+            return String(b.id || '').localeCompare(String(a.id || ''));
+        });
+    }, [visibleCandidates, leavingCandidates, pinnedChats]);
+
+    // ── Ancla de PIVOTE: el chat SELECCIONADO nunca se mueve de su posición en pantalla ──
+    // Antes existía un "congelado" del orden completo mientras estabas scrolleado (>80px),
+    // acumulando lo nuevo al final para no tocar tu vista. Eso rompía una regla de negocio:
+    // un chat que vuelve a ser el más reciente debe ir SIEMPRE al tope (es la cola de
+    // prioridad con la que trabajan los reclutadores), no al final del bloque congelado —
+    // si no, se mete a media lista, justo donde estás trabajando.
+    // Ahora el orden SIEMPRE es el real (fecha/hora), sin excepción por filtro. En vez de
+    // congelar todo, se ancla solo el chat que tienes ABIERTO: se mide su posición en
+    // pantalla antes/después de cada cambio y se compensa el scroll con la diferencia, así
+    // que tu chat activo no se mueve aunque el resto de la lista se reordene alrededor.
+    // El ajuste se agrupa por frame (rAF): si llegan varios reordenamientos casi juntos
+    // (tráfico alto, varios reclutadores respondiendo a la vez), se aplica UNA sola
+    // corrección por frame en vez de una por evento — evita el "temblor" de corregir
+    // varias veces por segundo aunque cada corrección individual sea correcta.
+    // ChatRow marca la fila seleccionada con data-pivot="true" (ver ChatRow.jsx) — se lee
+    // ESE nodo puntual, no un escaneo del DOM interno de Virtuoso.
+    const chatListVirtuosoRef = useRef(null);
+    const chatListScrollerRef = useRef(null);
+    const pivotIdRef = useRef(null);
+    const pivotOffsetRef = useRef(null);
+    const pivotRafRef = useRef(0);
+
+    const handleChatListScrollerRef = useCallback((el) => {
+        chatListScrollerRef.current = el;
+    }, []);
+
+    useLayoutEffect(() => {
+        const sc = chatListScrollerRef.current;
+        if (!sc || !selectedChat?.id) { pivotIdRef.current = null; pivotOffsetRef.current = null; return; }
+        const pivotEl = sc.querySelector('[data-pivot="true"]');
+        if (!pivotEl) { pivotIdRef.current = null; pivotOffsetRef.current = null; return; }
+
+        const currentOffset = pivotEl.getBoundingClientRect().top - sc.getBoundingClientRect().top;
+
+        if (pivotIdRef.current === selectedChat.id && pivotOffsetRef.current != null) {
+            const delta = currentOffset - pivotOffsetRef.current;
+            if (Math.abs(delta) > 0.5 && !pivotRafRef.current) {
+                pivotRafRef.current = requestAnimationFrame(() => {
+                    pivotRafRef.current = 0;
+                    const sc2 = chatListScrollerRef.current;
+                    const el2 = sc2 && sc2.querySelector('[data-pivot="true"]');
+                    if (!sc2 || !el2 || pivotOffsetRef.current == null) return;
+                    const liveOffset = el2.getBoundingClientRect().top - sc2.getBoundingClientRect().top;
+                    const liveDelta = liveOffset - pivotOffsetRef.current;
+                    if (Math.abs(liveDelta) > 0.5) sc2.scrollTop += liveDelta;
+                });
+            }
+        } else {
+            // Pivote nuevo (cambiaste de chat, o primer render con selección): su posición
+            // actual se vuelve la referencia — nada que compensar todavía.
+            pivotIdRef.current = selectedChat.id;
+            pivotOffsetRef.current = currentOffset;
+        }
+    }, [renderedCandidates, selectedChat?.id]);
+
+    useEffect(() => () => { if (pivotRafRef.current) cancelAnimationFrame(pivotRafRef.current); }, []);
+
+    // ── Entrada por CAMBIO DE ESTATUS: detecta tarjetas que RECIÉN pasan a matchear el
+    // filtro actual (p.ej. un chat leído recibe mensaje → entra a "no leídos", o vuelve a
+    // ser el más reciente) para animar su entrada con el mismo fade que un lead nuevo. Se
+    // calcula DURANTE el render (patrón usePrevious: se lee el estado del commit anterior
+    // desde refs actualizados en un effect) para que el prop esté listo cuando la fila
+    // monta. Guardas anti-cascadeo:
+    //   • filtro sin cambiar (si cambió el filtro → set nuevo entero → NO animar)
+    //   • sin paginar (visibleChatLimit no creció → no animar la tanda de abajo)
+    //   • solo cerca del tope (las entradas por estatus llegan arriba; tope acota un bulk)
+    //   • nunca los leads nuevos (esos animan por _newCardAt)
+    // Antes esto competía contra el congelado por scroll y se desactivó por inestabilidad
+    // bajo tráfico; con el congelado eliminado (orden siempre real + ancla de pivote) esa
+    // fuente de conflicto ya no existe.
     const entryPrevIdsRef = useRef(null);
     const entryPrevFilterSigRef = useRef(null);
     const entryPrevLimitRef = useRef(0);
     const enteredFilterIds = useMemo(() => {
         const result = new Set();
-        // ⛔ DESACTIVADO: la animación de entrada por CAMBIO DE ESTATUS (chat que entra al filtro)
-        // bajo tráfico + acciones (enviar en "no leídos" → el chat sale y re-entra) hacía saltar
-        // las tarjetas ("sube y baja"). Se deja la de leads NUEVOS (_newCardAt), que sí es estable.
-        // Ver regla feedback_chatweb_alto_trafico. Código conservado por si se retoma coalescido.
-        return result;
-        // eslint-disable-next-line no-unreachable
         const prevIds = entryPrevIdsRef.current;
         const filterSame = entryPrevFilterSigRef.current !== null && chatFilterSignature === entryPrevFilterSigRef.current;
         const noPagination = visibleChatLimit <= entryPrevLimitRef.current;
@@ -2166,17 +2202,6 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         entryPrevFilterSigRef.current = chatFilterSignature;
         entryPrevLimitRef.current = visibleChatLimit;
     }, [visibleCandidates, chatFilterSignature, visibleChatLimit]);
-
-    // Al cambiar de filtro/búsqueda, soltar el congelado: el orden congelado del filtro anterior
-    // no aplica al nuevo conjunto (dejaría casi todo "apilado al final"). Se libera para mostrar
-    // el orden vivo correcto del nuevo filtro.
-    useEffect(() => {
-        if (listFrozenRef.current) {
-            listFrozenRef.current = false;
-            frozenOrderRef.current = null;
-            setFreezeVersion(v => v + 1);
-        }
-    }, [chatFilterSignature]);
 
     // Throttle: al empujar contra el fondo, Virtuoso dispara endReached en ráfaga. Sin freno,
     // crecía visibleChatLimit sin parar (la lista se inflaba de golpe → parpadeo/inestabilidad
@@ -2821,18 +2846,6 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                         }
                     })
                     .catch(() => {});
-            }
-
-            // Libera el freeze-on-send en cuanto llega la confirmación real del propio envío:
-            // `ultimoMensaje` es el campo que de verdad mueve el orden (ver el sort de
-            // filteredCandidates), así que su llegada para ESTE candidato es la prueba de que
-            // el servidor ya procesó el mensaje — no hace falta esperar al timer de respaldo.
-            if (sendFreezeCandidateIdRef.current === sseUpdate.candidateId && patch.ultimoMensaje) {
-                sendFreezeCandidateIdRef.current = null;
-                const sc = chatListScrollerRef.current;
-                if (listFrozenRef.current && (!sc || sc.scrollTop < 80)) {
-                    requestAnimationFrame(() => applyFreezeState(false));
-                }
             }
 
             // Also update selectedChat if it's the one that changed
@@ -3777,7 +3790,9 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
 
         setReplyingToMsg(null);
         isSendingRef.current = true;
-        freezeListForSend(currentCandidateId); // que TU envío no reordene/brinque la lista izquierda
+        // El chat abierto es el pivote de la lista izquierda (ver el efecto de ancla más
+        // arriba): se mantiene fijo en su posición en pantalla aunque tu propio envío lo
+        // mande al tope del orden real. Ya no hace falta congelar nada al enviar.
         // grupo con imágenes: 1 solo scroll al montar, sin snaps por carga/estado
         sendScrollHoldUntilRef.current = Date.now() + 2000;
 
@@ -3924,7 +3939,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         const _optimisticContent = `⚡ Plantilla oficial: *${_displayName}*\n\n${_bodyText}`.trim();
 
         isSendingRef.current = true;
-        freezeListForSend(currentCandidateId); // que la plantilla no reordene/brinque la lista izquierda
+        // El chat abierto es el pivote de la lista izquierda — se mantiene fijo en pantalla.
         sendScrollHoldUntilRef.current = Date.now() + 2000;
         updateChatMessages(currentCandidateId, prev => [...(prev || []), withMessageEntryAnimation({
             id: optimisticId,
@@ -4747,7 +4762,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                         <Virtuoso
                             ref={chatListVirtuosoRef}
                             scrollerRef={handleChatListScrollerRef}
-                            data={displayCandidates}
+                            data={renderedCandidates}
                             style={{ height: '100%' }}
                             // Buffer de render alto (px): antes era overscan={10} (¡10px!) y en scroll
                             // rápido Virtuoso no alcanzaba a pintar filas por delante → huecos en blanco

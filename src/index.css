@@ -278,13 +278,34 @@ body {
   100% { opacity: 1; transform: translate3d(0, 0, 0); }
 }
 
+/* Salida elegante de una TARJETA que deja de cumplir el filtro activo (se marca leída,
+   pierde la etiqueta seleccionada, etc.): se desvanece y colapsa su alto en vez de
+   desaparecer de golpe. overflow:hidden + max-height/padding en 0 para que Virtuoso
+   mida el colapso real (ResizeObserver) y el resto de la lista suba suave, no de un salto. */
+.chat-card-exit {
+  -webkit-animation: chat-card-exit 260ms cubic-bezier(0.4, 0, 1, 1) both;
+  animation: chat-card-exit 260ms cubic-bezier(0.4, 0, 1, 1) both;
+  overflow: hidden;
+}
+@-webkit-keyframes chat-card-exit {
+  0%   { max-height: 160px; opacity: 1; }
+  55%  { opacity: 0; }
+  100% { max-height: 0; opacity: 0; padding-top: 0; padding-bottom: 0; }
+}
+@keyframes chat-card-exit {
+  0%   { max-height: 160px; opacity: 1; }
+  55%  { opacity: 0; }
+  100% { max-height: 0; opacity: 0; padding-top: 0; padding-bottom: 0; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .candidatic-thinking-logo,
   .candidatic-brand-icon,
   .chat-message-row-enter,
   .chat-message-enter-outgoing,
   .chat-message-enter-incoming,
-  .chat-card-enter {
+  .chat-card-enter,
+  .chat-card-exit {
     animation: none;
   }
 }

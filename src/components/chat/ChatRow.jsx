@@ -63,11 +63,17 @@ const ChatRow = React.memo(({ chat, isSelected, isPinned, onSelect, onBlock, onD
         }
     }, [chat.id, shouldAnimateEntry]);
 
+    // chat._leaving: el padre lo sigue renderizando un momento tras salir del filtro
+    // (banco de "salida elegante", ver ChatSection.jsx) — no es interactivo ni anima
+    // entrada, solo corre su animación de salida y desaparece de verdad al terminar.
+    const isLeaving = Boolean(chat._leaving);
+
     return (
         <div
-            onClick={() => onSelect(chat)}
+            data-pivot={isSelected ? 'true' : undefined}
+            onClick={() => { if (!isLeaving) onSelect(chat); }}
             onAnimationEnd={(e) => { if (e.animationName === 'chat-card-enter') setEntryPlayed(true); }}
-            className={`group flex items-center px-3 py-3 cursor-pointer hover:bg-[#f5f6f6] dark:hover:bg-[#202c33] transition-colors duration-100 border-l-0 md:border-l-4 ${shouldAnimateEntry ? 'chat-card-enter' : ''} ${isSelected ? 'bg-[#f0f2f5] dark:bg-[#2a3942] border-[#25d366] dark:border-[#00a884] md:shadow-sm md:relative md:z-10' : 'border-transparent'}`}
+            className={`group flex items-center px-3 py-3 cursor-pointer hover:bg-[#f5f6f6] dark:hover:bg-[#202c33] transition-colors duration-100 border-l-0 md:border-l-4 ${isLeaving ? 'chat-card-exit pointer-events-none' : (shouldAnimateEntry ? 'chat-card-enter' : '')} ${isSelected ? 'bg-[#f0f2f5] dark:bg-[#2a3942] border-[#25d366] dark:border-[#00a884] md:shadow-sm md:relative md:z-10' : 'border-transparent'}`}
         >
             <div className={`w-12 h-12 rounded-full flex-shrink-0 flex items-center justify-center mr-3 relative overflow-hidden ${isEmptyChat ? 'ring-2 ring-blue-500 ring-offset-2 ring-offset-[#ffffff] dark:ring-offset-[#111b21]' : ''}`}>
                 {chat.profilePic && !imgError ? (
