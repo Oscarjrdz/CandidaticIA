@@ -15,17 +15,20 @@ const SkillRow = ({ skill, expanded, onToggle, onSaved, onDeleted }) => {
     const [content, setContent] = useState(skill.content || '');
     const [saving, setSaving] = useState(false);
     const [deleting, setDeleting] = useState(false);
+    const [err, setErr] = useState('');
+    const [confirmDelete, setConfirmDelete] = useState(false);
 
     const dirty = name !== skill.name || content !== (skill.content || '');
 
     const save = async () => {
         if (saving || !name.trim()) return;
+        setErr('');
         setSaving(true);
         try {
             const data = await agentIAFetch('/api/agent-ia/skills', { method: 'PUT', body: { id: skill.id, name: name.trim(), content } });
             if (onSaved) onSaved(data.skills);
         } catch (e) {
-            alert(`No se pudo guardar la skill: ${e.message}`);
+            setErr(`No se pudo guardar: ${e.message}`);
         } finally {
             setSaving(false);
         }
@@ -33,14 +36,15 @@ const SkillRow = ({ skill, expanded, onToggle, onSaved, onDeleted }) => {
 
     const remove = async () => {
         if (deleting) return;
-        if (!window.confirm(`¿Borrar la skill "${skill.name}"?`)) return;
+        setErr('');
         setDeleting(true);
         try {
             const data = await agentIAFetch(`/api/agent-ia/skills?id=${encodeURIComponent(skill.id)}`, { method: 'DELETE' });
             if (onDeleted) onDeleted(data.skills);
         } catch (e) {
-            alert(`No se pudo borrar: ${e.message}`);
+            setErr(`No se pudo borrar: ${e.message}`);
             setDeleting(false);
+            setConfirmDelete(false);
         }
     };
 
@@ -67,13 +71,24 @@ const SkillRow = ({ skill, expanded, onToggle, onSaved, onDeleted }) => {
                         className="w-full h-44 resize-none text-[12px] font-mono leading-relaxed rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-900 px-2.5 py-2 text-gray-800 dark:text-gray-100 outline-none focus:border-amber-500"
                     />
                     <div className="flex items-center justify-between">
-                        <button onClick={remove} disabled={deleting} className="inline-flex items-center gap-1 text-[11px] font-semibold text-red-500 hover:text-red-600 disabled:opacity-50">
-                            {deleting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />} Borrar
-                        </button>
+                        {confirmDelete ? (
+                            <span className="inline-flex items-center gap-1.5 text-[11px]">
+                                <span className="text-gray-600 dark:text-gray-300">¿Borrar?</span>
+                                <button onClick={remove} disabled={deleting} className="font-semibold text-red-500 hover:text-red-600 disabled:opacity-50">
+                                    {deleting ? <Loader2 className="w-3.5 h-3.5 animate-spin inline" /> : 'Sí, borrar'}
+                                </button>
+                                <button onClick={() => setConfirmDelete(false)} disabled={deleting} className="text-gray-400 hover:text-gray-500">Cancelar</button>
+                            </span>
+                        ) : (
+                            <button onClick={() => { setErr(''); setConfirmDelete(true); }} className="inline-flex items-center gap-1 text-[11px] font-semibold text-red-500 hover:text-red-600">
+                                <Trash2 className="w-3.5 h-3.5" /> Borrar
+                            </button>
+                        )}
                         <button onClick={save} disabled={saving || !dirty || !name.trim()} className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors ${dirty && name.trim() ? 'bg-amber-600 hover:bg-amber-700 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500'}`}>
                             {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />} Guardar
                         </button>
                     </div>
+                    {err && <p className="text-[11px] text-red-500 dark:text-red-400">{err}</p>}
                 </div>
             )}
         </div>
@@ -85,9 +100,11 @@ const SkillsPanel = ({ skills = [], onChange }) => {
     const [creating, setCreating] = useState(false);
     const [newName, setNewName] = useState('');
     const [savingNew, setSavingNew] = useState(false);
+    const [createErr, setCreateErr] = useState('');
 
     const createSkill = async () => {
         if (savingNew || !newName.trim()) return;
+        setCreateErr('');
         setSavingNew(true);
         try {
             const data = await agentIAFetch('/api/agent-ia/skills', { method: 'POST', body: { name: newName.trim(), content: '' } });
@@ -96,7 +113,7 @@ const SkillsPanel = ({ skills = [], onChange }) => {
             setCreating(false);
             if (data.skill?.id) setExpandedId(data.skill.id);
         } catch (e) {
-            alert(`No se pudo crear la skill: ${e.message}`);
+            setCreateErr(`No se pudo crear: ${e.message}`);
         } finally {
             setSavingNew(false);
         }
@@ -128,6 +145,11 @@ const SkillsPanel = ({ skills = [], onChange }) => {
                     <button onClick={createSkill} disabled={savingNew || !newName.trim()} className="inline-flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white">
                         {savingNew ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Crear'}
                     </button>
+                </div>
+            )}
+            {createErr && (
+                <div className="px-4 py-1.5 border-b border-gray-200 dark:border-gray-700 bg-red-50/50 dark:bg-red-900/10">
+                    <p className="text-[11px] text-red-500 dark:text-red-400">{createErr}</p>
                 </div>
             )}
 

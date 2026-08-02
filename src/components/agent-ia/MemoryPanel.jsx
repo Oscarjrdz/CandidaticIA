@@ -13,6 +13,7 @@ const MemoryPanel = ({ value, pending = [], onSaved, onResolved }) => {
     const [saving, setSaving] = useState(false);
     const [savedAt, setSavedAt] = useState(0);
     const [busyId, setBusyId] = useState(null);
+    const [err, setErr] = useState('');
     const lastExternalRef = useRef(value);
 
     useEffect(() => {
@@ -25,6 +26,7 @@ const MemoryPanel = ({ value, pending = [], onSaved, onResolved }) => {
 
     const save = async () => {
         if (saving) return;
+        setErr('');
         setSaving(true);
         try {
             await agentIAFetch('/api/agent-ia/config', { method: 'PUT', body: { doc: 'memory', content: draft } });
@@ -32,7 +34,7 @@ const MemoryPanel = ({ value, pending = [], onSaved, onResolved }) => {
             setSavedAt(Date.now());
             if (onSaved) onSaved(draft);
         } catch (e) {
-            alert(`No se pudo guardar MEMORY.md: ${e.message}`);
+            setErr(`No se pudo guardar: ${e.message}`);
         } finally {
             setSaving(false);
         }
@@ -40,6 +42,7 @@ const MemoryPanel = ({ value, pending = [], onSaved, onResolved }) => {
 
     const resolve = async (id, action) => {
         if (busyId) return;
+        setErr('');
         setBusyId(id);
         try {
             const data = await agentIAFetch('/api/agent-ia/memory', { method: 'POST', body: { action, id } });
@@ -51,7 +54,7 @@ const MemoryPanel = ({ value, pending = [], onSaved, onResolved }) => {
             }
             if (onResolved) onResolved(data);
         } catch (e) {
-            alert(`No se pudo ${action === 'approve' ? 'aprobar' : 'rechazar'}: ${e.message}`);
+            setErr(`No se pudo ${action === 'approve' ? 'aprobar' : 'rechazar'}: ${e.message}`);
         } finally {
             setBusyId(null);
         }
@@ -112,6 +115,7 @@ const MemoryPanel = ({ value, pending = [], onSaved, onResolved }) => {
                 placeholder="Aún no hay memoria acumulada. El agente propondrá aprendizajes aquí, y tú los apruebas."
                 className="w-full h-52 resize-none px-4 py-3 text-[13px] font-mono leading-relaxed text-gray-800 dark:text-gray-100 bg-white dark:bg-gray-800 outline-none"
             />
+            {err && <p className="px-4 py-2 text-[11px] text-red-500 dark:text-red-400 border-t border-gray-100 dark:border-gray-700/60">{err}</p>}
         </div>
     );
 };

@@ -117,17 +117,17 @@ const AgentChat = ({ hasApiKey, model, onAgentsUpdated, onMemoryProposed, onSkil
     // Aprobar/descartar una propuesta de memoria DESDE el chat. Actualiza el status de la
     // tarjeta (persistido con el transcript) y refresca el panel derecho.
     const resolveInlineMemory = async (msgIdx, proposalId, action) => {
-        const setStatus = (status) => setMessages((prev) => prev.map((m, i) => (
-            i !== msgIdx ? m : { ...m, memoryProposals: (m.memoryProposals || []).map((p) => (p.id === proposalId ? { ...p, status } : p)) }
+        const patch = (fields) => setMessages((prev) => prev.map((m, i) => (
+            i !== msgIdx ? m : { ...m, memoryProposals: (m.memoryProposals || []).map((p) => (p.id === proposalId ? { ...p, ...fields } : p)) }
         )));
-        setStatus('busy');
+        patch({ status: 'busy', error: null });
         try {
             await agentIAFetch('/api/agent-ia/memory', { method: 'POST', body: { action, id: proposalId } });
-            setStatus(action === 'approve' ? 'saved' : 'discarded');
+            patch({ status: action === 'approve' ? 'saved' : 'discarded' });
             if (onMemoryProposed) onMemoryProposed(); // refresca MEMORY.md + pendientes del panel
         } catch (e) {
-            setStatus('pending');
-            alert(`No se pudo ${action === 'approve' ? 'guardar' : 'descartar'}: ${e.message}`);
+            // Error inline en la tarjeta (sin alert bloqueante); se puede reintentar.
+            patch({ status: 'pending', error: `No se pudo ${action === 'approve' ? 'guardar' : 'descartar'}: ${e.message}` });
         }
     };
 
@@ -275,6 +275,7 @@ const AgentChat = ({ hasApiKey, model, onAgentsUpdated, onMemoryProposed, onSkil
                                             <button onClick={() => resolveInlineMemory(i, p.id, 'reject')} disabled={p.status === 'busy'} className="text-[11px] font-semibold px-2.5 py-1 rounded-lg text-gray-500 dark:text-gray-400 hover:bg-black/5 dark:hover:bg-white/5 disabled:opacity-50 transition-colors">
                                                 Descartar
                                             </button>
+                                            {p.error && <span className="text-[11px] text-red-500">{p.error}</span>}
                                         </div>
                                     ) : (
                                         <div className={`mt-1.5 text-[11px] font-semibold inline-flex items-center gap-1 ${p.status === 'saved' ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-400 dark:text-gray-500'}`}>

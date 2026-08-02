@@ -12,6 +12,7 @@ const AgentsDocEditor = ({ value, onSaved }) => {
     const [draft, setDraft] = useState(value || '');
     const [saving, setSaving] = useState(false);
     const [savedAt, setSavedAt] = useState(0);
+    const [err, setErr] = useState('');
     const lastExternalRef = useRef(value);
 
     // El agente (u otra fuente) actualizó el documento: sincroniza SIN pisar una
@@ -27,6 +28,7 @@ const AgentsDocEditor = ({ value, onSaved }) => {
 
     const save = async () => {
         if (saving) return;
+        setErr('');
         setSaving(true);
         try {
             await agentIAFetch('/api/agent-ia/config', { method: 'PUT', body: { doc: 'agents', content: draft } });
@@ -34,7 +36,7 @@ const AgentsDocEditor = ({ value, onSaved }) => {
             setSavedAt(Date.now());
             if (onSaved) onSaved(draft);
         } catch (e) {
-            alert(`No se pudo guardar AGENTS.md: ${e.message}`);
+            setErr(`No se pudo guardar: ${e.message}`);
         } finally {
             setSaving(false);
         }
@@ -73,6 +75,7 @@ const AgentsDocEditor = ({ value, onSaved }) => {
                 placeholder="Define aquí el comportamiento del agente…"
                 className="w-full h-64 resize-none px-4 py-3 text-[13px] font-mono leading-relaxed text-gray-800 dark:text-gray-100 bg-white dark:bg-gray-800 outline-none"
             />
+            {err && <p className="px-4 py-2 text-[11px] text-red-500 dark:text-red-400 border-t border-gray-100 dark:border-gray-700/60">{err}</p>}
         </div>
     );
 };
