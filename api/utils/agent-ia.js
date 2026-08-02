@@ -138,20 +138,95 @@ export async function getTagCounts() {
     }
 }
 
-// Conteo de candidatos completos vs incompletos. BARATO: cardinalidad de dos SETs
+// Conteo de candidatos completos vs incompletos vs no leídos. BARATO: cardinalidad de SETs
 // que la plataforma ya mantiene (SCARD es O(1)), sin escanear ni tokens.
 export async function getCandidateCounts() {
     const redis = getRedisClient();
     if (!redis) return null;
     try {
-        const [complete, pending] = await Promise.all([
+        const [complete, pending, unread] = await Promise.all([
             redis.scard('stats:list:complete'),
-            redis.scard('stats:list:pending')
+            redis.scard('stats:list:pending'),
+            redis.scard('candidates:unread')
         ]);
         const completeN = Number(complete) || 0;
         const incompleteN = Number(pending) || 0;
-        return { complete: completeN, incomplete: incompleteN, total: completeN + incompleteN };
+        const unreadN = Number(unread) || 0;
+        return { complete: completeN, incomplete: incompleteN, unread: unreadN, total: completeN + incompleteN };
     } catch {
+        return null;
+    }
+}
+
+// Consultas cruzadas de candidatos por intersección de SETs en Redis (SINTER = O(N)).
+// BARATO: Cruza etiqueta (index:candidates:tag:<b64>), estado (stats:list:complete/pending)
+// y lectura (candidates:unread) en una sola operación de Redis sin gastar tokens.
+export async function getCrossedCandidateCounts({ etiqueta, estado, noLeidos } = {}) {
+    const redis = getRedisClient();
+    if (!redis) return null;
+    try {
+        let canonicalTag = null;
+        if (etiqueta) {
+            canonicalTag = await resolveTagName(etiqueta);
+            if (!canonicalTag) {
+                return { error: `No encontré una etiqueta que coincida con "${etiqueta}". Usa contar_etiquetas para ver los nombres reales.` };
+            }
+        }
+
+        const setKeys = [];
+
+        if (canonicalTag) {
+            const tagB64 = Buffer.from(String(canonicalTag).trim().toLowerCase()).toString('base64url');
+            setKeys.push(`index:candidates:tag:${tagB64}`);
+        }
+
+        const est = String(estado || '').toLowerCase().trim();
+        if (est === 'completo' || est === 'completos') {
+            setKeys.push('stats:list:complete');
+        } else if (est === 'incompleto' || est === 'incompletos' || est === 'pendiente' || est === 'pendientes') {
+            setKeys.push('stats:list:pending');
+        }
+
+        const isUnread = noLeidos === true || String(noLeidos).toLowerCase() === 'true' || String(noLeidos).toLowerCase() === 'si' || String(noLeidos).toLowerCase() === 'sí';
+        if (isUnread) {
+            setKeys.push('candidates:unread');
+        }
+
+        if (setKeys.length === 0) {
+            return await getCandidateCounts();
+        }
+
+        let matchingIds = [];
+        if (setKeys.length === 1) {
+            matchingIds = await redis.smembers(setKeys[0]);
+        } else {
+            matchingIds = await redis.sinter(...setKeys);
+        }
+
+        const totalMatches = matchingIds ? matchingIds.length : 0;
+
+        let sampleNames = [];
+        if (totalMatches > 0) {
+            const sampleIds = matchingIds.slice(0, 3);
+            const pipe = redis.pipeline();
+            sampleIds.forEach((id) => pipe.hmget(`candidate:${id}`, 'nombreReal', 'nombre'));
+            const results = await pipe.exec();
+            sampleNames = (results || []).map(([err, fields]) => {
+                if (!fields) return null;
+                const [nombreReal, nombre] = fields;
+                return nombreReal || nombre || null;
+            }).filter(Boolean);
+        }
+
+        return {
+            tag: canonicalTag,
+            estadoFilter: est || 'todos',
+            noLeidosFilter: isUnread,
+            count: totalMatches,
+            sample: sampleNames
+        };
+    } catch (err) {
+        console.error('Error in getCrossedCandidateCounts:', err);
         return null;
     }
 }
@@ -462,7 +537,7 @@ export async function assembleSystemPrompt() {
         '- `listar_skills`: nombres de las skills de reclutamiento existentes.\n' +
         '- `leer_skill`: abre el contenido completo de una skill por su nombre (ej. "Yageo").\n' +
         '- `guardar_skill`: crea o edita una skill (nombre + contenido markdown completo). Si el nombre ya existe, la reemplaza; si no, la crea. Se guarda al instante y se ve en el panel del usuario.\n' +
-        '- `contar_candidatos`: cuántos candidatos hay completos vs incompletos (y el total). Lectura barata de contadores; úsala cuando pregunten por esas cantidades.\n' +
+        '- `contar_candidatos`: consulta y filtra candidatos por estado (completos/incompletos), etiqueta (ej. "Yageo") y/o no leídos (burbujas sin responder). Permite consultas cruzadas como "cuántos completos con etiqueta Yageo están no leídos". Lectura barata de intersecciones de Sets en Redis (SINTER O(N)); no escanea ni gasta tokens.\n' +
         '- `contar_etiquetas`: las etiquetas de Candidatic CON su cantidad de candidatos (y cuántos sin etiqueta). Sirve también para saber qué etiquetas existen. Lectura barata; NO inventes nombres ni números.\n' +
         '- `contar_altas`: cuántos candidatos LLEGARON (se dieron de alta) en una fecha/rango (hoy, ayer, esta semana, este mes, o fechas explícitas). Lectura barata de contadores diarios.\n' +
         '- `contar_altas_etiqueta`: cuántos candidatos de UNA etiqueta llegaron en una fecha/rango (ej. "cuántos de Yageo llegaron hoy"). El conteo por etiqueta y día se registra desde que se activó esta función, así que fechas muy anteriores pueden salir en 0.\n' +

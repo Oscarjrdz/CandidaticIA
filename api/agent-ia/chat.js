@@ -7,6 +7,7 @@ import {
     addMemoryProposal,
     getTagCounts,
     getCandidateCounts,
+    getCrossedCandidateCounts,
     buildDateKeys,
     getCapturesTotal,
     getCapturesByTag,
@@ -108,8 +109,16 @@ const TOOLS = [
     },
     {
         name: 'contar_candidatos',
-        description: 'Cuántos candidatos hay completos vs incompletos (y el total). Lectura BARATA de contadores de Redis; no escanea ni gasta tokens. Úsala cuando pregunten por esas cantidades.',
-        input_schema: { type: 'object', properties: {}, required: [] }
+        description: 'Consulta y filtra candidatos por estado (completos/incompletos), etiqueta (ej. "Yageo", "Metalsa") y/o no leídos (burbujas sin responder). Permite consultas cruzadas (ej. "cuántos completos con etiqueta Yageo están no leídos"). Lectura BARATA de intersecciones de Sets en Redis (SINTER O(N)); no escanea ni gasta tokens.',
+        input_schema: {
+            type: 'object',
+            properties: {
+                etiqueta: { type: 'string', description: 'Nombre o parte del nombre de la etiqueta (opcional, ej. "Yageo", "Metalsa").' },
+                estado: { type: 'string', enum: ['completos', 'incompletos', 'todos'], description: 'Filtrar por perfil completo o incompleto (opcional).' },
+                no_leidos: { type: 'boolean', description: 'Si es true, sólo cuenta los que tienen mensajes no leídos (burbujas sin responder por el reclutador).' }
+            },
+            required: []
+        }
     },
     {
         name: 'contar_etiquetas',
@@ -249,10 +258,34 @@ export default async function handler(req, res) {
                         result = r.error || 'No pude guardar la skill.';
                     }
                 } else if (block.name === 'contar_candidatos') {
-                    const c = await getCandidateCounts();
-                    result = c
-                        ? `Candidatos: ${c.complete} completos, ${c.incomplete} incompletos (total ${c.total}).`
-                        : 'No pude leer el conteo de candidatos en este momento.';
+                    const input = block.input || {};
+                    if (input.etiqueta || input.estado || input.no_leidos != null) {
+                        const c = await getCrossedCandidateCounts({
+                            etiqueta: input.etiqueta,
+                            estado: input.estado,
+                            noLeidos: input.no_leidos
+                        });
+                        if (!c) {
+                            result = 'No pude leer la consulta cruzada de candidatos en este momento.';
+                        } else if (c.error) {
+                            result = c.error;
+                        } else {
+                            const filtersStr = [
+                                c.tag ? `Etiqueta: "${c.tag}"` : null,
+                                c.estadoFilter !== 'todos' ? `Estado: ${c.estadoFilter}` : null,
+                                c.noLeidosFilter ? 'No leídos (sin responder): sí' : null
+                            ].filter(Boolean).join(', ') || 'Sin filtros';
+                            const sampleStr = c.sample && c.sample.length
+                                ? ` Muestra: ${c.sample.join(', ')}.`
+                                : '';
+                            result = `Candidatos encontrados: ${c.count} (${filtersStr}).${sampleStr}`;
+                        }
+                    } else {
+                        const c = await getCandidateCounts();
+                        result = c
+                            ? `Candidatos totales: ${c.complete} completos, ${c.incomplete} incompletos, ${c.unread} con mensajes no leídos (listos para responder) (total ${c.total}).`
+                            : 'No pude leer el conteo de candidatos en este momento.';
+                    }
                 } else if (block.name === 'contar_etiquetas') {
                     const data = await getTagCounts();
                     if (!data) {
