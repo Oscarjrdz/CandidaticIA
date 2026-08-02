@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Send, Loader2, Bot, Wrench, FileText, BrainCircuit, Trash2, ThumbsUp } from 'lucide-react';
+import { Send, Loader2, Bot, Wrench, FileText, BrainCircuit, Trash2, ThumbsUp, Puzzle } from 'lucide-react';
 import { agentIAFetch } from './api';
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -47,7 +47,7 @@ const Bubble = ({ role, children }) => (
     </div>
 );
 
-const AgentChat = ({ hasApiKey, model, onAgentsUpdated, onMemoryProposed }) => {
+const AgentChat = ({ hasApiKey, model, onAgentsUpdated, onMemoryProposed, onSkillsUpdated }) => {
     const [messages, setMessages] = useState(loadStoredMessages);
     const [input, setInput] = useState('');
     const [sending, setSending] = useState(false);
@@ -85,12 +85,14 @@ const AgentChat = ({ hasApiKey, model, onAgentsUpdated, onMemoryProposed }) => {
                 toolCalls: data.toolCalls,
                 usageTokens: data.usageTokens,
                 agentsUpdated: data.agentsUpdated,
+                skillsUpdated: data.skillsUpdated,
                 // tarjetas de aprobación en el chat; status por tarjeta: pending|busy|saved|discarded
                 memoryProposals: Array.isArray(data.memoryProposals)
                     ? data.memoryProposals.map((p) => ({ ...p, status: 'pending' }))
                     : []
             }]);
             if (data.agentsUpdated && onAgentsUpdated) onAgentsUpdated();
+            if (data.skillsUpdated && onSkillsUpdated) onSkillsUpdated();
             if (data.memoryProposals?.length && onMemoryProposed) onMemoryProposed();
         } catch (e) {
             setMessages((prev) => [...prev, { role: 'assistant', content: `No pude responder: ${e.message}` }]);
@@ -153,9 +155,10 @@ const AgentChat = ({ hasApiKey, model, onAgentsUpdated, onMemoryProposed }) => {
                     <div key={i} className="space-y-1.5">
                         <Bubble role={m.role}>{m.content}</Bubble>
 
-                        {m.role === 'assistant' && (m.toolCalls > 0 || m.agentsUpdated) && (
+                        {m.role === 'assistant' && (m.toolCalls > 0 || m.agentsUpdated || m.skillsUpdated) && (
                             <div className="flex flex-wrap items-center gap-2 text-[10px] text-gray-500 dark:text-gray-400 pl-1">
                                 {m.agentsUpdated && <span className="inline-flex items-center gap-1 text-blue-600 dark:text-blue-400"><FileText className="w-3 h-3" /> editó AGENTS.md</span>}
+                                {m.skillsUpdated && <span className="inline-flex items-center gap-1 text-amber-600 dark:text-amber-400"><Puzzle className="w-3 h-3" /> guardó una skill</span>}
                                 {m.toolCalls > 0 && <span className="inline-flex items-center gap-1"><Wrench className="w-3 h-3" /> {m.toolCalls} herramienta(s)</span>}
                             </div>
                         )}

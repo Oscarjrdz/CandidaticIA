@@ -13,7 +13,7 @@ import { agentIAFetch } from './agent-ia/api';
 //   Izquierda  → chat con el agente.
 //   Derecha    → 3 módulos apilados: AGENTS.md (definición, editable por ti y por
 //                el agente), MEMORY.md (memoria; el agente propone, tú apruebas),
-//                y Skills (placeholder por ahora).
+//                y Skills de reclutamiento (playbooks por cliente; ver/editar/crear).
 //
 // Los documentos viven en Redis (no en archivos de git) porque el agente los edita
 // en vivo y el filesystem de Vercel es de solo lectura en producción. Solo SuperAdmin.
@@ -24,17 +24,22 @@ const AgentIASection = () => {
     const [agentsMd, setAgentsMd] = useState('');
     const [memoryMd, setMemoryMd] = useState('');
     const [pendingMemory, setPendingMemory] = useState([]);
+    const [skills, setSkills] = useState([]);
     const [hasApiKey, setHasApiKey] = useState(false);
     const [model, setModel] = useState('claude-opus-4-8');
 
     const load = useCallback(async () => {
         try {
-            const data = await agentIAFetch('/api/agent-ia/config');
-            setAgentsMd(data.agentsMd || '');
-            setMemoryMd(data.memoryMd || '');
-            setPendingMemory(Array.isArray(data.pendingMemory) ? data.pendingMemory : []);
-            setHasApiKey(Boolean(data.hasApiKey));
-            if (data.model) setModel(data.model);
+            const [cfg, skillsData] = await Promise.all([
+                agentIAFetch('/api/agent-ia/config'),
+                agentIAFetch('/api/agent-ia/skills').catch(() => ({ skills: [] }))
+            ]);
+            setAgentsMd(cfg.agentsMd || '');
+            setMemoryMd(cfg.memoryMd || '');
+            setPendingMemory(Array.isArray(cfg.pendingMemory) ? cfg.pendingMemory : []);
+            setHasApiKey(Boolean(cfg.hasApiKey));
+            if (cfg.model) setModel(cfg.model);
+            setSkills(Array.isArray(skillsData.skills) ? skillsData.skills : []);
         } catch {
             /* la UI muestra estado vacío si falla */
         } finally {
@@ -60,6 +65,14 @@ const AgentIASection = () => {
         } catch { /* noop */ }
     }, []);
 
+    // El agente creó/editó una skill durante el chat → recargar el listado.
+    const refreshSkills = useCallback(async () => {
+        try {
+            const data = await agentIAFetch('/api/agent-ia/skills');
+            setSkills(Array.isArray(data.skills) ? data.skills : []);
+        } catch { /* noop */ }
+    }, []);
+
     if (loading) {
         return (
             <div className="flex items-center justify-center h-full text-gray-400">
@@ -77,6 +90,7 @@ const AgentIASection = () => {
                     model={model}
                     onAgentsUpdated={refreshAgents}
                     onMemoryProposed={refreshMemory}
+                    onSkillsUpdated={refreshSkills}
                 />
             </div>
 
@@ -92,7 +106,7 @@ const AgentIASection = () => {
                         if (Array.isArray(data.pendingMemory)) setPendingMemory(data.pendingMemory);
                     }}
                 />
-                <SkillsPanel />
+                <SkillsPanel skills={skills} onChange={(list) => setSkills(Array.isArray(list) ? list : [])} />
             </div>
         </div>
     );

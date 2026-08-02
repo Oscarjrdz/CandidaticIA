@@ -28,6 +28,7 @@ export const AGENT_MODEL = 'claude-opus-4-8';
 const KEY_AGENTS_MD = 'agent-ia:agents_md';
 const KEY_MEMORY_MD = 'agent-ia:memory_md';
 const KEY_MEMORY_PENDING = 'agent-ia:memory_pending'; // JSON: [{id, text, createdAt}]
+const KEY_SKILLS = 'agent-ia:skills'; // JSON: [{id, name, content, updatedAt}]
 
 // ─── Auth: solo SuperAdmin (mismo patrón que el resto de la plataforma) ──────
 export async function requireSuperAdmin(req, res) {
@@ -132,6 +133,64 @@ export async function getQuickReplyNames() {
     }
 }
 
+// ─── SKILLS DE RECLUTAMIENTO (playbooks por cliente) ─────────────────────────
+// Cada skill es un documento con nombre (ej. "Yageo", "Metalsa") y contenido
+// markdown con las instrucciones de ese cliente: qué etiqueta usar, qué mensaje
+// del banco enviar, cómo responder al candidato en cada caso. Es CONTENIDO (no
+// código): el agente y el usuario las pueden ver, crear y editar sin desplegar.
+export async function getSkills() {
+    const redis = getRedisClient();
+    if (!redis) return [];
+    try {
+        const raw = await redis.get(KEY_SKILLS);
+        const list = raw ? JSON.parse(raw) : [];
+        return Array.isArray(list) ? list : [];
+    } catch {
+        return [];
+    }
+}
+
+async function setSkills(list) {
+    const redis = getRedisClient();
+    if (!redis) return false;
+    await redis.set(KEY_SKILLS, JSON.stringify(Array.isArray(list) ? list : []));
+    return true;
+}
+
+export async function getSkillByName(name) {
+    const norm = String(name || '').trim().toLowerCase();
+    if (!norm) return null;
+    const list = await getSkills();
+    return list.find((s) => String(s.name || '').trim().toLowerCase() === norm) || null;
+}
+
+// Crea o edita por nombre (o por id si se pasa, para permitir renombrar).
+export async function upsertSkill(name, content, id = null) {
+    const cleanName = String(name || '').trim();
+    if (!cleanName) return { success: false, error: 'Falta el nombre de la skill' };
+    const list = await getSkills();
+    let idx = -1;
+    if (id) idx = list.findIndex((s) => s.id === id);
+    if (idx < 0) idx = list.findIndex((s) => String(s.name || '').trim().toLowerCase() === cleanName.toLowerCase());
+    const now = new Date().toISOString();
+    if (idx >= 0) {
+        list[idx] = { ...list[idx], name: cleanName, content: String(content ?? ''), updatedAt: now };
+        await setSkills(list);
+        return { success: true, skill: list[idx], created: false };
+    }
+    const skill = { id: `skill-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, name: cleanName, content: String(content ?? ''), updatedAt: now };
+    list.push(skill);
+    await setSkills(list);
+    return { success: true, skill, created: true };
+}
+
+export async function deleteSkill(id) {
+    const list = await getSkills();
+    if (!list.some((s) => s.id === id)) return { success: false, error: 'Skill no encontrada' };
+    await setSkills(list.filter((s) => s.id !== id));
+    return { success: true };
+}
+
 // ─── Documento MEMORY.md (aprendizajes aprobados) ────────────────────────────
 export async function getMemoryMd() {
     const redis = getRedisClient();
@@ -209,7 +268,7 @@ export async function rejectMemoryProposal(id) {
 
 // ─── System prompt = AGENTS.md + MEMORY.md + contrato de herramientas ────────
 export async function assembleSystemPrompt() {
-    const [agentsMd, memoryMd] = await Promise.all([getAgentsMd(), getMemoryMd()]);
+    const [agentsMd, memoryMd, skills] = await Promise.all([getAgentsMd(), getMemoryMd(), getSkills()]);
     const parts = [agentsMd.trim() || DEFAULT_AGENTS_MD];
     parts.push(
         '\n\n# MEMORIA (MEMORY.md)\n' +
@@ -219,9 +278,20 @@ export async function assembleSystemPrompt() {
         (memoryMd.trim() ? memoryMd.trim() : '(Aún no hay memoria acumulada.)')
     );
     parts.push(
+        '\n\n# SKILLS DE RECLUTAMIENTO\n' +
+        'Cada skill es el "playbook" de un cliente/campaña: qué etiqueta usar, qué mensaje del banco enviar, y cómo responderle al candidato en distintos casos.\n' +
+        (skills.length
+            ? `Skills disponibles: ${skills.map((s) => s.name).join(', ')}.\n`
+            : 'Aún no hay skills creadas.\n') +
+        'No tienes el contenido completo de las skills aquí (para no saturar el contexto): ábrela con `leer_skill` cuando la necesites. Crea una nueva (ej. "Metalsa") o edita una existente con `guardar_skill`. Con `listar_skills` ves los nombres. Al crear/editar, usa nombres reales de etiquetas y del banco (consúltalos con `listar_etiquetas` y `listar_respuestas_banco`), no los inventes.'
+    );
+    parts.push(
         '\n\n# HERRAMIENTAS\n' +
         '- `editar_agents_md`: reescribe tu documento de definición (AGENTS.md). Úsala SOLO cuando el usuario te pida cambiar quién eres o cómo te comportas. Envía el documento COMPLETO ya modificado, no un fragmento.\n' +
         '- `proponer_memoria`: propón un aprendizaje para guardar en MEMORY.md entre conversaciones. Antes de llamarla, PREGÚNTALE al usuario en tu respuesta si quiere que lo guardes (ej. "¿Quieres que lo recuerde?"). Al proponerla, en el chat aparece una tarjeta con botones Guardar/Descartar: el usuario decide ahí mismo. NO afirmes que ya quedó guardado — queda pendiente hasta que el usuario lo apruebe.\n' +
+        '- `listar_skills`: nombres de las skills de reclutamiento existentes.\n' +
+        '- `leer_skill`: abre el contenido completo de una skill por su nombre (ej. "Yageo").\n' +
+        '- `guardar_skill`: crea o edita una skill (nombre + contenido markdown completo). Si el nombre ya existe, la reemplaza; si no, la crea. Se guarda al instante y se ve en el panel del usuario.\n' +
         '- `listar_etiquetas`: consulta los nombres reales de las etiquetas de Candidatic. Se usan para clasificar candidatos; muchas vienen de anuncios (ej. "Anuncio Yageo"). Úsala cuando el usuario pregunte qué etiquetas existen. NO las inventes.\n' +
         '- `listar_respuestas_banco`: consulta los nombres reales de las respuestas del Banco de Respuestas (plantillas que los reclutadores mandan a los candidatos). Úsala cuando el usuario pregunte qué respuestas de banco hay. NO las inventes.'
     );

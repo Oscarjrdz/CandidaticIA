@@ -7,6 +7,9 @@ import {
     addMemoryProposal,
     getTagNames,
     getQuickReplyNames,
+    getSkills,
+    getSkillByName,
+    upsertSkill,
     AGENT_MODEL
 } from '../utils/agent-ia.js';
 
@@ -72,6 +75,32 @@ const TOOLS = [
         }
     },
     {
+        name: 'listar_skills',
+        description: 'Devuelve los nombres de las skills de reclutamiento existentes (playbooks por cliente, ej. "Yageo", "Metalsa"). Solo lectura.',
+        input_schema: { type: 'object', properties: {}, required: [] }
+    },
+    {
+        name: 'leer_skill',
+        description: 'Abre el contenido completo de una skill de reclutamiento por su nombre (ej. "Yageo"): sus instrucciones, etiqueta, mensaje de banco y respuestas. Úsala antes de usar o editar una skill.',
+        input_schema: {
+            type: 'object',
+            properties: { nombre: { type: 'string', description: 'Nombre de la skill, ej. "Yageo".' } },
+            required: ['nombre']
+        }
+    },
+    {
+        name: 'guardar_skill',
+        description: 'Crea o edita una skill de reclutamiento. Si el nombre ya existe, reemplaza su contenido; si no, la crea. Manda el contenido COMPLETO (markdown) con el playbook del cliente: qué etiqueta usar, qué mensaje del banco, y cómo responder al candidato en cada caso. Usa nombres reales de etiquetas/banco (consúltalos con listar_etiquetas / listar_respuestas_banco).',
+        input_schema: {
+            type: 'object',
+            properties: {
+                nombre: { type: 'string', description: 'Nombre de la skill/cliente, ej. "Metalsa".' },
+                contenido: { type: 'string', description: 'El playbook completo en markdown.' }
+            },
+            required: ['nombre', 'contenido']
+        }
+    },
+    {
         name: 'listar_etiquetas',
         description: 'Devuelve los nombres reales de las etiquetas de Candidatic (clasifican candidatos; muchas vienen de anuncios, ej. "Anuncio Yageo"). Úsala cuando el usuario pregunte qué etiquetas existen o cuántas hay. Solo lectura.',
         input_schema: { type: 'object', properties: {}, required: [] }
@@ -110,6 +139,7 @@ export default async function handler(req, res) {
         const messages = [...normalizeHistory(req.body?.history), { role: 'user', content: message }];
 
         let agentsUpdated = false;      // el agente editó AGENTS.md este turno
+        let skillsUpdated = false;      // el agente creó/editó una skill este turno
         const memoryProposals = [];     // propuestas de memoria de este turno: {id, text}
         let usageTokens = 0;
         let toolCalls = 0;
@@ -153,6 +183,24 @@ export default async function handler(req, res) {
                     } else {
                         result = 'No pude registrar la propuesta (llegó vacía).';
                     }
+                } else if (block.name === 'listar_skills') {
+                    const skills = await getSkills();
+                    result = skills.length
+                        ? `Skills de reclutamiento (${skills.length}): ${skills.map((s) => s.name).join(', ')}`
+                        : 'No hay skills de reclutamiento creadas todavía.';
+                } else if (block.name === 'leer_skill') {
+                    const skill = await getSkillByName(block.input?.nombre || '');
+                    result = skill
+                        ? `Skill "${skill.name}":\n\n${skill.content || '(sin contenido)'}`
+                        : `No encontré una skill llamada "${block.input?.nombre || ''}". Usa listar_skills para ver los nombres.`;
+                } else if (block.name === 'guardar_skill') {
+                    const r = await upsertSkill(block.input?.nombre, block.input?.contenido);
+                    if (r.success) {
+                        skillsUpdated = true;
+                        result = `Skill "${r.skill.name}" ${r.created ? 'creada' : 'actualizada'}. Ya quedó guardada y se ve en el panel del usuario.`;
+                    } else {
+                        result = r.error || 'No pude guardar la skill.';
+                    }
                 } else if (block.name === 'listar_etiquetas') {
                     const tags = await getTagNames();
                     result = tags.length
@@ -184,7 +232,7 @@ export default async function handler(req, res) {
         }
 
         if (response.stop_reason === 'refusal') {
-            return res.status(200).json({ success: true, reply: 'No puedo ayudar con eso en este momento.', model: response.model, usageTokens, agentsUpdated, memoryProposals, memoryProposed: memoryProposals.length });
+            return res.status(200).json({ success: true, reply: 'No puedo ayudar con eso en este momento.', model: response.model, usageTokens, agentsUpdated, skillsUpdated, memoryProposals, memoryProposed: memoryProposals.length });
         }
 
         return res.status(200).json({
@@ -194,6 +242,7 @@ export default async function handler(req, res) {
             usageTokens,
             toolCalls,
             agentsUpdated,                       // la UI refresca AGENTS.md si true
+            skillsUpdated,                       // la UI refresca el panel de Skills si true
             memoryProposals,                     // [{id, text}] → tarjetas Guardar/Descartar en el chat
             memoryProposed: memoryProposals.length // conteo (refresca panel derecho)
         });
