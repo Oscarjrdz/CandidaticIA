@@ -90,7 +90,7 @@ const AgentChat = ({ hasApiKey, model, onAgentsUpdated, onMemoryProposed }) => {
                 {messages.map((m, i) => (
                     <div key={i} className="space-y-1">
                         <Bubble role={m.role}>{m.content}</Bubble>
-                        {m.role === 'assistant' && (m.toolCalls > 0 || m.agentsUpdated || m.memoryProposed) && (
+                        {m.role === 'assistant' && (m.toolCalls > 0 || m.agentsUpdated || m.memoryProposed > 0) && (
                             <div className="flex flex-wrap items-center gap-2 text-[10px] text-gray-500 dark:text-gray-400 pl-1">
                                 {m.agentsUpdated && <span className="inline-flex items-center gap-1 text-blue-600 dark:text-blue-400"><FileText className="w-3 h-3" /> editó AGENTS.md</span>}
                                 {m.memoryProposed > 0 && <span className="inline-flex items-center gap-1 text-purple-600 dark:text-purple-400"><BrainCircuit className="w-3 h-3" /> propuso {m.memoryProposed} memoria(s)</span>}
