@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Send, Loader2, Bot, Wrench, FileText, BrainCircuit, Trash2 } from 'lucide-react';
+import { Send, Loader2, Bot, Wrench, FileText, BrainCircuit, Trash2, ThumbsUp } from 'lucide-react';
 import { agentIAFetch } from './api';
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -85,14 +85,34 @@ const AgentChat = ({ hasApiKey, model, onAgentsUpdated, onMemoryProposed }) => {
                 toolCalls: data.toolCalls,
                 usageTokens: data.usageTokens,
                 agentsUpdated: data.agentsUpdated,
-                memoryProposed: data.memoryProposed
+                // tarjetas de aprobación en el chat; status por tarjeta: pending|busy|saved|discarded
+                memoryProposals: Array.isArray(data.memoryProposals)
+                    ? data.memoryProposals.map((p) => ({ ...p, status: 'pending' }))
+                    : []
             }]);
             if (data.agentsUpdated && onAgentsUpdated) onAgentsUpdated();
-            if (data.memoryProposed && onMemoryProposed) onMemoryProposed();
+            if (data.memoryProposals?.length && onMemoryProposed) onMemoryProposed();
         } catch (e) {
             setMessages((prev) => [...prev, { role: 'assistant', content: `No pude responder: ${e.message}` }]);
         } finally {
             setSending(false);
+        }
+    };
+
+    // Aprobar/descartar una propuesta de memoria DESDE el chat. Actualiza el status de la
+    // tarjeta (persistido con el transcript) y refresca el panel derecho.
+    const resolveInlineMemory = async (msgIdx, proposalId, action) => {
+        const setStatus = (status) => setMessages((prev) => prev.map((m, i) => (
+            i !== msgIdx ? m : { ...m, memoryProposals: (m.memoryProposals || []).map((p) => (p.id === proposalId ? { ...p, status } : p)) }
+        )));
+        setStatus('busy');
+        try {
+            await agentIAFetch('/api/agent-ia/memory', { method: 'POST', body: { action, id: proposalId } });
+            setStatus(action === 'approve' ? 'saved' : 'discarded');
+            if (onMemoryProposed) onMemoryProposed(); // refresca MEMORY.md + pendientes del panel
+        } catch (e) {
+            setStatus('pending');
+            alert(`No se pudo ${action === 'approve' ? 'guardar' : 'descartar'}: ${e.message}`);
         }
     };
 
@@ -130,15 +150,40 @@ const AgentChat = ({ hasApiKey, model, onAgentsUpdated, onMemoryProposed }) => {
                     </p>
                 )}
                 {messages.map((m, i) => (
-                    <div key={i} className="space-y-1">
+                    <div key={i} className="space-y-1.5">
                         <Bubble role={m.role}>{m.content}</Bubble>
-                        {m.role === 'assistant' && (m.toolCalls > 0 || m.agentsUpdated || m.memoryProposed > 0) && (
+
+                        {m.role === 'assistant' && (m.toolCalls > 0 || m.agentsUpdated) && (
                             <div className="flex flex-wrap items-center gap-2 text-[10px] text-gray-500 dark:text-gray-400 pl-1">
                                 {m.agentsUpdated && <span className="inline-flex items-center gap-1 text-blue-600 dark:text-blue-400"><FileText className="w-3 h-3" /> editó AGENTS.md</span>}
-                                {m.memoryProposed > 0 && <span className="inline-flex items-center gap-1 text-purple-600 dark:text-purple-400"><BrainCircuit className="w-3 h-3" /> propuso {m.memoryProposed} memoria(s)</span>}
                                 {m.toolCalls > 0 && <span className="inline-flex items-center gap-1"><Wrench className="w-3 h-3" /> {m.toolCalls} herramienta(s)</span>}
                             </div>
                         )}
+
+                        {/* Tarjetas de memoria propuesta: aprobar/descartar SIN salir del chat */}
+                        {m.role === 'assistant' && Array.isArray(m.memoryProposals) && m.memoryProposals.map((p) => (
+                            <div key={p.id} className="flex items-start gap-2 rounded-xl border border-purple-200 dark:border-purple-800 bg-purple-50 dark:bg-purple-900/15 px-3 py-2 max-w-[92%]">
+                                <BrainCircuit className="w-4 h-4 text-purple-600 dark:text-purple-400 mt-0.5 shrink-0" />
+                                <div className="flex-1 min-w-0">
+                                    <div className="text-[10px] font-semibold text-purple-600 dark:text-purple-400 uppercase tracking-wide mb-0.5">¿Guardar en memoria?</div>
+                                    <p className="text-[13px] text-gray-700 dark:text-gray-200 leading-snug break-words">{p.text}</p>
+                                    {(p.status === 'pending' || p.status === 'busy') ? (
+                                        <div className="flex items-center gap-2 mt-2">
+                                            <button onClick={() => resolveInlineMemory(i, p.id, 'approve')} disabled={p.status === 'busy'} className="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white disabled:opacity-50 transition-colors">
+                                                {p.status === 'busy' ? <Loader2 className="w-3 h-3 animate-spin" /> : <ThumbsUp className="w-3 h-3" />} Guardar
+                                            </button>
+                                            <button onClick={() => resolveInlineMemory(i, p.id, 'reject')} disabled={p.status === 'busy'} className="text-[11px] font-semibold px-2.5 py-1 rounded-lg text-gray-500 dark:text-gray-400 hover:bg-black/5 dark:hover:bg-white/5 disabled:opacity-50 transition-colors">
+                                                Descartar
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <div className={`mt-1.5 text-[11px] font-semibold inline-flex items-center gap-1 ${p.status === 'saved' ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-400 dark:text-gray-500'}`}>
+                                            {p.status === 'saved' ? <><ThumbsUp className="w-3 h-3" /> Guardado en MEMORY.md</> : 'Descartado'}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        ))}
                     </div>
                 ))}
                 {sending && (

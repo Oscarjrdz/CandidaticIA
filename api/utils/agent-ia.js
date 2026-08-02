@@ -177,12 +177,15 @@ export async function assembleSystemPrompt() {
     const parts = [agentsMd.trim() || DEFAULT_AGENTS_MD];
     parts.push(
         '\n\n# MEMORIA (MEMORY.md)\n' +
+        'Este es el contenido EXACTO y ACTUAL de tu MEMORY.md. PUEDES LEERLO: si el usuario ' +
+        'te pide un resumen de tu memoria, "el último punto", "qué recuerdas" o algo similar, ' +
+        'respóndele con base en lo que ves aquí abajo (el último punto es la última línea de la lista).\n\n' +
         (memoryMd.trim() ? memoryMd.trim() : '(Aún no hay memoria acumulada.)')
     );
     parts.push(
         '\n\n# HERRAMIENTAS\n' +
         '- `editar_agents_md`: reescribe tu documento de definición (AGENTS.md). Úsala SOLO cuando el usuario te pida cambiar quién eres o cómo te comportas. Envía el documento COMPLETO ya modificado, no un fragmento.\n' +
-        '- `proponer_memoria`: propón un aprendizaje para guardar entre conversaciones. NO queda guardado hasta que el usuario lo apruebe — no afirmes que ya lo recordaste de forma permanente.'
+        '- `proponer_memoria`: propón un aprendizaje para guardar en MEMORY.md entre conversaciones. Antes de llamarla, PREGÚNTALE al usuario en tu respuesta si quiere que lo guardes (ej. "¿Quieres que lo recuerde?"). Al proponerla, en el chat aparece una tarjeta con botones Guardar/Descartar: el usuario decide ahí mismo. NO afirmes que ya quedó guardado — queda pendiente hasta que el usuario lo apruebe.'
     );
     return parts.join('');
 }

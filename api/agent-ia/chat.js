@@ -97,8 +97,8 @@ export default async function handler(req, res) {
         const system = await assembleSystemPrompt();
         const messages = [...normalizeHistory(req.body?.history), { role: 'user', content: message }];
 
-        let agentsUpdated = false;   // el agente editó AGENTS.md este turno
-        let memoryProposed = 0;      // cuántas propuestas de memoria hizo este turno
+        let agentsUpdated = false;      // el agente editó AGENTS.md este turno
+        const memoryProposals = [];     // propuestas de memoria de este turno: {id, text}
         let usageTokens = 0;
         let toolCalls = 0;
 
@@ -136,8 +136,8 @@ export default async function handler(req, res) {
                     const aprendizaje = block.input?.aprendizaje || '';
                     const proposal = await addMemoryProposal(aprendizaje);
                     if (proposal) {
-                        memoryProposed++;
-                        result = 'Propuesta de memoria registrada. Queda PENDIENTE hasta que el usuario la apruebe en el panel — no está guardada todavía.';
+                        memoryProposals.push({ id: proposal.id, text: proposal.text });
+                        result = 'Propuesta registrada. En el chat le apareció al usuario una tarjeta con botones Guardar/Descartar; él decide ahí. PREGÚNTALE explícitamente en tu respuesta si quiere que lo guardes. NO afirmes que ya quedó guardado.';
                     } else {
                         result = 'No pude registrar la propuesta (llegó vacía).';
                     }
@@ -162,7 +162,7 @@ export default async function handler(req, res) {
         }
 
         if (response.stop_reason === 'refusal') {
-            return res.status(200).json({ success: true, reply: 'No puedo ayudar con eso en este momento.', model: response.model, usageTokens, agentsUpdated, memoryProposed });
+            return res.status(200).json({ success: true, reply: 'No puedo ayudar con eso en este momento.', model: response.model, usageTokens, agentsUpdated, memoryProposals, memoryProposed: memoryProposals.length });
         }
 
         return res.status(200).json({
@@ -171,8 +171,9 @@ export default async function handler(req, res) {
             model: response.model,
             usageTokens,
             toolCalls,
-            agentsUpdated,     // la UI refresca AGENTS.md si true
-            memoryProposed     // la UI refresca la lista de propuestas si > 0
+            agentsUpdated,                       // la UI refresca AGENTS.md si true
+            memoryProposals,                     // [{id, text}] → tarjetas Guardar/Descartar en el chat
+            memoryProposed: memoryProposals.length // conteo (refresca panel derecho)
         });
     } catch (error) {
         console.error('❌ [AgentIA] chat error:', error);
