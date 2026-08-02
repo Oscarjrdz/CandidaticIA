@@ -5,6 +5,8 @@ import {
     assembleSystemPrompt,
     setAgentsMd,
     addMemoryProposal,
+    getTagNames,
+    getQuickReplyNames,
     AGENT_MODEL
 } from '../utils/agent-ia.js';
 
@@ -68,6 +70,16 @@ const TOOLS = [
             },
             required: ['aprendizaje']
         }
+    },
+    {
+        name: 'listar_etiquetas',
+        description: 'Devuelve los nombres reales de las etiquetas de Candidatic (clasifican candidatos; muchas vienen de anuncios, ej. "Anuncio Yageo"). Úsala cuando el usuario pregunte qué etiquetas existen o cuántas hay. Solo lectura.',
+        input_schema: { type: 'object', properties: {}, required: [] }
+    },
+    {
+        name: 'listar_respuestas_banco',
+        description: 'Devuelve los nombres reales de las respuestas del Banco de Respuestas (plantillas que los reclutadores mandan a los candidatos). Úsala cuando el usuario pregunte qué respuestas de banco hay o sus nombres. Solo lectura.',
+        input_schema: { type: 'object', properties: {}, required: [] }
     }
 ];
 
@@ -141,6 +153,16 @@ export default async function handler(req, res) {
                     } else {
                         result = 'No pude registrar la propuesta (llegó vacía).';
                     }
+                } else if (block.name === 'listar_etiquetas') {
+                    const tags = await getTagNames();
+                    result = tags.length
+                        ? `Etiquetas de Candidatic (${tags.length}):\n${tags.map((t) => `- ${t}`).join('\n')}`
+                        : 'No hay etiquetas configuradas en Candidatic.';
+                } else if (block.name === 'listar_respuestas_banco') {
+                    const names = await getQuickReplyNames();
+                    result = names.length
+                        ? `Respuestas del Banco de Respuestas (${names.length}):\n${names.map((n) => `- ${n}`).join('\n')}`
+                        : 'No hay respuestas guardadas en el Banco de Respuestas.';
                 } else {
                     result = 'Herramienta desconocida.';
                 }

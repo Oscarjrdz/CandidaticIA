@@ -96,6 +96,42 @@ export async function setAgentsMd(content) {
     return true;
 }
 
+// ─── SKILL: datos de solo lectura de Candidatic (etiquetas + banco de respuestas) ──
+// Lee las mismas llaves de Redis que usa la plataforma, así el agente ve lo real.
+
+// Nombres de las etiquetas (candidatic:chat_tags) — se usan para clasificar
+// candidatos, muchas vienen de anuncios (ej. "Anuncio Yageo").
+export async function getTagNames() {
+    const redis = getRedisClient();
+    if (!redis) return [];
+    try {
+        const raw = await redis.get('candidatic:chat_tags');
+        const list = raw ? JSON.parse(raw) : [];
+        return (Array.isArray(list) ? list : [])
+            .map((t) => (typeof t === 'string' ? t : t?.name))
+            .map((n) => String(n || '').trim())
+            .filter(Boolean);
+    } catch {
+        return [];
+    }
+}
+
+// Nombres de las respuestas del Banco de Respuestas (candidatic:quick_replies) —
+// plantillas que los reclutadores mandan a los candidatos.
+export async function getQuickReplyNames() {
+    const redis = getRedisClient();
+    if (!redis) return [];
+    try {
+        const raw = await redis.get('candidatic:quick_replies');
+        const list = raw ? JSON.parse(raw) : [];
+        return (Array.isArray(list) ? list : [])
+            .map((r) => String(r?.name || '').trim())
+            .filter(Boolean);
+    } catch {
+        return [];
+    }
+}
+
 // ─── Documento MEMORY.md (aprendizajes aprobados) ────────────────────────────
 export async function getMemoryMd() {
     const redis = getRedisClient();
@@ -185,7 +221,9 @@ export async function assembleSystemPrompt() {
     parts.push(
         '\n\n# HERRAMIENTAS\n' +
         '- `editar_agents_md`: reescribe tu documento de definición (AGENTS.md). Úsala SOLO cuando el usuario te pida cambiar quién eres o cómo te comportas. Envía el documento COMPLETO ya modificado, no un fragmento.\n' +
-        '- `proponer_memoria`: propón un aprendizaje para guardar en MEMORY.md entre conversaciones. Antes de llamarla, PREGÚNTALE al usuario en tu respuesta si quiere que lo guardes (ej. "¿Quieres que lo recuerde?"). Al proponerla, en el chat aparece una tarjeta con botones Guardar/Descartar: el usuario decide ahí mismo. NO afirmes que ya quedó guardado — queda pendiente hasta que el usuario lo apruebe.'
+        '- `proponer_memoria`: propón un aprendizaje para guardar en MEMORY.md entre conversaciones. Antes de llamarla, PREGÚNTALE al usuario en tu respuesta si quiere que lo guardes (ej. "¿Quieres que lo recuerde?"). Al proponerla, en el chat aparece una tarjeta con botones Guardar/Descartar: el usuario decide ahí mismo. NO afirmes que ya quedó guardado — queda pendiente hasta que el usuario lo apruebe.\n' +
+        '- `listar_etiquetas`: consulta los nombres reales de las etiquetas de Candidatic. Se usan para clasificar candidatos; muchas vienen de anuncios (ej. "Anuncio Yageo"). Úsala cuando el usuario pregunte qué etiquetas existen. NO las inventes.\n' +
+        '- `listar_respuestas_banco`: consulta los nombres reales de las respuestas del Banco de Respuestas (plantillas que los reclutadores mandan a los candidatos). Úsala cuando el usuario pregunte qué respuestas de banco hay. NO las inventes.'
     );
     return parts.join('');
 }
