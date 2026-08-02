@@ -1,5 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { Send, Loader2, Bot, Wrench, FileText, BrainCircuit, Trash2, ThumbsUp, Puzzle } from 'lucide-react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { Send, Loader2, Bot, Wrench, FileText, BrainCircuit, Trash2, ThumbsUp, Puzzle, Coins } from 'lucide-react';
 import { agentIAFetch } from './api';
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -52,8 +52,15 @@ const AgentChat = ({ hasApiKey, model, onAgentsUpdated, onMemoryProposed, onSkil
     const [input, setInput] = useState('');
     const [sending, setSending] = useState(false);
     const endRef = useRef(null);
+    const scrolledOnceRef = useRef(false);
 
-    useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' }); }, [messages, sending]);
+    // Al ABRIR el chat: salto instantáneo al fondo (sin animación desde arriba).
+    // En mensajes nuevos: scroll suave. useLayoutEffect corre antes del pintado,
+    // así que el primer salto no se ve como un scroll animado.
+    useLayoutEffect(() => {
+        endRef.current?.scrollIntoView({ behavior: scrolledOnceRef.current ? 'smooth' : 'auto', block: 'end' });
+        scrolledOnceRef.current = true;
+    }, [messages, sending]);
 
     // Persiste el transcript (últimos MAX_STORED) para sobrevivir recargas.
     useEffect(() => {
@@ -155,11 +162,12 @@ const AgentChat = ({ hasApiKey, model, onAgentsUpdated, onMemoryProposed, onSkil
                     <div key={i} className="space-y-1.5">
                         <Bubble role={m.role}>{m.content}</Bubble>
 
-                        {m.role === 'assistant' && (m.toolCalls > 0 || m.agentsUpdated || m.skillsUpdated) && (
+                        {m.role === 'assistant' && (m.toolCalls > 0 || m.agentsUpdated || m.skillsUpdated || m.usageTokens > 0) && (
                             <div className="flex flex-wrap items-center gap-2 text-[10px] text-gray-500 dark:text-gray-400 pl-1">
                                 {m.agentsUpdated && <span className="inline-flex items-center gap-1 text-blue-600 dark:text-blue-400"><FileText className="w-3 h-3" /> editó AGENTS.md</span>}
                                 {m.skillsUpdated && <span className="inline-flex items-center gap-1 text-amber-600 dark:text-amber-400"><Puzzle className="w-3 h-3" /> guardó una skill</span>}
                                 {m.toolCalls > 0 && <span className="inline-flex items-center gap-1"><Wrench className="w-3 h-3" /> {m.toolCalls} herramienta(s)</span>}
+                                {m.usageTokens > 0 && <span className="inline-flex items-center gap-1"><Coins className="w-3 h-3" /> {m.usageTokens.toLocaleString('es-MX')} tokens</span>}
                             </div>
                         )}
 
