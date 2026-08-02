@@ -17,6 +17,11 @@ import {
     getActiveCandidates,
     resolveTagName,
     getQuickReplyNames,
+    getQuickReplyContent,
+    proposeQuickReplyEdit,
+    getVacancyNames,
+    getVacancyContent,
+    proposeVacancyBulkSend,
     getSkills,
     getSkillByName,
     upsertSkill,
@@ -170,6 +175,61 @@ const TOOLS = [
         input_schema: { type: 'object', properties: {}, required: [] }
     },
     {
+        name: 'leer_respuesta_banco',
+        description: 'Abre el CONTENIDO completo de una respuesta del Banco de Respuestas por su nombre (ej. "Punto Yageo"): su texto exacto, tipo, cuántas imágenes tiene, si lleva ubicación (maps) o audio. Solo lectura. Úsala cuando el usuario pregunte qué dice una respuesta o antes de proponer editarla.',
+        input_schema: {
+            type: 'object',
+            properties: {
+                nombre: { type: 'string', description: 'Nombre (o parte) de la respuesta del banco, ej. "Punto Yageo".' }
+            },
+            required: ['nombre']
+        }
+    },
+    {
+        name: 'proponer_edicion_banco',
+        description: 'Propón editar el TEXTO de una respuesta del Banco de Respuestas. NO guarda de inmediato: genera una tarjeta de aprobación en el chat con el antes/después y botones Aprobar / Descartar; el usuario decide ahí. Manda el texto COMPLETO ya editado (reemplaza todo el texto actual). Solo edita el texto — no imágenes, ubicación ni audio. Lee primero con leer_respuesta_banco.',
+        input_schema: {
+            type: 'object',
+            properties: {
+                nombre: { type: 'string', description: 'Nombre (o parte) de la respuesta del banco a editar, ej. "Punto Yageo".' },
+                nuevo_mensaje: { type: 'string', description: 'El texto COMPLETO ya editado que reemplazará al actual. Conserva las variables como {{nombre}} si aplican.' }
+            },
+            required: ['nombre', 'nuevo_mensaje']
+        }
+    },
+    {
+        name: 'listar_vacantes',
+        description: 'Devuelve los nombres de las vacantes del "maletín" del Chat Web que tienen info lista para enviar al candidato. Solo lectura. Úsala cuando el usuario pregunte qué vacantes hay.',
+        input_schema: { type: 'object', properties: {}, required: [] }
+    },
+    {
+        name: 'leer_vacante',
+        description: 'Abre el contenido de una vacante por su nombre: empresa, categoría y el MENSAJE EXACTO que se le enviaría al candidato. Solo lectura. Úsala cuando el usuario pregunte por una vacante o antes de enviarla.',
+        input_schema: {
+            type: 'object',
+            properties: {
+                nombre: { type: 'string', description: 'Nombre (o parte) de la vacante.' }
+            },
+            required: ['nombre']
+        }
+    },
+    {
+        name: 'proponer_envio_vacante',
+        description: 'Propón enviar la info de UNA vacante a candidatos. Igual que proponer_envio_banco pero con una vacante. NO envía de inmediato: genera una tarjeta de confirmación en el chat con Confirmar / Cancelar. Para UN candidato pasa su "telefono"; para una LISTA usa filtros (etiqueta/estado/no_leidos).',
+        input_schema: {
+            type: 'object',
+            properties: {
+                vacante: { type: 'string', description: 'Nombre (o parte) de la vacante a enviar.' },
+                telefono: { type: 'string', description: 'Teléfono de UN candidato para enviarle sólo a él (ej. "8116038195"). Si lo usas, ignora los filtros de lista.' },
+                etiqueta: { type: 'string', description: 'Nombre o parte de la etiqueta (ej. "Anuncio Yageo").' },
+                estado: { type: 'string', enum: ['completos', 'incompletos', 'todos'], description: 'Filtrar por perfil completo o incompleto (opcional).' },
+                no_leidos: { type: 'boolean', description: 'Si es true, sólo los que tienen mensajes no leídos.' },
+                limite: { type: 'number', description: 'Máximo de candidatos (por defecto 20, tope 50).' }
+            },
+            required: ['vacante']
+        }
+    },
+    {
         name: 'listar_candidatos',
         description: 'Devuelve la LISTA detallada (nombre completo y número de WhatsApp) de los candidatos que cumplen los filtros (etiqueta, estado, no leídos), hasta el límite indicado. Úsala cuando el usuario pida VER la lista de candidatos o sus teléfonos (ej. "los 20 completos no leídos con etiqueta Anuncio Yageo"). Lectura BARATA de Sets en Redis; no escanea.',
         input_schema: {
@@ -241,6 +301,7 @@ export default async function handler(req, res) {
         let agentsUpdated = false;      // el agente editó AGENTS.md este turno
         let skillsUpdated = false;      // el agente creó/editó una skill este turno
         let bulkProposal = null;        // propuesta de envío masivo de este turno (tarjeta de confirmación)
+        let bankEditProposal = null;    // propuesta de edición de una respuesta del banco (tarjeta antes/después)
         const memoryProposals = [];     // propuestas de memoria de este turno: {id, text}
         let usageTokens = 0;
         let toolCalls = 0;
@@ -370,6 +431,61 @@ export default async function handler(req, res) {
                     result = names.length
                         ? `Respuestas del Banco de Respuestas (${names.length}):\n${names.map((n) => `- ${n}`).join('\n')}`
                         : 'No hay respuestas guardadas en el Banco de Respuestas.';
+                } else if (block.name === 'leer_respuesta_banco') {
+                    const data = await getQuickReplyContent(block.input?.nombre || '');
+                    result = data
+                        ? `Contenido de la respuesta del banco:\n${data.summary}`
+                        : `No encontré la respuesta de banco "${block.input?.nombre || ''}". Usa listar_respuestas_banco para ver los nombres reales.`;
+                } else if (block.name === 'proponer_edicion_banco') {
+                    const r = await proposeQuickReplyEdit({
+                        nombre: block.input?.nombre,
+                        nuevo_mensaje: block.input?.nuevo_mensaje
+                    });
+                    if (r.error) {
+                        result = r.error;
+                    } else {
+                        bankEditProposal = r.proposal; // la UI pinta la tarjeta antes/después
+                        result = `Propuesta de edición creada para "${r.proposal.name}". En el chat le apareció al usuario una tarjeta con el antes/después y botones Aprobar / Descartar. PREGÚNTALE explícitamente si quiere aplicar el cambio. NO afirmes que ya quedó guardado — queda pendiente hasta que el usuario apruebe en la tarjeta.`;
+                    }
+                } else if (block.name === 'listar_vacantes') {
+                    const names = await getVacancyNames();
+                    result = names.length
+                        ? `Vacantes con info para enviar (${names.length}):\n${names.map((n) => `- ${n}`).join('\n')}`
+                        : 'No hay vacantes con "info para el bot" configuradas en el maletín.';
+                } else if (block.name === 'leer_vacante') {
+                    const data = await getVacancyContent(block.input?.nombre || '');
+                    result = data
+                        ? data.summary
+                        : `No encontré una vacante con "info para el bot" llamada "${block.input?.nombre || ''}". Usa listar_vacantes para ver las disponibles.`;
+                } else if (block.name === 'proponer_envio_vacante') {
+                    const input = block.input || {};
+                    let candidatoIds;
+                    let telError = null;
+                    if (input.telefono) {
+                        const found = await findCandidateByPhone(input.telefono);
+                        if (found?.error) telError = found.error;
+                        else if (found?.notFound) telError = `No encontré ningún candidato con el teléfono ${found.telefono || input.telefono}.`;
+                        else candidatoIds = [found.candidate.id];
+                    }
+                    if (telError) {
+                        result = telError;
+                    } else {
+                        const r = await proposeVacancyBulkSend({
+                            vacante: input.vacante,
+                            etiqueta: input.etiqueta,
+                            estado: input.estado,
+                            noLeidos: input.no_leidos,
+                            limite: input.limite,
+                            candidatoIds
+                        });
+                        if (r.error) {
+                            result = r.error;
+                        } else {
+                            bulkProposal = r.proposal;
+                            const cuantos = r.proposal.candidateCount === 1 ? '1 candidato' : `${r.proposal.candidateCount} candidatos`;
+                            result = `Propuesta de envío de la vacante "${r.proposal.templateName}" a ${cuantos}. En el chat le apareció al usuario una tarjeta con la lista y botones Confirmar Envíos / Cancelar. PREGÚNTALE explícitamente si quiere que se envíe. NO afirmes que ya se envió — queda pendiente hasta que el usuario confirme en la tarjeta.`;
+                        }
+                    }
                 } else if (block.name === 'listar_candidatos') {
                     const input = block.input || {};
                     const data = await getDetailedCandidatesList({
@@ -473,6 +589,7 @@ export default async function handler(req, res) {
             agentsUpdated,                       // la UI refresca AGENTS.md si true
             skillsUpdated,                       // la UI refresca el panel de Skills si true
             bulkProposal,                        // {id, templateName, candidates,...} → tarjeta Confirmar/Cancelar envío
+            bankEditProposal,                    // {id, name, before, after} → tarjeta Aprobar/Descartar edición
             memoryProposals,                     // [{id, text}] → tarjetas Guardar/Descartar en el chat
             memoryProposed: memoryProposals.length // conteo (refresca panel derecho)
         });

@@ -400,15 +400,6 @@ export async function proposeQuickReplyBulkSend({ respuesta_banco, etiqueta, est
         return { error: `La respuesta del banco "${qr.name || respuesta_banco}" no tiene contenido para enviar.` };
     }
 
-    const listData = await getDetailedCandidatesList({ etiqueta, estado, noLeidos, limite, candidatoIds });
-    if (!listData || listData.error) {
-        return { error: listData?.error || 'No se pudo generar la lista de candidatos.' };
-    }
-
-    if (!listData.candidates || listData.candidates.length === 0) {
-        return { error: 'No se encontraron candidatos que coincidan con los criterios para realizar el envío.' };
-    }
-
     // Resumen legible de la mezcla, para mostrarlo en la tarjeta de confirmación.
     const parts = [];
     if (messageText) parts.push('1 texto');
@@ -417,9 +408,7 @@ export async function proposeQuickReplyBulkSend({ respuesta_banco, etiqueta, est
     if (audioUrl) parts.push(voice ? 'nota de voz' : 'audio');
     const mixSummary = parts.join(' + ');
 
-    const proposalId = `proposal_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
-    const proposal = {
-        id: proposalId,
+    return storeBulkProposal({
         templateName: qr.name || qr.title || respuesta_banco,
         messageText,           // texto CRUDO con {{variables}} — se resuelven por candidato al enviar
         templateType,          // 'text' | 'location' | 'audio'
@@ -427,15 +416,96 @@ export async function proposeQuickReplyBulkSend({ respuesta_banco, etiqueta, est
         location,              // {lat,lng,name,address} | null
         audioUrl,              // '' o URL de audio
         voice,                 // true si es nota de voz
-        mixSummary,            // ej. "1 texto + 2 imágenes"
+        mixSummary             // ej. "1 texto + 2 imágenes"
+    }, { etiqueta, estado, noLeidos, limite, candidatoIds });
+}
+
+// Builder compartido: resuelve la lista de candidatos, arma la propuesta con el
+// payload dado (mismo shape que consume bulk-send.js) y la guarda en Redis (TTL 1h).
+async function storeBulkProposal(payload, { etiqueta, estado, noLeidos, limite = 20, candidatoIds } = {}) {
+    const redis = getRedisClient();
+    if (!redis) return { error: 'Redis no disponible' };
+
+    const listData = await getDetailedCandidatesList({ etiqueta, estado, noLeidos, limite, candidatoIds });
+    if (!listData || listData.error) {
+        return { error: listData?.error || 'No se pudo generar la lista de candidatos.' };
+    }
+    if (!listData.candidates || listData.candidates.length === 0) {
+        return { error: 'No se encontraron candidatos que coincidan con los criterios para realizar el envío.' };
+    }
+
+    const proposalId = `proposal_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    const proposal = {
+        id: proposalId,
+        templateType: 'text',
+        imageUrls: [],
+        location: null,
+        audioUrl: '',
+        voice: false,
+        ...payload,
         candidateCount: listData.candidates.length,
         candidates: listData.candidates,
         createdAt: new Date().toISOString()
     };
 
     await redis.set(`bulk_proposal:${proposalId}`, JSON.stringify(proposal), 'EX', 3600);
-
     return { success: true, proposal };
+}
+
+// ─── VACANTES (el "maletín" del Chat Web) ────────────────────────────────────
+// Viven en candidatic_vacancies (JSON array). Solo las que tienen "info para el
+// bot" (active && messageDescription) se pueden enviar. El texto enviable replica
+// el del chat manual: *<nombre>*\n\n<messageDescription>.
+export async function getBotVacancies() {
+    const redis = getRedisClient();
+    if (!redis) return [];
+    try {
+        const raw = await redis.get('candidatic_vacancies');
+        const list = raw ? JSON.parse(raw) : [];
+        return (Array.isArray(list) ? list : []).filter((v) => v && v.active && v.messageDescription);
+    } catch {
+        return [];
+    }
+}
+
+export async function getVacancyNames() {
+    const list = await getBotVacancies();
+    return list.map((v) => String(v.name || '').trim()).filter(Boolean);
+}
+
+export async function getVacancyByName(query) {
+    const q = String(query || '').trim().toLowerCase();
+    if (!q) return null;
+    const list = await getBotVacancies();
+    return list.find((v) => String(v.name || '').trim().toLowerCase() === q)
+        || list.find((v) => String(v.name || '').trim().toLowerCase().includes(q))
+        || null;
+}
+
+// Texto enviable de una vacante (igual que el chat manual).
+export function vacancyMessageText(v) {
+    return `*${v.name}*\n\n${v.messageDescription}`;
+}
+
+export async function getVacancyContent(nombre) {
+    const v = await getVacancyByName(nombre);
+    if (!v) return null;
+    const meta = [v.company ? `Empresa: ${v.company}` : null, v.category ? `Categoría: ${v.category}` : null].filter(Boolean).join(' · ');
+    const summary = `Vacante: ${v.name}${meta ? `\n${meta}` : ''}\n\nMensaje que se enviaría al candidato:\n"""\n${vacancyMessageText(v)}\n"""`;
+    return { vacancy: { id: v.id, name: v.name, company: v.company || null, category: v.category || null }, summary };
+}
+
+// Propone enviar UNA vacante (texto) a los candidatos filtrados (o a uno por id).
+export async function proposeVacancyBulkSend({ vacante, etiqueta, estado, noLeidos, limite = 20, candidatoIds }) {
+    const v = await getVacancyByName(vacante);
+    if (!v) {
+        return { error: `No encontré una vacante con "info para el bot" llamada "${vacante}". Usa listar_vacantes para ver las disponibles.` };
+    }
+    return storeBulkProposal({
+        templateName: v.name,
+        messageText: vacancyMessageText(v),
+        mixSummary: '1 texto (vacante)'
+    }, { etiqueta, estado, noLeidos, limite, candidatoIds });
 }
 
 // ─── Altas por fecha (contadores diarios, zona Monterrey) ────────────────────
@@ -583,6 +653,96 @@ export async function getQuickReplyNames() {
     } catch {
         return [];
     }
+}
+
+// Contenido COMPLETO de una respuesta del banco (para que el agente lo lea).
+// Devuelve un resumen estructurado + un texto legible. { reply, summary } | null.
+export async function getQuickReplyContent(nombre) {
+    const qr = await getQuickReplyByName(nombre);
+    if (!qr) return null;
+    const imageUrls = Array.isArray(qr.imageUrls) ? qr.imageUrls.filter(Boolean) : (qr.imageUrl ? [qr.imageUrl] : []);
+    const hasLocation = !!(qr.location && qr.location.lat != null && qr.location.lng != null);
+    const parts = [`Nombre: ${qr.name || qr.title || ''}`];
+    parts.push(`Tipo: ${qr.type || 'text'}`);
+    if (qr.message) parts.push(`Texto:\n"""\n${qr.message}\n"""`);
+    else parts.push('Texto: (sin texto)');
+    if (imageUrls.length) parts.push(`Imágenes: ${imageUrls.length}`);
+    if (hasLocation) parts.push(`Ubicación (maps): ${qr.location.name || ''} [${qr.location.lat}, ${qr.location.lng}]`);
+    if (qr.audioUrl) parts.push(`Audio: sí${qr.voice || qr.audioVoice ? ' (nota de voz)' : ''}`);
+    return {
+        reply: { id: qr.id, name: qr.name || qr.title || '', type: qr.type || 'text', message: qr.message || '', imageCount: imageUrls.length, hasLocation, hasAudio: !!qr.audioUrl },
+        summary: parts.join('\n')
+    };
+}
+
+// ─── Editar el TEXTO de una respuesta del banco (con aprobación humana) ───────
+// El agente PROPONE un nuevo texto; se guarda una propuesta que el humano aprueba.
+// Solo se edita el campo `message` (texto) — no imágenes/ubicación/audio.
+const KEY_QR_EDIT_PREFIX = 'agent-ia:qr_edit:'; // + <id> → JSON {id, quickReplyId, name, before, after}
+
+export async function proposeQuickReplyEdit({ nombre, nuevo_mensaje }) {
+    const redis = getRedisClient();
+    if (!redis) return { error: 'Redis no disponible' };
+    const qr = await getQuickReplyByName(nombre);
+    if (!qr) {
+        return { error: `No encontré la respuesta de banco "${nombre}". Usa listar_respuestas_banco para ver los nombres reales.` };
+    }
+    const after = String(nuevo_mensaje ?? '');
+    if (!after.trim()) {
+        return { error: 'El nuevo texto llegó vacío. Manda el texto completo ya editado.' };
+    }
+    const before = String(qr.message || '');
+    if (after === before) {
+        return { error: 'El texto nuevo es idéntico al actual: no hay nada que cambiar.' };
+    }
+    const id = `qredit_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    const proposal = {
+        id,
+        quickReplyId: qr.id,
+        name: qr.name || qr.title || nombre,
+        field: 'message',
+        before,
+        after,
+        createdAt: new Date().toISOString()
+    };
+    await redis.set(`${KEY_QR_EDIT_PREFIX}${id}`, JSON.stringify(proposal), 'EX', 3600);
+    return { success: true, proposal };
+}
+
+// El humano APRUEBA → escribe el nuevo texto en la respuesta del banco real.
+export async function applyQuickReplyEdit(id) {
+    const redis = getRedisClient();
+    if (!redis) return { success: false, error: 'Redis no disponible' };
+    const raw = await redis.get(`${KEY_QR_EDIT_PREFIX}${id}`);
+    if (!raw) return { success: false, error: 'La propuesta de edición expiró o no existe.' };
+    let proposal;
+    try { proposal = JSON.parse(raw); } catch { return { success: false, error: 'Propuesta corrupta.' }; }
+
+    const listRaw = await redis.get('candidatic:quick_replies');
+    let list;
+    try { list = listRaw ? JSON.parse(listRaw) : []; } catch { list = []; }
+    if (!Array.isArray(list)) list = [];
+
+    // Buscar por id (preferente) o por nombre (respaldo si el id cambió).
+    let idx = list.findIndex((r) => r?.id === proposal.quickReplyId);
+    if (idx < 0) idx = list.findIndex((r) => String(r?.name || r?.title || '').trim().toLowerCase() === String(proposal.name).trim().toLowerCase());
+    if (idx < 0) {
+        await redis.del(`${KEY_QR_EDIT_PREFIX}${id}`);
+        return { success: false, error: `Ya no encontré la respuesta "${proposal.name}" en el banco (¿la borraron o renombraron?).` };
+    }
+
+    list[idx] = { ...list[idx], message: proposal.after };
+    await redis.set('candidatic:quick_replies', JSON.stringify(list));
+    await redis.del(`${KEY_QR_EDIT_PREFIX}${id}`);
+    return { success: true, name: list[idx].name || proposal.name };
+}
+
+// El humano RECHAZA → solo se descarta la propuesta.
+export async function rejectQuickReplyEdit(id) {
+    const redis = getRedisClient();
+    if (!redis) return { success: false, error: 'Redis no disponible' };
+    const existed = await redis.del(`${KEY_QR_EDIT_PREFIX}${id}`);
+    return existed ? { success: true } : { success: false, error: 'Propuesta no encontrada.' };
 }
 
 // ─── SKILLS DE RECLUTAMIENTO (playbooks por cliente) ─────────────────────────
@@ -752,7 +912,12 @@ export async function assembleSystemPrompt() {
         '- `contar_altas`: cuántos candidatos LLEGARON (se dieron de alta) en una fecha/rango (hoy, ayer, esta semana, este mes, o fechas explícitas). Lectura barata de contadores diarios.\n' +
         '- `contar_altas_etiqueta`: cuántos candidatos de UNA etiqueta llegaron en una fecha/rango (ej. "cuántos de Yageo llegaron hoy"). El conteo por etiqueta y día se registra desde que se activó esta función, así que fechas muy anteriores pueden salir en 0.\n' +
         '- `candidatos_activos`: quiénes están ACTIVOS ahora mismo (actividad reciente) y cuántos siguen INCOMPLETOS (completándose en vivo), con una muestra de nombres y hace cuánto. Úsala para "quién se está completando ahorita".\n' +
-        '- `listar_respuestas_banco`: consulta los nombres reales de las respuestas del Banco de Respuestas (plantillas que los reclutadores mandan a los candidatos). Úsala cuando el usuario pregunte qué respuestas de banco hay. NO las inventes.'
+        '- `listar_respuestas_banco`: consulta los nombres reales de las respuestas del Banco de Respuestas (plantillas que los reclutadores mandan a los candidatos). Úsala cuando el usuario pregunte qué respuestas de banco hay. NO las inventes.\n' +
+        '- `leer_respuesta_banco`: abre el CONTENIDO completo de una respuesta del banco por su nombre (su texto exacto, tipo, cuántas imágenes, si lleva ubicación o audio). Úsala cuando el usuario quiera ver qué dice una respuesta, o antes de proponer editarla.\n' +
+        '- `proponer_edicion_banco`: propón editar el TEXTO de una respuesta del banco. NO guarda de inmediato: genera una tarjeta de aprobación con el antes/después y botones Aprobar / Descartar. Manda el texto COMPLETO ya editado. Solo edita texto (no imágenes/ubicación/audio). Lee primero con `leer_respuesta_banco`.\n' +
+        '- `listar_vacantes`: los nombres de las vacantes del "maletín" del Chat Web que tienen info para enviar al candidato. Solo lectura.\n' +
+        '- `leer_vacante`: abre el contenido de una vacante por su nombre (empresa, categoría y el mensaje exacto que se le enviaría al candidato). Úsala cuando el usuario pregunte por una vacante o antes de enviarla.\n' +
+        '- `proponer_envio_vacante`: propón enviar la info de UNA vacante a candidatos. Igual que `proponer_envio_banco` pero con una vacante en vez de una respuesta del banco: NO envía de inmediato, genera la tarjeta de confirmación con Confirmar / Cancelar. Para UN candidato pasa su `telefono`; para una LISTA usa filtros (etiqueta/estado/no_leidos).'
     );
     return parts.join('');
 }

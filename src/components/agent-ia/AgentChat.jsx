@@ -1,5 +1,5 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { Send, Loader2, Bot, Wrench, FileText, BrainCircuit, Trash2, ThumbsUp, Puzzle, Coins, Rocket, Users, CheckCircle2, XCircle } from 'lucide-react';
+import { Send, Loader2, Bot, Wrench, FileText, BrainCircuit, Trash2, ThumbsUp, Puzzle, Coins, Rocket, Users, CheckCircle2, XCircle, Pencil } from 'lucide-react';
 import { agentIAFetch } from './api';
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -100,7 +100,9 @@ const AgentChat = ({ hasApiKey, model, onAgentsUpdated, onMemoryProposed, onSkil
                 // tarjeta de envío masivo; bulkStatus: pending|sending|completed|canceled|error
                 bulkProposal: data.bulkProposal || null,
                 bulkStatus: data.bulkProposal ? 'pending' : null,
-                bulkProgress: null
+                bulkProgress: null,
+                // tarjeta de edición de respuesta del banco; status: pending|busy|saved|discarded
+                bankEditProposal: data.bankEditProposal ? { ...data.bankEditProposal, status: 'pending' } : null
             }]);
             if (data.agentsUpdated && onAgentsUpdated) onAgentsUpdated();
             if (data.skillsUpdated && onSkillsUpdated) onSkillsUpdated();
@@ -126,6 +128,23 @@ const AgentChat = ({ hasApiKey, model, onAgentsUpdated, onMemoryProposed, onSkil
         } catch (e) {
             setStatus('pending');
             alert(`No se pudo ${action === 'approve' ? 'guardar' : 'descartar'}: ${e.message}`);
+        }
+    };
+
+    // Aprobar/descartar una edición de respuesta del banco DESDE el chat (sin alert).
+    const resolveInlineBankEdit = async (msgIdx, proposalId, action) => {
+        const setStatus = (status) => setMessages((prev) => prev.map((m, i) => (
+            i !== msgIdx ? m : { ...m, bankEditProposal: m.bankEditProposal ? { ...m.bankEditProposal, status } : m.bankEditProposal }
+        )));
+        setStatus('busy');
+        try {
+            await agentIAFetch('/api/agent-ia/quick-reply', { method: 'POST', body: { action, proposalId } });
+            setStatus(action === 'approve' ? 'saved' : 'discarded');
+        } catch (e) {
+            setStatus('error');
+            setMessages((prev) => prev.map((m, i) => (
+                i !== msgIdx ? m : { ...m, bankEditProposal: m.bankEditProposal ? { ...m.bankEditProposal, error: e.message } : m.bankEditProposal }
+            )));
         }
     };
 
@@ -265,6 +284,43 @@ const AgentChat = ({ hasApiKey, model, onAgentsUpdated, onMemoryProposed, onSkil
                                 </div>
                             </div>
                         ))}
+
+                        {/* Tarjeta de edición de respuesta del banco: antes/después + Aprobar/Descartar */}
+                        {m.role === 'assistant' && m.bankEditProposal && (() => {
+                            const e = m.bankEditProposal;
+                            return (
+                                <div className="rounded-xl border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/15 px-3 py-2.5 max-w-[92%]">
+                                    <div className="flex items-center gap-1.5 text-[10px] font-semibold text-blue-700 dark:text-blue-400 uppercase tracking-wide mb-1.5">
+                                        <Pencil className="w-3.5 h-3.5" /> Editar respuesta del banco: "{e.name}"
+                                    </div>
+                                    <div className="space-y-1.5 mb-2">
+                                        <div className="rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-900/50 px-2.5 py-1.5">
+                                            <div className="text-[9px] font-semibold text-red-500 dark:text-red-400 uppercase tracking-wide mb-0.5">Actual</div>
+                                            <p className="text-[12px] text-gray-600 dark:text-gray-300 whitespace-pre-wrap break-words line-through decoration-red-300/60">{e.before || '(sin texto)'}</p>
+                                        </div>
+                                        <div className="rounded-lg bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-900/50 px-2.5 py-1.5">
+                                            <div className="text-[9px] font-semibold text-emerald-600 dark:text-emerald-400 uppercase tracking-wide mb-0.5">Nuevo</div>
+                                            <p className="text-[12px] text-gray-700 dark:text-gray-200 whitespace-pre-wrap break-words">{e.after}</p>
+                                        </div>
+                                    </div>
+                                    {(e.status === 'pending' || e.status === 'busy' || e.status === 'error') ? (
+                                        <div className="flex items-center gap-2">
+                                            <button onClick={() => resolveInlineBankEdit(i, e.id, 'approve')} disabled={e.status === 'busy'} className="inline-flex items-center gap-1 text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50 transition-colors">
+                                                {e.status === 'busy' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />} Aprobar cambio
+                                            </button>
+                                            <button onClick={() => resolveInlineBankEdit(i, e.id, 'reject')} disabled={e.status === 'busy'} className="text-[11px] font-semibold px-3 py-1.5 rounded-lg text-gray-500 dark:text-gray-400 hover:bg-black/5 dark:hover:bg-white/5 disabled:opacity-50 transition-colors">
+                                                Descartar
+                                            </button>
+                                            {e.status === 'error' && <span className="text-[11px] text-red-500">{e.error || 'No se pudo aplicar.'}</span>}
+                                        </div>
+                                    ) : (
+                                        <div className={`text-[11px] font-semibold inline-flex items-center gap-1 ${e.status === 'saved' ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-400 dark:text-gray-500'}`}>
+                                            {e.status === 'saved' ? <><CheckCircle2 className="w-3.5 h-3.5" /> Guardado en el banco</> : 'Descartado'}
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })()}
 
                         {/* Tarjeta de envío masivo: destinatarios + Confirmar/Cancelar + progreso en vivo */}
                         {m.role === 'assistant' && m.bulkProposal && (() => {
