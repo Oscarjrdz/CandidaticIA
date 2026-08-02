@@ -43,6 +43,12 @@ const MemoryPanel = ({ value, pending = [], onSaved, onResolved }) => {
         setBusyId(id);
         try {
             const data = await agentIAFetch('/api/agent-ia/memory', { method: 'POST', body: { action, id } });
+            // Sincroniza el textarea EN VIVO con la memoria nueva (si no hay una edición
+            // local sin guardar), sin depender del efecto de `value` que llegaba tarde.
+            if (typeof data.memoryMd === 'string') {
+                setDraft((prev) => (prev === lastExternalRef.current ? data.memoryMd : prev));
+                lastExternalRef.current = data.memoryMd;
+            }
             if (onResolved) onResolved(data);
         } catch (e) {
             alert(`No se pudo ${action === 'approve' ? 'aprobar' : 'rechazar'}: ${e.message}`);
