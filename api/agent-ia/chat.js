@@ -5,7 +5,8 @@ import {
     assembleSystemPrompt,
     setAgentsMd,
     addMemoryProposal,
-    getTagNames,
+    getTagCounts,
+    getCandidateCounts,
     getQuickReplyNames,
     getSkills,
     getSkillByName,
@@ -90,7 +91,7 @@ const TOOLS = [
     },
     {
         name: 'guardar_skill',
-        description: 'Crea o edita una skill de reclutamiento. Si el nombre ya existe, reemplaza su contenido; si no, la crea. Manda el contenido COMPLETO (markdown) con el playbook del cliente: qué etiqueta usar, qué mensaje del banco, y cómo responder al candidato en cada caso. Usa nombres reales de etiquetas/banco (consúltalos con listar_etiquetas / listar_respuestas_banco).',
+        description: 'Crea o edita una skill de reclutamiento. Si el nombre ya existe, reemplaza su contenido; si no, la crea. Manda el contenido COMPLETO (markdown) con el playbook del cliente: qué etiqueta usar, qué mensaje del banco, y cómo responder al candidato en cada caso. Usa nombres reales de etiquetas/banco (consúltalos con contar_etiquetas / listar_respuestas_banco).',
         input_schema: {
             type: 'object',
             properties: {
@@ -101,8 +102,13 @@ const TOOLS = [
         }
     },
     {
-        name: 'listar_etiquetas',
-        description: 'Devuelve los nombres reales de las etiquetas de Candidatic (clasifican candidatos; muchas vienen de anuncios, ej. "Anuncio Yageo"). Úsala cuando el usuario pregunte qué etiquetas existen o cuántas hay. Solo lectura.',
+        name: 'contar_candidatos',
+        description: 'Cuántos candidatos hay completos vs incompletos (y el total). Lectura BARATA de contadores de Redis; no escanea ni gasta tokens. Úsala cuando pregunten por esas cantidades.',
+        input_schema: { type: 'object', properties: {}, required: [] }
+    },
+    {
+        name: 'contar_etiquetas',
+        description: 'Las etiquetas de Candidatic CON su cantidad de candidatos (y cuántos sin etiqueta). También sirve para saber qué etiquetas existen. Lectura BARATA de contadores; no inventes nombres ni números.',
         input_schema: { type: 'object', properties: {}, required: [] }
     },
     {
@@ -201,11 +207,22 @@ export default async function handler(req, res) {
                     } else {
                         result = r.error || 'No pude guardar la skill.';
                     }
-                } else if (block.name === 'listar_etiquetas') {
-                    const tags = await getTagNames();
-                    result = tags.length
-                        ? `Etiquetas de Candidatic (${tags.length}):\n${tags.map((t) => `- ${t}`).join('\n')}`
-                        : 'No hay etiquetas configuradas en Candidatic.';
+                } else if (block.name === 'contar_candidatos') {
+                    const c = await getCandidateCounts();
+                    result = c
+                        ? `Candidatos: ${c.complete} completos, ${c.incomplete} incompletos (total ${c.total}).`
+                        : 'No pude leer el conteo de candidatos en este momento.';
+                } else if (block.name === 'contar_etiquetas') {
+                    const data = await getTagCounts();
+                    if (!data) {
+                        result = 'No pude leer los conteos de etiquetas en este momento.';
+                    } else if (!data.tags.length && !data.untagged) {
+                        result = 'No hay etiquetas configuradas en Candidatic.';
+                    } else {
+                        const lines = data.tags.map((t) => `- ${t.name}: ${t.count}`);
+                        lines.push(`- (Sin etiqueta): ${data.untagged}`);
+                        result = `Etiquetas y su cantidad de candidatos:\n${lines.join('\n')}`;
+                    }
                 } else if (block.name === 'listar_respuestas_banco') {
                     const names = await getQuickReplyNames();
                     result = names.length

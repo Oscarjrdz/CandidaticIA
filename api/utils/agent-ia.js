@@ -100,20 +100,55 @@ export async function setAgentsMd(content) {
 // ─── SKILL: datos de solo lectura de Candidatic (etiquetas + banco de respuestas) ──
 // Lee las mismas llaves de Redis que usa la plataforma, así el agente ve lo real.
 
-// Nombres de las etiquetas (candidatic:chat_tags) — se usan para clasificar
-// candidatos, muchas vienen de anuncios (ej. "Anuncio Yageo").
-export async function getTagNames() {
+// Etiquetas CON su cantidad. BARATO: lee los contadores que la plataforma ya
+// mantiene incrementalmente (candidatic:tag_counts = HASH, candidatic:untagged_count),
+// NO escanea candidatos ni gasta tokens. Combina con candidatic:chat_tags para
+// incluir también etiquetas definidas que tengan 0 candidatos.
+export async function getTagCounts() {
     const redis = getRedisClient();
-    if (!redis) return [];
+    if (!redis) return null;
     try {
-        const raw = await redis.get('candidatic:chat_tags');
-        const list = raw ? JSON.parse(raw) : [];
-        return (Array.isArray(list) ? list : [])
-            .map((t) => (typeof t === 'string' ? t : t?.name))
-            .map((n) => String(n || '').trim())
-            .filter(Boolean);
+        const [rawTags, rawCounts, rawUntagged] = await Promise.all([
+            redis.get('candidatic:chat_tags'),
+            redis.hgetall('candidatic:tag_counts'),
+            redis.get('candidatic:untagged_count')
+        ]);
+        let defined = [];
+        try {
+            const l = rawTags ? JSON.parse(rawTags) : [];
+            defined = (Array.isArray(l) ? l : [])
+                .map((t) => (typeof t === 'string' ? t : t?.name))
+                .map((n) => String(n || '').trim())
+                .filter(Boolean);
+        } catch { /* ignorar json malo */ }
+        const countMap = rawCounts || {};
+        const names = new Set(defined);
+        Object.keys(countMap).forEach((k) => { if (k) names.add(k); });
+        const tags = [...names]
+            .map((name) => ({ name, count: parseInt(countMap[name], 10) || 0 }))
+            .sort((a, b) => b.count - a.count);
+        const untagged = Math.max(0, parseInt(rawUntagged, 10) || 0);
+        return { tags, untagged };
     } catch {
-        return [];
+        return null;
+    }
+}
+
+// Conteo de candidatos completos vs incompletos. BARATO: cardinalidad de dos SETs
+// que la plataforma ya mantiene (SCARD es O(1)), sin escanear ni tokens.
+export async function getCandidateCounts() {
+    const redis = getRedisClient();
+    if (!redis) return null;
+    try {
+        const [complete, pending] = await Promise.all([
+            redis.scard('stats:list:complete'),
+            redis.scard('stats:list:pending')
+        ]);
+        const completeN = Number(complete) || 0;
+        const incompleteN = Number(pending) || 0;
+        return { complete: completeN, incomplete: incompleteN, total: completeN + incompleteN };
+    } catch {
+        return null;
     }
 }
 
@@ -283,7 +318,7 @@ export async function assembleSystemPrompt() {
         (skills.length
             ? `Skills disponibles: ${skills.map((s) => s.name).join(', ')}.\n`
             : 'Aún no hay skills creadas.\n') +
-        'No tienes el contenido completo de las skills aquí (para no saturar el contexto): ábrela con `leer_skill` cuando la necesites. Crea una nueva (ej. "Metalsa") o edita una existente con `guardar_skill`. Con `listar_skills` ves los nombres. Al crear/editar, usa nombres reales de etiquetas y del banco (consúltalos con `listar_etiquetas` y `listar_respuestas_banco`), no los inventes.'
+        'No tienes el contenido completo de las skills aquí (para no saturar el contexto): ábrela con `leer_skill` cuando la necesites. Crea una nueva (ej. "Metalsa") o edita una existente con `guardar_skill`. Con `listar_skills` ves los nombres. Al crear/editar, usa nombres reales de etiquetas y del banco (consúltalos con `contar_etiquetas` y `listar_respuestas_banco`), no los inventes.'
     );
     parts.push(
         '\n\n# HERRAMIENTAS\n' +
@@ -292,7 +327,8 @@ export async function assembleSystemPrompt() {
         '- `listar_skills`: nombres de las skills de reclutamiento existentes.\n' +
         '- `leer_skill`: abre el contenido completo de una skill por su nombre (ej. "Yageo").\n' +
         '- `guardar_skill`: crea o edita una skill (nombre + contenido markdown completo). Si el nombre ya existe, la reemplaza; si no, la crea. Se guarda al instante y se ve en el panel del usuario.\n' +
-        '- `listar_etiquetas`: consulta los nombres reales de las etiquetas de Candidatic. Se usan para clasificar candidatos; muchas vienen de anuncios (ej. "Anuncio Yageo"). Úsala cuando el usuario pregunte qué etiquetas existen. NO las inventes.\n' +
+        '- `contar_candidatos`: cuántos candidatos hay completos vs incompletos (y el total). Lectura barata de contadores; úsala cuando pregunten por esas cantidades.\n' +
+        '- `contar_etiquetas`: las etiquetas de Candidatic CON su cantidad de candidatos (y cuántos sin etiqueta). Sirve también para saber qué etiquetas existen. Lectura barata; NO inventes nombres ni números.\n' +
         '- `listar_respuestas_banco`: consulta los nombres reales de las respuestas del Banco de Respuestas (plantillas que los reclutadores mandan a los candidatos). Úsala cuando el usuario pregunte qué respuestas de banco hay. NO las inventes.'
     );
     return parts.join('');
