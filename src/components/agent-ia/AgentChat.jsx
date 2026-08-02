@@ -1,5 +1,5 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { Send, Loader2, Bot, Wrench, FileText, BrainCircuit, Trash2, ThumbsUp, Puzzle, Coins } from 'lucide-react';
+import { Send, Loader2, Bot, Wrench, FileText, BrainCircuit, Trash2, ThumbsUp, Puzzle, Coins, Rocket, Users, CheckCircle2, XCircle } from 'lucide-react';
 import { agentIAFetch } from './api';
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -96,7 +96,11 @@ const AgentChat = ({ hasApiKey, model, onAgentsUpdated, onMemoryProposed, onSkil
                 // tarjetas de aprobación en el chat; status por tarjeta: pending|busy|saved|discarded
                 memoryProposals: Array.isArray(data.memoryProposals)
                     ? data.memoryProposals.map((p) => ({ ...p, status: 'pending' }))
-                    : []
+                    : [],
+                // tarjeta de envío masivo; bulkStatus: pending|sending|completed|canceled|error
+                bulkProposal: data.bulkProposal || null,
+                bulkStatus: data.bulkProposal ? 'pending' : null,
+                bulkProgress: null
             }]);
             if (data.agentsUpdated && onAgentsUpdated) onAgentsUpdated();
             if (data.skillsUpdated && onSkillsUpdated) onSkillsUpdated();
@@ -124,6 +128,72 @@ const AgentChat = ({ hasApiKey, model, onAgentsUpdated, onMemoryProposed, onSkil
             alert(`No se pudo ${action === 'approve' ? 'guardar' : 'descartar'}: ${e.message}`);
         }
     };
+
+    // ─── Envío masivo desde el chat ──────────────────────────────────────────
+    // El envío corre en el SERVIDOR (bulk-send.js) y persiste su progreso en Redis,
+    // así que NO depende de que la UI siga abierta. Aquí solo lo disparamos y
+    // sondeamos el estado para pintar la barra de avance.
+    const patchMsg = (msgIdx, patch) => setMessages((prev) => prev.map((m, i) => (i === msgIdx ? { ...m, ...patch } : m)));
+
+    const activePolls = useRef(new Set());
+
+    const pollBulk = async (msgIdx, proposalId) => {
+        if (activePolls.current.has(proposalId)) return; // ya lo estamos sondeando
+        activePolls.current.add(proposalId);
+        try {
+            // hasta ~5 min de sondeo (200ms/candidato + margen); se corta en estado terminal
+            for (let i = 0; i < 300; i++) {
+                let data;
+                try {
+                    data = await agentIAFetch(`/api/agent-ia/bulk-send?proposalId=${encodeURIComponent(proposalId)}`);
+                } catch {
+                    await new Promise((r) => setTimeout(r, 1500));
+                    continue;
+                }
+                const st = data.state || {};
+                const status = st.status === 'sending' || st.status === 'pending'
+                    ? 'sending'
+                    : (st.status === 'completed' ? 'completed' : (st.status === 'canceled' ? 'canceled' : 'sending'));
+                patchMsg(msgIdx, {
+                    bulkStatus: status,
+                    bulkProgress: { sent: st.sent || 0, failed: st.failed || 0, total: st.total || 0, logs: (st.logs || []).slice(0, 6) }
+                });
+                if (st.status === 'completed' || st.status === 'canceled') break;
+                await new Promise((r) => setTimeout(r, 1500));
+            }
+        } finally {
+            activePolls.current.delete(proposalId);
+        }
+    };
+
+    const confirmBulk = async (msgIdx, proposalId) => {
+        patchMsg(msgIdx, { bulkStatus: 'sending', bulkProgress: { sent: 0, failed: 0, total: 0, logs: [] } });
+        try {
+            await agentIAFetch('/api/agent-ia/bulk-send', { method: 'POST', body: { action: 'execute', proposalId } });
+            pollBulk(msgIdx, proposalId);
+        } catch (e) {
+            patchMsg(msgIdx, { bulkStatus: 'error' });
+            alert(`No se pudo iniciar el envío: ${e.message}`);
+        }
+    };
+
+    const cancelBulk = async (msgIdx, proposalId, wasSending) => {
+        if (!wasSending) { patchMsg(msgIdx, { bulkStatus: 'canceled' }); return; }
+        try {
+            await agentIAFetch('/api/agent-ia/bulk-send', { method: 'POST', body: { action: 'cancel', proposalId } });
+            // el polling recogerá el estado 'canceled' del servidor
+        } catch (e) {
+            alert(`No se pudo cancelar: ${e.message}`);
+        }
+    };
+
+    // Al montar (o tras un refresh): reanuda el sondeo de cualquier envío que
+    // quedara 'sending'. El envío sigue vivo en el servidor aunque se recargue.
+    useEffect(() => {
+        messages.forEach((m, i) => {
+            if (m.bulkStatus === 'sending' && m.bulkProposal?.id) pollBulk(i, m.bulkProposal.id);
+        });
+    }, []);
 
     return (
         <div className="flex flex-col h-full bg-[#efeae2] dark:bg-[#0b141a]">
@@ -195,6 +265,75 @@ const AgentChat = ({ hasApiKey, model, onAgentsUpdated, onMemoryProposed, onSkil
                                 </div>
                             </div>
                         ))}
+
+                        {/* Tarjeta de envío masivo: destinatarios + Confirmar/Cancelar + progreso en vivo */}
+                        {m.role === 'assistant' && m.bulkProposal && (() => {
+                            const p = m.bulkProposal;
+                            const prog = m.bulkProgress || { sent: 0, failed: 0, total: p.candidateCount || 0, logs: [] };
+                            const total = prog.total || p.candidateCount || 0;
+                            const done = (prog.sent || 0) + (prog.failed || 0);
+                            const pct = total ? Math.min(100, Math.round((done / total) * 100)) : 0;
+                            return (
+                                <div className="rounded-xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/15 px-3 py-2.5 max-w-[92%]">
+                                    <div className="flex items-center gap-1.5 text-[10px] font-semibold text-emerald-700 dark:text-emerald-400 uppercase tracking-wide mb-1">
+                                        <Rocket className="w-3.5 h-3.5" /> Envío del banco: "{p.templateName}"
+                                    </div>
+                                    <div className="flex items-center gap-1.5 text-[12px] text-gray-700 dark:text-gray-200 mb-1.5">
+                                        <Users className="w-3.5 h-3.5 shrink-0" /> {p.candidateCount} destinatario(s)
+                                    </div>
+
+                                    {/* Lista de destinatarios (scroll si son muchos) */}
+                                    <div className="max-h-40 overflow-y-auto rounded-lg bg-white/70 dark:bg-black/20 border border-emerald-100 dark:border-emerald-900 divide-y divide-emerald-100 dark:divide-emerald-900/50 mb-2">
+                                        {(p.candidates || []).map((c, ci) => (
+                                            <div key={c.id || ci} className="flex items-center justify-between gap-2 px-2.5 py-1 text-[11px]">
+                                                <span className="truncate text-gray-700 dark:text-gray-200">{ci + 1}. {c.name}</span>
+                                                <span className="shrink-0 font-mono text-gray-500 dark:text-gray-400">{c.phone}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    {/* Estado / progreso */}
+                                    {m.bulkStatus === 'pending' && (
+                                        <div className="flex items-center gap-2">
+                                            <button onClick={() => confirmBulk(i, p.id)} className="inline-flex items-center gap-1 text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white transition-colors">
+                                                <Rocket className="w-3.5 h-3.5" /> Confirmar envíos
+                                            </button>
+                                            <button onClick={() => cancelBulk(i, p.id, false)} className="text-[11px] font-semibold px-3 py-1.5 rounded-lg text-gray-500 dark:text-gray-400 hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
+                                                Cancelar
+                                            </button>
+                                        </div>
+                                    )}
+
+                                    {(m.bulkStatus === 'sending' || m.bulkStatus === 'completed' || m.bulkStatus === 'canceled') && (
+                                        <div className="space-y-1.5">
+                                            <div className="h-2 rounded-full bg-emerald-100 dark:bg-emerald-900/40 overflow-hidden">
+                                                <div className={`h-full rounded-full transition-all duration-300 ${m.bulkStatus === 'canceled' ? 'bg-gray-400' : 'bg-emerald-500'}`} style={{ width: `${pct}%` }} />
+                                            </div>
+                                            <div className="flex items-center justify-between text-[11px]">
+                                                <span className="inline-flex items-center gap-1 font-semibold">
+                                                    {m.bulkStatus === 'sending' && <><Loader2 className="w-3 h-3 animate-spin text-emerald-600" /> Enviando…</>}
+                                                    {m.bulkStatus === 'completed' && <><CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> Completado</>}
+                                                    {m.bulkStatus === 'canceled' && <><XCircle className="w-3.5 h-3.5 text-gray-400" /> Cancelado</>}
+                                                </span>
+                                                <span className="text-gray-600 dark:text-gray-300">
+                                                    {prog.sent} enviados{prog.failed ? ` · ${prog.failed} fallidos` : ''} / {total}
+                                                </span>
+                                            </div>
+                                            {m.bulkStatus === 'sending' && (
+                                                <button onClick={() => cancelBulk(i, p.id, true)} className="text-[10px] font-semibold text-red-500 hover:underline">
+                                                    Detener envío
+                                                </button>
+                                            )}
+                                            {prog.logs?.length > 0 && (
+                                                <div className="mt-1 space-y-0.5 max-h-24 overflow-y-auto font-mono text-[10px] text-gray-500 dark:text-gray-400">
+                                                    {prog.logs.map((l, li) => <div key={li} className="truncate">{l}</div>)}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })()}
                     </div>
                 ))}
                 {sending && (

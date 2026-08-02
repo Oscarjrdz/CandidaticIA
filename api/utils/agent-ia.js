@@ -18,7 +18,7 @@
  * devuelve null y los endpoints responden un aviso claro (no se rompen).
  */
 import Anthropic from '@anthropic-ai/sdk';
-import { getUsers, validateAdminSession, getRedisClient } from './storage.js';
+import { getUsers, validateAdminSession, getRedisClient, getCandidateByPhone } from './storage.js';
 
 // Modelo del agente. Se eligió Haiku 4.5 por costo: ~5x más barato que Opus
 // ($1/$5 vs $5/$25 por millón), suficiente para acciones repetidas (tool use +
@@ -209,12 +209,16 @@ export async function getCrossedCandidateCounts({ etiqueta, estado, noLeidos } =
         if (totalMatches > 0) {
             const sampleIds = matchingIds.slice(0, 3);
             const pipe = redis.pipeline();
-            sampleIds.forEach((id) => pipe.hmget(`candidate:${id}`, 'nombreReal', 'nombre'));
+            // candidate:<id> es un JSON string (.set/.get), NO un hash: leer con GET + parse.
+            sampleIds.forEach((id) => pipe.get(`candidate:${id}`));
             const results = await pipe.exec();
-            sampleNames = (results || []).map(([err, fields]) => {
-                if (!fields) return null;
-                const [nombreReal, nombre] = fields;
-                return nombreReal || nombre || null;
+            sampleNames = (results || []).map(([, raw]) => {
+                try {
+                    const c = raw ? JSON.parse(raw) : null;
+                    return c ? (c.nombreReal || c.nombre || null) : null;
+                } catch {
+                    return null;
+                }
             }).filter(Boolean);
         }
 
@@ -229,6 +233,182 @@ export async function getCrossedCandidateCounts({ etiqueta, estado, noLeidos } =
         console.error('Error in getCrossedCandidateCounts:', err);
         return null;
     }
+}
+
+// Obtiene la plantilla del Banco de Respuestas por coincidencia exacta o parcial
+export async function getQuickReplyByName(query) {
+    const redis = getRedisClient();
+    if (!redis || !query) return null;
+    const q = String(query).trim().toLowerCase();
+    try {
+        const raw = await redis.get('candidatic:quick_replies');
+        const list = raw ? JSON.parse(raw) : [];
+        if (!Array.isArray(list)) return null;
+        return list.find((r) => String(r?.name || r?.title || '').trim().toLowerCase() === q)
+            || list.find((r) => String(r?.name || r?.title || '').trim().toLowerCase().includes(q))
+            || null;
+    } catch {
+        return null;
+    }
+}
+
+// Busca UN candidato por su teléfono (reusa getCandidateByPhone de storage, que ya
+// maneja variantes de prefijo de México: 10 dígitos, 52+10, 521+10). Devuelve un
+// resumen legible para el agente. { candidate } | { notFound: true } | { error }.
+export async function findCandidateByPhone(telefono) {
+    const clean = String(telefono || '').replace(/\D/g, '');
+    if (!clean) return { error: 'Teléfono vacío o inválido.' };
+    try {
+        const c = await getCandidateByPhone(clean);
+        if (!c) return { notFound: true, telefono: clean };
+        const cleanPhone = String(c.whatsapp || '').replace(/\D/g, '');
+        const tags = Array.isArray(c.tags) ? c.tags : (Array.isArray(c.etiquetas) ? c.etiquetas : []);
+        return {
+            candidate: {
+                id: c.id,
+                name: c.nombreReal || c.nombre || `Candidato ${c.id}`,
+                phone: cleanPhone ? `+${cleanPhone}` : 'Sin WhatsApp',
+                municipio: c.municipio || null,
+                escolaridad: c.escolaridad || null,
+                categoria: c.categoria || null,
+                edad: c.edad || null,
+                colonia: c.colonia || null,
+                completo: c.paso2Estado === 'completo',
+                etiquetas: tags.map((t) => (typeof t === 'string' ? t : t?.name)).filter(Boolean)
+            }
+        };
+    } catch (err) {
+        console.error('Error in findCandidateByPhone:', err);
+        return { error: 'No pude buscar el candidato en este momento.' };
+    }
+}
+
+// Lista detallada (id, nombre completo, WhatsApp) de candidatos filtrados por etiqueta/estado/no-leídos
+export async function getDetailedCandidatesList({ etiqueta, estado, noLeidos, limite = 20, candidatoIds } = {}) {
+    const redis = getRedisClient();
+    if (!redis) return null;
+    try {
+        let matchingIds = [];
+
+        if (Array.isArray(candidatoIds) && candidatoIds.length > 0) {
+            matchingIds = candidatoIds;
+        } else {
+            let canonicalTag = null;
+            if (etiqueta) {
+                canonicalTag = await resolveTagName(etiqueta);
+                if (!canonicalTag) {
+                    return { error: `No encontré una etiqueta que coincida con "${etiqueta}". Usa contar_etiquetas para ver las etiquetas reales.` };
+                }
+            }
+
+            const setKeys = [];
+            if (canonicalTag) {
+                const tagB64 = Buffer.from(String(canonicalTag).trim().toLowerCase()).toString('base64url');
+                setKeys.push(`index:candidates:tag:${tagB64}`);
+            }
+
+            const est = String(estado || '').toLowerCase().trim();
+            if (est === 'completo' || est === 'completos') {
+                setKeys.push('stats:list:complete');
+            } else if (est === 'incompleto' || est === 'incompletos' || est === 'pendiente' || est === 'pendientes') {
+                setKeys.push('stats:list:pending');
+            }
+
+            const isUnread = noLeidos === true || String(noLeidos).toLowerCase() === 'true' || String(noLeidos).toLowerCase() === 'si' || String(noLeidos).toLowerCase() === 'sí';
+            if (isUnread) {
+                setKeys.push('candidates:unread');
+            }
+
+            if (setKeys.length === 0) {
+                matchingIds = await redis.smembers('stats:list:complete');
+            } else if (setKeys.length === 1) {
+                matchingIds = await redis.smembers(setKeys[0]);
+            } else {
+                matchingIds = await redis.sinter(...setKeys);
+            }
+        }
+
+        const maxLimit = Math.min(50, Math.max(1, Number(limite) || 20));
+        const targetIds = (matchingIds || []).slice(0, maxLimit);
+        const totalMatches = matchingIds ? matchingIds.length : 0;
+
+        if (targetIds.length === 0) {
+            return {
+                totalMatches: 0,
+                candidates: []
+            };
+        }
+
+        const pipe = redis.pipeline();
+        // candidate:<id> es un JSON string (.set/.get), NO un hash: leer con GET + parse.
+        targetIds.forEach((id) => pipe.get(`candidate:${id}`));
+        const results = await pipe.exec();
+
+        const candidates = targetIds.map((id, idx) => {
+            const [, raw] = results[idx] || [];
+            let c = null;
+            try { c = raw ? JSON.parse(raw) : null; } catch { c = null; }
+            if (!c) return { id, name: 'Candidato sin nombre', phone: 'Sin WhatsApp', rawPhone: '' };
+            const cleanPhone = String(c.whatsapp || '').replace(/\D/g, '');
+            const formattedPhone = cleanPhone ? `+${cleanPhone}` : 'Sin WhatsApp';
+            return {
+                id,
+                name: c.nombreReal || c.nombre || `Candidato ${id}`,
+                phone: formattedPhone,
+                rawPhone: cleanPhone,
+                municipio: c.municipio || null,
+                escolaridad: c.escolaridad || null,
+                categoria: c.categoria || null
+            };
+        });
+
+        return {
+            totalMatches,
+            candidates
+        };
+    } catch (err) {
+        console.error('Error in getDetailedCandidatesList:', err);
+        return null;
+    }
+}
+
+// Crea la propuesta de envío masivo de una plantilla del Banco de Respuestas
+export async function proposeQuickReplyBulkSend({ respuesta_banco, etiqueta, estado, noLeidos, limite = 20, candidatoIds }) {
+    const redis = getRedisClient();
+    if (!redis) return { error: 'Redis no disponible' };
+
+    const qr = await getQuickReplyByName(respuesta_banco);
+    if (!qr) {
+        return { error: `No encontré la respuesta de banco "${respuesta_banco}". Usa listar_respuestas_banco para ver los nombres reales.` };
+    }
+
+    const messageText = qr.text || qr.message || qr.content || '';
+    if (!messageText) {
+        return { error: `La respuesta del banco "${qr.name || respuesta_banco}" no contiene texto.` };
+    }
+
+    const listData = await getDetailedCandidatesList({ etiqueta, estado, noLeidos, limite, candidatoIds });
+    if (!listData || listData.error) {
+        return { error: listData?.error || 'No se pudo generar la lista de candidatos.' };
+    }
+
+    if (!listData.candidates || listData.candidates.length === 0) {
+        return { error: 'No se encontraron candidatos que coincidan con los criterios para realizar el envío.' };
+    }
+
+    const proposalId = `proposal_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    const proposal = {
+        id: proposalId,
+        templateName: qr.name || qr.title || respuesta_banco,
+        messageText,
+        candidateCount: listData.candidates.length,
+        candidates: listData.candidates,
+        createdAt: new Date().toISOString()
+    };
+
+    await redis.set(`bulk_proposal:${proposalId}`, JSON.stringify(proposal), 'EX', 3600);
+
+    return { success: true, proposal };
 }
 
 // ─── Altas por fecha (contadores diarios, zona Monterrey) ────────────────────
@@ -538,6 +718,9 @@ export async function assembleSystemPrompt() {
         '- `leer_skill`: abre el contenido completo de una skill por su nombre (ej. "Yageo").\n' +
         '- `guardar_skill`: crea o edita una skill (nombre + contenido markdown completo). Si el nombre ya existe, la reemplaza; si no, la crea. Se guarda al instante y se ve en el panel del usuario.\n' +
         '- `contar_candidatos`: consulta y filtra candidatos por estado (completos/incompletos), etiqueta (ej. "Yageo") y/o no leídos (burbujas sin responder). Permite consultas cruzadas como "cuántos completos con etiqueta Yageo están no leídos". Lectura barata de intersecciones de Sets en Redis (SINTER O(N)); no escanea ni gasta tokens.\n' +
+        '- `listar_candidatos`: obtiene la lista detallada (nombre completo y WhatsApp) de los candidatos filtrados (etiqueta, estado, no leídos) hasta el límite indicado. Úsala cuando el usuario pida ver la lista de candidatos o sus teléfonos.\n' +
+        '- `buscar_candidato`: busca UN candidato por su número de teléfono/WhatsApp y devuelve su nombre completo y datos de perfil. Úsala cuando el usuario diga "busca al candidato 8116038195" o similar.\n' +
+        '- `proponer_envio_banco`: propón enviar un mensaje del Banco de Respuestas (ej. "Punto Yageo") a candidatos. NO envía de inmediato: genera una tarjeta de confirmación en el chat con los botones Confirmar Envíos / Cancelar. Para UN solo candidato, pasa su `telefono` (ej. después de buscarlo). Para una LISTA, usa los mismos filtros (etiqueta/estado/no_leidos) con los que la listaste. Úsala cuando el usuario pida enviar o mandar un mensaje del banco.\n' +
         '- `contar_etiquetas`: las etiquetas de Candidatic CON su cantidad de candidatos (y cuántos sin etiqueta). Sirve también para saber qué etiquetas existen. Lectura barata; NO inventes nombres ni números.\n' +
         '- `contar_altas`: cuántos candidatos LLEGARON (se dieron de alta) en una fecha/rango (hoy, ayer, esta semana, este mes, o fechas explícitas). Lectura barata de contadores diarios.\n' +
         '- `contar_altas_etiqueta`: cuántos candidatos de UNA etiqueta llegaron en una fecha/rango (ej. "cuántos de Yageo llegaron hoy"). El conteo por etiqueta y día se registra desde que se activó esta función, así que fechas muy anteriores pueden salir en 0.\n' +

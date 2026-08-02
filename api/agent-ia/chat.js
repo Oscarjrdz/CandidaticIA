@@ -8,6 +8,9 @@ import {
     getTagCounts,
     getCandidateCounts,
     getCrossedCandidateCounts,
+    getDetailedCandidatesList,
+    findCandidateByPhone,
+    proposeQuickReplyBulkSend,
     buildDateKeys,
     getCapturesTotal,
     getCapturesByTag,
@@ -165,6 +168,47 @@ const TOOLS = [
         name: 'listar_respuestas_banco',
         description: 'Devuelve los nombres reales de las respuestas del Banco de Respuestas (plantillas que los reclutadores mandan a los candidatos). Úsala cuando el usuario pregunte qué respuestas de banco hay o sus nombres. Solo lectura.',
         input_schema: { type: 'object', properties: {}, required: [] }
+    },
+    {
+        name: 'listar_candidatos',
+        description: 'Devuelve la LISTA detallada (nombre completo y número de WhatsApp) de los candidatos que cumplen los filtros (etiqueta, estado, no leídos), hasta el límite indicado. Úsala cuando el usuario pida VER la lista de candidatos o sus teléfonos (ej. "los 20 completos no leídos con etiqueta Anuncio Yageo"). Lectura BARATA de Sets en Redis; no escanea.',
+        input_schema: {
+            type: 'object',
+            properties: {
+                etiqueta: { type: 'string', description: 'Nombre o parte del nombre de la etiqueta (ej. "Yageo", "Anuncio Yageo").' },
+                estado: { type: 'string', enum: ['completos', 'incompletos', 'todos'], description: 'Filtrar por perfil completo o incompleto (opcional).' },
+                no_leidos: { type: 'boolean', description: 'Si es true, sólo los que tienen mensajes no leídos (sin responder por el reclutador).' },
+                limite: { type: 'number', description: 'Máximo de candidatos a listar (por defecto 20, tope 50).' }
+            },
+            required: []
+        }
+    },
+    {
+        name: 'buscar_candidato',
+        description: 'Busca UN candidato por su número de teléfono/WhatsApp (ej. "8116038195"). Devuelve su nombre completo, WhatsApp, y datos del perfil (municipio, escolaridad, categoría, edad, colonia, si está completo, etiquetas). Tolera prefijos de México (10 dígitos, 52+10, 521+10). Úsala cuando el usuario pida buscar/ver a un candidato por teléfono.',
+        input_schema: {
+            type: 'object',
+            properties: {
+                telefono: { type: 'string', description: 'Número de teléfono/WhatsApp del candidato (ej. "8116038195").' }
+            },
+            required: ['telefono']
+        }
+    },
+    {
+        name: 'proponer_envio_banco',
+        description: 'Propón enviar un mensaje del Banco de Respuestas (ej. "Punto Yageo") a candidatos. NO envía de inmediato: genera una tarjeta de confirmación en el chat con botones Confirmar Envíos / Cancelar, y el usuario decide ahí. Úsala cuando el usuario pida enviar/mandar un mensaje del banco. Para enviar a UN solo candidato, pasa su "telefono" (ej. tras buscarlo). Para enviar a una LISTA, usa los MISMOS filtros (etiqueta/estado/no_leidos) con los que la listaste.',
+        input_schema: {
+            type: 'object',
+            properties: {
+                respuesta_banco: { type: 'string', description: 'Nombre de la respuesta del Banco de Respuestas a enviar (ej. "Punto Yageo").' },
+                telefono: { type: 'string', description: 'Teléfono de UN candidato para enviarle sólo a él (ej. "8116038195"). Si lo usas, ignora los filtros de lista.' },
+                etiqueta: { type: 'string', description: 'Nombre o parte del nombre de la etiqueta (ej. "Anuncio Yageo").' },
+                estado: { type: 'string', enum: ['completos', 'incompletos', 'todos'], description: 'Filtrar por perfil completo o incompleto (opcional).' },
+                no_leidos: { type: 'boolean', description: 'Si es true, sólo los que tienen mensajes no leídos.' },
+                limite: { type: 'number', description: 'Máximo de candidatos (por defecto 20, tope 50).' }
+            },
+            required: ['respuesta_banco']
+        }
     }
 ];
 
@@ -196,6 +240,7 @@ export default async function handler(req, res) {
 
         let agentsUpdated = false;      // el agente editó AGENTS.md este turno
         let skillsUpdated = false;      // el agente creó/editó una skill este turno
+        let bulkProposal = null;        // propuesta de envío masivo de este turno (tarjeta de confirmación)
         const memoryProposals = [];     // propuestas de memoria de este turno: {id, text}
         let usageTokens = 0;
         let toolCalls = 0;
@@ -325,6 +370,77 @@ export default async function handler(req, res) {
                     result = names.length
                         ? `Respuestas del Banco de Respuestas (${names.length}):\n${names.map((n) => `- ${n}`).join('\n')}`
                         : 'No hay respuestas guardadas en el Banco de Respuestas.';
+                } else if (block.name === 'listar_candidatos') {
+                    const input = block.input || {};
+                    const data = await getDetailedCandidatesList({
+                        etiqueta: input.etiqueta,
+                        estado: input.estado,
+                        noLeidos: input.no_leidos,
+                        limite: input.limite
+                    });
+                    if (!data) {
+                        result = 'No pude leer la lista de candidatos en este momento.';
+                    } else if (data.error) {
+                        result = data.error;
+                    } else if (!data.candidates.length) {
+                        result = 'No hay candidatos que cumplan esos filtros.';
+                    } else {
+                        const lines = data.candidates.map((c, idx) => `${idx + 1}. ${c.name} — ${c.phone}`);
+                        const extra = data.totalMatches > data.candidates.length
+                            ? `\n(Mostrando ${data.candidates.length} de ${data.totalMatches} en total.)`
+                            : '';
+                        result = `Candidatos (${data.candidates.length}):\n${lines.join('\n')}${extra}`;
+                    }
+                } else if (block.name === 'buscar_candidato') {
+                    const found = await findCandidateByPhone(block.input?.telefono || '');
+                    if (found?.error) {
+                        result = found.error;
+                    } else if (found?.notFound) {
+                        result = `No encontré ningún candidato con el teléfono ${found.telefono || block.input?.telefono || ''}.`;
+                    } else {
+                        const c = found.candidate;
+                        const datos = [
+                            `Nombre: ${c.name}`,
+                            `WhatsApp: ${c.phone}`,
+                            c.municipio ? `Municipio: ${c.municipio}` : null,
+                            c.colonia ? `Colonia: ${c.colonia}` : null,
+                            c.escolaridad ? `Escolaridad: ${c.escolaridad}` : null,
+                            c.categoria ? `Categoría: ${c.categoria}` : null,
+                            c.edad ? `Edad: ${c.edad}` : null,
+                            `Perfil: ${c.completo ? 'completo' : 'incompleto'}`,
+                            c.etiquetas.length ? `Etiquetas: ${c.etiquetas.join(', ')}` : null
+                        ].filter(Boolean).join('\n');
+                        result = `Candidato encontrado:\n${datos}`;
+                    }
+                } else if (block.name === 'proponer_envio_banco') {
+                    const input = block.input || {};
+                    let candidatoIds;
+                    let telError = null;
+                    if (input.telefono) {
+                        const found = await findCandidateByPhone(input.telefono);
+                        if (found?.error) telError = found.error;
+                        else if (found?.notFound) telError = `No encontré ningún candidato con el teléfono ${found.telefono || input.telefono}.`;
+                        else candidatoIds = [found.candidate.id];
+                    }
+                    if (telError) {
+                        result = telError;
+                    } else {
+                        const r = await proposeQuickReplyBulkSend({
+                            respuesta_banco: input.respuesta_banco,
+                            etiqueta: input.etiqueta,
+                            estado: input.estado,
+                            noLeidos: input.no_leidos,
+                            limite: input.limite,
+                            candidatoIds
+                        });
+                        if (r.error) {
+                            result = r.error;
+                        } else {
+                            bulkProposal = r.proposal; // la UI pinta la tarjeta de confirmación con esta propuesta
+                            const cuantos = r.proposal.candidateCount === 1 ? '1 candidato' : `${r.proposal.candidateCount} candidatos`;
+                            result = `Propuesta de envío creada: "${r.proposal.templateName}" a ${cuantos}. En el chat le apareció al usuario una tarjeta con la lista y botones Confirmar Envíos / Cancelar. PREGÚNTALE explícitamente si quiere que se envíe. NO afirmes que ya se envió — queda pendiente hasta que el usuario confirme en la tarjeta.`;
+                        }
+                    }
                 } else {
                     result = 'Herramienta desconocida.';
                 }
@@ -356,6 +472,7 @@ export default async function handler(req, res) {
             toolCalls,
             agentsUpdated,                       // la UI refresca AGENTS.md si true
             skillsUpdated,                       // la UI refresca el panel de Skills si true
+            bulkProposal,                        // {id, templateName, candidates,...} → tarjeta Confirmar/Cancelar envío
             memoryProposals,                     // [{id, text}] → tarjetas Guardar/Descartar en el chat
             memoryProposed: memoryProposals.length // conteo (refresca panel derecho)
         });
