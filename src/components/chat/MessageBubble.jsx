@@ -214,11 +214,30 @@ const MessageBubble = React.memo(function MessageBubble({
     // sobra espacio según lo que traiga la burbuja) y lo pasa como variable CSS para que la
     // animación de crecimiento (arriba) sepa a qué alto final animar. scrollHeight mide el
     // contenido real aunque esté clippeado por el max-height:0 inicial de la animación.
+    // ResizeObserver (no una medición única al montar): con varias imágenes seguidas del
+    // banco de respuestas, el layout de la fila podía no estar 100% asentado en el instante
+    // exacto del montaje (más tráfico simultáneo en la lista con la 2ª/3ª imagen que con la
+    // 1ª) — una medición única a veces salía corta, la animación crecía hasta ESE número y
+    // se sentía "atorada" cerca del final, con un brinco al valor real cuando la restricción
+    // se quitaba. Con el observer, si el alto real cambia mientras la animación sigue en
+    // curso, el objetivo se actualiza solo — nunca se queda mirando un número viejo.
     const mediaRowRef = React.useRef(null);
     React.useLayoutEffect(() => {
-        if (!hasMedia || !playRowEntry) return;
+        if (!hasMedia || !playRowEntry) return undefined;
         const el = mediaRowRef.current;
-        if (el) el.style.setProperty('--row-target-height', `${el.scrollHeight}px`);
+        if (!el) return undefined;
+        let lastHeight = -1;
+        const update = () => {
+            const h = el.scrollHeight;
+            if (h === lastHeight) return;
+            lastHeight = h;
+            el.style.setProperty('--row-target-height', `${h}px`);
+        };
+        update();
+        if (typeof ResizeObserver === 'undefined') return undefined;
+        const ro = new ResizeObserver(update);
+        ro.observe(el);
+        return () => ro.disconnect();
     }, []);
     // Fase 2 aplica a CUALQUIER burbuja, pero distinta según media o no:
     //   • SIN media: desliza + fade (opacity incluida) — como siempre.
