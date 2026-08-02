@@ -121,12 +121,8 @@
         "api/cron/reengagement.js": {
             "maxDuration": 60
         },
-        "api/brenda-agent/chat.js": {
-            "maxDuration": 60,
-            "includeFiles": "skills/**"
-        },
-        "api/brenda-agent/skills.js": {
-            "includeFiles": "skills/**"
+        "api/agent-ia/chat.js": {
+            "maxDuration": 120
         },
         "api/cron/agent-katcon.js": {
             "maxDuration": 60

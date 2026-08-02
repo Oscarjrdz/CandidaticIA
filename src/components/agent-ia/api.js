@@ -1,5 +1,4 @@
-// Helper de fetch para Brenda Agent (agente nativo de Claude). Centraliza el token
-// de sesión del SuperAdmin y el manejo de error.
+// Helper de fetch para Agent IA. Centraliza el token de sesión del SuperAdmin.
 function getSessionToken() {
     try {
         const raw = localStorage.getItem('candidatic_user_session');
@@ -10,7 +9,7 @@ function getSessionToken() {
     }
 }
 
-export async function agentFetch(url, { method = 'GET', body } = {}) {
+export async function agentIAFetch(url, { method = 'GET', body } = {}) {
     const res = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getSessionToken()}` },

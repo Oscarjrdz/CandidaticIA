@@ -1,0 +1,185 @@
+import {
+    requireSuperAdmin,
+    getAnthropicClient,
+    hasAnthropicKey,
+    assembleSystemPrompt,
+    setAgentsMd,
+    addMemoryProposal,
+    AGENT_MODEL
+} from '../utils/agent-ia.js';
+
+// ════════════════════════════════════════════════════════════════════════════
+// Agent IA — chat con el agente propio (Claude nativo).
+//
+// SDK oficial @anthropic-ai/sdk, modelo claude-opus-4-8, adaptive thinking, y un
+// LOOP MANUAL de tool use con dos herramientas:
+//   - editar_agents_md  → reescribe AGENTS.md (edición en vivo, se refleja en la UI).
+//   - proponer_memoria  → agrega una propuesta de memoria (pendiente de aprobación).
+//
+// Body: { message, history: [{role, content}] }
+// Requiere ANTHROPIC_API_KEY. Sin ella responde un aviso claro (200).
+// ════════════════════════════════════════════════════════════════════════════
+
+const MAX_INPUT = 4000;
+const MAX_HISTORY = 12;
+const MAX_TOKENS = 8000;
+const MAX_TOOL_LOOPS = 5;
+
+function sanitize(v, max) {
+    return String(v || '').replace(/\s+/g, ' ').trim().slice(0, max);
+}
+
+function normalizeHistory(history) {
+    if (!Array.isArray(history)) return [];
+    return history
+        .slice(-MAX_HISTORY)
+        .map((m) => {
+            const role = m?.role === 'assistant' ? 'assistant' : 'user';
+            const content = sanitize(m?.content, 2000);
+            return content ? { role, content } : null;
+        })
+        .filter(Boolean);
+}
+
+function extractText(content) {
+    if (!Array.isArray(content)) return '';
+    return content.filter((b) => b.type === 'text').map((b) => b.text).join('\n').trim();
+}
+
+const TOOLS = [
+    {
+        name: 'editar_agents_md',
+        description: 'Reescribe tu documento de definición (AGENTS.md). Úsala SOLO cuando el usuario te pida cambiar quién eres o cómo te comportas. Debes enviar el documento COMPLETO ya modificado (no un fragmento): lo que mandes reemplaza el AGENTS.md entero.',
+        input_schema: {
+            type: 'object',
+            properties: {
+                contenido: { type: 'string', description: 'El AGENTS.md completo, ya con los cambios aplicados.' }
+            },
+            required: ['contenido']
+        }
+    },
+    {
+        name: 'proponer_memoria',
+        description: 'Propón un aprendizaje para recordar entre conversaciones (se agrega a MEMORY.md SOLO si el usuario lo aprueba). Úsala cuando descubras algo estable y útil a futuro. Una idea por llamada, redactada en una frase concisa.',
+        input_schema: {
+            type: 'object',
+            properties: {
+                aprendizaje: { type: 'string', description: 'El aprendizaje a recordar, en una frase.' }
+            },
+            required: ['aprendizaje']
+        }
+    }
+];
+
+export default async function handler(req, res) {
+    if (req.method !== 'POST') {
+        return res.status(405).json({ success: false, error: 'Método no permitido' });
+    }
+
+    const user = await requireSuperAdmin(req, res);
+    if (!user) return;
+
+    const message = sanitize(req.body?.message, MAX_INPUT);
+    if (!message) return res.status(400).json({ success: false, error: 'Mensaje requerido' });
+
+    if (!hasAnthropicKey()) {
+        return res.status(200).json({
+            success: true,
+            reply: '⚠️ El agente aún no está conectado: falta configurar ANTHROPIC_API_KEY en las variables de entorno de Vercel. Una vez agregada, este chat responderá con Claude real.',
+            model: 'sin-api-key',
+            needsApiKey: true
+        });
+    }
+
+    const client = getAnthropicClient();
+
+    try {
+        const system = await assembleSystemPrompt();
+        const messages = [...normalizeHistory(req.body?.history), { role: 'user', content: message }];
+
+        let agentsUpdated = false;   // el agente editó AGENTS.md este turno
+        let memoryProposed = 0;      // cuántas propuestas de memoria hizo este turno
+        let usageTokens = 0;
+        let toolCalls = 0;
+
+        let response = await client.messages.create({
+            model: AGENT_MODEL,
+            max_tokens: MAX_TOKENS,
+            thinking: { type: 'adaptive' },
+            output_config: { effort: 'medium' },
+            system,
+            tools: TOOLS,
+            messages
+        });
+        usageTokens += (response.usage?.input_tokens || 0) + (response.usage?.output_tokens || 0);
+
+        let loops = 0;
+        while (response.stop_reason === 'tool_use' && loops < MAX_TOOL_LOOPS) {
+            loops++;
+            messages.push({ role: 'assistant', content: response.content });
+
+            const toolResults = [];
+            for (const block of response.content) {
+                if (block.type !== 'tool_use') continue;
+                toolCalls++;
+                let result;
+                if (block.name === 'editar_agents_md') {
+                    const contenido = block.input?.contenido || '';
+                    if (contenido.trim()) {
+                        await setAgentsMd(contenido);
+                        agentsUpdated = true;
+                        result = 'AGENTS.md actualizado. El cambio ya quedó guardado y se refleja en el panel del usuario.';
+                    } else {
+                        result = 'No actualicé nada: el contenido llegó vacío. Manda el documento completo.';
+                    }
+                } else if (block.name === 'proponer_memoria') {
+                    const aprendizaje = block.input?.aprendizaje || '';
+                    const proposal = await addMemoryProposal(aprendizaje);
+                    if (proposal) {
+                        memoryProposed++;
+                        result = 'Propuesta de memoria registrada. Queda PENDIENTE hasta que el usuario la apruebe en el panel — no está guardada todavía.';
+                    } else {
+                        result = 'No pude registrar la propuesta (llegó vacía).';
+                    }
+                } else {
+                    result = 'Herramienta desconocida.';
+                }
+                toolResults.push({ type: 'tool_result', tool_use_id: block.id, content: result });
+            }
+
+            messages.push({ role: 'user', content: toolResults });
+
+            response = await client.messages.create({
+                model: AGENT_MODEL,
+                max_tokens: MAX_TOKENS,
+                thinking: { type: 'adaptive' },
+                output_config: { effort: 'medium' },
+                system,
+                tools: TOOLS,
+                messages
+            });
+            usageTokens += (response.usage?.input_tokens || 0) + (response.usage?.output_tokens || 0);
+        }
+
+        if (response.stop_reason === 'refusal') {
+            return res.status(200).json({ success: true, reply: 'No puedo ayudar con eso en este momento.', model: response.model, usageTokens, agentsUpdated, memoryProposed });
+        }
+
+        return res.status(200).json({
+            success: true,
+            reply: extractText(response.content) || '(sin respuesta)',
+            model: response.model,
+            usageTokens,
+            toolCalls,
+            agentsUpdated,     // la UI refresca AGENTS.md si true
+            memoryProposed     // la UI refresca la lista de propuestas si > 0
+        });
+    } catch (error) {
+        console.error('❌ [AgentIA] chat error:', error);
+        const status = error?.status;
+        let msg = 'No pude responder en este momento.';
+        if (status === 401) msg = 'La ANTHROPIC_API_KEY es inválida o fue revocada.';
+        else if (status === 429) msg = 'Límite de tasa de Anthropic alcanzado. Intenta de nuevo en unos segundos.';
+        return res.status(200).json({ success: true, reply: `⚠️ ${msg}`, model: 'error', error: error.message });
+    }
+}

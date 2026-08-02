@@ -13,7 +13,6 @@ import { getTheme, saveTheme } from './utils/storage';
 import { usePresence } from './hooks/usePresence';
 import InternalChat from './components/InternalChat';
 import { useCandidatesSSE } from './hooks/useCandidatesSSE';
-import FloatingCopilot from './components/FloatingCopilot';
 
 // ⚡ React.lazy with auto-retry on stale chunk errors (post-deploy cache mismatch)
 // If a dynamic import fails (e.g. old chunk hash no longer exists), reload the page ONCE
@@ -52,7 +51,7 @@ const BotIASection = lazyWithRetry(() => import('./components/BotIASection'), 'B
 const MediaLibrarySection = lazyWithRetry(() => import('./components/MediaLibrarySection'), 'MediaLibrarySection');
 const CRMProjectsSection = lazyWithRetry(() => import('./components/CRMProjectsSection'), 'CRMProjectsSection');
 const AdsStatisticsSection = lazyWithRetry(() => import('./components/AdsStatisticsSection'), 'AdsStatisticsSection');
-const IACopilotoSection = lazyWithRetry(() => import('./components/IACopilotoSection'), 'IACopilotoSection');
+const AgentIASection = lazyWithRetry(() => import('./components/AgentIASection'), 'AgentIASection');
 
 /**
  * Inner app shell — consumes both contexts.
@@ -304,7 +303,7 @@ function AppShell() {
                       : activeSection === 'users' ? 'Usuarios'
                       : activeSection === 'media-library' ? 'Biblioteca'
                       : activeSection === 'projects' ? 'Proyectos'
-                      : activeSection === 'ia-copiloto' ? 'Brenda IA'
+                      : activeSection === 'agent-ia' ? 'Agent IA'
                       : 'Configuración'}
                   </h1>
 
@@ -357,7 +356,7 @@ function AppShell() {
                       : activeSection === 'users' ? 'Gestión de equipo y permisos'
                       : activeSection === 'media-library' ? 'Biblioteca de archivos y recursos del Bot'
                       : activeSection === 'projects' ? 'Kanban de reclutamiento'
-                      : activeSection === 'ia-copiloto' ? 'Prompts, skills y asistencia inteligente'
+                      : activeSection === 'agent-ia' ? 'Tu agente propio: chat, definición (AGENTS.md) y memoria (MEMORY.md)'
                       : 'Credenciales y configuración del sistema'}
                   </p>
                 </div>
@@ -510,7 +509,7 @@ function AppShell() {
             el contenido no se ensanche/encoja (brinco horizontal) cuando aparece/desaparece
             la barra al cambiar la altura del contenido (p.ej. contraer/expandir tarjetas).
             Solo en secciones normales; chat/bulks tienen su propio scroll interno. */}
-        <main className={`flex-1 overflow-y-auto overflow-x-hidden flex flex-col min-h-0 ${activeSection === 'chat' || activeSection === 'bulks' ? 'p-0' : 'px-3 sm:px-8 py-4 sm:py-8 [scrollbar-gutter:stable]'}`}>
+        <main className={`flex-1 overflow-y-auto overflow-x-hidden flex flex-col min-h-0 ${activeSection === 'chat' || activeSection === 'bulks' || activeSection === 'agent-ia' ? 'p-0' : 'px-3 sm:px-8 py-4 sm:py-8 [scrollbar-gutter:stable]'}`}>
           <ErrorBoundary>
           <Suspense fallback={<SectionSkeleton />}>
           {activeSection === 'candidates' ? (
@@ -537,8 +536,8 @@ function AppShell() {
             <MediaLibrarySection />
           ) : activeSection === 'projects' ? (
             <CRMProjectsSection />
-          ) : activeSection === 'ia-copiloto' && user?.role === 'SuperAdmin' ? (
-            <IACopilotoSection />
+          ) : activeSection === 'agent-ia' && user?.role === 'SuperAdmin' ? (
+            <AgentIASection />
           ) : (
             <SettingsSection />
           )}
@@ -547,10 +546,6 @@ function AppShell() {
         </main>
 
         <InternalChat onlineUsers={onlineUsers} />
-        {/* Brenda Copiloto (burbuja flotante) — SOLO el perfil de Oscar (antes: todos los SuperAdmin, incluida Paty) */}
-        {isOscar && (
-          <FloatingCopilot activeSection={activeSection} onOpenSection={() => setActiveSection('ia-copiloto')} />
-        )}
         {/* Footer */}
         <footer className="py-3 sm:py-4 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shrink-0 sticky bottom-0 z-10" style={{ WebkitBackdropFilter: 'blur(12px)', backdropFilter: 'blur(12px)', backgroundColor: 'rgba(255,255,255,0.9)' }}>
           <div className="px-4 sm:px-8">
