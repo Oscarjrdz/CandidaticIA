@@ -47,7 +47,7 @@ const Bubble = ({ role, children }) => (
     </div>
 );
 
-const AgentChat = ({ hasApiKey, model, onAgentsUpdated, onMemoryProposed, onSkillsUpdated }) => {
+const AgentChat = ({ hasApiKey, model, onAgentsUpdated, onMemoryProposed, onSkillsUpdated, onAgentLiveUpdated }) => {
     const [messages, setMessages] = useState(loadStoredMessages);
     const [input, setInput] = useState('');
     const [sending, setSending] = useState(false);
@@ -107,6 +107,7 @@ const AgentChat = ({ hasApiKey, model, onAgentsUpdated, onMemoryProposed, onSkil
             if (data.agentsUpdated && onAgentsUpdated) onAgentsUpdated();
             if (data.skillsUpdated && onSkillsUpdated) onSkillsUpdated();
             if (data.memoryProposals?.length && onMemoryProposed) onMemoryProposed();
+            if (data.agentLiveUpdated && onAgentLiveUpdated) onAgentLiveUpdated();
         } catch (e) {
             setMessages((prev) => [...prev, { role: 'assistant', content: `No pude responder: ${e.message}` }]);
         } finally {

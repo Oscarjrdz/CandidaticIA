@@ -4,6 +4,7 @@ import AgentChat from './agent-ia/AgentChat';
 import AgentsDocEditor from './agent-ia/DocEditor';
 import MemoryPanel from './agent-ia/MemoryPanel';
 import SkillsPanel from './agent-ia/SkillsPanel';
+import LiveAgentPanel from './agent-ia/LiveAgentPanel';
 import { agentIAFetch } from './agent-ia/api';
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -27,6 +28,7 @@ const AgentIASection = () => {
     const [skills, setSkills] = useState([]);
     const [hasApiKey, setHasApiKey] = useState(false);
     const [model, setModel] = useState('claude-opus-4-8');
+    const [liveReload, setLiveReload] = useState(0); // bump → LiveAgentPanel refetch (el chat prendió/apagó)
 
     const load = useCallback(async () => {
         try {
@@ -82,20 +84,21 @@ const AgentIASection = () => {
     }
 
     return (
-        <div className="flex flex-col md:flex-row h-full min-h-0 bg-gray-50 dark:bg-[#0b141a]">
+        <div className="flex flex-col lg:flex-row h-full min-h-0 bg-gray-50 dark:bg-[#0b141a]">
             {/* Izquierda: chat */}
-            <div className="w-full md:w-[46%] md:max-w-[560px] h-1/2 md:h-full border-b md:border-b-0 md:border-r border-gray-200 dark:border-gray-700 min-h-0">
+            <div className="w-full lg:w-[38%] lg:max-w-[520px] h-1/2 lg:h-full border-b lg:border-b-0 lg:border-r border-gray-200 dark:border-gray-700 min-h-0">
                 <AgentChat
                     hasApiKey={hasApiKey}
                     model={model}
                     onAgentsUpdated={refreshAgents}
                     onMemoryProposed={refreshMemory}
                     onSkillsUpdated={refreshSkills}
+                    onAgentLiveUpdated={() => setLiveReload((k) => k + 1)}
                 />
             </div>
 
-            {/* Derecha: 3 módulos apilados */}
-            <div className="flex-1 h-1/2 md:h-full overflow-y-auto p-4 space-y-4 min-h-0">
+            {/* Centro: módulos (AGENTS.md, MEMORY.md, Skills) */}
+            <div className="flex-1 h-1/2 lg:h-full overflow-y-auto p-4 space-y-4 min-h-0 lg:border-r border-gray-200 dark:border-gray-700">
                 <AgentsDocEditor value={agentsMd} onSaved={setAgentsMd} />
                 <MemoryPanel
                     value={memoryMd}
@@ -107,6 +110,11 @@ const AgentIASection = () => {
                     }}
                 />
                 <SkillsPanel skills={skills} onChange={(list) => setSkills(Array.isArray(list) ? list : [])} />
+            </div>
+
+            {/* Derecha: Agent Candidatic (atención automática en vivo) */}
+            <div className="w-full lg:w-[320px] lg:shrink-0 h-1/2 lg:h-full p-4 min-h-0">
+                <LiveAgentPanel reloadKey={liveReload} />
             </div>
         </div>
     );

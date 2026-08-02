@@ -27,6 +27,7 @@ import {
     upsertSkill,
     AGENT_MODEL
 } from '../utils/agent-ia.js';
+import { setAgentLiveState } from '../utils/agent-candidatic.js';
 
 // ════════════════════════════════════════════════════════════════════════════
 // Agent IA — chat con el agente propio (Claude nativo).
@@ -198,6 +199,22 @@ const TOOLS = [
         }
     },
     {
+        name: 'prender_agent_candidatic',
+        description: 'Prende el modo de atención automática en vivo ("Agent Candidatic") para una o varias etiquetas. Úsala cuando el usuario diga cosas como "me voy a comer, atiende a los de Yageo San Nicolás" o "prende el agente para la etiqueta X". Se activa el toggle del panel y, de ahí en adelante, los candidatos que se completen de esas etiquetas entran a la cola de atención. Requiere al menos una etiqueta.',
+        input_schema: {
+            type: 'object',
+            properties: {
+                etiquetas: { type: 'array', items: { type: 'string' }, description: 'Una o más etiquetas a atender (ej. ["Yageo San Nicolás"]).' }
+            },
+            required: ['etiquetas']
+        }
+    },
+    {
+        name: 'apagar_agent_candidatic',
+        description: 'Apaga el modo de atención automática en vivo ("Agent Candidatic"). Úsala cuando el usuario diga "ya volví", "apaga el agente", "deja de atender", etc.',
+        input_schema: { type: 'object', properties: {}, required: [] }
+    },
+    {
         name: 'listar_vacantes',
         description: 'Devuelve los nombres de las vacantes del "maletín" del Chat Web que tienen info lista para enviar al candidato. Solo lectura. Úsala cuando el usuario pregunte qué vacantes hay.',
         input_schema: { type: 'object', properties: {}, required: [] }
@@ -302,6 +319,7 @@ export default async function handler(req, res) {
         let skillsUpdated = false;      // el agente creó/editó una skill este turno
         let bulkProposal = null;        // propuesta de envío masivo de este turno (tarjeta de confirmación)
         let bankEditProposal = null;    // propuesta de edición de una respuesta del banco (tarjeta antes/después)
+        let agentLiveUpdated = false;   // el agente prendió/apagó Agent Candidatic este turno (refresca el panel)
         const memoryProposals = [];     // propuestas de memoria de este turno: {id, text}
         let usageTokens = 0;
         let toolCalls = 0;
@@ -447,6 +465,22 @@ export default async function handler(req, res) {
                         bankEditProposal = r.proposal; // la UI pinta la tarjeta antes/después
                         result = `Propuesta de edición creada para "${r.proposal.name}". En el chat le apareció al usuario una tarjeta con el antes/después y botones Aprobar / Descartar. PREGÚNTALE explícitamente si quiere aplicar el cambio. NO afirmes que ya quedó guardado — queda pendiente hasta que el usuario apruebe en la tarjeta.`;
                     }
+                } else if (block.name === 'prender_agent_candidatic') {
+                    const r = await setAgentLiveState({ on: true, tags: block.input?.etiquetas });
+                    if (r.error) {
+                        result = r.error;
+                    } else {
+                        agentLiveUpdated = true;
+                        result = `Agent Candidatic PRENDIDO para: ${r.state.tags.join(', ')}. El toggle del panel se activó. De ahora en adelante, los candidatos que se completen de esas etiquetas entran a la cola de atención. (Nota: el motor de auto-envío se conecta en el siguiente paso; por ahora esto activa el control y la cola en vivo.)`;
+                    }
+                } else if (block.name === 'apagar_agent_candidatic') {
+                    const r = await setAgentLiveState({ on: false });
+                    if (r.error) {
+                        result = r.error;
+                    } else {
+                        agentLiveUpdated = true;
+                        result = 'Agent Candidatic APAGADO. El toggle del panel se desactivó y ya no se atiende ninguna etiqueta.';
+                    }
                 } else if (block.name === 'listar_vacantes') {
                     const names = await getVacancyNames();
                     result = names.length
@@ -590,6 +624,7 @@ export default async function handler(req, res) {
             skillsUpdated,                       // la UI refresca el panel de Skills si true
             bulkProposal,                        // {id, templateName, candidates,...} → tarjeta Confirmar/Cancelar envío
             bankEditProposal,                    // {id, name, before, after} → tarjeta Aprobar/Descartar edición
+            agentLiveUpdated,                    // true si el agente prendió/apagó Agent Candidatic → la UI refresca el panel
             memoryProposals,                     // [{id, text}] → tarjetas Guardar/Descartar en el chat
             memoryProposed: memoryProposals.length // conteo (refresca panel derecho)
         });

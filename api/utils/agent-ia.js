@@ -917,7 +917,9 @@ export async function assembleSystemPrompt() {
         '- `proponer_edicion_banco`: propón editar el TEXTO de una respuesta del banco. NO guarda de inmediato: genera una tarjeta de aprobación con el antes/después y botones Aprobar / Descartar. Manda el texto COMPLETO ya editado. Solo edita texto (no imágenes/ubicación/audio). Lee primero con `leer_respuesta_banco`.\n' +
         '- `listar_vacantes`: los nombres de las vacantes del "maletín" del Chat Web que tienen info para enviar al candidato. Solo lectura.\n' +
         '- `leer_vacante`: abre el contenido de una vacante por su nombre (empresa, categoría y el mensaje exacto que se le enviaría al candidato). Úsala cuando el usuario pregunte por una vacante o antes de enviarla.\n' +
-        '- `proponer_envio_vacante`: propón enviar la info de UNA vacante a candidatos. Igual que `proponer_envio_banco` pero con una vacante en vez de una respuesta del banco: NO envía de inmediato, genera la tarjeta de confirmación con Confirmar / Cancelar. Para UN candidato pasa su `telefono`; para una LISTA usa filtros (etiqueta/estado/no_leidos).'
+        '- `proponer_envio_vacante`: propón enviar la info de UNA vacante a candidatos. Igual que `proponer_envio_banco` pero con una vacante en vez de una respuesta del banco: NO envía de inmediato, genera la tarjeta de confirmación con Confirmar / Cancelar. Para UN candidato pasa su `telefono`; para una LISTA usa filtros (etiqueta/estado/no_leidos).\n' +
+        '- `prender_agent_candidatic`: prende el modo de atención automática en vivo ("Agent Candidatic") para una o más etiquetas. Úsala cuando el usuario diga "me voy a comer, atiende a los de <etiqueta>" o "prende el agente para <etiqueta>". Activa el toggle del panel. Requiere al menos una etiqueta; si el usuario no la dio, PREGÚNTASELA.\n' +
+        '- `apagar_agent_candidatic`: apaga ese modo ("ya volví", "apaga el agente").'
     );
     return parts.join('');
 }
