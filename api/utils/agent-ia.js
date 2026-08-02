@@ -20,9 +20,13 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { getUsers, validateAdminSession, getRedisClient } from './storage.js';
 
-// Modelo por defecto: el más capaz de Anthropic. Para alto volumen se podría bajar a
-// claude-sonnet-5 (más económico) — decisión de costo del negocio.
-export const AGENT_MODEL = 'claude-opus-4-8';
+// Modelo del agente. Se eligió Haiku 4.5 por costo: ~5x más barato que Opus
+// ($1/$5 vs $5/$25 por millón), suficiente para acciones repetidas (tool use +
+// respuestas cortas). Nota: Haiku 4.5 NO soporta `effort` ni `adaptive thinking`
+// (son de modelos 4.6+); por eso las llamadas en chat.js van SIN thinking ni
+// output_config (menos tokens de salida = más barato). Para más razonamiento
+// subir a 'claude-sonnet-5' o 'claude-opus-4-8' y reactivar thinking allá.
+export const AGENT_MODEL = 'claude-haiku-4-5';
 
 // ─── Llaves de Redis ─────────────────────────────────────────────────────────
 const KEY_AGENTS_MD = 'agent-ia:agents_md';

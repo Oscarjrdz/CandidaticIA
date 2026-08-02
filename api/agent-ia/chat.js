@@ -22,17 +22,17 @@ import {
 // ════════════════════════════════════════════════════════════════════════════
 // Agent IA — chat con el agente propio (Claude nativo).
 //
-// SDK oficial @anthropic-ai/sdk, modelo claude-opus-4-8, adaptive thinking, y un
-// LOOP MANUAL de tool use con dos herramientas:
-//   - editar_agents_md  → reescribe AGENTS.md (edición en vivo, se refleja en la UI).
-//   - proponer_memoria  → agrega una propuesta de memoria (pendiente de aprobación).
+// SDK oficial @anthropic-ai/sdk, modelo AGENT_MODEL (hoy claude-haiku-4-5, elegido
+// por costo — ver nota en agent-ia.js), SIN thinking (Haiku 4.5 no lo soporta y así
+// es más barato), y un LOOP MANUAL de tool use. Herramientas: editar_agents_md,
+// proponer_memoria, skills, conteos (candidatos/etiquetas/altas), candidatos_activos.
 //
 // Body: { message, history: [{role, content}] }
 // Requiere ANTHROPIC_API_KEY. Sin ella responde un aviso claro (200).
 // ════════════════════════════════════════════════════════════════════════════
 
 const MAX_INPUT = 4000;
-const MAX_HISTORY = 12;
+const MAX_HISTORY = 6; // menos historial reenviado = menos tokens de entrada por acción
 const MAX_TOKENS = 8000;
 const MAX_TOOL_LOOPS = 5;
 
@@ -194,8 +194,8 @@ export default async function handler(req, res) {
         let response = await client.messages.create({
             model: AGENT_MODEL,
             max_tokens: MAX_TOKENS,
-            thinking: { type: 'adaptive' },
-            output_config: { effort: 'medium' },
+            // Sin thinking ni output_config: Haiku 4.5 no los soporta, y omitir el
+            // razonamiento abarata cada acción (menos tokens de salida).
             system,
             tools: TOOLS,
             messages
@@ -303,8 +303,7 @@ export default async function handler(req, res) {
             response = await client.messages.create({
                 model: AGENT_MODEL,
                 max_tokens: MAX_TOKENS,
-                thinking: { type: 'adaptive' },
-                output_config: { effort: 'medium' },
+                // Sin thinking ni output_config (ver arriba): Haiku 4.5 + más barato.
                 system,
                 tools: TOOLS,
                 messages
