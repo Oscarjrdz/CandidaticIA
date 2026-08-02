@@ -167,13 +167,13 @@ const AgentChat = ({ hasApiKey, model, onAgentsUpdated, onMemoryProposed, onSkil
     };
 
     const confirmBulk = async (msgIdx, proposalId) => {
-        patchMsg(msgIdx, { bulkStatus: 'sending', bulkProgress: { sent: 0, failed: 0, total: 0, logs: [] } });
+        patchMsg(msgIdx, { bulkStatus: 'sending', bulkError: null, bulkProgress: { sent: 0, failed: 0, total: 0, logs: [] } });
         try {
             await agentIAFetch('/api/agent-ia/bulk-send', { method: 'POST', body: { action: 'execute', proposalId } });
             pollBulk(msgIdx, proposalId);
         } catch (e) {
-            patchMsg(msgIdx, { bulkStatus: 'error' });
-            alert(`No se pudo iniciar el envío: ${e.message}`);
+            // Error inline en la tarjeta (sin alert bloqueante); se puede reintentar.
+            patchMsg(msgIdx, { bulkStatus: 'error', bulkError: e.message || 'Error de red' });
         }
     };
 
@@ -183,7 +183,7 @@ const AgentChat = ({ hasApiKey, model, onAgentsUpdated, onMemoryProposed, onSkil
             await agentIAFetch('/api/agent-ia/bulk-send', { method: 'POST', body: { action: 'cancel', proposalId } });
             // el polling recogerá el estado 'canceled' del servidor
         } catch (e) {
-            alert(`No se pudo cancelar: ${e.message}`);
+            patchMsg(msgIdx, { bulkError: `No se pudo cancelar: ${e.message}` });
         }
     };
 
@@ -278,9 +278,14 @@ const AgentChat = ({ hasApiKey, model, onAgentsUpdated, onMemoryProposed, onSkil
                                     <div className="flex items-center gap-1.5 text-[10px] font-semibold text-emerald-700 dark:text-emerald-400 uppercase tracking-wide mb-1">
                                         <Rocket className="w-3.5 h-3.5" /> Envío del banco: "{p.templateName}"
                                     </div>
-                                    <div className="flex items-center gap-1.5 text-[12px] text-gray-700 dark:text-gray-200 mb-1.5">
+                                    <div className="flex items-center gap-1.5 text-[12px] text-gray-700 dark:text-gray-200 mb-0.5">
                                         <Users className="w-3.5 h-3.5 shrink-0" /> {p.candidateCount} destinatario(s)
                                     </div>
+                                    {p.mixSummary && (
+                                        <div className="text-[11px] text-gray-500 dark:text-gray-400 mb-1.5 pl-5">
+                                            Cada uno recibe: <span className="font-medium text-gray-700 dark:text-gray-300">{p.mixSummary}</span>
+                                        </div>
+                                    )}
 
                                     {/* Lista de destinatarios (scroll si son muchos) */}
                                     <div className="max-h-40 overflow-y-auto rounded-lg bg-white/70 dark:bg-black/20 border border-emerald-100 dark:border-emerald-900 divide-y divide-emerald-100 dark:divide-emerald-900/50 mb-2">
@@ -291,6 +296,18 @@ const AgentChat = ({ hasApiKey, model, onAgentsUpdated, onMemoryProposed, onSkil
                                             </div>
                                         ))}
                                     </div>
+
+                                    {/* Error inline (sin alert bloqueante) + reintentar */}
+                                    {m.bulkStatus === 'error' && (
+                                        <div className="flex items-center justify-between gap-2">
+                                            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-red-600 dark:text-red-400">
+                                                <XCircle className="w-3.5 h-3.5" /> {m.bulkError || 'No se pudo iniciar el envío.'}
+                                            </span>
+                                            <button onClick={() => confirmBulk(i, p.id)} className="text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white transition-colors">
+                                                Reintentar
+                                            </button>
+                                        </div>
+                                    )}
 
                                     {/* Estado / progreso */}
                                     {m.bulkStatus === 'pending' && (

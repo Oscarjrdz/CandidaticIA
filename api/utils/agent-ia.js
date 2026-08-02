@@ -382,9 +382,22 @@ export async function proposeQuickReplyBulkSend({ respuesta_banco, etiqueta, est
         return { error: `No encontré la respuesta de banco "${respuesta_banco}". Usa listar_respuestas_banco para ver los nombres reales.` };
     }
 
-    const messageText = qr.text || qr.message || qr.content || '';
-    if (!messageText) {
-        return { error: `La respuesta del banco "${qr.name || respuesta_banco}" no contiene texto.` };
+    // Una respuesta del banco puede ser texto, imágenes, ubicación (maps) o audio,
+    // o una MEZCLA (ej. texto + 2 imágenes = 3 mensajes). Cargamos TODAS las variantes
+    // en la propuesta para que el envío las reproduzca igual que el envío manual.
+    const messageText = qr.message || qr.text || qr.content || '';
+    const templateType = qr.type || 'text';
+    const imageUrls = Array.isArray(qr.imageUrls)
+        ? qr.imageUrls.filter(Boolean)
+        : (qr.imageUrl ? [qr.imageUrl] : []);
+    const location = (qr.location && qr.location.lat != null && qr.location.lng != null) ? qr.location : null;
+    const audioUrl = qr.audioUrl || '';
+    const voice = !!(qr.voice || qr.audioVoice);
+
+    // Debe haber ALGO que enviar (texto, imágenes, ubicación o audio).
+    const hasPayload = Boolean(messageText || imageUrls.length || location || audioUrl);
+    if (!hasPayload) {
+        return { error: `La respuesta del banco "${qr.name || respuesta_banco}" no tiene contenido para enviar.` };
     }
 
     const listData = await getDetailedCandidatesList({ etiqueta, estado, noLeidos, limite, candidatoIds });
@@ -396,11 +409,25 @@ export async function proposeQuickReplyBulkSend({ respuesta_banco, etiqueta, est
         return { error: 'No se encontraron candidatos que coincidan con los criterios para realizar el envío.' };
     }
 
+    // Resumen legible de la mezcla, para mostrarlo en la tarjeta de confirmación.
+    const parts = [];
+    if (messageText) parts.push('1 texto');
+    if (imageUrls.length) parts.push(`${imageUrls.length} ${imageUrls.length === 1 ? 'imagen' : 'imágenes'}`);
+    if (location) parts.push('ubicación (maps)');
+    if (audioUrl) parts.push(voice ? 'nota de voz' : 'audio');
+    const mixSummary = parts.join(' + ');
+
     const proposalId = `proposal_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
     const proposal = {
         id: proposalId,
         templateName: qr.name || qr.title || respuesta_banco,
-        messageText,
+        messageText,           // texto CRUDO con {{variables}} — se resuelven por candidato al enviar
+        templateType,          // 'text' | 'location' | 'audio'
+        imageUrls,             // [] o N URLs de imagen
+        location,              // {lat,lng,name,address} | null
+        audioUrl,              // '' o URL de audio
+        voice,                 // true si es nota de voz
+        mixSummary,            // ej. "1 texto + 2 imágenes"
         candidateCount: listData.candidates.length,
         candidates: listData.candidates,
         createdAt: new Date().toISOString()
