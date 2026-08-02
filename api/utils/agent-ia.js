@@ -152,6 +152,137 @@ export async function getCandidateCounts() {
     }
 }
 
+// ─── Altas por fecha (contadores diarios, zona Monterrey) ────────────────────
+// Todo es HMGET de hashes que la plataforma ya mantiene: barato, sin escanear.
+const mtyDateKey = (d) => d.toLocaleDateString('sv-SE', { timeZone: 'America/Monterrey' });
+
+// Traduce un rango ('hoy'/'ayer'/'semana'/'mes') o un rango explícito (desde/hasta,
+// YYYY-MM-DD) a la lista de llaves de día. Devuelve {keys, label}.
+export function buildDateKeys({ rango, desde, hasta } = {}) {
+    const iso = /^\d{4}-\d{2}-\d{2}$/;
+    if ((desde && iso.test(desde)) || (hasta && iso.test(hasta))) {
+        const start = iso.test(desde) ? desde : hasta;
+        const end = iso.test(hasta) ? hasta : start;
+        const lo = start <= end ? start : end;
+        const hi = start <= end ? end : start;
+        const keys = [];
+        let cur = new Date(`${lo}T12:00:00Z`);
+        const stop = new Date(`${hi}T12:00:00Z`);
+        let guard = 0;
+        while (cur <= stop && guard < 92) {
+            keys.push(cur.toISOString().slice(0, 10));
+            cur = new Date(cur.getTime() + 86400000);
+            guard++;
+        }
+        return { keys, label: `del ${lo} al ${hi}` };
+    }
+    const now = new Date();
+    const today = mtyDateKey(now);
+    const shift = (n) => mtyDateKey(new Date(now.getTime() + n * 86400000));
+    switch (rango) {
+        case 'ayer': {
+            const y = shift(-1);
+            return { keys: [y], label: `ayer (${y})` };
+        }
+        case 'semana': {
+            const keys = [];
+            for (let i = 6; i >= 0; i--) keys.push(shift(-i));
+            return { keys: [...new Set(keys)], label: 'los últimos 7 días' };
+        }
+        case 'mes': {
+            const [y, m] = today.split('-');
+            const day = parseInt(today.slice(8), 10) || 1;
+            const keys = [];
+            for (let d = 1; d <= day; d++) keys.push(`${y}-${m}-${String(d).padStart(2, '0')}`);
+            return { keys, label: `este mes (${y}-${m})` };
+        }
+        default:
+            return { keys: [today], label: `hoy (${today})` };
+    }
+}
+
+// Total de altas (todos los candidatos) en esas fechas.
+export async function getCapturesTotal(dateKeys) {
+    const redis = getRedisClient();
+    if (!redis || !dateKeys?.length) return 0;
+    try {
+        const vals = await redis.hmget('stats:daily:captures', ...dateKeys);
+        return (vals || []).reduce((s, v) => s + (parseInt(v, 10) || 0), 0);
+    } catch {
+        return 0;
+    }
+}
+
+// Altas de UNA etiqueta en esas fechas (contador que se registra desde que se
+// activó esta función; fechas anteriores pueden salir en 0).
+export async function getCapturesByTag(tagName, dateKeys) {
+    const redis = getRedisClient();
+    if (!redis || !dateKeys?.length) return 0;
+    const key = `stats:daily:captures:tag:${String(tagName || '').trim()}`;
+    try {
+        const vals = await redis.hmget(key, ...dateKeys);
+        return (vals || []).reduce((s, v) => s + (parseInt(v, 10) || 0), 0);
+    } catch {
+        return 0;
+    }
+}
+
+// Candidatos ACTIVOS ahora mismo (completándose en vivo). BARATO: activity:tracker
+// es un sorted-set por timestamp de última actividad; se lee por RANGO de score
+// (acotado con LIMIT), se cruza con stats:list:pending (SISMEMBER, O(1)) para saber
+// quién sigue incompleto, y solo se leen los nombres de la muestra a mostrar.
+export async function getActiveCandidates(minutes = 30, limit = 10) {
+    const redis = getRedisClient();
+    if (!redis) return null;
+    try {
+        const now = Date.now();
+        const since = now - Math.max(1, minutes) * 60000;
+        // IDs activos en la ventana, más recientes primero, acotado a 500.
+        const raw = await redis.zrevrangebyscore('activity:tracker', '+inf', since, 'WITHSCORES', 'LIMIT', 0, 500);
+        const active = [];
+        for (let i = 0; i < raw.length; i += 2) active.push({ id: raw[i], ts: Number(raw[i + 1]) || 0 });
+
+        let incompleteActive = 0;
+        const incompleteRecent = [];
+        for (const a of active) {
+            const isPending = await redis.sismember('stats:list:pending', a.id);
+            if (!isPending) continue;
+            incompleteActive++;
+            if (incompleteRecent.length < limit) incompleteRecent.push(a);
+        }
+
+        const sample = [];
+        for (const a of incompleteRecent) {
+            let name = a.id;
+            try {
+                const rawC = await redis.get(`candidate:${a.id}`);
+                if (rawC) {
+                    const c = JSON.parse(rawC);
+                    name = c.nombreReal || c.nombre || a.id;
+                }
+            } catch { /* usa el id */ }
+            sample.push({ id: a.id, name, minsAgo: Math.max(0, Math.round((now - a.ts) / 60000)) });
+        }
+
+        return { windowMinutes: minutes, totalActive: active.length, incompleteActive, sample };
+    } catch {
+        return null;
+    }
+}
+
+// Resuelve un nombre de etiqueta escrito por el usuario (ej. "Yageo") al nombre
+// real (ej. "Anuncio Yageo") comparando contra las etiquetas existentes.
+export async function resolveTagName(query) {
+    const q = String(query || '').trim().toLowerCase();
+    if (!q) return null;
+    const data = await getTagCounts();
+    if (!data) return null;
+    const names = data.tags.map((t) => t.name);
+    return names.find((n) => n.toLowerCase() === q)
+        || names.find((n) => n.toLowerCase().includes(q))
+        || null;
+}
+
 // Nombres de las respuestas del Banco de Respuestas (candidatic:quick_replies) —
 // plantillas que los reclutadores mandan a los candidatos.
 export async function getQuickReplyNames() {
@@ -329,6 +460,9 @@ export async function assembleSystemPrompt() {
         '- `guardar_skill`: crea o edita una skill (nombre + contenido markdown completo). Si el nombre ya existe, la reemplaza; si no, la crea. Se guarda al instante y se ve en el panel del usuario.\n' +
         '- `contar_candidatos`: cuántos candidatos hay completos vs incompletos (y el total). Lectura barata de contadores; úsala cuando pregunten por esas cantidades.\n' +
         '- `contar_etiquetas`: las etiquetas de Candidatic CON su cantidad de candidatos (y cuántos sin etiqueta). Sirve también para saber qué etiquetas existen. Lectura barata; NO inventes nombres ni números.\n' +
+        '- `contar_altas`: cuántos candidatos LLEGARON (se dieron de alta) en una fecha/rango (hoy, ayer, esta semana, este mes, o fechas explícitas). Lectura barata de contadores diarios.\n' +
+        '- `contar_altas_etiqueta`: cuántos candidatos de UNA etiqueta llegaron en una fecha/rango (ej. "cuántos de Yageo llegaron hoy"). El conteo por etiqueta y día se registra desde que se activó esta función, así que fechas muy anteriores pueden salir en 0.\n' +
+        '- `candidatos_activos`: quiénes están ACTIVOS ahora mismo (actividad reciente) y cuántos siguen INCOMPLETOS (completándose en vivo), con una muestra de nombres y hace cuánto. Úsala para "quién se está completando ahorita".\n' +
         '- `listar_respuestas_banco`: consulta los nombres reales de las respuestas del Banco de Respuestas (plantillas que los reclutadores mandan a los candidatos). Úsala cuando el usuario pregunte qué respuestas de banco hay. NO las inventes.'
     );
     return parts.join('');

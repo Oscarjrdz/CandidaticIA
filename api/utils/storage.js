@@ -1396,6 +1396,15 @@ export const saveCandidate = async (candidate) => {
                 const dateSource = Number.isNaN(parsedDate.getTime()) ? new Date() : parsedDate;
                 const dateKey = dateSource.toLocaleDateString('sv-SE', { timeZone: 'America/Monterrey' });
                 await client.hincrby('stats:daily:captures', dateKey, 1);
+                // Altas por ETIQUETA y día (para "cuántos de Yageo llegaron hoy"). Solo cuenta las
+                // etiquetas presentes al CREARSE el candidato (las de anuncio ya vienen). Barato y
+                // fire-and-forget: no bloquea la creación y no escanea nada.
+                const capturedTags = cleanTagValues(finalCandidate.tags);
+                if (capturedTags.length) {
+                    const tp = client.pipeline();
+                    capturedTags.forEach((t) => tp.hincrby(`stats:daily:captures:tag:${t}`, dateKey, 1));
+                    tp.exec().catch(() => {});
+                }
             } catch {}
         }
     }

@@ -7,6 +7,11 @@ import {
     addMemoryProposal,
     getTagCounts,
     getCandidateCounts,
+    buildDateKeys,
+    getCapturesTotal,
+    getCapturesByTag,
+    getActiveCandidates,
+    resolveTagName,
     getQuickReplyNames,
     getSkills,
     getSkillByName,
@@ -110,6 +115,42 @@ const TOOLS = [
         name: 'contar_etiquetas',
         description: 'Las etiquetas de Candidatic CON su cantidad de candidatos (y cuántos sin etiqueta). También sirve para saber qué etiquetas existen. Lectura BARATA de contadores; no inventes nombres ni números.',
         input_schema: { type: 'object', properties: {}, required: [] }
+    },
+    {
+        name: 'contar_altas',
+        description: 'Cuántos candidatos LLEGARON (altas nuevas) en una fecha o rango. Lectura BARATA de contadores diarios; no escanea. Rango por defecto: hoy.',
+        input_schema: {
+            type: 'object',
+            properties: {
+                rango: { type: 'string', enum: ['hoy', 'ayer', 'semana', 'mes'], description: 'Atajo de rango. Por defecto "hoy".' },
+                desde: { type: 'string', description: 'Fecha inicio explícita YYYY-MM-DD (opcional).' },
+                hasta: { type: 'string', description: 'Fecha fin explícita YYYY-MM-DD (opcional).' }
+            },
+            required: []
+        }
+    },
+    {
+        name: 'contar_altas_etiqueta',
+        description: 'Cuántos candidatos de UNA etiqueta llegaron en una fecha o rango (ej. "cuántos de Yageo llegaron hoy"). Lectura BARATA. El conteo por etiqueta y día se registra desde que se activó la función, así que fechas muy anteriores pueden salir en 0.',
+        input_schema: {
+            type: 'object',
+            properties: {
+                etiqueta: { type: 'string', description: 'Nombre de la etiqueta (ej. "Yageo" o "Anuncio Yageo").' },
+                rango: { type: 'string', enum: ['hoy', 'ayer', 'semana', 'mes'], description: 'Atajo de rango. Por defecto "hoy".' },
+                desde: { type: 'string', description: 'Fecha inicio explícita YYYY-MM-DD (opcional).' },
+                hasta: { type: 'string', description: 'Fecha fin explícita YYYY-MM-DD (opcional).' }
+            },
+            required: ['etiqueta']
+        }
+    },
+    {
+        name: 'candidatos_activos',
+        description: 'Candidatos ACTIVOS ahora mismo (actividad reciente) y cuántos siguen INCOMPLETOS (completándose en vivo), con una muestra de nombres y hace cuánto. Lectura BARATA (ventana acotada). Úsala para "quién se está completando ahorita" o "cuántos están activos".',
+        input_schema: {
+            type: 'object',
+            properties: { minutos: { type: 'number', description: 'Ventana de actividad en minutos (por defecto 30).' } },
+            required: []
+        }
     },
     {
         name: 'listar_respuestas_banco',
@@ -222,6 +263,29 @@ export default async function handler(req, res) {
                         const lines = data.tags.map((t) => `- ${t.name}: ${t.count}`);
                         lines.push(`- (Sin etiqueta): ${data.untagged}`);
                         result = `Etiquetas y su cantidad de candidatos:\n${lines.join('\n')}`;
+                    }
+                } else if (block.name === 'contar_altas') {
+                    const { keys, label } = buildDateKeys(block.input || {});
+                    const total = await getCapturesTotal(keys);
+                    result = `Candidatos que llegaron ${label}: ${total}.`;
+                } else if (block.name === 'contar_altas_etiqueta') {
+                    const canonical = await resolveTagName(block.input?.etiqueta || '');
+                    if (!canonical) {
+                        result = `No encontré una etiqueta que coincida con "${block.input?.etiqueta || ''}". Usa contar_etiquetas para ver los nombres reales.`;
+                    } else {
+                        const { keys, label } = buildDateKeys(block.input || {});
+                        const total = await getCapturesByTag(canonical, keys);
+                        result = `Candidatos con la etiqueta "${canonical}" que llegaron ${label}: ${total}. (Nota: el conteo por etiqueta y día se registra desde que se activó esta función; fechas muy anteriores pueden salir en 0.)`;
+                    }
+                } else if (block.name === 'candidatos_activos') {
+                    const mins = Math.min(180, Math.max(1, Number(block.input?.minutos) || 30));
+                    const data = await getActiveCandidates(mins);
+                    if (!data) {
+                        result = 'No pude leer la actividad en vivo en este momento.';
+                    } else {
+                        const lines = data.sample.map((s) => `- ${s.name} (hace ${s.minsAgo} min)`);
+                        result = `En los últimos ${data.windowMinutes} min: ${data.totalActive} candidatos activos, ${data.incompleteActive} de ellos aún incompletos (completándose en vivo).`
+                            + (lines.length ? `\nAlgunos completándose ahora:\n${lines.join('\n')}` : '');
                     }
                 } else if (block.name === 'listar_respuestas_banco') {
                     const names = await getQuickReplyNames();
