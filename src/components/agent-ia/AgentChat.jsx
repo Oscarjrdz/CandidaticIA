@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Send, Loader2, Bot, Wrench, FileText, BrainCircuit } from 'lucide-react';
+import { Send, Loader2, Bot, Wrench, FileText, BrainCircuit, Trash2 } from 'lucide-react';
 import { agentIAFetch } from './api';
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -7,10 +7,35 @@ import { agentIAFetch } from './api';
 // su definición (AGENTS.md) + memoria (MEMORY.md), y puede editar AGENTS.md o
 // proponer memoria en vivo. Al detectar esos cambios, avisa al padre para
 // refrescar los paneles de la derecha.
+//
+// El transcript se persiste en localStorage por usuario para que un refresh NO
+// borre la conversación (el backend es stateless: solo recibe el historial que
+// le manda el front, así que sin esto se perdería todo al recargar).
 // ════════════════════════════════════════════════════════════════════════════
 
 const MAX_INPUT = 4000;
 const MAX_HISTORY = 12;
+const MAX_STORED = 60; // últimos N mensajes que se guardan (evita inflar localStorage)
+
+function storageKey() {
+    try {
+        const raw = localStorage.getItem('candidatic_user_session');
+        const user = raw ? JSON.parse(raw) : null;
+        return `candidatic:agent_ia_chat:${user?.id || 'anon'}`;
+    } catch {
+        return 'candidatic:agent_ia_chat:anon';
+    }
+}
+
+function loadStoredMessages() {
+    try {
+        const raw = localStorage.getItem(storageKey());
+        const list = raw ? JSON.parse(raw) : [];
+        return Array.isArray(list) ? list : [];
+    } catch {
+        return [];
+    }
+}
 
 const Bubble = ({ role, children }) => (
     <div className={`flex ${role === 'user' ? 'justify-end' : 'justify-start'}`}>
@@ -23,12 +48,24 @@ const Bubble = ({ role, children }) => (
 );
 
 const AgentChat = ({ hasApiKey, model, onAgentsUpdated, onMemoryProposed }) => {
-    const [messages, setMessages] = useState([]);
+    const [messages, setMessages] = useState(loadStoredMessages);
     const [input, setInput] = useState('');
     const [sending, setSending] = useState(false);
     const endRef = useRef(null);
 
     useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' }); }, [messages, sending]);
+
+    // Persiste el transcript (últimos MAX_STORED) para sobrevivir recargas.
+    useEffect(() => {
+        try {
+            localStorage.setItem(storageKey(), JSON.stringify(messages.slice(-MAX_STORED)));
+        } catch { /* cuota llena u otro: ignorar, no es crítico */ }
+    }, [messages]);
+
+    const clearChat = () => {
+        setMessages([]);
+        try { localStorage.removeItem(storageKey()); } catch { /* noop */ }
+    };
 
     const send = async () => {
         const clean = input.replace(/\s+/g, ' ').trim().slice(0, MAX_INPUT);
@@ -66,12 +103,17 @@ const AgentChat = ({ hasApiKey, model, onAgentsUpdated, onMemoryProposed }) => {
                 <div className="w-9 h-9 rounded-full bg-gradient-to-br from-purple-500 to-blue-600 flex items-center justify-center shadow-sm">
                     <Bot className="w-5 h-5 text-white" />
                 </div>
-                <div className="min-w-0">
+                <div className="min-w-0 flex-1">
                     <div className="text-sm font-bold text-[#111b21] dark:text-[#e9edef]">Agente</div>
                     <div className="text-[11px] text-gray-500 dark:text-gray-400 truncate">
                         {hasApiKey ? `Claude · ${model || 'claude-opus-4-8'}` : 'Falta ANTHROPIC_API_KEY'}
                     </div>
                 </div>
+                {messages.length > 0 && (
+                    <button onClick={clearChat} title="Limpiar conversación" className="shrink-0 p-2 rounded-lg text-gray-400 hover:text-red-500 hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
+                        <Trash2 className="w-4 h-4" />
+                    </button>
+                )}
             </div>
 
             {!hasApiKey && (
