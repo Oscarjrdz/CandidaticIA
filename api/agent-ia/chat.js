@@ -28,6 +28,7 @@ import {
     AGENT_MODEL
 } from '../utils/agent-ia.js';
 import { setAgentLiveState } from '../utils/agent-candidatic.js';
+import { getProjectsOverview, getProjectDetail, moveCandidateToProject } from '../utils/agent-crm.js';
 
 // ════════════════════════════════════════════════════════════════════════════
 // Agent IA — chat con el agente propio (Claude nativo).
@@ -196,6 +197,35 @@ const TOOLS = [
                 nuevo_mensaje: { type: 'string', description: 'El texto COMPLETO ya editado que reemplazará al actual. Conserva las variables como {{nombre}} si aplican.' }
             },
             required: ['nombre', 'nuevo_mensaje']
+        }
+    },
+    {
+        name: 'listar_proyectos',
+        description: 'Devuelve TODOS los proyectos del CRM con sus pasos y cuántos candidatos hay en cada paso. Solo lectura. Úsala cuando el usuario pregunte qué proyectos/pasos hay.',
+        input_schema: { type: 'object', properties: {}, required: [] }
+    },
+    {
+        name: 'ver_proyecto',
+        description: 'Abre el detalle de UN proyecto del CRM por su nombre: cada paso con los NOMBRES de los candidatos que están dentro. Solo lectura. Úsala cuando el usuario pregunte quién está en un proyecto o en un paso.',
+        input_schema: {
+            type: 'object',
+            properties: {
+                nombre: { type: 'string', description: 'Nombre (o parte) del proyecto, ej. "Yageo".' }
+            },
+            required: ['nombre']
+        }
+    },
+    {
+        name: 'mover_candidato_crm',
+        description: 'Mete/mueve a UN candidato (por su teléfono) a un proyecto y a un paso del CRM (ej. proyecto "Yageo", paso "Cita"). Si el candidato ya estaba en otro proyecto, se cambia a este (un candidato vive en un solo proyecto). Si no indicas paso, cae en el primer paso del proyecto. Es una acción directa (se aplica al momento y el tablero CRM se actualiza en vivo).',
+        input_schema: {
+            type: 'object',
+            properties: {
+                telefono: { type: 'string', description: 'Teléfono del candidato (ej. "8116038195").' },
+                proyecto: { type: 'string', description: 'Nombre (o parte) del proyecto, ej. "Yageo".' },
+                paso: { type: 'string', description: 'Nombre (o parte) del paso, ej. "Cita" (opcional; por defecto el primer paso).' }
+            },
+            required: ['telefono', 'proyecto']
         }
     },
     {
@@ -464,6 +494,41 @@ export default async function handler(req, res) {
                     } else {
                         bankEditProposal = r.proposal; // la UI pinta la tarjeta antes/después
                         result = `Propuesta de edición creada para "${r.proposal.name}". En el chat le apareció al usuario una tarjeta con el antes/después y botones Aprobar / Descartar. PREGÚNTALE explícitamente si quiere aplicar el cambio. NO afirmes que ya quedó guardado — queda pendiente hasta que el usuario apruebe en la tarjeta.`;
+                    }
+                } else if (block.name === 'listar_proyectos') {
+                    const projects = await getProjectsOverview();
+                    if (!projects.length) {
+                        result = 'No hay proyectos en el CRM.';
+                    } else {
+                        const lines = projects.map((p) => {
+                            const pasos = p.steps.map((s) => `${s.name}: ${s.count}`).join(' · ') || '(sin pasos)';
+                            return `- ${p.name} (${p.total} candidatos) → ${pasos}`;
+                        });
+                        result = `Proyectos del CRM (${projects.length}):\n${lines.join('\n')}`;
+                    }
+                } else if (block.name === 'ver_proyecto') {
+                    const detail = await getProjectDetail(block.input?.nombre || '');
+                    if (!detail) {
+                        result = `No encontré un proyecto llamado "${block.input?.nombre || ''}". Usa listar_proyectos para ver los reales.`;
+                    } else {
+                        const bloques = detail.steps.map((s) => {
+                            const nombres = s.candidates.length ? s.candidates.map((n) => `   • ${n}`).join('\n') : '   (vacío)';
+                            return `${s.name} (${s.candidates.length}):\n${nombres}`;
+                        });
+                        result = `Proyecto "${detail.name}" — ${detail.total} candidatos:\n${bloques.join('\n')}`;
+                    }
+                } else if (block.name === 'mover_candidato_crm') {
+                    const r = await moveCandidateToProject({
+                        telefono: block.input?.telefono,
+                        proyecto: block.input?.proyecto,
+                        paso: block.input?.paso
+                    });
+                    if (r.error) {
+                        result = r.error;
+                    } else {
+                        const quien = r.candidateName || 'El candidato';
+                        const extra = r.removedFromOthers ? ' (se sacó de su proyecto anterior)' : '';
+                        result = `Listo: ${quien} quedó en el proyecto "${r.projectName}", paso "${r.stepName}"${extra}. El tablero CRM se actualizó en vivo.`;
                     }
                 } else if (block.name === 'prender_agent_candidatic') {
                     const r = await setAgentLiveState({ on: true, tags: block.input?.etiquetas });
