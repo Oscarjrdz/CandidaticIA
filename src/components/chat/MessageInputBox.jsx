@@ -10,6 +10,19 @@ const MessageInputBox = React.forwardRef(({ onSend, onTyping, fileInputRef, hand
     const [showTemplates, setShowTemplates] = useState(false);
     const textareaRef = useRef(null);
     const lastTypingRef = useRef(0);
+    const lastTextareaHeightRef = useRef(0);
+
+    const resizeTextarea = (input = textareaRef.current, shouldFocus = false) => {
+        if (!input) return;
+        if (shouldFocus) input.focus();
+        input.style.height = 'auto';
+        if (input.value) input.style.height = input.scrollHeight + 'px';
+        const nextHeight = Math.ceil(input.getBoundingClientRect().height || input.scrollHeight || 0);
+        if (nextHeight !== lastTextareaHeightRef.current) {
+            lastTextareaHeightRef.current = nextHeight;
+            onHeightChange?.();
+        }
+    };
 
     const emitTyping = () => {
         const now = Date.now();
@@ -25,33 +38,18 @@ const MessageInputBox = React.forwardRef(({ onSend, onTyping, fileInputRef, hand
                 return baseStr + newText;
             });
             setTimeout(() => {
-                const input = textareaRef.current;
-                if (input) {
-                    input.focus();
-                    input.style.height = 'auto';
-                    input.style.height = input.scrollHeight + 'px';
-                }
-                onHeightChange?.(); // el input pudo crecer → el padre re-ancla al fondo si estaba abajo
+                resizeTextarea(textareaRef.current, true);
             }, 50);
         },
         clearText: () => {
             setLocalMessage('');
-            const input = textareaRef.current;
-            if (input) input.style.height = 'auto';
+            setTimeout(() => resizeTextarea(), 0);
         },
         getText: () => localMessage,
         setText: (text) => {
             setLocalMessage(text || '');
             setTimeout(() => {
-                const input = textareaRef.current;
-                if (input) {
-                    input.style.height = 'auto';
-                    if (text) {
-                        input.style.height = input.scrollHeight + 'px';
-                        input.focus();
-                    }
-                }
-                onHeightChange?.();
+                resizeTextarea(textareaRef.current, Boolean(text));
             }, 50);
         },
         setSendingState: (state) => setSending(state)
@@ -63,8 +61,7 @@ const MessageInputBox = React.forwardRef(({ onSend, onTyping, fileInputRef, hand
         if ((!msg && !hasPendingMedia) || sending) return;
         onSend(msg);
         setTimeout(() => {
-            const input = textareaRef.current;
-            if (input) input.style.height = 'auto';
+            resizeTextarea();
         }, 50);
     };
 
@@ -146,11 +143,11 @@ const MessageInputBox = React.forwardRef(({ onSend, onTyping, fileInputRef, hand
                                 value={localMessage}
                                 onChange={(e) => { setLocalMessage(e.target.value); emitTyping(); }}
                                 onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmit(e); } }}
-                                onInput={(e) => { e.target.style.height = 'auto'; e.target.style.height = e.target.scrollHeight + 'px'; onHeightChange?.(); }}
+                                onInput={(e) => resizeTextarea(e.target)}
                             />
                             {localMessage && (
                                 <button type="button" title="Limpiar texto"
-                                    onClick={() => { setLocalMessage(''); const el = textareaRef.current; if (el) el.style.height = 'auto'; }}
+                                    onClick={() => { setLocalMessage(''); setTimeout(() => resizeTextarea(), 0); }}
                                     className="p-1 text-gray-400 hover:text-red-500 dark:hover:text-red-400 transition-colors rounded-full mr-1 shrink-0"
                                 >
                                     <X className="w-3.5 h-3.5" />
@@ -248,11 +245,11 @@ const MessageInputBox = React.forwardRef(({ onSend, onTyping, fileInputRef, hand
                         value={localMessage}
                         onChange={(e) => { setLocalMessage(e.target.value); emitTyping(); }}
                         onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmit(e); } }}
-                        onInput={(e) => { e.target.style.height = 'auto'; e.target.style.height = e.target.scrollHeight + 'px'; }}
+                        onInput={(e) => resizeTextarea(e.target)}
                     />
                     {localMessage && (
                         <button type="button" title="Limpiar texto"
-                            onClick={() => { setLocalMessage(''); const el = textareaRef.current; if (el) el.style.height = 'auto'; }}
+                            onClick={() => { setLocalMessage(''); setTimeout(() => resizeTextarea(), 0); }}
                             className="p-1 text-gray-400 hover:text-red-500 dark:hover:text-red-400 transition-colors rounded-full shrink-0"
                         >
                             <X className="w-3.5 h-3.5" />

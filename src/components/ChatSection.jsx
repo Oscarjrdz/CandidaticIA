@@ -153,6 +153,12 @@ const isOutgoingAuthor = (message = {}) => message.from === 'me' || message.from
 
 const isIncomingAuthor = (message = {}) => !!message && !isOutgoingAuthor(message);
 
+const haveDifferentKnownSenders = (a = {}, b = {}) => {
+    const senderA = a.senderId || a.sentBy || a.userId || a.recruiterId || '';
+    const senderB = b.senderId || b.sentBy || b.userId || b.recruiterId || '';
+    return Boolean(senderA && senderB && String(senderA) !== String(senderB));
+};
+
 const withMessageEntryAnimation = (message = {}, direction = null) => ({
     ...message,
     _animateIn: direction || (isOutgoingAuthor(message) ? 'outgoing' : 'incoming')
@@ -216,6 +222,8 @@ const sortMessagesChronologically = (list = []) => {
 
 const areSameOutgoingMessage = (a = {}, b = {}) => {
     if (!isOutgoingAuthor(a) || !isOutgoingAuthor(b)) return false;
+    if (a.from && b.from && a.from !== b.from) return false;
+    if (haveDifferentKnownSenders(a, b)) return false;
     if (a.id && b.id && String(a.id) === String(b.id)) return true;
     const aIsTemp = String(a.id || '').startsWith('temp');
     const bIsTemp = String(b.id || '').startsWith('temp');
@@ -666,7 +674,9 @@ const MessagesEncryptionHeader = () => (
 // remonta → la altura total de la lista baja/sube 25px → Virtuoso corrige el scroll.
 // Con muchos chats en la lista (muchos re-renders por SSE durante un envío con fotos)
 // eso se veía como un temblor "arriba y abajo" de las burbujas recién inyectadas.
-const MessagesListFooter = () => <div style={{ height: 25 }} />;
+const MessagesListFooter = ({ context }) => (
+    <div style={{ height: 25 + (context?.bottomOverlaySpacerHeight || 0) }} />
+);
 const MESSAGES_VIRTUOSO_COMPONENTS = { Header: MessagesEncryptionHeader, Footer: MessagesListFooter };
 
 // Mismo caso para la lista de chats: el estado (loadingMore) llega vía el prop
@@ -1059,6 +1069,31 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
     const qrRecordTimerRef = useRef(null);
     const qrRecordStartRef = useRef(0);
     const [pendingQrImages, setPendingQrImages] = useState([]); // imágenes de QR en espera de enviar
+    const pendingQrPreviewRef = useRef(null);
+    const [pendingQrPreviewHeight, setPendingQrPreviewHeight] = useState(0);
+
+    useLayoutEffect(() => {
+        if (!pendingQrImages.length) {
+            setPendingQrPreviewHeight(0);
+            return undefined;
+        }
+
+        const el = pendingQrPreviewRef.current;
+        if (!el) return undefined;
+
+        const syncPreviewHeight = () => {
+            const nextHeight = Math.ceil(el.getBoundingClientRect().height || 0);
+            setPendingQrPreviewHeight(prev => prev === nextHeight ? prev : nextHeight);
+            if (isAtBottomRef.current) scrollToBottom();
+        };
+
+        syncPreviewHeight();
+        if (typeof ResizeObserver === 'undefined') return undefined;
+
+        const ro = new ResizeObserver(syncPreviewHeight);
+        ro.observe(el);
+        return () => ro.disconnect();
+    }, [pendingQrImages.length]);
     const [_qrSaving, _setQrSaving] = useState(false);
     const [capturingShortcut, setCapturingShortcut] = useState(false);
 
@@ -1628,7 +1663,9 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
             const optimisticId = 'temp-loc-' + Date.now();
             updateChatMessages(currentCandidateId, prev => [...(prev || []), withMessageEntryAnimation({
                 id: optimisticId, content: `[Ubicación: ${qr.location.name || 'Mapa'}]`, tipo: 'location',
-                from: 'me', enviado_por_agente: 1, status: 'pending', fecha: new Date().toISOString(), _clientAnchoredTime: true
+                from: 'me', enviado_por_agente: 1, status: 'pending', fecha: new Date().toISOString(), _clientAnchoredTime: true,
+                senderId: user?.id || user?.whatsapp,
+                senderName: user?.name || user?.nombre
             }, 'outgoing')]);
             fetch('/api/chat', {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -1660,7 +1697,9 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
             // igual con 'audio'. La distinción de nota de voz la maneja el flag voice al enviar.
             updateChatMessages(currentCandidateId, prev => [...(prev || []), withMessageEntryAnimation({
                 id: optimisticId, content: qr.voice ? '🎤 Nota de voz' : '🎵 Audio', type: 'audio', mediaUrl: qr.audioUrl,
-                from: 'me', enviado_por_agente: 1, status: 'pending', fecha: new Date().toISOString(), _clientAnchoredTime: true
+                from: 'me', enviado_por_agente: 1, status: 'pending', fecha: new Date().toISOString(), _clientAnchoredTime: true,
+                senderId: user?.id || user?.whatsapp,
+                senderName: user?.name || user?.nombre
             }, 'outgoing')]);
             fetch('/api/chat', {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -2763,6 +2802,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                             body: JSON.stringify({ action: 'send_read_receipt', candidateId: currentChat.id, messageId: incomingMessageId })
                         }).catch(() => {});
                     }
+                    const shouldPreserveBottom = isAtBottomRef.current || isSendingRef.current;
                     // 🚀 O(1) Instant Message Injection (Meta Standard)
                     // Functional update chains correctly even when React batches
                     setMessages(prev => {
@@ -2776,15 +2816,14 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                             const pendingIndex = prev.findIndex(m => String(m.id).startsWith('temp') && areSameOutgoingMessage(m, newMsg));
                             if (pendingIndex !== -1) {
                                 const newArr = mergeOutgoingMessage(prev, newMsg, prev[pendingIndex].id);
-                                scrollToBottom();
                                 return newArr;
                             }
                             if (prev.some(m => areSameOutgoingMessage(m, newMsg))) return prev;
                         }
 
-                        scrollToBottom();
                         return [...prev, withMessageEntryAnimation(newMsg)];
                     });
+                    if (shouldPreserveBottom) scrollToBottom();
                 } else {
                     // Fallback: SSE hook didn't send payload — do a surgical merge
                     // instead of full array replace (prevents flickering)
@@ -3415,7 +3454,9 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
             type: msgType,
             status: 'queued',
             timestamp: new Date().toISOString(),
-            filename: file.name
+            filename: file.name,
+            senderId: user?.id || user?.whatsapp,
+            senderName: user?.name || user?.nombre
         };
         isSendingRef.current = true;
         updateChatMessages(currentCandidateId, prev => [...prev, withMessageEntryAnimation(tempMsg, 'outgoing')]);
@@ -3561,7 +3602,9 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
             enviado_por_agente: 1,
             status: 'pending',
             fecha: new Date().toISOString(),
-            _clientAnchoredTime: true
+            _clientAnchoredTime: true,
+            senderId: user?.id || user?.whatsapp,
+            senderName: user?.name || user?.nombre
         }, 'outgoing')]);
 
         fetch('/api/chat', {
@@ -3595,7 +3638,9 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         const optimisticId = 'temp-' + Date.now();
         isSendingRef.current = true;
         updateChatMessages(currentCandidateId, prev => [...(prev || []), withMessageEntryAnimation({
-            id: optimisticId, content: `[Ubicación: ${name || 'Mapa'}]`, tipo: 'location', from: 'me', enviado_por_agente: 1, status: 'pending', fecha: new Date().toISOString(), _clientAnchoredTime: true
+            id: optimisticId, content: `[Ubicación: ${name || 'Mapa'}]`, tipo: 'location', from: 'me', enviado_por_agente: 1, status: 'pending', fecha: new Date().toISOString(), _clientAnchoredTime: true,
+            senderId: user?.id || user?.whatsapp,
+            senderName: user?.name || user?.nombre
         }, 'outgoing')]);
         fetch('/api/chat', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -3616,7 +3661,9 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         const optimisticId = 'temp-' + Date.now();
         isSendingRef.current = true;
         updateChatMessages(currentCandidateId, prev => [...(prev || []), withMessageEntryAnimation({
-            id: optimisticId, content: `${bodyTxt}\n\n[Lista: ${items.map(i=>i.title).join(', ')}]`, tipo: 'interactive', from: 'me', enviado_por_agente: 1, status: 'pending', fecha: new Date().toISOString(), _clientAnchoredTime: true
+            id: optimisticId, content: `${bodyTxt}\n\n[Lista: ${items.map(i=>i.title).join(', ')}]`, tipo: 'interactive', from: 'me', enviado_por_agente: 1, status: 'pending', fecha: new Date().toISOString(), _clientAnchoredTime: true,
+            senderId: user?.id || user?.whatsapp,
+            senderName: user?.name || user?.nombre
         }, 'outgoing')]);
         fetch('/api/chat', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -3637,7 +3684,9 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         const optimisticId = 'temp-' + Date.now();
         isSendingRef.current = true;
         updateChatMessages(currentCandidateId, prev => [...(prev || []), withMessageEntryAnimation({
-            id: optimisticId, content: `[Producto del Catálogo: ${productSku}]`, tipo: 'interactive', from: 'me', enviado_por_agente: 1, status: 'pending', fecha: new Date().toISOString(), _clientAnchoredTime: true
+            id: optimisticId, content: `[Producto del Catálogo: ${productSku}]`, tipo: 'interactive', from: 'me', enviado_por_agente: 1, status: 'pending', fecha: new Date().toISOString(), _clientAnchoredTime: true,
+            senderId: user?.id || user?.whatsapp,
+            senderName: user?.name || user?.nombre
         }, 'outgoing')]);
         fetch('/api/chat', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -3666,7 +3715,9 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
             enviado_por_agente: 1,
             status: 'pending',
             fecha: new Date().toISOString(),
-            _clientAnchoredTime: true
+            _clientAnchoredTime: true,
+            senderId: user?.id || user?.whatsapp,
+            senderName: user?.name || user?.nombre
         }, 'outgoing')]);
 
         fetch('/api/chat', {
@@ -3846,6 +3897,8 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                 status: 'pending',
                 fecha: new Date(baseTime).toISOString(),
                 _clientAnchoredTime: true,
+                senderId,
+                senderName,
                 ...contextInfoParams
             }, 'outgoing')]);
             outboxRef.current.queue.push({
@@ -3890,7 +3943,9 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                         // cronológico necesita tiempos estrictamente crecientes (texto → foto 1 → 2 → 3)
                         timestamp: new Date(baseTime + idx + 1).toISOString(),
                         _clientAnchoredTime: true,
-                        _sequenceIndex: textMessage ? idx + 1 : idx
+                        _sequenceIndex: textMessage ? idx + 1 : idx,
+                        senderId,
+                        senderName
                     }, 'outgoing')]);
                     outboxRef.current.queue.push({
                         candidateId: currentCandidateId,
@@ -3979,7 +4034,9 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
             enviado_por_agente: 1,
             status: 'pending',
             fecha: new Date().toISOString(),
-            _clientAnchoredTime: true
+            _clientAnchoredTime: true,
+            senderId: user?.id || user?.whatsapp,
+            senderName: user?.name || user?.nombre
         }, 'outgoing')]);
 
         fetch('/api/chat', {
@@ -5340,6 +5397,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                             scrollerRef={(el) => { virtuosoScrollerRef.current = el; }}
                             style={{ height: '100%' }}
                             data={displayMessages}
+                            context={{ bottomOverlaySpacerHeight: pendingQrPreviewHeight }}
                             // Con pocos mensajes (lista mas corta que el viewport) Virtuoso alinea
                             // arriba por defecto: las burbujas quedan pegadas al tope y el hueco vacio
                             // abajo, junto al input. Al inyectar del banco algo con imagenes (~520px),
@@ -5450,6 +5508,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                         <button
                             onClick={() => { scrollToBottom(); setUnseenCount(0); }}
                             className="absolute bottom-[72px] right-5 z-30 w-10 h-10 rounded-full bg-white dark:bg-[#202c33] shadow-lg flex items-center justify-center border border-black/10 dark:border-white/10 hover:bg-gray-50 dark:hover:bg-[#2a3942] transition-colors"
+                            style={{ bottom: `${72 + pendingQrPreviewHeight}px` }}
                             title="Ir al final"
                         >
                             {unseenCount > 0 && (
@@ -5462,15 +5521,13 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                     )}
 
                     {/* Input Area + preview de imágenes pendientes de QR.
-                        La tira de preview va como OVERLAY absoluto (bottom-full) sobre el input,
-                        NO en el flujo flex: si estuviera en flujo, al enviar (setPendingQrImages([]))
-                        se desmontaba en el mismo commit que inyecta las burbujas → la lista flex-1
-                        crecía ~72px → Virtuoso re-anclaba su scroll → micro-parpadeo de las burbujas
-                        recién inyectadas (solo visible en envíos CON imágenes del banco). Al sacarla
-                        del flujo, montarla/desmontarla ya no cambia la altura de la lista. */}
+                        La tira de preview va como OVERLAY absoluto (bottom-full) sobre el input para
+                        que montar/desmontar imágenes no redimensione el layout flex. Su alto se mide
+                        arriba y se replica como footer invisible en Virtuoso: así el último mensaje
+                        sube con aire real y no queda tapado cuando se inyecta banco con imágenes. */}
                     <div className="relative shrink-0">
                         {pendingQrImages.length > 0 && (
-                            <div className="absolute bottom-full inset-x-0 z-20 px-3 pt-2 pb-1 bg-[#f0f2f5] dark:bg-[#202c33] border-t border-[#d1d7db] dark:border-[#222e35] shadow-[0_-1px_2px_rgba(11,20,26,.08)] flex items-center gap-2">
+                            <div ref={pendingQrPreviewRef} className="absolute bottom-full inset-x-0 z-20 px-3 pt-2 pb-1 bg-[#f0f2f5] dark:bg-[#202c33] border-t border-[#d1d7db] dark:border-[#222e35] shadow-[0_-1px_2px_rgba(11,20,26,.08)] flex items-center gap-2">
                                 {pendingQrImages.map((imgUrl, idx) => (
                                     <div key={idx} className="relative shrink-0">
                                         <img src={imgUrl} alt="preview" className="w-14 h-14 object-cover rounded-lg border border-gray-300 dark:border-gray-600" />
@@ -5917,7 +5974,6 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                                         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
                                             <button
                                                 onClick={(e) => { e.stopPropagation(); setEditingQuickReply(qr); const imgs = qr.imageUrls || (qr.imageUrl ? [qr.imageUrl] : []); setQrForm({ name: qr.name, message: qr.message || '', shortcut: qr.shortcut || '', imageUrl: imgs[0] || '', imageUrl2: imgs[1] || '', imageUrl3: imgs[2] || '', imageUrl4: imgs[3] || '', type: qr.type || 'text', locName: qr.location?.name || '', locAddress: qr.location?.address || '', locLat: qr.location?.lat ? String(qr.location.lat) : '', locLng: qr.location?.lng ? String(qr.location.lng) : '', audioUrl: qr.audioUrl || '', audioMime: qr.audioMime || '', audioVoice: !!qr.voice, audioDurationMs: qr.audioDurationMs || 0 }); }}
-                                                className="p-1.5 text-gray-400 hover:text-blue-500 transition-colors rounded-full hover:bg-blue-50 dark:hover:bg-blue-900/20"
                                                 className="p-1.5 text-gray-400 hover:text-blue-500 transition-colors rounded-full hover:bg-blue-50 dark:hover:bg-blue-900/20"
                                                 title="Editar"
                                             >

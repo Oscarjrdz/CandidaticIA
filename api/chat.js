@@ -418,7 +418,9 @@ export default async function handler(req, res) {
                 type: type,
                 mediaUrl: mediaUrl,
                 status: 'queued',
-                timestamp: timestamp
+                timestamp: timestamp,
+                ...(senderId ? { senderId } : {}),
+                ...(senderName ? { senderName } : {})
             };
 
             if (replyToId) {
