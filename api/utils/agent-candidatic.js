@@ -6,15 +6,25 @@
  * se van completando de esas etiquetas — el LLM lee la skill de la etiqueta y decide
  * qué mandar/responder (ese motor de envío se conecta en un paso posterior).
  *
- * Este módulo, por ahora, maneja el ESTADO (on/off, etiquetas, desde-cuándo) y la
- * COLA (candidatos completos de esas etiquetas) que consume la 3ª columna del panel.
+ * LA COLA ES EVENT-DRIVEN, NO UN POOL HISTÓRICO: arranca VACÍA en cada activación
+ * (regla de Oscar: "a partir de activar agente y seleccionar la(s) etiqueta(s), todos
+ * los candidatos que se completan serán respondidos" — los que ya estaban completos
+ * ANTES de prender no cuentan). Se llena solo vía el hook `maybeEnqueueForLiveAgent()`,
+ * llamado desde el extractor (api/ai/agent.js) en el instante exacto en que un candidato
+ * pasa a completo (mismo punto de enganche que el viejo agent-katcon, generalizado).
  *
- * Estado en Redis: candidatic:agent_live = JSON { on, since, tags: [nombres canónicos] }
+ * Estado en Redis:
+ *   candidatic:agent_live       = JSON { on, since, tags: [nombres canónicos] }
+ *   candidatic:agent_live:queue = JSON [{ id, name, phone, tag, completedAt }] (cap 200, más reciente primero)
  */
 import { getRedisClient } from './storage.js';
-import { resolveTagName, getDetailedCandidatesList, getTagCounts } from './agent-ia.js';
+import { resolveTagName, getTagCounts } from './agent-ia.js';
 
 const KEY_STATE = 'candidatic:agent_live';
+const KEY_QUEUE = 'candidatic:agent_live:queue';
+const QUEUE_CAP = 200;
+
+const normTag = (t) => String(typeof t === 'string' ? t : t?.name || '').trim().toUpperCase();
 
 export async function getAgentLiveState() {
     const redis = getRedisClient();
@@ -63,34 +73,76 @@ export async function setAgentLiveState({ on, tags }) {
         return { needsTags: true, error: 'Para prender Agent Candidatic necesitas al menos una etiqueta válida. ¿A qué etiqueta(s) atiendo?' };
     }
 
+    // Activación EXPLÍCITA (botón o comando de chat) → cola limpia: arranca vacía y
+    // solo se llena con quien se complete de aquí en adelante. Si ya estaba ON y
+    // vuelves a prender (ej. cambiaste etiquetas), también se reinicia: es un nuevo
+    // "turno de atención".
     const state = {
         on: true,
         tags: canonical,
-        since: prev.on && prev.since ? prev.since : Date.now()
+        since: Date.now()
     };
     await redis.set(KEY_STATE, JSON.stringify(state));
+    await redis.del(KEY_QUEUE);
     return { success: true, state };
 }
 
-// Cola de atención: candidatos COMPLETOS de las etiquetas activas (unión, sin
-// duplicados). Barato: reusa getDetailedCandidatesList (intersección de Sets).
-// Nota: en esta primera etapa muestra el POOL de completos con esas etiquetas;
-// cuando exista el motor, se distinguirá pendiente vs. ya atendido con precisión.
-export async function getLiveQueue(tags, limitPerTag = 50) {
-    const list = Array.isArray(tags) ? tags : [];
-    const seen = new Set();
-    const items = [];
-    for (const tag of list) {
-        const data = await getDetailedCandidatesList({ etiqueta: tag, estado: 'completos', limite: limitPerTag });
-        if (data && !data.error && Array.isArray(data.candidates)) {
-            for (const c of data.candidates) {
-                if (seen.has(c.id)) continue;
-                seen.add(c.id);
-                items.push({ id: c.id, name: c.name, phone: c.phone, tag });
-            }
-        }
+// Cola persistida (NO se recalcula desde Redis cada vez): se lee tal cual quedó
+// guardada por el hook event-driven. Más reciente primero.
+export async function getLiveQueue() {
+    const redis = getRedisClient();
+    if (!redis) return [];
+    try {
+        const raw = await redis.get(KEY_QUEUE);
+        const list = raw ? JSON.parse(raw) : [];
+        return Array.isArray(list) ? list : [];
+    } catch {
+        return [];
     }
-    return items;
+}
+
+// ── HOOK EVENT-DRIVEN ─────────────────────────────────────────────────────────
+// Se llama desde el extractor (api/ai/agent.js) en el MOMENTO EXACTO en que un
+// candidato pasa a completo (mismo punto que el viejo agent-katcon, generalizado
+// a cualquier etiqueta). Fire-and-forget: nunca bloquea ni rompe el extractor.
+//
+// Candados: ① Agent Candidatic ON, ② el candidato trae alguna de las etiquetas
+// activas, ③ ningún humano intervino (!blocked) — igual que agent-katcon.
+// El corte no-retroactivo es automático: esta función solo se invoca quien ACABA
+// de completar en este turno (lo garantiza el caller), y `since` siempre es anterior
+// a "ahora", así que todo lo que llega aquí es, por definición, posterior a la activación.
+export async function maybeEnqueueForLiveAgent(candidateId, candidateSnapshot) {
+    try {
+        const redis = getRedisClient();
+        if (!redis) return;
+
+        const state = await getAgentLiveState();
+        if (!state.on || !state.tags.length) return;
+
+        const c = candidateSnapshot;
+        if (!c || !c.id || c.blocked) return;
+
+        const candTags = Array.isArray(c.tags) ? c.tags.map(normTag) : [];
+        const matchedTag = state.tags.find((t) => candTags.includes(normTag(t)));
+        if (!matchedTag) return;
+
+        const queue = await getLiveQueue();
+        if (queue.some((q) => q.id === c.id)) return; // ya estaba en la cola
+
+        const cleanPhone = String(c.whatsapp || '').replace(/\D/g, '');
+        const entry = {
+            id: c.id,
+            name: c.nombreReal || c.nombre || c.id,
+            phone: cleanPhone ? `+${cleanPhone}` : 'Sin WhatsApp',
+            tag: matchedTag,
+            completedAt: new Date().toISOString()
+        };
+        const next = [entry, ...queue].slice(0, QUEUE_CAP);
+        await redis.set(KEY_QUEUE, JSON.stringify(next));
+    } catch (e) {
+        // Fire-and-forget: jamás propaga error al extractor.
+        console.error('[AGENT-CANDIDATIC] maybeEnqueueForLiveAgent:', e?.message);
+    }
 }
 
 // Nombres de etiquetas disponibles (para el selector del panel), con su conteo.

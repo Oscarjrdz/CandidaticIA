@@ -79,7 +79,7 @@ const Mascot = ({ on, waking }) => (
 
 const POLL_MS = 4000;
 
-const LiveAgentPanel = ({ reloadKey = 0 }) => {
+const LiveAgentPanel = ({ reloadKey = 0, onSelectCandidate, selectedId }) => {
     const [state, setState] = useState({ on: false, since: 0, tags: [] });
     const [queue, setQueue] = useState([]);
     const [availableTags, setAvailableTags] = useState([]);
@@ -238,38 +238,52 @@ const LiveAgentPanel = ({ reloadKey = 0 }) => {
                         </div>
                     )}
 
-                    {/* Etiquetas activas + cola viva */}
+                    {/* Etiquetas activas (solo mientras está ON) */}
                     {state.on && (
+                        <div className="px-4 mt-3 flex flex-wrap gap-1">
+                            {state.tags.map((t) => (
+                                <span key={t} className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300">
+                                    <TagIcon className="w-2.5 h-2.5" /> {t}
+                                </span>
+                            ))}
+                        </div>
+                    )}
+
+                    {/* Cola en vivo: event-driven, arranca vacía en cada activación y se llena
+                        SOLO con quien se completa después de prender (nada retroactivo). Se
+                        conserva al apagar, para poder revisar el último turno de atención. */}
+                    {(state.on || queue.length > 0) && (
                         <div className="px-4 mt-3">
-                            <div className="flex flex-wrap gap-1 mb-2">
-                                {state.tags.map((t) => (
-                                    <span key={t} className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300">
-                                        <TagIcon className="w-2.5 h-2.5" /> {t}
-                                    </span>
-                                ))}
-                            </div>
                             <div className="flex items-center gap-1.5 text-[11px] font-semibold text-gray-500 dark:text-gray-400 mb-1.5">
-                                <Users className="w-3.5 h-3.5" /> En cola de atención
+                                <Users className="w-3.5 h-3.5" /> {state.on ? 'En cola de atención' : 'Último turno de atención'}
                                 <span className="ml-auto text-orange-600 dark:text-orange-400">{queue.length}</span>
                             </div>
                             <div className="rounded-lg border border-gray-100 dark:border-gray-700 divide-y divide-gray-100 dark:divide-gray-700/60 overflow-hidden">
                                 {queue.length === 0 ? (
                                     <p className="text-[11px] text-gray-400 py-4 text-center">Nadie en cola todavía. Conforme se completen, aparecerán aquí.</p>
                                 ) : queue.slice(0, 60).map((c, i) => (
-                                    <div key={c.id || i} className="flex items-center gap-2 px-2.5 py-1.5">
+                                    <button
+                                        key={c.id || i}
+                                        onClick={() => onSelectCandidate && onSelectCandidate(c)}
+                                        className={`w-full flex items-center gap-2 px-2.5 py-1.5 text-left transition-colors ${
+                                            selectedId === c.id ? 'bg-orange-50 dark:bg-orange-900/20' : 'hover:bg-black/5 dark:hover:bg-white/5'
+                                        }`}
+                                    >
                                         <span className="w-5 h-5 rounded-full bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 text-[10px] font-bold flex items-center justify-center shrink-0">{i + 1}</span>
                                         <span className="text-[12px] text-gray-800 dark:text-gray-100 truncate flex-1">{c.name}</span>
                                         <span className="text-[10px] font-mono text-gray-400 shrink-0">{c.phone}</span>
-                                    </div>
+                                    </button>
                                 ))}
                             </div>
-                            <p className="mt-2 text-[10px] text-gray-400 dark:text-gray-500 leading-snug">
-                                ⚙️ El motor de auto-envío (que lee la skill y atiende a cada uno) se conecta en el siguiente paso. Por ahora esto es el control y la cola en vivo.
-                            </p>
+                            {state.on && (
+                                <p className="mt-2 text-[10px] text-gray-400 dark:text-gray-500 leading-snug">
+                                    ⚙️ El motor de auto-envío (que lee la skill y atiende a cada uno) se conecta en el siguiente paso. Por ahora esto es el control y la cola en vivo. Toca a un candidato para ver su chat.
+                                </p>
+                            )}
                         </div>
                     )}
 
-                    {!state.on && !picking && (
+                    {!state.on && !picking && queue.length === 0 && (
                         <p className="px-5 mt-3 text-[11px] text-gray-400 dark:text-gray-500 text-center leading-relaxed">
                             Prende el agente (o dile por el chat "me voy a comer, atiende a los de «etiqueta»") y elige a qué etiqueta(s) atender. Los candidatos que se completen entrarán a la cola.
                         </p>

@@ -16,9 +16,11 @@ export default async function handler(req, res) {
 
     try {
         if (req.method === 'GET') {
-            const state = await getAgentLiveState();
-            const [queue, availableTags] = await Promise.all([
-                state.on ? getLiveQueue(state.tags) : Promise.resolve([]),
+            // La cola es event-driven (no se recalcula de un pool): se muestra tal cual,
+            // incluso apagado, para poder revisar quién se atendió en el último turno.
+            const [state, queue, availableTags] = await Promise.all([
+                getAgentLiveState(),
+                getLiveQueue(),
                 getAvailableTags()
             ]);
             return res.status(200).json({ success: true, state, queue, availableTags });
@@ -31,7 +33,7 @@ export default async function handler(req, res) {
             if (result.error) {
                 return res.status(result.needsTags ? 400 : 500).json({ success: false, ...result });
             }
-            const queue = result.state.on ? await getLiveQueue(result.state.tags) : [];
+            const queue = await getLiveQueue(); // recién limpiada si se prendió; conservada si se apagó
             return res.status(200).json({ success: true, state: result.state, queue });
         }
 
