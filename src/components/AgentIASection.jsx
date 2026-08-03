@@ -1,5 +1,23 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { Loader2 } from 'lucide-react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { Loader2, GripVertical } from 'lucide-react';
+import {
+    DndContext,
+    closestCenter,
+    KeyboardSensor,
+    PointerSensor,
+    useSensor,
+    useSensors
+} from '@dnd-kit/core';
+import {
+    arrayMove,
+    SortableContext,
+    sortableKeyboardCoordinates,
+    horizontalListSortingStrategy,
+    verticalListSortingStrategy,
+    useSortable
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import { useAuthContext } from '../contexts/AuthContext';
 import AgentChat from './agent-ia/AgentChat';
 import AgentsDocEditor from './agent-ia/DocEditor';
 import MemoryPanel from './agent-ia/MemoryPanel';
@@ -11,7 +29,11 @@ import { agentIAFetch } from './agent-ia/api';
 // ════════════════════════════════════════════════════════════════════════════
 // SECCIÓN "Agent IA" — el agente propio de Oscar (Claude nativo).
 //
-// Panel dividido con el estilo de Candidatic, 4 columnas:
+// 4 columnas, cada una al 25% de ancho, y REORDENABLES por drag & drop (arrastra
+// desde el grip de cada encabezado). El orden se guarda en el perfil del usuario
+// (preferences.agentColumnsOrder, mismo patrón que el orden de la Sidebar y del
+// Banco de Respuestas) — persiste entre sesiones.
+//
 //   1) Chat con el agente.
 //   2) Módulos: AGENTS.md (definición, editable por ti y por el agente), MEMORY.md
 //      (memoria; el agente propone, tú apruebas), Skills (playbooks por cliente).
@@ -23,7 +45,52 @@ import { agentIAFetch } from './agent-ia/api';
 // en vivo y el filesystem de Vercel es de solo lectura en producción. Solo SuperAdmin.
 // ════════════════════════════════════════════════════════════════════════════
 
+const DEFAULT_ORDER = ['agent-chat', 'agent-modules', 'agent-live', 'agent-live-chat'];
+const COLUMN_TITLES = {
+    'agent-chat': 'Chat del agente',
+    'agent-modules': 'Definición · Memoria · Skills',
+    'agent-live': 'Agent Candidatic',
+    'agent-live-chat': 'Chat del candidato'
+};
+
+// Columna arrastrable: el grip es el ÚNICO punto de agarre (no la tarjeta completa),
+// para no interferir con clics/tecleo dentro del contenido (textarea del chat, etc.).
+const SortableColumn = ({ id, isLast, children }) => {
+    const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+    const style = {
+        transform: CSS.Transform.toString(transform),
+        transition,
+        zIndex: isDragging ? 40 : 'auto',
+        opacity: isDragging ? 0.5 : 1
+    };
+    return (
+        <div
+            ref={setNodeRef}
+            style={style}
+            className={`w-full lg:w-1/4 lg:min-w-0 h-[70vh] lg:h-full shrink-0 flex flex-col ${!isLast ? 'border-b lg:border-b-0 lg:border-r' : ''} border-gray-200 dark:border-gray-700`}
+        >
+            <div className="shrink-0 flex items-center gap-1.5 px-2 py-1 bg-gray-100/80 dark:bg-gray-900/40 border-b border-gray-200 dark:border-gray-700">
+                <div
+                    {...attributes}
+                    {...listeners}
+                    title="Arrastrar para reordenar"
+                    className="cursor-grab active:cursor-grabbing p-1 -m-1 rounded text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-black/5 dark:hover:bg-white/5 transition-colors touch-none"
+                >
+                    <GripVertical className="w-3.5 h-3.5" />
+                </div>
+                <span className="text-[10px] font-bold uppercase tracking-wide text-gray-400 dark:text-gray-500 truncate">
+                    {COLUMN_TITLES[id]}
+                </span>
+            </div>
+            <div className="flex-1 min-h-0 min-w-0 p-2">
+                {children}
+            </div>
+        </div>
+    );
+};
+
 const AgentIASection = () => {
+    const { user, setUser } = useAuthContext();
     const [loading, setLoading] = useState(true);
     const [agentsMd, setAgentsMd] = useState('');
     const [memoryMd, setMemoryMd] = useState('');
@@ -33,6 +100,50 @@ const AgentIASection = () => {
     const [model, setModel] = useState('claude-opus-4-8');
     const [liveReload, setLiveReload] = useState(0); // bump → LiveAgentPanel refetch (el chat prendió/apagó)
     const [selectedLiveCandidate, setSelectedLiveCandidate] = useState(null); // candidato elegido en la cola → 4ª columna
+
+    // ── Orden de columnas (drag & drop), guardado por reclutador ──────────────
+    const [order, setOrder] = useState(() => {
+        const saved = Array.isArray(user?.preferences?.agentColumnsOrder) ? user.preferences.agentColumnsOrder : [];
+        const valid = saved.filter((id) => DEFAULT_ORDER.includes(id));
+        const missing = DEFAULT_ORDER.filter((id) => !valid.includes(id)); // columnas nuevas a futuro → al final
+        return valid.length ? [...valid, ...missing] : DEFAULT_ORDER;
+    });
+
+    const saveOrder = useCallback((nextOrder) => {
+        setOrder(nextOrder);
+        if (!user?.id) return;
+        const nextPreferences = { ...(user.preferences || {}), agentColumnsOrder: nextOrder };
+        setUser((prev) => (prev ? { ...prev, preferences: nextPreferences } : prev));
+        fetch('/api/users', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: user.id, preferences: nextPreferences })
+        }).catch(() => {});
+    }, [user?.id, user?.preferences, setUser]);
+
+    // Orientación del drag: horizontal en escritorio (columnas lado a lado),
+    // vertical cuando se apilan en pantallas angostas.
+    const [isWide, setIsWide] = useState(() => (typeof window !== 'undefined' ? window.matchMedia('(min-width: 1024px)').matches : true));
+    useEffect(() => {
+        const mq = window.matchMedia('(min-width: 1024px)');
+        const handler = (e) => setIsWide(e.matches);
+        mq.addEventListener('change', handler);
+        return () => mq.removeEventListener('change', handler);
+    }, []);
+
+    const sensors = useSensors(
+        useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+        useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+    );
+
+    const handleDragEnd = (event) => {
+        const { active, over } = event;
+        if (over && active.id !== over.id) {
+            const oldIndex = order.indexOf(active.id);
+            const newIndex = order.indexOf(over.id);
+            saveOrder(arrayMove(order, oldIndex, newIndex));
+        }
+    };
 
     const load = useCallback(async () => {
         try {
@@ -79,30 +190,20 @@ const AgentIASection = () => {
         } catch { /* noop */ }
     }, []);
 
-    if (loading) {
-        return (
-            <div className="flex items-center justify-center h-full text-gray-400">
-                <Loader2 className="w-6 h-6 animate-spin" />
-            </div>
-        );
-    }
-
-    return (
-        <div className="flex flex-col lg:flex-row h-full min-h-0 overflow-y-auto lg:overflow-x-auto lg:overflow-y-hidden bg-gray-50 dark:bg-[#0b141a]">
-            {/* 1) Chat con el agente */}
-            <div className="w-full lg:w-[320px] lg:shrink-0 h-[70vh] shrink-0 lg:h-full border-b lg:border-b-0 lg:border-r border-gray-200 dark:border-gray-700 min-h-0">
-                <AgentChat
-                    hasApiKey={hasApiKey}
-                    model={model}
-                    onAgentsUpdated={refreshAgents}
-                    onMemoryProposed={refreshMemory}
-                    onSkillsUpdated={refreshSkills}
-                    onAgentLiveUpdated={() => setLiveReload((k) => k + 1)}
-                />
-            </div>
-
-            {/* 2) Módulos: AGENTS.md, MEMORY.md, Skills */}
-            <div className="w-full lg:flex-1 lg:min-w-[300px] h-[70vh] shrink-0 lg:h-full overflow-y-auto p-4 space-y-4 min-h-0 border-b lg:border-b-0 lg:border-r border-gray-200 dark:border-gray-700">
+    // Contenido de cada columna, por id — separado del orden en que se pintan.
+    const columnContent = useMemo(() => ({
+        'agent-chat': (
+            <AgentChat
+                hasApiKey={hasApiKey}
+                model={model}
+                onAgentsUpdated={refreshAgents}
+                onMemoryProposed={refreshMemory}
+                onSkillsUpdated={refreshSkills}
+                onAgentLiveUpdated={() => setLiveReload((k) => k + 1)}
+            />
+        ),
+        'agent-modules': (
+            <div className="h-full overflow-y-auto space-y-4">
                 <AgentsDocEditor value={agentsMd} onSaved={setAgentsMd} />
                 <MemoryPanel
                     value={memoryMd}
@@ -115,21 +216,37 @@ const AgentIASection = () => {
                 />
                 <SkillsPanel skills={skills} onChange={(list) => setSkills(Array.isArray(list) ? list : [])} />
             </div>
+        ),
+        'agent-live': (
+            <LiveAgentPanel
+                reloadKey={liveReload}
+                selectedId={selectedLiveCandidate?.id}
+                onSelectCandidate={setSelectedLiveCandidate}
+            />
+        ),
+        'agent-live-chat': <LiveChatViewer candidate={selectedLiveCandidate} />
+    }), [hasApiKey, model, refreshAgents, refreshMemory, refreshSkills, agentsMd, memoryMd, pendingMemory, skills, liveReload, selectedLiveCandidate]);
 
-            {/* 3) Agent Candidatic: control/monitor de la atención automática en vivo */}
-            <div className="w-full lg:w-[280px] lg:shrink-0 h-[70vh] shrink-0 lg:h-full p-4 min-h-0 border-b lg:border-b-0 lg:border-r border-gray-200 dark:border-gray-700">
-                <LiveAgentPanel
-                    reloadKey={liveReload}
-                    selectedId={selectedLiveCandidate?.id}
-                    onSelectCandidate={setSelectedLiveCandidate}
-                />
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center h-full text-gray-400">
+                <Loader2 className="w-6 h-6 animate-spin" />
             </div>
+        );
+    }
 
-            {/* 4) Chat del candidato seleccionado en la cola (solo lectura) */}
-            <div className="w-full lg:w-[300px] lg:shrink-0 h-[70vh] shrink-0 lg:h-full p-4 min-h-0">
-                <LiveChatViewer candidate={selectedLiveCandidate} />
-            </div>
-        </div>
+    return (
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+            <SortableContext items={order} strategy={isWide ? horizontalListSortingStrategy : verticalListSortingStrategy}>
+                <div className="flex flex-col lg:flex-row h-full min-h-0 overflow-y-auto lg:overflow-hidden bg-gray-50 dark:bg-[#0b141a]">
+                    {order.map((id, idx) => (
+                        <SortableColumn key={id} id={id} isLast={idx === order.length - 1}>
+                            {columnContent[id]}
+                        </SortableColumn>
+                    ))}
+                </div>
+            </SortableContext>
+        </DndContext>
     );
 };
 
