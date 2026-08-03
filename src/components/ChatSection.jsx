@@ -1138,6 +1138,34 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
     const nextCandidatesOffsetRef = useRef(0);
     const prevSearchRef = useRef(null);
     const sseWasConnectedOnceRef = useRef(false);
+    const [chatListSortHold, setChatListSortHold] = useState({ candidateId: null, sortTime: 0, until: 0 });
+    const chatListSortHoldRef = useRef(chatListSortHold);
+    const chatListSortHoldTimerRef = useRef(null);
+
+    const holdChatListPosition = useCallback((candidateId, holdMs = 4200) => {
+        if (!candidateId) return;
+        const now = Date.now();
+        const currentHold = chatListSortHoldRef.current;
+        const candidate =
+            candidatesRef.current.find(c => String(c.id) === String(candidateId)) ||
+            (selectedChatRef.current?.id === candidateId ? selectedChatRef.current : null);
+        const currentSortTime = candidate?.ultimoMensaje ? new Date(candidate.ultimoMensaje).getTime() : 0;
+        const sortTime = currentHold.candidateId === candidateId && currentHold.until > now
+            ? currentHold.sortTime
+            : (Number.isFinite(currentSortTime) ? currentSortTime : 0);
+        const nextHold = { candidateId, sortTime, until: now + holdMs };
+        chatListSortHoldRef.current = nextHold;
+        setChatListSortHold(nextHold);
+
+        if (chatListSortHoldTimerRef.current) clearTimeout(chatListSortHoldTimerRef.current);
+        chatListSortHoldTimerRef.current = setTimeout(() => {
+            const latest = chatListSortHoldRef.current;
+            if (latest.candidateId !== candidateId || latest.until > Date.now()) return;
+            const emptyHold = { candidateId: null, sortTime: 0, until: 0 };
+            chatListSortHoldRef.current = emptyHold;
+            setChatListSortHold(emptyHold);
+        }, holdMs + 80);
+    }, []);
 
     // Multi-select Filters State
     const [selectedAges, setSelectedAges] = useState([]);
@@ -1221,6 +1249,10 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
 
     useEffect(() => { searchRef.current = deferredSearch; }, [deferredSearch]);
     useEffect(() => { candidatesRef.current = candidates; }, [candidates]);
+    useEffect(() => { chatListSortHoldRef.current = chatListSortHold; }, [chatListSortHold]);
+    useEffect(() => () => {
+        if (chatListSortHoldTimerRef.current) clearTimeout(chatListSortHoldTimerRef.current);
+    }, []);
 
     const prevActiveFilterRef = useRef(null);
     const prevSelectedTagRef = useRef(undefined);
@@ -1387,8 +1419,9 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
     }, [reconcileUnreadBadges]);
 
 
-    const markReplyHandledOptimistically = useCallback((candidateId) => {
+    const markReplyHandledOptimistically = useCallback((candidateId, holdMs = 4200) => {
         if (!candidateId) return;
+        holdChatListPosition(candidateId, holdMs);
         const now = new Date().toISOString();
         applyCandidateUnreadPatch(candidateId, {
             unreadMsgCount: 0,
@@ -1396,7 +1429,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
             ultimoMensajeBot: now,
             lastHumanMessageAt: now,
         });
-    }, [applyCandidateUnreadPatch]);
+    }, [applyCandidateUnreadPatch, holdChatListPosition]);
 
 
     // Optimistic unread clearance
@@ -2025,8 +2058,15 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
 
         // 🏎️ Pre-compute timestamps ONCE (eliminates ~44,000 Date objects per sort)
         const tsCache = new Map();
+        const sortHoldActive = chatListSortHold.candidateId && chatListSortHold.until > Date.now();
         for (const c of result) {
-            tsCache.set(c.id, c.ultimoMensaje ? new Date(c.ultimoMensaje).getTime() : 0);
+            const realTime = c.ultimoMensaje ? new Date(c.ultimoMensaje).getTime() : 0;
+            tsCache.set(
+                c.id,
+                sortHoldActive && String(c.id) === String(chatListSortHold.candidateId)
+                    ? chatListSortHold.sortTime
+                    : realTime
+            );
         }
 
         // WhatsApp-Native Sort: Pinned first → then strictly chronological (with deterministic tie-breaker)
@@ -2045,7 +2085,8 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         selectedTag,
         manualPipelineFilter, manualStepFilter,
         pinnedChats,
-        selectedAges, selectedGenders, selectedMunicipalities
+        selectedAges, selectedGenders, selectedMunicipalities,
+        chatListSortHold
     ]);
 
     const visibleCandidates = useMemo(
@@ -2164,18 +2205,26 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
             extra.push({ ...cand, _leaving: true });
         });
         if (extra.length === 0) return visibleCandidates;
+        const sortHoldActive = chatListSortHold.candidateId && chatListSortHold.until > Date.now();
+        const getChatSortTime = (candidate) => {
+            if (sortHoldActive && String(candidate?.id) === String(chatListSortHold.candidateId)) {
+                return chatListSortHold.sortTime;
+            }
+            const time = candidate?.ultimoMensaje ? new Date(candidate.ultimoMensaje).getTime() : 0;
+            return Number.isFinite(time) ? time : 0;
+        };
         return [...visibleCandidates, ...extra].sort((a, b) => {
             const aPinned = pinnedChats.includes(a.id);
             const bPinned = pinnedChats.includes(b.id);
             if (aPinned && !bPinned) return -1;
             if (!aPinned && bPinned) return 1;
-            const at = a.ultimoMensaje ? new Date(a.ultimoMensaje).getTime() : 0;
-            const bt = b.ultimoMensaje ? new Date(b.ultimoMensaje).getTime() : 0;
+            const at = getChatSortTime(a);
+            const bt = getChatSortTime(b);
             const diff = bt - at;
             if (diff !== 0) return diff;
             return String(b.id || '').localeCompare(String(a.id || ''));
         });
-    }, [visibleCandidates, leavingCandidates, pinnedChats]);
+    }, [visibleCandidates, leavingCandidates, pinnedChats, chatListSortHold]);
 
     // ── Ancla de PIVOTE: el chat SELECCIONADO nunca se mueve de su posición en pantalla ──
     // Antes existía un "congelado" del orden completo mientras estabas scrolleado (>80px),
@@ -3850,7 +3899,8 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
 
         // Auto-silence bot on manual intervention
         autoSilenceBot(currentChat);
-        markReplyHandledOptimistically(currentCandidateId);
+        const chatListHoldMs = Math.min(9000, 3200 + queuedImages.length * 1500 + (textMessage ? 700 : 0));
+        markReplyHandledOptimistically(currentCandidateId, chatListHoldMs);
 
         // El input queda libre de inmediato: el envío real corre en el outbox
         setPendingQrImages([]);
