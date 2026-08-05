@@ -27,6 +27,7 @@ import { processRecruiterMessage } from './recruiter-agent.js';
 import { inferGender } from '../utils/gender-helper.js';
 import { maybeSendKatconOnComplete } from '../utils/agent-katcon.js';
 import { maybeEnqueueForLiveAgent } from '../utils/agent-candidatic.js';
+import { attendLiveCandidate } from '../utils/agent-attend.js';
 import { classifyIntent } from './intent-classifier.js';
 import { FEATURES } from '../utils/feature-flags.js';
 import { AIGuard } from '../utils/ai-guard.js';
@@ -5347,8 +5348,11 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
         if (!_wasP2Complete && _isP2Complete) {
             maybeSendKatconOnComplete(candidateId, { ...candidateData, ...candidateUpdates }).catch(() => {});
             // AGENT CANDIDATIC (generalizado, cualquier etiqueta): mismo instante exacto,
-            // agrega a la cola en vivo de la 3ª columna si el toggle está ON para su etiqueta.
-            maybeEnqueueForLiveAgent(candidateId, { ...candidateData, ...candidateUpdates }).catch(() => {});
+            // agrega a la cola en vivo y dispara el motor de atención (agent-attend.js)
+            // SOLO si de verdad quedó encolado (candados ya validados adentro).
+            maybeEnqueueForLiveAgent(candidateId, { ...candidateData, ...candidateUpdates })
+                .then((entry) => { if (entry) return attendLiveCandidate(candidateId, entry.tag); })
+                .catch(() => {});
         }
 
         recordAITelemetry(candidateId, 'brenda_turn_complete', {

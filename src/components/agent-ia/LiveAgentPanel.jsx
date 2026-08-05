@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Loader2, Power, Search, Users, Tag as TagIcon, Check, X } from 'lucide-react';
+import { Loader2, Power, Search, Users, Tag as TagIcon, Check, X, Clock, CheckCircle2, HelpCircle, XCircle } from 'lucide-react';
 import { agentIAFetch } from './api';
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -78,6 +78,15 @@ const Mascot = ({ on, waking }) => (
 );
 
 const POLL_MS = 4000;
+
+// Status por candidato en la cola (lo va poniendo el motor de agent-attend.js).
+const QUEUE_STATUS_META = {
+    pending: { icon: Clock, className: 'text-gray-400', title: 'En espera' },
+    attending: { icon: Loader2, className: 'text-orange-500 animate-spin', title: 'Atendiendo…' },
+    done: { icon: CheckCircle2, className: 'text-emerald-500', title: 'Atendido' },
+    waiting: { icon: HelpCircle, className: 'text-amber-500', title: 'Duda — revisa el chat del agente' },
+    error: { icon: XCircle, className: 'text-red-500', title: 'Error — revisa el chat del agente' }
+};
 
 const LiveAgentPanel = ({ reloadKey = 0, onSelectCandidate, selectedId }) => {
     const [state, setState] = useState({ on: false, since: 0, tags: [] });
@@ -261,23 +270,28 @@ const LiveAgentPanel = ({ reloadKey = 0, onSelectCandidate, selectedId }) => {
                             <div className="rounded-lg border border-gray-100 dark:border-gray-700 divide-y divide-gray-100 dark:divide-gray-700/60 overflow-hidden">
                                 {queue.length === 0 ? (
                                     <p className="text-[11px] text-gray-400 py-4 text-center">Nadie en cola todavía. Conforme se completen, aparecerán aquí.</p>
-                                ) : queue.slice(0, 60).map((c, i) => (
-                                    <button
-                                        key={c.id || i}
-                                        onClick={() => onSelectCandidate && onSelectCandidate(c)}
-                                        className={`w-full flex items-center gap-2 px-2.5 py-1.5 text-left transition-colors ${
-                                            selectedId === c.id ? 'bg-orange-50 dark:bg-orange-900/20' : 'hover:bg-black/5 dark:hover:bg-white/5'
-                                        }`}
-                                    >
-                                        <span className="w-5 h-5 rounded-full bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 text-[10px] font-bold flex items-center justify-center shrink-0">{i + 1}</span>
-                                        <span className="text-[12px] text-gray-800 dark:text-gray-100 truncate flex-1">{c.name}</span>
-                                        <span className="text-[10px] font-mono text-gray-400 shrink-0">{c.phone}</span>
-                                    </button>
-                                ))}
+                                ) : queue.slice(0, 60).map((c, i) => {
+                                    const meta = QUEUE_STATUS_META[c.status] || QUEUE_STATUS_META.pending;
+                                    const StatusIcon = meta.icon;
+                                    return (
+                                        <button
+                                            key={c.id || i}
+                                            onClick={() => onSelectCandidate && onSelectCandidate(c)}
+                                            title={c.note ? `${meta.title}: ${c.note}` : meta.title}
+                                            className={`w-full flex items-center gap-2 px-2.5 py-1.5 text-left transition-colors ${
+                                                selectedId === c.id ? 'bg-orange-50 dark:bg-orange-900/20' : 'hover:bg-black/5 dark:hover:bg-white/5'
+                                            }`}
+                                        >
+                                            <span className="w-5 h-5 rounded-full bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 text-[10px] font-bold flex items-center justify-center shrink-0">{i + 1}</span>
+                                            <span className="text-[12px] text-gray-800 dark:text-gray-100 truncate flex-1">{c.name}</span>
+                                            <StatusIcon className={`w-3.5 h-3.5 shrink-0 ${meta.className}`} />
+                                        </button>
+                                    );
+                                })}
                             </div>
                             {state.on && (
                                 <p className="mt-2 text-[10px] text-gray-400 dark:text-gray-500 leading-snug">
-                                    ⚙️ El motor de auto-envío (que lee la skill y atiende a cada uno) se conecta en el siguiente paso. Por ahora esto es el control y la cola en vivo. Toca a un candidato para ver su chat.
+                                    ⚙️ El motor lee la skill de la etiqueta y actúa por su cuenta (sin pedirte confirmar cada envío). Si no hay skill clara, te pregunta en el chat del agente en vez de adivinar. Toca a un candidato para ver su chat.
                                 </p>
                             )}
                         </div>

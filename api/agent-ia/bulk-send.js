@@ -1,7 +1,6 @@
-import { getRedisClient, getCandidateById, saveMessage } from '../utils/storage.js';
+import { getRedisClient, getCandidateById } from '../utils/storage.js';
 import { requireSuperAdmin } from '../utils/agent-ia.js';
-import { substituteVariables } from '../utils/shortcuts.js';
-import { sendUltraMsgMessage, getUltraMsgConfig } from '../whatsapp/utils.js';
+import { sendMessageBundleTo } from '../utils/agent-send.js';
 
 // ════════════════════════════════════════════════════════════════════════════
 // Endpoint de Ejecución y Polling de Envíos Masivos (Agent IA)
@@ -10,85 +9,10 @@ import { sendUltraMsgMessage, getUltraMsgConfig } from '../whatsapp/utils.js';
 // GET  /api/agent-ia/bulk-send?proposalId=... → Estado en vivo ({ status, sent, total, failed, logs })
 //
 // El proceso corre en servidor y persiste progreso en Redis (bulk_proposal:<id>:status)
-// para no depender del navegador ni de la UI abierta.
+// para no depender del navegador ni de la UI abierta. El envío real (texto/imágenes/
+// ubicación/audio) vive en utils/agent-send.js, compartido con el motor de Agent
+// Candidatic (agent-attend.js) para no duplicar esa lógica.
 // ════════════════════════════════════════════════════════════════════════════
-
-const HOST = process.env.PUBLIC_BASE_URL || 'https://www.candidatic.com';
-
-// /api/image?id=med_X → https://HOST/api/media/med_X.jpg (URL pública que Meta jala)
-const toAbsoluteImageUrl = (u) => {
-    if (!u) return u;
-    const m = /[?&]id=([^&]+)/.exec(u);
-    if (m) return `${HOST}/api/media/${m[1]}.jpg`;
-    if (u.startsWith('/')) return `${HOST}${u}`;
-    return u;
-};
-
-// Audio u otro media relativo: absolutizar SIN forzar extensión (no es .jpg).
-const toAbsoluteMediaUrl = (u) => {
-    if (!u) return u;
-    if (u.startsWith('http')) return u;
-    if (u.startsWith('/')) return `${HOST}${u}`;
-    return u;
-};
-
-// Envía a UN candidato el bundle COMPLETO de la respuesta del banco, reproduciendo
-// TODAS las variantes en orden: ubicación (maps), o audio/nota de voz, o la mezcla
-// texto + N imágenes (cada elemento es su propio mensaje de WhatsApp). Cada candidato
-// recibe exactamente los mismos mensajes que en el envío manual. { ok, sentCount }.
-const sendBankBundleTo = async (candidate, proposal) => {
-    const phone = String(candidate.whatsapp || '').replace(/\D/g, '');
-    if (!phone) return { ok: false, error: 'sin teléfono' };
-
-    const config = await getUltraMsgConfig(candidate.incomingPhoneNumberId || candidate.instanceId);
-    if (!config || !config.instanceId || !config.token) return { ok: false, error: 'sin config de WhatsApp' };
-    const { instanceId, token } = config;
-    const now = () => new Date().toISOString();
-    let sentCount = 0;
-
-    // ── UBICACIÓN (maps) ──
-    if (proposal.templateType === 'location' && proposal.location) {
-        const loc = proposal.location;
-        const r = await sendUltraMsgMessage(instanceId, token, phone, '', 'location', { name: loc.name, address: loc.address, lat: loc.lat, lng: loc.lng });
-        if (r?.success) {
-            sentCount++;
-            await saveMessage(candidate.id, { from: 'me', content: `[Ubicación: ${loc.name || 'Mapa'}]`, type: 'location', timestamp: now(), meta: { bulk: true } }).catch(() => {});
-        }
-        return { ok: sentCount > 0, sentCount, error: sentCount ? null : 'falló ubicación' };
-    }
-
-    // ── AUDIO / nota de voz ──
-    if (proposal.templateType === 'audio' && proposal.audioUrl) {
-        const extra = {};
-        if (proposal.voice) extra.voice = true;
-        const r = await sendUltraMsgMessage(instanceId, token, phone, toAbsoluteMediaUrl(proposal.audioUrl), 'audio', extra);
-        if (r?.success) {
-            sentCount++;
-            await saveMessage(candidate.id, { from: 'me', content: proposal.voice ? '🎤 Nota de voz' : '🎵 Audio', type: 'audio', mediaUrl: proposal.audioUrl, timestamp: now(), meta: { bulk: true } }).catch(() => {});
-        }
-        return { ok: sentCount > 0, sentCount, error: sentCount ? null : 'falló audio' };
-    }
-
-    // ── TEXTO + IMÁGENES (mezcla) ── cada uno es un mensaje independiente.
-    if (proposal.messageText) {
-        const text = substituteVariables(proposal.messageText, candidate); // resuelve {{nombre}} por candidato
-        const r = await sendUltraMsgMessage(instanceId, token, phone, text, 'chat', {});
-        if (r?.success) {
-            sentCount++;
-            await saveMessage(candidate.id, { from: 'me', content: text, timestamp: now(), meta: { bulk: true } }).catch(() => {});
-        }
-    }
-    for (const imgUrl of (proposal.imageUrls || [])) {
-        const r = await sendUltraMsgMessage(instanceId, token, phone, toAbsoluteImageUrl(imgUrl), 'image', {});
-        if (r?.success) {
-            sentCount++;
-            await saveMessage(candidate.id, { from: 'me', content: '', type: 'image', mediaUrl: imgUrl, timestamp: now(), meta: { bulk: true } }).catch(() => {});
-        }
-        await new Promise((res) => setTimeout(res, 150)); // respiro entre imágenes
-    }
-
-    return { ok: sentCount > 0, sentCount, error: sentCount ? null : 'no se envió nada' };
-};
 
 const executeBulkSend = async (proposalId, proposal) => {
     const redis = getRedisClient();
@@ -128,7 +52,7 @@ const executeBulkSend = async (proposalId, proposal) => {
                 state.failed++;
                 state.logs.unshift(`[${new Date().toLocaleTimeString()}] ⚠️ Candidato ${candId} no encontrado. Saltando.`);
             } else {
-                const r = await sendBankBundleTo(candidate, proposal);
+                const r = await sendMessageBundleTo(candidate, proposal, { bulk: true });
                 const nombre = candidate.nombreReal || candidate.nombre || candId;
                 if (r.ok) {
                     state.sent++;

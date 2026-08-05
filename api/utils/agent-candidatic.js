@@ -101,6 +101,21 @@ export async function getLiveQueue() {
     }
 }
 
+// Actualiza el status/nota de UNA entrada de la cola (la usa el motor de atención:
+// pending → attending → done | waiting | error). No falla si ya no está en la cola
+// (pudo limpiarse por un re-encendido mientras se procesaba).
+export async function updateQueueEntryStatus(candidateId, patch) {
+    const redis = getRedisClient();
+    if (!redis) return;
+    try {
+        const queue = await getLiveQueue();
+        const idx = queue.findIndex((q) => q.id === candidateId);
+        if (idx < 0) return;
+        queue[idx] = { ...queue[idx], ...patch, updatedAt: new Date().toISOString() };
+        await redis.set(KEY_QUEUE, JSON.stringify(queue));
+    } catch { /* no crítico */ }
+}
+
 // ── HOOK EVENT-DRIVEN ─────────────────────────────────────────────────────────
 // Se llama desde el extractor (api/ai/agent.js) en el MOMENTO EXACTO en que un
 // candidato pasa a completo (mismo punto que el viejo agent-katcon, generalizado
@@ -111,23 +126,26 @@ export async function getLiveQueue() {
 // El corte no-retroactivo es automático: esta función solo se invoca quien ACABA
 // de completar en este turno (lo garantiza el caller), y `since` siempre es anterior
 // a "ahora", así que todo lo que llega aquí es, por definición, posterior a la activación.
+//
+// Devuelve la entrada agregada (o null si no aplicó ningún candado) para que el
+// caller sepa si debe disparar también el motor de atención (agent-attend.js).
 export async function maybeEnqueueForLiveAgent(candidateId, candidateSnapshot) {
     try {
         const redis = getRedisClient();
-        if (!redis) return;
+        if (!redis) return null;
 
         const state = await getAgentLiveState();
-        if (!state.on || !state.tags.length) return;
+        if (!state.on || !state.tags.length) return null;
 
         const c = candidateSnapshot;
-        if (!c || !c.id || c.blocked) return;
+        if (!c || !c.id || c.blocked) return null;
 
         const candTags = Array.isArray(c.tags) ? c.tags.map(normTag) : [];
         const matchedTag = state.tags.find((t) => candTags.includes(normTag(t)));
-        if (!matchedTag) return;
+        if (!matchedTag) return null;
 
         const queue = await getLiveQueue();
-        if (queue.some((q) => q.id === c.id)) return; // ya estaba en la cola
+        if (queue.some((q) => q.id === c.id)) return null; // ya estaba en la cola
 
         const cleanPhone = String(c.whatsapp || '').replace(/\D/g, '');
         const entry = {
@@ -135,13 +153,16 @@ export async function maybeEnqueueForLiveAgent(candidateId, candidateSnapshot) {
             name: c.nombreReal || c.nombre || c.id,
             phone: cleanPhone ? `+${cleanPhone}` : 'Sin WhatsApp',
             tag: matchedTag,
+            status: 'pending', // pending → attending → done | waiting | error
             completedAt: new Date().toISOString()
         };
         const next = [entry, ...queue].slice(0, QUEUE_CAP);
         await redis.set(KEY_QUEUE, JSON.stringify(next));
+        return entry;
     } catch (e) {
         // Fire-and-forget: jamás propaga error al extractor.
         console.error('[AGENT-CANDIDATIC] maybeEnqueueForLiveAgent:', e?.message);
+        return null;
     }
 }
 

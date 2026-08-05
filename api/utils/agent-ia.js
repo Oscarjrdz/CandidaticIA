@@ -372,6 +372,39 @@ export async function getDetailedCandidatesList({ etiqueta, estado, noLeidos, li
     }
 }
 
+// Arma el payload de envío (mismo shape que consume agent-send.js) de UNA respuesta
+// del banco: texto, imágenes, ubicación (maps) o audio, o una MEZCLA. Es una función
+// PURA (sin Redis extra ni lista de candidatos) — la reusan tanto la propuesta masiva
+// (proposeQuickReplyBulkSend) como el motor de Agent Candidatic (agent-attend.js), que
+// envía directo sin pasar por una propuesta. { payload, mixSummary } | { error }.
+export function buildBankSendPayload(qr, label) {
+    const messageText = qr.message || qr.text || qr.content || '';
+    const templateType = qr.type || 'text';
+    const imageUrls = Array.isArray(qr.imageUrls)
+        ? qr.imageUrls.filter(Boolean)
+        : (qr.imageUrl ? [qr.imageUrl] : []);
+    const location = (qr.location && qr.location.lat != null && qr.location.lng != null) ? qr.location : null;
+    const audioUrl = qr.audioUrl || '';
+    const voice = !!(qr.voice || qr.audioVoice);
+
+    const hasPayload = Boolean(messageText || imageUrls.length || location || audioUrl);
+    if (!hasPayload) {
+        return { error: `La respuesta del banco "${qr.name || label || ''}" no tiene contenido para enviar.` };
+    }
+
+    const parts = [];
+    if (messageText) parts.push('1 texto');
+    if (imageUrls.length) parts.push(`${imageUrls.length} ${imageUrls.length === 1 ? 'imagen' : 'imágenes'}`);
+    if (location) parts.push('ubicación (maps)');
+    if (audioUrl) parts.push(voice ? 'nota de voz' : 'audio');
+    const mixSummary = parts.join(' + ');
+
+    return {
+        payload: { templateType, messageText, imageUrls, location, audioUrl, voice },
+        mixSummary
+    };
+}
+
 // Crea la propuesta de envío masivo de una plantilla del Banco de Respuestas
 export async function proposeQuickReplyBulkSend({ respuesta_banco, etiqueta, estado, noLeidos, limite = 20, candidatoIds }) {
     const redis = getRedisClient();
@@ -385,38 +418,13 @@ export async function proposeQuickReplyBulkSend({ respuesta_banco, etiqueta, est
     // Una respuesta del banco puede ser texto, imágenes, ubicación (maps) o audio,
     // o una MEZCLA (ej. texto + 2 imágenes = 3 mensajes). Cargamos TODAS las variantes
     // en la propuesta para que el envío las reproduzca igual que el envío manual.
-    const messageText = qr.message || qr.text || qr.content || '';
-    const templateType = qr.type || 'text';
-    const imageUrls = Array.isArray(qr.imageUrls)
-        ? qr.imageUrls.filter(Boolean)
-        : (qr.imageUrl ? [qr.imageUrl] : []);
-    const location = (qr.location && qr.location.lat != null && qr.location.lng != null) ? qr.location : null;
-    const audioUrl = qr.audioUrl || '';
-    const voice = !!(qr.voice || qr.audioVoice);
-
-    // Debe haber ALGO que enviar (texto, imágenes, ubicación o audio).
-    const hasPayload = Boolean(messageText || imageUrls.length || location || audioUrl);
-    if (!hasPayload) {
-        return { error: `La respuesta del banco "${qr.name || respuesta_banco}" no tiene contenido para enviar.` };
-    }
-
-    // Resumen legible de la mezcla, para mostrarlo en la tarjeta de confirmación.
-    const parts = [];
-    if (messageText) parts.push('1 texto');
-    if (imageUrls.length) parts.push(`${imageUrls.length} ${imageUrls.length === 1 ? 'imagen' : 'imágenes'}`);
-    if (location) parts.push('ubicación (maps)');
-    if (audioUrl) parts.push(voice ? 'nota de voz' : 'audio');
-    const mixSummary = parts.join(' + ');
+    const built = buildBankSendPayload(qr, respuesta_banco);
+    if (built.error) return built;
 
     return storeBulkProposal({
         templateName: qr.name || qr.title || respuesta_banco,
-        messageText,           // texto CRUDO con {{variables}} — se resuelven por candidato al enviar
-        templateType,          // 'text' | 'location' | 'audio'
-        imageUrls,             // [] o N URLs de imagen
-        location,              // {lat,lng,name,address} | null
-        audioUrl,              // '' o URL de audio
-        voice,                 // true si es nota de voz
-        mixSummary             // ej. "1 texto + 2 imágenes"
+        ...built.payload,       // templateType, messageText, imageUrls, location, audioUrl, voice
+        mixSummary: built.mixSummary
     }, { etiqueta, estado, noLeidos, limite, candidatoIds });
 }
 
