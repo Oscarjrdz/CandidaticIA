@@ -51,7 +51,7 @@ import {
 import { moveCandidateToProject } from './agent-crm.js';
 import { sendMessageBundleTo } from './agent-send.js';
 import { pushLiveFeed } from './agent-live-feed.js';
-import { updateQueueEntryStatus, getLiveQueue } from './agent-candidatic.js';
+import { updateQueueEntryStatus, getLiveQueue, recordAttended, recordGoal, recordAttendingDuration } from './agent-candidatic.js';
 
 const MAX_TOOL_LOOPS = 5;
 const MAX_TOKENS = 1200;
@@ -91,7 +91,8 @@ Tu tarea, en este orden:
    - NO ejecutes pasos que la skill condiciona a "si confirma / si pregunta / si rechaza" — eso depende de una respuesta que aún no llega. Detente ahí.
    - Si la skill indica mover al candidato de proyecto/paso en el CRM en ESTE momento (no condicionado a una respuesta futura), hazlo con mover_candidato_crm.
 3. Si NO hay ninguna skill para esta etiqueta, o la skill no dice qué hacer en el momento "recién completado" (todo está condicionado a una respuesta futura), NO mandes nada al azar: usa pedir_ayuda para preguntarle a Oscar qué hacer, explicando la situación en una frase clara.
-4. Al terminar (hayas actuado o pedido ayuda), responde con un resumen MUY breve (1-2 frases, en español, tono directo) de lo que hiciste o de tu duda — ese texto se le muestra a Oscar en su chat tal cual.
+4. EVALÚA SI MARCASTE GOL: cada skill tiene un objetivo real (busca algo como "Objetivo Principal" en su texto — ej. "confirmar la asistencia del candidato a la entrevista", no solo "mandarle un mensaje"). Si lo que acabas de hacer YA cumple ese objetivo, usa marcar_gol. Si solo diste un paso intermedio (ej. mandaste la invitación pero el objetivo depende de que el candidato conteste algo que todavía no existe), NO marques gol — es lo normal en la mayoría de los casos en este momento, no te fuerces a marcar uno.
+5. Al terminar (hayas actuado, marcado gol o pedido ayuda), responde con un resumen MUY breve (1-2 frases, en español, tono directo) de lo que hiciste o de tu duda — ese texto se le muestra a Oscar en su chat tal cual.
 
 No hay tarjeta de confirmación aquí: si usas enviar_banco_ahora, enviar_vacante_ahora o mover_candidato_crm, la acción se ejecuta al instante (prender Agent Candidatic para esta etiqueta ya fue la autorización de Oscar).`;
 }
@@ -128,6 +129,11 @@ const ATTEND_TOOLS = [
         name: 'pedir_ayuda',
         description: 'No hay skill clara o no sabes qué hacer: pregúntale a Oscar en vez de improvisar. NO manda nada al candidato.',
         input_schema: { type: 'object', properties: { pregunta: { type: 'string', description: 'Tu duda, en una frase clara.' } }, required: ['pregunta'] }
+    },
+    {
+        name: 'marcar_gol',
+        description: 'Marca que CUMPLISTE el objetivo real de la skill para este candidato (no solo "mandé un mensaje" — el objetivo de verdad, ej. "confirmó su asistencia"). Úsala SOLO cuando de verdad se cumplió en este momento; la mayoría de las veces todavía no aplica porque el objetivo depende de una respuesta futura del candidato. No la uses "por cumplir" — si tienes duda, no la marques.',
+        input_schema: { type: 'object', properties: { razon: { type: 'string', description: 'En una frase: qué objetivo se cumplió y por qué.' } }, required: ['razon'] }
     }
 ];
 
@@ -167,6 +173,7 @@ export async function attendLiveCandidate(candidateId, tag) {
     if (entryBefore.status !== 'pending' && !staleAttending) return;
 
     await updateQueueEntryStatus(candidateId, { status: 'attending' });
+    const startedAt = Date.now(); // para "tiempo atendiendo" acumulado (métrica), no confundir con completedAt
 
     let candidate = null;
     try {
@@ -188,6 +195,8 @@ export async function attendLiveCandidate(candidateId, tag) {
         let actedSomething = false;
         let askedHelp = false;
         let helpQuestion = '';
+        let goalMarked = false;
+        let goalReason = '';
 
         while (response.stop_reason === 'tool_use' && loops < MAX_TOOL_LOOPS) {
             loops++;
@@ -216,6 +225,10 @@ export async function attendLiveCandidate(candidateId, tag) {
                     askedHelp = true;
                     helpQuestion = block.input?.pregunta || '';
                     result = 'Anotado — se le mostrará a Oscar en su chat.';
+                } else if (block.name === 'marcar_gol') {
+                    goalMarked = true;
+                    goalReason = block.input?.razon || '';
+                    result = '⚽ Gol registrado.';
                 } else {
                     result = 'Herramienta desconocida.';
                 }
@@ -243,8 +256,14 @@ export async function attendLiveCandidate(candidateId, tag) {
             });
             await updateQueueEntryStatus(candidateId, { status: 'waiting', note: finalText });
         } else {
-            await pushLiveFeed({ kind: 'action', text: finalText || 'Atendido según la skill.', candidateId, candidateName, tag });
-            await updateQueueEntryStatus(candidateId, { status: 'done', note: finalText });
+            await recordAttended();
+            if (goalMarked) await recordGoal();
+            await pushLiveFeed({
+                kind: goalMarked ? 'goal' : 'action',
+                text: goalMarked ? `⚽ ¡Gol! ${goalReason || finalText}` : (finalText || 'Atendido según la skill.'),
+                candidateId, candidateName, tag
+            });
+            await updateQueueEntryStatus(candidateId, { status: 'done', note: finalText, goal: goalMarked });
         }
     } catch (e) {
         console.error('[AGENT-ATTEND] attendLiveCandidate:', e?.message);
@@ -254,5 +273,8 @@ export async function attendLiveCandidate(candidateId, tag) {
             candidateId, candidateName: candidate?.nombreReal || candidate?.nombre || candidateId, tag
         }).catch(() => {});
         await updateQueueEntryStatus(candidateId, { status: 'error', note: e.message });
+    } finally {
+        // Se suma en TODOS los casos (éxito, duda o error) — el tiempo se gastó igual.
+        await recordAttendingDuration(Date.now() - startedAt).catch(() => {});
     }
 }

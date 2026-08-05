@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Loader2, Power, Search, Users, Tag as TagIcon, Check, X, Clock, CheckCircle2, HelpCircle, XCircle } from 'lucide-react';
+import { Loader2, Power, Search, Users, Tag as TagIcon, Check, X, Clock, CheckCircle2, HelpCircle, XCircle, Trash2 } from 'lucide-react';
 import { agentIAFetch } from './api';
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -79,6 +79,14 @@ const Mascot = ({ on, waking }) => (
 
 const POLL_MS = 4000;
 
+// ms → "Xh Ym" (o "Ym" si dura menos de 1h). Usado para las métricas acumuladas.
+function formatDuration(ms) {
+    const totalMin = Math.floor((ms || 0) / 60000);
+    const h = Math.floor(totalMin / 60);
+    const m = totalMin % 60;
+    return h > 0 ? `${h}h ${m}m` : `${m}m`;
+}
+
 // Status por candidato en la cola (lo va poniendo el motor de agent-attend.js).
 const QUEUE_STATUS_META = {
     pending: { icon: Clock, className: 'text-gray-400', title: 'En espera' },
@@ -88,9 +96,12 @@ const QUEUE_STATUS_META = {
     error: { icon: XCircle, className: 'text-red-500', title: 'Error — revisa el chat del agente' }
 };
 
+const EMPTY_STATS = { totalAttended: 0, totalGoals: 0, totalAttendingMs: 0, totalAwakeMs: 0 };
+
 const LiveAgentPanel = ({ reloadKey = 0, onSelectCandidate, selectedId }) => {
     const [state, setState] = useState({ on: false, since: 0, tags: [] });
     const [queue, setQueue] = useState([]);
+    const [stats, setStats] = useState(EMPTY_STATS);
     const [availableTags, setAvailableTags] = useState([]);
     const [loading, setLoading] = useState(true);
     const [busy, setBusy] = useState(false);
@@ -99,6 +110,9 @@ const LiveAgentPanel = ({ reloadKey = 0, onSelectCandidate, selectedId }) => {
     const [tagSearch, setTagSearch] = useState('');
     const [err, setErr] = useState('');
     const [waking, setWaking] = useState(false);
+    const [confirmClearAll, setConfirmClearAll] = useState(false);
+    const [clearing, setClearing] = useState(false);
+    const [removingId, setRemovingId] = useState(null);
     const prevOnRef = useRef(false);
 
     const applyData = useCallback((data) => {
@@ -109,8 +123,28 @@ const LiveAgentPanel = ({ reloadKey = 0, onSelectCandidate, selectedId }) => {
             prevOnRef.current = data.state.on;
         }
         if (Array.isArray(data?.queue)) setQueue(data.queue);
+        if (data?.stats) setStats(data.stats);
         if (Array.isArray(data?.availableTags)) setAvailableTags(data.availableTags);
     }, []);
+
+    const clearAll = async () => {
+        setClearing(true); setErr('');
+        try {
+            const data = await agentIAFetch('/api/agent-ia/live-agent', { method: 'POST', body: { action: 'clear' } });
+            if (Array.isArray(data.queue)) setQueue(data.queue);
+            setConfirmClearAll(false);
+            if (onSelectCandidate) onSelectCandidate(null); // por si apuntaba a algo que se acaba de vaciar
+        } catch (e) { setErr(e.message); } finally { setClearing(false); }
+    };
+
+    const removeCandidate = async (candidateId) => {
+        setRemovingId(candidateId); setErr('');
+        try {
+            const data = await agentIAFetch('/api/agent-ia/live-agent', { method: 'POST', body: { action: 'remove', candidateId } });
+            if (Array.isArray(data.queue)) setQueue(data.queue);
+            if (selectedId === candidateId && onSelectCandidate) onSelectCandidate(null);
+        } catch (e) { setErr(e.message); } finally { setRemovingId(null); }
+    };
 
     const fetchState = useCallback(async () => {
         try {
@@ -202,6 +236,26 @@ const LiveAgentPanel = ({ reloadKey = 0, onSelectCandidate, selectedId }) => {
                         {err && <p className="mt-1.5 text-[11px] text-red-500 dark:text-red-400 text-center">{err}</p>}
                     </div>
 
+                    {/* Métricas acumuladas (sobreviven apagar/prender) */}
+                    <div className="px-4 mt-3 grid grid-cols-2 gap-1.5">
+                        <div className="rounded-lg bg-gray-50 dark:bg-gray-900/30 px-2 py-1.5 text-center" title="Candidatos que el motor terminó de atender">
+                            <div className="text-[15px] font-bold text-gray-800 dark:text-gray-100">{stats.totalAttended}</div>
+                            <div className="text-[9px] text-gray-400 uppercase tracking-wide">Atendidos</div>
+                        </div>
+                        <div className="rounded-lg bg-gray-50 dark:bg-gray-900/30 px-2 py-1.5 text-center" title="Veces que el agente juzgó que cumplió el objetivo real de la skill">
+                            <div className="text-[15px] font-bold text-gray-800 dark:text-gray-100">⚽ {stats.totalGoals}</div>
+                            <div className="text-[9px] text-gray-400 uppercase tracking-wide">Goles</div>
+                        </div>
+                        <div className="rounded-lg bg-gray-50 dark:bg-gray-900/30 px-2 py-1.5 text-center" title="Tiempo real que el motor pasó procesando candidatos">
+                            <div className="text-[13px] font-bold text-gray-800 dark:text-gray-100">{formatDuration(stats.totalAttendingMs)}</div>
+                            <div className="text-[9px] text-gray-400 uppercase tracking-wide">Atendiendo</div>
+                        </div>
+                        <div className="rounded-lg bg-gray-50 dark:bg-gray-900/30 px-2 py-1.5 text-center" title="Tiempo acumulado con el toggle prendido">
+                            <div className="text-[13px] font-bold text-gray-800 dark:text-gray-100">{formatDuration(stats.totalAwakeMs)}</div>
+                            <div className="text-[9px] text-gray-400 uppercase tracking-wide">Despierto</div>
+                        </div>
+                    </div>
+
                     {/* Selector de etiquetas (al prender) */}
                     {picking && !state.on && (
                         <div className="mx-4 mt-3 rounded-xl border border-orange-200 dark:border-orange-800 bg-orange-50/50 dark:bg-orange-900/10 p-3">
@@ -265,7 +319,23 @@ const LiveAgentPanel = ({ reloadKey = 0, onSelectCandidate, selectedId }) => {
                         <div className="px-4 mt-3">
                             <div className="flex items-center gap-1.5 text-[11px] font-semibold text-gray-500 dark:text-gray-400 mb-1.5">
                                 <Users className="w-3.5 h-3.5" /> {state.on ? 'En cola de atención' : 'Último turno de atención'}
-                                <span className="ml-auto text-orange-600 dark:text-orange-400">{queue.length}</span>
+                                <span className="text-orange-600 dark:text-orange-400">{queue.length}</span>
+                                {queue.length > 0 && (
+                                    <div className="ml-auto">
+                                        {confirmClearAll ? (
+                                            <span className="inline-flex items-center gap-1.5 normal-case font-normal">
+                                                <button onClick={clearAll} disabled={clearing} className="text-[10px] font-semibold text-red-500 hover:text-red-600 disabled:opacity-50">
+                                                    {clearing ? <Loader2 className="w-3 h-3 animate-spin inline" /> : 'Sí, vaciar'}
+                                                </button>
+                                                <button onClick={() => setConfirmClearAll(false)} disabled={clearing} className="text-[10px] text-gray-400 hover:text-gray-500">Cancelar</button>
+                                            </span>
+                                        ) : (
+                                            <button onClick={() => setConfirmClearAll(true)} title="Vaciar toda la cola" className="text-gray-300 dark:text-gray-600 hover:text-red-500 transition-colors">
+                                                <Trash2 className="w-3.5 h-3.5" />
+                                            </button>
+                                        )}
+                                    </div>
+                                )}
                             </div>
                             <div className="rounded-lg border border-gray-100 dark:border-gray-700 divide-y divide-gray-100 dark:divide-gray-700/60 overflow-hidden">
                                 {queue.length === 0 ? (
@@ -274,18 +344,28 @@ const LiveAgentPanel = ({ reloadKey = 0, onSelectCandidate, selectedId }) => {
                                     const meta = QUEUE_STATUS_META[c.status] || QUEUE_STATUS_META.pending;
                                     const StatusIcon = meta.icon;
                                     return (
-                                        <button
+                                        <div
                                             key={c.id || i}
-                                            onClick={() => onSelectCandidate && onSelectCandidate(c)}
-                                            title={c.note ? `${meta.title}: ${c.note}` : meta.title}
-                                            className={`w-full flex items-center gap-2 px-2.5 py-1.5 text-left transition-colors ${
-                                                selectedId === c.id ? 'bg-orange-50 dark:bg-orange-900/20' : 'hover:bg-black/5 dark:hover:bg-white/5'
-                                            }`}
+                                            className={`flex items-center transition-colors ${selectedId === c.id ? 'bg-orange-50 dark:bg-orange-900/20' : ''}`}
                                         >
-                                            <span className="w-5 h-5 rounded-full bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 text-[10px] font-bold flex items-center justify-center shrink-0">{i + 1}</span>
-                                            <span className="text-[12px] text-gray-800 dark:text-gray-100 truncate flex-1">{c.name}</span>
-                                            <StatusIcon className={`w-3.5 h-3.5 shrink-0 ${meta.className}`} />
-                                        </button>
+                                            <button
+                                                onClick={() => onSelectCandidate && onSelectCandidate(c)}
+                                                title={c.note ? `${meta.title}: ${c.note}` : meta.title}
+                                                className="flex-1 min-w-0 flex items-center gap-2 px-2.5 py-1.5 text-left hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+                                            >
+                                                <span className="w-5 h-5 rounded-full bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 text-[10px] font-bold flex items-center justify-center shrink-0">{i + 1}</span>
+                                                <span className="text-[12px] text-gray-800 dark:text-gray-100 truncate flex-1">{c.name}{c.goal ? ' ⚽' : ''}</span>
+                                                <StatusIcon className={`w-3.5 h-3.5 shrink-0 ${meta.className}`} />
+                                            </button>
+                                            <button
+                                                onClick={() => removeCandidate(c.id)}
+                                                disabled={removingId === c.id}
+                                                title="Quitar de la cola"
+                                                className="shrink-0 p-1.5 mr-1 rounded text-gray-300 dark:text-gray-600 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 disabled:opacity-50 transition-colors"
+                                            >
+                                                {removingId === c.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                                            </button>
+                                        </div>
                                     );
                                 })}
                             </div>

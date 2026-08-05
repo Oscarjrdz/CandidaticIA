@@ -28,7 +28,7 @@ import {
     upsertSkill,
     AGENT_MODEL
 } from '../utils/agent-ia.js';
-import { setAgentLiveState, getAgentLiveState, getLiveQueue } from '../utils/agent-candidatic.js';
+import { setAgentLiveState, getAgentLiveState, getLiveQueue, getLiveStats } from '../utils/agent-candidatic.js';
 import { getProjectsOverview, getProjectDetail, moveCandidateToProject } from '../utils/agent-crm.js';
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -247,7 +247,7 @@ const TOOLS = [
     },
     {
         name: 'ver_cola_agent_candidatic',
-        description: 'Consulta el estado de "Agent Candidatic": si está prendido o apagado, para qué etiqueta(s), y la LISTA de candidatos que van llegando a la cola para ser atendidos (con su status: en espera / atendiendo / atendido / duda / error). Solo lectura. Úsala cuando el usuario pregunte "quién está en la cola", "quién falta por atender", "cómo va el agente en vivo" o similar.',
+        description: 'Consulta el estado de "Agent Candidatic": si está prendido o apagado, para qué etiqueta(s), la LISTA de candidatos en la cola con su status (en espera / atendiendo / atendido / duda / error, y si marcó gol ⚽), y sus MÉTRICAS acumuladas (candidatos atendidos, goles, tiempo atendiendo, tiempo despierto). Solo lectura. Úsala cuando pregunten "quién está en la cola", "cómo va el agente en vivo", "cuántos ha atendido" o "cuánto tiempo lleva despierto".',
         input_schema: { type: 'object', properties: {}, required: [] }
     },
     {
@@ -565,18 +565,19 @@ export default async function handler(req, res) {
                         result = 'Agent Candidatic APAGADO. El toggle del panel se desactivó y ya no se atiende ninguna etiqueta.';
                     }
                 } else if (block.name === 'ver_cola_agent_candidatic') {
-                    const state = await getAgentLiveState();
-                    const queue = await getLiveQueue();
+                    const [state, queue, stats] = await Promise.all([getAgentLiveState(), getLiveQueue(), getLiveStats()]);
                     const estadoStr = state.on
                         ? `PRENDIDO para: ${state.tags.join(', ')} (desde ${new Date(state.since).toLocaleString('es-MX')})`
                         : 'APAGADO';
+                    const fmtMin = (ms) => `${Math.round(ms / 60000)}min`;
+                    const metricsStr = `Métricas: ${stats.totalAttended} atendidos, ${stats.totalGoals} goles, ${fmtMin(stats.totalAttendingMs)} atendiendo, ${fmtMin(stats.totalAwakeMs)} despierto.`;
                     if (!queue.length) {
-                        result = `Estado: ${estadoStr}.\nCola: vacía (nadie ha llegado a atender todavía).`;
+                        result = `Estado: ${estadoStr}.\n${metricsStr}\nCola: vacía (nadie ha llegado a atender todavía).`;
                     } else {
                         const STATUS_LABEL = { pending: 'en espera', attending: 'atendiendo…', done: 'atendido', waiting: 'duda — revisa el feed', error: 'error' };
-                        const lines = queue.slice(0, 40).map((c, i) => `${i + 1}. ${c.name} — ${STATUS_LABEL[c.status] || 'en espera'}${c.note ? ` (${c.note})` : ''}`);
+                        const lines = queue.slice(0, 40).map((c, i) => `${i + 1}. ${c.name}${c.goal ? ' ⚽' : ''} — ${STATUS_LABEL[c.status] || 'en espera'}${c.note ? ` (${c.note})` : ''}`);
                         const extra = queue.length > 40 ? `\n(mostrando 40 de ${queue.length})` : '';
-                        result = `Estado: ${estadoStr}.\nCola (${queue.length}):\n${lines.join('\n')}${extra}`;
+                        result = `Estado: ${estadoStr}.\n${metricsStr}\nCola (${queue.length}):\n${lines.join('\n')}${extra}`;
                     }
                 } else if (block.name === 'listar_vacantes') {
                     const names = await getVacancyNames();
