@@ -28,7 +28,7 @@ import {
     upsertSkill,
     AGENT_MODEL
 } from '../utils/agent-ia.js';
-import { setAgentLiveState } from '../utils/agent-candidatic.js';
+import { setAgentLiveState, getAgentLiveState, getLiveQueue } from '../utils/agent-candidatic.js';
 import { getProjectsOverview, getProjectDetail, moveCandidateToProject } from '../utils/agent-crm.js';
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -243,6 +243,11 @@ const TOOLS = [
     {
         name: 'apagar_agent_candidatic',
         description: 'Apaga el modo de atención automática en vivo ("Agent Candidatic"). Úsala cuando el usuario diga "ya volví", "apaga el agente", "deja de atender", etc.',
+        input_schema: { type: 'object', properties: {}, required: [] }
+    },
+    {
+        name: 'ver_cola_agent_candidatic',
+        description: 'Consulta el estado de "Agent Candidatic": si está prendido o apagado, para qué etiqueta(s), y la LISTA de candidatos que van llegando a la cola para ser atendidos (con su status: en espera / atendiendo / atendido / duda / error). Solo lectura. Úsala cuando el usuario pregunte "quién está en la cola", "quién falta por atender", "cómo va el agente en vivo" o similar.',
         input_schema: { type: 'object', properties: {}, required: [] }
     },
     {
@@ -549,7 +554,7 @@ export default async function handler(req, res) {
                         result = r.error;
                     } else {
                         agentLiveUpdated = true;
-                        result = `Agent Candidatic PRENDIDO para: ${r.state.tags.join(', ')}. El toggle del panel se activó. De ahora en adelante, los candidatos que se completen de esas etiquetas entran a la cola de atención. (Nota: el motor de auto-envío se conecta en el siguiente paso; por ahora esto activa el control y la cola en vivo.)`;
+                        result = `Agent Candidatic PRENDIDO para: ${r.state.tags.join(', ')}. El toggle del panel se activó. De ahora en adelante, los candidatos que se completen de esas etiquetas entran a la cola y el motor los atiende automáticamente según su skill (o pregunta si no sabe qué hacer). No es retroactivo: candidatos que ya estaban completos ANTES de este momento no entran.`;
                     }
                 } else if (block.name === 'apagar_agent_candidatic') {
                     const r = await setAgentLiveState({ on: false });
@@ -558,6 +563,20 @@ export default async function handler(req, res) {
                     } else {
                         agentLiveUpdated = true;
                         result = 'Agent Candidatic APAGADO. El toggle del panel se desactivó y ya no se atiende ninguna etiqueta.';
+                    }
+                } else if (block.name === 'ver_cola_agent_candidatic') {
+                    const state = await getAgentLiveState();
+                    const queue = await getLiveQueue();
+                    const estadoStr = state.on
+                        ? `PRENDIDO para: ${state.tags.join(', ')} (desde ${new Date(state.since).toLocaleString('es-MX')})`
+                        : 'APAGADO';
+                    if (!queue.length) {
+                        result = `Estado: ${estadoStr}.\nCola: vacía (nadie ha llegado a atender todavía).`;
+                    } else {
+                        const STATUS_LABEL = { pending: 'en espera', attending: 'atendiendo…', done: 'atendido', waiting: 'duda — revisa el feed', error: 'error' };
+                        const lines = queue.slice(0, 40).map((c, i) => `${i + 1}. ${c.name} — ${STATUS_LABEL[c.status] || 'en espera'}${c.note ? ` (${c.note})` : ''}`);
+                        const extra = queue.length > 40 ? `\n(mostrando 40 de ${queue.length})` : '';
+                        result = `Estado: ${estadoStr}.\nCola (${queue.length}):\n${lines.join('\n')}${extra}`;
                     }
                 } else if (block.name === 'listar_vacantes') {
                     const names = await getVacancyNames();

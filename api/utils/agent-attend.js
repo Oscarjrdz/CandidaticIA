@@ -22,6 +22,17 @@
  * Envíos SIN tarjeta de confirmación: prender el toggle de Agent Candidatic para una
  * etiqueta YA ES la autorización (mismo criterio que el viejo agent-katcon, que
  * auto-enviaba en cuanto Oscar prendía su toggle).
+ *
+ * RIESGO DE SERVERLESS (confirmado en producción, agosto 2026): esta función se llama
+ * SIN await desde api/ai/agent.js (fire-and-forget, para no retrasar la respuesta al
+ * candidato). Eso significa que corre en la MISMA invocación serverless que procesó el
+ * webhook de WhatsApp — y Vercel puede congelar la función en cuanto se manda esa
+ * respuesta, sin garantía de que esta promesa termine. Cuando eso pasa, el candidato
+ * queda con status 'attending' para siempre. Por eso el guard de abajo NO usa un candado
+ * permanente (SADD): usa el status de la cola, para que api/cron/agent-candidatic.js
+ * (cada 15 min, mismo patrón que el backstop de agent-katcon) pueda reintentar lo que
+ * se quedó a medias — esa corrida del cron NO compite por tiempo con el webhook, así
+ * que sí alcanza a terminar.
  */
 import { getRedisClient, getCandidateById, updateCandidate } from './storage.js';
 import {
@@ -40,11 +51,11 @@ import {
 import { moveCandidateToProject } from './agent-crm.js';
 import { sendMessageBundleTo } from './agent-send.js';
 import { pushLiveFeed } from './agent-live-feed.js';
-import { updateQueueEntryStatus } from './agent-candidatic.js';
+import { updateQueueEntryStatus, getLiveQueue } from './agent-candidatic.js';
 
-const ATTEND_CLAIM_SET = 'agent-ia:live_attended:v1'; // candidatos ya procesados (una sola vez)
 const MAX_TOOL_LOOPS = 5;
 const MAX_TOKENS = 1200;
+const STALE_ATTENDING_MS = 3 * 60 * 1000; // "attending" más viejo que esto = se quedó a medias, se puede reintentar
 
 function extractText(content) {
     if (!Array.isArray(content)) return '';
@@ -142,9 +153,18 @@ export async function attendLiveCandidate(candidateId, tag) {
     const redis = getRedisClient();
     if (!redis || !hasAnthropicKey()) return;
 
-    // Claim atómico: una sola vez por candidato (evita dobles disparos por carreras).
-    const claimed = await redis.sadd(ATTEND_CLAIM_SET, candidateId);
-    if (!claimed) return;
+    // Guard basado en el status de la cola (no un candado permanente): solo procesa si
+    // sigue 'pending' (nunca arrancó) o quedó 'attending' colgado (la llamada anterior
+    // se cortó — típicamente porque Vercel congeló la función justo después de responder
+    // el webhook de WhatsApp, ya que esta llamada corre sin await). Esto es lo que permite
+    // que el CRON de respaldo (api/cron/agent-candidatic.js) reintente lo que se atoró.
+    // 'done' / 'waiting' / 'error' son terminales — no se reintentan solos.
+    const queueBefore = await getLiveQueue();
+    const entryBefore = queueBefore.find((q) => q.id === candidateId);
+    if (!entryBefore) return; // ya no está en la cola (se limpió, o se re-prendió el toggle)
+    const staleAttending = entryBefore.status === 'attending'
+        && (Date.now() - new Date(entryBefore.updatedAt || entryBefore.completedAt).getTime()) > STALE_ATTENDING_MS;
+    if (entryBefore.status !== 'pending' && !staleAttending) return;
 
     await updateQueueEntryStatus(candidateId, { status: 'attending' });
 
@@ -234,6 +254,5 @@ export async function attendLiveCandidate(candidateId, tag) {
             candidateId, candidateName: candidate?.nombreReal || candidate?.nombre || candidateId, tag
         }).catch(() => {});
         await updateQueueEntryStatus(candidateId, { status: 'error', note: e.message });
-        await redis.srem(ATTEND_CLAIM_SET, candidateId).catch(() => {}); // permitir reintento futuro
     }
 }

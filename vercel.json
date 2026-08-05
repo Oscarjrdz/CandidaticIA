@@ -126,6 +126,9 @@
         },
         "api/cron/agent-katcon.js": {
             "maxDuration": 60
+        },
+        "api/cron/agent-candidatic.js": {
+            "maxDuration": 60
         }
     },
     "crons": [
@@ -139,6 +142,10 @@
         },
         {
             "path": "/api/cron/agent-katcon",
+            "schedule": "*/15 * * * *"
+        },
+        {
+            "path": "/api/cron/agent-candidatic",
             "schedule": "*/15 * * * *"
         }
     ]
