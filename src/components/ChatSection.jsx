@@ -4855,7 +4855,13 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                                                 });
                                                 const data = await res.json();
                                                 if (data.success && data.candidate) {
-                                                    setSelectedChat(data.candidate);
+                                                    // handleSelectChat (no setSelectedChat directo): resetea mensajes,
+                                                    // caché y draft del chat anterior — sin esto, el chat que tenías
+                                                    // abierto se quedaba con los mensajes viejos bajo el nombre nuevo.
+                                                    handleSelectChat(data.candidate);
+                                                    if (!candidates.some(c => c.id === data.candidate.id)) {
+                                                        setCandidates(prev => [data.candidate, ...prev]);
+                                                    }
                                                     setNewChatPhone('');
                                                     setNewChatName('');
                                                     setShowNewChat(false);
