@@ -18,7 +18,7 @@
  * devuelve null y los endpoints responden un aviso claro (no se rompen).
  */
 import Anthropic from '@anthropic-ai/sdk';
-import { getUsers, validateAdminSession, getRedisClient, getCandidateByPhone } from './storage.js';
+import { getUsers, validateAdminSession, getRedisClient, getCandidateByPhone, getMessages } from './storage.js';
 
 // Modelo del agente. Se eligió Haiku 4.5 por costo: ~5x más barato que Opus
 // ($1/$5 vs $5/$25 por millón), suficiente para acciones repetidas (tool use +
@@ -281,6 +281,52 @@ export async function findCandidateByPhone(telefono) {
         console.error('Error in findCandidateByPhone:', err);
         return { error: 'No pude buscar el candidato en este momento.' };
     }
+}
+
+// Transcripción legible de la conversación de WhatsApp de UN candidato (por teléfono).
+// Reusa getMessages (mismo dato que ve /api/chat en el Chat Web) — así el agente puede
+// leer qué se han dicho antes de responder preguntas o decidir una acción.
+export async function getCandidateChatTranscript(telefono, limite = 40) {
+    const found = await findCandidateByPhone(telefono);
+    if (found?.error) return { error: found.error };
+    if (found?.notFound) return { error: `No encontré ningún candidato con el teléfono ${found.telefono || telefono}.` };
+
+    const c = found.candidate;
+    const maxLimit = Math.min(100, Math.max(1, Number(limite) || 40));
+    let messages;
+    try {
+        messages = await getMessages(c.id, maxLimit);
+    } catch (err) {
+        console.error('Error in getCandidateChatTranscript:', err);
+        return { error: 'No pude leer el chat en este momento.' };
+    }
+
+    if (!Array.isArray(messages) || !messages.length) {
+        return { candidate: c, transcript: '(sin mensajes)' };
+    }
+
+    const sorted = [...messages].sort((a, b) => {
+        const ta = new Date(a.timestamp || a.fecha || 0).getTime();
+        const tb = new Date(b.timestamp || b.fecha || 0).getTime();
+        return ta - tb;
+    });
+
+    const who = (m) => (m.from === 'me' ? 'Reclutador' : (m.from === 'bot' ? 'Brenda (bot)' : c.name));
+    const kindNote = (m) => {
+        const kind = m.type || m.tipo || (m.mediaUrl ? 'image' : 'text');
+        if (kind === 'image') return '[imagen]';
+        if (kind === 'audio') return m.voice ? '[nota de voz]' : '[audio]';
+        if (kind === 'location') return '[ubicación]';
+        return '';
+    };
+    const transcript = sorted.map((m) => {
+        const time = (m.timestamp || m.fecha || '').slice(0, 16).replace('T', ' ');
+        const note = kindNote(m);
+        const text = m.content ? m.content : (note || '(vacío)');
+        return `[${time}] ${who(m)}: ${text}${m.content && note ? ` ${note}` : ''}`;
+    }).join('\n');
+
+    return { candidate: c, transcript, count: sorted.length };
 }
 
 // Lista detallada (id, nombre completo, WhatsApp) de candidatos filtrados por etiqueta/estado/no-leídos
@@ -915,6 +961,7 @@ export async function assembleSystemPrompt() {
         '- `contar_candidatos`: consulta y filtra candidatos por estado (completos/incompletos), etiqueta (ej. "Yageo") y/o no leídos (burbujas sin responder). Permite consultas cruzadas como "cuántos completos con etiqueta Yageo están no leídos". Lectura barata de intersecciones de Sets en Redis (SINTER O(N)); no escanea ni gasta tokens.\n' +
         '- `listar_candidatos`: obtiene la lista detallada (nombre completo y WhatsApp) de los candidatos filtrados (etiqueta, estado, no leídos) hasta el límite indicado. Úsala cuando el usuario pida ver la lista de candidatos o sus teléfonos.\n' +
         '- `buscar_candidato`: busca UN candidato por su número de teléfono/WhatsApp y devuelve su nombre completo y datos de perfil. Úsala cuando el usuario diga "busca al candidato 8116038195" o similar.\n' +
+        '- `leer_chat_candidato`: lee la conversación real de WhatsApp de un candidato (quién dijo qué, en orden). Úsala cuando el usuario pida ver/resumir qué le dijo un candidato, o antes de decidir qué responderle.\n' +
         '- `proponer_envio_banco`: propón enviar un mensaje del Banco de Respuestas (ej. "Punto Yageo") a candidatos. NO envía de inmediato: genera una tarjeta de confirmación en el chat con los botones Confirmar Envíos / Cancelar. Para UN solo candidato, pasa su `telefono` (ej. después de buscarlo). Para una LISTA, usa los mismos filtros (etiqueta/estado/no_leidos) con los que la listaste. Úsala cuando el usuario pida enviar o mandar un mensaje del banco.\n' +
         '- `contar_etiquetas`: las etiquetas de Candidatic CON su cantidad de candidatos (y cuántos sin etiqueta). Sirve también para saber qué etiquetas existen. Lectura barata; NO inventes nombres ni números.\n' +
         '- `contar_altas`: cuántos candidatos LLEGARON (se dieron de alta) en una fecha/rango (hoy, ayer, esta semana, este mes, o fechas explícitas). Lectura barata de contadores diarios.\n' +

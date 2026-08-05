@@ -10,6 +10,7 @@ import {
     getCrossedCandidateCounts,
     getDetailedCandidatesList,
     findCandidateByPhone,
+    getCandidateChatTranscript,
     proposeQuickReplyBulkSend,
     buildDateKeys,
     getCapturesTotal,
@@ -297,6 +298,18 @@ const TOOLS = [
             type: 'object',
             properties: {
                 telefono: { type: 'string', description: 'Número de teléfono/WhatsApp del candidato (ej. "8116038195").' }
+            },
+            required: ['telefono']
+        }
+    },
+    {
+        name: 'leer_chat_candidato',
+        description: 'Lee la conversación real de WhatsApp de UN candidato (lo que se han dicho, en orden, con quién habló: Brenda, el reclutador o el candidato). Úsala cuando el usuario pida ver/revisar qué le dijo un candidato, resumir una conversación, o antes de decidir qué responderle. Tolera prefijos de México igual que buscar_candidato.',
+        input_schema: {
+            type: 'object',
+            properties: {
+                telefono: { type: 'string', description: 'Número de teléfono/WhatsApp del candidato (ej. "8116038195").' },
+                limite: { type: 'number', description: 'Máximo de mensajes recientes a traer (por defecto 40, tope 100).' }
             },
             required: ['telefono']
         }
@@ -626,6 +639,15 @@ export default async function handler(req, res) {
                             c.etiquetas.length ? `Etiquetas: ${c.etiquetas.join(', ')}` : null
                         ].filter(Boolean).join('\n');
                         result = `Candidato encontrado:\n${datos}`;
+                    }
+                } else if (block.name === 'leer_chat_candidato') {
+                    const r = await getCandidateChatTranscript(block.input?.telefono || '', block.input?.limite);
+                    if (r.error) {
+                        result = r.error;
+                    } else if (r.transcript === '(sin mensajes)') {
+                        result = `${r.candidate.name} (${r.candidate.phone}) todavía no tiene mensajes.`;
+                    } else {
+                        result = `Conversación con ${r.candidate.name} (${r.candidate.phone}) — ${r.count} mensaje(s):\n\n${r.transcript}`;
                     }
                 } else if (block.name === 'proponer_envio_banco') {
                     const input = block.input || {};
