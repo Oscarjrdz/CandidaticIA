@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback, useDeferredValue } from 'react';
 import ConfirmModal from './ui/ConfirmModal';
-import { MapPin, List as ListIcon, ShoppingBag, UserSquare, MousePointerClick, Search, MessageSquare, Plus, Smile, Paperclip, Mic, Square, ArrowLeft, Send, Tag, Pencil, Check, X, Trash2, Briefcase, Kanban, BookOpen, Keyboard, Loader2, Edit2, Reply, Zap, Pin, MessageCirclePlus, Phone, User, Bell, GripVertical, ChevronDown, ChevronUp, Snowflake } from 'lucide-react';
+import { MapPin, List as ListIcon, ShoppingBag, UserSquare, MousePointerClick, Search, MessageSquare, Plus, Smile, Paperclip, Mic, Square, ArrowLeft, Send, Tag, Pencil, Check, X, Trash2, Briefcase, Kanban, BookOpen, Keyboard, Loader2, Edit2, Reply, Zap, Pin, MessageCirclePlus, Phone, User, Bell, GripVertical, ChevronDown, ChevronUp, Snowflake, LayoutTemplate } from 'lucide-react';
 import { getCandidates, getCandidateById, blockCandidate, deleteCandidate } from '../services/candidatesService';
 import { substituteVariables } from '../../api/utils/shortcuts.js';
 import ManualProjectsSidepanel from './ManualProjectsSidepanel';
@@ -792,6 +792,11 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
     const [replyingToMsg, setReplyingToMsg] = useState(null);
     const [profileModalCandidate, setProfileModalCandidate] = useState(null);
     const [reminderModalCandidate, setReminderModalCandidate] = useState(null);
+    // Plantillas de recordatorio (creadas desde CandidateReminderModal) para envío de 1 clic
+    const [reminderTemplates, setReminderTemplates] = useState([]);
+    const reminderTemplatesLoadedRef = useRef(false);
+    const [reminderTemplateMenuOpen, setReminderTemplateMenuOpen] = useState(false);
+    const [applyingReminderTemplateId, setApplyingReminderTemplateId] = useState(null);
     // 🎨 Styled Confirm Modal (replaces ugly window.confirm)
     const [confirmModal, setConfirmModal] = useState(null);
 
@@ -1494,6 +1499,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
             loadVacanciesList();
             loadManualProjects();
             loadQuickReplies();
+            loadReminderTemplates();
 
             fetch('/api/whatsapp/templates')
                 .then(res => res.json())
@@ -1546,6 +1552,75 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
             }
         } catch (e) {
             console.error('Error fetching manual projects', e);
+        }
+    };
+
+    // Plantillas de recordatorio loader
+    const loadReminderTemplates = async () => {
+        if (reminderTemplatesLoadedRef.current) return;
+        reminderTemplatesLoadedRef.current = true;
+        try {
+            const res = await fetch('/api/reminder-templates');
+            const data = await res.json();
+            if (data.success) setReminderTemplates(data.templates || []);
+        } catch (e) {
+            reminderTemplatesLoadedRef.current = false;
+            console.error('Error loading reminder templates', e);
+        }
+    };
+
+    // Aplica una plantilla de recordatorio con un clic: programa el recordatorio de
+    // inmediato para el candidato abierto, sin pasar por el modal completo.
+    const handleApplyReminderTemplate = async (tpl) => {
+        if (!selectedChat) return;
+        setApplyingReminderTemplateId(tpl.id);
+        setReminderTemplateMenuOpen(false);
+        try {
+            const nombre = selectedChat.nombreReal || selectedChat.nombre || selectedChat.whatsapp;
+            const sendAt = new Date();
+            sendAt.setDate(sendAt.getDate() + (Number(tpl.dayOffset) || 0));
+            const [hours, minutes] = String(tpl.timeOfDay || '07:00').split(':').map(Number);
+            sendAt.setHours(hours || 0, minutes || 0, 0, 0);
+            // Si el offset guardado ya quedó en el pasado (ej. "mismo día" aplicado después
+            // de esa hora), se corre un día para que siga siendo una fecha futura válida.
+            if (sendAt.getTime() <= Date.now() + 60000) {
+                sendAt.setDate(sendAt.getDate() + 1);
+            }
+
+            let fallbackTemplateData = null;
+            let fallbackTemplateParams = null;
+            if (tpl.fallbackTemplateName) {
+                const match = metaTemplates.find(t => t.name === tpl.fallbackTemplateName && t.language === tpl.fallbackTemplateLanguage);
+                if (match) {
+                    const firstName = String(nombre || '').trim().split(/\s+/)[0] || 'Candidato';
+                    fallbackTemplateData = match;
+                    fallbackTemplateParams = { candidato: firstName, nombre: firstName, name: firstName, 1: firstName };
+                }
+            }
+
+            const res = await fetch('/api/candidate-reminders', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    candidateId: selectedChat.id,
+                    whatsapp: selectedChat.whatsapp,
+                    nombre,
+                    message: substituteVariables(tpl.message, selectedChat),
+                    scheduledAt: sendAt.toISOString(),
+                    fallbackTemplateData,
+                    fallbackTemplateParams,
+                }),
+            });
+            const data = await res.json();
+            if (!res.ok) {
+                showToast && showToast(data.error || 'Error al programar el recordatorio', 'error');
+                return;
+            }
+            showToast && showToast(`Recordatorio "${tpl.name}" programado`, 'success');
+        } catch (e) {
+            showToast && showToast('Error de red al programar el recordatorio', 'error');
+        } finally {
+            setApplyingReminderTemplateId(null);
         }
     };
 
@@ -1770,6 +1845,13 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
     useEffect(() => {
         if (showQuickRepliesPanel) loadQuickReplies();
     }, [showQuickRepliesPanel]);
+
+    useEffect(() => {
+        if (!reminderTemplateMenuOpen) return;
+        const closeMenu = () => setReminderTemplateMenuOpen(false);
+        document.addEventListener('click', closeMenu);
+        return () => document.removeEventListener('click', closeMenu);
+    }, [reminderTemplateMenuOpen]);
 
     // HIGH-3: Clean up typing indicator timers on unmount to prevent state updates on unmounted component
     useEffect(() => {
@@ -5076,6 +5158,45 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                                     >
                                         <Bell className="w-5 h-5" />
                                     </button>
+                                    {reminderTemplates.length > 0 && (
+                                        <div className="relative">
+                                            <button
+                                                type="button"
+                                                onClick={(e) => { e.stopPropagation(); setReminderTemplateMenuOpen(v => !v); }}
+                                                className={`p-2 rounded-full text-[#54656f] dark:text-[#aebac1] hover:text-violet-500 dark:hover:text-violet-400 hover:bg-black/5 dark:hover:bg-white/5 transition-colors ${reminderTemplateMenuOpen ? 'bg-black/5 dark:bg-white/5 text-violet-500 dark:text-violet-400' : ''}`}
+                                                title="Enviar plantilla de recordatorio"
+                                                aria-label="Enviar plantilla de recordatorio"
+                                            >
+                                                <LayoutTemplate className="w-5 h-5" />
+                                            </button>
+                                            {reminderTemplateMenuOpen && (
+                                                <div
+                                                    onClick={(e) => e.stopPropagation()}
+                                                    className="absolute right-0 top-full mt-1 w-64 bg-white dark:bg-[#202c33] rounded-lg shadow-xl z-50 border border-gray-100 dark:border-gray-700 overflow-hidden"
+                                                >
+                                                    <div className="px-3 py-2 text-xs font-bold text-[#8696a0] border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-[#111b21]">
+                                                        Plantillas de recordatorio
+                                                    </div>
+                                                    <div className="max-h-72 overflow-y-auto">
+                                                        {reminderTemplates.map(tpl => (
+                                                            <button
+                                                                key={tpl.id}
+                                                                type="button"
+                                                                onClick={() => handleApplyReminderTemplate(tpl)}
+                                                                disabled={applyingReminderTemplateId === tpl.id}
+                                                                className="w-full text-left px-3 py-2.5 hover:bg-violet-50 dark:hover:bg-violet-900/20 transition-colors disabled:opacity-50"
+                                                            >
+                                                                <span className="block text-sm font-bold text-slate-800 dark:text-slate-100 truncate">{tpl.name}</span>
+                                                                <span className="block text-[10px] text-slate-400 dark:text-slate-500 truncate">
+                                                                    {applyingReminderTemplateId === tpl.id ? 'Programando...' : tpl.message}
+                                                                </span>
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
                                 </div>
                                 );
                             })()}

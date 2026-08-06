@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { X, Bell, Trash2, Clock, Send, ChevronDown, Check } from 'lucide-react';
+import { X, Bell, Trash2, Clock, Send, ChevronDown, Check, Save, LayoutTemplate } from 'lucide-react';
 import { renderMetaTemplatePreviewText } from '../utils/metaTemplatePreview';
+import { substituteVariables } from '../../api/utils/shortcuts.js';
 
 const API = '/api/candidate-reminders';
+const TEMPLATES_API = '/api/reminder-templates';
 
 function formatLocalDatetime(isoStr) {
     if (!isoStr) return '';
@@ -27,6 +29,34 @@ function defaultDatetime() {
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T07:00`;
 }
 
+// Convierte un "YYYY-MM-DDTHH:MM" (datetime-local, hora local) en { dayOffset, timeOfDay }
+// relativos al momento actual, para que una plantilla sea reutilizable en cualquier día
+// (no guarda una fecha absoluta, que quedaría vencida en el segundo uso).
+function toRelativeOffset(scheduledAtLocal) {
+    const target = new Date(scheduledAtLocal);
+    const now = new Date();
+    const targetDateOnly = new Date(target.getFullYear(), target.getMonth(), target.getDate());
+    const nowDateOnly = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const dayOffset = Math.max(0, Math.round((targetDateOnly - nowDateOnly) / 86400000));
+    const pad = n => String(n).padStart(2, '0');
+    return { dayOffset, timeOfDay: `${pad(target.getHours())}:${pad(target.getMinutes())}` };
+}
+
+// Inverso de toRelativeOffset: reconstruye un "YYYY-MM-DDTHH:MM" a partir de un offset
+// relativo, anclado al momento en que se aplica la plantilla.
+function fromRelativeOffset(dayOffset, timeOfDay) {
+    const d = new Date();
+    d.setDate(d.getDate() + (Number(dayOffset) || 0));
+    const [hours, minutes] = String(timeOfDay || '07:00').split(':').map(Number);
+    d.setHours(hours || 0, minutes || 0, 0, 0);
+    const pad = n => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function makeTemplateId() {
+    return `rt_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+}
+
 const CandidateReminderModal = ({ candidate, onClose }) => {
     const [reminders, setReminders] = useState([]);
     const [templates, setTemplates] = useState([]);
@@ -42,6 +72,13 @@ const CandidateReminderModal = ({ candidate, onClose }) => {
     const [templateMenuOpen, setTemplateMenuOpen] = useState(false);
     const [templateMenuPosition, setTemplateMenuPosition] = useState(null);
     const templateButtonRef = useRef(null);
+
+    // Plantillas de recordatorio (reutilizables, guardadas por el reclutador)
+    const [savedTemplates, setSavedTemplates] = useState([]);
+    const [creatingTemplate, setCreatingTemplate] = useState(false);
+    const [newTemplateName, setNewTemplateName] = useState('');
+    const [savingTemplate, setSavingTemplate] = useState(false);
+    const [deletingTemplateId, setDeletingTemplateId] = useState(null);
 
     const nombre = candidate.nombreReal || candidate.nombre || candidate.whatsapp;
     const firstName = String(nombre || '').trim().split(/\s+/)[0] || 'Candidato';
@@ -116,6 +153,13 @@ const CandidateReminderModal = ({ candidate, onClose }) => {
             .finally(() => setTemplatesLoading(false));
     }, []);
 
+    useEffect(() => {
+        fetch(TEMPLATES_API)
+            .then(res => res.json())
+            .then(data => setSavedTemplates(data.success ? (data.templates || []) : []))
+            .catch(() => setSavedTemplates([]));
+    }, []);
+
     const handleCreate = async () => {
         if (!message.trim() || !scheduledAt) return;
         setSaving(true);
@@ -158,6 +202,75 @@ const CandidateReminderModal = ({ candidate, onClose }) => {
             alert('Error al cancelar');
         } finally {
             setDeleting(null);
+        }
+    };
+
+    const handleSaveTemplate = async () => {
+        const name = newTemplateName.trim();
+        if (!name || !message.trim() || !scheduledAt) return;
+        setSavingTemplate(true);
+        try {
+            const { dayOffset, timeOfDay } = toRelativeOffset(scheduledAt);
+            const newTemplate = {
+                id: makeTemplateId(),
+                name,
+                message: message.trim(),
+                dayOffset,
+                timeOfDay,
+                fallbackTemplateName: selectedTemplate?.name || null,
+                fallbackTemplateLanguage: selectedTemplate?.language || null,
+                createdAt: new Date().toISOString(),
+            };
+            const updated = [...savedTemplates, newTemplate];
+            const res = await fetch(TEMPLATES_API, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ templates: updated }),
+            });
+            if (!res.ok) {
+                const d = await res.json();
+                alert(d.error || 'Error al guardar la plantilla');
+                return;
+            }
+            setSavedTemplates(updated);
+            setNewTemplateName('');
+            setCreatingTemplate(false);
+        } catch {
+            alert('Error de red al guardar la plantilla');
+        } finally {
+            setSavingTemplate(false);
+        }
+    };
+
+    const handleUseTemplate = (tpl) => {
+        setMessage(substituteVariables(tpl.message, candidate));
+        setScheduledAt(fromRelativeOffset(tpl.dayOffset, tpl.timeOfDay));
+        if (tpl.fallbackTemplateName) {
+            const match = templates.find(t => t.name === tpl.fallbackTemplateName && t.language === tpl.fallbackTemplateLanguage);
+            setFallbackTemplateId(match ? match.id : '');
+        } else {
+            setFallbackTemplateId('');
+        }
+    };
+
+    const handleDeleteTemplate = async (id) => {
+        setDeletingTemplateId(id);
+        try {
+            const updated = savedTemplates.filter(t => t.id !== id);
+            const res = await fetch(TEMPLATES_API, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ templates: updated }),
+            });
+            if (!res.ok) {
+                alert('Error al eliminar la plantilla');
+                return;
+            }
+            setSavedTemplates(updated);
+        } catch {
+            alert('Error de red al eliminar la plantilla');
+        } finally {
+            setDeletingTemplateId(null);
         }
     };
 
@@ -298,7 +411,90 @@ const CandidateReminderModal = ({ candidate, onClose }) => {
                             <Send className="w-3.5 h-3.5" />
                             {saving ? 'Programando...' : 'Programar mensaje'}
                         </button>
+
+                        {!creatingTemplate ? (
+                            <button
+                                type="button"
+                                onClick={() => { setCreatingTemplate(true); setNewTemplateName(''); }}
+                                disabled={!message.trim() || !scheduledAt}
+                                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-violet-500 hover:bg-violet-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold text-sm transition-colors shadow-md shadow-violet-500/20"
+                            >
+                                <Save className="w-3.5 h-3.5" />
+                                Crear plantilla con esta configuración
+                            </button>
+                        ) : (
+                            <div className="flex items-center gap-2 p-2 rounded-xl border border-violet-200 dark:border-violet-800 bg-violet-50/70 dark:bg-violet-900/10">
+                                <input
+                                    autoFocus
+                                    type="text"
+                                    value={newTemplateName}
+                                    onChange={e => setNewTemplateName(e.target.value)}
+                                    onKeyDown={e => {
+                                        if (e.key === 'Enter') handleSaveTemplate();
+                                        if (e.key === 'Escape') setCreatingTemplate(false);
+                                    }}
+                                    placeholder="Nombre de la plantilla"
+                                    className="flex-1 min-w-0 bg-white dark:bg-slate-800 border border-violet-200 dark:border-violet-700 rounded-lg px-2.5 py-1.5 text-sm outline-none focus:ring-2 focus:ring-violet-400 text-slate-800 dark:text-slate-200 placeholder-slate-400"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={handleSaveTemplate}
+                                    disabled={!newTemplateName.trim() || savingTemplate}
+                                    className="px-3 py-1.5 rounded-lg bg-violet-500 hover:bg-violet-600 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-bold transition-colors shrink-0"
+                                >
+                                    {savingTemplate ? 'Guardando...' : 'Guardar'}
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setCreatingTemplate(false)}
+                                    className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors shrink-0"
+                                    title="Cancelar"
+                                >
+                                    <X className="w-4 h-4" />
+                                </button>
+                            </div>
+                        )}
                     </div>
+
+                    {/* Plantillas guardadas */}
+                    {savedTemplates.length > 0 && (
+                        <div className="space-y-2">
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                                <LayoutTemplate className="w-3 h-3" />
+                                Plantillas guardadas
+                            </p>
+                            {savedTemplates.map(t => (
+                                <div key={t.id} className="flex items-start gap-3 p-3 rounded-2xl bg-violet-50 dark:bg-violet-900/10 border border-violet-100 dark:border-violet-800/30">
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-xs font-bold text-violet-700 dark:text-violet-400 truncate">{t.name}</p>
+                                        <p className="text-xs text-slate-600 dark:text-slate-300 mt-0.5 leading-relaxed line-clamp-2">{t.message}</p>
+                                        <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1">
+                                            {t.dayOffset === 0 ? 'Mismo día' : `+${t.dayOffset} día${t.dayOffset === 1 ? '' : 's'}`} · {t.timeOfDay}
+                                            {t.fallbackTemplateName && ` · Template 24h: ${t.fallbackTemplateName.replace(/_/g, ' ')}`}
+                                        </p>
+                                    </div>
+                                    <div className="flex items-center gap-1 shrink-0">
+                                        <button
+                                            type="button"
+                                            onClick={() => handleUseTemplate(t)}
+                                            className="px-2.5 py-1.5 rounded-lg bg-violet-500 hover:bg-violet-600 text-white text-[11px] font-bold transition-colors"
+                                        >
+                                            Usar
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => handleDeleteTemplate(t.id)}
+                                            disabled={deletingTemplateId === t.id}
+                                            className="p-1.5 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                                            title="Eliminar plantilla"
+                                        >
+                                            <Trash2 className="w-3.5 h-3.5" />
+                                        </button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
 
                     {/* Pending list */}
                     {!loading && pendingReminders.length > 0 && (
