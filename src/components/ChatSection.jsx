@@ -1555,9 +1555,11 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         }
     };
 
-    // Plantillas de recordatorio loader
-    const loadReminderTemplates = async () => {
-        if (reminderTemplatesLoadedRef.current) return;
+    // Plantillas de recordatorio loader. `force` re-consulta aunque ya se haya cargado
+    // antes — se usa al cerrar CandidateReminderModal, porque ahí es donde el reclutador
+    // pudo haber creado/borrado una plantilla y el header necesita enterarse sin recargar.
+    const loadReminderTemplates = async (force = false) => {
+        if (reminderTemplatesLoadedRef.current && !force) return;
         reminderTemplatesLoadedRef.current = true;
         try {
             const res = await fetch('/api/reminder-templates');
@@ -6428,7 +6430,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
             {reminderModalCandidate && (
                 <CandidateReminderModal
                     candidate={reminderModalCandidate}
-                    onClose={() => setReminderModalCandidate(null)}
+                    onClose={() => { setReminderModalCandidate(null); loadReminderTemplates(true); }}
                 />
             )}
         </div>

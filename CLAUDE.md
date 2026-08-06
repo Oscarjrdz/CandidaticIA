@@ -8,7 +8,7 @@ Plataforma de reclutamiento por WhatsApp. Un bot con IA ("Brenda") conversa con 
 - **Backend:** Funciones serverless de Vercel bajo `api/` (cada archivo `.js` con `export default` es un endpoint).
 - **Base de datos:** Redis (vía `ioredis`) — **es la única fuente de verdad**, no hay SQL. Todo son llaves/valores, sets, sorted sets, hashes y listas.
 - **Canal principal:** WhatsApp vía Meta Cloud API (`api/whatsapp/webhook.js`). También soporta Messenger (`api/messenger/webhook.js`) y un legado de UltraMsg.
-- **Deploy:** manual — `git push origin main` seguido de `vercel --prod`. No hay CI/CD automático en push (confirmado: dos pushes seguidos sin `vercel --prod` no despliegan nada nuevo).
+- **Deploy:** Vercel tiene integración automática con GitHub — `git push origin main` por sí solo ya dispara un deployment a producción. **Nunca corras `vercel --prod` después de un push**: generan dos builds duplicados del mismo commit en paralelo (confirmado 2026-08-06 en el dashboard de Vercel). Si por lo que sea el auto-deploy no dispara, usa `vercel --prod` como alternativa — pero nunca ambos.
 - **Plan de Vercel:** soporta `maxDuration` de al menos 120s (confirmado en julio 2026 al subirlo de 60 a 120 sin que el deploy fallara).
 
 ## Estructura de carpetas clave
@@ -110,6 +110,5 @@ El botón flotante `FloatingCopilot.jsx` (burbuja "Brenda IA" en el dashboard, p
 git add <archivos específicos>
 git commit -m "..."
 git fetch origin main   # confirmar que no hay commits nuevos de otra sesión (Codex corre en paralelo a veces)
-git push origin main
-vercel --prod
+git push origin main    # esto YA despliega a producción — no corras vercel --prod después
 ```
