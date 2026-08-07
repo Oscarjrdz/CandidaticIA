@@ -362,6 +362,13 @@ export default async function handler(req, res) {
 
     try {
         const system = await assembleSystemPrompt();
+        // Caché de prompts: AGENTS.md + MEMORY.md + skills + la descripción de las
+        // ~20 tools (bloque "HERRAMIENTAS") es idéntico en casi todos los turnos y
+        // entre distintos SuperAdmins — solo cambia cuando alguien edita AGENTS.md,
+        // aprueba una memoria, o crea/edita una skill. El breakpoint va en el ÚLTIMO
+        // bloque de system: cachea TOOLS + system juntos (tools se renderiza antes
+        // que system, y el prefijo cacheado cubre todo lo anterior al breakpoint).
+        const systemBlocks = [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }];
         const messages = [...normalizeHistory(req.body?.history), { role: 'user', content: message }];
 
         let agentsUpdated = false;      // el agente editó AGENTS.md este turno
@@ -371,6 +378,8 @@ export default async function handler(req, res) {
         let agentLiveUpdated = false;   // el agente prendió/apagó Agent Candidatic este turno (refresca el panel)
         const memoryProposals = [];     // propuestas de memoria de este turno: {id, text}
         let usageTokens = 0;
+        let usageCacheRead = 0;
+        let usageCacheCreation = 0;
         let toolCalls = 0;
 
         let response = await client.messages.create({
@@ -378,11 +387,13 @@ export default async function handler(req, res) {
             max_tokens: MAX_TOKENS,
             // Sin thinking ni output_config: Haiku 4.5 no los soporta, y omitir el
             // razonamiento abarata cada acción (menos tokens de salida).
-            system,
+            system: systemBlocks,
             tools: TOOLS,
             messages
         });
         usageTokens += (response.usage?.input_tokens || 0) + (response.usage?.output_tokens || 0);
+        usageCacheRead += response.usage?.cache_read_input_tokens || 0;
+        usageCacheCreation += response.usage?.cache_creation_input_tokens || 0;
 
         let loops = 0;
         while (response.stop_reason === 'tool_use' && loops < MAX_TOOL_LOOPS) {
@@ -721,15 +732,17 @@ export default async function handler(req, res) {
                 model: AGENT_MODEL,
                 max_tokens: MAX_TOKENS,
                 // Sin thinking ni output_config (ver arriba): Haiku 4.5 + más barato.
-                system,
+                system: systemBlocks,
                 tools: TOOLS,
                 messages
             });
             usageTokens += (response.usage?.input_tokens || 0) + (response.usage?.output_tokens || 0);
+            usageCacheRead += response.usage?.cache_read_input_tokens || 0;
+            usageCacheCreation += response.usage?.cache_creation_input_tokens || 0;
         }
 
         if (response.stop_reason === 'refusal') {
-            return res.status(200).json({ success: true, reply: 'No puedo ayudar con eso en este momento.', model: response.model, usageTokens, agentsUpdated, skillsUpdated, memoryProposals, memoryProposed: memoryProposals.length });
+            return res.status(200).json({ success: true, reply: 'No puedo ayudar con eso en este momento.', model: response.model, usageTokens, usageCacheRead, usageCacheCreation, agentsUpdated, skillsUpdated, memoryProposals, memoryProposed: memoryProposals.length });
         }
 
         return res.status(200).json({
@@ -737,6 +750,8 @@ export default async function handler(req, res) {
             reply: extractText(response.content) || '(sin respuesta)',
             model: response.model,
             usageTokens,
+            usageCacheRead,       // tokens servidos desde caché este turno (~0.1x costo) — 0 en el primer mensaje de cada ventana de 5 min
+            usageCacheCreation,   // tokens escritos a caché este turno (~1.25x costo, se paga una vez por ventana)
             toolCalls,
             agentsUpdated,                       // la UI refresca AGENTS.md si true
             skillsUpdated,                       // la UI refresca el panel de Skills si true
