@@ -15,6 +15,7 @@ import {
     buildDateKeys,
     getCapturesTotal,
     getCapturesByTag,
+    getCapturesByAllTags,
     getActiveCandidates,
     resolveTagName,
     getQuickReplyNames,
@@ -151,16 +152,16 @@ const TOOLS = [
     },
     {
         name: 'contar_altas_etiqueta',
-        description: 'Cuántos candidatos de UNA etiqueta llegaron en una fecha o rango (ej. "cuántos de Yageo llegaron hoy"). Lectura BARATA. El conteo por etiqueta y día se registra desde que se activó la función, así que fechas muy anteriores pueden salir en 0.',
+        description: 'Cuántos candidatos llegaron en una fecha o rango, desglosado por etiqueta (ej. "cuántos de Yageo llegaron hoy", o "desglósame las altas de hoy por etiqueta"). Si mandas `etiqueta`, da el total de esa etiqueta. Si la OMITES, da el desglose de TODAS las etiquetas en una sola llamada — úsala así para "por etiqueta" sin nombrar una en específico, en vez de llamar esta tool una vez por cada etiqueta. Lectura BARATA. El conteo por etiqueta y día se registra desde que se activó la función, así que fechas muy anteriores pueden salir en 0.',
         input_schema: {
             type: 'object',
             properties: {
-                etiqueta: { type: 'string', description: 'Nombre de la etiqueta (ej. "Yageo" o "Anuncio Yageo").' },
+                etiqueta: { type: 'string', description: 'Nombre de la etiqueta (ej. "Yageo" o "Anuncio Yageo"). Opcional: si se omite, responde el desglose de todas las etiquetas.' },
                 rango: { type: 'string', enum: ['hoy', 'ayer', 'semana', 'mes'], description: 'Atajo de rango. Por defecto "hoy".' },
                 desde: { type: 'string', description: 'Fecha inicio explícita YYYY-MM-DD (opcional).' },
                 hasta: { type: 'string', description: 'Fecha fin explícita YYYY-MM-DD (opcional).' }
             },
-            required: ['etiqueta']
+            required: []
         }
     },
     {
@@ -474,13 +475,23 @@ export default async function handler(req, res) {
                     const total = await getCapturesTotal(keys);
                     result = `Candidatos que llegaron ${label}: ${total}.`;
                 } else if (block.name === 'contar_altas_etiqueta') {
-                    const canonical = await resolveTagName(block.input?.etiqueta || '');
-                    if (!canonical) {
-                        result = `No encontré una etiqueta que coincida con "${block.input?.etiqueta || ''}". Usa contar_etiquetas para ver los nombres reales.`;
+                    const { keys, label } = buildDateKeys(block.input || {});
+                    if (!block.input?.etiqueta) {
+                        const breakdown = await getCapturesByAllTags(keys);
+                        if (!breakdown.length) {
+                            result = 'No hay etiquetas configuradas en Candidatic.';
+                        } else {
+                            const lines = breakdown.map((t) => `- ${t.name}: ${t.total}`);
+                            result = `Altas ${label} por etiqueta:\n${lines.join('\n')}\n(Nota: el conteo por etiqueta y día se registra desde que se activó esta función; fechas muy anteriores pueden salir en 0.)`;
+                        }
                     } else {
-                        const { keys, label } = buildDateKeys(block.input || {});
-                        const total = await getCapturesByTag(canonical, keys);
-                        result = `Candidatos con la etiqueta "${canonical}" que llegaron ${label}: ${total}. (Nota: el conteo por etiqueta y día se registra desde que se activó esta función; fechas muy anteriores pueden salir en 0.)`;
+                        const canonical = await resolveTagName(block.input.etiqueta);
+                        if (!canonical) {
+                            result = `No encontré una etiqueta que coincida con "${block.input.etiqueta}". Usa contar_etiquetas para ver los nombres reales.`;
+                        } else {
+                            const total = await getCapturesByTag(canonical, keys);
+                            result = `Candidatos con la etiqueta "${canonical}" que llegaron ${label}: ${total}. (Nota: el conteo por etiqueta y día se registra desde que se activó esta función; fechas muy anteriores pueden salir en 0.)`;
+                        }
                     }
                 } else if (block.name === 'candidatos_activos') {
                     const mins = Math.min(180, Math.max(1, Number(block.input?.minutos) || 30));

@@ -1780,6 +1780,17 @@ export const updateCandidate = async (id, data) => {
                 const p = tc.pipeline();
                 added.forEach(t => p.hincrby('candidatic:tag_counts', t, 1));
                 removed.forEach(t => p.hincrby('candidatic:tag_counts', t, -1));
+                // Altas por ETIQUETA y día (para "cuántos de Yageo llegaron hoy"), sumado
+                // también aquí y no solo al crearse (ver saveCandidate): en la práctica las
+                // etiquetas de anuncio se asignan en un updateCandidate() posterior a la
+                // creación, así que el contador de creación casi nunca las veía — quedaba
+                // en 0 aunque el candidato sí tuviera la etiqueta. Se cuenta el día en que
+                // se ASIGNA la etiqueta (no el de creación del candidato), mismo pipeline
+                // ya en vuelo — no agrega ninguna llamada extra a Redis.
+                if (added.length) {
+                    const tagDateKey = new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Monterrey' });
+                    added.forEach(t => p.hincrby(`stats:daily:captures:tag:${t}`, tagDateKey, 1));
+                }
                 if (wasUntagged && !isUntagged) {
                     p.eval(
                         "local current = tonumber(redis.call('GET', KEYS[1]) or '0'); if current > 0 then return redis.call('DECR', KEYS[1]); end; return current;",

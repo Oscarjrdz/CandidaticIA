@@ -637,6 +637,32 @@ export async function getCapturesByTag(tagName, dateKeys) {
     }
 }
 
+// Desglose de altas por TODAS las etiquetas en esas fechas, en una sola pasada
+// (un pipeline, no N llamadas). Usa los nombres definidos que ya expone
+// getTagCounts (candidatic:chat_tags + contadores vivos), mismo criterio que
+// contar_etiquetas — así que también salen etiquetas con 0 altas en el rango.
+export async function getCapturesByAllTags(dateKeys) {
+    const redis = getRedisClient();
+    if (!redis || !dateKeys?.length) return [];
+    const data = await getTagCounts();
+    const names = (data?.tags || []).map((t) => t.name);
+    if (!names.length) return [];
+    try {
+        const pipeline = redis.pipeline();
+        names.forEach((name) => pipeline.hmget(`stats:daily:captures:tag:${name}`, ...dateKeys));
+        const results = await pipeline.exec();
+        return names
+            .map((name, i) => {
+                const vals = results[i]?.[1] || [];
+                const total = vals.reduce((s, v) => s + (parseInt(v, 10) || 0), 0);
+                return { name, total };
+            })
+            .sort((a, b) => b.total - a.total);
+    } catch {
+        return [];
+    }
+}
+
 // Candidatos ACTIVOS ahora mismo (completándose en vivo). BARATO: activity:tracker
 // es un sorted-set por timestamp de última actividad; se lee por RANGO de score
 // (acotado con LIMIT), se cruza con stats:list:pending (SISMEMBER, O(1)) para saber
@@ -965,7 +991,7 @@ export async function assembleSystemPrompt() {
         '- `proponer_envio_banco`: propón enviar un mensaje del Banco de Respuestas (ej. "Punto Yageo") a candidatos. NO envía de inmediato: genera una tarjeta de confirmación en el chat con los botones Confirmar Envíos / Cancelar. Para UN solo candidato, pasa su `telefono` (ej. después de buscarlo). Para una LISTA, usa los mismos filtros (etiqueta/estado/no_leidos) con los que la listaste. Úsala cuando el usuario pida enviar o mandar un mensaje del banco.\n' +
         '- `contar_etiquetas`: las etiquetas de Candidatic CON su cantidad de candidatos (y cuántos sin etiqueta). Sirve también para saber qué etiquetas existen. Lectura barata; NO inventes nombres ni números.\n' +
         '- `contar_altas`: cuántos candidatos LLEGARON (se dieron de alta) en una fecha/rango (hoy, ayer, esta semana, este mes, o fechas explícitas). Lectura barata de contadores diarios.\n' +
-        '- `contar_altas_etiqueta`: cuántos candidatos de UNA etiqueta llegaron en una fecha/rango (ej. "cuántos de Yageo llegaron hoy"). El conteo por etiqueta y día se registra desde que se activó esta función, así que fechas muy anteriores pueden salir en 0.\n' +
+        '- `contar_altas_etiqueta`: altas en una fecha/rango, por etiqueta. Con `etiqueta` da el total de esa etiqueta (ej. "cuántos de Yageo llegaron hoy"). SIN `etiqueta` da el desglose de TODAS las etiquetas en una sola llamada — úsala así para "desglósame las altas de hoy por etiqueta", nunca la llames una vez por cada etiqueta. El conteo por etiqueta y día se registra desde que se activó esta función, así que fechas muy anteriores pueden salir en 0.\n' +
         '- `candidatos_activos`: quiénes están ACTIVOS ahora mismo (actividad reciente) y cuántos siguen INCOMPLETOS (completándose en vivo), con una muestra de nombres y hace cuánto. Úsala para "quién se está completando ahorita".\n' +
         '- `listar_respuestas_banco`: consulta los nombres reales de las respuestas del Banco de Respuestas (plantillas que los reclutadores mandan a los candidatos). Úsala cuando el usuario pregunte qué respuestas de banco hay. NO las inventes.\n' +
         '- `leer_respuesta_banco`: abre el CONTENIDO completo de una respuesta del banco por su nombre (su texto exacto, tipo, cuántas imágenes, si lleva ubicación o audio). Úsala cuando el usuario quiera ver qué dice una respuesta, o antes de proponer editarla.\n' +
