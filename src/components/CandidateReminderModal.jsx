@@ -279,7 +279,7 @@ const CandidateReminderModal = ({ candidate, onClose }) => {
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={onClose}>
-            <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl w-full max-w-xl max-h-[90vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
 
                 {/* Header */}
                 <div className="flex items-center justify-between p-5 border-b border-slate-100 dark:border-slate-800 flex-shrink-0">
@@ -312,148 +312,153 @@ const CandidateReminderModal = ({ candidate, onClose }) => {
                                 className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 text-sm font-medium focus:ring-2 focus:ring-amber-400 outline-none text-slate-800 dark:text-slate-200"
                             />
                         </div>
-                        <div className="space-y-1">
-                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Mensaje para {firstName}</label>
-                            <textarea
-                                rows={3}
-                                value={message}
-                                onChange={e => setMessage(e.target.value)}
-                                placeholder={`Ej: Hola ${firstName}, recuerda que tu entrevista es hoy a las 9:00am 🌟`}
-                                className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-amber-400 outline-none resize-none text-slate-800 dark:text-slate-200 placeholder-slate-400"
-                            />
-                        </div>
-                        <div className="space-y-2 rounded-2xl border border-emerald-100 dark:border-emerald-900/40 bg-emerald-50/70 dark:bg-emerald-900/10 p-3">
-                            <div>
-                                <label className="text-[10px] font-black text-emerald-700 dark:text-emerald-400 uppercase tracking-widest">Elige un template para ventana de 24 horas expirada</label>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-start">
+                            <div className="space-y-1 min-w-0">
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Mensaje para {firstName}</label>
+                                <textarea
+                                    rows={4}
+                                    value={message}
+                                    onChange={e => setMessage(e.target.value)}
+                                    placeholder={`Ej: Hola ${firstName}, recuerda que tu entrevista es hoy a las 9:00am 🌟`}
+                                    className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-amber-400 outline-none resize-none text-slate-800 dark:text-slate-200 placeholder-slate-400"
+                                />
                             </div>
-                            <div className="relative">
-                                <button
-                                    ref={templateButtonRef}
-                                    type="button"
-                                    onClick={() => {
-                                        const next = !templateMenuOpen;
-                                        if (next) updateTemplateMenuPosition();
-                                        setTemplateMenuOpen(next);
-                                    }}
-                                    disabled={templatesLoading}
-                                    className="w-full min-h-[46px] bg-white dark:bg-slate-800 border border-emerald-200 dark:border-emerald-800 rounded-xl px-3 py-2.5 text-sm font-bold text-left text-slate-800 dark:text-slate-200 flex items-center justify-between gap-3 shadow-sm hover:border-emerald-300 dark:hover:border-emerald-700 focus:ring-2 focus:ring-emerald-400 outline-none transition-all disabled:opacity-70"
-                                >
-                                    <span className="truncate">{templateButtonLabel}</span>
-                                    <ChevronDown className={`w-4 h-4 text-slate-400 shrink-0 transition-transform duration-200 ${templateMenuOpen ? 'rotate-180' : ''}`} />
-                                </button>
-
-                                {templateMenuOpen && templateMenuPosition && (
-                                    <div
-                                        className="fixed z-[80] overflow-hidden rounded-xl border border-emerald-100 dark:border-emerald-900/50 bg-white dark:bg-slate-900 shadow-2xl shadow-emerald-900/10"
-                                        style={{
-                                            left: templateMenuPosition.left,
-                                            top: templateMenuPosition.top,
-                                            width: templateMenuPosition.width
+                            <div className="space-y-2 rounded-2xl border border-emerald-100 dark:border-emerald-900/40 bg-emerald-50/70 dark:bg-emerald-900/10 p-3 min-w-0">
+                                <div>
+                                    <label className="text-[10px] font-black text-emerald-700 dark:text-emerald-400 uppercase tracking-widest">Template para ventana de 24h expirada</label>
+                                </div>
+                                <div className="relative">
+                                    <button
+                                        ref={templateButtonRef}
+                                        type="button"
+                                        onClick={() => {
+                                            const next = !templateMenuOpen;
+                                            if (next) updateTemplateMenuPosition();
+                                            setTemplateMenuOpen(next);
                                         }}
+                                        disabled={templatesLoading}
+                                        className="w-full min-h-[46px] bg-white dark:bg-slate-800 border border-emerald-200 dark:border-emerald-800 rounded-xl px-3 py-2.5 text-sm font-bold text-left text-slate-800 dark:text-slate-200 flex items-center justify-between gap-3 shadow-sm hover:border-emerald-300 dark:hover:border-emerald-700 focus:ring-2 focus:ring-emerald-400 outline-none transition-all disabled:opacity-70"
                                     >
-                                        <div className="overflow-y-auto py-1" style={{ maxHeight: templateMenuPosition.maxHeight }}>
-                                            <button
-                                                type="button"
-                                                onClick={() => {
-                                                    setFallbackTemplateId('');
-                                                    setTemplateMenuOpen(false);
-                                                }}
-                                                className="w-full px-3 py-2.5 text-left text-sm font-bold text-slate-700 dark:text-slate-200 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 flex items-center gap-2 transition-colors"
-                                            >
-                                                <Check className={`w-4 h-4 shrink-0 ${!fallbackTemplateId ? 'text-emerald-500' : 'text-transparent'}`} />
-                                                <span className="truncate">Sin template para ventana expirada</span>
-                                            </button>
-                                            {templates.map(t => (
+                                        <span className="truncate">{templateButtonLabel}</span>
+                                        <ChevronDown className={`w-4 h-4 text-slate-400 shrink-0 transition-transform duration-200 ${templateMenuOpen ? 'rotate-180' : ''}`} />
+                                    </button>
+
+                                    {templateMenuOpen && templateMenuPosition && (
+                                        <div
+                                            className="fixed z-[80] overflow-hidden rounded-xl border border-emerald-100 dark:border-emerald-900/50 bg-white dark:bg-slate-900 shadow-2xl shadow-emerald-900/10"
+                                            style={{
+                                                left: templateMenuPosition.left,
+                                                top: templateMenuPosition.top,
+                                                width: templateMenuPosition.width
+                                            }}
+                                        >
+                                            <div className="overflow-y-auto py-1" style={{ maxHeight: templateMenuPosition.maxHeight }}>
                                                 <button
-                                                    key={t.id}
                                                     type="button"
                                                     onClick={() => {
-                                                        setFallbackTemplateId(t.id);
+                                                        setFallbackTemplateId('');
                                                         setTemplateMenuOpen(false);
                                                     }}
-                                                    className="w-full px-3 py-2.5 text-left hover:bg-emerald-50 dark:hover:bg-emerald-900/20 flex items-center gap-2 transition-colors"
+                                                    className="w-full px-3 py-2.5 text-left text-sm font-bold text-slate-700 dark:text-slate-200 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 flex items-center gap-2 transition-colors"
                                                 >
-                                                    <Check className={`w-4 h-4 shrink-0 ${fallbackTemplateId === t.id ? 'text-emerald-500' : 'text-transparent'}`} />
-                                                    <span className="min-w-0">
-                                                        <span className="block truncate text-sm font-bold text-slate-800 dark:text-slate-100">{t.name.replace(/_/g, ' ')}</span>
-                                                        <span className="block text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500">{t.language}</span>
-                                                    </span>
+                                                    <Check className={`w-4 h-4 shrink-0 ${!fallbackTemplateId ? 'text-emerald-500' : 'text-transparent'}`} />
+                                                    <span className="truncate">Sin template para ventana expirada</span>
                                                 </button>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-
-                            <div className={`grid transition-all duration-300 ease-out ${selectedTemplate ? 'grid-rows-[1fr] opacity-100 pt-1' : 'grid-rows-[0fr] opacity-0 pt-0'}`}>
-                                <div className="overflow-hidden">
-                                    {selectedTemplate && (
-                                        <div className="rounded-xl bg-white dark:bg-slate-800 border border-emerald-100 dark:border-emerald-900/40 p-3 space-y-2">
-                                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Vista previa</p>
-                                            <div className="space-y-2">
-                                                <p className="text-xs font-black text-emerald-700 dark:text-emerald-300">
-                                                    {selectedTemplate.name.replace(/_/g, ' ')}
-                                                </p>
-                                                <p className="text-xs text-slate-600 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">
-                                                    {renderMetaTemplatePreviewText(selectedTemplate, { candidato: firstName, nombre: firstName, name: firstName, 1: firstName }, firstName)}
-                                                </p>
+                                                {templates.map(t => (
+                                                    <button
+                                                        key={t.id}
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setFallbackTemplateId(t.id);
+                                                            setTemplateMenuOpen(false);
+                                                        }}
+                                                        className="w-full px-3 py-2.5 text-left hover:bg-emerald-50 dark:hover:bg-emerald-900/20 flex items-center gap-2 transition-colors"
+                                                    >
+                                                        <Check className={`w-4 h-4 shrink-0 ${fallbackTemplateId === t.id ? 'text-emerald-500' : 'text-transparent'}`} />
+                                                        <span className="min-w-0">
+                                                            <span className="block truncate text-sm font-bold text-slate-800 dark:text-slate-100">{t.name.replace(/_/g, ' ')}</span>
+                                                            <span className="block text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500">{t.language}</span>
+                                                        </span>
+                                                    </button>
+                                                ))}
                                             </div>
                                         </div>
                                     )}
                                 </div>
+
+                                <div className={`grid transition-all duration-300 ease-out ${selectedTemplate ? 'grid-rows-[1fr] opacity-100 pt-1' : 'grid-rows-[0fr] opacity-0 pt-0'}`}>
+                                    <div className="overflow-hidden">
+                                        {selectedTemplate && (
+                                            <div className="rounded-xl bg-white dark:bg-slate-800 border border-emerald-100 dark:border-emerald-900/40 p-3 space-y-2">
+                                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Vista previa</p>
+                                                <div className="space-y-2">
+                                                    <p className="text-xs font-black text-emerald-700 dark:text-emerald-300">
+                                                        {selectedTemplate.name.replace(/_/g, ' ')}
+                                                    </p>
+                                                    <p className="text-xs text-slate-600 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">
+                                                        {renderMetaTemplatePreviewText(selectedTemplate, { candidato: firstName, nombre: firstName, name: firstName, 1: firstName }, firstName)}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
                             </div>
                         </div>
-                        <button
-                            onClick={handleCreate}
-                            disabled={!message.trim() || !scheduledAt || saving}
-                            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold text-sm transition-colors shadow-md shadow-amber-500/20"
-                        >
-                            <Send className="w-3.5 h-3.5" />
-                            {saving ? 'Programando...' : 'Programar mensaje'}
-                        </button>
 
-                        {!creatingTemplate ? (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-start">
                             <button
-                                type="button"
-                                onClick={() => { setCreatingTemplate(true); setNewTemplateName(''); }}
-                                disabled={!message.trim() || !scheduledAt}
-                                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-violet-500 hover:bg-violet-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold text-sm transition-colors shadow-md shadow-violet-500/20"
+                                onClick={handleCreate}
+                                disabled={!message.trim() || !scheduledAt || saving}
+                                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold text-sm transition-colors shadow-md shadow-amber-500/20"
                             >
-                                <Save className="w-3.5 h-3.5" />
-                                Crear plantilla con esta configuración
+                                <Send className="w-3.5 h-3.5" />
+                                {saving ? 'Programando...' : 'Programar mensaje'}
                             </button>
-                        ) : (
-                            <div className="flex items-center gap-2 p-2 rounded-xl border border-violet-200 dark:border-violet-800 bg-violet-50/70 dark:bg-violet-900/10">
-                                <input
-                                    autoFocus
-                                    type="text"
-                                    value={newTemplateName}
-                                    onChange={e => setNewTemplateName(e.target.value)}
-                                    onKeyDown={e => {
-                                        if (e.key === 'Enter') handleSaveTemplate();
-                                        if (e.key === 'Escape') setCreatingTemplate(false);
-                                    }}
-                                    placeholder="Nombre de la plantilla"
-                                    className="flex-1 min-w-0 bg-white dark:bg-slate-800 border border-violet-200 dark:border-violet-700 rounded-lg px-2.5 py-1.5 text-sm outline-none focus:ring-2 focus:ring-violet-400 text-slate-800 dark:text-slate-200 placeholder-slate-400"
-                                />
+
+                            {!creatingTemplate ? (
                                 <button
                                     type="button"
-                                    onClick={handleSaveTemplate}
-                                    disabled={!newTemplateName.trim() || savingTemplate}
-                                    className="px-3 py-1.5 rounded-lg bg-violet-500 hover:bg-violet-600 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-bold transition-colors shrink-0"
+                                    onClick={() => { setCreatingTemplate(true); setNewTemplateName(''); }}
+                                    disabled={!message.trim() || !scheduledAt}
+                                    className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-violet-500 hover:bg-violet-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold text-sm transition-colors shadow-md shadow-violet-500/20"
                                 >
-                                    {savingTemplate ? 'Guardando...' : 'Guardar'}
+                                    <Save className="w-3.5 h-3.5" />
+                                    Crear plantilla
                                 </button>
-                                <button
-                                    type="button"
-                                    onClick={() => setCreatingTemplate(false)}
-                                    className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors shrink-0"
-                                    title="Cancelar"
-                                >
-                                    <X className="w-4 h-4" />
-                                </button>
-                            </div>
-                        )}
+                            ) : (
+                                <div className="flex items-center gap-1.5 p-1.5 rounded-xl border border-violet-200 dark:border-violet-800 bg-violet-50/70 dark:bg-violet-900/10 min-w-0">
+                                    <input
+                                        autoFocus
+                                        type="text"
+                                        value={newTemplateName}
+                                        onChange={e => setNewTemplateName(e.target.value)}
+                                        onKeyDown={e => {
+                                            if (e.key === 'Enter') handleSaveTemplate();
+                                            if (e.key === 'Escape') setCreatingTemplate(false);
+                                        }}
+                                        placeholder="Nombre"
+                                        className="flex-1 min-w-0 bg-white dark:bg-slate-800 border border-violet-200 dark:border-violet-700 rounded-lg px-2.5 py-1.5 text-sm outline-none focus:ring-2 focus:ring-violet-400 text-slate-800 dark:text-slate-200 placeholder-slate-400"
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={handleSaveTemplate}
+                                        disabled={!newTemplateName.trim() || savingTemplate}
+                                        className="px-2.5 py-1.5 rounded-lg bg-violet-500 hover:bg-violet-600 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-bold transition-colors shrink-0"
+                                    >
+                                        {savingTemplate ? '...' : 'Guardar'}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setCreatingTemplate(false)}
+                                        className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors shrink-0"
+                                        title="Cancelar"
+                                    >
+                                        <X className="w-4 h-4" />
+                                    </button>
+                                </div>
+                            )}
+                        </div>
                     </div>
 
                     {/* Plantillas guardadas */}
@@ -463,36 +468,38 @@ const CandidateReminderModal = ({ candidate, onClose }) => {
                                 <LayoutTemplate className="w-3 h-3" />
                                 Plantillas guardadas
                             </p>
-                            {savedTemplates.map(t => (
-                                <div key={t.id} className="flex items-start gap-3 p-3 rounded-2xl bg-violet-50 dark:bg-violet-900/10 border border-violet-100 dark:border-violet-800/30">
-                                    <div className="flex-1 min-w-0">
-                                        <p className="text-xs font-bold text-violet-700 dark:text-violet-400 truncate">{t.name}</p>
-                                        <p className="text-xs text-slate-600 dark:text-slate-300 mt-0.5 leading-relaxed line-clamp-2">{t.message}</p>
-                                        <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1">
-                                            {t.dayOffset === 0 ? 'Mismo día' : `+${t.dayOffset} día${t.dayOffset === 1 ? '' : 's'}`} · {t.timeOfDay}
-                                            {t.fallbackTemplateName && ` · Template 24h: ${t.fallbackTemplateName.replace(/_/g, ' ')}`}
-                                        </p>
+                            <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                                {savedTemplates.map(t => (
+                                    <div key={t.id} className="flex items-start gap-3 p-3 rounded-2xl bg-violet-50 dark:bg-violet-900/10 border border-violet-100 dark:border-violet-800/30">
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-xs font-bold text-violet-700 dark:text-violet-400 truncate">{t.name}</p>
+                                            <p className="text-xs text-slate-600 dark:text-slate-300 mt-0.5 leading-relaxed line-clamp-2">{t.message}</p>
+                                            <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1">
+                                                {t.dayOffset === 0 ? 'Mismo día' : `+${t.dayOffset} día${t.dayOffset === 1 ? '' : 's'}`} · {t.timeOfDay}
+                                                {t.fallbackTemplateName && ` · Template 24h: ${t.fallbackTemplateName.replace(/_/g, ' ')}`}
+                                            </p>
+                                        </div>
+                                        <div className="flex items-center gap-1 shrink-0">
+                                            <button
+                                                type="button"
+                                                onClick={() => handleUseTemplate(t)}
+                                                className="px-2.5 py-1.5 rounded-lg bg-violet-500 hover:bg-violet-600 text-white text-[11px] font-bold transition-colors"
+                                            >
+                                                Usar
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => handleDeleteTemplate(t.id)}
+                                                disabled={deletingTemplateId === t.id}
+                                                className="p-1.5 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                                                title="Eliminar plantilla"
+                                            >
+                                                <Trash2 className="w-3.5 h-3.5" />
+                                            </button>
+                                        </div>
                                     </div>
-                                    <div className="flex items-center gap-1 shrink-0">
-                                        <button
-                                            type="button"
-                                            onClick={() => handleUseTemplate(t)}
-                                            className="px-2.5 py-1.5 rounded-lg bg-violet-500 hover:bg-violet-600 text-white text-[11px] font-bold transition-colors"
-                                        >
-                                            Usar
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => handleDeleteTemplate(t.id)}
-                                            disabled={deletingTemplateId === t.id}
-                                            className="p-1.5 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-                                            title="Eliminar plantilla"
-                                        >
-                                            <Trash2 className="w-3.5 h-3.5" />
-                                        </button>
-                                    </div>
-                                </div>
-                            ))}
+                                ))}
+                            </div>
                         </div>
                     )}
 
