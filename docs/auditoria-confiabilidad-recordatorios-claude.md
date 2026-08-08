@@ -3,6 +3,21 @@
 Fecha: 2026-08-07
 Repositorio: Candidatic_IA
 
+> **Actualización 2026-08-08 — `scheduled_reminders` (recordatorios de "proyecto") se eliminó por completo.**
+> Oscar confirmó que ese sistema era código viejo sin uso real: no hay ninguna UI actual para
+> configurarlo (`ScheduledRemindersModal.jsx` estaba huérfano, sin ningún componente que lo
+> importara) — la única forma real de configurar un recordatorio es desde la sección Chat
+> (tarjeta del candidato o menú de arriba del chat), que es exactamente `direct_reminders`.
+> Se borraron `api/utils/reminder-scheduler.js` y `src/components/ScheduledRemindersModal.jsx`
+> completos, y se quitaron sus llamadas en `api/ai/agent.js` y `api/utils/storage.js`.
+> `api/cron/send-reminders.js` ahora solo procesa `direct_reminders`.
+> El hallazgo #1 de abajo (`cancelRemindersForCandidate` nunca se llamaba) y toda mención a
+> `scheduled_reminders`/`ScheduledRemindersModal.jsx` quedan como **registro histórico** de
+> un sistema que ya no existe en el código — no como referencia de algo que sigue activo.
+> Si quedó algo en el ZSET `scheduled_reminders` de Redis de antes de este cambio, ya nadie
+> lo procesa (dato huérfano e inofensivo, no se limpió a propósito para no tocar Redis sin
+> necesidad).
+
 Origen: Oscar aplicó 2 plantillas de recordatorio a su número de prueba (8116038195) el 2026-08-06 y ninguna llegó al aparato, aunque Redis las marcaba `status: "sent"`. Se pidió una auditoría completa del sistema de recordatorios con estándar de confiabilidad alto ("nivel Meta/AAA") porque es crítico para la operación (candidatos citados a entrevista dependen de esto).
 
 Cubre los dos motores que existen — **son el mismo pipeline de envío**, no dos sistemas distintos:

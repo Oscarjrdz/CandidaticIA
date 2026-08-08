@@ -33,7 +33,6 @@ import { FEATURES } from '../utils/feature-flags.js';
 import { AIGuard } from '../utils/ai-guard.js';
 import { Orchestrator } from '../utils/orchestrator.js';
 import { MediaEngine } from '../utils/media-engine.js';
-import { scheduleRemindersForCandidate, cancelRemindersForCandidate } from '../utils/reminder-scheduler.js';
 import { cleanMunicipioWithAI, cleanCategoryWithAI, cleanEscolaridadWithAI } from '../utils/ai.js';
 import { getMissingFields } from '../reengagement-queue.js';
 
@@ -3852,35 +3851,11 @@ ${safeDnaLines}
                         const fromCitados = (currentStep?.name || '').toLowerCase().includes('citado');
                         const toCita = (nextStep?.name || '').toLowerCase().includes('cita') && !nextStep.name.toLowerCase().includes('citado');
                         if (fromCitados && toCita) {
-                            // Cancela los recordatorios de la cita vieja ANTES de que se agende una
-                            // nueva — sin esto, el candidato podía recibir un recordatorio de una
-                            // cita ya cancelada, con la fecha/hora equivocada (bug encontrado en
-                            // auditoría 2026-08-07: cancelRemindersForCandidate existía pero nunca
-                            // se llamaba desde ningún lado).
-                            const oldCitaFecha = candidateData.projectMetadata?.citaFecha;
-                            if (oldCitaFecha) {
-                                cancelRemindersForCandidate(candidateId, oldCitaFecha)
-                                    .catch(e => console.error('[REMINDER] Cancel-on-reset error:', e.message));
-                            }
-
                             if (!candidateUpdates.projectMetadata) {
                                 candidateUpdates.projectMetadata = { ...(candidateData.projectMetadata || {}) };
                             }
                             candidateUpdates.projectMetadata.citaFecha = null;
                             candidateUpdates.projectMetadata.citaHora = null;
-                        }
-
-                        // 🔔 PRE-SCHEDULE REMINDERS: Register reminder timestamps in Redis Sorted Set
-                        // (fire-and-forget — never block the main confirmation flow)
-                        const _metaForReminders = { ...(candidateData.projectMetadata || {}), ...(candidateUpdates.projectMetadata || {}) };
-                        if (nextStep.scheduledReminders?.length && _metaForReminders.citaFecha && _metaForReminders.citaHora) {
-                            scheduleRemindersForCandidate({
-                                candidateId,
-                                projectId: activeProjectId,
-                                stepId: nextStep.id,
-                                citaFecha: _metaForReminders.citaFecha,
-                                citaHora: _metaForReminders.citaHora
-                            }).catch(e => console.error('[REMINDER] Pre-schedule error:', e.message));
                         }
 
                         // 🟢 NEW: Dispatch Appointment Confirmation Sequence regardless of cleanSpeech

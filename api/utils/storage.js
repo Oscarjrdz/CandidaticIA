@@ -1528,15 +1528,10 @@ export const deleteCandidate = async (id) => {
         ];
         await client.del(...stateKeys).catch(() => {});
 
-        // 3b. Cancelar recordatorios pendientes (de proyecto Y directos/plantilla) — un
-        // recordatorio directo es autocontenido (guarda whatsapp/message propios, no
-        // depende de que el candidato exista), así que sin esto un candidato borrado
-        // seguía recibiendo el mensaje de todas formas. Ver auditoría 2026-08-07.
-        try {
-            const { cancelRemindersForCandidate } = await import('./reminder-scheduler.js');
-            await cancelRemindersForCandidate(id); // sin citaFecha = cancela todos los del candidato
-        } catch (_) {}
-
+        // 3b. Cancelar recordatorios directos/plantilla pendientes — son autocontenidos
+        // (guardan whatsapp/message propios, no dependen de que el candidato exista),
+        // así que sin esto un candidato borrado seguía recibiendo el mensaje de todas
+        // formas. Ver auditoría 2026-08-07.
         try {
             const directReminderIds = await client.smembers(`direct_reminders:candidate:${id}`);
             if (directReminderIds.length > 0) {
