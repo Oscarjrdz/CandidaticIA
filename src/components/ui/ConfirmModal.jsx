@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 
 /**
  * 🎨 Candidatic ConfirmModal — Universal Confirmation Dialog
@@ -72,6 +72,24 @@ const VARIANTS = {
 };
 
 const ConfirmModal = ({ config, onClose }) => {
+    // Enter confirma, Escape cancela — igual que un window.confirm() nativo.
+    useEffect(() => {
+        if (!config) return;
+        const handleKeyDown = (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                config.onConfirm?.();
+                onClose();
+            } else if (e.key === 'Escape') {
+                e.preventDefault();
+                config.onCancel?.();
+                onClose();
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [config, onClose]);
+
     if (!config) return null;
 
     const variant = VARIANTS[config.variant] || VARIANTS.info;
