@@ -543,6 +543,14 @@ const CandidateReminderModal = ({ candidate, onClose }) => {
                                         <p className="text-xs text-slate-600 dark:text-slate-300 mt-0.5 leading-relaxed">{r.message}</p>
                                         <p className="text-[10px] text-red-500 dark:text-red-300 mt-1">{r.failureReason || 'No se pudo enviar'}</p>
                                     </div>
+                                    <button
+                                        onClick={() => handleDelete(r.id)}
+                                        disabled={deleting === r.id}
+                                        className="p-1.5 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors shrink-0"
+                                        title="Eliminar del historial"
+                                    >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
                                 </div>
                             ))}
                         </div>
