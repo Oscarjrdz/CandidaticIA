@@ -21,11 +21,12 @@
  */
 
 import { getRedisClient, getCandidateById, getProjectById, saveMessage } from '../utils/storage.js';
-import { getUltraMsgConfig, sendUltraMsgMessage, buildMetaTemplateComponents, renderMetaTemplatePreviewText } from '../whatsapp/utils.js';
+import { getUltraMsgConfig, sendUltraMsgMessage } from '../whatsapp/utils.js';
 import { generateTTS } from '../utils/openai.js';
 import { acquireProcessingLock, releaseProcessingLock, markCompleted, isCompleted } from '../utils/reminder-lock.js';
 import { recordBandwidthSnapshot } from '../utils/redis-bandwidth.js';
 import { removeScheduledReminderMember } from '../utils/reminder-scheduler.js';
+import { isMeta24hWindowError, attemptReminderTemplateFallback } from '../utils/reminder-fallback.js';
 
 const REDIS_ZSET_KEY = 'scheduled_reminders';
 const DIRECT_REMINDERS_ZSET_KEY = 'direct_reminders';
@@ -83,35 +84,12 @@ export function humanizeFecha(isoDate) {
     }
 }
 
-export function isMeta24hWindowError(result = {}) {
-    const error = result.data?.error || {};
-    const code = Number(error.code || result.code || 0);
-    const text = [
-        result.error,
-        error.message,
-        error.error_data?.details,
-        JSON.stringify(result.data || {})
-    ].filter(Boolean).join(' ').toLowerCase();
-
-    return code === 131047 ||
-        text.includes('131047') ||
-        text.includes('24 hour') ||
-        text.includes('24-hour') ||
-        text.includes('outside the allowed window') ||
-        text.includes('re-engagement');
-}
-
 function getMetaErrorCode(result = {}) {
     return Number(result.data?.error?.code || result.code || 0);
 }
 
 function isTerminalDirectReminderFailure(result = {}) {
     return getMetaErrorCode(result) === 131026;
-}
-
-function candidateFirstName(candidate = {}, fallback = 'Candidato') {
-    const name = candidate.nombreReal || candidate.nombre || fallback;
-    return String(name || fallback).trim().split(/\s+/)[0] || fallback;
 }
 
 async function saveDirectReminderStatus(redis, remId, reminder, patch) {
@@ -331,40 +309,14 @@ export async function processDirectReminderItem(redis, remId, now = Date.now()) 
         let finalResult = textResult;
 
         if (!textResult?.success) {
-            const hasTemplateFallback = reminder.fallbackTemplateData?.name;
-            if (isMeta24hWindowError(textResult) && hasTemplateFallback) {
-                const fallbackName = candidateFirstName(candForReminder, reminder.nombre || 'Candidato');
-                const templateData = reminder.fallbackTemplateData;
-                const templateParams = reminder.fallbackTemplateParams || {};
-                const extraParams = {
-                    templateName: templateData.name,
-                    languageCode: templateData.language || 'es_MX',
-                    priority: 1
-                };
-                const componentsToSend = buildMetaTemplateComponents(
-                    templateData.components,
-                    fallbackName,
-                    { templateParams, parameterFormat: templateData.parameter_format }
-                );
-                if (componentsToSend.length > 0) {
-                    extraParams.components = componentsToSend;
-                }
-
-                const templateResult = await sendUltraMsgMessage(
-                    config.instanceId,
-                    config.token,
-                    reminder.whatsapp,
-                    templateData.name,
-                    'template',
-                    extraParams
-                );
-
-                finalResult = templateResult;
-                if (templateResult?.success) {
-                    sentVia = 'template_fallback';
-                    const displayName = templateData.name.replace(/_/g, ' ');
-                    const renderedBody = renderMetaTemplatePreviewText(templateData, fallbackName, { templateParams });
-                    contentToSave = `⚡ Plantilla de recordatorio: *${displayName}*\n\n${renderedBody}`.trim();
+            if (isMeta24hWindowError(textResult)) {
+                const fallback = await attemptReminderTemplateFallback({ reminder, candidate: candForReminder });
+                if (fallback.attempted) {
+                    finalResult = fallback.result;
+                    if (fallback.success) {
+                        sentVia = 'template_fallback';
+                        contentToSave = fallback.contentToSave;
+                    }
                 }
             }
 

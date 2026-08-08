@@ -113,5 +113,19 @@ Script temporal (borrado al terminar) usando un proyecto real existente (`proj_1
 5. `isStaleDue()` — función pura: casos límite (49h/10h/exactamente el umbral/NaN).
 6. Un `direct_reminder` vencido 50h se marca `failed` con razón clara y se saca del ZSET — `processDirectReminderItem()` ejecutado directamente contra Redis real, sin disparar el resto de la cola.
 
+## Hallazgo #7 (2026-08-08) — el fallback a template nunca se intentaba en el rechazo async
+
+Descubierto probando en vivo con el número de prueba: dos recordatorios directos con `fallbackTemplateData` configurado fallaron igual, con `sentVia` quedando en `"text"` (nunca cambió a `"template_fallback"`).
+
+Causa: Meta puede rechazar un mensaje de dos formas —
+1. **Síncrona**: el POST responde de inmediato con error 131047. `send-reminders.js` sí manejaba este caso (intenta el template ahí mismo).
+2. **Asíncrona**: Meta responde `200 OK` (acepta el mensaje) y el rechazo real llega segundos/minutos después por el webhook de status `failed`. Este caso **nunca intentaba el template** — `webhook.js` solo marcaba `failed` y ya.
+
+En el número de prueba, Meta está rechazando de la forma asíncrona, así que el template de respaldo configurado nunca se usaba aunque estuviera ahí.
+
+**Fix:** se extrajo la lógica de armar/enviar el template de respaldo a `api/utils/reminder-fallback.js` (`attemptReminderTemplateFallback()`), compartida por los dos casos — antes estaba duplicada solo en el lado síncrono. `webhook.js` ahora, en el fallo async con código 131047, intenta el template antes de marcar `failed`, con lock (`reminder-lock.js`) para no reintentarlo dos veces si Meta manda el webhook duplicado, y guardado idempotente (solo actúa si `status === 'sent' && sentVia === 'text'`, es decir la primera vez que nos enteramos del fallo).
+
+Probado en vivo: `attemptReminderTemplateFallback()` llamado directamente contra Redis/Meta reales con los datos del recordatorio que había fallado — Meta aceptó el template (`success: true`, wamid real devuelto), confirmado por Oscar en su teléfono.
+
 ### Limitación conocida — observabilidad (#5) sigue parcial
 `recordHealthSnapshot()` guarda los contadores, pero **no hay UI ni alerta** que los muestre — hoy solo se pueden leer con un `HGETALL reminders:health:daily:YYYY-MM-DD` manual. Si se quiere una tarjeta en Configuración (como la de Ancho de Banda) o una alerta cuando `errors > 0`, es trabajo aparte, no incluido en esta pasada.

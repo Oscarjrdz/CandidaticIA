@@ -234,7 +234,11 @@ export default async function handler(req, res) {
                             // Un recordatorio (directo o de plantilla) queda marcado "sent" apenas Meta
                             // acepta el envío (ver api/cron/send-reminders.js) — si Meta reporta un fallo
                             // async después, esto lo refleja en direct_reminder:<id> en vez de dejarlo
-                            // mintiendo "sent" para siempre.
+                            // mintiendo "sent" para siempre. Si el fallo es por ventana de 24h cerrada Y
+                            // el recordatorio tiene un template de respaldo, se intenta aquí — el envío
+                            // síncrono en send-reminders.js solo cubre el rechazo INMEDIATO de Meta; este
+                            // es el caso donde Meta acepta primero y rechaza después (visto en producción
+                            // 2026-08-08: el fallback nunca se intentaba en ese escenario).
                             if (redis) {
                                 try {
                                     const idxRaw = await redis.get(`message:index:${msgId}`);
@@ -244,16 +248,61 @@ export default async function handler(req, res) {
                                         const msg = msgRaw ? JSON.parse(msgRaw) : null;
                                         const reminderId = msg?.meta?.reminderId;
                                         if (reminderId && msg?.meta?.directReminder) {
-                                            const remRaw = await redis.get(`direct_reminder:${reminderId}`);
-                                            if (remRaw) {
-                                                const rem = JSON.parse(remRaw);
-                                                if (rem.status !== 'failed') {
-                                                    await redis.set(`direct_reminder:${reminderId}`, JSON.stringify({
-                                                        ...rem,
-                                                        status: 'failed',
-                                                        failedAt: new Date().toISOString(),
-                                                        failureReason: errorText || 'Meta reportó fallo de entrega después de aceptar el envío.'
-                                                    }), 'EX', 60 * 60 * 24 * 7);
+                                            const { acquireProcessingLock, releaseProcessingLock } = await import('../utils/reminder-lock.js');
+                                            const lock = await acquireProcessingLock(redis, 'direct_reminder_async_failure', reminderId);
+                                            if (lock) {
+                                                try {
+                                                    const remRaw = await redis.get(`direct_reminder:${reminderId}`);
+                                                    const rem = remRaw ? JSON.parse(remRaw) : null;
+                                                    // Solo la primera vez que nos enteramos de este fallo (idempotente
+                                                    // ante webhooks duplicados de Meta): ya se había marcado "sent" vía
+                                                    // texto libre y todavía no se intentó el template de respaldo.
+                                                    if (rem && rem.status === 'sent' && rem.sentVia === 'text') {
+                                                        const isWindowError = Number(metaError?.code) === 131047;
+                                                        const fallback = isWindowError
+                                                            ? await (async () => {
+                                                                const { attemptReminderTemplateFallback } = await import('../utils/reminder-fallback.js');
+                                                                const candidate = rem.candidateId ? await getCandidateById(rem.candidateId) : null;
+                                                                return attemptReminderTemplateFallback({ reminder: rem, candidate });
+                                                            })()
+                                                            : { attempted: false };
+
+                                                        if (fallback.attempted && fallback.success) {
+                                                            await redis.set(`direct_reminder:${reminderId}`, JSON.stringify({
+                                                                ...rem,
+                                                                status: 'sent',
+                                                                sentVia: 'template_fallback',
+                                                                sentAt: new Date().toISOString(),
+                                                                recoveredFromAsyncFailure: true
+                                                            }), 'EX', 60 * 60 * 24 * 7);
+
+                                                            await saveMessage(rem.candidateId, {
+                                                                from: 'me',
+                                                                content: fallback.contentToSave,
+                                                                type: 'template',
+                                                                timestamp: new Date().toISOString(),
+                                                                ultraMsgId: fallback.messageId || null,
+                                                                meta: {
+                                                                    directReminder: true,
+                                                                    reminderId,
+                                                                    sentVia: 'template_fallback',
+                                                                    usedFallbackTemplate: true,
+                                                                    recoveredFromAsyncFailure: true
+                                                                }
+                                                            }).catch(() => {});
+                                                        } else {
+                                                            await redis.set(`direct_reminder:${reminderId}`, JSON.stringify({
+                                                                ...rem,
+                                                                status: 'failed',
+                                                                failedAt: new Date().toISOString(),
+                                                                failureReason: fallback.attempted
+                                                                    ? `${errorText || 'Ventana de 24h cerrada'} — el template de respaldo también falló: ${fallback.result?.error || 'error desconocido'}.`
+                                                                    : (errorText || 'Meta reportó fallo de entrega después de aceptar el envío.')
+                                                            }), 'EX', 60 * 60 * 24 * 7);
+                                                        }
+                                                    }
+                                                } finally {
+                                                    await releaseProcessingLock(redis, lock);
                                                 }
                                             }
                                         }
