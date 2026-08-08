@@ -326,7 +326,7 @@ const TOOLS = [
     },
     {
         name: 'leer_chats_filtrados',
-        description: 'Lee la conversación de VARIOS candidatos a la vez, filtrados por etiqueta/estado/no leídos (ej. "los chats de candidatos de etiqueta Yageo, qué preguntas hacen"). Trae varios candidatos con su transcripción reciente para que puedas comparar y resumir patrones entre chats (preguntas frecuentes, objeciones, dudas comunes, etc.). Para UN solo candidato usa leer_chat_candidato en vez de esta (es más barato y trae más historial por candidato). Cada candidato adicional consume más tokens — no pidas más de los que necesitas para responder.',
+        description: 'Lee la conversación de VARIOS candidatos a la vez, filtrados por etiqueta/estado/no leídos (ej. "los chats de candidatos de etiqueta Yageo, qué preguntas hacen"). Trae varios candidatos con su transcripción reciente para que puedas comparar y resumir patrones entre chats (preguntas frecuentes, objeciones, dudas comunes, etc.). Para UN solo candidato usa leer_chat_candidato en vez de esta (es más barato y trae más historial por candidato). Cada candidato adicional consume más tokens — usa `solo_candidato: true` cuando lo que te importa es literalmente lo que ESCRIBIÓ el candidato (sus preguntas, sus palabras) y no necesitas ver las respuestas de Brenda/el reclutador: ahorra bastantes tokens porque los mensajes de Brenda se repiten casi igual en cada chat. Si necesitas ver la conversación completa (ida y vuelta) para entender contexto, déjalo en false.',
         input_schema: {
             type: 'object',
             properties: {
@@ -334,7 +334,9 @@ const TOOLS = [
                 estado: { type: 'string', enum: ['completos', 'incompletos', 'todos'], description: 'Filtrar por perfil completo o incompleto (opcional).' },
                 no_leidos: { type: 'boolean', description: 'Si es true, sólo los que tienen mensajes no leídos.' },
                 limite_candidatos: { type: 'number', description: 'Cuántos candidatos incluir (por defecto 5, tope 10).' },
-                mensajes_por_candidato: { type: 'number', description: 'Cuántos mensajes recientes por candidato (por defecto 20, tope 30).' }
+                mensajes_por_candidato: { type: 'number', description: 'Cuántos mensajes recientes por candidato (por defecto 20, tope 30).' },
+                solo_candidato: { type: 'boolean', description: 'Si es true, trae SOLO lo que escribió el candidato (nada de Brenda ni el reclutador) — mucho más barato en tokens, úsalo cuando la pregunta es sobre qué dicen/preguntan los candidatos en sí. Por defecto false (trae la conversación completa).' },
+                formato_compacto: { type: 'boolean', description: 'Formato abreviado (hora sin fecha, "C"/"B"/"R" en vez de nombres completos) para ahorrar tokens. Por defecto true — solo ponlo en false si necesitas fechas completas o nombres explícitos en el texto.' }
             },
             required: []
         }
@@ -723,7 +725,9 @@ export default async function handler(req, res) {
                         estado: input.estado,
                         noLeidos: input.no_leidos,
                         limiteCandidatos: input.limite_candidatos,
-                        mensajesPorCandidato: input.mensajes_por_candidato
+                        mensajesPorCandidato: input.mensajes_por_candidato,
+                        soloCandidato: input.solo_candidato,
+                        formatoCompacto: input.formato_compacto !== false
                     });
                     if (r.error) {
                         result = r.error;

@@ -339,17 +339,26 @@ export async function findCandidateByQuery({ telefono, nombre } = {}) {
 
 // Arma la transcripción legible (orden cronológico, quién dijo qué) a partir de una
 // lista de mensajes ya cargados — compartida por getCandidateChatTranscript (un
-// candidato, sin recorte) y getMultipleCandidateChatTranscripts (varios a la vez, con
-// `maxMessageChars` para no dejar que un mensaje largo de Brenda infle el token count
-// cuando se está leyendo a varios candidatos de un jalón).
-function buildTranscript(messages, candidateName, { maxMessageChars = null } = {}) {
-    const sorted = [...messages].sort((a, b) => {
+// candidato, sin recorte) y getMultipleCandidateChatTranscripts (varios a la vez).
+//
+// Los dos ahorros de tokens reales (no solo recorte) están aquí:
+//   - `onlyFrom`: filtra a SOLO los mensajes del candidato antes de armar el texto —
+//     los de Brenda/reclutador son en buena parte el mismo guión repetido en cada
+//     chat; si lo que importa es qué dice/pregunta el candidato, ni se traen.
+//   - `compact`: prefijo corto (hora sin fecha, inicial de quién habla) en vez de
+//     "[2026-07-09 16:56] Brenda (bot):" repetido en cada línea — mismo contenido,
+//     menos texto de formato repetido por mensaje.
+// `maxMessageChars` sigue siendo el respaldo por si un solo mensaje es muy largo.
+function buildTranscript(messages, candidateName, { maxMessageChars = null, onlyFrom = null, compact = false } = {}) {
+    const filtered = Array.isArray(onlyFrom) ? messages.filter((m) => onlyFrom.includes(m.from)) : messages;
+    const sorted = [...filtered].sort((a, b) => {
         const ta = new Date(a.timestamp || a.fecha || 0).getTime();
         const tb = new Date(b.timestamp || b.fecha || 0).getTime();
         return ta - tb;
     });
 
     const who = (m) => (m.from === 'me' ? 'Reclutador' : (m.from === 'bot' ? 'Brenda (bot)' : candidateName));
+    const whoShort = (m) => (m.from === 'me' ? 'R' : (m.from === 'bot' ? 'B' : 'C'));
     const kindNote = (m) => {
         const kind = m.type || m.tipo || (m.mediaUrl ? 'image' : 'text');
         if (kind === 'image') return '[imagen]';
@@ -358,13 +367,16 @@ function buildTranscript(messages, candidateName, { maxMessageChars = null } = {
         return '';
     };
     const transcript = sorted.map((m) => {
-        const time = (m.timestamp || m.fecha || '').slice(0, 16).replace('T', ' ');
+        const time = compact
+            ? (m.timestamp || m.fecha || '').slice(11, 16) // solo HH:MM
+            : (m.timestamp || m.fecha || '').slice(0, 16).replace('T', ' ');
         const note = kindNote(m);
         let text = m.content ? m.content : (note || '(vacío)');
         if (maxMessageChars && text.length > maxMessageChars) {
             text = `${text.slice(0, maxMessageChars)}… [recortado]`;
         }
-        return `[${time}] ${who(m)}: ${text}${m.content && note ? ` ${note}` : ''}`;
+        const prefix = compact ? `${time} ${whoShort(m)}` : `[${time}] ${who(m)}`;
+        return `${prefix}: ${text}${m.content && note ? ` ${note}` : ''}`;
     }).join('\n');
 
     return { transcript, count: sorted.length };
@@ -410,9 +422,10 @@ const MAX_BULK_MESSAGE_CHARS = 220;
 // entre chats (ej. "qué preguntas hacen los de la etiqueta Yageo"). Cada candidato
 // consume tokens, así que los límites son más chicos que leer_chat_candidato Y hay un
 // tope duro de tamaño total (MAX_BULK_TRANSCRIPT_CHARS) además de los de cantidad.
-export async function getMultipleCandidateChatTranscripts({ etiqueta, estado, noLeidos, limiteCandidatos = 5, mensajesPorCandidato = 20 } = {}) {
+export async function getMultipleCandidateChatTranscripts({ etiqueta, estado, noLeidos, limiteCandidatos = 5, mensajesPorCandidato = 20, soloCandidato = false, formatoCompacto = true } = {}) {
     const maxCandidatos = Math.min(10, Math.max(1, Number(limiteCandidatos) || 5));
     const maxMensajes = Math.min(30, Math.max(5, Number(mensajesPorCandidato) || 20));
+    const onlyFrom = soloCandidato ? ['user'] : null;
 
     const list = await getDetailedCandidatesList({ etiqueta, estado, noLeidos, limite: maxCandidatos });
     if (!list) return { error: 'No pude leer la lista de candidatos en este momento.' };
@@ -434,9 +447,14 @@ export async function getMultipleCandidateChatTranscripts({ etiqueta, estado, no
                 transcripts.push({ name: c.name, phone: c.phone, transcript: '(sin mensajes)', count: 0 });
                 continue;
             }
-            const { transcript, count } = buildTranscript(messages, c.name, { maxMessageChars: MAX_BULK_MESSAGE_CHARS });
-            transcripts.push({ name: c.name, phone: c.phone, transcript, count });
-            totalChars += transcript.length;
+            const { transcript, count } = buildTranscript(messages, c.name, {
+                maxMessageChars: MAX_BULK_MESSAGE_CHARS,
+                onlyFrom,
+                compact: formatoCompacto
+            });
+            const finalTranscript = transcript || (soloCandidato ? '(el candidato no ha escrito nada todavía)' : '(sin mensajes)');
+            transcripts.push({ name: c.name, phone: c.phone, transcript: finalTranscript, count });
+            totalChars += finalTranscript.length;
         } catch (err) {
             console.error('Error building transcript for', c.id, err);
             transcripts.push({ name: c.name, phone: c.phone, transcript: '(error al leer este chat)', count: 0 });
