@@ -10,7 +10,9 @@ import {
     getCrossedCandidateCounts,
     getDetailedCandidatesList,
     findCandidateByPhone,
+    findCandidateByQuery,
     getCandidateChatTranscript,
+    getMultipleCandidateChatTranscripts,
     proposeQuickReplyBulkSend,
     buildDateKeys,
     getCapturesTotal,
@@ -299,25 +301,42 @@ const TOOLS = [
     },
     {
         name: 'buscar_candidato',
-        description: 'Busca UN candidato por su número de teléfono/WhatsApp (ej. "8116038195"). Devuelve su nombre completo, WhatsApp, y datos del perfil (municipio, escolaridad, categoría, edad, colonia, si está completo, etiquetas). Tolera prefijos de México (10 dígitos, 52+10, 521+10). Úsala cuando el usuario pida buscar/ver a un candidato por teléfono.',
-        input_schema: {
-            type: 'object',
-            properties: {
-                telefono: { type: 'string', description: 'Número de teléfono/WhatsApp del candidato (ej. "8116038195").' }
-            },
-            required: ['telefono']
-        }
-    },
-    {
-        name: 'leer_chat_candidato',
-        description: 'Lee la conversación real de WhatsApp de UN candidato (lo que se han dicho, en orden, con quién habló: Brenda, el reclutador o el candidato). Úsala cuando el usuario pida ver/revisar qué le dijo un candidato, resumir una conversación, o antes de decidir qué responderle. Tolera prefijos de México igual que buscar_candidato.',
+        description: 'Busca UN candidato por su número de teléfono/WhatsApp (ej. "8116038195") O por su nombre (ej. "Juan Pérez"). Devuelve su nombre completo, WhatsApp, y datos del perfil (municipio, escolaridad, categoría, edad, colonia, si está completo, etiquetas). Tolera prefijos de México (10 dígitos, 52+10, 521+10). Si el nombre coincide con varios candidatos, te devuelve la lista para que le preguntes al usuario cuál — no adivines.',
         input_schema: {
             type: 'object',
             properties: {
                 telefono: { type: 'string', description: 'Número de teléfono/WhatsApp del candidato (ej. "8116038195").' },
+                nombre: { type: 'string', description: 'Nombre o parte del nombre del candidato (ej. "Juan Pérez"). Usa esto si no tienes el teléfono.' }
+            },
+            required: []
+        }
+    },
+    {
+        name: 'leer_chat_candidato',
+        description: 'Lee la conversación real de WhatsApp de UN candidato (lo que se han dicho, en orden, con quién habló: Brenda, el reclutador o el candidato). Úsala cuando el usuario pida ver/revisar qué le dijo un candidato, resumir una conversación, o antes de decidir qué responderle. Busca por teléfono O por nombre, igual que buscar_candidato — si el nombre coincide con varios, te devuelve la lista para desambiguar.',
+        input_schema: {
+            type: 'object',
+            properties: {
+                telefono: { type: 'string', description: 'Número de teléfono/WhatsApp del candidato (ej. "8116038195").' },
+                nombre: { type: 'string', description: 'Nombre o parte del nombre del candidato. Usa esto si no tienes el teléfono.' },
                 limite: { type: 'number', description: 'Máximo de mensajes recientes a traer (por defecto 40, tope 100).' }
             },
-            required: ['telefono']
+            required: []
+        }
+    },
+    {
+        name: 'leer_chats_filtrados',
+        description: 'Lee la conversación de VARIOS candidatos a la vez, filtrados por etiqueta/estado/no leídos (ej. "los chats de candidatos de etiqueta Yageo, qué preguntas hacen"). Trae varios candidatos con su transcripción reciente para que puedas comparar y resumir patrones entre chats (preguntas frecuentes, objeciones, dudas comunes, etc.). Para UN solo candidato usa leer_chat_candidato en vez de esta (es más barato y trae más historial por candidato). Cada candidato adicional consume más tokens — no pidas más de los que necesitas para responder.',
+        input_schema: {
+            type: 'object',
+            properties: {
+                etiqueta: { type: 'string', description: 'Nombre o parte del nombre de la etiqueta (ej. "Yageo").' },
+                estado: { type: 'string', enum: ['completos', 'incompletos', 'todos'], description: 'Filtrar por perfil completo o incompleto (opcional).' },
+                no_leidos: { type: 'boolean', description: 'Si es true, sólo los que tienen mensajes no leídos.' },
+                limite_candidatos: { type: 'number', description: 'Cuántos candidatos incluir (por defecto 5, tope 10).' },
+                mensajes_por_candidato: { type: 'number', description: 'Cuántos mensajes recientes por candidato (por defecto 20, tope 30).' }
+            },
+            required: []
         }
     },
     {
@@ -662,11 +681,14 @@ export default async function handler(req, res) {
                         result = `Candidatos (${data.candidates.length}):\n${lines.join('\n')}${extra}`;
                     }
                 } else if (block.name === 'buscar_candidato') {
-                    const found = await findCandidateByPhone(block.input?.telefono || '');
+                    const found = await findCandidateByQuery({ telefono: block.input?.telefono, nombre: block.input?.nombre });
                     if (found?.error) {
                         result = found.error;
                     } else if (found?.notFound) {
-                        result = `No encontré ningún candidato con el teléfono ${found.telefono || block.input?.telefono || ''}.`;
+                        result = `No encontré ningún candidato con "${found.telefono || found.query || block.input?.telefono || block.input?.nombre || ''}".`;
+                    } else if (found?.multiple) {
+                        const lines = found.candidates.map((c, idx) => `${idx + 1}. ${c.name} — ${c.phone}`);
+                        result = `Encontré varios candidatos que coinciden con "${block.input?.nombre}". Pregúntale al usuario cuál es, o vuelve a buscar con el teléfono exacto:\n${lines.join('\n')}`;
                     } else {
                         const c = found.candidate;
                         const datos = [
@@ -683,13 +705,38 @@ export default async function handler(req, res) {
                         result = `Candidato encontrado:\n${datos}`;
                     }
                 } else if (block.name === 'leer_chat_candidato') {
-                    const r = await getCandidateChatTranscript(block.input?.telefono || '', block.input?.limite);
+                    const r = await getCandidateChatTranscript({ telefono: block.input?.telefono, nombre: block.input?.nombre }, block.input?.limite);
                     if (r.error) {
                         result = r.error;
+                    } else if (r.multiple) {
+                        const lines = r.candidates.map((c, idx) => `${idx + 1}. ${c.name} — ${c.phone}`);
+                        result = `Encontré varios candidatos que coinciden con "${block.input?.nombre}". Pregúntale al usuario cuál es, o vuelve a buscar con el teléfono exacto:\n${lines.join('\n')}`;
                     } else if (r.transcript === '(sin mensajes)') {
                         result = `${r.candidate.name} (${r.candidate.phone}) todavía no tiene mensajes.`;
                     } else {
                         result = `Conversación con ${r.candidate.name} (${r.candidate.phone}) — ${r.count} mensaje(s):\n\n${r.transcript}`;
+                    }
+                } else if (block.name === 'leer_chats_filtrados') {
+                    const input = block.input || {};
+                    const r = await getMultipleCandidateChatTranscripts({
+                        etiqueta: input.etiqueta,
+                        estado: input.estado,
+                        noLeidos: input.no_leidos,
+                        limiteCandidatos: input.limite_candidatos,
+                        mensajesPorCandidato: input.mensajes_por_candidato
+                    });
+                    if (r.error) {
+                        result = r.error;
+                    } else if (!r.transcripts.length) {
+                        result = 'No hay candidatos que cumplan esos filtros.';
+                    } else {
+                        const blocks = r.transcripts.map((t) =>
+                            `── ${t.name} (${t.phone}) — ${t.count} mensaje(s) ──\n${t.transcript}`
+                        );
+                        const extra = r.totalMatches > r.transcripts.length
+                            ? `\n\n(Mostrando ${r.transcripts.length} de ${r.totalMatches} candidatos que cumplen el filtro.)`
+                            : '';
+                        result = blocks.join('\n\n') + extra;
                     }
                 } else if (block.name === 'proponer_envio_banco') {
                     const input = block.input || {};

@@ -18,7 +18,7 @@
  * devuelve null y los endpoints responden un aviso claro (no se rompen).
  */
 import Anthropic from '@anthropic-ai/sdk';
-import { getUsers, validateAdminSession, getRedisClient, getCandidateByPhone, getMessages } from './storage.js';
+import { getUsers, validateAdminSession, getRedisClient, getCandidateByPhone, getMessages, getCandidates } from './storage.js';
 
 // Modelo del agente. Se eligió Haiku 4.5 por costo: ~5x más barato que Opus
 // ($1/$5 vs $5/$25 por millón), suficiente para acciones repetidas (tool use +
@@ -283,13 +283,96 @@ export async function findCandidateByPhone(telefono) {
     }
 }
 
-// Transcripción legible de la conversación de WhatsApp de UN candidato (por teléfono).
-// Reusa getMessages (mismo dato que ve /api/chat en el Chat Web) — así el agente puede
-// leer qué se han dicho antes de responder preguntas o decidir una acción.
-export async function getCandidateChatTranscript(telefono, limite = 40) {
-    const found = await findCandidateByPhone(telefono);
+// Busca UN candidato por nombre (o parte del nombre) reusando el mismo search que ya
+// usa el Chat Web (getCandidates con `search`) — sin índice nuevo, mismo comportamiento
+// que ya conocen los reclutadores en la barra de búsqueda. Puede devolver 0, 1 o varios
+// resultados: { notFound } | { candidate } (match único) | { multiple, candidates } (a
+// desambiguar) | { error }.
+export async function findCandidateByName(nombre) {
+    const query = String(nombre || '').trim();
+    if (!query) return { error: 'Nombre vacío.' };
+    try {
+        const { candidates } = await getCandidates(6, 0, query);
+        if (!candidates || candidates.length === 0) return { notFound: true, query };
+
+        const toSummary = (c) => {
+            const cleanPhone = String(c.whatsapp || '').replace(/\D/g, '');
+            const tags = Array.isArray(c.tags) ? c.tags : (Array.isArray(c.etiquetas) ? c.etiquetas : []);
+            return {
+                id: c.id,
+                name: c.nombreReal || c.nombre || `Candidato ${c.id}`,
+                phone: cleanPhone ? `+${cleanPhone}` : 'Sin WhatsApp',
+                municipio: c.municipio || null,
+                escolaridad: c.escolaridad || null,
+                categoria: c.categoria || null,
+                edad: c.edad || null,
+                colonia: c.colonia || null,
+                completo: c.paso2Estado === 'completo',
+                etiquetas: tags.map((t) => (typeof t === 'string' ? t : t?.name)).filter(Boolean)
+            };
+        };
+
+        if (candidates.length === 1) return { candidate: toSummary(candidates[0]) };
+        return { multiple: true, candidates: candidates.map(toSummary) };
+    } catch (err) {
+        console.error('Error in findCandidateByName:', err);
+        return { error: 'No pude buscar el candidato en este momento.' };
+    }
+}
+
+// Busca UN candidato por teléfono O por nombre — detecta cuál es por la forma del
+// texto (si tiene 8+ dígitos, es teléfono). Punto de entrada único para las tools que
+// aceptan "telefono" o "nombre" (buscar_candidato, leer_chat_candidato).
+export async function findCandidateByQuery({ telefono, nombre } = {}) {
+    const tel = String(telefono || '').trim();
+    if (tel) return findCandidateByPhone(tel);
+
+    const nom = String(nombre || '').trim();
+    if (nom) {
+        const digitsOnly = nom.replace(/\D/g, '');
+        if (digitsOnly.length >= 8) return findCandidateByPhone(digitsOnly);
+        return findCandidateByName(nom);
+    }
+
+    return { error: 'Manda "telefono" o "nombre" para buscar al candidato.' };
+}
+
+// Arma la transcripción legible (orden cronológico, quién dijo qué) a partir de una
+// lista de mensajes ya cargados — compartida por getCandidateChatTranscript (un
+// candidato) y getMultipleCandidateChatTranscripts (varios a la vez).
+function buildTranscript(messages, candidateName) {
+    const sorted = [...messages].sort((a, b) => {
+        const ta = new Date(a.timestamp || a.fecha || 0).getTime();
+        const tb = new Date(b.timestamp || b.fecha || 0).getTime();
+        return ta - tb;
+    });
+
+    const who = (m) => (m.from === 'me' ? 'Reclutador' : (m.from === 'bot' ? 'Brenda (bot)' : candidateName));
+    const kindNote = (m) => {
+        const kind = m.type || m.tipo || (m.mediaUrl ? 'image' : 'text');
+        if (kind === 'image') return '[imagen]';
+        if (kind === 'audio') return m.voice ? '[nota de voz]' : '[audio]';
+        if (kind === 'location') return '[ubicación]';
+        return '';
+    };
+    const transcript = sorted.map((m) => {
+        const time = (m.timestamp || m.fecha || '').slice(0, 16).replace('T', ' ');
+        const note = kindNote(m);
+        const text = m.content ? m.content : (note || '(vacío)');
+        return `[${time}] ${who(m)}: ${text}${m.content && note ? ` ${note}` : ''}`;
+    }).join('\n');
+
+    return { transcript, count: sorted.length };
+}
+
+// Transcripción legible de la conversación de WhatsApp de UN candidato (por teléfono
+// o nombre). Reusa getMessages (mismo dato que ve /api/chat en el Chat Web) — así el
+// agente puede leer qué se han dicho antes de responder preguntas o decidir una acción.
+export async function getCandidateChatTranscript({ telefono, nombre } = {}, limite = 40) {
+    const found = await findCandidateByQuery({ telefono, nombre });
     if (found?.error) return { error: found.error };
-    if (found?.notFound) return { error: `No encontré ningún candidato con el teléfono ${found.telefono || telefono}.` };
+    if (found?.notFound) return { error: `No encontré ningún candidato con "${found.telefono || found.query || telefono || nombre}".` };
+    if (found?.multiple) return { multiple: true, candidates: found.candidates };
 
     const c = found.candidate;
     const maxLimit = Math.min(100, Math.max(1, Number(limite) || 40));
@@ -305,28 +388,40 @@ export async function getCandidateChatTranscript(telefono, limite = 40) {
         return { candidate: c, transcript: '(sin mensajes)' };
     }
 
-    const sorted = [...messages].sort((a, b) => {
-        const ta = new Date(a.timestamp || a.fecha || 0).getTime();
-        const tb = new Date(b.timestamp || b.fecha || 0).getTime();
-        return ta - tb;
-    });
+    const { transcript, count } = buildTranscript(messages, c.name);
+    return { candidate: c, transcript, count };
+}
 
-    const who = (m) => (m.from === 'me' ? 'Reclutador' : (m.from === 'bot' ? 'Brenda (bot)' : c.name));
-    const kindNote = (m) => {
-        const kind = m.type || m.tipo || (m.mediaUrl ? 'image' : 'text');
-        if (kind === 'image') return '[imagen]';
-        if (kind === 'audio') return m.voice ? '[nota de voz]' : '[audio]';
-        if (kind === 'location') return '[ubicación]';
-        return '';
-    };
-    const transcript = sorted.map((m) => {
-        const time = (m.timestamp || m.fecha || '').slice(0, 16).replace('T', ' ');
-        const note = kindNote(m);
-        const text = m.content ? m.content : (note || '(vacío)');
-        return `[${time}] ${who(m)}: ${text}${m.content && note ? ` ${note}` : ''}`;
-    }).join('\n');
+// Trae la transcripción de VARIOS candidatos a la vez, filtrados por etiqueta/estado/
+// no-leídos (mismo filtro que listar_candidatos) — para comparar/resumir patrones
+// entre chats (ej. "qué preguntas hacen los de la etiqueta Yageo"). Cada candidato
+// consume tokens, así que los límites son más chicos que leer_chat_candidato.
+export async function getMultipleCandidateChatTranscripts({ etiqueta, estado, noLeidos, limiteCandidatos = 5, mensajesPorCandidato = 20 } = {}) {
+    const maxCandidatos = Math.min(10, Math.max(1, Number(limiteCandidatos) || 5));
+    const maxMensajes = Math.min(30, Math.max(5, Number(mensajesPorCandidato) || 20));
 
-    return { candidate: c, transcript, count: sorted.length };
+    const list = await getDetailedCandidatesList({ etiqueta, estado, noLeidos, limite: maxCandidatos });
+    if (!list) return { error: 'No pude leer la lista de candidatos en este momento.' };
+    if (list.error) return { error: list.error };
+    if (!list.candidates.length) return { totalMatches: 0, transcripts: [] };
+
+    const transcripts = [];
+    for (const c of list.candidates) {
+        try {
+            const messages = await getMessages(c.id, maxMensajes);
+            if (!Array.isArray(messages) || !messages.length) {
+                transcripts.push({ name: c.name, phone: c.phone, transcript: '(sin mensajes)', count: 0 });
+                continue;
+            }
+            const { transcript, count } = buildTranscript(messages, c.name);
+            transcripts.push({ name: c.name, phone: c.phone, transcript, count });
+        } catch (err) {
+            console.error('Error building transcript for', c.id, err);
+            transcripts.push({ name: c.name, phone: c.phone, transcript: '(error al leer este chat)', count: 0 });
+        }
+    }
+
+    return { totalMatches: list.totalMatches, transcripts };
 }
 
 // Lista detallada (id, nombre completo, WhatsApp) de candidatos filtrados por etiqueta/estado/no-leídos
@@ -986,8 +1081,9 @@ export async function assembleSystemPrompt() {
         '- `guardar_skill`: crea o edita una skill (nombre + contenido markdown completo). Si el nombre ya existe, la reemplaza; si no, la crea. Se guarda al instante y se ve en el panel del usuario.\n' +
         '- `contar_candidatos`: consulta y filtra candidatos por estado (completos/incompletos), etiqueta (ej. "Yageo") y/o no leídos (burbujas sin responder). Permite consultas cruzadas como "cuántos completos con etiqueta Yageo están no leídos". Lectura barata de intersecciones de Sets en Redis (SINTER O(N)); no escanea ni gasta tokens.\n' +
         '- `listar_candidatos`: obtiene la lista detallada (nombre completo y WhatsApp) de los candidatos filtrados (etiqueta, estado, no leídos) hasta el límite indicado. Úsala cuando el usuario pida ver la lista de candidatos o sus teléfonos.\n' +
-        '- `buscar_candidato`: busca UN candidato por su número de teléfono/WhatsApp y devuelve su nombre completo y datos de perfil. Úsala cuando el usuario diga "busca al candidato 8116038195" o similar.\n' +
-        '- `leer_chat_candidato`: lee la conversación real de WhatsApp de un candidato (quién dijo qué, en orden). Úsala cuando el usuario pida ver/resumir qué le dijo un candidato, o antes de decidir qué responderle.\n' +
+        '- `buscar_candidato`: busca UN candidato por teléfono/WhatsApp O por nombre y devuelve su nombre completo y datos de perfil. Úsala cuando el usuario diga "busca al candidato 8116038195" o "busca a Juan Pérez". Si el nombre da varios resultados, te los devuelve para que le preguntes al usuario cuál es — no adivines.\n' +
+        '- `leer_chat_candidato`: lee la conversación real de WhatsApp de UN candidato (quién dijo qué, en orden), por teléfono o por nombre. Úsala cuando el usuario pida ver/resumir qué le dijo un candidato, o antes de decidir qué responderle.\n' +
+        '- `leer_chats_filtrados`: lee la conversación de VARIOS candidatos a la vez (filtrados por etiqueta/estado/no leídos) para comparar o resumir patrones entre chats — ej. "los chats de la etiqueta Yageo, qué preguntas hacen" o "qué dudas comunes tienen los incompletos de Metalsa". Cada candidato adicional cuesta más tokens, así que no pidas más de los que necesitas.\n' +
         '- `proponer_envio_banco`: propón enviar un mensaje del Banco de Respuestas (ej. "Punto Yageo") a candidatos. NO envía de inmediato: genera una tarjeta de confirmación en el chat con los botones Confirmar Envíos / Cancelar. Para UN solo candidato, pasa su `telefono` (ej. después de buscarlo). Para una LISTA, usa los mismos filtros (etiqueta/estado/no_leidos) con los que la listaste. Úsala cuando el usuario pida enviar o mandar un mensaje del banco.\n' +
         '- `contar_etiquetas`: las etiquetas de Candidatic CON su cantidad de candidatos (y cuántos sin etiqueta). Sirve también para saber qué etiquetas existen. Lectura barata; NO inventes nombres ni números.\n' +
         '- `contar_altas`: cuántos candidatos LLEGARON (se dieron de alta) en una fecha/rango (hoy, ayer, esta semana, este mes, o fechas explícitas). Lectura barata de contadores diarios.\n' +
