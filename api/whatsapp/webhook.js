@@ -221,16 +221,44 @@ export default async function handler(req, res) {
                                 : null;
                             await updateMessageStatus(candidateId, msgId, 'failed', errorText ? { error: errorText } : {});
 
-                            if (metaError) {
-                                const redis = getRedisClient();
-                                if (redis) {
-                                    redis.set('debug:last_meta_failure', JSON.stringify({
-                                        timestamp: new Date().toISOString(),
-                                        phone: recipientPhone,
-                                        msgId,
-                                        error: metaError
-                                    }), 'EX', 86400).catch(() => {});
-                                }
+                            const redis = getRedisClient();
+                            if (metaError && redis) {
+                                redis.set('debug:last_meta_failure', JSON.stringify({
+                                    timestamp: new Date().toISOString(),
+                                    phone: recipientPhone,
+                                    msgId,
+                                    error: metaError
+                                }), 'EX', 86400).catch(() => {});
+                            }
+
+                            // Un recordatorio (directo o de plantilla) queda marcado "sent" apenas Meta
+                            // acepta el envío (ver api/cron/send-reminders.js) — si Meta reporta un fallo
+                            // async después, esto lo refleja en direct_reminder:<id> en vez de dejarlo
+                            // mintiendo "sent" para siempre.
+                            if (redis) {
+                                try {
+                                    const idxRaw = await redis.get(`message:index:${msgId}`);
+                                    if (idxRaw) {
+                                        const { index } = JSON.parse(idxRaw);
+                                        const msgRaw = await redis.lindex(`messages:${candidateId}`, index);
+                                        const msg = msgRaw ? JSON.parse(msgRaw) : null;
+                                        const reminderId = msg?.meta?.reminderId;
+                                        if (reminderId && msg?.meta?.directReminder) {
+                                            const remRaw = await redis.get(`direct_reminder:${reminderId}`);
+                                            if (remRaw) {
+                                                const rem = JSON.parse(remRaw);
+                                                if (rem.status !== 'failed') {
+                                                    await redis.set(`direct_reminder:${reminderId}`, JSON.stringify({
+                                                        ...rem,
+                                                        status: 'failed',
+                                                        failedAt: new Date().toISOString(),
+                                                        failureReason: errorText || 'Meta reportó fallo de entrega después de aceptar el envío.'
+                                                    }), 'EX', 60 * 60 * 24 * 7);
+                                                }
+                                            }
+                                        }
+                                    }
+                                } catch (e) { /* silent */ }
                             }
 
                             // 131026 = number not on WhatsApp

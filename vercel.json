@@ -115,6 +115,9 @@
         "api/sse/candidates.js": {
             "maxDuration": 60
         },
+        "api/cron/send-reminders.js": {
+            "maxDuration": 120
+        },
         "api/ai/agent.js": {
             "maxDuration": 60
         },
