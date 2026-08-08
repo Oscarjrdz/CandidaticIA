@@ -734,7 +734,7 @@ export default async function handler(req, res) {
                             `── ${t.name} (${t.phone}) — ${t.count} mensaje(s) ──\n${t.transcript}`
                         );
                         const extra = r.totalMatches > r.transcripts.length
-                            ? `\n\n(Mostrando ${r.transcripts.length} de ${r.totalMatches} candidatos que cumplen el filtro.)`
+                            ? `\n\n(Mostrando ${r.transcripts.length} de ${r.totalMatches} candidatos que cumplen el filtro${r.truncated ? ' — se cortó por tamaño, no por el límite pedido; si necesitas más, pide menos mensajes por candidato' : ''}.)`
                             : '';
                         result = blocks.join('\n\n') + extra;
                     }

@@ -339,8 +339,10 @@ export async function findCandidateByQuery({ telefono, nombre } = {}) {
 
 // Arma la transcripción legible (orden cronológico, quién dijo qué) a partir de una
 // lista de mensajes ya cargados — compartida por getCandidateChatTranscript (un
-// candidato) y getMultipleCandidateChatTranscripts (varios a la vez).
-function buildTranscript(messages, candidateName) {
+// candidato, sin recorte) y getMultipleCandidateChatTranscripts (varios a la vez, con
+// `maxMessageChars` para no dejar que un mensaje largo de Brenda infle el token count
+// cuando se está leyendo a varios candidatos de un jalón).
+function buildTranscript(messages, candidateName, { maxMessageChars = null } = {}) {
     const sorted = [...messages].sort((a, b) => {
         const ta = new Date(a.timestamp || a.fecha || 0).getTime();
         const tb = new Date(b.timestamp || b.fecha || 0).getTime();
@@ -358,7 +360,10 @@ function buildTranscript(messages, candidateName) {
     const transcript = sorted.map((m) => {
         const time = (m.timestamp || m.fecha || '').slice(0, 16).replace('T', ' ');
         const note = kindNote(m);
-        const text = m.content ? m.content : (note || '(vacío)');
+        let text = m.content ? m.content : (note || '(vacío)');
+        if (maxMessageChars && text.length > maxMessageChars) {
+            text = `${text.slice(0, maxMessageChars)}… [recortado]`;
+        }
         return `[${time}] ${who(m)}: ${text}${m.content && note ? ` ${note}` : ''}`;
     }).join('\n');
 
@@ -392,10 +397,19 @@ export async function getCandidateChatTranscript({ telefono, nombre } = {}, limi
     return { candidate: c, transcript, count };
 }
 
+// Tope duro de caracteres del resultado combinado (~2000-2500 tokens) — los topes de
+// "cuántos candidatos / cuántos mensajes" son blandos (dependen de qué tan largos sean
+// los mensajes reales), esto es la garantía dura de que una sola llamada no se dispara
+// a 15-20k tokens y se queda pegada en el historial de la conversación. Se corta entre
+// candidatos completos (nunca a medio chat) y se recorta cada mensaje individual.
+const MAX_BULK_TRANSCRIPT_CHARS = 6000;
+const MAX_BULK_MESSAGE_CHARS = 220;
+
 // Trae la transcripción de VARIOS candidatos a la vez, filtrados por etiqueta/estado/
 // no-leídos (mismo filtro que listar_candidatos) — para comparar/resumir patrones
 // entre chats (ej. "qué preguntas hacen los de la etiqueta Yageo"). Cada candidato
-// consume tokens, así que los límites son más chicos que leer_chat_candidato.
+// consume tokens, así que los límites son más chicos que leer_chat_candidato Y hay un
+// tope duro de tamaño total (MAX_BULK_TRANSCRIPT_CHARS) además de los de cantidad.
 export async function getMultipleCandidateChatTranscripts({ etiqueta, estado, noLeidos, limiteCandidatos = 5, mensajesPorCandidato = 20 } = {}) {
     const maxCandidatos = Math.min(10, Math.max(1, Number(limiteCandidatos) || 5));
     const maxMensajes = Math.min(30, Math.max(5, Number(mensajesPorCandidato) || 20));
@@ -406,22 +420,30 @@ export async function getMultipleCandidateChatTranscripts({ etiqueta, estado, no
     if (!list.candidates.length) return { totalMatches: 0, transcripts: [] };
 
     const transcripts = [];
+    let totalChars = 0;
+    let truncated = false;
+
     for (const c of list.candidates) {
+        if (totalChars >= MAX_BULK_TRANSCRIPT_CHARS && transcripts.length > 0) {
+            truncated = true;
+            break;
+        }
         try {
             const messages = await getMessages(c.id, maxMensajes);
             if (!Array.isArray(messages) || !messages.length) {
                 transcripts.push({ name: c.name, phone: c.phone, transcript: '(sin mensajes)', count: 0 });
                 continue;
             }
-            const { transcript, count } = buildTranscript(messages, c.name);
+            const { transcript, count } = buildTranscript(messages, c.name, { maxMessageChars: MAX_BULK_MESSAGE_CHARS });
             transcripts.push({ name: c.name, phone: c.phone, transcript, count });
+            totalChars += transcript.length;
         } catch (err) {
             console.error('Error building transcript for', c.id, err);
             transcripts.push({ name: c.name, phone: c.phone, transcript: '(error al leer este chat)', count: 0 });
         }
     }
 
-    return { totalMatches: list.totalMatches, transcripts };
+    return { totalMatches: list.totalMatches, transcripts, truncated };
 }
 
 // Lista detallada (id, nombre completo, WhatsApp) de candidatos filtrados por etiqueta/estado/no-leídos
