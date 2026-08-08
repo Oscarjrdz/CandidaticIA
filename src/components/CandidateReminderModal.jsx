@@ -564,6 +564,14 @@ const CandidateReminderModal = ({ candidate, onClose }) => {
                                             </p>
                                         )}
                                     </div>
+                                    <button
+                                        onClick={() => handleDelete(r.id)}
+                                        disabled={deleting === r.id}
+                                        className="p-1.5 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors shrink-0"
+                                        title="Eliminar del historial"
+                                    >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
                                 </div>
                             ))}
                         </div>
