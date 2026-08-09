@@ -28,11 +28,17 @@
  * candidato). Eso significa que corre en la MISMA invocación serverless que procesó el
  * webhook de WhatsApp — y Vercel puede congelar la función en cuanto se manda esa
  * respuesta, sin garantía de que esta promesa termine. Cuando eso pasa, el candidato
- * queda con status 'attending' para siempre. Por eso el guard de abajo NO usa un candado
- * permanente (SADD): usa el status de la cola, para que api/cron/agent-candidatic.js
- * (cada 15 min, mismo patrón que el backstop de agent-katcon) pueda reintentar lo que
- * se quedó a medias — esa corrida del cron NO compite por tiempo con el webhook, así
- * que sí alcanza a terminar.
+ * queda con status 'attending' colgado. Por eso existe api/cron/agent-candidatic.js
+ * (cada 15 min, mismo patrón que el backstop de agent-katcon): reintenta lo que se
+ * quedó a medias, sin competir por tiempo con el webhook.
+ *
+ * BUG REAL CONFIRMADO Y CORREGIDO (agosto 2026): con solo el status de la cola como
+ * guard (sin candado atómico), el disparo event-driven demorado y el cron pudieron
+ * caer casi al mismo tiempo, leer 'pending' los dos ANTES de que cualquiera escribiera
+ * 'attending', y procesar el mismo candidato en paralelo — un candidato recibió la
+ * cita, las imágenes y la pregunta DOS VECES. Fix: candado atómico (SET NX EX, ver
+ * ATTEND_LOCK_TTL_SEC abajo) — solo una llamada puede "ganar"; el TTL expira solo si
+ * algo se cuelga de verdad, así que el cron sigue pudiendo reintentar lo genuino.
  */
 import { getRedisClient, getCandidateById, updateCandidate } from './storage.js';
 import {
@@ -55,7 +61,7 @@ import { updateQueueEntryStatus, getLiveQueue, recordAttended, recordGoal, recor
 
 const MAX_TOOL_LOOPS = 5;
 const MAX_TOKENS = 1200;
-const STALE_ATTENDING_MS = 3 * 60 * 1000; // "attending" más viejo que esto = se quedó a medias, se puede reintentar
+const ATTEND_LOCK_TTL_SEC = 3 * 60; // candado atómico: nadie más toca a este candidato mientras dure
 
 function extractText(content) {
     if (!Array.isArray(content)) return '';
@@ -153,24 +159,31 @@ async function sendVacancyReplyNow(candidate, nombre) {
     return { ok: r.ok, sentCount: r.sentCount, error: r.error, name: v.name || nombre };
 }
 
-// Se llama fire-and-forget desde el extractor justo después de encolar. NUNCA lanza
-// (todo error se traga) — no debe poder romper ni retrasar el flujo de Brenda.
+// Se llama fire-and-forget desde el extractor justo después de encolar, Y desde el
+// cron de respaldo — por eso necesita ser a prueba de doble disparo casi simultáneo.
+// NUNCA lanza (todo error se traga) — no debe poder romper ni retrasar el flujo de Brenda.
 export async function attendLiveCandidate(candidateId, tag) {
     const redis = getRedisClient();
     if (!redis || !hasAnthropicKey()) return;
 
-    // Guard basado en el status de la cola (no un candado permanente): solo procesa si
-    // sigue 'pending' (nunca arrancó) o quedó 'attending' colgado (la llamada anterior
-    // se cortó — típicamente porque Vercel congeló la función justo después de responder
-    // el webhook de WhatsApp, ya que esta llamada corre sin await). Esto es lo que permite
-    // que el CRON de respaldo (api/cron/agent-candidatic.js) reintente lo que se atoró.
-    // 'done' / 'waiting' / 'error' son terminales — no se reintentan solos.
+    // BUG REAL CONFIRMADO EN PRODUCCIÓN (agosto 2026): antes este guard solo leía el
+    // status de la cola (sin escribir nada de inmediato) — si el disparo event-driven
+    // se demoraba (ej. Vercel lo dejó a medias) Y el cron corría casi al mismo tiempo,
+    // AMBOS leían 'pending' antes de que cualquiera alcanzara a escribir 'attending', y
+    // los dos procesaban completo: un candidato recibió la cita y las imágenes 2 VECES.
+    // Fix: candado ATÓMICO (SET NX EX) — solo UNA llamada puede "ganar" el candado; la
+    // otra se retira al instante. El TTL expira solo si algo se cuelga de verdad, así
+    // que el cron sigue pudiendo reintentar lo que de verdad se quedó a medias.
+    const lockKey = `agent-ia:attend_lock:${candidateId}`;
+    const acquired = await redis.set(lockKey, '1', 'EX', ATTEND_LOCK_TTL_SEC, 'NX');
+    if (!acquired) return; // otra llamada ya lo está procesando (o lo acaba de procesar)
+
+    // Además del candado: si ya quedó en un status TERMINAL (done/waiting/error), no
+    // hay nada que reintentar — evita reprocesar algo ya resuelto tras expirar el candado.
     const queueBefore = await getLiveQueue();
     const entryBefore = queueBefore.find((q) => q.id === candidateId);
     if (!entryBefore) return; // ya no está en la cola (se limpió, o se re-prendió el toggle)
-    const staleAttending = entryBefore.status === 'attending'
-        && (Date.now() - new Date(entryBefore.updatedAt || entryBefore.completedAt).getTime()) > STALE_ATTENDING_MS;
-    if (entryBefore.status !== 'pending' && !staleAttending) return;
+    if (entryBefore.status === 'done' || entryBefore.status === 'waiting' || entryBefore.status === 'error') return;
 
     await updateQueueEntryStatus(candidateId, { status: 'attending' });
     const startedAt = Date.now(); // para "tiempo atendiendo" acumulado (métrica), no confundir con completedAt

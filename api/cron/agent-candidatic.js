@@ -16,6 +16,11 @@ import { attendLiveCandidate } from '../utils/agent-attend.js';
 // Reintenta: status 'pending' (nunca arrancó) o 'attending' viejo (>3 min, colgado).
 // NO reintenta 'done' (ya se resolvió) ni 'waiting'/'error' (esos requieren que Oscar
 // decida algo — no hay que insistir solo, ver el feed del chat del agente).
+//
+// La seguridad de fondo contra doble-procesamiento (si este cron y el disparo
+// event-driven caen casi al mismo tiempo) la da el candado atómico DENTRO de
+// attendLiveCandidate (ver agent-attend.js) — este filtro de aquí es solo para no
+// llamarla de más sobre candidatos que casi seguro siguen en proceso legítimo.
 // ════════════════════════════════════════════════════════════════════════════
 
 export default async function handler(req, res) {
