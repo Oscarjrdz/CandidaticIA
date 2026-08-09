@@ -5,7 +5,7 @@ import {
     ArrowRight, CheckCircle, Users, Zap, Loader2, MessageSquare, BrainCircuit,
     Bot, Search, Send, BarChart3, Workflow, FileText, Shield, Clock,
     ChevronRight, Star, Play, Sparkles, Globe, Layers, Target, ArrowUpRight,
-    MousePointerClick, Rocket, Check, X, Menu, ChevronDown
+    MousePointerClick, Rocket, Check, X, Menu, ChevronDown, Smartphone
 } from 'lucide-react';
 import Button from './ui/Button';
 import Input from './ui/Input';
@@ -14,6 +14,14 @@ import Input from './ui/Input';
 const WhatsAppIcon = ({ className = "w-5 h-5" }) => (
     <svg viewBox="0 0 24 24" className={`${className} fill-current`}>
         <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.008-.57-.008-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
+    </svg>
+);
+
+/* ─── Google Play triangle icon (para el badge "Próximamente") ─── */
+const GooglePlayIcon = ({ className = "w-4 h-4" }) => (
+    <svg viewBox="0 0 24 24" className={className}>
+        <path fill="currentColor" d="M3.6 2.4c-.4.3-.6.8-.6 1.4v16.4c0 .6.2 1.1.6 1.4l.1.1L13 12.5v-.1L3.7 2.3l-.1.1z" />
+        <path fill="currentColor" d="M16.1 15.6l-3.1-3.1v-.1l3.1-3.1 3.7 2.1c1 .6 1 1.5 0 2.1l-3.7 2.1z" />
     </svg>
 );
 
@@ -1039,6 +1047,84 @@ const LandingPage = ({ onLoginSuccess }) => {
                                 ¿Te interesa? Escríbenos · 81 1603 8195
                             </a>
 
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                {/* ═══ APPS — RECLUTADOR / CANDIDATO ═══ */}
+                <section className="py-12 sm:py-20 px-4 sm:px-6">
+                    <div className="max-w-7xl mx-auto">
+                        <div className="text-center mb-10 sm:mb-14">
+                            <div className="inline-flex items-center space-x-2 bg-violet-50 px-4 py-1.5 rounded-full text-xs sm:text-sm font-semibold text-violet-700 mb-4 border border-violet-100">
+                                <Smartphone className="w-4 h-4" />
+                                <span>Ya disponible en iOS</span>
+                            </div>
+                            <h2 className="text-2xl sm:text-3xl md:text-5xl font-extrabold text-gray-900 tracking-tight mb-4">
+                                Candidatic también vive en tu celular
+                            </h2>
+                            <p className="text-sm sm:text-lg text-gray-500 max-w-2xl mx-auto px-2">
+                                Una app para reclutadores, otra para candidatos — cada quien con lo que necesita.
+                            </p>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-8">
+                            {/* Reclutador */}
+                            <div className="rounded-3xl border border-blue-100 bg-gradient-to-br from-blue-50 to-white p-6 sm:p-8 flex flex-col sm:flex-row items-center sm:items-start gap-5 sm:gap-6">
+                                <img
+                                    src="/lp/Candidatic_app_reclutador_icono.png"
+                                    alt="Ícono de la app Candidatic Reclutador para App Store, plataforma de reclutamiento masivo en Monterrey"
+                                    className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl shadow-lg shadow-blue-200/60 shrink-0"
+                                />
+                                <div className="text-center sm:text-left">
+                                    <p className="text-xs font-bold uppercase tracking-widest text-blue-600 mb-1">¿Eres reclutador?</p>
+                                    <h3 className="text-lg sm:text-xl font-extrabold text-gray-900 mb-2">Descarga la app y publica gratis</h3>
+                                    <p className="text-sm text-gray-500 mb-4">Publica tus vacantes y recibe candidatos al instante, directo desde tu celular.</p>
+                                    <a
+                                        href="https://apps.apple.com/mx/app/id6776356939"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="inline-flex hover:scale-[1.03] active:scale-95 transition-transform"
+                                    >
+                                        <img
+                                            src="/lp/badge-app-store-es-mx.svg"
+                                            alt="Descarga Candidatic Reclutador en el App Store"
+                                            className="h-11"
+                                        />
+                                    </a>
+                                </div>
+                            </div>
+
+                            {/* Candidato */}
+                            <div className="rounded-3xl border border-orange-100 bg-gradient-to-br from-orange-50 to-white p-6 sm:p-8 flex flex-col sm:flex-row items-center sm:items-start gap-5 sm:gap-6">
+                                <img
+                                    src="/lp/Candidatic_app_candidato_icono.png"
+                                    alt="Ícono de la app Candidatic Bolsa de Empleo para App Store y Google Play, agencia de reclutamiento masivo en Monterrey"
+                                    className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl shadow-lg shadow-orange-200/60 shrink-0"
+                                />
+                                <div className="text-center sm:text-left">
+                                    <p className="text-xs font-bold uppercase tracking-widest text-orange-600 mb-1">¿Eres candidato?</p>
+                                    <h3 className="text-lg sm:text-xl font-extrabold text-gray-900 mb-2">Descarga la app de Candidatic</h3>
+                                    <p className="text-sm text-gray-500 mb-4">Explora vacantes, postúlate con un toque y contacta al reclutador por WhatsApp.</p>
+                                    <div className="flex flex-wrap items-center justify-center sm:justify-start gap-3">
+                                        <a
+                                            href="https://apps.apple.com/mx/app/id6776012569"
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="inline-flex hover:scale-[1.03] active:scale-95 transition-transform"
+                                        >
+                                            <img
+                                                src="/lp/badge-app-store-es-mx.svg"
+                                                alt="Descarga Candidatic Bolsa de Empleo en el App Store"
+                                                className="h-11"
+                                            />
+                                        </a>
+                                        <span className="inline-flex items-center gap-2 h-11 px-4 rounded-xl border border-gray-200 bg-gray-50 text-gray-400 text-xs font-semibold">
+                                            <GooglePlayIcon className="w-4 h-4" />
+                                            Google Play — Próximamente
+                                        </span>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
