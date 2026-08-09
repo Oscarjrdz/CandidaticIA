@@ -1092,8 +1092,31 @@ const LandingPage = ({ onLoginSuccess }) => {
                 </section>
 
                 {/* ═══ PRODUCTO / SCREENSHOTS ═══ */}
-                <section className="py-12 sm:py-20 px-4 sm:px-6 bg-gray-50">
-                    <div className="max-w-7xl mx-auto">
+                <section className="py-12 sm:py-20 px-4 sm:px-6 bg-gray-50 relative overflow-hidden">
+                    {/* Dot grid pattern — mismo patrón del hero */}
+                    <div className="absolute inset-0 pointer-events-none"
+                        style={{
+                            backgroundImage: 'radial-gradient(circle, #c4b5fd 1px, transparent 1px)',
+                            backgroundSize: '28px 28px',
+                            opacity: 0.35,
+                            maskImage: 'radial-gradient(ellipse 80% 80% at 50% 50%, black 40%, transparent 100%)',
+                            WebkitMaskImage: 'radial-gradient(ellipse 80% 80% at 50% 50%, black 40%, transparent 100%)',
+                        }}
+                    />
+                    {/* Orbes flotantes — mismas animaciones/clases del hero, para que se vea "IA" y no un fondo estático */}
+                    <div className="absolute inset-0 pointer-events-none overflow-hidden">
+                        <div className="orb-2 absolute rounded-full"
+                            style={{ top: '-10%', left: '-6%', width: '40%', height: '55%', filter: 'blur(50px)',
+                                background: 'radial-gradient(circle, rgba(124,58,237,0.18) 0%, rgba(91,33,182,0.07) 55%, transparent 100%)' }} />
+                        <div className="orb-3 absolute rounded-full"
+                            style={{ bottom: '-15%', right: '-6%', width: '42%', height: '60%', filter: 'blur(50px)',
+                                background: 'radial-gradient(circle, rgba(59,130,246,0.16) 0%, rgba(37,99,235,0.06) 55%, transparent 100%)' }} />
+                        <div className="orb-4 absolute rounded-full"
+                            style={{ top: '30%', left: '38%', width: '30%', height: '40%', filter: 'blur(45px)',
+                                background: 'radial-gradient(circle, rgba(167,139,250,0.15) 0%, rgba(139,92,246,0.05) 60%, transparent 100%)' }} />
+                    </div>
+
+                    <div className="max-w-7xl mx-auto relative z-10">
                         <div className="text-center mb-10 sm:mb-16">
                             <div className="inline-flex items-center space-x-2 bg-violet-50 px-4 py-1.5 rounded-full text-xs sm:text-sm font-semibold text-violet-700 mb-4 border border-violet-100">
                                 <Sparkles className="w-4 h-4" />
@@ -1114,7 +1137,7 @@ const LandingPage = ({ onLoginSuccess }) => {
                                     img: '/lp/Candidatic_reclutamiento_masivo_monterrey_1.png',
                                     alt: 'Dashboard de gestión de candidatos de WhatsApp en Candidatic IA, plataforma de reclutamiento masivo en Monterrey con miles de candidatos y captura automática de datos',
                                     title: 'Miles de candidatos, un solo dashboard',
-                                    desc: '12,763 candidatos capturados desde WhatsApp con nombre, municipio, categoría y escolaridad completados automáticamente.',
+                                    desc: 'Miles de candidatos capturados desde WhatsApp con nombre, municipio, categoría y escolaridad completados automáticamente.',
                                 },
                                 {
                                     img: '/lp/Candidatic_reclutamiento_masivo_monterrey_2.png',
