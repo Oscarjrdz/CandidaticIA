@@ -182,7 +182,7 @@ const TOOLS = [
     },
     {
         name: 'leer_respuesta_banco',
-        description: 'Abre el CONTENIDO completo de una respuesta del Banco de Respuestas por su nombre (ej. "Punto Yageo"): su texto exacto, tipo, cuántas imágenes tiene, si lleva ubicación (maps) o audio. Solo lectura. Úsala cuando el usuario pregunte qué dice una respuesta o antes de proponer editarla.',
+        description: 'Abre el CONTENIDO completo de una respuesta del Banco de Respuestas por su nombre (ej. "Punto Yageo"): su texto exacto, tipo, cuántas imágenes tiene, si lleva ubicación (maps), audio o documento PDF. Solo lectura. Úsala cuando el usuario pregunte qué dice una respuesta o antes de proponer editarla.',
         input_schema: {
             type: 'object',
             properties: {

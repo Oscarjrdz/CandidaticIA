@@ -567,8 +567,10 @@ export function buildBankSendPayload(qr, label) {
     const location = (qr.location && qr.location.lat != null && qr.location.lng != null) ? qr.location : null;
     const audioUrl = qr.audioUrl || '';
     const voice = !!(qr.voice || qr.audioVoice);
+    const documentUrl = qr.documentUrl || '';
+    const documentName = qr.documentName || '';
 
-    const hasPayload = Boolean(messageText || imageUrls.length || location || audioUrl);
+    const hasPayload = Boolean(messageText || imageUrls.length || location || audioUrl || documentUrl);
     if (!hasPayload) {
         return { error: `La respuesta del banco "${qr.name || label || ''}" no tiene contenido para enviar.` };
     }
@@ -578,10 +580,11 @@ export function buildBankSendPayload(qr, label) {
     if (imageUrls.length) parts.push(`${imageUrls.length} ${imageUrls.length === 1 ? 'imagen' : 'imágenes'}`);
     if (location) parts.push('ubicación (maps)');
     if (audioUrl) parts.push(voice ? 'nota de voz' : 'audio');
+    if (documentUrl) parts.push('documento (PDF)');
     const mixSummary = parts.join(' + ');
 
     return {
-        payload: { templateType, messageText, imageUrls, location, audioUrl, voice },
+        payload: { templateType, messageText, imageUrls, location, audioUrl, voice, documentUrl, documentName },
         mixSummary
     };
 }
@@ -884,8 +887,9 @@ export async function getQuickReplyContent(nombre) {
     if (imageUrls.length) parts.push(`Imágenes: ${imageUrls.length}`);
     if (hasLocation) parts.push(`Ubicación (maps): ${qr.location.name || ''} [${qr.location.lat}, ${qr.location.lng}]`);
     if (qr.audioUrl) parts.push(`Audio: sí${qr.voice || qr.audioVoice ? ' (nota de voz)' : ''}`);
+    if (qr.documentUrl) parts.push(`Documento (PDF): sí${qr.documentName ? ` (${qr.documentName})` : ''}`);
     return {
-        reply: { id: qr.id, name: qr.name || qr.title || '', type: qr.type || 'text', message: qr.message || '', imageCount: imageUrls.length, hasLocation, hasAudio: !!qr.audioUrl },
+        reply: { id: qr.id, name: qr.name || qr.title || '', type: qr.type || 'text', message: qr.message || '', imageCount: imageUrls.length, hasLocation, hasAudio: !!qr.audioUrl, hasDocument: !!qr.documentUrl },
         summary: parts.join('\n')
     };
 }
@@ -1130,7 +1134,7 @@ export async function assembleSystemPrompt() {
         '- `contar_altas_etiqueta`: altas en una fecha/rango, por etiqueta. Con `etiqueta` da el total de esa etiqueta (ej. "cuántos de Yageo llegaron hoy"). SIN `etiqueta` da el desglose de TODAS las etiquetas en una sola llamada — úsala así para "desglósame las altas de hoy por etiqueta", nunca la llames una vez por cada etiqueta. El conteo por etiqueta y día se registra desde que se activó esta función, así que fechas muy anteriores pueden salir en 0.\n' +
         '- `candidatos_activos`: quiénes están ACTIVOS ahora mismo (actividad reciente) y cuántos siguen INCOMPLETOS (completándose en vivo), con una muestra de nombres y hace cuánto. Úsala para "quién se está completando ahorita".\n' +
         '- `listar_respuestas_banco`: consulta los nombres reales de las respuestas del Banco de Respuestas (plantillas que los reclutadores mandan a los candidatos). Úsala cuando el usuario pregunte qué respuestas de banco hay. NO las inventes.\n' +
-        '- `leer_respuesta_banco`: abre el CONTENIDO completo de una respuesta del banco por su nombre (su texto exacto, tipo, cuántas imágenes, si lleva ubicación o audio). Úsala cuando el usuario quiera ver qué dice una respuesta, o antes de proponer editarla.\n' +
+        '- `leer_respuesta_banco`: abre el CONTENIDO completo de una respuesta del banco por su nombre (su texto exacto, tipo, cuántas imágenes, si lleva ubicación, audio o documento PDF). Úsala cuando el usuario quiera ver qué dice una respuesta, o antes de proponer editarla.\n' +
         '- `proponer_edicion_banco`: propón editar el TEXTO de una respuesta del banco. NO guarda de inmediato: genera una tarjeta de aprobación con el antes/después y botones Aprobar / Descartar. Manda el texto COMPLETO ya editado. Solo edita texto (no imágenes/ubicación/audio). Lee primero con `leer_respuesta_banco`.\n' +
         '- `listar_vacantes`: los nombres de las vacantes del "maletín" del Chat Web que tienen info para enviar al candidato. Solo lectura.\n' +
         '- `leer_vacante`: abre el contenido de una vacante por su nombre (empresa, categoría y el mensaje exacto que se le enviaría al candidato). Úsala cuando el usuario pregunte por una vacante o antes de enviarla.\n' +

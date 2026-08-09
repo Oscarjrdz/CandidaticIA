@@ -66,6 +66,19 @@ export async function sendMessageBundleTo(candidate, payload, meta = { bulk: tru
         return { ok: sentCount > 0, sentCount, error: sentCount ? null : 'falló audio' };
     }
 
+    // ── DOCUMENTO (PDF) ──
+    if (payload.templateType === 'document' && payload.documentUrl) {
+        const caption = payload.messageText ? substituteVariables(payload.messageText, candidate) : '';
+        const extra = { filename: payload.documentName || 'documento.pdf' };
+        if (caption) extra.caption = caption;
+        const r = await sendUltraMsgMessage(instanceId, token, phone, toAbsoluteMediaUrl(payload.documentUrl), 'document', extra);
+        if (r?.success) {
+            sentCount++;
+            await saveMessage(candidate.id, { from: 'me', content: caption, type: 'document', mediaUrl: payload.documentUrl, filename: payload.documentName || 'documento.pdf', timestamp: now(), meta }).catch(() => {});
+        }
+        return { ok: sentCount > 0, sentCount, error: sentCount ? null : 'falló documento' };
+    }
+
     // ── TEXTO + IMÁGENES (mezcla) ── cada uno es un mensaje independiente.
     if (payload.messageText) {
         const text = substituteVariables(payload.messageText, candidate); // resuelve {{nombre}} por candidato

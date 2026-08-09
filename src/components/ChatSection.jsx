@@ -1064,8 +1064,9 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         persistVacancyOrder(ids);
     }, [vacancyDraggedId, orderedVacancies, persistVacancyOrder]);
 
-    const [qrForm, setQrForm] = useState({ name: '', message: '', shortcut: '', imageUrl: '', imageUrl2: '', imageUrl3: '', imageUrl4: '', type: 'text', locName: '', locAddress: '', locLat: '', locLng: '', audioUrl: '', audioMime: '', audioVoice: false, audioDurationMs: 0 });
+    const [qrForm, setQrForm] = useState({ name: '', message: '', shortcut: '', imageUrl: '', imageUrl2: '', imageUrl3: '', imageUrl4: '', type: 'text', locName: '', locAddress: '', locLat: '', locLng: '', audioUrl: '', audioMime: '', audioVoice: false, audioDurationMs: 0, documentUrl: '', documentName: '' });
     const [qrImageUploading, setQrImageUploading] = useState(false);
+    const [qrDocumentUploading, setQrDocumentUploading] = useState(false);
     // Grabación de audio para banco de respuestas (nota de voz nativa ogg/opus)
     const [qrRecording, setQrRecording] = useState(false);
     const [qrRecordSecs, setQrRecordSecs] = useState(0);
@@ -1696,6 +1697,27 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         }
     };
 
+    // Sube un PDF al banco (mismo patrón que imagen/audio: /api/media/upload con
+    // candidateId 'quick_reply_asset' para que quede como asset permanente del banco).
+    const handleQrDocumentUpload = async (file) => {
+        if (!file) return null;
+        setQrDocumentUploading(true);
+        try {
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('candidateId', 'quick_reply_asset');
+            const res = await fetch('/api/media/upload', { method: 'POST', body: formData });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Error al subir el PDF');
+            return { url: data.url || data.mediaUrl || null, name: file.name };
+        } catch (e) {
+            showToast && showToast('Error al subir el PDF: ' + e.message, 'error');
+            return null;
+        } finally {
+            setQrDocumentUploading(false);
+        }
+    };
+
     const isOggOpus = (mime) => /ogg/i.test(mime || '');
 
     const stopQrRecording = useCallback(() => {
@@ -1815,6 +1837,37 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     candidateId: currentCandidateId, message: '', type: 'audio', mediaUrl: qr.audioUrl, voice: !!qr.voice,
+                    senderId: user?.id || user?.whatsapp, senderName: user?.name || user?.nombre
+                })
+            }).then(r => r.json()).then(data => {
+                updateChatMessages(currentCandidateId, prev => data.success && data.message
+                    ? mergeOutgoingMessage(prev, data.message, optimisticId)
+                    : prev.map(m => m.id === optimisticId ? { ...m, status: 'failed', error: data.error } : m)
+                );
+            }).catch(() => {
+                updateChatMessages(currentCandidateId, prev => prev.map(m => m.id === optimisticId ? { ...m, status: 'failed' } : m));
+            });
+            return;
+        }
+        // Tipo documento: enviar directo como PDF adjunto (no pasa por el input)
+        if (qr.type === 'document' && qr.documentUrl) {
+            if (!selectedChat) return;
+            autoSilenceBot(selectedChat);
+            const currentCandidateId = selectedChat.id;
+            markReplyHandledOptimistically(currentCandidateId);
+            const optimisticId = 'temp-doc-' + Date.now();
+            const candidatoFresh = candidates.find(c => c.id === selectedChat?.id) || selectedChat;
+            const caption = qr.message ? substituteVariables(qr.message, candidatoFresh || {}).replace(/[^\S\n]{2,}/g, ' ').trim() : '';
+            updateChatMessages(currentCandidateId, prev => [...(prev || []), withMessageEntryAnimation({
+                id: optimisticId, content: caption, type: 'document', mediaUrl: qr.documentUrl, filename: qr.documentName || 'documento.pdf',
+                from: 'me', enviado_por_agente: 1, status: 'pending', fecha: new Date().toISOString(), _clientAnchoredTime: true,
+                senderId: user?.id || user?.whatsapp,
+                senderName: user?.name || user?.nombre
+            }, 'outgoing')]);
+            fetch('/api/chat', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    candidateId: currentCandidateId, message: caption, type: 'document', mediaUrl: qr.documentUrl,
                     senderId: user?.id || user?.whatsapp, senderName: user?.name || user?.nombre
                 })
             }).then(r => r.json()).then(data => {
@@ -4117,8 +4170,8 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
     // sin pasar por el campo de texto. Reusa handleSend (optimista + outbox + dedup). ──
     const sendBankReplyDirect = (qr) => {
         if (!selectedChat) { showToast && showToast('Abre un chat primero', 'info'); return; }
-        // Ubicación y audio ya se envían por su propia vía (POST directo) en handleApplyQuickReply.
-        if (qr.type === 'location' || qr.type === 'audio') { handleApplyQuickReply(qr); return; }
+        // Ubicación, audio y documento ya se envían por su propia vía (POST directo) en handleApplyQuickReply.
+        if (qr.type === 'location' || qr.type === 'audio' || qr.type === 'document') { handleApplyQuickReply(qr); return; }
         const candidatoFresh = candidates.find(c => c.id === selectedChat?.id) || selectedChat;
         const resolved = substituteVariables(qr.message || '', candidatoFresh || {}).replace(/[^\S\n]{2,}/g, ' ').trim();
         const imgs = qr.imageUrls?.length ? qr.imageUrls : (qr.imageUrl ? [qr.imageUrl] : []);
@@ -5822,13 +5875,18 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                         <div className="flex rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden text-xs">
                             <button type="button"
                                 onClick={() => setQrForm(prev => ({ ...prev, type: 'text' }))}
-                                className={`flex-1 py-1.5 font-medium transition-colors ${(qrForm.type !== 'location' && qrForm.type !== 'audio') ? 'bg-green-600 text-white' : 'bg-white dark:bg-[#202c33] text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-[#2a3942]'}`}>
+                                className={`flex-1 py-1.5 font-medium transition-colors ${(qrForm.type !== 'location' && qrForm.type !== 'audio' && qrForm.type !== 'document') ? 'bg-green-600 text-white' : 'bg-white dark:bg-[#202c33] text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-[#2a3942]'}`}>
                                 📝 Texto / Imagen
                             </button>
                             <button type="button"
                                 onClick={() => setQrForm(prev => ({ ...prev, type: 'audio' }))}
                                 className={`flex-1 py-1.5 font-medium transition-colors border-x border-gray-200 dark:border-gray-700 ${qrForm.type === 'audio' ? 'bg-green-600 text-white' : 'bg-white dark:bg-[#202c33] text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-[#2a3942]'}`}>
                                 🎤 Audio
+                            </button>
+                            <button type="button"
+                                onClick={() => setQrForm(prev => ({ ...prev, type: 'document' }))}
+                                className={`flex-1 py-1.5 font-medium transition-colors border-r border-gray-200 dark:border-gray-700 ${qrForm.type === 'document' ? 'bg-green-600 text-white' : 'bg-white dark:bg-[#202c33] text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-[#2a3942]'}`}>
+                                📄 Documento
                             </button>
                             <button type="button"
                                 onClick={() => setQrForm(prev => ({ ...prev, type: 'location' }))}
@@ -5934,6 +5992,45 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                                     💡 En Google Maps: clic derecho sobre el lugar → selecciona las coordenadas que aparecen (las copia automáticamente)
                                 </p>
                             </div>
+                        ) : qrForm.type === 'document' ? (
+                            <div className="space-y-2">
+                                {qrForm.documentUrl ? (
+                                    <div className="flex items-center gap-2 p-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-[#202c33]">
+                                        <Paperclip className="w-4 h-4 shrink-0 text-gray-400" />
+                                        <span className="flex-1 min-w-0 truncate text-xs text-[#111b21] dark:text-[#e9edef]">{qrForm.documentName || 'documento.pdf'}</span>
+                                        <button
+                                            type="button"
+                                            onClick={() => setQrForm(prev => ({ ...prev, documentUrl: '', documentName: '' }))}
+                                            className="shrink-0 p-1.5 text-gray-400 hover:text-red-500 rounded-full hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                                            title="Quitar documento"
+                                        >
+                                            <Trash2 className="w-4 h-4" />
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <label className={`flex items-center justify-center gap-2 w-full py-2.5 rounded-lg border border-dashed border-gray-300 dark:border-gray-600 cursor-pointer hover:border-green-500 transition-colors text-xs text-gray-500 dark:text-gray-400 ${qrDocumentUploading ? 'opacity-60 pointer-events-none' : ''}`}>
+                                        {qrDocumentUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Paperclip className="w-4 h-4" />}
+                                        {qrDocumentUploading ? 'Subiendo...' : 'Subir PDF'}
+                                        <input type="file" accept="application/pdf" className="hidden" onChange={async (e) => {
+                                            const f = e.target.files?.[0];
+                                            e.target.value = '';
+                                            if (!f) return;
+                                            const uploaded = await handleQrDocumentUpload(f);
+                                            if (uploaded?.url) setQrForm(prev => ({ ...prev, documentUrl: uploaded.url, documentName: uploaded.name }));
+                                        }} />
+                                    </label>
+                                )}
+                                <textarea
+                                    placeholder="Mensaje que acompaña al PDF (opcional)"
+                                    value={qrForm.message}
+                                    onChange={(e) => setQrForm({ ...qrForm, message: e.target.value })}
+                                    rows={3}
+                                    className="w-full text-xs px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#202c33] text-[#111b21] dark:text-[#e9edef] outline-none focus:border-green-500 transition-colors resize-y"
+                                />
+                                <p className="text-[10px] text-gray-400 dark:text-gray-500 leading-relaxed">
+                                    📄 Al hacer clic en la respuesta, el PDF se envía al instante (igual que audio y ubicación).
+                                </p>
+                            </div>
                         ) : (
                             <>
                                 <textarea
@@ -6007,7 +6104,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                             {editingQuickReply !== null && (
                                 <button
                                     type="button"
-                                    onClick={() => { setEditingQuickReply(null); setQrForm({ name: '', message: '', shortcut: '', imageUrl: '', imageUrl2: '', imageUrl3: '', imageUrl4: '', type: 'text', locName: '', locAddress: '', locLat: '', locLng: '', audioUrl: '', audioMime: '', audioVoice: false, audioDurationMs: 0 }); }}
+                                    onClick={() => { setEditingQuickReply(null); setQrForm({ name: '', message: '', shortcut: '', imageUrl: '', imageUrl2: '', imageUrl3: '', imageUrl4: '', type: 'text', locName: '', locAddress: '', locLat: '', locLng: '', audioUrl: '', audioMime: '', audioVoice: false, audioDurationMs: 0, documentUrl: '', documentName: '' }); }}
                                     className="flex-1 text-xs py-2 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-[#202c33] transition-colors font-medium"
                                 >
                                     Cancelar
@@ -6019,11 +6116,14 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                                     ? (!qrForm.locLat || !qrForm.locLng || !qrForm.locName.trim())
                                     : qrForm.type === 'audio'
                                     ? (!qrForm.name.trim() || !qrForm.audioUrl || qrRecording || qrAudioUploading)
+                                    : qrForm.type === 'document'
+                                    ? (!qrForm.name.trim() || !qrForm.documentUrl || qrDocumentUploading)
                                     : (!qrForm.name.trim() || (!qrForm.message.trim() && !qrForm.imageUrl && !qrForm.imageUrl2 && !qrForm.imageUrl3 && !qrForm.imageUrl4))
                                 }
                                 onClick={async () => {
                                     const isLoc = qrForm.type === 'location';
                                     const isAudio = qrForm.type === 'audio';
+                                    const isDocument = qrForm.type === 'document';
                                     const entry = {
                                         id: editingQuickReply?.id || `qr_${Date.now()}`,
                                         name: qrForm.name.trim() || qrForm.locName.trim(),
@@ -6036,6 +6136,10 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                                             audioMime: qrForm.audioMime,
                                             voice: !!qrForm.audioVoice,
                                             audioDurationMs: qrForm.audioDurationMs || 0
+                                        } : isDocument ? {
+                                            documentUrl: qrForm.documentUrl,
+                                            documentName: qrForm.documentName,
+                                            message: qrForm.message.trim()
                                         } : {
                                             message: qrForm.message.trim(),
                                             imageUrls: [qrForm.imageUrl, qrForm.imageUrl2, qrForm.imageUrl3, qrForm.imageUrl4].filter(Boolean)
@@ -6048,7 +6152,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                                         newList = [...quickReplies, entry];
                                     }
                                     await saveQuickReplies(newList);
-                                    setQrForm({ name: '', message: '', shortcut: '', imageUrl: '', imageUrl2: '', imageUrl3: '', imageUrl4: '', type: 'text', locName: '', locAddress: '', locLat: '', locLng: '', audioUrl: '', audioMime: '', audioVoice: false, audioDurationMs: 0 });
+                                    setQrForm({ name: '', message: '', shortcut: '', imageUrl: '', imageUrl2: '', imageUrl3: '', imageUrl4: '', type: 'text', locName: '', locAddress: '', locLat: '', locLng: '', audioUrl: '', audioMime: '', audioVoice: false, audioDurationMs: 0, documentUrl: '', documentName: '' });
                                     setEditingQuickReply(null);
                                     showToast && showToast(editingQuickReply ? 'Respuesta actualizada' : 'Respuesta creada', 'success');
                                 }}
@@ -6143,6 +6247,11 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                                                     <Mic className={`w-3 h-3 shrink-0 ${qr.voice ? 'text-green-600 dark:text-green-400' : 'text-amber-500'}`} />
                                                     <audio src={qr.audioUrl} controls className="h-8 max-w-[220px] flex-1 min-w-0" />
                                                 </div>
+                                            ) : qr.type === 'document' && qr.documentUrl ? (
+                                                <div className="flex items-center gap-1 text-[11px] text-[#667781] dark:text-[#8696a0]">
+                                                    <Paperclip className="w-3 h-3 shrink-0" />
+                                                    <span className="line-clamp-1">{qr.documentName || 'documento.pdf'}</span>
+                                                </div>
                                             ) : (
                                                 <>
                                                     {qr.imageUrl && <img src={qr.imageUrl} alt="img" className="mb-1 rounded-md max-h-20 object-cover border border-gray-200 dark:border-gray-700" />}
@@ -6152,7 +6261,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                                         </div>
                                         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
                                             <button
-                                                onClick={(e) => { e.stopPropagation(); setEditingQuickReply(qr); const imgs = qr.imageUrls || (qr.imageUrl ? [qr.imageUrl] : []); setQrForm({ name: qr.name, message: qr.message || '', shortcut: qr.shortcut || '', imageUrl: imgs[0] || '', imageUrl2: imgs[1] || '', imageUrl3: imgs[2] || '', imageUrl4: imgs[3] || '', type: qr.type || 'text', locName: qr.location?.name || '', locAddress: qr.location?.address || '', locLat: qr.location?.lat ? String(qr.location.lat) : '', locLng: qr.location?.lng ? String(qr.location.lng) : '', audioUrl: qr.audioUrl || '', audioMime: qr.audioMime || '', audioVoice: !!qr.voice, audioDurationMs: qr.audioDurationMs || 0 }); }}
+                                                onClick={(e) => { e.stopPropagation(); setEditingQuickReply(qr); const imgs = qr.imageUrls || (qr.imageUrl ? [qr.imageUrl] : []); setQrForm({ name: qr.name, message: qr.message || '', shortcut: qr.shortcut || '', imageUrl: imgs[0] || '', imageUrl2: imgs[1] || '', imageUrl3: imgs[2] || '', imageUrl4: imgs[3] || '', type: qr.type || 'text', locName: qr.location?.name || '', locAddress: qr.location?.address || '', locLat: qr.location?.lat ? String(qr.location.lat) : '', locLng: qr.location?.lng ? String(qr.location.lng) : '', audioUrl: qr.audioUrl || '', audioMime: qr.audioMime || '', audioVoice: !!qr.voice, audioDurationMs: qr.audioDurationMs || 0, documentUrl: qr.documentUrl || '', documentName: qr.documentName || '' }); }}
                                                 className="p-1.5 text-gray-400 hover:text-blue-500 transition-colors rounded-full hover:bg-blue-50 dark:hover:bg-blue-900/20"
                                                 title="Editar"
                                             >
