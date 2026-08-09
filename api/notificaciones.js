@@ -47,29 +47,39 @@ export default async function handler(req, res) {
       else if (target === 'recruiters') targets = recruiters;
       else targets = allTokens;
 
-      const rawTokens = targets.map(t => t.token).filter(t => t?.startsWith('ExponentPushToken['));
-      // Dedupe defensivo: si el mismo device quedó guardado dos veces (bug de registro
-      // con phone vacío ya corregido en push-token.js, pero puede haber datos viejos),
-      // no se le manda la notificación duplicada al mismo token.
-      const validTokens = [...new Set(rawTokens)];
-      if (validTokens.length === 0) return res.status(200).json({ success: true, sent: 0 });
+      // Dedupe defensivo por token (mismo device no debe recibir dos veces) — filtra
+      // sobre entries, no strings, para poder llevar el unreadCount de cada uno.
+      const seenTokens = new Set();
+      const validEntries = targets.filter(t => {
+        if (!t.token?.startsWith('ExponentPushToken[')) return false;
+        if (seenTokens.has(t.token)) return false;
+        seenTokens.add(t.token);
+        return true;
+      });
+      if (validEntries.length === 0) return res.status(200).json({ success: true, sent: 0 });
 
       // Expo Push API — máx 100 por batch
       const batches = [];
-      for (let i = 0; i < validTokens.length; i += 100) {
-        batches.push(validTokens.slice(i, i + 100));
+      for (let i = 0; i < validEntries.length; i += 100) {
+        batches.push(validEntries.slice(i, i + 100));
       }
 
       let sent = 0;
       for (const batch of batches) {
-        const messages = batch.map(token => ({
-          to: token,
-          title: title.trim(),
-          body: body.trim(),
-          data,
-          sound: 'default',
-          priority: 'high',
-        }));
+        const messages = batch.map(t => {
+          // unreadCount vive en el mismo objeto que está dentro de allTokens (filter
+          // conserva la referencia), así que este incremento se persiste abajo.
+          t.unreadCount = (t.unreadCount || 0) + 1;
+          return {
+            to: t.token,
+            title: title.trim(),
+            body: body.trim(),
+            data,
+            sound: 'default',
+            priority: 'high',
+            badge: t.unreadCount,
+          };
+        });
 
         const pushRes = await fetch('https://exp.host/--/api/v2/push/send', {
           method: 'POST',
@@ -84,6 +94,8 @@ export default async function handler(req, res) {
         }
       }
 
+      await redis.set(KEY, JSON.stringify(allTokens));
+
       // Guardar historial de notificaciones
       const HIST_KEY = 'candidatic_notif_history';
       const histRaw = await redis.get(HIST_KEY);
@@ -94,12 +106,12 @@ export default async function handler(req, res) {
         body: body.trim(),
         target,
         sent,
-        total: validTokens.length,
+        total: validEntries.length,
         createdAt: new Date().toISOString(),
       });
       await redis.set(HIST_KEY, JSON.stringify(history.slice(0, 50)));
 
-      return res.status(200).json({ success: true, sent, total: validTokens.length });
+      return res.status(200).json({ success: true, sent, total: validEntries.length });
     }
 
     /* ── DELETE: quitar un dispositivo registrado (limpieza manual) ── */

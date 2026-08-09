@@ -32,7 +32,10 @@ export default async function handler(req, res) {
     // (bug real: un reclutador que también era candidato de prueba perdió su token de
     // candidato porque el registro de reclutador con el mismo phone lo sobreescribió).
     const existing = tokens.findIndex(t => t.token === token || (t.phone === cleanPhone && t.type === type));
-    const entry = { phone: cleanPhone, token, type, updatedAt: new Date().toISOString() };
+    // unreadCount se conserva entre re-registros (abrir la app no debe borrar la
+    // burbuja) — solo se resetea explícitamente vía POST /api/push-unread.
+    const unreadCount = existing >= 0 ? (tokens[existing].unreadCount || 0) : 0;
+    const entry = { phone: cleanPhone, token, type, unreadCount, updatedAt: new Date().toISOString() };
 
     if (existing >= 0) tokens[existing] = entry;
     else tokens.push(entry);
