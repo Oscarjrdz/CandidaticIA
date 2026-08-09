@@ -5659,7 +5659,12 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                                 // Fuera de esa ventana, el comportamiento normal (anclar al fondo si estás
                                 // abajo) se conserva para el flujo de mensajes entrantes.
                                 const inSendHold = Date.now() < sendScrollHoldUntilRef.current;
-                                const atBottomTrigger = inSendHold ? messagesGrew : isAtBottomRef.current;
+                                // Fuera de sendHold también hace falta messagesGrew: sin este chequeo,
+                                // cualquier remedición idle (palomita sent→delivered→read) disparaba
+                                // scrollToBottom() sin que hubiera llegado nada nuevo, y ese scroll fuerza
+                                // otra remedición (overscan) — bucle de "brinquitos" al estar ya parado
+                                // en el fondo, sin hacer más scroll.
+                                const atBottomTrigger = inSendHold ? messagesGrew : (isAtBottomRef.current && messagesGrew);
                                 if (bottomAnchorRef.current || atBottomTrigger) {
                                     // Mismo scrollToBottom() para cualquier tamaño de mensaje — ya espera
                                     // el frame que Virtuoso necesita para medir burbujas altas (ver arriba),
