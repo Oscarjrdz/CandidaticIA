@@ -1091,6 +1091,66 @@ const LandingPage = ({ onLoginSuccess }) => {
                     </div>
                 </section>
 
+                {/* ═══ PRODUCTO / SCREENSHOTS ═══ */}
+                <section className="py-12 sm:py-20 px-4 sm:px-6 bg-gray-50">
+                    <div className="max-w-7xl mx-auto">
+                        <div className="text-center mb-10 sm:mb-16">
+                            <div className="inline-flex items-center space-x-2 bg-violet-50 px-4 py-1.5 rounded-full text-xs sm:text-sm font-semibold text-violet-700 mb-4 border border-violet-100">
+                                <Sparkles className="w-4 h-4" />
+                                <span>El sistema por dentro</span>
+                            </div>
+                            <h2 className="text-2xl sm:text-3xl md:text-5xl font-extrabold text-gray-900 tracking-tight mb-4">
+                                Así trabaja tu equipo de<br />
+                                <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-violet-600">reclutamiento masivo en Monterrey</span>
+                            </h2>
+                            <p className="text-sm sm:text-lg text-gray-500 max-w-2xl mx-auto px-2">
+                                Un dashboard real, con candidatos reales: así se ve Candidatic IA gestionando miles de conversaciones de WhatsApp al mismo tiempo.
+                            </p>
+                        </div>
+
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8">
+                            {[
+                                {
+                                    img: '/lp/Candidatic_reclutamiento_masivo_monterrey_1.png',
+                                    alt: 'Dashboard de gestión de candidatos de WhatsApp en Candidatic IA, plataforma de reclutamiento masivo en Monterrey con miles de candidatos y captura automática de datos',
+                                    title: 'Miles de candidatos, un solo dashboard',
+                                    desc: '12,763 candidatos capturados desde WhatsApp con nombre, municipio, categoría y escolaridad completados automáticamente.',
+                                },
+                                {
+                                    img: '/lp/Candidatic_reclutamiento_masivo_monterrey_2.png',
+                                    alt: 'Chat Web de Candidatic IA con Brenda, el bot de inteligencia artificial, conversando en vivo con un candidato y capturando sus datos por WhatsApp — reclutamiento masivo en Monterrey',
+                                    title: 'Brenda IA captura los datos por ti',
+                                    desc: 'Nuestro bot conversa 24/7 con cada candidato y llena su perfil solo — sin que un reclutador tenga que preguntar nada a mano.',
+                                },
+                                {
+                                    img: '/lp/Candidatic_reclutamiento_masivo_monterrey_3.png',
+                                    alt: 'Pantalla de envíos masivos de WhatsApp a candidatos en Candidatic IA, la plataforma de reclutamiento masivo en Monterrey para reactivar tu base de datos con un clic',
+                                    title: 'Reactiva tu base con un clic',
+                                    desc: 'Lanza campañas instantáneas con plantillas aprobadas por WhatsApp a cientos de candidatos a la vez.',
+                                },
+                            ].map((shot, i) => (
+                                <div key={i} className="group">
+                                    <div className="rounded-2xl overflow-hidden border border-gray-200 shadow-lg shadow-gray-200/50 bg-white hover:shadow-xl hover:-translate-y-1 transition-all duration-300">
+                                        <div className="flex items-center gap-1.5 px-4 py-2.5 bg-gray-100 border-b border-gray-200">
+                                            <span className="w-2.5 h-2.5 rounded-full bg-red-400" />
+                                            <span className="w-2.5 h-2.5 rounded-full bg-yellow-400" />
+                                            <span className="w-2.5 h-2.5 rounded-full bg-green-400" />
+                                        </div>
+                                        <img
+                                            src={shot.img}
+                                            alt={shot.alt}
+                                            loading="lazy"
+                                            className="w-full h-auto object-cover object-top"
+                                        />
+                                    </div>
+                                    <h3 className="text-base sm:text-lg font-bold text-gray-900 mt-4 mb-1">{shot.title}</h3>
+                                    <p className="text-sm text-gray-500 leading-relaxed">{shot.desc}</p>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </section>
+
                 {/* ═══ FEATURES SECTION ═══ */}
                 <section id="features" className="py-12 sm:py-20 px-4 sm:px-6" ref={featuresRef}>
                     <div className="max-w-7xl mx-auto">
