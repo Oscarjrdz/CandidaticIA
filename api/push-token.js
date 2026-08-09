@@ -20,12 +20,16 @@ export default async function handler(req, res) {
     if (!redis) return res.status(503).json({ error: 'Storage no disponible' });
 
     const cleanPhone = String(phone).replace(/\D/g, '').slice(-10);
+    if (cleanPhone.length < 10) return res.status(400).json({ error: 'Teléfono inválido' });
     const KEY = 'candidatic_push_tokens';
 
     const raw = await redis.get(KEY);
     const tokens = raw ? JSON.parse(raw) : [];
 
-    const existing = tokens.findIndex(t => t.phone === cleanPhone);
+    // Busca por token O por teléfono: si el mismo dispositivo ya estaba registrado
+    // (aunque haya sido con un phone distinto/vacío por un bug previo), actualiza esa
+    // entrada en vez de crear una duplicada — evita notificaciones dobles al mismo device.
+    const existing = tokens.findIndex(t => t.token === token || t.phone === cleanPhone);
     const entry = { phone: cleanPhone, token, type, updatedAt: new Date().toISOString() };
 
     if (existing >= 0) tokens[existing] = entry;

@@ -5,7 +5,7 @@
  */
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,DELETE,OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization');
   if (req.method === 'OPTIONS') return res.status(200).end();
 
@@ -47,7 +47,11 @@ export default async function handler(req, res) {
       else if (target === 'recruiters') targets = recruiters;
       else targets = allTokens;
 
-      const validTokens = targets.map(t => t.token).filter(t => t?.startsWith('ExponentPushToken['));
+      const rawTokens = targets.map(t => t.token).filter(t => t?.startsWith('ExponentPushToken['));
+      // Dedupe defensivo: si el mismo device quedó guardado dos veces (bug de registro
+      // con phone vacío ya corregido en push-token.js, pero puede haber datos viejos),
+      // no se le manda la notificación duplicada al mismo token.
+      const validTokens = [...new Set(rawTokens)];
       if (validTokens.length === 0) return res.status(200).json({ success: true, sent: 0 });
 
       // Expo Push API — máx 100 por batch
@@ -96,6 +100,16 @@ export default async function handler(req, res) {
       await redis.set(HIST_KEY, JSON.stringify(history.slice(0, 50)));
 
       return res.status(200).json({ success: true, sent, total: validTokens.length });
+    }
+
+    /* ── DELETE: quitar un dispositivo registrado (limpieza manual) ── */
+    if (req.method === 'DELETE') {
+      const { token } = req.body;
+      if (!token) return res.status(400).json({ error: 'Falta token' });
+
+      const remaining = allTokens.filter(t => t.token !== token);
+      await redis.set(KEY, JSON.stringify(remaining));
+      return res.status(200).json({ success: true, removed: allTokens.length - remaining.length });
     }
 
     return res.status(405).json({ error: 'Método no permitido' });

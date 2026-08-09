@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Bell, Send, Users, Briefcase, BarChart2, Loader2, CheckCircle, XCircle, Clock } from 'lucide-react';
+import { Bell, Send, Users, Briefcase, BarChart2, Loader2, CheckCircle, XCircle, Clock, Trash2 } from 'lucide-react';
 
 const TARGET_OPTIONS = [
   { value: 'all',        label: 'Todos',         desc: 'Candidatos y reclutadores',  color: '#6366f1' },
@@ -12,10 +12,17 @@ function _fmtDate(d) {
   return new Date(d).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
 }
 
+function fmtPhone(phone) {
+  if (!phone || phone.length < 10) return null;
+  return `${phone.slice(0, 3)} ${phone.slice(3, 6)} ${phone.slice(6)}`;
+}
+
 export default function NotificacionesSection() {
   const [stats, setStats] = useState({ candidates: 0, recruiters: 0, total: 0 });
+  const [tokens, setTokens] = useState([]);
   const [_history, _setHistory] = useState([]);
   const [loadingStats, setLoadingStats] = useState(true);
+  const [removingToken, setRemovingToken] = useState(null);
 
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
@@ -31,10 +38,25 @@ export default function NotificacionesSection() {
       const data = await res.json();
       if (data.success) {
         setStats(data.stats);
+        setTokens(data.tokens || []);
         // Obtener historial desde el endpoint (en el futuro)
       }
     } catch {}
     finally { setLoadingStats(false); }
+  };
+
+  const handleRemoveToken = async (token) => {
+    setRemovingToken(token);
+    try {
+      const res = await fetch('/api/notificaciones', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token }),
+      });
+      const data = await res.json();
+      if (data.success) await loadStats();
+    } catch {}
+    finally { setRemovingToken(null); }
   };
 
   const handleSend = async () => {
@@ -257,6 +279,56 @@ export default function NotificacionesSection() {
             </ul>
           </div>
         </div>
+      </div>
+
+      {/* ── Dispositivos registrados ── */}
+      <div className="bg-white dark:bg-gray-800 rounded-3xl border border-gray-100 dark:border-gray-700 p-6">
+        <h3 className="font-bold text-gray-900 dark:text-white text-base flex items-center gap-2 mb-4">
+          <Users className="w-4 h-4 text-indigo-500" /> Dispositivos registrados
+        </h3>
+        {tokens.length === 0 ? (
+          <p className="text-xs text-gray-400">
+            {loadingStats ? 'Cargando...' : 'Todavía no hay dispositivos registrados.'}
+          </p>
+        ) : (
+          <div className="space-y-1.5">
+            {tokens.map(t => {
+              const duplicate = tokens.filter(o => o.token === t.token).length > 1;
+              const phone = fmtPhone(t.phone);
+              return (
+                <div
+                  key={`${t.token}-${t.phone}-${t.updatedAt}`}
+                  className={`flex items-center justify-between gap-3 px-3 py-2 rounded-xl text-sm ${duplicate ? 'bg-red-50 dark:bg-red-900/20' : 'bg-gray-50 dark:bg-gray-700/50'}`}
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    {t.type === 'recruiter'
+                      ? <Briefcase className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                      : <Users className="w-3.5 h-3.5 text-orange-500 shrink-0" />}
+                    <span className="font-medium text-gray-700 dark:text-gray-200 truncate">
+                      {phone || <span className="italic text-gray-400">sin teléfono</span>}
+                    </span>
+                    {duplicate && (
+                      <span className="text-[10px] font-bold text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-900/40 px-1.5 py-0.5 rounded-md shrink-0">
+                        duplicado
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-[11px] text-gray-400">{_fmtDate(t.updatedAt)}</span>
+                    <button
+                      onClick={() => handleRemoveToken(t.token)}
+                      disabled={removingToken === t.token}
+                      title="Quitar este dispositivo"
+                      className="p-1.5 rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-40"
+                    >
+                      {removingToken === t.token ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     </div>
   );
