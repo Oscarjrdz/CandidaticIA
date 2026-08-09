@@ -4,7 +4,13 @@
       "Bash(git commit -m ' *)",
       "Bash(git push *)",
       "Bash(npx vite *)",
-      "Bash(python3 -)"
+      "Bash(python3 -)",
+      "Bash(node --check api/utils/agent-send.js)",
+      "Bash(curl -s -X POST https://www.candidatic.com/api/media/upload -F 'file=@/private/tmp/claude-501/-Users-oscar-Candidatic-IA/e2a68637-0dc6-468c-8b07-a82764f30901/scratchpad/test.pdf;type=application/pdf;filename=test.pdf' -F candidateId=quick_reply_asset)",
+      "Bash(node /private/tmp/claude-501/-Users-oscar-Candidatic-IA/37e277a2-4a39-4c69-9eb0-04b588ff8f70/scratchpad/_scratch_check_push_tokens.mjs)",
+      "Bash(node _scratch_check_push_tokens.mjs)",
+      "Bash(node --check api/notificaciones.js)",
+      "Bash(node --check api/push-token.js)"
     ]
   }
 }
