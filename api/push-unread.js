@@ -1,7 +1,7 @@
 /**
- * GET  /api/push-unread?phone=&type=   — contador de notificaciones no leídas
- * POST /api/push-unread  { phone, type } — marca como leídas (resetea a 0)
- * Usado por la burbuja/badge dentro de las apps de candidato y reclutador.
+ * GET  /api/push-unread?phone=&type=   — contador de no leídas + historial (inbox)
+ * POST /api/push-unread  { phone, type } — marca como leídas (resetea el contador a 0)
+ * Usado por la burbuja/badge y por la pantalla de Notificaciones en las apps.
  */
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -24,7 +24,7 @@ export default async function handler(req, res) {
       const raw = await redis.get(KEY);
       const tokens = raw ? JSON.parse(raw) : [];
       const entry = tokens.find(t => t.phone === cleanPhone && t.type === type);
-      return res.status(200).json({ success: true, unreadCount: entry?.unreadCount || 0 });
+      return res.status(200).json({ success: true, unreadCount: entry?.unreadCount || 0, items: entry?.inbox || [] });
     }
 
     if (req.method === 'POST') {

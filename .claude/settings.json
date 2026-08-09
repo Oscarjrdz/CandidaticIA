@@ -10,7 +10,14 @@
       "Bash(node /private/tmp/claude-501/-Users-oscar-Candidatic-IA/37e277a2-4a39-4c69-9eb0-04b588ff8f70/scratchpad/_scratch_check_push_tokens.mjs)",
       "Bash(node _scratch_check_push_tokens.mjs)",
       "Bash(node --check api/notificaciones.js)",
-      "Bash(node --check api/push-token.js)"
+      "Bash(node --check api/push-token.js)",
+      "Bash(python3 -c ' *)",
+      "Bash(node --check api/push-unread.js)",
+      "Bash(npx tsc *)"
+    ],
+    "additionalDirectories": [
+      "/Users/oscar/App Candidatic/Candidatic_App/utils",
+      "/Users/oscar/App Candidatic/Candidatic_App/app/(candidate_tabs)"
     ]
   }
 }

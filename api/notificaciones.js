@@ -67,9 +67,10 @@ export default async function handler(req, res) {
       let sent = 0;
       for (const batch of batches) {
         const messages = batch.map(t => {
-          // unreadCount vive en el mismo objeto que está dentro de allTokens (filter
-          // conserva la referencia), así que este incremento se persiste abajo.
+          // unreadCount/inbox viven en el mismo objeto que está dentro de allTokens
+          // (filter conserva la referencia), así que esto se persiste abajo.
           t.unreadCount = (t.unreadCount || 0) + 1;
+          t.inbox = [{ id: Date.now().toString() + Math.random().toString(36).slice(2, 6), title: title.trim(), body: body.trim(), data, createdAt: new Date().toISOString() }, ...(t.inbox || [])].slice(0, 30);
           return {
             to: t.token,
             title: title.trim(),
