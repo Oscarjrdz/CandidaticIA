@@ -26,10 +26,12 @@ export default async function handler(req, res) {
     const raw = await redis.get(KEY);
     const tokens = raw ? JSON.parse(raw) : [];
 
-    // Busca por token O por teléfono: si el mismo dispositivo ya estaba registrado
-    // (aunque haya sido con un phone distinto/vacío por un bug previo), actualiza esa
-    // entrada en vez de crear una duplicada — evita notificaciones dobles al mismo device.
-    const existing = tokens.findIndex(t => t.token === token || t.phone === cleanPhone);
+    // Busca por token, O por (phone + type) — el type es obligatorio en el match de
+    // phone porque la misma persona puede usar el mismo número en la app de candidato
+    // Y en la de reclutador; matchear solo por phone pisaba el registro del otro rol
+    // (bug real: un reclutador que también era candidato de prueba perdió su token de
+    // candidato porque el registro de reclutador con el mismo phone lo sobreescribió).
+    const existing = tokens.findIndex(t => t.token === token || (t.phone === cleanPhone && t.type === type));
     const entry = { phone: cleanPhone, token, type, updatedAt: new Date().toISOString() };
 
     if (existing >= 0) tokens[existing] = entry;
