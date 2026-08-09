@@ -5881,7 +5881,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                             <button type="button"
                                 onClick={() => setQrForm(prev => ({ ...prev, type: 'text' }))}
                                 className={`flex-1 py-1.5 font-medium transition-colors ${(qrForm.type !== 'location' && qrForm.type !== 'audio' && qrForm.type !== 'document') ? 'bg-green-600 text-white' : 'bg-white dark:bg-[#202c33] text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-[#2a3942]'}`}>
-                                📝 Texto / Imagen
+                                📝 Texto
                             </button>
                             <button type="button"
                                 onClick={() => setQrForm(prev => ({ ...prev, type: 'audio' }))}
@@ -5891,7 +5891,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                             <button type="button"
                                 onClick={() => setQrForm(prev => ({ ...prev, type: 'document' }))}
                                 className={`flex-1 py-1.5 font-medium transition-colors border-r border-gray-200 dark:border-gray-700 ${qrForm.type === 'document' ? 'bg-green-600 text-white' : 'bg-white dark:bg-[#202c33] text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-[#2a3942]'}`}>
-                                📄 Documento
+                                📄 PDF
                             </button>
                             <button type="button"
                                 onClick={() => setQrForm(prev => ({ ...prev, type: 'location' }))}
