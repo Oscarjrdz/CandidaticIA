@@ -320,6 +320,55 @@ const MobileLandingPage = ({ onLoginSuccess }) => {
                     </div>
                 </section>
 
+                {/* ── APPS — RECLUTADOR / CANDIDATO ── */}
+                <section className="px-5 py-9 bg-white">
+                    <div className="text-center mb-6">
+                        <div className="inline-flex items-center gap-2 bg-violet-50 border border-violet-100 px-3 py-1 rounded-full mb-3">
+                            <span className="text-[10px] font-semibold text-violet-700">Ya disponible en iOS</span>
+                        </div>
+                        <h2 className="text-xl font-extrabold text-gray-900">Candidatic también vive en tu celular</h2>
+                    </div>
+
+                    <div className="space-y-4">
+                        {/* Reclutador */}
+                        <div className="rounded-2xl border border-blue-100 bg-gradient-to-br from-blue-50 to-white p-4 flex items-center gap-4">
+                            <img
+                                src="/lp/Candidatic_app_reclutador_icono.png"
+                                alt="Ícono de la app Candidatic Reclutador para App Store, plataforma de reclutamiento masivo en Monterrey"
+                                className="w-16 h-16 rounded-2xl shadow-md shadow-blue-200/60 shrink-0"
+                            />
+                            <div className="min-w-0">
+                                <p className="text-[10px] font-bold uppercase tracking-widest text-blue-600 mb-0.5">¿Eres reclutador?</p>
+                                <p className="text-sm font-bold text-gray-900 mb-2">Descarga la app y publica gratis</p>
+                                <a href="https://apps.apple.com/mx/app/id6776356939" target="_blank" rel="noopener noreferrer" className="inline-flex">
+                                    <img src="/lp/badge-app-store-es-mx.svg" alt="Descarga Candidatic Reclutador en el App Store" className="h-9" />
+                                </a>
+                            </div>
+                        </div>
+
+                        {/* Candidato */}
+                        <div className="rounded-2xl border border-orange-100 bg-gradient-to-br from-orange-50 to-white p-4 flex items-center gap-4">
+                            <img
+                                src="/lp/Candidatic_app_candidato_icono.png"
+                                alt="Ícono de la app Candidatic Bolsa de Empleo para App Store y Google Play, agencia de reclutamiento masivo en Monterrey"
+                                className="w-16 h-16 rounded-2xl shadow-md shadow-orange-200/60 shrink-0"
+                            />
+                            <div className="min-w-0">
+                                <p className="text-[10px] font-bold uppercase tracking-widest text-orange-600 mb-0.5">¿Eres candidato?</p>
+                                <p className="text-sm font-bold text-gray-900 mb-2">Descarga la app de Candidatic</p>
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <a href="https://apps.apple.com/mx/app/id6776012569" target="_blank" rel="noopener noreferrer" className="inline-flex">
+                                        <img src="/lp/badge-app-store-es-mx.svg" alt="Descarga Candidatic Bolsa de Empleo en el App Store" className="h-9" />
+                                    </a>
+                                    <span className="inline-flex items-center h-9 px-2.5 rounded-lg border border-gray-200 bg-gray-50 text-gray-400 text-[10px] font-semibold">
+                                        Google Play — Próximamente
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
                 {/* ── CLIENTES MARQUEE ── */}
                 <section className="py-6 bg-white overflow-hidden">
                     <style>{`
@@ -366,6 +415,87 @@ const MobileLandingPage = ({ onLoginSuccess }) => {
                                     </div>
                                 ))}
                             </div>
+                        </div>
+                    </div>
+                </section>
+
+                {/* ── PRODUCTO / SCREENSHOTS ── */}
+                <section className="px-5 py-9 bg-gray-50 relative overflow-hidden">
+                    <style>{`
+                        @keyframes orbFloatMobile1 {
+                            0%, 100% { transform: translate(0px, 0px) scale(1); }
+                            33% { transform: translate(20px, -15px) scale(1.05); }
+                            66% { transform: translate(-10px, 10px) scale(0.97); }
+                        }
+                        @keyframes orbFloatMobile2 {
+                            0%, 100% { transform: translate(0px, 0px) scale(1); }
+                            50% { transform: translate(-15px, 20px) scale(1.06); }
+                        }
+                        .orb-mobile-1 { animation: orbFloatMobile1 16s ease-in-out infinite; }
+                        .orb-mobile-2 { animation: orbFloatMobile2 20s ease-in-out infinite; }
+                    `}</style>
+                    <div className="absolute inset-0 pointer-events-none"
+                        style={{
+                            backgroundImage: 'radial-gradient(circle, #c4b5fd 1px, transparent 1px)',
+                            backgroundSize: '22px 22px',
+                            opacity: 0.3,
+                            maskImage: 'radial-gradient(ellipse 80% 80% at 50% 50%, black 40%, transparent 100%)',
+                            WebkitMaskImage: 'radial-gradient(ellipse 80% 80% at 50% 50%, black 40%, transparent 100%)',
+                        }}
+                    />
+                    <div className="absolute inset-0 pointer-events-none overflow-hidden">
+                        <div className="orb-mobile-1 absolute rounded-full"
+                            style={{ top: '-10%', left: '-10%', width: '55%', height: '35%', filter: 'blur(40px)',
+                                background: 'radial-gradient(circle, rgba(124,58,237,0.18) 0%, rgba(91,33,182,0.07) 55%, transparent 100%)' }} />
+                        <div className="orb-mobile-2 absolute rounded-full"
+                            style={{ bottom: '-10%', right: '-10%', width: '55%', height: '35%', filter: 'blur(40px)',
+                                background: 'radial-gradient(circle, rgba(59,130,246,0.16) 0%, rgba(37,99,235,0.06) 55%, transparent 100%)' }} />
+                    </div>
+
+                    <div className="relative z-10">
+                        <div className="text-center mb-6">
+                            <div className="inline-flex items-center gap-2 bg-violet-50 border border-violet-100 px-3 py-1 rounded-full mb-3">
+                                <span className="text-[10px] font-semibold text-violet-700">El sistema por dentro</span>
+                            </div>
+                            <h2 className="text-xl font-extrabold text-gray-900">
+                                Así trabaja tu equipo de reclutamiento masivo en Monterrey
+                            </h2>
+                        </div>
+
+                        <div className="space-y-6">
+                            {[
+                                {
+                                    img: '/lp/Candidatic_reclutamiento_masivo_monterrey_1.png',
+                                    alt: 'Dashboard de gestión de candidatos de WhatsApp en Candidatic IA, plataforma de reclutamiento masivo en Monterrey con miles de candidatos y captura automática de datos',
+                                    title: 'Miles de candidatos, un solo dashboard',
+                                    desc: 'Miles de candidatos capturados desde WhatsApp con nombre, municipio, categoría y escolaridad completados automáticamente.',
+                                },
+                                {
+                                    img: '/lp/Candidatic_reclutamiento_masivo_monterrey_2.png',
+                                    alt: 'Chat Web de Candidatic IA con Brenda, el bot de inteligencia artificial, conversando en vivo con un candidato y capturando sus datos por WhatsApp — reclutamiento masivo en Monterrey',
+                                    title: 'Brenda IA captura los datos por ti',
+                                    desc: 'Nuestro bot conversa 24/7 con cada candidato y llena su perfil solo — sin que un reclutador tenga que preguntar nada a mano.',
+                                },
+                                {
+                                    img: '/lp/Candidatic_reclutamiento_masivo_monterrey_3.png',
+                                    alt: 'Pantalla de envíos masivos de WhatsApp a candidatos en Candidatic IA, la plataforma de reclutamiento masivo en Monterrey para reactivar tu base de datos con un clic',
+                                    title: 'Reactiva tu base con un clic',
+                                    desc: 'Lanza campañas instantáneas con plantillas aprobadas por WhatsApp a cientos de candidatos a la vez.',
+                                },
+                            ].map((shot, i) => (
+                                <div key={i}>
+                                    <div className="rounded-2xl overflow-hidden border border-gray-200 shadow-md bg-white">
+                                        <div className="flex items-center gap-1.5 px-3 py-2 bg-gray-100 border-b border-gray-200">
+                                            <span className="w-2 h-2 rounded-full bg-red-400" />
+                                            <span className="w-2 h-2 rounded-full bg-yellow-400" />
+                                            <span className="w-2 h-2 rounded-full bg-green-400" />
+                                        </div>
+                                        <img src={shot.img} alt={shot.alt} loading="lazy" className="w-full h-auto object-cover object-top" />
+                                    </div>
+                                    <h3 className="text-sm font-bold text-gray-900 mt-3 mb-1">{shot.title}</h3>
+                                    <p className="text-xs text-gray-500 leading-relaxed">{shot.desc}</p>
+                                </div>
+                            ))}
                         </div>
                     </div>
                 </section>
