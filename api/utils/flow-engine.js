@@ -28,6 +28,19 @@ const QUICK_REPLIES_KEY = 'candidatic:quick_replies';
 const REMINDER_TEMPLATES_KEY = 'candidatic:reminder_templates';
 const DIRECT_REMINDERS_ZSET = 'direct_reminders';
 const PROJECTS_KEY = 'candidatic_manual_projects';
+const MEDIA_HOST = 'https://www.candidatic.com';
+
+// Mismo helper que api/utils/agent-katcon.js → toAbsoluteImageUrl: el banco de
+// respuestas guarda media interna como `/api/image?id=med_X`, que Meta no puede
+// jalar directo (no es pública) — se convierte a la ruta pública /api/media/X.jpg.
+// La extensión es decorativa: api/image.js hace `id.split('.')[0]` y sirve el mime
+// real guardado, así que sirve igual para imagen/audio/documento.
+function toAbsoluteMediaUrl(u) {
+    const m = /[?&]id=([^&]+)/.exec(u || '');
+    if (m) return `${MEDIA_HOST}/api/media/${m[1]}.jpg`;
+    if (u && u.startsWith('/')) return `${MEDIA_HOST}${u}`;
+    return u;
+}
 const PROJECT_LINKS_PREFIX = 'crm_links:';
 export const EXEC_SET_PREFIX = 'flow:executed:v1:';
 export const COUNTER_PREFIX = 'flow:counter:v1:';
@@ -203,19 +216,73 @@ async function evaluateOrExecute(node, candidate, flowId, redis, opts = {}) {
                 const raw = await getCachedConfig(redis, QUICK_REPLIES_KEY);
                 const replies = raw ? JSON.parse(raw) : [];
                 const qr = replies.find(r => r.id === data.quickReplyId);
-                if (!qr || !qr.message) return true;
+                if (!qr) return true;
 
                 const config = await getUltraMsgConfig(candidate.incomingPhoneNumberId || candidate.instanceId);
                 if (!config?.token || !config?.instanceId) throw new Error('sin credenciales de WhatsApp');
-
                 const cleanTo = String(candidate.whatsapp).replace(/\D/g, '');
-                const text = substituteVariables(qr.message, candidate);
-                const sendResult = await sendUltraMsgMessage(config.instanceId, config.token, cleanTo, text, 'chat', { priority: 1 });
-                if (sendResult?.success) {
-                    await saveMessage(candidate.id, {
-                        from: 'me', content: text, timestamp: new Date().toISOString(),
-                        meta: { flow: true, flowId, nodeId: node.id }
-                    }).catch(() => {});
+                const qrType = qr.type || 'text';
+
+                // Igual que /api/quick_replies documenta: text (+ hasta 4 imágenes) es el
+                // default; location/audio/document son variantes exclusivas del mismo banco.
+                if (qrType === 'location' && qr.location?.lat && qr.location?.lng) {
+                    const locRes = await sendUltraMsgMessage(config.instanceId, config.token, cleanTo, qr.location.address || '', 'location', {
+                        name: qr.location.name, address: qr.location.address, lat: qr.location.lat, lng: qr.location.lng
+                    });
+                    if (locRes?.success) {
+                        await saveMessage(candidate.id, {
+                            from: 'me', content: `[Ubicación: ${qr.location.name || 'Mapa'}]`, timestamp: new Date().toISOString(),
+                            meta: { flow: true, flowId, nodeId: node.id }
+                        }).catch(() => {});
+                    }
+                    return true;
+                }
+
+                if (qrType === 'audio' && qr.audioUrl) {
+                    const audioRes = await sendUltraMsgMessage(config.instanceId, config.token, cleanTo, toAbsoluteMediaUrl(qr.audioUrl), 'audio', { voice: !!qr.voice });
+                    if (audioRes?.success) {
+                        await saveMessage(candidate.id, {
+                            from: 'me', content: qr.voice ? '🎤 Nota de voz' : '🎵 Audio', type: 'audio', mediaUrl: qr.audioUrl,
+                            timestamp: new Date().toISOString(), meta: { flow: true, flowId, nodeId: node.id }
+                        }).catch(() => {});
+                    }
+                    return true;
+                }
+
+                if (qrType === 'document' && qr.documentUrl) {
+                    const caption = qr.message ? substituteVariables(qr.message, candidate) : '';
+                    const docRes = await sendUltraMsgMessage(config.instanceId, config.token, cleanTo, toAbsoluteMediaUrl(qr.documentUrl), 'document', {
+                        filename: qr.documentName || 'documento.pdf', caption
+                    });
+                    if (docRes?.success) {
+                        await saveMessage(candidate.id, {
+                            from: 'me', content: caption, type: 'document', mediaUrl: qr.documentUrl, filename: qr.documentName || 'documento.pdf',
+                            timestamp: new Date().toISOString(), meta: { flow: true, flowId, nodeId: node.id }
+                        }).catch(() => {});
+                    }
+                    return true;
+                }
+
+                // type 'text' (default): texto + hasta 4 imágenes del banco.
+                if (qr.message) {
+                    const text = substituteVariables(qr.message, candidate);
+                    const textRes = await sendUltraMsgMessage(config.instanceId, config.token, cleanTo, text, 'chat', { priority: 1 });
+                    if (textRes?.success) {
+                        await saveMessage(candidate.id, {
+                            from: 'me', content: text, timestamp: new Date().toISOString(),
+                            meta: { flow: true, flowId, nodeId: node.id }
+                        }).catch(() => {});
+                    }
+                }
+                const bankImages = Array.isArray(qr.imageUrls) && qr.imageUrls.length ? qr.imageUrls : [qr.imageUrl].filter(Boolean);
+                for (const imgUrl of bankImages) {
+                    const imgRes = await sendUltraMsgMessage(config.instanceId, config.token, cleanTo, toAbsoluteMediaUrl(imgUrl), 'image', { priority: 1 });
+                    if (imgRes?.success) {
+                        await saveMessage(candidate.id, {
+                            from: 'me', content: '', type: 'image', mediaUrl: imgUrl,
+                            timestamp: new Date().toISOString(), meta: { flow: true, flowId, nodeId: node.id }
+                        }).catch(() => {});
+                    }
                 }
             } catch (e) {
                 console.error(`[FLOW-ENGINE] accion_whatsapp ${flowId}/${node.id}:`, e?.message);
