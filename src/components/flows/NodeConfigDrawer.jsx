@@ -194,6 +194,20 @@ const NodeConfigDrawer = ({ node, meta, quickReplies, reminderTemplates, project
                     </div>
                 )}
 
+                {node.type === 'accion_whatsapp_personalizado' && (
+                    <div>
+                        <label className="text-xs text-gray-500 dark:text-gray-400 mb-2 block">Mensaje</label>
+                        <textarea
+                            value={data.message || ''}
+                            onChange={(e) => patch({ message: e.target.value })}
+                            placeholder="Escribe tu mensaje... Puedes usar {{nombre}}, {{municipio}}, {{categoria}}, etc."
+                            rows={6}
+                            className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 dark:bg-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-y"
+                        />
+                        <p className="mt-2 text-xs text-gray-400">Las variables ({'{{nombre}}'}, {'{{municipio}}'}, etc.) se resuelven igual que en el banco de respuestas.</p>
+                    </div>
+                )}
+
                 {node.type === 'accion_vacante' && (
                     <div>
                         <label className="text-xs text-gray-500 dark:text-gray-400 mb-2 block">Vacante (maletín)</label>

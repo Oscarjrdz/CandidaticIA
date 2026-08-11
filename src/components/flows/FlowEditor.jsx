@@ -19,6 +19,7 @@ const DEFAULT_DATA_BY_TYPE = {
     condicion_escolaridad: { escolaridades: [] },
     accion_whatsapp: { quickReplyId: '', quickReplyName: '' },
     accion_vacante: { vacancyId: '', vacancyName: '' },
+    accion_whatsapp_personalizado: { message: '' },
     accion_etiqueta: { tag: '' },
     accion_quitar_etiqueta: { tag: '' },
     accion_limpiar_etiquetas: {},

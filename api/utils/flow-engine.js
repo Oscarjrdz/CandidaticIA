@@ -318,6 +318,27 @@ async function evaluateOrExecute(node, candidate, flowId, redis, opts = {}) {
             return true;
         }
 
+        case 'accion_whatsapp_personalizado': {
+            if (!data.message?.trim()) return true; // sin configurar → no rompe la cadena
+            try {
+                const config = await getUltraMsgConfig(candidate.incomingPhoneNumberId || candidate.instanceId);
+                if (!config?.token || !config?.instanceId) throw new Error('sin credenciales de WhatsApp');
+                const cleanTo = String(candidate.whatsapp).replace(/\D/g, '');
+
+                const text = substituteVariables(data.message, candidate);
+                const sendResult = await sendUltraMsgMessage(config.instanceId, config.token, cleanTo, text, 'chat', { priority: 1 });
+                if (sendResult?.success) {
+                    await saveMessage(candidate.id, {
+                        from: 'me', content: text, timestamp: new Date().toISOString(),
+                        meta: { flow: true, flowId, nodeId: node.id }
+                    }).catch(() => {});
+                }
+            } catch (e) {
+                console.error(`[FLOW-ENGINE] accion_whatsapp_personalizado ${flowId}/${node.id}:`, e?.message);
+            }
+            return true;
+        }
+
         case 'accion_etiqueta': {
             if (!data.tag) return true;
             try {

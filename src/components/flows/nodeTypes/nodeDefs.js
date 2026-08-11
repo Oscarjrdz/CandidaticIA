@@ -1,4 +1,4 @@
-import { Play, Tag, CalendarRange, MapPin, Briefcase, GraduationCap, MessageCircle, Hash, UserRound, CircleMinus, BellRing, FolderKanban, FlaskConical, Eraser, Filter } from 'lucide-react';
+import { Play, Tag, CalendarRange, MapPin, Briefcase, GraduationCap, MessageCircle, Hash, UserRound, CircleMinus, BellRing, FolderKanban, FlaskConical, Eraser, Filter, MessageSquareText } from 'lucide-react';
 
 export const PROFILE_FILTER_LABELS = {
     active: 'Activos (no bloqueados)',
@@ -103,6 +103,14 @@ export const NODE_DEFS = {
         hasTarget: true,
         hasSource: true,
         summary: (data) => data.vacancyName || 'Elige una vacante (maletín)'
+    },
+    accion_whatsapp_personalizado: {
+        label: 'WhatsApp Personalizado',
+        icon: MessageSquareText,
+        color: 'emerald',
+        hasTarget: true,
+        hasSource: true,
+        summary: (data) => data.message?.trim() ? (data.message.length > 60 ? `${data.message.slice(0, 60)}…` : data.message) : 'Escribe el mensaje'
     },
     accion_etiqueta: {
         label: 'Agregar Etiqueta',
