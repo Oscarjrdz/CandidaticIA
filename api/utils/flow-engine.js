@@ -1,7 +1,7 @@
 import { getRedisClient, isProfileComplete, updateCandidate, saveMessage } from './storage.js';
 import { getCachedConfig } from './cache.js';
 import { getUltraMsgConfig, sendUltraMsgMessage } from '../whatsapp/utils.js';
-import { substituteVariables } from './shortcuts.js';
+import { substituteVariables, splitBubbles } from './shortcuts.js';
 import { getBotVacancies, vacancyMessageText } from './agent-ia.js';
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -278,15 +278,18 @@ async function evaluateOrExecute(node, candidate, flowId, redis, opts = {}) {
                     return true;
                 }
 
-                // type 'text' (default): texto + hasta 4 imágenes del banco.
+                // type 'text' (default): texto (posiblemente partido en varias burbujas
+                // por [burbuja]) + hasta 4 imágenes del banco.
                 if (qr.message) {
                     const text = substituteVariables(qr.message, candidate);
-                    const textRes = await sendUltraMsgMessage(config.instanceId, config.token, cleanTo, text, 'chat', { priority: 1 });
-                    if (textRes?.success) {
-                        await saveMessage(candidate.id, {
-                            from: 'me', content: text, timestamp: new Date().toISOString(),
-                            meta: { flow: true, flowId, nodeId: node.id }
-                        }).catch(() => {});
+                    for (const bubbleText of splitBubbles(text)) {
+                        const textRes = await sendUltraMsgMessage(config.instanceId, config.token, cleanTo, bubbleText, 'chat', { priority: 1 });
+                        if (textRes?.success) {
+                            await saveMessage(candidate.id, {
+                                from: 'me', content: bubbleText, timestamp: new Date().toISOString(),
+                                meta: { flow: true, flowId, nodeId: node.id }
+                            }).catch(() => {});
+                        }
                     }
                 }
                 const bankImages = Array.isArray(qr.imageUrls) && qr.imageUrls.length ? qr.imageUrls : [qr.imageUrl].filter(Boolean);
@@ -340,12 +343,14 @@ async function evaluateOrExecute(node, candidate, flowId, redis, opts = {}) {
                 const cleanTo = String(candidate.whatsapp).replace(/\D/g, '');
 
                 const text = substituteVariables(data.message, candidate);
-                const sendResult = await sendUltraMsgMessage(config.instanceId, config.token, cleanTo, text, 'chat', { priority: 1 });
-                if (sendResult?.success) {
-                    await saveMessage(candidate.id, {
-                        from: 'me', content: text, timestamp: new Date().toISOString(),
-                        meta: { flow: true, flowId, nodeId: node.id }
-                    }).catch(() => {});
+                for (const bubbleText of splitBubbles(text)) {
+                    const sendResult = await sendUltraMsgMessage(config.instanceId, config.token, cleanTo, bubbleText, 'chat', { priority: 1 });
+                    if (sendResult?.success) {
+                        await saveMessage(candidate.id, {
+                            from: 'me', content: bubbleText, timestamp: new Date().toISOString(),
+                            meta: { flow: true, flowId, nodeId: node.id }
+                        }).catch(() => {});
+                    }
                 }
             } catch (e) {
                 console.error(`[FLOW-ENGINE] accion_whatsapp_personalizado ${flowId}/${node.id}:`, e?.message);

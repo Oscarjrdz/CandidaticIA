@@ -22,6 +22,7 @@ import { getUltraMsgConfig, sendUltraMsgMessage } from '../whatsapp/utils.js';
 import { acquireProcessingLock, releaseProcessingLock, markCompleted, isCompleted } from '../utils/reminder-lock.js';
 import { recordBandwidthSnapshot } from '../utils/redis-bandwidth.js';
 import { isMeta24hWindowError, attemptReminderTemplateFallback } from '../utils/reminder-fallback.js';
+import { splitBubbles } from '../utils/shortcuts.js';
 
 const DIRECT_REMINDERS_ZSET_KEY = 'direct_reminders';
 const DIRECT_REMINDER_TTL_AFTER_SEND_SECONDS = 60 * 60 * 24 * 7;
@@ -143,17 +144,26 @@ export async function processDirectReminderItem(redis, remId, now = Date.now()) 
             throw new Error('No hay configuración de WhatsApp/Meta para enviar este recordatorio.');
         }
 
+        // Si reminder.message trae el marcador [burbuja] (banco de respuestas / plantillas
+        // de recordatorio lo permiten igual que el resto de Flujos), solo el PRIMER trozo
+        // pasa por el intento normal + fallback de plantilla de 24h de abajo — es el único
+        // que decide si el recordatorio quedó 'sent' o 'failed'. Los trozos siguientes se
+        // mandan después, best-effort, y solo si el primero salió por texto libre (si cayó
+        // a fallback de plantilla, la ventana sigue cerrada y un segundo texto libre
+        // fallaría igual, así que no tiene caso intentarlo).
+        const [firstBubble, ...restBubbles] = splitBubbles(reminder.message);
+
         const textResult = await sendUltraMsgMessage(
             config.instanceId,
             config.token,
             reminder.whatsapp,
-            reminder.message,
+            firstBubble,
             'chat',
             { priority: 1 }
         );
 
         let sentVia = 'text';
-        let contentToSave = reminder.message;
+        let contentToSave = firstBubble;
         let finalResult = textResult;
 
         if (!textResult?.success) {
@@ -213,6 +223,19 @@ export async function processDirectReminderItem(redis, remId, now = Date.now()) 
                 usedFallbackTemplate: sentVia === 'template_fallback'
             }
         }).catch(() => {});
+
+        if (sentVia === 'text' && restBubbles.length) {
+            for (const bubbleText of restBubbles) {
+                const extraRes = await sendUltraMsgMessage(config.instanceId, config.token, reminder.whatsapp, bubbleText, 'chat', { priority: 1 }).catch(() => null);
+                if (extraRes?.success) {
+                    await saveMessage(reminder.candidateId, {
+                        from: 'me', content: bubbleText, type: 'text', timestamp: new Date().toISOString(),
+                        ultraMsgId: extraRes?.messageId || null,
+                        meta: { directReminder: true, reminderId: remId, sentVia: 'text', bubbleExtra: true }
+                    }).catch(() => {});
+                }
+            }
+        }
 
         console.log(`[SEND-REMINDERS] ✅ Direct reminder (${sentVia}) → ${reminder.nombre} (${reminder.whatsapp})`);
         return 'sent';

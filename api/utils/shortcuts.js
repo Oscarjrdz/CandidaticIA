@@ -56,3 +56,19 @@ export const substituteVariables = (text, candidate) => {
         return match;
     });
 };
+
+// Marcador [burbuja] (tolerante a mayúsculas/espacios) que un reclutador escribe dentro
+// de un texto — banco de respuestas, nodo "WhatsApp Personalizado" de Flujos, o una
+// plantilla de recordatorio — para partirlo en varios mensajes de WhatsApp seguidos en
+// vez de uno solo largo. Mismo regex que BUBBLE_SPLIT_REGEX en
+// src/components/ChatSection.jsx — no lo dupliques con uno propio.
+const BUBBLE_SPLIT_REGEX = /\[\s*burbuja\s*\]/gi;
+
+/**
+ * @param {string} text
+ * @returns {string[]} trozos no vacíos, en orden. Si no hay marcador, devuelve [text] tal cual.
+ */
+export const splitBubbles = (text) => {
+    const parts = String(text || '').split(BUBBLE_SPLIT_REGEX).map(s => s.trim()).filter(Boolean);
+    return parts.length ? parts : [String(text || '')];
+};
