@@ -28,7 +28,7 @@ const DroppableStepZone = ({ stepId, isOver, children }) => {
     );
 };
 
-const SortableCandCard = ({ candidate, onRemove, onChat, onCalendar, availableTags = [], onToggleTag }) => {
+const SortableCandCard = ({ candidate, onRemove, onChat, onCalendar, availableTags = [], onToggleTag, selected, onToggleSelect }) => {
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
         id: candidate.id, data: { type: 'candidate', candidate }
     });
@@ -38,8 +38,15 @@ const SortableCandCard = ({ candidate, onRemove, onChat, onCalendar, availableTa
 
     return (
         <div ref={setNodeRef} style={style} {...attributes} {...listeners}
-            className="bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl p-3 shadow-sm hover:shadow-md transition-all cursor-grab active:cursor-grabbing group">
+            className={`bg-white dark:bg-slate-800 border rounded-xl p-3 shadow-sm hover:shadow-md transition-all cursor-grab active:cursor-grabbing group ${selected ? 'border-blue-400 dark:border-blue-500 ring-1 ring-blue-400/50' : 'border-slate-100 dark:border-slate-700'}`}>
             <div className="flex items-center gap-2">
+                <input
+                    type="checkbox"
+                    checked={!!selected}
+                    onClick={(e) => e.stopPropagation()}
+                    onChange={(e) => { e.stopPropagation(); onToggleSelect?.(candidate.id); }}
+                    className="w-3.5 h-3.5 rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500 cursor-pointer shrink-0"
+                />
                 {candidate.profilePic ? (
                     <img src={candidate.profilePic} className="w-8 h-8 rounded-full object-cover" alt="" />
                 ) : (
@@ -173,7 +180,7 @@ const SortableCandCard = ({ candidate, onRemove, onChat, onCalendar, availableTa
     );
 };
 
-const SortableStepColumn = ({ step, stepCands, onRename, onDelete, canDelete, children }) => {
+const SortableStepColumn = ({ step, stepCands, onRename, onDelete, canDelete, controls, children }) => {
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
         id: step.id,
         data: { type: 'step' }
@@ -216,6 +223,7 @@ const SortableStepColumn = ({ step, stepCands, onRename, onDelete, canDelete, ch
                     )}
                 </div>
             </div>
+            {controls}
             {children}
         </div>
     );
@@ -290,6 +298,30 @@ const CRMProjectsSection = () => {
 
     // Etiquetas globales (compartidas con Chat Web)
     const [availableTags, setAvailableTags] = useState([]);
+
+    // Buscador + selección múltiple por columna (paso). El texto de búsqueda vive por
+    // stepId; la selección es un solo Set global de candidateId (cada candidato solo
+    // está en un paso a la vez, así que no hay colisión entre columnas).
+    const [stepSearch, setStepSearch] = useState({}); // { [stepId]: text }
+    const [selectedCandidateIds, setSelectedCandidateIds] = useState(new Set());
+
+    const toggleSelectCandidate = (candidateId) => {
+        setSelectedCandidateIds(prev => {
+            const next = new Set(prev);
+            if (next.has(candidateId)) next.delete(candidateId); else next.add(candidateId);
+            return next;
+        });
+    };
+
+    const toggleSelectAllInStep = (visibleCands) => {
+        const ids = visibleCands.map(c => c.id);
+        const allSelected = ids.length > 0 && ids.every(id => selectedCandidateIds.has(id));
+        setSelectedCandidateIds(prev => {
+            const next = new Set(prev);
+            ids.forEach(id => allSelected ? next.delete(id) : next.add(id));
+            return next;
+        });
+    };
 
     const STEP_COLOR_PALETTE = [
         '#3b82f6', // blue
@@ -429,6 +461,12 @@ const CRMProjectsSection = () => {
 
             if (update.action === 'unlinkCandidate' && update.candidateId) {
                 setCandidates(prev => prev.filter(c => c.id !== update.candidateId));
+                return;
+            }
+
+            if (update.action === 'batchUnlink' && Array.isArray(update.candidateIds)) {
+                const removeSet = new Set(update.candidateIds);
+                setCandidates(prev => prev.filter(c => !removeSet.has(c.id)));
                 return;
             }
 
@@ -614,6 +652,31 @@ const CRMProjectsSection = () => {
             await fetch('/api/manual_projects', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'unlinkCandidate', projectId: activeProject.id, candidateId }) });
             setCandidates(prev => prev.filter(c => c.id !== candidateId));
             showToast('Candidato removido', 'info');
+        } catch (e) { showToast('Error', 'error'); }
+    };
+
+    const handleBulkUnlink = async (candidateIds) => {
+        if (!activeProject || !candidateIds.length) return;
+        const ok = await showConfirm({
+            title: 'Quitar del paso',
+            message: `¿Quitar ${candidateIds.length} candidato${candidateIds.length > 1 ? 's' : ''} de este paso? No se elimina al candidato, solo se desvincula del proyecto.`,
+            confirmText: 'Quitar',
+            variant: 'danger'
+        });
+        if (!ok) return;
+        try {
+            await fetch('/api/manual_projects', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'batchUnlink', projectId: activeProject.id, candidateIds })
+            });
+            const removeSet = new Set(candidateIds);
+            setCandidates(prev => prev.filter(c => !removeSet.has(c.id)));
+            setSelectedCandidateIds(prev => {
+                const next = new Set(prev);
+                candidateIds.forEach(id => next.delete(id));
+                return next;
+            });
+            showToast(`${candidateIds.length} candidato${candidateIds.length > 1 ? 's' : ''} removido${candidateIds.length > 1 ? 's' : ''}`, 'info');
         } catch (e) { showToast('Error', 'error'); }
     };
 
@@ -814,6 +877,16 @@ const CRMProjectsSection = () => {
                                 <div className="flex gap-4 h-full pb-4" style={{ minWidth: `${Math.max(steps.length * 280, 560)}px` }}>
                                     {steps.map(step => {
                                         const stepCands = candidates.filter(c => c.crmMeta?.stepId === step.id);
+                                        const query = (stepSearch[step.id] || '').trim().toLowerCase();
+                                        const visibleCands = query
+                                            ? stepCands.filter(c => {
+                                                const name = (c.nombreReal || c.from || c.nombre || '').toLowerCase();
+                                                const phone = String(c.whatsapp || '').toLowerCase();
+                                                return name.includes(query) || phone.includes(query);
+                                            })
+                                            : stepCands;
+                                        const selectedInStep = stepCands.filter(c => selectedCandidateIds.has(c.id));
+                                        const allVisibleSelected = visibleCands.length > 0 && visibleCands.every(c => selectedCandidateIds.has(c.id));
 
                                         return (
                                             <SortableStepColumn
@@ -823,20 +896,52 @@ const CRMProjectsSection = () => {
                                                 onRename={handleRenameStep}
                                                 onDelete={handleDeleteStep}
                                                 canDelete={steps.length > 1}
+                                                controls={
+                                                    <div className="px-3 py-2 border-b border-slate-100 dark:border-slate-700 space-y-1.5" style={{ backgroundColor: `${step.color || '#64748b'}08` }}>
+                                                        <div className="flex items-center gap-1.5">
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={allVisibleSelected}
+                                                                onChange={() => toggleSelectAllInStep(visibleCands)}
+                                                                disabled={visibleCands.length === 0}
+                                                                title="Seleccionar todos"
+                                                                className="w-3.5 h-3.5 rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500 cursor-pointer shrink-0 disabled:opacity-40"
+                                                            />
+                                                            <div className="relative flex-1 min-w-0">
+                                                                <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400 pointer-events-none" />
+                                                                <input
+                                                                    type="text"
+                                                                    value={stepSearch[step.id] || ''}
+                                                                    onChange={(e) => setStepSearch(prev => ({ ...prev, [step.id]: e.target.value }))}
+                                                                    placeholder="Buscar..."
+                                                                    className="w-full text-[10px] pl-6 pr-2 py-1 rounded border border-gray-200 dark:border-gray-600 bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 outline-none focus:border-blue-400 transition-colors"
+                                                                />
+                                                            </div>
+                                                        </div>
+                                                        {selectedInStep.length > 0 && (
+                                                            <button
+                                                                onClick={() => handleBulkUnlink(selectedInStep.map(c => c.id))}
+                                                                className="w-full flex items-center justify-center gap-1.5 px-2 py-1 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-[10px] font-semibold hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors"
+                                                            >
+                                                                <Trash2 className="w-3 h-3" /> Quitar {selectedInStep.length} seleccionado{selectedInStep.length > 1 ? 's' : ''}
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                }
                                             >
                                                 {/* Candidates */}
-                                                <SortableContext items={stepCands.map(c => c.id)} strategy={verticalListSortingStrategy}>
+                                                <SortableContext items={visibleCands.map(c => c.id)} strategy={verticalListSortingStrategy}>
                                                     <DroppableStepZone stepId={step.id} isOver={overStepId === step.id}>
-                                                        {stepCands.length === 0 ? (
+                                                        {visibleCands.length === 0 ? (
                                                             <div className={`text-center py-8 text-xs rounded-xl border-2 border-dashed transition-all duration-300 ${
                                                                 overStepId === step.id
                                                                     ? 'border-blue-400 text-blue-400 bg-blue-50/50 dark:bg-blue-900/10'
                                                                     : 'border-transparent text-slate-300 dark:text-slate-600'
                                                             }`}>
-                                                                Arrastra candidatos aquí
+                                                                {query ? 'Sin resultados' : 'Arrastra candidatos aquí'}
                                                             </div>
-                                                        ) : stepCands.map(c => (
-                                                            <SortableCandCard key={c.id} candidate={c} onRemove={handleUnlink} onChat={setChatCandidate} onCalendar={(cand) => setCalendarModalConfig({ isOpen: true, projectId: activeProject.id, projectName: activeProject.name, candidateId: cand.id, candidateName: cand.nombreReal || cand.from || cand.nombre })} availableTags={availableTags} onToggleTag={handleToggleCandidateTag} />
+                                                        ) : visibleCands.map(c => (
+                                                            <SortableCandCard key={c.id} candidate={c} onRemove={handleUnlink} onChat={setChatCandidate} onCalendar={(cand) => setCalendarModalConfig({ isOpen: true, projectId: activeProject.id, projectName: activeProject.name, candidateId: cand.id, candidateName: cand.nombreReal || cand.from || cand.nombre })} availableTags={availableTags} onToggleTag={handleToggleCandidateTag} selected={selectedCandidateIds.has(c.id)} onToggleSelect={toggleSelectCandidate} />
                                                         ))}
                                                     </DroppableStepZone>
                                                 </SortableContext>

@@ -211,6 +211,23 @@ export default async function handler(req, res) {
                 return res.status(200).json({ success: true });
             }
 
+            if (action === 'batchUnlink') {
+                const { projectId, candidateIds } = body;
+                if (!projectId || !candidateIds?.length) return res.status(400).json({ error: 'Missing data' });
+
+                const linksRaw = await redis.get(`${LINKS_PREFIX}${projectId}`);
+                let links = linksRaw ? JSON.parse(linksRaw) : [];
+                const removeSet = new Set(candidateIds);
+                links = links.filter(l => !removeSet.has(l.candidateId));
+
+                await redis.set(`${LINKS_PREFIX}${projectId}`, JSON.stringify(links));
+                await Promise.all(candidateIds.map(cId =>
+                    updateCandidate(cId, { manualProjectId: null, manualProjectStepId: null })
+                ));
+                publishRealtime('crm:candidate', { action: 'batchUnlink', projectId, candidateIds });
+                return res.status(200).json({ success: true, unlinked: candidateIds.length });
+            }
+
             if (action === 'moveCandidate') {
                 const { projectId, candidateId, stepId } = body;
                 if (!projectId || !candidateId || !stepId) return res.status(400).json({ error: 'Missing data' });
