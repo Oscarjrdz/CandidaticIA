@@ -122,27 +122,24 @@ const FlowEditorInner = ({ flowId, onBack }) => {
         return () => { cancelled = true; };
     }, [flowId]);
 
-    // Contador en vivo: refresca cada 10s mientras el editor está abierto.
+    // Contador en vivo: carga el valor inicial al abrir el flujo (o al agregar un nodo
+    // contador nuevo). Las actualizaciones posteriores llegan por SSE (efecto de abajo),
+    // sin poll recurrente.
     useEffect(() => {
         const hasCounters = nodes.some(n => n.type === 'contador');
-        if (!hasCounters) return undefined;
-
-        const poll = async () => {
+        if (!hasCounters) return;
+        (async () => {
             const res = await getFlowCounters(flowId);
             if (!res.success) return;
             setNodes(nds => nds.map(n => n.type === 'contador'
                 ? { ...n, data: { ...n.data, liveCount: res.counters[n.id] ?? n.data.liveCount ?? 0 } }
                 : n));
-        };
-        poll();
-        const interval = setInterval(poll, 10000);
-        return () => clearInterval(interval);
+        })();
     }, [flowId, nodes.length]);
 
     // Empuje en vivo vía SSE (channel:sse:updates, publicado en flow-engine.js justo
     // cuando un candidato SUMA al contador): el número salta al instante para quien
-    // tenga el editor abierto, sin esperar el poll de 10s de arriba (que se deja como
-    // respaldo por si se pierde el evento — ej. reconexión del EventSource).
+    // tenga el editor abierto.
     useEffect(() => {
         const handler = (e) => {
             const { flowId: evFlowId, nodeId, count } = e.detail || {};
