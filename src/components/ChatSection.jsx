@@ -68,6 +68,10 @@ const scheduleIdleTask = (callback, timeout = 1200) => {
 
 const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 const ORDERED_MESSAGE_GAP_MS = 450;
+// Marcador que un reclutador escribe dentro de una respuesta del Banco de Respuestas
+// para partirla en varios mensajes de WhatsApp separados (varias burbujas) en vez de
+// uno solo largo. Tolerante a mayúsculas/espacios, igual que substituteVariables().
+const BUBBLE_SPLIT_REGEX = /\[\s*burbuja\s*\]/gi;
 const CHAT_LOCK_IDLE_MS = 5 * 60_000; // 5 min — evita falsos positivos al leer/pensar sin tocar el mouse
 const CHAT_LOCK_HEARTBEAT_MS = 30_000;
 
@@ -4164,11 +4168,17 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
             const input = document.getElementById('chat-msg-input');
             if (input) input.focus();
         }, 50);
+        return textOptimisticId;
     };
 
     // ── Envío DIRECTO (botón verde del banco / vacantes): inyecta y manda al chat abierto,
     // sin pasar por el campo de texto. Reusa handleSend (optimista + outbox + dedup). ──
-    const sendBankReplyDirect = (qr) => {
+    // Si el texto trae el marcador [burbuja], se manda como varios mensajes de WhatsApp
+    // seguidos (una llamada a handleSend por trozo) en vez de uno solo largo. Cada trozo
+    // espera a que la burbuja anterior termine su animación de entrada antes de mandarse
+    // (mismo mecanismo real, no un temporizador adivinado, que ya usan las fotos del banco
+    // más abajo en handleSend). Las imágenes siempre van pegadas al último trozo.
+    const sendBankReplyDirect = async (qr) => {
         if (!selectedChat) { showToast && showToast('Abre un chat primero', 'info'); return; }
         // Ubicación, audio y documento ya se envían por su propia vía (POST directo) en handleApplyQuickReply.
         if (qr.type === 'location' || qr.type === 'audio' || qr.type === 'document') { handleApplyQuickReply(qr); return; }
@@ -4176,7 +4186,17 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         const resolved = substituteVariables(qr.message || '', candidatoFresh || {}).replace(/[^\S\n]{2,}/g, ' ').trim();
         const imgs = qr.imageUrls?.length ? qr.imageUrls : (qr.imageUrl ? [qr.imageUrl] : []);
         if (!resolved && !imgs.length) return;
-        handleSend(resolved, imgs);
+
+        const chunks = resolved.split(BUBBLE_SPLIT_REGEX).map(s => s.trim()).filter(Boolean);
+        if (chunks.length <= 1) {
+            handleSend(chunks[0] ?? resolved, imgs);
+            return;
+        }
+        for (let i = 0; i < chunks.length; i++) {
+            const isLast = i === chunks.length - 1;
+            const tempId = handleSend(chunks[i], isLast ? imgs : []);
+            if (!isLast && tempId) await waitForBubbleReveal(tempId);
+        }
     };
     const sendVacancyDirect = (vac) => {
         if (!vac?.messageDescription) return;
