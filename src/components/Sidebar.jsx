@@ -3,7 +3,7 @@ import { useAuthContext } from '../contexts/AuthContext';
 import { useCandidatesSSE } from '../hooks/useCandidatesSSE';
 import {
     Users, Settings, Bot, History, Zap, Briefcase, Send, User, LogOut, BarChart3,
-    MessageSquare, Smartphone, Folder, FolderKanban, GripVertical, Wifi, BrainCircuit, X, ChevronLeft, ChevronRight, Bell, Sparkles
+    MessageSquare, Smartphone, Folder, FolderKanban, GripVertical, Wifi, BrainCircuit, X, ChevronLeft, ChevronRight, Bell, Sparkles, Workflow
 } from 'lucide-react';
 import {
     DndContext,
@@ -35,6 +35,7 @@ const DEFAULT_MENU_ITEMS = [
     { id: 'ads-stats', label: 'Estadísticas de Ads', icon: BarChart3, position: 'top' },
     { id: 'bot-ia', label: 'Bot IA (2.0)', icon: Smartphone, position: 'top' },
     { id: 'automations', label: 'Automatizaciones', icon: Zap, position: 'top' },
+    { id: 'flows', label: 'Flows', icon: Workflow, position: 'top' },
     { id: 'vacancies', label: 'Vacantes', icon: Briefcase, position: 'top' },
     { id: 'bolsa', label: 'Bolsa (App)', icon: Smartphone, position: 'top' },
     { id: 'notificaciones', label: 'Notificaciones', icon: Bell, position: 'top' },

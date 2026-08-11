@@ -43,6 +43,7 @@ const ChatSection = lazyWithRetry(importChatSection, 'ChatSection');
 const BulksSection = lazyWithRetry(() => import('./components/BulksSection'), 'BulksSection');
 const SettingsSection = lazyWithRetry(() => import('./components/SettingsSection'), 'SettingsSection');
 const AutomationsSection = lazyWithRetry(() => import('./components/AutomationsSection'), 'AutomationsSection');
+const FlowsSection = lazyWithRetry(() => import('./components/FlowsSection'), 'FlowsSection');
 const VacanciesSection = lazyWithRetry(() => import('./components/VacanciesSection'), 'VacanciesSection');
 const BolsaSection = lazyWithRetry(() => import('./components/BolsaSection'), 'BolsaSection');
 const NotificacionesSection = lazyWithRetry(() => import('./components/NotificacionesSection'), 'NotificacionesSection');
@@ -297,6 +298,7 @@ function AppShell() {
                       : activeSection === 'ads-stats' ? 'Estadísticas de Ads'
                       : activeSection === 'bot-ia' ? 'Bot IA'
                       : activeSection === 'automations' ? 'Automatizaciones'
+                      : activeSection === 'flows' ? 'Flows'
                       : activeSection === 'vacancies' ? 'Vacantes'
                       : activeSection === 'bolsa' ? 'Bolsa de Empleo (App)'
                       : activeSection === 'history' ? 'Historial'
@@ -351,6 +353,7 @@ function AppShell() {
                       : activeSection === 'ads-stats' ? 'Seguimiento y rendimiento de campañas de Meta Ads'
                       : activeSection === 'bot-ia' ? 'Configuración del comportamiento del Bot'
                       : activeSection === 'automations' ? 'Reglas de extracción inteligente de datos'
+                      : activeSection === 'flows' ? 'Automatiza acciones cuando un candidato completa su perfil'
                       : activeSection === 'vacancies' ? 'Gestión y publicación de vacantes'
                       : activeSection === 'history' ? 'Historial de conversaciones'
                       : activeSection === 'users' ? 'Gestión de equipo y permisos'
@@ -509,7 +512,7 @@ function AppShell() {
             el contenido no se ensanche/encoja (brinco horizontal) cuando aparece/desaparece
             la barra al cambiar la altura del contenido (p.ej. contraer/expandir tarjetas).
             Solo en secciones normales; chat/bulks tienen su propio scroll interno. */}
-        <main className={`flex-1 overflow-y-auto overflow-x-hidden flex flex-col min-h-0 ${activeSection === 'chat' || activeSection === 'bulks' || activeSection === 'agent-ia' ? 'p-0' : 'px-3 sm:px-8 py-4 sm:py-8 [scrollbar-gutter:stable]'}`}>
+        <main className={`flex-1 overflow-y-auto overflow-x-hidden flex flex-col min-h-0 ${activeSection === 'chat' || activeSection === 'bulks' || activeSection === 'agent-ia' || activeSection === 'flows' ? 'p-0' : 'px-3 sm:px-8 py-4 sm:py-8 [scrollbar-gutter:stable]'}`}>
           <ErrorBoundary>
           <Suspense fallback={<SectionSkeleton />}>
           {activeSection === 'candidates' ? (
@@ -524,6 +527,8 @@ function AppShell() {
             <AdsStatisticsSection />
           ) : activeSection === 'automations' ? (
             <AutomationsSection />
+          ) : activeSection === 'flows' ? (
+            <FlowsSection />
           ) : activeSection === 'vacancies' ? (
             <VacanciesSection />
           ) : activeSection === 'bolsa' ? (
