@@ -47,7 +47,6 @@ const FlowEditorInner = ({ flowId, onBack }) => {
     const [saving, setSaving] = useState(false);
     const [dirty, setDirty] = useState(false);
     const [selectedNodeId, setSelectedNodeId] = useState(null);
-    const nodeCountRef = useRef(0);
     const handleTestRunRef = useRef(null);
 
     const handleConfigure = useCallback((nodeId) => setSelectedNodeId(nodeId), []);
@@ -92,7 +91,6 @@ const FlowEditorInner = ({ flowId, onBack }) => {
             const flow = flowRes.flow;
             setFlowMeta({ name: flow.name, active: !!flow.active });
             const loadedNodes = (flow.nodes || []).map(n => hydrateNode(n));
-            nodeCountRef.current = loadedNodes.length;
             setNodes(loadedNodes);
             setEdges(flow.edges || []);
 
@@ -146,15 +144,20 @@ const FlowEditorInner = ({ flowId, onBack }) => {
         setDirty(true);
     }, []);
 
+    // Justo debajo del último nodo de la lista (el más reciente, en su posición REAL
+    // actual — no una cuadrícula fija que se aleja del flujo si ya lo acomodaste).
     const handleAddNode = useCallback((type) => {
-        const count = nodeCountRef.current++;
-        const newNode = hydrateNode({
-            id: `n_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-            type,
-            position: { x: 420 + (count % 3) * 300, y: 80 + Math.floor(count / 3) * 180 },
-            data: { ...(DEFAULT_DATA_BY_TYPE[type] || {}) }
+        setNodes(nds => {
+            const last = nds[nds.length - 1];
+            const position = last ? { x: last.position.x, y: last.position.y + 160 } : { x: 420, y: 80 };
+            const newNode = hydrateNode({
+                id: `n_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+                type,
+                position,
+                data: { ...(DEFAULT_DATA_BY_TYPE[type] || {}) }
+            });
+            return [...nds, newNode];
         });
-        setNodes(nds => [...nds, newNode]);
         setDirty(true);
     }, [hydrateNode]);
 
