@@ -5,7 +5,7 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { useToastContext } from '../../contexts/ToastContext';
-import { getFlow, updateFlow, getFlowsMeta, getFlowCounters, getQuickReplies, getReminderTemplates, getManualProjects } from '../../services/flowsService';
+import { getFlow, updateFlow, getFlowsMeta, getFlowCounters, getQuickReplies, getReminderTemplates, getManualProjects, testFlow } from '../../services/flowsService';
 import { flowNodeTypes, COLOR_CLASSES, NODE_DEFS } from './nodeTypes';
 import NodeConfigDrawer from './NodeConfigDrawer';
 import FlowToolbar from './FlowToolbar';
@@ -22,11 +22,12 @@ const DEFAULT_DATA_BY_TYPE = {
     accion_quitar_etiqueta: { tag: '' },
     accion_recordatorio: { templateId: '', templateName: '' },
     accion_proyecto: { projectId: '', projectName: '' },
-    contador: { label: '' }
+    contador: { label: '' },
+    test: { testPhone: '' }
 };
 
 const stripTransientData = (data = {}) => {
-    const { onConfigure, onDelete, liveCount, ...rest } = data;
+    const { onConfigure, onDelete, onTestPhoneChange, onTestRun, onToggleActive, liveCount, active, testStatus, testMessage, ...rest } = data;
     return rest;
 };
 
@@ -44,6 +45,7 @@ const FlowEditorInner = ({ flowId, onBack }) => {
     const [dirty, setDirty] = useState(false);
     const [selectedNodeId, setSelectedNodeId] = useState(null);
     const nodeCountRef = useRef(0);
+    const handleTestRunRef = useRef(null);
 
     const handleConfigure = useCallback((nodeId) => setSelectedNodeId(nodeId), []);
 
@@ -54,10 +56,20 @@ const FlowEditorInner = ({ flowId, onBack }) => {
         setDirty(true);
     }, []);
 
+    const handleTestPhoneChange = useCallback((nodeId, phone) => {
+        setNodes(nds => nds.map(n => n.id === nodeId ? { ...n, data: { ...n.data, testPhone: phone } } : n));
+    }, []);
+
     const hydrateNode = useCallback((n) => ({
         ...n,
-        data: { ...n.data, onConfigure: handleConfigure, onDelete: handleDeleteNode }
-    }), [handleConfigure, handleDeleteNode]);
+        data: {
+            ...n.data,
+            onConfigure: handleConfigure,
+            onDelete: handleDeleteNode,
+            onTestPhoneChange: handleTestPhoneChange,
+            onTestRun: (nodeId, phone) => handleTestRunRef.current?.(nodeId, phone)
+        }
+    }), [handleConfigure, handleDeleteNode, handleTestPhoneChange]);
 
     useEffect(() => {
         let cancelled = false;
@@ -147,7 +159,7 @@ const FlowEditorInner = ({ flowId, onBack }) => {
         setDirty(true);
     }, []);
 
-    const handleSave = useCallback(async () => {
+    const handleSave = useCallback(async ({ silent = false } = {}) => {
         setSaving(true);
         const payload = {
             nodes: nodes.map(n => ({ id: n.id, type: n.type, position: n.position, data: stripTransientData(n.data) })),
@@ -157,11 +169,40 @@ const FlowEditorInner = ({ flowId, onBack }) => {
         setSaving(false);
         if (res.success) {
             setDirty(false);
-            showToast('Flujo guardado', 'success');
+            if (!silent) showToast('Flujo guardado', 'success');
         } else {
-            showToast('Error al guardar el flujo', 'error');
+            if (!silent) showToast('Error al guardar el flujo', 'error');
         }
+        return res;
     }, [flowId, nodes, edges, showToast]);
+
+    // Nodo "test": corre el flujo COMPLETO contra un candidato real por teléfono, sin
+    // pasar por el claim de dedupe de producción (para poder repetir la prueba) ni por
+    // el filtro flow.active (para poder probar un borrador antes de activarlo). Primero
+    // guarda en silencio para que la prueba corra exactamente contra lo que se ve en el
+    // lienzo, no contra la última versión guardada.
+    const handleTestRun = useCallback(async (nodeId, phone) => {
+        if (!phone) return;
+        setNodes(nds => nds.map(n => n.id === nodeId ? { ...n, data: { ...n.data, testStatus: 'running', testMessage: '' } } : n));
+
+        const saveRes = await handleSave({ silent: true });
+        if (!saveRes.success) {
+            setNodes(nds => nds.map(n => n.id === nodeId ? { ...n, data: { ...n.data, testStatus: 'error', testMessage: 'No se pudo guardar antes de probar' } } : n));
+            return;
+        }
+
+        const res = await testFlow(flowId, phone);
+        setNodes(nds => nds.map(n => n.id === nodeId ? {
+            ...n,
+            data: {
+                ...n.data,
+                testStatus: res.success ? 'success' : 'error',
+                testMessage: res.success ? `Corrió para ${res.candidate?.nombre || phone}` : (res.error || 'Error al probar')
+            }
+        } : n));
+    }, [flowId, handleSave]);
+
+    useEffect(() => { handleTestRunRef.current = handleTestRun; }, [handleTestRun]);
 
     const handleToggleActive = useCallback(async () => {
         const nextActive = !flowMeta.active;
@@ -174,6 +215,14 @@ const FlowEditorInner = ({ flowId, onBack }) => {
             showToast(nextActive ? 'Flujo activado' : 'Flujo desactivado', 'success');
         }
     }, [flowId, flowMeta.active, showToast]);
+
+    // El toggle también vive dentro del nodo "inicio" (además del botón del toolbar) —
+    // se inyecta al vuelo, no se guarda como parte de node.data (stripTransientData lo quita).
+    useEffect(() => {
+        setNodes(nds => nds.map(n => n.type === 'inicio'
+            ? { ...n, data: { ...n.data, active: flowMeta.active, onToggleActive: handleToggleActive } }
+            : n));
+    }, [flowMeta.active, handleToggleActive]);
 
     const handleRename = useCallback(async (name) => {
         setFlowMeta(m => ({ ...m, name }));
@@ -214,8 +263,8 @@ const FlowEditorInner = ({ flowId, onBack }) => {
                 defaultEdgeOptions={{ style: { stroke: '#a5b4fc', strokeWidth: 2 }, animated: false }}
                 proOptions={{ hideAttribution: true }}
             >
-                <Background id="blueprint-minor" variant={BackgroundVariant.Lines} gap={20} lineWidth={1} color="#dbeafe" />
-                <Background id="blueprint-major" variant={BackgroundVariant.Lines} gap={100} lineWidth={1.5} color="#93c5fd" />
+                <Background id="blueprint-minor" variant={BackgroundVariant.Lines} gap={20} lineWidth={1} color="#eff6ff" />
+                <Background id="blueprint-major" variant={BackgroundVariant.Lines} gap={100} lineWidth={1.5} color="#dbeafe" />
                 <Controls showInteractive={false} />
                 <MiniMap
                     pannable zoomable

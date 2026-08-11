@@ -1,4 +1,4 @@
-import { Play, Tag, CalendarRange, MapPin, Briefcase, GraduationCap, MessageCircle, Hash, UserRound, CircleMinus, BellRing, FolderKanban } from 'lucide-react';
+import { Play, Tag, CalendarRange, MapPin, Briefcase, GraduationCap, MessageCircle, Hash, UserRound, CircleMinus, BellRing, FolderKanban, FlaskConical } from 'lucide-react';
 
 export const PROFILE_FILTER_LABELS = {
     active: 'Activos (no bloqueados)',
@@ -135,5 +135,13 @@ export const NODE_DEFS = {
         hasTarget: true,
         hasSource: true,
         summary: (data) => data.label || 'Cuenta candidatos que llegan aquí'
+    },
+    test: {
+        label: 'Nodo Test',
+        icon: FlaskConical,
+        color: 'gray',
+        hasTarget: false,
+        hasSource: false,
+        summary: () => 'Corre el flujo completo con un número real'
     }
 };

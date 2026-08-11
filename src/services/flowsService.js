@@ -95,6 +95,22 @@ export const deleteFlow = async (id) => {
     }
 };
 
+// Nodo "test": corre el flujo completo contra un candidato real por teléfono.
+export const testFlow = async (flowId, whatsapp) => {
+    try {
+        const res = await fetch(`/api/flows?id=${flowId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'test', whatsapp })
+        });
+        const data = await res.json();
+        if (data.success) return { success: true, candidate: data.candidate };
+        return { success: false, error: data.error };
+    } catch (error) {
+        return { success: false, error: error.message };
+    }
+};
+
 // Banco de respuestas — reusado tal cual por el nodo "accion_whatsapp" para elegir mensaje.
 export const getQuickReplies = async () => {
     try {

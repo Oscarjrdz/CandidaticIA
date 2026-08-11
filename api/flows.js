@@ -1,5 +1,6 @@
-import { getRedisClient, validateAdminSession } from './utils/storage.js';
+import { getRedisClient, validateAdminSession, getCandidateByPhone } from './utils/storage.js';
 import { getCachedConfig, invalidateCache } from './utils/cache.js';
+import { runFlowTest } from './utils/flow-engine.js';
 
 const REDIS_KEY = 'flows:v1';
 const EXEC_SET_PREFIX = 'flow:executed:v1:';
@@ -102,6 +103,28 @@ export default async function handler(req, res) {
         if (method === 'GET') {
             const flows = await getFlows(redis);
             return res.status(200).json({ success: true, flows });
+        }
+
+        if (method === 'POST' && id && req.body?.action === 'test') {
+            const { whatsapp } = req.body || {};
+            if (!whatsapp) return res.status(400).json({ success: false, error: 'whatsapp requerido' });
+
+            // Lee directo de Redis (no cacheado) para probar exactamente contra la
+            // última versión guardada del flujo, sin esperar el TTL del caché.
+            const raw = await redis.get(REDIS_KEY);
+            const flows = raw ? JSON.parse(raw) : [];
+            const flow = flows.find(f => f.id === id);
+            if (!flow) return res.status(404).json({ success: false, error: 'Flow not found' });
+
+            const candidate = await getCandidateByPhone(whatsapp);
+            if (!candidate) return res.status(404).json({ success: false, error: 'No se encontró un candidato con ese número' });
+
+            await runFlowTest(flow, candidate);
+
+            return res.status(200).json({
+                success: true,
+                candidate: { id: candidate.id, nombre: candidate.nombreReal || candidate.nombre || candidate.whatsapp }
+            });
         }
 
         if (method === 'POST') {

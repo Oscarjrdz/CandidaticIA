@@ -138,7 +138,7 @@ function buildIncomingMap(edges) {
     return incoming;
 }
 
-async function evaluateOrExecute(node, candidate, flowId, redis) {
+async function evaluateOrExecute(node, candidate, flowId, redis, opts = {}) {
     const data = node.data || {};
 
     switch (node.type) {
@@ -297,6 +297,7 @@ async function evaluateOrExecute(node, candidate, flowId, redis) {
         }
 
         case 'contador': {
+            if (opts.skipCounters) return true; // modo test: no ensucia las métricas reales
             try {
                 await redis.sadd(`${COUNTER_PREFIX}${flowId}:${node.id}`, candidate.id);
             } catch (e) {
@@ -310,9 +311,14 @@ async function evaluateOrExecute(node, candidate, flowId, redis) {
     }
 }
 
-async function runOneFlow(redis, flow, candidateId, candidate) {
-    const claimed = await redis.sadd(`${EXEC_SET_PREFIX}${flow.id}`, candidateId);
-    if (claimed === 0) return; // ya ejecutado para este candidato (webhook reintentado)
+// opts.skipClaim: no reclama/consulta el dedupe de producción (modo test, para poder
+// repetir la corrida). opts.skipCounters: no incrementa los nodos "contador" (modo
+// test, para no inflar la métrica real con corridas manuales).
+async function runOneFlow(redis, flow, candidateId, candidate, opts = {}) {
+    if (!opts.skipClaim) {
+        const claimed = await redis.sadd(`${EXEC_SET_PREFIX}${flow.id}`, candidateId);
+        if (claimed === 0) return; // ya ejecutado para este candidato (webhook reintentado)
+    }
 
     const nodes = Array.isArray(flow.nodes) ? flow.nodes : [];
     const edges = Array.isArray(flow.edges) ? flow.edges : [];
@@ -329,7 +335,7 @@ async function runOneFlow(redis, flow, candidateId, candidate) {
             passed.set(node.id, false);
             continue;
         }
-        passed.set(node.id, await evaluateOrExecute(node, candidate, flow.id, redis));
+        passed.set(node.id, await evaluateOrExecute(node, candidate, flow.id, redis, opts));
     }
 }
 
@@ -349,4 +355,18 @@ export async function runFlowsForCandidate(candidateId, candidateSnapshot) {
     } catch (e) {
         console.error('[FLOW-ENGINE] runFlowsForCandidate:', e?.message);
     }
+}
+
+// Nodo "test" del editor: corre el flujo COMPLETO contra un candidato real (por
+// teléfono), saltando el filtro `flow.active` (para poder probar un borrador antes de
+// activarlo) y el claim de dedupe de producción (para poder repetir la prueba las veces
+// que haga falta) y sin tocar los contadores reales. Las acciones (WhatsApp, etiquetas,
+// recordatorio, proyecto) SÍ se ejecutan de verdad — es la manera de confirmar que el
+// flujo hace lo que debe antes de activarlo.
+export async function runFlowTest(flow, candidateSnapshot) {
+    const redis = getRedisClient();
+    if (!redis) throw new Error('Redis no disponible');
+    if (!candidateSnapshot?.id || !candidateSnapshot?.whatsapp) throw new Error('Candidato inválido');
+
+    await runOneFlow(redis, flow, candidateSnapshot.id, { ...candidateSnapshot }, { skipClaim: true, skipCounters: true });
 }
