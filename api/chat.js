@@ -488,6 +488,7 @@ export default async function handler(req, res) {
                     // ═══ MEDIA (image/document/video/audio) ═══
                     // If the mediaUrl is an internal Redis URL, upload to Meta first for reliability
                     let deliveryContent = mediaUrl;
+                    let redisMediaIdForRetry = null;
                     const isInternalMedia = mediaUrl && mediaUrl.startsWith('/api/image') && mediaUrl.includes('id=');
                     const makeAbsoluteUrl = (relUrl, mediaId, fileType) => {
                         const protocol = req.headers['x-forwarded-proto'] || 'https';
@@ -505,6 +506,7 @@ export default async function handler(req, res) {
                             const redisMediaId = urlObj.searchParams.get('id');
                             
                             if (redisMediaId) {
+                                redisMediaIdForRetry = redisMediaId;
                                 const redis = getRedisClient();
                                 const metaRaw = await redis.get(`meta:image:${redisMediaId}`);
                                 const meta = metaRaw ? JSON.parse(metaRaw) : {};
@@ -563,6 +565,38 @@ export default async function handler(req, res) {
                         extraParams.caption = finalMessage;
                     }
                     sendResult = await sendUltraMsgMessage(ultraConfig.instanceId, ultraConfig.token, cleanTo, deliveryContent, type, extraParams);
+
+                    // Meta media_ids go stale after enough time unused (banco de respuestas
+                    // caches them forever — see api/media/upload.js). If sending by cached
+                    // id fails, re-upload the file from Redis/Blob and retry once before
+                    // giving up, instead of surfacing a raw #131000 to the recruiter.
+                    if (!sendResult?.success && extraParams.mediaId && redisMediaIdForRetry) {
+                        console.log(`⚠️ [Media] Cached metaMediaId=${extraParams.mediaId} failed (${sendResult?.error}), re-uploading and retrying once...`);
+                        try {
+                            const redis = getRedisClient();
+                            const base64Str = await redis.get(`image:${redisMediaIdForRetry}`);
+                            if (base64Str) {
+                                const metaRaw = await redis.get(`meta:image:${redisMediaIdForRetry}`);
+                                const meta = metaRaw ? JSON.parse(metaRaw) : {};
+                                const filename = meta.filename || (type === 'document' ? 'documento.pdf' : 'imagen.jpg');
+                                const buffer = Buffer.from(base64Str, 'base64');
+                                const mimeType = meta.mime || (type === 'document' ? 'application/pdf' : 'image/jpeg');
+
+                                const { uploadMediaToMeta } = await import('./whatsapp/utils.js');
+                                const uploadResult = await uploadMediaToMeta(buffer, mimeType, filename);
+
+                                if (uploadResult?.mediaId) {
+                                    extraParams.mediaId = uploadResult.mediaId;
+                                    meta.metaMediaId = uploadResult.mediaId;
+                                    redis.set(`meta:image:${redisMediaIdForRetry}`, JSON.stringify(meta)).catch(() => {});
+                                    console.log(`✅ [Media] Re-uploaded to Meta → media_id=${uploadResult.mediaId}, retrying send...`);
+                                    sendResult = await sendUltraMsgMessage(ultraConfig.instanceId, ultraConfig.token, cleanTo, '', type, extraParams);
+                                }
+                            }
+                        } catch (retryErr) {
+                            console.error('⚠️ [Media] Retry after stale media_id failed:', retryErr.message);
+                        }
+                    }
                 }
 
                 if (sendResult) {
