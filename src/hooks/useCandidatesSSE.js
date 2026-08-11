@@ -129,6 +129,8 @@ function _connectSingleton() {
                     window.dispatchEvent(new CustomEvent('sse:crm:project', { detail: data.data }));
                 } else if (data.type === 'crm:candidate') {
                     window.dispatchEvent(new CustomEvent('sse:crm:candidate', { detail: data.data }));
+                } else if (data.type === 'flow:counter') {
+                    window.dispatchEvent(new CustomEvent('sse:flow:counter', { detail: data.data }));
                 }
             } catch (parseError) {
                 console.error('SSE parse error:', parseError);

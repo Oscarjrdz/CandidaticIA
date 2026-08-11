@@ -139,6 +139,22 @@ const FlowEditorInner = ({ flowId, onBack }) => {
         return () => clearInterval(interval);
     }, [flowId, nodes.length]);
 
+    // Empuje en vivo vía SSE (channel:sse:updates, publicado en flow-engine.js justo
+    // cuando un candidato SUMA al contador): el número salta al instante para quien
+    // tenga el editor abierto, sin esperar el poll de 10s de arriba (que se deja como
+    // respaldo por si se pierde el evento — ej. reconexión del EventSource).
+    useEffect(() => {
+        const handler = (e) => {
+            const { flowId: evFlowId, nodeId, count } = e.detail || {};
+            if (evFlowId !== flowId) return;
+            setNodes(nds => nds.map(n => (n.type === 'contador' && n.id === nodeId)
+                ? { ...n, data: { ...n.data, liveCount: count } }
+                : n));
+        };
+        window.addEventListener('sse:flow:counter', handler);
+        return () => window.removeEventListener('sse:flow:counter', handler);
+    }, [flowId]);
+
     const onNodesChange = useCallback((changes) => {
         setNodes(nds => applyNodeChanges(changes, nds));
         setDirty(true);

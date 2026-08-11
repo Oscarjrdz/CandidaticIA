@@ -447,7 +447,20 @@ async function evaluateOrExecute(node, candidate, flowId, redis, opts = {}) {
         case 'contador': {
             if (opts.skipCounters) return true; // modo test: no ensucia las métricas reales
             try {
-                await redis.sadd(`${COUNTER_PREFIX}${flowId}:${node.id}`, candidate.id);
+                const counterKey = `${COUNTER_PREFIX}${flowId}:${node.id}`;
+                const [[, added], [, count]] = await redis.pipeline()
+                    .sadd(counterKey, candidate.id)
+                    .scard(counterKey)
+                    .exec();
+                // Solo empuja el push si el candidato SUMÓ al set (sadd=1) — si ya estaba
+                // (reintento del mismo evento), el número en pantalla no cambió, no hay
+                // nada que avisarle a los editores de flujo abiertos.
+                if (added === 1) {
+                    redis.publish('channel:sse:updates', JSON.stringify({
+                        type: 'flow:counter', flowId, nodeId: node.id, count,
+                        timestamp: new Date().toISOString()
+                    })).catch(() => {});
+                }
             } catch (e) {
                 console.error(`[FLOW-ENGINE] contador ${flowId}/${node.id}:`, e?.message);
             }
