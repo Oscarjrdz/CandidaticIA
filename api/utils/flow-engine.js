@@ -25,8 +25,64 @@ import { substituteVariables } from './shortcuts.js';
 
 const FLOWS_KEY = 'flows:v1';
 const QUICK_REPLIES_KEY = 'candidatic:quick_replies';
+const REMINDER_TEMPLATES_KEY = 'candidatic:reminder_templates';
+const DIRECT_REMINDERS_ZSET = 'direct_reminders';
+const PROJECTS_KEY = 'candidatic_manual_projects';
+const PROJECT_LINKS_PREFIX = 'crm_links:';
 export const EXEC_SET_PREFIX = 'flow:executed:v1:';
 export const COUNTER_PREFIX = 'flow:counter:v1:';
+
+// Mismo cálculo que handleApplyReminderTemplate en src/components/ChatSection.jsx —
+// dayOffset/timeOfDay son relativos al momento en que se aplica la plantilla, no una
+// fecha absoluta. Si el offset ya cayó en el pasado (ej. "mismo día" tarde), se corre
+// un día para que siga siendo una fecha futura válida (POST /api/candidate-reminders
+// exige scheduledAt estrictamente futuro).
+function resolveReminderSendAt(tpl) {
+    const sendAt = new Date();
+    sendAt.setDate(sendAt.getDate() + (Number(tpl.dayOffset) || 0));
+    const [hours, minutes] = String(tpl.timeOfDay || '07:00').split(':').map(Number);
+    sendAt.setHours(hours || 0, minutes || 0, 0, 0);
+    if (sendAt.getTime() <= Date.now() + 60000) sendAt.setDate(sendAt.getDate() + 1);
+    return sendAt;
+}
+
+// Mismo invariante que la acción 'linkCandidate' de api/manual_projects.js: un
+// candidato solo puede estar en un proyecto a la vez, así que primero se desvincula
+// de cualquier otro antes de vincularlo al nuevo.
+async function linkCandidateToProject(redis, candidateId, projectId, stepId) {
+    const raw = await redis.get(PROJECTS_KEY);
+    const projects = raw ? JSON.parse(raw) : [];
+    const project = projects.find(p => p.id === projectId);
+    if (!project) return null;
+
+    for (const p of projects) {
+        if (!p?.id || p.id === projectId) continue;
+        const otherLinksRaw = await redis.get(`${PROJECT_LINKS_PREFIX}${p.id}`);
+        if (!otherLinksRaw) continue;
+        const otherLinks = JSON.parse(otherLinksRaw);
+        const next = otherLinks.filter(l => l.candidateId !== candidateId);
+        if (next.length !== otherLinks.length) {
+            await redis.set(`${PROJECT_LINKS_PREFIX}${p.id}`, JSON.stringify(next));
+        }
+    }
+
+    const linksRaw = await redis.get(`${PROJECT_LINKS_PREFIX}${projectId}`);
+    let links = linksRaw ? JSON.parse(linksRaw) : [];
+    const finalStepId = stepId || project.steps?.[0]?.id || 'step_inicio';
+    const existing = links.find(l => l.candidateId === candidateId);
+    links = existing
+        ? links.map(l => l.candidateId === candidateId ? { ...l, stepId: finalStepId } : l)
+        : [...links, { candidateId, stepId: finalStepId, linkedAt: new Date().toISOString() }];
+
+    await redis.set(`${PROJECT_LINKS_PREFIX}${projectId}`, JSON.stringify(links));
+    await updateCandidate(candidateId, { manualProjectId: projectId, manualProjectStepId: finalStepId });
+    redis.publish('channel:sse:updates', JSON.stringify({
+        type: 'crm:candidate', action: 'linkCandidate', projectId, candidateId, stepId: finalStepId,
+        timestamp: new Date().toISOString()
+    })).catch(() => {});
+
+    return finalStepId;
+}
 
 function getCandidateAge(candidate) {
     if (Number.isFinite(candidate?.edad)) return Number(candidate.edad);
@@ -193,6 +249,49 @@ async function evaluateOrExecute(node, candidate, flowId, redis) {
                 }
             } catch (e) {
                 console.error(`[FLOW-ENGINE] accion_quitar_etiqueta ${flowId}/${node.id}:`, e?.message);
+            }
+            return true;
+        }
+
+        case 'accion_recordatorio': {
+            if (!data.templateId) return true;
+            try {
+                const raw = await getCachedConfig(redis, REMINDER_TEMPLATES_KEY);
+                const templates = raw ? JSON.parse(raw) : [];
+                const tpl = templates.find(t => t.id === data.templateId);
+                if (!tpl || !tpl.message) return true;
+
+                const sendAt = resolveReminderSendAt(tpl);
+                const id = `dr_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+                const reminder = {
+                    id, candidateId: candidate.id, whatsapp: candidate.whatsapp,
+                    nombre: candidate.nombreReal || candidate.nombre || candidate.whatsapp,
+                    message: substituteVariables(tpl.message, candidate),
+                    scheduledAt: sendAt.toISOString(),
+                    fallbackTemplateData: null, fallbackTemplateParams: null,
+                    createdAt: new Date().toISOString(), status: 'pending'
+                };
+                await redis.pipeline()
+                    .set(`direct_reminder:${id}`, JSON.stringify(reminder), 'EX', 60 * 60 * 24 * 30)
+                    .zadd(DIRECT_REMINDERS_ZSET, sendAt.getTime(), id)
+                    .sadd(`direct_reminders:candidate:${candidate.id}`, id)
+                    .exec();
+            } catch (e) {
+                console.error(`[FLOW-ENGINE] accion_recordatorio ${flowId}/${node.id}:`, e?.message);
+            }
+            return true;
+        }
+
+        case 'accion_proyecto': {
+            if (!data.projectId) return true;
+            try {
+                const finalStepId = await linkCandidateToProject(redis, candidate.id, data.projectId, data.stepId);
+                if (finalStepId) {
+                    candidate.manualProjectId = data.projectId; // mantener el snapshot en memoria en sync
+                    candidate.manualProjectStepId = finalStepId;
+                }
+            } catch (e) {
+                console.error(`[FLOW-ENGINE] accion_proyecto ${flowId}/${node.id}:`, e?.message);
             }
             return true;
         }

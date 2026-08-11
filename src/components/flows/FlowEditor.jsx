@@ -5,7 +5,7 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { useToastContext } from '../../contexts/ToastContext';
-import { getFlow, updateFlow, getFlowsMeta, getFlowCounters, getQuickReplies } from '../../services/flowsService';
+import { getFlow, updateFlow, getFlowsMeta, getFlowCounters, getQuickReplies, getReminderTemplates, getManualProjects } from '../../services/flowsService';
 import { flowNodeTypes, COLOR_CLASSES, NODE_DEFS } from './nodeTypes';
 import NodeConfigDrawer from './NodeConfigDrawer';
 import FlowToolbar from './FlowToolbar';
@@ -20,6 +20,8 @@ const DEFAULT_DATA_BY_TYPE = {
     accion_whatsapp: { quickReplyId: '', quickReplyName: '' },
     accion_etiqueta: { tag: '' },
     accion_quitar_etiqueta: { tag: '' },
+    accion_recordatorio: { templateId: '', templateName: '' },
+    accion_proyecto: { projectId: '', projectName: '' },
     contador: { label: '' }
 };
 
@@ -35,6 +37,8 @@ const FlowEditorInner = ({ flowId, onBack }) => {
     const [edges, setEdges] = useState([]);
     const [meta, setMeta] = useState({ municipios: [], categorias: [], escolaridades: [], tags: [] });
     const [quickReplies, setQuickReplies] = useState([]);
+    const [reminderTemplates, setReminderTemplates] = useState([]);
+    const [projects, setProjects] = useState([]);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [dirty, setDirty] = useState(false);
@@ -59,7 +63,9 @@ const FlowEditorInner = ({ flowId, onBack }) => {
         let cancelled = false;
         (async () => {
             setLoading(true);
-            const [flowRes, metaRes, qrRes] = await Promise.all([getFlow(flowId), getFlowsMeta(), getQuickReplies()]);
+            const [flowRes, metaRes, qrRes, rtRes, projRes] = await Promise.all([
+                getFlow(flowId), getFlowsMeta(), getQuickReplies(), getReminderTemplates(), getManualProjects()
+            ]);
             if (cancelled) return;
 
             if (!flowRes.success) {
@@ -84,6 +90,8 @@ const FlowEditorInner = ({ flowId, onBack }) => {
                 });
             }
             if (qrRes.success) setQuickReplies(qrRes.replies || []);
+            if (rtRes.success) setReminderTemplates(rtRes.templates || []);
+            if (projRes.success) setProjects(projRes.projects || []);
 
             setLoading(false);
         })();
@@ -180,7 +188,7 @@ const FlowEditorInner = ({ flowId, onBack }) => {
     }
 
     return (
-        <div className="relative h-full w-full bg-gray-50 dark:bg-gray-900">
+        <div className="relative h-full w-full bg-white dark:bg-gray-900">
             <FlowToolbar
                 flowName={flowMeta.name}
                 active={flowMeta.active}
@@ -206,7 +214,8 @@ const FlowEditorInner = ({ flowId, onBack }) => {
                 defaultEdgeOptions={{ style: { stroke: '#a5b4fc', strokeWidth: 2 }, animated: false }}
                 proOptions={{ hideAttribution: true }}
             >
-                <Background variant={BackgroundVariant.Dots} gap={20} size={1} color="#e2e8f0" />
+                <Background id="blueprint-minor" variant={BackgroundVariant.Lines} gap={20} lineWidth={1} color="#dbeafe" />
+                <Background id="blueprint-major" variant={BackgroundVariant.Lines} gap={100} lineWidth={1.5} color="#93c5fd" />
                 <Controls showInteractive={false} />
                 <MiniMap
                     pannable zoomable
@@ -228,6 +237,8 @@ const FlowEditorInner = ({ flowId, onBack }) => {
                     node={selectedNode}
                     meta={meta}
                     quickReplies={quickReplies}
+                    reminderTemplates={reminderTemplates}
+                    projects={projects}
                     onChange={handleNodeConfigChange}
                     onClose={() => setSelectedNodeId(null)}
                 />

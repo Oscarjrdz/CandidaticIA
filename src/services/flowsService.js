@@ -106,3 +106,27 @@ export const getQuickReplies = async () => {
         return { success: false, error: error.message };
     }
 };
+
+// Plantillas de recordatorio — reusadas tal cual por el nodo "accion_recordatorio".
+export const getReminderTemplates = async () => {
+    try {
+        const res = await fetch('/api/reminder-templates');
+        const data = await res.json();
+        if (data.success) return { success: true, templates: data.templates };
+        return { success: false, error: data.error };
+    } catch (error) {
+        return { success: false, error: error.message };
+    }
+};
+
+// Proyectos (CRM Kanban) — reusados tal cual por el nodo "accion_proyecto".
+export const getManualProjects = async () => {
+    try {
+        const res = await fetch('/api/manual_projects');
+        const data = await res.json();
+        if (data.success) return { success: true, projects: data.data };
+        return { success: false, error: data.error };
+    } catch (error) {
+        return { success: false, error: error.message };
+    }
+};

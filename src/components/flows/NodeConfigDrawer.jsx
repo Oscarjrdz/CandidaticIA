@@ -64,7 +64,7 @@ const MultiSelectChecklist = ({ items, selected, onChange, searchable }) => {
     );
 };
 
-const NodeConfigDrawer = ({ node, meta, quickReplies, onChange, onClose }) => {
+const NodeConfigDrawer = ({ node, meta, quickReplies, reminderTemplates, projects, onChange, onClose }) => {
     if (!node) return null;
     const def = NODE_DEFS[node.type] || NODE_DEFS.contador;
     const colors = COLOR_CLASSES[def.color] || COLOR_CLASSES.gray;
@@ -206,6 +206,49 @@ const NodeConfigDrawer = ({ node, meta, quickReplies, onChange, onClose }) => {
                             <option value="">Elige una etiqueta...</option>
                             {(meta?.tags || []).map(t => <option key={t} value={t}>{t}</option>)}
                         </select>
+                    </div>
+                )}
+
+                {node.type === 'accion_recordatorio' && (
+                    <div>
+                        <label className="text-xs text-gray-500 dark:text-gray-400 mb-2 block">Plantilla de recordatorio</label>
+                        <select
+                            value={data.templateId || ''}
+                            onChange={(e) => {
+                                const tpl = (reminderTemplates || []).find(t => t.id === e.target.value);
+                                patch({ templateId: e.target.value, templateName: tpl?.name || '' });
+                            }}
+                            className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 dark:bg-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        >
+                            <option value="">Elige una plantilla...</option>
+                            {(reminderTemplates || []).map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                        </select>
+                        {!(reminderTemplates || []).length && (
+                            <p className="mt-2 text-xs text-gray-400">Todavía no tienes plantillas de recordatorio — créalas desde la campanita en Chat.</p>
+                        )}
+                        {data.templateId && (
+                            <p className="mt-2 text-xs text-gray-400">Se programa según el tiempo configurado en la plantilla (días + hora), a partir del momento en que el candidato completa su perfil.</p>
+                        )}
+                    </div>
+                )}
+
+                {node.type === 'accion_proyecto' && (
+                    <div>
+                        <label className="text-xs text-gray-500 dark:text-gray-400 mb-2 block">Proyecto</label>
+                        <select
+                            value={data.projectId || ''}
+                            onChange={(e) => {
+                                const proj = (projects || []).find(p => p.id === e.target.value);
+                                patch({ projectId: e.target.value, projectName: proj?.name || '' });
+                            }}
+                            className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 dark:bg-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                        >
+                            <option value="">Elige un proyecto...</option>
+                            {(projects || []).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                        </select>
+                        {data.projectId && (
+                            <p className="mt-2 text-xs text-gray-400">Cae en la primera columna del proyecto. Si ya estaba en otro proyecto, se desvincula de ahí (solo puede estar en uno a la vez).</p>
+                        )}
                     </div>
                 )}
 

@@ -1,4 +1,4 @@
-import { Play, Tag, CalendarRange, MapPin, Briefcase, GraduationCap, MessageCircle, Hash, UserRound, CircleMinus } from 'lucide-react';
+import { Play, Tag, CalendarRange, MapPin, Briefcase, GraduationCap, MessageCircle, Hash, UserRound, CircleMinus, BellRing, FolderKanban } from 'lucide-react';
 
 export const PROFILE_FILTER_LABELS = {
     active: 'Activos (no bloqueados)',
@@ -111,6 +111,22 @@ export const NODE_DEFS = {
         hasTarget: true,
         hasSource: true,
         summary: (data) => data.tag ? `Quitar: ${data.tag}` : 'Elige una etiqueta'
+    },
+    accion_recordatorio: {
+        label: 'Mandar Recordatorio',
+        icon: BellRing,
+        color: 'emerald',
+        hasTarget: true,
+        hasSource: true,
+        summary: (data) => data.templateName || 'Elige una plantilla de recordatorio'
+    },
+    accion_proyecto: {
+        label: 'Meter a Proyecto',
+        icon: FolderKanban,
+        color: 'amber',
+        hasTarget: true,
+        hasSource: true,
+        summary: (data) => data.projectName || 'Elige un proyecto'
     },
     contador: {
         label: 'Contador',
