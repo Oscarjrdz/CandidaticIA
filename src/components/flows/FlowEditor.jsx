@@ -7,8 +7,11 @@ import '@xyflow/react/dist/style.css';
 import { useToastContext } from '../../contexts/ToastContext';
 import { getFlow, updateFlow, getFlowsMeta, getFlowCounters, getQuickReplies, getReminderTemplates, getManualProjects, testFlow } from '../../services/flowsService';
 import { flowNodeTypes, COLOR_CLASSES, NODE_DEFS } from './nodeTypes';
+import FlowEdge from './edgeTypes/FlowEdge';
 import NodeConfigDrawer from './NodeConfigDrawer';
 import FlowToolbar from './FlowToolbar';
+
+const flowEdgeTypes = { default: FlowEdge };
 
 const DEFAULT_DATA_BY_TYPE = {
     etiqueta: { mode: 'todas' },
@@ -58,6 +61,13 @@ const FlowEditorInner = ({ flowId, onBack }) => {
         setDirty(true);
     }, []);
 
+    const handleDeleteEdge = useCallback((edgeId) => {
+        setEdges(eds => eds.filter(e => e.id !== edgeId));
+        setDirty(true);
+    }, []);
+
+    const hydrateEdge = useCallback((e) => ({ ...e, data: { ...e.data, onDelete: handleDeleteEdge } }), [handleDeleteEdge]);
+
     const handleTestPhoneChange = useCallback((nodeId, phone) => {
         setNodes(nds => nds.map(n => n.id === nodeId ? { ...n, data: { ...n.data, testPhone: phone } } : n));
     }, []);
@@ -92,7 +102,7 @@ const FlowEditorInner = ({ flowId, onBack }) => {
             setFlowMeta({ name: flow.name, active: !!flow.active });
             const loadedNodes = (flow.nodes || []).map(n => hydrateNode(n));
             setNodes(loadedNodes);
-            setEdges(flow.edges || []);
+            setEdges((flow.edges || []).map(hydrateEdge));
 
             if (metaRes.success) {
                 setMeta({
@@ -140,9 +150,9 @@ const FlowEditorInner = ({ flowId, onBack }) => {
     }, []);
 
     const onConnect = useCallback((params) => {
-        setEdges(eds => addEdge({ ...params, id: `e${Date.now()}_${Math.random().toString(36).slice(2, 6)}` }, eds));
+        setEdges(eds => addEdge(hydrateEdge({ ...params, id: `e${Date.now()}_${Math.random().toString(36).slice(2, 6)}` }), eds));
         setDirty(true);
-    }, []);
+    }, [hydrateEdge]);
 
     // Justo debajo del último nodo de la lista (el más reciente, en su posición REAL
     // actual — no una cuadrícula fija que se aleja del flujo si ya lo acomodaste).
@@ -275,6 +285,7 @@ const FlowEditorInner = ({ flowId, onBack }) => {
                 onEdgesChange={onEdgesChange}
                 onConnect={onConnect}
                 nodeTypes={flowNodeTypes}
+                edgeTypes={flowEdgeTypes}
                 fitView
                 minZoom={0.2}
                 maxZoom={1.5}

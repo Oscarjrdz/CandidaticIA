@@ -46,17 +46,31 @@ const PROJECT_LINKS_PREFIX = 'crm_links:';
 export const EXEC_SET_PREFIX = 'flow:executed:v1:';
 export const COUNTER_PREFIX = 'flow:counter:v1:';
 
-// Mismo cálculo que handleApplyReminderTemplate en src/components/ChatSection.jsx —
+// Mismo cálculo que handleApplyReminderTemplate en src/components/ChatSection.jsx,
+// pero AHÍ corre en el navegador del reclutador (hora local = Monterrey) y setHours()
+// da el resultado correcto. Acá corre en una función serverless de Vercel, cuyo
+// proceso Node está en UTC — setHours() interpretaría 06:00 como 06:00 UTC en vez de
+// 06:00 Monterrey (bug detectado: guardaba 6 horas antes de lo debido). Por eso se
+// arma la fecha en UTC explícitamente, fijando el offset de Monterrey (UTC-6 todo el
+// año — México quitó el horario de verano en 2022 fuera de la franja fronteriza, y
+// Monterrey no es franja fronteriza).
+//
 // dayOffset/timeOfDay son relativos al momento en que se aplica la plantilla, no una
 // fecha absoluta. Si el offset ya cayó en el pasado (ej. "mismo día" tarde), se corre
 // un día para que siga siendo una fecha futura válida (POST /api/candidate-reminders
 // exige scheduledAt estrictamente futuro).
+const MTY_UTC_OFFSET_HOURS = 6;
+
 function resolveReminderSendAt(tpl) {
-    const sendAt = new Date();
-    sendAt.setDate(sendAt.getDate() + (Number(tpl.dayOffset) || 0));
+    const days = Number(tpl.dayOffset) || 0;
     const [hours, minutes] = String(tpl.timeOfDay || '07:00').split(':').map(Number);
-    sendAt.setHours(hours || 0, minutes || 0, 0, 0);
-    if (sendAt.getTime() <= Date.now() + 60000) sendAt.setDate(sendAt.getDate() + 1);
+
+    const mtyDateStr = new Date(Date.now() + days * 86400000)
+        .toLocaleDateString('sv-SE', { timeZone: 'America/Monterrey' }); // YYYY-MM-DD
+    const sendAt = new Date(`${mtyDateStr}T00:00:00.000Z`);
+    sendAt.setUTCHours((hours || 0) + MTY_UTC_OFFSET_HOURS, minutes || 0, 0, 0);
+
+    if (sendAt.getTime() <= Date.now() + 60000) sendAt.setUTCDate(sendAt.getUTCDate() + 1);
     return sendAt;
 }
 
