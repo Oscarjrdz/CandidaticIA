@@ -54,15 +54,21 @@ export default async function handler(req, res) {
 
     try {
         if (method === 'GET' && meta === '1') {
-            const [categoriasRaw, chatTagsRaw, tagCountsMap] = await Promise.all([
+            const [categoriasRaw, chatTagsRaw] = await Promise.all([
                 getCachedConfig(redis, 'candidatic_categories'),
-                redis.get('candidatic:chat_tags'),
-                redis.hkeys('candidatic:tag_counts')
+                redis.get('candidatic:chat_tags')
             ]);
             const categorias = categoriasRaw ? JSON.parse(categoriasRaw) : [];
-            const chatTags = chatTagsRaw ? JSON.parse(chatTagsRaw) : [];
-            const chatTagNames = chatTags.map(t => (typeof t === 'string' ? t : t?.name)).filter(Boolean);
-            const tags = [...new Set([...chatTagNames, ...(tagCountsMap || [])])].sort((a, b) => a.localeCompare(b));
+            // Misma fuente y mismo fallback que GET /api/tags (Chat Web / Proyectos) — para
+            // que la lista de etiquetas sea idéntica en toda la app, no una versión ampliada.
+            const chatTags = chatTagsRaw ? JSON.parse(chatTagsRaw) : [
+                { name: 'Urgente', color: '#64748b' },
+                { name: 'Entrevista', color: '#f97316' },
+                { name: 'Contratado', color: '#eab308' },
+                { name: 'Rechazado', color: '#22c55e' },
+                { name: 'Duda', color: '#3b82f6' }
+            ];
+            const tags = chatTags.map(t => (typeof t === 'string' ? t : t?.name)).filter(Boolean);
 
             return res.status(200).json({
                 success: true,

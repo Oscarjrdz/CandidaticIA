@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { X } from 'lucide-react';
 import { NODE_DEFS, COLOR_CLASSES, PROFILE_FILTER_LABELS, ETIQUETA_MODE_LABELS, GENEROS } from './nodeTypes';
+import FlowSelect from './FlowSelect';
 
 const RadioGroup = ({ options, value, onChange }) => (
     <div className="space-y-2">
@@ -104,14 +105,14 @@ const NodeConfigDrawer = ({ node, meta, quickReplies, reminderTemplates, project
                             onChange={(v) => patch({ mode: v })}
                         />
                         {data.mode === 'especifica' && (
-                            <select
+                            <FlowSelect
                                 value={data.tag || ''}
-                                onChange={(e) => patch({ tag: e.target.value })}
-                                className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 dark:bg-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                            >
-                                <option value="">Elige una etiqueta...</option>
-                                {(meta?.tags || []).map(t => <option key={t} value={t}>{t}</option>)}
-                            </select>
+                                onChange={(v) => patch({ tag: v })}
+                                options={(meta?.tags || []).map(t => ({ value: t, label: t }))}
+                                placeholder="Elige una etiqueta..."
+                                ringClass="focus:ring-indigo-500"
+                                emptyLabel="No hay etiquetas creadas todavía"
+                            />
                         )}
                     </div>
                 )}
@@ -176,19 +177,17 @@ const NodeConfigDrawer = ({ node, meta, quickReplies, reminderTemplates, project
                 {node.type === 'accion_whatsapp' && (
                     <div>
                         <label className="text-xs text-gray-500 dark:text-gray-400 mb-2 block">Mensaje del banco de respuestas</label>
-                        <select
+                        <FlowSelect
                             value={data.quickReplyId || ''}
-                            onChange={(e) => {
-                                const qr = (quickReplies || []).find(r => r.id === e.target.value);
-                                patch({ quickReplyId: e.target.value, quickReplyName: qr?.name || '' });
+                            onChange={(v) => {
+                                const qr = (quickReplies || []).find(r => r.id === v);
+                                patch({ quickReplyId: v, quickReplyName: qr?.name || '' });
                             }}
-                            className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 dark:bg-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                        >
-                            <option value="">Elige un mensaje...</option>
-                            {(quickReplies || []).filter(r => r.type === 'text' || !r.type).map(r => (
-                                <option key={r.id} value={r.id}>{r.name}</option>
-                            ))}
-                        </select>
+                            options={(quickReplies || []).map(r => ({ value: r.id, label: r.name }))}
+                            placeholder="Elige un mensaje..."
+                            ringClass="focus:ring-emerald-500"
+                            emptyLabel="No hay mensajes en el banco de respuestas"
+                        />
                         {data.quickReplyId && (
                             <p className="mt-2 text-xs text-gray-400">Se manda con variables ya resueltas ({'{{nombre}}'}, {'{{municipio}}'}, etc.)</p>
                         )}
@@ -198,31 +197,31 @@ const NodeConfigDrawer = ({ node, meta, quickReplies, reminderTemplates, project
                 {node.type === 'accion_etiqueta' && (
                     <div>
                         <label className="text-xs text-gray-500 dark:text-gray-400 mb-2 block">Etiqueta a asignar</label>
-                        <select
+                        <FlowSelect
                             value={data.tag || ''}
-                            onChange={(e) => patch({ tag: e.target.value })}
-                            className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 dark:bg-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
-                        >
-                            <option value="">Elige una etiqueta...</option>
-                            {(meta?.tags || []).map(t => <option key={t} value={t}>{t}</option>)}
-                        </select>
+                            onChange={(v) => patch({ tag: v })}
+                            options={(meta?.tags || []).map(t => ({ value: t, label: t }))}
+                            placeholder="Elige una etiqueta..."
+                            ringClass="focus:ring-amber-500"
+                            emptyLabel="No hay etiquetas creadas todavía"
+                        />
                     </div>
                 )}
 
                 {node.type === 'accion_recordatorio' && (
                     <div>
                         <label className="text-xs text-gray-500 dark:text-gray-400 mb-2 block">Plantilla de recordatorio</label>
-                        <select
+                        <FlowSelect
                             value={data.templateId || ''}
-                            onChange={(e) => {
-                                const tpl = (reminderTemplates || []).find(t => t.id === e.target.value);
-                                patch({ templateId: e.target.value, templateName: tpl?.name || '' });
+                            onChange={(v) => {
+                                const tpl = (reminderTemplates || []).find(t => t.id === v);
+                                patch({ templateId: v, templateName: tpl?.name || '' });
                             }}
-                            className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 dark:bg-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                        >
-                            <option value="">Elige una plantilla...</option>
-                            {(reminderTemplates || []).map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-                        </select>
+                            options={(reminderTemplates || []).map(t => ({ value: t.id, label: t.name }))}
+                            placeholder="Elige una plantilla..."
+                            ringClass="focus:ring-emerald-500"
+                            emptyLabel="No hay plantillas de recordatorio"
+                        />
                         {!(reminderTemplates || []).length && (
                             <p className="mt-2 text-xs text-gray-400">Todavía no tienes plantillas de recordatorio — créalas desde la campanita en Chat.</p>
                         )}
@@ -235,17 +234,17 @@ const NodeConfigDrawer = ({ node, meta, quickReplies, reminderTemplates, project
                 {node.type === 'accion_proyecto' && (
                     <div>
                         <label className="text-xs text-gray-500 dark:text-gray-400 mb-2 block">Proyecto</label>
-                        <select
+                        <FlowSelect
                             value={data.projectId || ''}
-                            onChange={(e) => {
-                                const proj = (projects || []).find(p => p.id === e.target.value);
-                                patch({ projectId: e.target.value, projectName: proj?.name || '' });
+                            onChange={(v) => {
+                                const proj = (projects || []).find(p => p.id === v);
+                                patch({ projectId: v, projectName: proj?.name || '' });
                             }}
-                            className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 dark:bg-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
-                        >
-                            <option value="">Elige un proyecto...</option>
-                            {(projects || []).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                        </select>
+                            options={(projects || []).map(p => ({ value: p.id, label: p.name }))}
+                            placeholder="Elige un proyecto..."
+                            ringClass="focus:ring-amber-500"
+                            emptyLabel="No hay proyectos creados todavía"
+                        />
                         {data.projectId && (
                             <p className="mt-2 text-xs text-gray-400">Cae en la primera columna del proyecto. Si ya estaba en otro proyecto, se desvincula de ahí (solo puede estar en uno a la vez).</p>
                         )}
@@ -255,14 +254,14 @@ const NodeConfigDrawer = ({ node, meta, quickReplies, reminderTemplates, project
                 {node.type === 'accion_quitar_etiqueta' && (
                     <div>
                         <label className="text-xs text-gray-500 dark:text-gray-400 mb-2 block">Etiqueta a quitar</label>
-                        <select
+                        <FlowSelect
                             value={data.tag || ''}
-                            onChange={(e) => patch({ tag: e.target.value })}
-                            className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 dark:bg-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
-                        >
-                            <option value="">Elige una etiqueta...</option>
-                            {(meta?.tags || []).map(t => <option key={t} value={t}>{t}</option>)}
-                        </select>
+                            onChange={(v) => patch({ tag: v })}
+                            options={(meta?.tags || []).map(t => ({ value: t, label: t }))}
+                            placeholder="Elige una etiqueta..."
+                            ringClass="focus:ring-amber-500"
+                            emptyLabel="No hay etiquetas creadas todavía"
+                        />
                     </div>
                 )}
 
