@@ -1,6 +1,7 @@
 import { getRedisClient, validateAdminSession, getCandidateByPhone } from './utils/storage.js';
 import { getCachedConfig, invalidateCache } from './utils/cache.js';
 import { runFlowTest } from './utils/flow-engine.js';
+import { getBotVacancies } from './utils/agent-ia.js';
 
 const REDIS_KEY = 'flows:v1';
 const EXEC_SET_PREFIX = 'flow:executed:v1:';
@@ -69,13 +70,16 @@ export default async function handler(req, res) {
                 { name: 'Duda', color: '#3b82f6' }
             ];
             const tags = chatTags.map(t => (typeof t === 'string' ? t : t?.name)).filter(Boolean);
+            const vacanciesList = await getBotVacancies();
+            const vacantes = vacanciesList.map(v => ({ id: v.id, name: v.name }));
 
             return res.status(200).json({
                 success: true,
                 municipios: NL_MUNICIPIOS,
                 categorias,
                 escolaridades: ESCOLARIDADES,
-                tags
+                tags,
+                vacantes
             });
         }
 

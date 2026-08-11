@@ -1,4 +1,4 @@
-import { Play, Tag, CalendarRange, MapPin, Briefcase, GraduationCap, MessageCircle, Hash, UserRound, CircleMinus, BellRing, FolderKanban, FlaskConical } from 'lucide-react';
+import { Play, Tag, CalendarRange, MapPin, Briefcase, GraduationCap, MessageCircle, Hash, UserRound, CircleMinus, BellRing, FolderKanban, FlaskConical, Eraser, Filter } from 'lucide-react';
 
 export const PROFILE_FILTER_LABELS = {
     active: 'Activos (no bloqueados)',
@@ -74,7 +74,7 @@ export const NODE_DEFS = {
     },
     condicion_categoria: {
         label: 'Condición: Categoría',
-        icon: Briefcase,
+        icon: Filter,
         color: 'blue',
         hasTarget: true,
         hasSource: true,
@@ -96,6 +96,14 @@ export const NODE_DEFS = {
         hasSource: true,
         summary: (data) => data.quickReplyName || 'Elige un mensaje del banco'
     },
+    accion_vacante: {
+        label: 'Mandar Vacante',
+        icon: Briefcase,
+        color: 'emerald',
+        hasTarget: true,
+        hasSource: true,
+        summary: (data) => data.vacancyName || 'Elige una vacante (maletín)'
+    },
     accion_etiqueta: {
         label: 'Agregar Etiqueta',
         icon: Tag,
@@ -111,6 +119,14 @@ export const NODE_DEFS = {
         hasTarget: true,
         hasSource: true,
         summary: (data) => data.tag ? `Quitar: ${data.tag}` : 'Elige una etiqueta'
+    },
+    accion_limpiar_etiquetas: {
+        label: 'Limpiar Etiquetas',
+        icon: Eraser,
+        color: 'amber',
+        hasTarget: true,
+        hasSource: true,
+        summary: () => 'Quita TODAS las etiquetas del candidato'
     },
     accion_recordatorio: {
         label: 'Mandar Recordatorio',

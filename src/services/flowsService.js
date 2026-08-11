@@ -45,7 +45,8 @@ export const getFlowsMeta = async () => {
                 municipios: data.municipios,
                 categorias: data.categorias,
                 escolaridades: data.escolaridades,
-                tags: data.tags
+                tags: data.tags,
+                vacantes: data.vacantes
             };
         }
         return { success: false, error: data.error };

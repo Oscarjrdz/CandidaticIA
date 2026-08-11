@@ -2,6 +2,7 @@ import { getRedisClient, isProfileComplete, updateCandidate, saveMessage } from 
 import { getCachedConfig } from './cache.js';
 import { getUltraMsgConfig, sendUltraMsgMessage } from '../whatsapp/utils.js';
 import { substituteVariables } from './shortcuts.js';
+import { getBotVacancies, vacancyMessageText } from './agent-ia.js';
 
 // ════════════════════════════════════════════════════════════════════════════
 // MOTOR DE FLOWS — ejecución determinística de automatizaciones post-extracción.
@@ -290,6 +291,33 @@ async function evaluateOrExecute(node, candidate, flowId, redis, opts = {}) {
             return true;
         }
 
+        case 'accion_vacante': {
+            if (!data.vacancyId) return true; // sin configurar → no rompe la cadena
+            try {
+                const vacancies = await getBotVacancies();
+                const vac = vacancies.find(v => v.id === data.vacancyId);
+                if (!vac) return true;
+
+                const config = await getUltraMsgConfig(candidate.incomingPhoneNumberId || candidate.instanceId);
+                if (!config?.token || !config?.instanceId) throw new Error('sin credenciales de WhatsApp');
+                const cleanTo = String(candidate.whatsapp).replace(/\D/g, '');
+
+                // Mismo texto EXACTO que el "maletín" del chat manual — sin substituteVariables,
+                // igual que sendVacancyDirect en ChatSection.jsx (no aplica variables ahí tampoco).
+                const text = vacancyMessageText(vac);
+                const sendResult = await sendUltraMsgMessage(config.instanceId, config.token, cleanTo, text, 'chat', { priority: 1 });
+                if (sendResult?.success) {
+                    await saveMessage(candidate.id, {
+                        from: 'me', content: text, timestamp: new Date().toISOString(),
+                        meta: { flow: true, flowId, nodeId: node.id }
+                    }).catch(() => {});
+                }
+            } catch (e) {
+                console.error(`[FLOW-ENGINE] accion_vacante ${flowId}/${node.id}:`, e?.message);
+            }
+            return true;
+        }
+
         case 'accion_etiqueta': {
             if (!data.tag) return true;
             try {
@@ -316,6 +344,19 @@ async function evaluateOrExecute(node, candidate, flowId, redis, opts = {}) {
                 }
             } catch (e) {
                 console.error(`[FLOW-ENGINE] accion_quitar_etiqueta ${flowId}/${node.id}:`, e?.message);
+            }
+            return true;
+        }
+
+        case 'accion_limpiar_etiquetas': {
+            try {
+                const tags = Array.isArray(candidate.tags) ? candidate.tags : [];
+                if (tags.length) {
+                    await updateCandidate(candidate.id, { tags: [] });
+                    candidate.tags = []; // mantener el snapshot en memoria en sync para el resto de la corrida
+                }
+            } catch (e) {
+                console.error(`[FLOW-ENGINE] accion_limpiar_etiquetas ${flowId}/${node.id}:`, e?.message);
             }
             return true;
         }

@@ -194,6 +194,26 @@ const NodeConfigDrawer = ({ node, meta, quickReplies, reminderTemplates, project
                     </div>
                 )}
 
+                {node.type === 'accion_vacante' && (
+                    <div>
+                        <label className="text-xs text-gray-500 dark:text-gray-400 mb-2 block">Vacante (maletín)</label>
+                        <FlowSelect
+                            value={data.vacancyId || ''}
+                            onChange={(v) => {
+                                const vac = (meta?.vacantes || []).find(x => x.id === v);
+                                patch({ vacancyId: v, vacancyName: vac?.name || '' });
+                            }}
+                            options={(meta?.vacantes || []).map(v => ({ value: v.id, label: v.name }))}
+                            placeholder="Elige una vacante..."
+                            ringClass="focus:ring-emerald-500"
+                            emptyLabel="No hay vacantes con 'info para el bot' activada"
+                        />
+                        {data.vacancyId && (
+                            <p className="mt-2 text-xs text-gray-400">Manda el mismo texto que el maletín del chat manual (nombre + descripción), sin variables.</p>
+                        )}
+                    </div>
+                )}
+
                 {node.type === 'accion_etiqueta' && (
                     <div>
                         <label className="text-xs text-gray-500 dark:text-gray-400 mb-2 block">Etiqueta a asignar</label>
@@ -206,6 +226,12 @@ const NodeConfigDrawer = ({ node, meta, quickReplies, reminderTemplates, project
                             emptyLabel="No hay etiquetas creadas todavía"
                         />
                     </div>
+                )}
+
+                {node.type === 'accion_limpiar_etiquetas' && (
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                        No necesita configuración: al ejecutarse, quita <strong>todas</strong> las etiquetas que tenga el candidato en ese momento (no solo una).
+                    </p>
                 )}
 
                 {node.type === 'accion_recordatorio' && (

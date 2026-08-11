@@ -18,8 +18,10 @@ const DEFAULT_DATA_BY_TYPE = {
     condicion_categoria: { categorias: [] },
     condicion_escolaridad: { escolaridades: [] },
     accion_whatsapp: { quickReplyId: '', quickReplyName: '' },
+    accion_vacante: { vacancyId: '', vacancyName: '' },
     accion_etiqueta: { tag: '' },
     accion_quitar_etiqueta: { tag: '' },
+    accion_limpiar_etiquetas: {},
     accion_recordatorio: { templateId: '', templateName: '' },
     accion_proyecto: { projectId: '', projectName: '' },
     contador: { label: '' },
@@ -36,7 +38,7 @@ const FlowEditorInner = ({ flowId, onBack }) => {
     const [flowMeta, setFlowMeta] = useState({ name: '', active: false });
     const [nodes, setNodes] = useState([]);
     const [edges, setEdges] = useState([]);
-    const [meta, setMeta] = useState({ municipios: [], categorias: [], escolaridades: [], tags: [] });
+    const [meta, setMeta] = useState({ municipios: [], categorias: [], escolaridades: [], tags: [], vacantes: [] });
     const [quickReplies, setQuickReplies] = useState([]);
     const [reminderTemplates, setReminderTemplates] = useState([]);
     const [projects, setProjects] = useState([]);
@@ -98,7 +100,8 @@ const FlowEditorInner = ({ flowId, onBack }) => {
                     municipios: metaRes.municipios || [],
                     categorias: metaRes.categorias || [],
                     escolaridades: metaRes.escolaridades || [],
-                    tags: metaRes.tags || []
+                    tags: metaRes.tags || [],
+                    vacantes: metaRes.vacantes || []
                 });
             }
             if (qrRes.success) setQuickReplies(qrRes.replies || []);
