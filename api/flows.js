@@ -119,11 +119,12 @@ export default async function handler(req, res) {
             const candidate = await getCandidateByPhone(whatsapp);
             if (!candidate) return res.status(404).json({ success: false, error: 'No se encontró un candidato con ese número' });
 
-            await runFlowTest(flow, candidate);
+            const passed = await runFlowTest(flow, candidate);
 
             return res.status(200).json({
                 success: true,
-                candidate: { id: candidate.id, nombre: candidate.nombreReal || candidate.nombre || candidate.whatsapp }
+                candidate: { id: candidate.id, nombre: candidate.nombreReal || candidate.nombre || candidate.whatsapp },
+                passed
             });
         }
 

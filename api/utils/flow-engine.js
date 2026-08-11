@@ -381,19 +381,23 @@ async function evaluateOrExecute(node, candidate, flowId, redis, opts = {}) {
 // opts.skipClaim: no reclama/consulta el dedupe de producción (modo test, para poder
 // repetir la corrida). opts.skipCounters: no incrementa los nodos "contador" (modo
 // test, para no inflar la métrica real con corridas manuales).
+// Devuelve un Map<nodeId, boolean> con el resultado de cada nodo alcanzable —
+// usado por el modo test para mostrarle al usuario hasta dónde llegó la corrida
+// (los nodos fuera del Map nunca se evaluaron, ej. ciclo o desconectados de "inicio").
 async function runOneFlow(redis, flow, candidateId, candidate, opts = {}) {
+    const passed = new Map();
+
     if (!opts.skipClaim) {
         const claimed = await redis.sadd(`${EXEC_SET_PREFIX}${flow.id}`, candidateId);
-        if (claimed === 0) return; // ya ejecutado para este candidato (webhook reintentado)
+        if (claimed === 0) return passed; // ya ejecutado para este candidato (webhook reintentado)
     }
 
     const nodes = Array.isArray(flow.nodes) ? flow.nodes : [];
     const edges = Array.isArray(flow.edges) ? flow.edges : [];
-    if (!nodes.length) return;
+    if (!nodes.length) return passed;
 
     const order = topoSort(nodes, edges);
     const incoming = buildIncomingMap(edges);
-    const passed = new Map();
 
     for (const node of order) {
         const preds = incoming.get(node.id) || [];
@@ -404,6 +408,8 @@ async function runOneFlow(redis, flow, candidateId, candidate, opts = {}) {
         }
         passed.set(node.id, await evaluateOrExecute(node, candidate, flow.id, redis, opts));
     }
+
+    return passed;
 }
 
 // Punto de entrada — llamado fire-and-forget desde api/ai/agent.js con el snapshot
@@ -435,5 +441,6 @@ export async function runFlowTest(flow, candidateSnapshot) {
     if (!redis) throw new Error('Redis no disponible');
     if (!candidateSnapshot?.id || !candidateSnapshot?.whatsapp) throw new Error('Candidato inválido');
 
-    await runOneFlow(redis, flow, candidateSnapshot.id, { ...candidateSnapshot }, { skipClaim: true, skipCounters: true });
+    const passed = await runOneFlow(redis, flow, candidateSnapshot.id, { ...candidateSnapshot }, { skipClaim: true, skipCounters: true });
+    return Object.fromEntries(passed);
 }

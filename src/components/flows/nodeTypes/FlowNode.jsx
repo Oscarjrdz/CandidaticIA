@@ -1,7 +1,22 @@
 import React from 'react';
 import { Handle, Position } from '@xyflow/react';
-import { X, Play, Loader2 } from 'lucide-react';
+import { X, Play, Loader2, Check } from 'lucide-react';
 import { NODE_DEFS, COLOR_CLASSES } from './nodeDefs';
+
+// Badge de resultado de la última corrida del nodo "test": verde con check si el nodo
+// SÍ pasó/se ejecutó, gris con X si no se alcanzó (bloqueado por una condición previa
+// o él mismo no cumplió). undefined = no hay corrida de prueba reciente, no se muestra.
+const TestResultBadge = ({ testPassed }) => {
+    if (testPassed === undefined) return null;
+    return (
+        <div
+            className={`absolute -top-2 -left-2 w-5 h-5 rounded-full flex items-center justify-center text-white shadow z-10 ${testPassed ? 'bg-emerald-500' : 'bg-gray-400'}`}
+            title={testPassed ? 'La última prueba SÍ llegó a este nodo' : 'La última prueba NO llegó a este nodo'}
+        >
+            {testPassed ? <Check className="w-3 h-3" /> : <X className="w-3 h-3" />}
+        </div>
+    );
+};
 
 const InicioToggle = ({ active, onToggle }) => (
     <button
@@ -56,11 +71,15 @@ const FlowNode = ({ id, type, data, selected }) => {
     const Icon = def.icon;
     const isTest = type === 'test';
 
+    const testRing = data.testPassed === true ? 'ring-2 ring-emerald-400' : data.testPassed === false ? 'ring-2 ring-gray-300 dark:ring-gray-600' : '';
+
     return (
         <div
-            className={`group relative w-60 rounded-2xl border-2 shadow-sm transition-shadow ${colors.bg} ${isTest ? '' : 'cursor-pointer'} ${selected ? 'border-gray-900 dark:border-white shadow-md' : colors.border}`}
+            className={`group relative w-60 rounded-2xl border-2 shadow-sm transition-shadow ${colors.bg} ${isTest ? '' : 'cursor-pointer'} ${selected ? 'border-gray-900 dark:border-white shadow-md' : colors.border} ${testRing}`}
             onClick={isTest ? undefined : () => data.onConfigure?.(id)}
         >
+            <TestResultBadge testPassed={data.testPassed} />
+
             {def.hasTarget && (
                 <Handle type="target" position={Position.Left} className="!w-3 !h-3 !bg-gray-400 !border-2 !border-white dark:!border-gray-900" />
             )}

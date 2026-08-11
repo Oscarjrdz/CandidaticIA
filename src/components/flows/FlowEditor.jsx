@@ -27,7 +27,7 @@ const DEFAULT_DATA_BY_TYPE = {
 };
 
 const stripTransientData = (data = {}) => {
-    const { onConfigure, onDelete, onTestPhoneChange, onTestRun, onToggleActive, liveCount, active, testStatus, testMessage, ...rest } = data;
+    const { onConfigure, onDelete, onTestPhoneChange, onTestRun, onToggleActive, liveCount, active, testStatus, testMessage, testPassed, ...rest } = data;
     return rest;
 };
 
@@ -183,7 +183,15 @@ const FlowEditorInner = ({ flowId, onBack }) => {
     // lienzo, no contra la última versión guardada.
     const handleTestRun = useCallback(async (nodeId, phone) => {
         if (!phone) return;
-        setNodes(nds => nds.map(n => n.id === nodeId ? { ...n, data: { ...n.data, testStatus: 'running', testMessage: '' } } : n));
+        // Limpia el resaltado de la corrida anterior en TODO el lienzo antes de empezar.
+        setNodes(nds => nds.map(n => ({
+            ...n,
+            data: {
+                ...n.data,
+                testPassed: undefined,
+                ...(n.id === nodeId ? { testStatus: 'running', testMessage: '' } : {})
+            }
+        })));
 
         const saveRes = await handleSave({ silent: true });
         if (!saveRes.success) {
@@ -192,14 +200,17 @@ const FlowEditorInner = ({ flowId, onBack }) => {
         }
 
         const res = await testFlow(flowId, phone);
-        setNodes(nds => nds.map(n => n.id === nodeId ? {
+        setNodes(nds => nds.map(n => ({
             ...n,
             data: {
                 ...n.data,
-                testStatus: res.success ? 'success' : 'error',
-                testMessage: res.success ? `Corrió para ${res.candidate?.nombre || phone}` : (res.error || 'Error al probar')
+                testPassed: res.success ? (res.passed?.[n.id]) : undefined,
+                ...(n.id === nodeId ? {
+                    testStatus: res.success ? 'success' : 'error',
+                    testMessage: res.success ? `Corrió para ${res.candidate?.nombre || phone}` : (res.error || 'Error al probar')
+                } : {})
             }
-        } : n));
+        })));
     }, [flowId, handleSave]);
 
     useEffect(() => { handleTestRunRef.current = handleTestRun; }, [handleTestRun]);

@@ -104,7 +104,7 @@ export const testFlow = async (flowId, whatsapp) => {
             body: JSON.stringify({ action: 'test', whatsapp })
         });
         const data = await res.json();
-        if (data.success) return { success: true, candidate: data.candidate };
+        if (data.success) return { success: true, candidate: data.candidate, passed: data.passed || {} };
         return { success: false, error: data.error };
     } catch (error) {
         return { success: false, error: error.message };
