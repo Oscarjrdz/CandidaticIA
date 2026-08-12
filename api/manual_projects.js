@@ -6,7 +6,7 @@ export default async function handler(req, res) {
     }
 
     try {
-        const { getRedisClient, updateCandidate, validateAdminSession } = await import('./utils/storage.js');
+        const { getRedisClient, updateCandidate, validateAdminSession, withCrmProjectLinksLock } = await import('./utils/storage.js');
 
         const userId = await validateAdminSession(req);
         if (!userId) return res.status(401).json({ error: 'No autorizado' });
@@ -74,13 +74,12 @@ export default async function handler(req, res) {
         };
 
         const unlinkCandidateFromProject = async (projectId, candidateId, { publish = true } = {}) => {
-            const linksRaw = await redis.get(`${LINKS_PREFIX}${projectId}`);
-            const links = linksRaw ? JSON.parse(linksRaw) : [];
-            const nextLinks = links.filter(l => l.candidateId !== candidateId);
-            if (nextLinks.length === links.length) return false;
-            await redis.set(`${LINKS_PREFIX}${projectId}`, JSON.stringify(nextLinks));
-            if (publish) publishRealtime('crm:candidate', { action: 'unlinkCandidate', projectId, candidateId });
-            return true;
+            const removed = await withCrmProjectLinksLock(projectId, async (links) => {
+                const nextLinks = links.filter(l => l.candidateId !== candidateId);
+                return { links: nextLinks.length !== links.length ? nextLinks : undefined, result: nextLinks.length !== links.length };
+            });
+            if (removed && publish) publishRealtime('crm:candidate', { action: 'unlinkCandidate', projectId, candidateId });
+            return removed;
         };
 
         const unlinkCandidateFromOtherProjects = async (candidateId, keepProjectId) => {
@@ -98,15 +97,15 @@ export default async function handler(req, res) {
             const nextStepIds = new Set((nextSteps || []).map(s => s.id));
             const removedStepIds = (oldSteps || []).map(s => s.id).filter(id => id && !nextStepIds.has(id));
             if (removedStepIds.length === 0) return [];
-
             const removedSet = new Set(removedStepIds);
-            const linksRaw = await redis.get(`${LINKS_PREFIX}${projectId}`);
-            const links = linksRaw ? JSON.parse(linksRaw) : [];
-            const removedLinks = links.filter(l => removedSet.has(l.stepId));
-            if (removedLinks.length === 0) return [];
 
-            const keptLinks = links.filter(l => !removedSet.has(l.stepId));
-            await redis.set(`${LINKS_PREFIX}${projectId}`, JSON.stringify(keptLinks));
+            const removedLinks = await withCrmProjectLinksLock(projectId, async (links) => {
+                const removed = links.filter(l => removedSet.has(l.stepId));
+                if (!removed.length) return { links: undefined, result: [] };
+                const kept = links.filter(l => !removedSet.has(l.stepId));
+                return { links: kept, result: removed };
+            });
+            if (!removedLinks?.length) return [];
 
             await Promise.all(removedLinks.map(link =>
                 updateCandidate(link.candidateId, { manualProjectId: null, manualProjectStepId: null })
@@ -152,20 +151,15 @@ export default async function handler(req, res) {
                 if (!projectId || !candidateId) return res.status(400).json({ error: 'Missing projectId or candidateId' });
 
                 const removedProjectIds = await unlinkCandidateFromOtherProjects(candidateId, projectId);
-                const linksRaw = await redis.get(`${LINKS_PREFIX}${projectId}`);
-                let links = linksRaw ? JSON.parse(linksRaw) : [];
-                const existingLink = links.find(l => l.candidateId === candidateId);
-                const finalStepId = stepId || existingLink?.stepId || 'step_inicio';
+                const finalStepId = await withCrmProjectLinksLock(projectId, async (links) => {
+                    const existingLink = links.find(l => l.candidateId === candidateId);
+                    const stepIdFinal = stepId || existingLink?.stepId || 'step_inicio';
+                    const nextLinks = existingLink
+                        ? links.map(l => l.candidateId === candidateId ? { ...l, stepId: stepIdFinal } : l)
+                        : [...links, { candidateId, stepId: stepIdFinal, linkedAt: new Date().toISOString() }];
+                    return { links: nextLinks, result: stepIdFinal };
+                });
 
-                // Don't duplicate
-                if (existingLink) {
-                    // Update step if already linked
-                    links = links.map(l => l.candidateId === candidateId ? { ...l, stepId: finalStepId } : l);
-                } else {
-                    links.push({ candidateId, stepId: finalStepId, linkedAt: new Date().toISOString() });
-                }
-
-                await redis.set(`${LINKS_PREFIX}${projectId}`, JSON.stringify(links));
                 await updateCandidate(candidateId, { manualProjectId: projectId, manualProjectStepId: finalStepId });
                 publishRealtime('crm:candidate', { action: 'linkCandidate', projectId, candidateId, stepId: finalStepId, removedProjectIds });
                 return res.status(200).json({ success: true });
@@ -175,21 +169,22 @@ export default async function handler(req, res) {
                 const { projectId, candidateIds, stepId } = body;
                 if (!projectId || !candidateIds?.length) return res.status(400).json({ error: 'Missing data' });
 
-                const linksRaw = await redis.get(`${LINKS_PREFIX}${projectId}`);
-                let links = linksRaw ? JSON.parse(linksRaw) : [];
-                const existingIds = new Set(links.map(l => l.candidateId));
                 const finalStepId = stepId || 'step_inicio';
                 const removedProjectIdsByCandidate = {};
 
                 for (const cId of candidateIds) {
                     const removed = await unlinkCandidateFromOtherProjects(cId, projectId);
                     if (removed.length > 0) removedProjectIdsByCandidate[cId] = removed;
-                    if (!existingIds.has(cId)) {
-                        links.push({ candidateId: cId, stepId: finalStepId, linkedAt: new Date().toISOString() });
-                    }
                 }
 
-                await redis.set(`${LINKS_PREFIX}${projectId}`, JSON.stringify(links));
+                await withCrmProjectLinksLock(projectId, async (links) => {
+                    const existingIds = new Set(links.map(l => l.candidateId));
+                    const additions = candidateIds
+                        .filter(cId => !existingIds.has(cId))
+                        .map(cId => ({ candidateId: cId, stepId: finalStepId, linkedAt: new Date().toISOString() }));
+                    return { links: additions.length ? [...links, ...additions] : undefined, result: null };
+                });
+
                 await Promise.all(candidateIds.map(cId =>
                     updateCandidate(cId, { manualProjectId: projectId, manualProjectStepId: finalStepId })
                 ));
@@ -201,11 +196,10 @@ export default async function handler(req, res) {
                 const { projectId, candidateId } = body;
                 if (!projectId || !candidateId) return res.status(400).json({ error: 'Missing data' });
 
-                const linksRaw = await redis.get(`${LINKS_PREFIX}${projectId}`);
-                let links = linksRaw ? JSON.parse(linksRaw) : [];
-                links = links.filter(l => l.candidateId !== candidateId);
-
-                await redis.set(`${LINKS_PREFIX}${projectId}`, JSON.stringify(links));
+                await withCrmProjectLinksLock(projectId, async (links) => ({
+                    links: links.filter(l => l.candidateId !== candidateId),
+                    result: null
+                }));
                 await updateCandidate(candidateId, { manualProjectId: null, manualProjectStepId: null });
                 publishRealtime('crm:candidate', { action: 'unlinkCandidate', projectId, candidateId });
                 return res.status(200).json({ success: true });
@@ -215,12 +209,10 @@ export default async function handler(req, res) {
                 const { projectId, candidateIds } = body;
                 if (!projectId || !candidateIds?.length) return res.status(400).json({ error: 'Missing data' });
 
-                const linksRaw = await redis.get(`${LINKS_PREFIX}${projectId}`);
-                let links = linksRaw ? JSON.parse(linksRaw) : [];
-                const removeSet = new Set(candidateIds);
-                links = links.filter(l => !removeSet.has(l.candidateId));
-
-                await redis.set(`${LINKS_PREFIX}${projectId}`, JSON.stringify(links));
+                await withCrmProjectLinksLock(projectId, async (links) => {
+                    const removeSet = new Set(candidateIds);
+                    return { links: links.filter(l => !removeSet.has(l.candidateId)), result: null };
+                });
                 await Promise.all(candidateIds.map(cId =>
                     updateCandidate(cId, { manualProjectId: null, manualProjectStepId: null })
                 ));
@@ -232,11 +224,10 @@ export default async function handler(req, res) {
                 const { projectId, candidateId, stepId } = body;
                 if (!projectId || !candidateId || !stepId) return res.status(400).json({ error: 'Missing data' });
 
-                const linksRaw = await redis.get(`${LINKS_PREFIX}${projectId}`);
-                let links = linksRaw ? JSON.parse(linksRaw) : [];
-                links = links.map(l => l.candidateId === candidateId ? { ...l, stepId } : l);
-
-                await redis.set(`${LINKS_PREFIX}${projectId}`, JSON.stringify(links));
+                await withCrmProjectLinksLock(projectId, async (links) => ({
+                    links: links.map(l => l.candidateId === candidateId ? { ...l, stepId } : l),
+                    result: null
+                }));
                 await updateCandidate(candidateId, { manualProjectId: projectId, manualProjectStepId: stepId });
                 publishRealtime('crm:candidate', { action: 'moveCandidate', projectId, candidateId, stepId });
                 return res.status(200).json({ success: true });
@@ -246,23 +237,22 @@ export default async function handler(req, res) {
                 const { projectId, stepId, candidateIds } = body;
                 if (!projectId || !stepId || !candidateIds?.length) return res.status(400).json({ error: 'Missing data' });
 
-                const linksRaw = await redis.get(`${LINKS_PREFIX}${projectId}`);
-                let links = linksRaw ? JSON.parse(linksRaw) : [];
+                await withCrmProjectLinksLock(projectId, async (links) => {
+                    // Separate links for this step vs other steps
+                    const otherLinks = links.filter(l => l.stepId !== stepId);
+                    const stepLinks = links.filter(l => l.stepId === stepId);
 
-                // Separate links for this step vs other steps
-                const otherLinks = links.filter(l => l.stepId !== stepId);
-                const stepLinks = links.filter(l => l.stepId === stepId);
+                    // Reorder step links according to candidateIds order
+                    const reordered = candidateIds
+                        .map(id => stepLinks.find(l => l.candidateId === id))
+                        .filter(Boolean);
 
-                // Reorder step links according to candidateIds order
-                const reordered = candidateIds
-                    .map(id => stepLinks.find(l => l.candidateId === id))
-                    .filter(Boolean);
+                    // Add any step links that weren't in the candidateIds list (safety net)
+                    const reorderedIds = new Set(reordered.map(l => l.candidateId));
+                    const remaining = stepLinks.filter(l => !reorderedIds.has(l.candidateId));
 
-                // Add any step links that weren't in the candidateIds list (safety net)
-                const reorderedIds = new Set(reordered.map(l => l.candidateId));
-                const remaining = stepLinks.filter(l => !reorderedIds.has(l.candidateId));
-
-                await redis.set(`${LINKS_PREFIX}${projectId}`, JSON.stringify([...otherLinks, ...reordered, ...remaining]));
+                    return { links: [...otherLinks, ...reordered, ...remaining], result: null };
+                });
                 publishRealtime('crm:candidate', { action: 'reorderCandidates', projectId, stepId, candidateIds });
                 return res.status(200).json({ success: true });
             }

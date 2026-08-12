@@ -12,6 +12,7 @@ import Redis from 'ioredis';
 import { sendConversionEvent } from './metaConversions.js';
 import { getCachedConfig } from './cache.js';
 import { recordScanEvent } from './redis-bandwidth.js';
+import { acquireProcessingLock, releaseProcessingLock } from './reminder-lock.js';
 
 // Initialize Redis client
 let redis;
@@ -127,8 +128,54 @@ const INDEX_KEYS = {
 };
 const UNTAGGED_TAG_FILTER = '__candidatic_untagged__';
 const UNTAGGED_COUNT_KEY = 'candidatic:untagged_count';
-const MANUAL_PROJECT_LINKS_PREFIX = 'crm_links:';
+export const MANUAL_PROJECT_LINKS_PREFIX = 'crm_links:';
 export const HUMAN_INTERVENTION_SILENCE_MS = 5 * 24 * 60 * 60 * 1000;
+
+const CRM_LINKS_LOCK_SCOPE = 'crm_links';
+const CRM_LINKS_LOCK_TTL_SECONDS = 10;
+const CRM_LINKS_LOCK_MAX_WAIT_MS = 3000;
+const CRM_LINKS_LOCK_RETRY_MS = 60;
+
+// TODA escritura a crm_links:{projectId} (vincular/desvincular/mover/reordenar
+// candidatos — desde Flujos en flow-engine.js o desde el tablero CRM manual en
+// manual_projects.js) DEBE pasar por aquí. Es un blob JSON único por proyecto: leer
+// todo, modificar en memoria, reescribir todo — no atómico por sí mismo. Sin candado,
+// dos escrituras concurrentes al MISMO proyecto (dos flujos corriendo casi juntos, o un
+// flujo corriendo mientras un reclutador arrastra una tarjeta) se pisan: la segunda
+// sobreescribe a la primera completa y el candidato que perdió la carrera desaparece sin
+// ningún error visible (bug real confirmado en producción, agosto 2026, campaña "Hr One
+// México" — 2 de 11 candidatos que sí cumplían todas las condiciones del flujo nunca se
+// vincularon a su proyecto).
+//
+// `mutate(links)` recibe el array actual y debe devolver `{ links, result }` — `links`
+// es el array nuevo a guardar (o `undefined`/`null` si no hubo cambios, para no
+// reescribir de más), `result` es lo que el caller necesita de vuelta.
+export async function withCrmProjectLinksLock(projectId, mutate) {
+    const client = getRedisClient();
+    if (!client) return null;
+    const key = `${MANUAL_PROJECT_LINKS_PREFIX}${projectId}`;
+
+    let lock = null;
+    const deadline = Date.now() + CRM_LINKS_LOCK_MAX_WAIT_MS;
+    while (!lock) {
+        lock = await acquireProcessingLock(client, CRM_LINKS_LOCK_SCOPE, projectId, CRM_LINKS_LOCK_TTL_SECONDS);
+        if (lock || Date.now() >= deadline) break;
+        await new Promise(r => setTimeout(r, CRM_LINKS_LOCK_RETRY_MS));
+    }
+    if (!lock) {
+        console.error(`[CRM-LINKS] No se pudo tomar el candado para el proyecto ${projectId} tras ${CRM_LINKS_LOCK_MAX_WAIT_MS}ms de contención — se procede sin candado para no bloquear indefinidamente.`);
+    }
+
+    try {
+        const raw = await client.get(key);
+        const links = raw ? JSON.parse(raw) : [];
+        const { links: nextLinks, result } = await mutate(links);
+        if (nextLinks) await client.set(key, JSON.stringify(nextLinks));
+        return result;
+    } finally {
+        if (lock) await releaseProcessingLock(client, lock);
+    }
+}
 
 const indexPart = (value) => Buffer.from(String(value || '').trim().toLowerCase()).toString('base64url');
 const tagIndexKey = (tag) => `${INDEX_KEYS.TAG_PREFIX}${indexPart(typeof tag === 'string' ? tag : tag?.name)}`;
@@ -426,6 +473,67 @@ export async function getCandidatesByTag(tag, limit = 1000) {
     await ensureCandidateSecondaryIndexes();
     const ids = await client.smembers(tagIndexKey(tag));
     return hydrateCandidateIds(ids, limit);
+}
+
+// Para el nodo "inicio_lista" de Flujos (flujo manual, no en vivo — ver flow-engine.js):
+// arma la lista de candidatos que matchean completo/incompleto/todos + al menos una de
+// las etiquetas (OR) + opcionalmente "dentro de la ventana de 24h de Meta" ahora mismo.
+// La ventana de 24h usa lastUserMessageAt (SOLO se actualiza con mensajes ENTRANTES del
+// candidato — webhook.js/messenger webhook.js/saveMessage con isFromUser — nunca con
+// salientes del bot/reclutador), igual que la detección reactiva de isMeta24hWindowError.
+export async function getCandidatesForFlowList({ profileFilter = 'todos', tags = [], within24h = false } = {}, limit = 300) {
+    const client = getRedisClient();
+    if (!client) return { candidates: [], total: 0 };
+
+    const cleanTags = cleanTagValues(tags);
+    let baseIds;
+    if (cleanTags.length) {
+        await ensureCandidateSecondaryIndexes();
+        const pipe = client.pipeline();
+        cleanTags.forEach(tag => pipe.smembers(tagIndexKey(tag)));
+        const rows = await pipe.exec();
+        baseIds = [...new Set(rows.flatMap(([err, members]) => (err || !members) ? [] : members))];
+    } else if (profileFilter === 'completo') {
+        baseIds = await client.smembers(KEYS.LIST_COMPLETE);
+    } else if (profileFilter === 'incompleto') {
+        baseIds = await client.smembers(KEYS.LIST_PENDING);
+    } else {
+        const [c, p] = await Promise.all([client.smembers(KEYS.LIST_COMPLETE), client.smembers(KEYS.LIST_PENDING)]);
+        baseIds = [...new Set([...c, ...p])];
+    }
+    if (!baseIds.length) return { candidates: [], total: 0 };
+
+    // Se hidratan TODOS los ids de baseIds, sin cap intermedio — un cap aquí (ej. el
+    // default 500 de hydrateCandidateIds) recortaría el set ANTES de aplicar tags/24h,
+    // descartando en silencio candidatos que sí matchean (bug real detectado probando
+    // contra Redis: con "todos" el cap cortaba justo donde termina LIST_COMPLETE y
+    // LIST_PENDING casi desaparecía de los resultados). El único límite real es `limit`,
+    // aplicado al final tras filtrar y ordenar.
+    let candidates = await hydrateCandidateIds(baseIds, baseIds.length);
+
+    if (cleanTags.length && profileFilter !== 'todos') {
+        candidates = candidates.filter(c => profileFilter === 'completo' ? isProfileComplete(c) : !isProfileComplete(c));
+    }
+    if (within24h) {
+        const now = Date.now();
+        candidates = candidates.filter(c => {
+            const t = new Date(c.lastUserMessageAt || 0).getTime();
+            return Number.isFinite(t) && t > 0 && (now - t) < 24 * 60 * 60 * 1000;
+        });
+    }
+
+    candidates.sort((a, b) =>
+        new Date(b.lastUserMessageAt || b.ultimoMensaje || 0).getTime() - new Date(a.lastUserMessageAt || a.ultimoMensaje || 0).getTime()
+    );
+
+    return {
+        total: candidates.length,
+        candidates: candidates.slice(0, limit).map(c => ({
+            id: c.id,
+            nombre: c.nombreReal || c.nombre || c.whatsapp,
+            whatsapp: c.whatsapp
+        }))
+    };
 }
 
 export const DEFAULT_PROJECT_STEPS = [

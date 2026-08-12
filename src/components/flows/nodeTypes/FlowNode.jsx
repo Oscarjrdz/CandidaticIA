@@ -1,6 +1,6 @@
 import React from 'react';
 import { Handle, Position } from '@xyflow/react';
-import { X, Play, Loader2, Check } from 'lucide-react';
+import { X, Play, Loader2, Check, RefreshCw } from 'lucide-react';
 import { NODE_DEFS, COLOR_CLASSES } from './nodeDefs';
 
 // Badge de resultado de la última corrida del nodo "test": verde con check si el nodo
@@ -62,6 +62,59 @@ const TestNodeBody = ({ id, data, colors }) => {
     );
 };
 
+// Nodo "inicio_lista" (flujo manual, no en vivo): botón para cargar la lista de
+// candidatos que matchean el filtro configurado en el drawer, y botón Run para
+// correr el resto del flujo uno por uno — reintentar (recargar / volver a dar Run)
+// nunca vuelve a mandarle nada a un candidato ya marcado `executed` (dedupe real de
+// producción, ver runFlowForListCandidate en flow-engine.js).
+const InicioListaBody = ({ id, data, summary }) => {
+    const list = Array.isArray(data.candidateList) ? data.candidateList : null;
+    const status = data.listStatus || 'idle'; // idle | loading | ready | running
+    const doneCount = list ? list.filter(c => c.executed).length : 0;
+
+    return (
+        <div className="px-3 pb-3 pt-1.5 space-y-2">
+            <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{summary}</p>
+            <button
+                onClick={(e) => { e.stopPropagation(); data.onLoadList?.(id); }}
+                disabled={status === 'loading' || status === 'running'}
+                className="nodrag w-full flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50 disabled:opacity-50"
+            >
+                {status === 'loading' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                {status === 'loading' ? 'Cargando…' : list ? 'Recargar lista' : 'Cargar lista'}
+            </button>
+
+            {list && (
+                <>
+                    <div className="nodrag nowheel max-h-40 overflow-y-auto space-y-1">
+                        {list.length === 0 && <p className="text-xs text-gray-400 py-1">Nadie matchea este filtro</p>}
+                        {list.map(c => (
+                            <div key={c.id} className="flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-300">
+                                {c.id === data.runningCandidateId
+                                    ? <Loader2 className="w-3 h-3 shrink-0 animate-spin text-indigo-500" />
+                                    : c.executed
+                                        ? <Check className="w-3 h-3 shrink-0 text-emerald-500" />
+                                        : <span className="w-3 h-3 shrink-0 rounded-full border border-gray-300 dark:border-gray-600" />}
+                                <span className="truncate">{c.nombre}</span>
+                            </div>
+                        ))}
+                    </div>
+                    {list.length > 0 && (
+                        <button
+                            onClick={(e) => { e.stopPropagation(); data.onRunList?.(id); }}
+                            disabled={status === 'running' || doneCount === list.length}
+                            className="nodrag w-full flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-white bg-indigo-500 hover:bg-indigo-600 disabled:opacity-50"
+                        >
+                            {status === 'running' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />}
+                            {status === 'running' ? `Corriendo… (${doneCount}/${list.length})` : doneCount === list.length ? 'Completado' : `Run (${doneCount}/${list.length})`}
+                        </button>
+                    )}
+                </>
+            )}
+        </div>
+    );
+};
+
 // Un único componente renderiza todos los tipos de nodo — la diferencia visual (ícono,
 // color, texto resumen) sale de NODE_DEFS. La configuración real vive en el drawer
 // lateral (NodeConfigDrawer), salvo "inicio" (toggle inline) y "test" (input+run inline).
@@ -70,6 +123,7 @@ const FlowNode = ({ id, type, data, selected }) => {
     const colors = COLOR_CLASSES[def.color] || COLOR_CLASSES.gray;
     const Icon = def.icon;
     const isTest = type === 'test';
+    const isInicioLista = type === 'inicio_lista';
 
     const testRing = data.testPassed === true ? 'ring-2 ring-emerald-400' : data.testPassed === false ? 'ring-2 ring-gray-300 dark:ring-gray-600' : '';
 
@@ -84,7 +138,7 @@ const FlowNode = ({ id, type, data, selected }) => {
                 <Handle type="target" position={Position.Left} className="!w-3 !h-3 !bg-gray-400 !border-2 !border-white dark:!border-gray-900" />
             )}
 
-            {data.onDelete && type !== 'inicio' && (
+            {data.onDelete && type !== 'inicio' && type !== 'inicio_lista' && (
                 <button
                     onClick={(e) => { e.stopPropagation(); data.onDelete(id); }}
                     className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-gray-700 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600 z-10"
@@ -103,6 +157,8 @@ const FlowNode = ({ id, type, data, selected }) => {
 
             {isTest ? (
                 <TestNodeBody id={id} data={data} colors={colors} />
+            ) : isInicioLista ? (
+                <InicioListaBody id={id} data={data} summary={def.summary(data)} />
             ) : (
                 <div className="px-3 pb-3 pt-1.5">
                     <p className="text-sm text-gray-700 dark:text-gray-200 truncate">{def.summary(data)}</p>

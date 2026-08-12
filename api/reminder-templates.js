@@ -17,6 +17,7 @@
 export default async function handler(req, res) {
     try {
         const { getRedisClient, validateAdminSession } = await import('./utils/storage.js');
+        const { invalidateCache } = await import('./utils/cache.js');
 
         const userId = await validateAdminSession(req);
         if (!userId) return res.status(401).json({ error: 'No autorizado' });
@@ -35,6 +36,7 @@ export default async function handler(req, res) {
                 return res.status(400).json({ error: 'templates debe ser un arreglo' });
             }
             await redis.set(KEY, JSON.stringify(templates));
+            invalidateCache(KEY);
             return res.status(200).json({ success: true, templates });
         }
 

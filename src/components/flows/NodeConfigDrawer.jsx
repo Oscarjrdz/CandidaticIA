@@ -97,6 +97,47 @@ const NodeConfigDrawer = ({ node, meta, quickReplies, reminderTemplates, project
                     />
                 )}
 
+                {node.type === 'inicio_lista' && (
+                    <div className="space-y-5">
+                        <p className="text-xs text-gray-400">
+                            Flujo manual, no en vivo: arma una lista de candidatos que ya existen (no se dispara solo cuando alguien completa su perfil). Dale a "Cargar lista" en el nodo y luego "Run" para correrlo uno por uno.
+                        </p>
+                        <div>
+                            <label className="text-xs text-gray-500 dark:text-gray-400 mb-2 block">Estado del perfil</label>
+                            <RadioGroup
+                                options={[
+                                    { value: 'todos', label: PROFILE_FILTER_LABELS.todos },
+                                    { value: 'completo', label: PROFILE_FILTER_LABELS.completo },
+                                    { value: 'incompleto', label: PROFILE_FILTER_LABELS.incompleto }
+                                ]}
+                                value={data.profileFilter || 'todos'}
+                                onChange={(v) => patch({ profileFilter: v })}
+                            />
+                        </div>
+                        <div>
+                            <label className="text-xs text-gray-500 dark:text-gray-400 mb-2 block">Etiquetas (al menos una)</label>
+                            <MultiSelectChecklist
+                                items={meta?.tags || []}
+                                selected={data.tags || []}
+                                onChange={(v) => patch({ tags: v })}
+                                searchable
+                            />
+                        </div>
+                        <label className="flex items-center gap-2.5 p-2.5 rounded-xl border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer">
+                            <input
+                                type="checkbox"
+                                checked={!!data.within24h}
+                                onChange={(e) => patch({ within24h: e.target.checked })}
+                                className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500"
+                            />
+                            <span className="text-sm text-gray-700 dark:text-gray-200">Solo si sigue dentro de la ventana de 24h de Meta</span>
+                        </label>
+                        <p className="text-xs text-gray-400">
+                            La ventana de 24h se calcula sobre el último mensaje que EL CANDIDATO te mandó (no lo que tú le mandaste a él) — si se marca, se excluyen los que ya no se les puede escribir texto libre.
+                        </p>
+                    </div>
+                )}
+
                 {node.type === 'etiqueta' && (
                     <div className="space-y-4">
                         <RadioGroup

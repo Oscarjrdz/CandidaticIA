@@ -1,6 +1,6 @@
-import { getRedisClient, validateAdminSession, getCandidateByPhone } from './utils/storage.js';
+import { getRedisClient, validateAdminSession, getCandidateByPhone, getCandidateById, getCandidatesForFlowList } from './utils/storage.js';
 import { getCachedConfig, invalidateCache } from './utils/cache.js';
-import { runFlowTest } from './utils/flow-engine.js';
+import { runFlowTest, runFlowForListCandidate } from './utils/flow-engine.js';
 import { getBotVacancies } from './utils/agent-ia.js';
 
 const REDIS_KEY = 'flows:v1';
@@ -38,6 +38,17 @@ function defaultFlowNodes() {
     return {
         nodes: [
             { id: 'n1', type: 'inicio', position: { x: 80, y: 200 }, data: { profileFilter: 'completo' } }
+        ],
+        edges: []
+    };
+}
+
+// Flujo MANUAL ("del pasado", no en vivo — ver comentario en flow-engine.js sobre
+// inicio_lista): arranca con el nodo de lista filtrada en vez de "inicio".
+function defaultFlowNodesLista() {
+    return {
+        nodes: [
+            { id: 'n1', type: 'inicio_lista', position: { x: 80, y: 200 }, data: { profileFilter: 'todos', tags: [], within24h: false } }
         ],
         edges: []
     };
@@ -103,6 +114,23 @@ export default async function handler(req, res) {
             return res.status(200).json({ success: true, counters });
         }
 
+        if (method === 'GET' && id && mode === 'filtered_candidates') {
+            const flows = await getFlows(redis);
+            const flow = flows.find(f => f.id === id);
+            if (!flow) return res.status(404).json({ success: false, error: 'Flow not found' });
+
+            const profileFilter = req.query.profileFilter || 'todos';
+            const tags = String(req.query.tags || '').split(',').map(t => t.trim()).filter(Boolean);
+            const within24h = req.query.within24h === '1';
+
+            const { candidates, total } = await getCandidatesForFlowList({ profileFilter, tags, within24h });
+            const ids = candidates.map(c => c.id);
+            const executedFlags = ids.length ? await redis.smismember(`${EXEC_SET_PREFIX}${id}`, ...ids) : [];
+            const result = candidates.map((c, i) => ({ ...c, executed: executedFlags[i] === 1 }));
+
+            return res.status(200).json({ success: true, candidates: result, total });
+        }
+
         if (method === 'GET' && id) {
             const flows = await getFlows(redis);
             const flow = flows.find(f => f.id === id);
@@ -138,8 +166,24 @@ export default async function handler(req, res) {
             });
         }
 
+        if (method === 'POST' && id && req.body?.action === 'run_list_item') {
+            const { candidateId } = req.body || {};
+            if (!candidateId) return res.status(400).json({ success: false, error: 'candidateId requerido' });
+
+            const raw = await redis.get(REDIS_KEY);
+            const flows = raw ? JSON.parse(raw) : [];
+            const flow = flows.find(f => f.id === id);
+            if (!flow) return res.status(404).json({ success: false, error: 'Flow not found' });
+
+            const candidate = await getCandidateById(candidateId);
+            if (!candidate) return res.status(404).json({ success: false, error: 'Candidato no encontrado' });
+
+            const result = await runFlowForListCandidate(flow, candidate);
+            return res.status(200).json({ success: true, alreadyExecuted: result.alreadyExecuted });
+        }
+
         if (method === 'POST') {
-            const { name } = req.body || {};
+            const { name, rootType } = req.body || {};
             if (!name || !String(name).trim()) {
                 return res.status(400).json({ success: false, error: 'Nombre requerido' });
             }
@@ -151,7 +195,7 @@ export default async function handler(req, res) {
                 active: false,
                 createdAt: new Date().toISOString(),
                 updatedAt: new Date().toISOString(),
-                ...defaultFlowNodes()
+                ...(rootType === 'lista' ? defaultFlowNodesLista() : defaultFlowNodes())
             };
 
             flows.push(newFlow);

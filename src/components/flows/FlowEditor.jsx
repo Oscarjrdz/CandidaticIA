@@ -5,7 +5,7 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { useToastContext } from '../../contexts/ToastContext';
-import { getFlow, updateFlow, getFlowsMeta, getFlowCounters, getQuickReplies, getReminderTemplates, getManualProjects, testFlow } from '../../services/flowsService';
+import { getFlow, updateFlow, getFlowsMeta, getFlowCounters, getQuickReplies, getReminderTemplates, getManualProjects, testFlow, getFilteredFlowCandidates, runFlowListItem } from '../../services/flowsService';
 import { flowNodeTypes, COLOR_CLASSES, NODE_DEFS } from './nodeTypes';
 import FlowEdge from './edgeTypes/FlowEdge';
 import NodeConfigDrawer from './NodeConfigDrawer';
@@ -33,7 +33,11 @@ const DEFAULT_DATA_BY_TYPE = {
 };
 
 const stripTransientData = (data = {}) => {
-    const { onConfigure, onDelete, onTestPhoneChange, onTestRun, onToggleActive, liveCount, active, testStatus, testMessage, testPassed, ...rest } = data;
+    const {
+        onConfigure, onDelete, onTestPhoneChange, onTestRun, onToggleActive, liveCount, active,
+        testStatus, testMessage, testPassed, onLoadList, onRunList, candidateList, listStatus, runningCandidateId,
+        ...rest
+    } = data;
     return rest;
 };
 
@@ -51,6 +55,8 @@ const FlowEditorInner = ({ flowId, onBack }) => {
     const [dirty, setDirty] = useState(false);
     const [selectedNodeId, setSelectedNodeId] = useState(null);
     const handleTestRunRef = useRef(null);
+    const handleLoadListRef = useRef(null);
+    const handleRunListRef = useRef(null);
 
     const handleConfigure = useCallback((nodeId) => setSelectedNodeId(nodeId), []);
 
@@ -79,7 +85,9 @@ const FlowEditorInner = ({ flowId, onBack }) => {
             onConfigure: handleConfigure,
             onDelete: handleDeleteNode,
             onTestPhoneChange: handleTestPhoneChange,
-            onTestRun: (nodeId, phone) => handleTestRunRef.current?.(nodeId, phone)
+            onTestRun: (nodeId, phone) => handleTestRunRef.current?.(nodeId, phone),
+            onLoadList: (nodeId) => handleLoadListRef.current?.(nodeId),
+            onRunList: (nodeId) => handleRunListRef.current?.(nodeId)
         }
     }), [handleConfigure, handleDeleteNode, handleTestPhoneChange]);
 
@@ -244,6 +252,66 @@ const FlowEditorInner = ({ flowId, onBack }) => {
     }, [flowId, handleSave]);
 
     useEffect(() => { handleTestRunRef.current = handleTestRun; }, [handleTestRun]);
+
+    // Nodo "inicio_lista" (flujo manual): "Cargar lista" trae los candidatos que matchean
+    // el filtro configurado en el nodo (guardado primero en silencio, mismo motivo que
+    // handleTestRun — que la lista refleje el filtro tal cual está en el lienzo).
+    const handleLoadFilteredList = useCallback(async (nodeId) => {
+        const node = nodes.find(n => n.id === nodeId);
+        if (!node) return;
+        setNodes(nds => nds.map(n => n.id === nodeId ? { ...n, data: { ...n.data, listStatus: 'loading' } } : n));
+
+        await handleSave({ silent: true });
+        const { profileFilter, tags, within24h } = node.data || {};
+        const res = await getFilteredFlowCandidates(flowId, { profileFilter, tags, within24h });
+
+        setNodes(nds => nds.map(n => n.id === nodeId ? {
+            ...n,
+            data: {
+                ...n.data,
+                listStatus: res.success ? 'ready' : 'idle',
+                candidateList: res.success ? res.candidates : n.data.candidateList
+            }
+        } : n));
+        if (!res.success) showToast('Error al cargar la lista', 'error');
+    }, [nodes, flowId, handleSave, showToast]);
+
+    // Run: corre el resto del flujo para cada candidato de la lista, UNO POR UNO en
+    // secuencia (no en paralelo — cada `await runFlowListItem` espera la respuesta antes
+    // de seguir con el siguiente). Salta los que ya vienen `executed` (ya sea de una
+    // corrida anterior o de un Run previo que se quedó a medias) — retomar es gratis
+    // gracias al dedupe real de producción en runFlowForListCandidate (flow-engine.js).
+    // Guarda en silencio primero, mismo motivo que handleTestRun.
+    const handleRunFilteredList = useCallback(async (nodeId) => {
+        const node = nodes.find(n => n.id === nodeId);
+        const list = node?.data?.candidateList;
+        if (!Array.isArray(list) || !list.length) return;
+
+        const saveRes = await handleSave({ silent: true });
+        if (!saveRes.success) {
+            showToast('No se pudo guardar antes de correr la lista', 'error');
+            return;
+        }
+
+        setNodes(nds => nds.map(n => n.id === nodeId ? { ...n, data: { ...n.data, listStatus: 'running' } } : n));
+
+        for (const candidate of list) {
+            if (candidate.executed) continue;
+            setNodes(nds => nds.map(n => n.id === nodeId ? { ...n, data: { ...n.data, runningCandidateId: candidate.id } } : n));
+            const res = await runFlowListItem(flowId, candidate.id);
+            if (!res.success) showToast(`Error corriendo el flujo para ${candidate.nombre}: ${res.error || 'desconocido'}`, 'error');
+            setNodes(nds => nds.map(n => {
+                if (n.id !== nodeId) return n;
+                const updatedList = (n.data.candidateList || []).map(c => c.id === candidate.id ? { ...c, executed: res.success ? true : c.executed } : c);
+                return { ...n, data: { ...n.data, candidateList: updatedList } };
+            }));
+        }
+
+        setNodes(nds => nds.map(n => n.id === nodeId ? { ...n, data: { ...n.data, listStatus: 'ready', runningCandidateId: null } } : n));
+    }, [nodes, flowId, handleSave, showToast]);
+
+    useEffect(() => { handleLoadListRef.current = handleLoadFilteredList; }, [handleLoadFilteredList]);
+    useEffect(() => { handleRunListRef.current = handleRunFilteredList; }, [handleRunFilteredList]);
 
     const handleToggleActive = useCallback(async () => {
         const nextActive = !flowMeta.active;

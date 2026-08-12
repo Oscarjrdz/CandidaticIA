@@ -1,4 +1,4 @@
-import { getRedisClient, isProfileComplete, updateCandidate, saveMessage } from './storage.js';
+import { getRedisClient, isProfileComplete, updateCandidate, saveMessage, withCrmProjectLinksLock } from './storage.js';
 import { getCachedConfig } from './cache.js';
 import { getUltraMsgConfig, sendUltraMsgMessage } from '../whatsapp/utils.js';
 import { substituteVariables, splitBubbles } from './shortcuts.js';
@@ -42,7 +42,6 @@ function toAbsoluteMediaUrl(u) {
     if (u && u.startsWith('/')) return `${MEDIA_HOST}${u}`;
     return u;
 }
-const PROJECT_LINKS_PREFIX = 'crm_links:';
 export const EXEC_SET_PREFIX = 'flow:executed:v1:';
 export const COUNTER_PREFIX = 'flow:counter:v1:';
 
@@ -61,7 +60,7 @@ export const COUNTER_PREFIX = 'flow:counter:v1:';
 // exige scheduledAt estrictamente futuro).
 const MTY_UTC_OFFSET_HOURS = 6;
 
-function resolveReminderSendAt(tpl) {
+export function resolveReminderSendAt(tpl) {
     const days = Number(tpl.dayOffset) || 0;
     const [hours, minutes] = String(tpl.timeOfDay || '07:00').split(':').map(Number);
 
@@ -83,26 +82,26 @@ async function linkCandidateToProject(redis, candidateId, projectId, stepId) {
     const project = projects.find(p => p.id === projectId);
     if (!project) return null;
 
+    // Desvincular de cualquier otro proyecto primero (mismo invariante: uno a la vez) —
+    // cada proyecto se bloquea/lee/escribe por separado vía withCrmProjectLinksLock, ver
+    // storage.js (bug de carrera confirmado en producción, agosto 2026).
     for (const p of projects) {
         if (!p?.id || p.id === projectId) continue;
-        const otherLinksRaw = await redis.get(`${PROJECT_LINKS_PREFIX}${p.id}`);
-        if (!otherLinksRaw) continue;
-        const otherLinks = JSON.parse(otherLinksRaw);
-        const next = otherLinks.filter(l => l.candidateId !== candidateId);
-        if (next.length !== otherLinks.length) {
-            await redis.set(`${PROJECT_LINKS_PREFIX}${p.id}`, JSON.stringify(next));
-        }
+        await withCrmProjectLinksLock(p.id, async (links) => {
+            const next = links.filter(l => l.candidateId !== candidateId);
+            return { links: next.length !== links.length ? next : undefined, result: null };
+        });
     }
 
-    const linksRaw = await redis.get(`${PROJECT_LINKS_PREFIX}${projectId}`);
-    let links = linksRaw ? JSON.parse(linksRaw) : [];
-    const finalStepId = stepId || project.steps?.[0]?.id || 'step_inicio';
-    const existing = links.find(l => l.candidateId === candidateId);
-    links = existing
-        ? links.map(l => l.candidateId === candidateId ? { ...l, stepId: finalStepId } : l)
-        : [...links, { candidateId, stepId: finalStepId, linkedAt: new Date().toISOString() }];
+    const finalStepId = await withCrmProjectLinksLock(projectId, async (links) => {
+        const stepIdFinal = stepId || project.steps?.[0]?.id || 'step_inicio';
+        const existing = links.find(l => l.candidateId === candidateId);
+        const nextLinks = existing
+            ? links.map(l => l.candidateId === candidateId ? { ...l, stepId: stepIdFinal } : l)
+            : [...links, { candidateId, stepId: stepIdFinal, linkedAt: new Date().toISOString() }];
+        return { links: nextLinks, result: stepIdFinal };
+    });
 
-    await redis.set(`${PROJECT_LINKS_PREFIX}${projectId}`, JSON.stringify(links));
     await updateCandidate(candidateId, { manualProjectId: projectId, manualProjectStepId: finalStepId });
     redis.publish('channel:sse:updates', JSON.stringify({
         type: 'crm:candidate', action: 'linkCandidate', projectId, candidateId, stepId: finalStepId,
@@ -178,6 +177,12 @@ async function evaluateOrExecute(node, candidate, flowId, redis, opts = {}) {
             if (filter === 'incompleto') return !isProfileComplete(candidate);
             return true;
         }
+
+        // Raíz de un flujo MANUAL (no en vivo, ver runFlowForListCandidate más abajo): el
+        // candidato ya pasó el filtro completo/incompleto/etiqueta/ventana-24h al armar la
+        // lista en getCandidatesForFlowList (storage.js), así que aquí siempre "pasa".
+        case 'inicio_lista':
+            return true;
 
         case 'etiqueta': {
             const mode = data.mode || 'todas';
@@ -404,10 +409,19 @@ async function evaluateOrExecute(node, candidate, flowId, redis, opts = {}) {
         case 'accion_recordatorio': {
             if (!data.templateId) return true;
             try {
-                const raw = await getCachedConfig(redis, REMINDER_TEMPLATES_KEY);
+                // Lectura directa, SIN caché (getCachedConfig tiene hasta 5 min de TTL en
+                // memoria por instancia de servidor) — si el reclutador edita la plantilla
+                // mientras la campaña corre, una instancia con caché viejo podía no
+                // encontrarla y saltarse el recordatorio en silencio (bug real confirmado
+                // en producción, agosto 2026). Este nodo corre una sola vez por candidato,
+                // no por mensaje, así que el costo extra de leer directo es insignificante.
+                const raw = await redis.get(REMINDER_TEMPLATES_KEY);
                 const templates = raw ? JSON.parse(raw) : [];
                 const tpl = templates.find(t => t.id === data.templateId);
-                if (!tpl || !tpl.message) return true;
+                if (!tpl || !tpl.message) {
+                    console.error(`[FLOW-ENGINE] accion_recordatorio ${flowId}/${node.id}: plantilla "${data.templateId}" no encontrada o sin mensaje — recordatorio NO creado para candidato ${candidate.id}`);
+                    return true;
+                }
 
                 const sendAt = resolveReminderSendAt(tpl);
                 const id = `dr_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
@@ -437,6 +451,8 @@ async function evaluateOrExecute(node, candidate, flowId, redis, opts = {}) {
                 if (finalStepId) {
                     candidate.manualProjectId = data.projectId; // mantener el snapshot en memoria en sync
                     candidate.manualProjectStepId = finalStepId;
+                } else {
+                    console.error(`[FLOW-ENGINE] accion_proyecto ${flowId}/${node.id}: proyecto "${data.projectId}" no encontrado — candidato ${candidate.id} NO se vinculó`);
                 }
             } catch (e) {
                 console.error(`[FLOW-ENGINE] accion_proyecto ${flowId}/${node.id}:`, e?.message);
@@ -537,4 +553,21 @@ export async function runFlowTest(flow, candidateSnapshot) {
 
     const passed = await runOneFlow(redis, flow, candidateSnapshot.id, { ...candidateSnapshot }, { skipClaim: true, skipCounters: true });
     return Object.fromEntries(passed);
+}
+
+// Nodo "inicio_lista": corre el flujo REAL para un candidato de la lista filtrada,
+// disparado por el botón Run del nodo (uno a la vez, desde api/flows.js). A diferencia
+// de runFlowTest, aquí SÍ se respeta el dedupe de producción (opts={} → runOneFlow
+// reclama flow:executed:v1:{flowId}), a propósito: así el botón Run se puede apretar
+// varias veces, o retomar tras cerrar la pestaña a la mitad, sin volver a mandarle nada
+// a un candidato que ya se procesó. `passed.size === 0` tras un runOneFlow normal solo
+// puede significar que el claim fue rechazado (ya estaba en el set) — cualquier corrida
+// real evalúa al menos el nodo inicio_lista mismo, que siempre queda en el Map.
+export async function runFlowForListCandidate(flow, candidateSnapshot) {
+    const redis = getRedisClient();
+    if (!redis) throw new Error('Redis no disponible');
+    if (!candidateSnapshot?.id || !candidateSnapshot?.whatsapp) throw new Error('Candidato inválido');
+
+    const passed = await runOneFlow(redis, flow, candidateSnapshot.id, { ...candidateSnapshot }, {});
+    return { alreadyExecuted: passed.size === 0, passed: Object.fromEntries(passed) };
 }

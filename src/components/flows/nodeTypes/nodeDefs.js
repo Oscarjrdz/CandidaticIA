@@ -1,4 +1,4 @@
-import { Play, Tag, CalendarRange, MapPin, Briefcase, GraduationCap, MessageCircle, Hash, UserRound, CircleMinus, BellRing, FolderKanban, FlaskConical, Eraser, Filter, MessageSquareText } from 'lucide-react';
+import { Play, Tag, CalendarRange, MapPin, Briefcase, GraduationCap, MessageCircle, Hash, UserRound, CircleMinus, BellRing, FolderKanban, FlaskConical, Eraser, Filter, MessageSquareText, ListChecks } from 'lucide-react';
 
 export const PROFILE_FILTER_LABELS = {
     active: 'Activos (no bloqueados)',
@@ -39,6 +39,19 @@ export const NODE_DEFS = {
         hasTarget: false,
         hasSource: true,
         summary: (data) => PROFILE_FILTER_LABELS[data.profileFilter] || PROFILE_FILTER_LABELS.todos
+    },
+    inicio_lista: {
+        label: 'Inicio: Lista Filtrada',
+        icon: ListChecks,
+        color: 'indigo',
+        hasTarget: false,
+        hasSource: true,
+        summary: (data) => {
+            const parts = [PROFILE_FILTER_LABELS[data.profileFilter] || PROFILE_FILTER_LABELS.todos];
+            if (Array.isArray(data.tags) && data.tags.length) parts.push(formatMultiSummary(data.tags, ''));
+            if (data.within24h) parts.push('dentro de ventana 24h');
+            return parts.filter(Boolean).join(' · ');
+        }
     },
     etiqueta: {
         label: 'Filtro: Etiqueta',
