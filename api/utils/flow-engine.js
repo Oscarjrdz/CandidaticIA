@@ -618,13 +618,29 @@ async function runOneFlow(redis, flow, candidateId, candidate, opts = {}) {
         // El Map `passed` que se devuelve conserva su semántica de antes (true = cumplió),
         // para el badge del nodo test.
         const outcome = new Map();
-        const edgeSatisfied = (dep) => dep.handle === 'no'
-            ? outcome.get(dep.source) === 'fail'
-            : outcome.get(dep.source) === 'pass';
+
+        // Elegibilidad de un nodo según sus aristas entrantes:
+        //   • Aristas normales ("Sí"/sin handle) → se unen con Y (AND): TODAS deben venir
+        //     de un origen que cumplió. Preserva el patrón de convergencia original
+        //     (varias condiciones → una acción que solo corre si TODAS pasan) y deja los
+        //     flujos ya guardados EXACTO igual que antes (no tienen aristas "No").
+        //   • Aristas "No cumple" (handle === 'no') → se unen con O (OR): basta que UNA
+        //     traiga un origen que NO cumplió. Así un único nodo "Marcar Leído" puede
+        //     recibir la rama roja de muchas condiciones/ramas y dispararse en cuanto el
+        //     candidato falle en la rama que le tocó (cada candidato recorre una sola).
+        //   • Si un nodo mezcla ambos tipos, debe cumplir las dos reglas a la vez.
+        const isEligible = (deps) => {
+            if (deps.length === 0) return true;
+            const normal = deps.filter(d => d.handle !== 'no');
+            const negativos = deps.filter(d => d.handle === 'no');
+            const normalOk = normal.length === 0 || normal.every(d => outcome.get(d.source) === 'pass');
+            const negativoOk = negativos.length === 0 || negativos.some(d => outcome.get(d.source) === 'fail');
+            return normalOk && negativoOk;
+        };
 
         for (const node of order) {
             const deps = incoming.get(node.id) || [];
-            const eligible = deps.length === 0 || deps.every(edgeSatisfied);
+            const eligible = isEligible(deps);
             if (!eligible) {
                 outcome.set(node.id, 'unreached');
                 passed.set(node.id, false);

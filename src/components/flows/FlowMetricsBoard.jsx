@@ -239,7 +239,7 @@ const FlowMetricsBoard = () => {
     return (
         <div className="cfm-root" style={{ left: pos.x, top: pos.y, transform: `scale(${scale})`, transformOrigin: 'top left' }}>
             <style>{CFM_STYLES}</style>
-            <div className="cfm-board" style={collapsed ? undefined : { width }}>
+            <div className="cfm-board" style={collapsed ? undefined : { minWidth: width }}>
                 <div className="cfm-board__head" onPointerDown={onDragStart}>
                     <div className="cfm-board__title">
                         <GripVertical className="w-3.5 h-3.5 cfm-grip" />
@@ -308,7 +308,13 @@ const CFM_STYLES = `
     padding: 10px 12px;
     color: var(--text-primary, #1a1d29);
     user-select: none;
+    /* El tablero crece a lo ancho para que TODOS los contadores quepan en una sola línea
+       (max-content = tan ancho como su fila más ancha, que es la de tarjetas). El ancho
+       persistido del usuario actúa como piso (min-width, se aplica inline). Solo si la
+       fila superara el ancho de la pantalla entra el scroll horizontal de .cfm-tiles. */
+    width: max-content;
     min-width: ${MIN_W}px;
+    max-width: calc(100vw - 24px);
 }
 .cfm-board__head { display:flex; align-items:center; justify-content:space-between; gap:12px; cursor: grab; }
 .cfm-board__head:active { cursor: grabbing; }
@@ -330,7 +336,12 @@ const CFM_STYLES = `
 .cfm-date { font-size:11px; color: var(--text-primary, #1a1d29); background: var(--bg-secondary, #fff); border:1px solid var(--border-color, #e5e7eb); border-radius:8px; padding:3px 6px; }
 .cfm-date-sep { color: var(--text-secondary, #6b7280); font-size:12px; }
 
-.cfm-tiles { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
+/* Una sola LÍNEA de contadores: no se envuelven en varias filas — el tablero se
+   ensancha hacia la derecha (o se desliza horizontal) para ver más. */
+.cfm-tiles { display:flex; flex-wrap:nowrap; gap:8px; margin-top:12px; overflow-x:auto; overflow-y:hidden; padding-bottom:4px; scrollbar-width:thin; scrollbar-color: var(--border-color, #cbd5e1) transparent; }
+.cfm-tiles::-webkit-scrollbar { height:6px; }
+.cfm-tiles::-webkit-scrollbar-thumb { background: var(--border-color, #cbd5e1); border-radius:3px; }
+.cfm-tiles::-webkit-scrollbar-track { background: transparent; }
 
 .cfm-tile { display:flex; flex-direction:column; align-items:center; gap:6px; padding:8px 10px; border-radius:12px; background: var(--accent-brand-light, #eff6ff); border:1px solid var(--border-color, #e5e7eb); min-width:64px; flex:0 0 auto; }
 .cfm-tile--untagged { background: rgba(100,116,139,0.10); }

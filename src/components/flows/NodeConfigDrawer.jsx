@@ -290,9 +290,14 @@ const NodeConfigDrawer = ({ node, meta, quickReplies, reminderTemplates, project
                 )}
 
                 {node.type === 'accion_marcar_leido' && (
-                    <p className="text-sm text-gray-500 dark:text-gray-400">
-                        No necesita configuración: al ejecutarse, marca al candidato como <strong>leído</strong> y lo saca de la lista de no-leídos (le quita la burbuja/badge). Útil para candidatos que ya están completos pero <strong>no cumplen los filtros</strong> — así dejan de estorbar en la lista. Si el candidato vuelve a escribir, reaparece como no-leído.
-                    </p>
+                    <div className="space-y-3 text-sm text-gray-500 dark:text-gray-400">
+                        <p>
+                            No necesita configuración: al ejecutarse, marca al candidato como <strong>leído</strong> y lo saca de la lista de no-leídos (le quita la burbuja/badge). Útil para candidatos que ya están completos pero <strong>no cumplen los filtros</strong>. Si el candidato vuelve a escribir, reaparece como no-leído.
+                        </p>
+                        <p className="text-xs bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-2.5 text-amber-800 dark:text-amber-300">
+                            <strong>Puedes conectarle varias ramas rojas “No cumple”</strong>: se dispara si el candidato falla en <strong>cualquiera</strong> de ellas (O/OR). ⚠️ Ojo: solo conecta la roja de una condición si fallarla <strong>sí</strong> significa descartar. No conectes aquí la roja de condiciones que solo <strong>enrutan</strong> (ej. “Género: Mujer” cuando el hombre debe seguir por otra rama), porque marcarías leído a candidatos válidos.
+                        </p>
+                    </div>
                 )}
 
                 {node.type === 'accion_recordatorio' && (
