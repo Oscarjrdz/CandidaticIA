@@ -206,8 +206,14 @@ const ChatRow = React.memo(({ chat, isSelected, isPinned, onSelect, onBlock, onD
                         )}
                     </div>
                 )}
-                {(chat.adId || chat.adHeadline || onlineReaders.length > 0 || lockText) && (
-                    <div className="hidden lg:flex items-center justify-between mt-0.5 text-[10px] text-[#8696a0] dark:text-[#697882]">
+                {/* Renglón meta inferior (anuncio / atendiendo / lectores en línea). En lg SIEMPRE
+                    se renderiza con altura reservada (min-h): así la tarjeta mide IGUAL tenga o no
+                    presencia/lock, y la lista virtualizada no se recorre unos px cuando un lector
+                    entra/sale o expira un lock (ese era el "sube y baja"). Estándar de listas
+                    virtualizadas (WhatsApp/Slack): altura de fila estable, la presencia no agrega
+                    alto. En pantallas chicas sigue oculto (no hay jitter ahí). */}
+                {(chat.adId || chat.adHeadline || onlineReaders.length > 0 || lockText) ? (
+                    <div className="hidden lg:flex items-center justify-between mt-0.5 min-h-[18px] text-[10px] text-[#8696a0] dark:text-[#697882]">
                         <span className="flex items-center gap-1.5 min-w-0 truncate">
                             {chat.adId && (
                                 <button
@@ -236,6 +242,11 @@ const ChatRow = React.memo(({ chat, isSelected, isPinned, onSelect, onBlock, onD
                             </div>
                         )}
                     </div>
+                ) : (
+                    // Slot vacío con la MISMA altura reservada: mantiene la tarjeta a alto
+                    // constante cuando no hay anuncio/lectores/lock (evita el jitter al aparecer
+                    // un lector). Solo en lg, igual que el renglón real.
+                    <div className="hidden lg:block mt-0.5 min-h-[18px]" aria-hidden="true" />
                 )}
             </div>
         </div>
