@@ -126,7 +126,7 @@ function getCandidateAge(candidate) {
     return age;
 }
 
-function topoSort(nodes, edges) {
+export function topoSort(nodes, edges) {
     const inDegree = new Map(nodes.map(n => [n.id, 0]));
     const adj = new Map(nodes.map(n => [n.id, []]));
     for (const e of edges) {
@@ -156,7 +156,7 @@ function topoSort(nodes, edges) {
     return order;
 }
 
-function buildIncomingMap(edges) {
+export function buildIncomingMap(edges) {
     const incoming = new Map();
     for (const e of edges) {
         if (!incoming.has(e.target)) incoming.set(e.target, []);
@@ -165,7 +165,28 @@ function buildIncomingMap(edges) {
     return incoming;
 }
 
-async function evaluateOrExecute(node, candidate, flowId, redis, opts = {}) {
+// Mismo valor que ORDERED_MESSAGE_GAP_MS en src/components/ChatSection.jsx — "para que
+// Meta respete el orden". A diferencia del chat manual, un flujo puede mandar varios
+// WhatsApp SEGUIDOS para el mismo candidato (ej. "PUNTO CORZEN" → "RUTAS CORZEN") sin
+// ninguna pausa entre ellos — posible causa de envíos perdidos bajo ráfaga (ago 2026,
+// no confirmado con certeza total porque el log de detalle de Meta ya había expirado
+// para cuando se investigó, pero es una mitigación segura y barata de todos modos: esto
+// corre en segundo plano, nadie espera la respuesta). `opts` vive una sola corrida de
+// runOneFlow para UN candidato — se usa como carrier mutable para recordar cuándo fue el
+// último envío de ESTE candidato en ESTA corrida.
+const FLOW_MESSAGE_GAP_MS = 450;
+
+async function pacedSend(opts, sendFn) {
+    if (opts._lastFlowSendAt) {
+        const elapsed = Date.now() - opts._lastFlowSendAt;
+        if (elapsed < FLOW_MESSAGE_GAP_MS) await new Promise(r => setTimeout(r, FLOW_MESSAGE_GAP_MS - elapsed));
+    }
+    const result = await sendFn();
+    opts._lastFlowSendAt = Date.now();
+    return result;
+}
+
+export async function evaluateOrExecute(node, candidate, flowId, redis, opts = {}) {
     const data = node.data || {};
 
     switch (node.type) {
@@ -246,9 +267,9 @@ async function evaluateOrExecute(node, candidate, flowId, redis, opts = {}) {
                 // Igual que /api/quick_replies documenta: text (+ hasta 4 imágenes) es el
                 // default; location/audio/document son variantes exclusivas del mismo banco.
                 if (qrType === 'location' && qr.location?.lat && qr.location?.lng) {
-                    const locRes = await sendUltraMsgMessage(config.instanceId, config.token, cleanTo, qr.location.address || '', 'location', {
+                    const locRes = await pacedSend(opts, () => sendUltraMsgMessage(config.instanceId, config.token, cleanTo, qr.location.address || '', 'location', {
                         name: qr.location.name, address: qr.location.address, lat: qr.location.lat, lng: qr.location.lng
-                    });
+                    }));
                     if (locRes?.success) {
                         await saveMessage(candidate.id, {
                             from: 'me', content: `[Ubicación: ${qr.location.name || 'Mapa'}]`, timestamp: new Date().toISOString(),
@@ -261,7 +282,7 @@ async function evaluateOrExecute(node, candidate, flowId, redis, opts = {}) {
                 }
 
                 if (qrType === 'audio' && qr.audioUrl) {
-                    const audioRes = await sendUltraMsgMessage(config.instanceId, config.token, cleanTo, toAbsoluteMediaUrl(qr.audioUrl), 'audio', { voice: !!qr.voice });
+                    const audioRes = await pacedSend(opts, () => sendUltraMsgMessage(config.instanceId, config.token, cleanTo, toAbsoluteMediaUrl(qr.audioUrl), 'audio', { voice: !!qr.voice }));
                     if (audioRes?.success) {
                         await saveMessage(candidate.id, {
                             from: 'me', content: qr.voice ? '🎤 Nota de voz' : '🎵 Audio', type: 'audio', mediaUrl: qr.audioUrl,
@@ -275,9 +296,9 @@ async function evaluateOrExecute(node, candidate, flowId, redis, opts = {}) {
 
                 if (qrType === 'document' && qr.documentUrl) {
                     const caption = qr.message ? substituteVariables(qr.message, candidate) : '';
-                    const docRes = await sendUltraMsgMessage(config.instanceId, config.token, cleanTo, toAbsoluteMediaUrl(qr.documentUrl), 'document', {
+                    const docRes = await pacedSend(opts, () => sendUltraMsgMessage(config.instanceId, config.token, cleanTo, toAbsoluteMediaUrl(qr.documentUrl), 'document', {
                         filename: qr.documentName || 'documento.pdf', caption
-                    });
+                    }));
                     if (docRes?.success) {
                         await saveMessage(candidate.id, {
                             from: 'me', content: caption, type: 'document', mediaUrl: qr.documentUrl, filename: qr.documentName || 'documento.pdf',
@@ -297,7 +318,7 @@ async function evaluateOrExecute(node, candidate, flowId, redis, opts = {}) {
                 if (qr.message) {
                     const text = substituteVariables(qr.message, candidate);
                     for (const bubbleText of splitBubbles(text)) {
-                        const textRes = await sendUltraMsgMessageWithRetry(config.instanceId, config.token, cleanTo, bubbleText, 'chat', { priority: 1 });
+                        const textRes = await pacedSend(opts, () => sendUltraMsgMessageWithRetry(config.instanceId, config.token, cleanTo, bubbleText, 'chat', { priority: 1 }));
                         if (textRes?.success) {
                             await saveMessage(candidate.id, {
                                 from: 'me', content: bubbleText, timestamp: new Date().toISOString(),
@@ -310,7 +331,7 @@ async function evaluateOrExecute(node, candidate, flowId, redis, opts = {}) {
                 }
                 const bankImages = Array.isArray(qr.imageUrls) && qr.imageUrls.length ? qr.imageUrls : [qr.imageUrl].filter(Boolean);
                 for (const imgUrl of bankImages) {
-                    const imgRes = await sendUltraMsgMessage(config.instanceId, config.token, cleanTo, toAbsoluteMediaUrl(imgUrl), 'image', { priority: 1 });
+                    const imgRes = await pacedSend(opts, () => sendUltraMsgMessage(config.instanceId, config.token, cleanTo, toAbsoluteMediaUrl(imgUrl), 'image', { priority: 1 }));
                     if (imgRes?.success) {
                         await saveMessage(candidate.id, {
                             from: 'me', content: '', type: 'image', mediaUrl: imgUrl,
@@ -340,7 +361,7 @@ async function evaluateOrExecute(node, candidate, flowId, redis, opts = {}) {
                 // Mismo texto EXACTO que el "maletín" del chat manual — sin substituteVariables,
                 // igual que sendVacancyDirect en ChatSection.jsx (no aplica variables ahí tampoco).
                 const text = vacancyMessageText(vac);
-                const sendResult = await sendUltraMsgMessageWithRetry(config.instanceId, config.token, cleanTo, text, 'chat', { priority: 1 });
+                const sendResult = await pacedSend(opts, () => sendUltraMsgMessageWithRetry(config.instanceId, config.token, cleanTo, text, 'chat', { priority: 1 }));
                 if (sendResult?.success) {
                     await saveMessage(candidate.id, {
                         from: 'me', content: text, timestamp: new Date().toISOString(),
@@ -364,7 +385,7 @@ async function evaluateOrExecute(node, candidate, flowId, redis, opts = {}) {
 
                 const text = substituteVariables(data.message, candidate);
                 for (const bubbleText of splitBubbles(text)) {
-                    const sendResult = await sendUltraMsgMessageWithRetry(config.instanceId, config.token, cleanTo, bubbleText, 'chat', { priority: 1 });
+                    const sendResult = await pacedSend(opts, () => sendUltraMsgMessageWithRetry(config.instanceId, config.token, cleanTo, bubbleText, 'chat', { priority: 1 }));
                     if (sendResult?.success) {
                         await saveMessage(candidate.id, {
                             from: 'me', content: bubbleText, timestamp: new Date().toISOString(),
