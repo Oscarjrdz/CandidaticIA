@@ -5334,20 +5334,33 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
         const _wasP2Complete = candidateData.paso2Estado === 'completo';
         const _isP2Complete = (candidateUpdates.paso2Estado || candidateData.paso2Estado) === 'completo';
         if (!_wasP2Complete && _isP2Complete) {
-            maybeSendKatconOnComplete(candidateId, { ...candidateData, ...candidateUpdates }).catch(() => {});
-            // FLOWS (constructor visual de automatizaciones, sección "Flows"): mismo instante
-            // exacto, evalúa los flujos activos contra el candidato y ejecuta las acciones que
-            // apliquen. Determinístico, sin cron ni IA — ver api/utils/flow-engine.js.
-            // runInBackground (waitUntil): el flujo puede tardar varios segundos (varios envíos
-            // con pausa entre ellos); sin esto, Vercel congelaba la instancia al responder y el
-            // flujo quedaba a medias — ver api/utils/background.js.
-            runInBackground(runFlowsForCandidate(candidateId, { ...candidateData, ...candidateUpdates }));
-            // AGENT CANDIDATIC (generalizado, cualquier etiqueta): mismo instante exacto,
-            // agrega a la cola en vivo y dispara el motor de atención (agent-attend.js)
-            // SOLO si de verdad quedó encolado (candados ya validados adentro).
-            maybeEnqueueForLiveAgent(candidateId, { ...candidateData, ...candidateUpdates })
-                .then((entry) => { if (entry) return attendLiveCandidate(candidateId, entry.tag); })
-                .catch(() => {});
+            // ── SECCIÓN "CANDIDATO RECIÉN COMPLETO" ──────────────────────────────────
+            // TODA esta sección corre bajo UN SOLO blindaje de segundo plano (runInBackground
+            // → waitUntil). Antes cada gancho era fire-and-forget suelto y Vercel CONGELA la
+            // instancia al responder 200 → el trabajo pendiente (envíos con pausa, llamadas al
+            // LLM) se descartaba en silencio. Al envolver la sección entera en un solo lugar,
+            // cualquier gancho que se agregue aquí en el futuro queda protegido automáticamente,
+            // sin depender de que alguien recuerde envolverlo. Ver api/utils/background.js.
+            // Se corren en secuencia (mismo candidato → orden de mensajes predecible) y cada uno
+            // aísla su propio error para no cortar a los siguientes.
+            runInBackground((async () => {
+                // KATCON: manda el mensaje de banco "PUNTO KATCON" (la cita). Determinístico, sin IA.
+                await maybeSendKatconOnComplete(candidateId, { ...candidateData, ...candidateUpdates })
+                    .catch(e => console.error('[COMPLETION] katcon:', e?.message));
+
+                // FLOWS (constructor visual de automatizaciones): evalúa los flujos activos y
+                // ejecuta las acciones que apliquen. Sin cron ni IA — ver api/utils/flow-engine.js.
+                await runFlowsForCandidate(candidateId, { ...candidateData, ...candidateUpdates })
+                    .catch(e => console.error('[COMPLETION] flows:', e?.message));
+
+                // AGENT CANDIDATIC (agente en vivo, generalizado por etiqueta): encola al candidato
+                // y dispara el motor de atención (agent-attend.js), que SÍ llama a Claude para
+                // decidir qué mandar. Se encola SOLO si aplica (candados ya validados adentro).
+                const entry = await maybeEnqueueForLiveAgent(candidateId, { ...candidateData, ...candidateUpdates })
+                    .catch(() => null);
+                if (entry) await attendLiveCandidate(candidateId, entry.tag)
+                    .catch(e => console.error('[COMPLETION] live-agent:', e?.message));
+            })());
         }
 
         recordAITelemetry(candidateId, 'brenda_turn_complete', {
