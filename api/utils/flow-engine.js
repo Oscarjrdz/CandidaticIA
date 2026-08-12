@@ -42,8 +42,18 @@ function toAbsoluteMediaUrl(u) {
     if (u && u.startsWith('/')) return `${MEDIA_HOST}${u}`;
     return u;
 }
-export const EXEC_SET_PREFIX = 'flow:executed:v1:';
+export const EXEC_SET_PREFIX = 'flow:executed:v1:';   // set: candidatos que COMPLETARON el flujo
 export const COUNTER_PREFIX = 'flow:counter:v1:';
+// Ledger de progreso por candidato/flujo (hash nodeId → '1'/'0'): permite RETOMAR una
+// corrida que quedó a medias sin re-ejecutar los nodos ya hechos (no re-enviar WhatsApp,
+// no re-crear recordatorios). Se borra al completar; TTL como red de seguridad.
+const PROGRESS_PREFIX = 'flow:progress:v1:';
+const PROGRESS_TTL_SEC = 60 * 60 * 24 * 7; // 7 días
+// Lock de exclusión mutua por candidato/flujo: evita que dos invocaciones concurrentes
+// (reentrega de webhook, doble disparo) corran el mismo flujo para el mismo candidato a
+// la vez. TTL > maxDuration (120s) para que se auto-libere si la instancia muere a medias.
+const RUN_LOCK_PREFIX = 'flow:lock:v1:';
+const RUN_LOCK_TTL_SEC = 130;
 
 // Mismo cálculo que handleApplyReminderTemplate en src/components/ChatSection.jsx,
 // pero AHÍ corre en el navegador del reclutador (hora local = Monterrey) y setHours()
@@ -526,42 +536,100 @@ export async function evaluateOrExecute(node, candidate, flowId, redis, opts = {
     }
 }
 
-// opts.skipClaim: no reclama/consulta el dedupe de producción (modo test, para poder
-// repetir la corrida). opts.skipCounters: no incrementa los nodos "contador" (modo
-// test, para no inflar la métrica real con corridas manuales).
-// Devuelve un Map<nodeId, boolean> con el resultado de cada nodo alcanzable —
-// usado por el modo test para mostrarle al usuario hasta dónde llegó la corrida
-// (los nodos fuera del Map nunca se evaluaron, ej. ciclo o desconectados de "inicio").
+// Corre UN flujo para UN candidato, de forma IDEMPOTENTE y RETOMABLE.
+//
+// opts.skipClaim  → modo test: no toca dedupe/ledger/lock (para repetir la prueba).
+// opts.skipCounters → modo test: no incrementa los nodos "contador".
+//
+// Semántica de idempotencia (fuera de modo test):
+//   1. Si el candidato ya COMPLETÓ el flujo (está en flow:executed) → no hace nada.
+//   2. Toma un lock por candidato/flujo; si otra invocación ya lo tiene → no hace nada
+//      (evita doble ejecución concurrente por reentrega de webhook / doble disparo).
+//   3. Recorre el grafo en orden topológico. Cada nodo YA ejecutado en una corrida
+//      previa (en el ledger de progreso) se SALTA — se reusa su resultado guardado para
+//      la elegibilidad de los siguientes, pero NO se re-ejecuta (no re-enviar WhatsApp).
+//   4. Al terminar TODO el grafo, marca al candidato como completado y borra el ledger.
+//   Si la corrida muere a medias (raro con waitUntil), el ledger sobrevive y el próximo
+//   disparo retoma exactamente donde se quedó.
+//
+// Devuelve un Map<nodeId, boolean> con el resultado de cada nodo alcanzable — usado por
+// el modo test para mostrar hasta dónde llegó (los nodos fuera del Map nunca se evaluaron:
+// ciclo o desconectados de la raíz). Un Map vacío fuera de modo test significa "ya
+// completado antes" o "otra invocación lo está corriendo".
 async function runOneFlow(redis, flow, candidateId, candidate, opts = {}) {
     const passed = new Map();
-
-    if (!opts.skipClaim) {
-        const claimed = await redis.sadd(`${EXEC_SET_PREFIX}${flow.id}`, candidateId);
-        if (claimed === 0) return passed; // ya ejecutado para este candidato (webhook reintentado)
-    }
 
     const nodes = Array.isArray(flow.nodes) ? flow.nodes : [];
     const edges = Array.isArray(flow.edges) ? flow.edges : [];
     if (!nodes.length) return passed;
 
-    const order = topoSort(nodes, edges);
-    const incoming = buildIncomingMap(edges);
+    const testMode = !!opts.skipClaim;
+    const execKey = `${EXEC_SET_PREFIX}${flow.id}`;
+    const progressKey = `${PROGRESS_PREFIX}${flow.id}:${candidateId}`;
+    const lockKey = `${RUN_LOCK_PREFIX}${flow.id}:${candidateId}`;
 
-    for (const node of order) {
-        const preds = incoming.get(node.id) || [];
-        const eligible = preds.length === 0 || preds.every(p => passed.get(p) === true);
-        if (!eligible) {
-            passed.set(node.id, false);
-            continue;
+    let prior = {};          // ledger de una corrida previa parcial (nodeId → '1'/'0')
+    let lockAcquired = false;
+
+    if (!testMode) {
+        if (await redis.sismember(execKey, candidateId)) return passed; // ya completado
+        const lock = await redis.set(lockKey, '1', 'EX', RUN_LOCK_TTL_SEC, 'NX').catch(() => null);
+        if (lock !== 'OK') return passed; // otra invocación lo está corriendo (o fallo transitorio)
+        lockAcquired = true;
+        prior = (await redis.hgetall(progressKey)) || {};
+    }
+
+    try {
+        const order = topoSort(nodes, edges);
+        const incoming = buildIncomingMap(edges);
+
+        for (const node of order) {
+            const preds = incoming.get(node.id) || [];
+            const eligible = preds.length === 0 || preds.every(p => passed.get(p) === true);
+            if (!eligible) {
+                passed.set(node.id, false);
+                continue;
+            }
+
+            // Resume: nodo ya hecho en una corrida previa → reusa resultado, no re-ejecuta.
+            if (Object.prototype.hasOwnProperty.call(prior, node.id)) {
+                passed.set(node.id, prior[node.id] === '1');
+                continue;
+            }
+
+            const result = await evaluateOrExecute(node, candidate, flow.id, redis, opts);
+            passed.set(node.id, result);
+
+            // Persistir el avance ANTES de seguir: si la instancia muere aquí, el próximo
+            // disparo retoma desde el siguiente nodo (no re-envía lo ya enviado).
+            if (!testMode) {
+                await redis.pipeline()
+                    .hset(progressKey, node.id, result ? '1' : '0')
+                    .expire(progressKey, PROGRESS_TTL_SEC)
+                    .exec();
+            }
         }
-        passed.set(node.id, await evaluateOrExecute(node, candidate, flow.id, redis, opts));
+
+        // Grafo completo → marcar candidato como terminado y limpiar el ledger.
+        if (!testMode) {
+            await redis.pipeline().sadd(execKey, candidateId).del(progressKey).exec();
+        }
+    } finally {
+        if (lockAcquired) await redis.del(lockKey).catch(() => {});
     }
 
     return passed;
 }
 
-// Punto de entrada — llamado fire-and-forget desde api/ai/agent.js con el snapshot
-// del candidato ya mergeado (para no releer Redis). Nunca lanza: todo error se traga.
+// Punto de entrada en vivo — llamado (vía waitUntil, ver api/utils/background.js) desde
+// api/ai/agent.js con el snapshot del candidato ya mergeado. Nunca lanza.
+//
+// Los flujos activos corren en SECUENCIA (no en paralelo) sobre UN MISMO objeto candidato
+// compartido: así una etiqueta/proyecto que agrega un flujo ya está presente cuando corre
+// el siguiente. Antes corrían con Promise.allSettled y cada uno con su propio snapshot
+// stale → el updateCandidate de uno pisaba al del otro (read-modify-write no atómico).
+// El objeto opts compartido también preserva la pausa entre envíos ENTRE flujos (no solo
+// dentro de uno), para no atropellar a Meta con ráfagas al mismo candidato.
 export async function runFlowsForCandidate(candidateId, candidateSnapshot) {
     try {
         const redis = getRedisClient();
@@ -572,7 +640,15 @@ export async function runFlowsForCandidate(candidateId, candidateSnapshot) {
         const active = flows.filter(f => f.active && Array.isArray(f.nodes) && f.nodes.length);
         if (!active.length) return;
 
-        await Promise.allSettled(active.map(flow => runOneFlow(redis, flow, candidateId, { ...candidateSnapshot })));
+        const candidate = { ...candidateSnapshot };
+        const opts = {};
+        for (const flow of active) {
+            try {
+                await runOneFlow(redis, flow, candidateId, candidate, opts);
+            } catch (e) {
+                console.error(`[FLOW-ENGINE] flujo ${flow.id} para candidato ${candidateId}:`, e?.message);
+            }
+        }
     } catch (e) {
         console.error('[FLOW-ENGINE] runFlowsForCandidate:', e?.message);
     }
@@ -594,18 +670,22 @@ export async function runFlowTest(flow, candidateSnapshot) {
 }
 
 // Nodo "inicio_lista": corre el flujo REAL para un candidato de la lista filtrada,
-// disparado por el botón Run del nodo (uno a la vez, desde api/flows.js). A diferencia
-// de runFlowTest, aquí SÍ se respeta el dedupe de producción (opts={} → runOneFlow
-// reclama flow:executed:v1:{flowId}), a propósito: así el botón Run se puede apretar
-// varias veces, o retomar tras cerrar la pestaña a la mitad, sin volver a mandarle nada
-// a un candidato que ya se procesó. `passed.size === 0` tras un runOneFlow normal solo
-// puede significar que el claim fue rechazado (ya estaba en el set) — cualquier corrida
-// real evalúa al menos el nodo inicio_lista mismo, que siempre queda en el Map.
+// disparado por el botón Run del nodo (uno a la vez, desde api/flows.js). Respeta el
+// dedupe/ledger de producción (opts={}), a propósito: el botón Run se puede apretar
+// varias veces, o retomar tras cerrar la pestaña a media corrida, sin volver a mandarle
+// nada a un candidato que ya se completó — y una corrida que quedó a medias se RETOMA
+// desde donde se quedó (ver runOneFlow) en vez de re-enviar todo o saltárselo entero.
 export async function runFlowForListCandidate(flow, candidateSnapshot) {
     const redis = getRedisClient();
     if (!redis) throw new Error('Redis no disponible');
     if (!candidateSnapshot?.id || !candidateSnapshot?.whatsapp) throw new Error('Candidato inválido');
 
+    if (await redis.sismember(`${EXEC_SET_PREFIX}${flow.id}`, candidateSnapshot.id)) {
+        return { alreadyExecuted: true, passed: {} };
+    }
+
     const passed = await runOneFlow(redis, flow, candidateSnapshot.id, { ...candidateSnapshot }, {});
+    // passed vacío aquí = otra invocación tomó el lock (corriendo en paralelo) o justo se
+    // marcó completado — de cualquier modo no hubo trabajo nuevo que reportar en esta llamada.
     return { alreadyExecuted: passed.size === 0, passed: Object.fromEntries(passed) };
 }

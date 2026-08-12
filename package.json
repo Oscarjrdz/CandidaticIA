@@ -18,6 +18,7 @@
     "@dnd-kit/sortable": "^8.0.0",
     "@dnd-kit/utilities": "^3.2.2",
     "@vercel/blob": "^2.6.1",
+    "@vercel/functions": "^3.9.3",
     "@vercel/speed-insights": "^2.0.0",
     "@xyflow/react": "^12.11.2",
     "axios": "^1.13.2",

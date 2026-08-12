@@ -27,6 +27,7 @@ import { processRecruiterMessage } from './recruiter-agent.js';
 import { inferGender } from '../utils/gender-helper.js';
 import { maybeSendKatconOnComplete } from '../utils/agent-katcon.js';
 import { runFlowsForCandidate } from '../utils/flow-engine.js';
+import { runInBackground } from '../utils/background.js';
 import { maybeEnqueueForLiveAgent } from '../utils/agent-candidatic.js';
 import { attendLiveCandidate } from '../utils/agent-attend.js';
 import { classifyIntent } from './intent-classifier.js';
@@ -5337,7 +5338,10 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
             // FLOWS (constructor visual de automatizaciones, sección "Flows"): mismo instante
             // exacto, evalúa los flujos activos contra el candidato y ejecuta las acciones que
             // apliquen. Determinístico, sin cron ni IA — ver api/utils/flow-engine.js.
-            runFlowsForCandidate(candidateId, { ...candidateData, ...candidateUpdates }).catch(() => {});
+            // runInBackground (waitUntil): el flujo puede tardar varios segundos (varios envíos
+            // con pausa entre ellos); sin esto, Vercel congelaba la instancia al responder y el
+            // flujo quedaba a medias — ver api/utils/background.js.
+            runInBackground(runFlowsForCandidate(candidateId, { ...candidateData, ...candidateUpdates }));
             // AGENT CANDIDATIC (generalizado, cualquier etiqueta): mismo instante exacto,
             // agrega a la cola en vivo y dispara el motor de atención (agent-attend.js)
             // SOLO si de verdad quedó encolado (candados ya validados adentro).
