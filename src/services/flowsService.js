@@ -35,6 +35,23 @@ export const getFlowCounters = async (id) => {
     }
 };
 
+// Métricas del tablero de Flujos: altas por etiqueta en un rango (hoy/ayer/semana/mes
+// o desde-hasta). Devuelve [{name, total}] ya ordenado desc por el backend.
+export const getFlowTagMetrics = async ({ rango, desde, hasta } = {}) => {
+    try {
+        const params = new URLSearchParams({ mode: 'tag_metrics' });
+        if (rango) params.set('rango', rango);
+        if (desde) params.set('desde', desde);
+        if (hasta) params.set('hasta', hasta);
+        const res = await fetch(`/api/flows?${params.toString()}`);
+        const data = await res.json();
+        if (data.success) return { success: true, metrics: data.metrics || [], total: data.total || 0, label: data.label || '' };
+        return { success: false, error: data.error };
+    } catch (error) {
+        return { success: false, error: error.message };
+    }
+};
+
 export const getFlowsMeta = async () => {
     try {
         const res = await fetch('/api/flows?meta=1');
