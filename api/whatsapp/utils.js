@@ -369,6 +369,20 @@ export const sendMetaMessage = async (to, body, type = 'chat', extraParams = {})
     }
 };
 
+// Mismo patrón que sendBotMessageWithRetry en api/ai/agent.js (agente Brenda) — los
+// hiccups de Meta/red suelen ser transitorios. Reintenta UNA vez, solo para 'chat'
+// (texto), tras una pausa corta. Confirmado en producción (ago 2026): sin esto, un
+// rate-limit momentáneo de Meta bajo mucha carga (muchos candidatos entrando a la vez)
+// perdía mensajes de Flujos en silencio (accion_whatsapp nunca reintentaba ni logueaba).
+export const sendUltraMsgMessageWithRetry = async (instanceId, token, to, body, type = 'chat', extraParams = {}) => {
+    let result = await sendUltraMsgMessage(instanceId, token, to, body, type, extraParams);
+    if (!result?.success && type === 'chat') {
+        await new Promise(resolve => setTimeout(resolve, 700));
+        result = await sendUltraMsgMessage(instanceId, token, to, body, type, extraParams);
+    }
+    return result;
+};
+
 export const sendUltraMsgMessage = async (_instanceId, _token, to, body, type = 'chat', extraParams = {}) => {
     // Multi-platform routing: check if recipient is a Messenger PSID
     try {

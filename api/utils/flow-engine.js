@@ -1,6 +1,6 @@
 import { getRedisClient, isProfileComplete, updateCandidate, saveMessage, withCrmProjectLinksLock } from './storage.js';
 import { getCachedConfig } from './cache.js';
-import { getUltraMsgConfig, sendUltraMsgMessage } from '../whatsapp/utils.js';
+import { getUltraMsgConfig, sendUltraMsgMessage, sendUltraMsgMessageWithRetry } from '../whatsapp/utils.js';
 import { substituteVariables, splitBubbles } from './shortcuts.js';
 import { getBotVacancies, vacancyMessageText } from './agent-ia.js';
 
@@ -254,6 +254,8 @@ async function evaluateOrExecute(node, candidate, flowId, redis, opts = {}) {
                             from: 'me', content: `[Ubicación: ${qr.location.name || 'Mapa'}]`, timestamp: new Date().toISOString(),
                             meta: { flow: true, flowId, nodeId: node.id }
                         }).catch(() => {});
+                    } else {
+                        console.error(`[FLOW-ENGINE] accion_whatsapp ${flowId}/${node.id} (ubicación) candidato ${candidate.id}: envío falló —`, locRes?.error);
                     }
                     return true;
                 }
@@ -265,6 +267,8 @@ async function evaluateOrExecute(node, candidate, flowId, redis, opts = {}) {
                             from: 'me', content: qr.voice ? '🎤 Nota de voz' : '🎵 Audio', type: 'audio', mediaUrl: qr.audioUrl,
                             timestamp: new Date().toISOString(), meta: { flow: true, flowId, nodeId: node.id }
                         }).catch(() => {});
+                    } else {
+                        console.error(`[FLOW-ENGINE] accion_whatsapp ${flowId}/${node.id} (audio) candidato ${candidate.id}: envío falló —`, audioRes?.error);
                     }
                     return true;
                 }
@@ -279,21 +283,28 @@ async function evaluateOrExecute(node, candidate, flowId, redis, opts = {}) {
                             from: 'me', content: caption, type: 'document', mediaUrl: qr.documentUrl, filename: qr.documentName || 'documento.pdf',
                             timestamp: new Date().toISOString(), meta: { flow: true, flowId, nodeId: node.id }
                         }).catch(() => {});
+                    } else {
+                        console.error(`[FLOW-ENGINE] accion_whatsapp ${flowId}/${node.id} (documento) candidato ${candidate.id}: envío falló —`, docRes?.error);
                     }
                     return true;
                 }
 
                 // type 'text' (default): texto (posiblemente partido en varias burbujas
-                // por [burbuja]) + hasta 4 imágenes del banco.
+                // por [burbuja]) + hasta 4 imágenes del banco. sendUltraMsgMessageWithRetry
+                // reintenta una vez tras un rate-limit/hiccup transitorio de Meta (bug real
+                // confirmado en producción, ago 2026: bajo mucha carga se perdían mensajes
+                // en silencio, sin reintento ni log con contexto de flujo/nodo/candidato).
                 if (qr.message) {
                     const text = substituteVariables(qr.message, candidate);
                     for (const bubbleText of splitBubbles(text)) {
-                        const textRes = await sendUltraMsgMessage(config.instanceId, config.token, cleanTo, bubbleText, 'chat', { priority: 1 });
+                        const textRes = await sendUltraMsgMessageWithRetry(config.instanceId, config.token, cleanTo, bubbleText, 'chat', { priority: 1 });
                         if (textRes?.success) {
                             await saveMessage(candidate.id, {
                                 from: 'me', content: bubbleText, timestamp: new Date().toISOString(),
                                 meta: { flow: true, flowId, nodeId: node.id }
                             }).catch(() => {});
+                        } else {
+                            console.error(`[FLOW-ENGINE] accion_whatsapp ${flowId}/${node.id} (texto) candidato ${candidate.id}: envío falló tras reintento —`, textRes?.error);
                         }
                     }
                 }
@@ -305,6 +316,8 @@ async function evaluateOrExecute(node, candidate, flowId, redis, opts = {}) {
                             from: 'me', content: '', type: 'image', mediaUrl: imgUrl,
                             timestamp: new Date().toISOString(), meta: { flow: true, flowId, nodeId: node.id }
                         }).catch(() => {});
+                    } else {
+                        console.error(`[FLOW-ENGINE] accion_whatsapp ${flowId}/${node.id} (imagen) candidato ${candidate.id}: envío falló —`, imgRes?.error);
                     }
                 }
             } catch (e) {
@@ -327,12 +340,14 @@ async function evaluateOrExecute(node, candidate, flowId, redis, opts = {}) {
                 // Mismo texto EXACTO que el "maletín" del chat manual — sin substituteVariables,
                 // igual que sendVacancyDirect en ChatSection.jsx (no aplica variables ahí tampoco).
                 const text = vacancyMessageText(vac);
-                const sendResult = await sendUltraMsgMessage(config.instanceId, config.token, cleanTo, text, 'chat', { priority: 1 });
+                const sendResult = await sendUltraMsgMessageWithRetry(config.instanceId, config.token, cleanTo, text, 'chat', { priority: 1 });
                 if (sendResult?.success) {
                     await saveMessage(candidate.id, {
                         from: 'me', content: text, timestamp: new Date().toISOString(),
                         meta: { flow: true, flowId, nodeId: node.id }
                     }).catch(() => {});
+                } else {
+                    console.error(`[FLOW-ENGINE] accion_vacante ${flowId}/${node.id} candidato ${candidate.id}: envío falló tras reintento —`, sendResult?.error);
                 }
             } catch (e) {
                 console.error(`[FLOW-ENGINE] accion_vacante ${flowId}/${node.id}:`, e?.message);
@@ -349,12 +364,14 @@ async function evaluateOrExecute(node, candidate, flowId, redis, opts = {}) {
 
                 const text = substituteVariables(data.message, candidate);
                 for (const bubbleText of splitBubbles(text)) {
-                    const sendResult = await sendUltraMsgMessage(config.instanceId, config.token, cleanTo, bubbleText, 'chat', { priority: 1 });
+                    const sendResult = await sendUltraMsgMessageWithRetry(config.instanceId, config.token, cleanTo, bubbleText, 'chat', { priority: 1 });
                     if (sendResult?.success) {
                         await saveMessage(candidate.id, {
                             from: 'me', content: bubbleText, timestamp: new Date().toISOString(),
                             meta: { flow: true, flowId, nodeId: node.id }
                         }).catch(() => {});
+                    } else {
+                        console.error(`[FLOW-ENGINE] accion_whatsapp_personalizado ${flowId}/${node.id} candidato ${candidate.id}: envío falló tras reintento —`, sendResult?.error);
                     }
                 }
             } catch (e) {
