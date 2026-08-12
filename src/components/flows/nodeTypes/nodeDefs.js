@@ -1,4 +1,4 @@
-import { Play, Tag, CalendarRange, MapPin, Briefcase, GraduationCap, MessageCircle, Hash, UserRound, CircleMinus, BellRing, FolderKanban, FlaskConical, Eraser, Filter, MessageSquareText, ListChecks } from 'lucide-react';
+import { Play, Tag, CalendarRange, MapPin, Briefcase, GraduationCap, MessageCircle, Hash, UserRound, CircleMinus, BellRing, FolderKanban, FlaskConical, Eraser, Filter, MessageSquareText, ListChecks, CheckCheck } from 'lucide-react';
 
 export const PROFILE_FILTER_LABELS = {
     active: 'Activos (no bloqueados)',
@@ -59,6 +59,7 @@ export const NODE_DEFS = {
         color: 'indigo',
         hasTarget: true,
         hasSource: true,
+        branching: true,
         summary: (data) => data.mode === 'especifica' ? (data.tag || 'Elige etiqueta') : (ETIQUETA_MODE_LABELS[data.mode] || ETIQUETA_MODE_LABELS.todas)
     },
     condicion_genero: {
@@ -67,6 +68,7 @@ export const NODE_DEFS = {
         color: 'blue',
         hasTarget: true,
         hasSource: true,
+        branching: true,
         summary: (data) => formatMultiSummary(data.generos)
     },
     condicion_edad: {
@@ -75,6 +77,7 @@ export const NODE_DEFS = {
         color: 'blue',
         hasTarget: true,
         hasSource: true,
+        branching: true,
         summary: (data) => (data.min == null && data.max == null) ? 'Sin filtro' : `${data.min ?? '—'} a ${data.max ?? '—'} años`
     },
     condicion_municipio: {
@@ -83,6 +86,7 @@ export const NODE_DEFS = {
         color: 'blue',
         hasTarget: true,
         hasSource: true,
+        branching: true,
         summary: (data) => formatMultiSummary(data.municipios)
     },
     condicion_categoria: {
@@ -91,6 +95,7 @@ export const NODE_DEFS = {
         color: 'blue',
         hasTarget: true,
         hasSource: true,
+        branching: true,
         summary: (data) => formatMultiSummary(data.categorias)
     },
     condicion_escolaridad: {
@@ -99,6 +104,7 @@ export const NODE_DEFS = {
         color: 'blue',
         hasTarget: true,
         hasSource: true,
+        branching: true,
         summary: (data) => formatMultiSummary(data.escolaridades)
     },
     accion_whatsapp: {
@@ -164,6 +170,14 @@ export const NODE_DEFS = {
         hasTarget: true,
         hasSource: true,
         summary: (data) => data.projectName || 'Elige un proyecto'
+    },
+    accion_marcar_leido: {
+        label: 'Marcar Leído',
+        icon: CheckCheck,
+        color: 'gray',
+        hasTarget: true,
+        hasSource: true,
+        summary: () => 'Saca al candidato de la lista de no-leídos (quita la burbuja)'
     },
     contador: {
         label: 'Contador',

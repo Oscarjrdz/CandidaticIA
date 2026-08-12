@@ -166,11 +166,17 @@ export function topoSort(nodes, edges) {
     return order;
 }
 
+// Devuelve Map<target, [{source, handle}]>. `handle` es el sourceHandle de la arista:
+//   - 'no'  → sale de la ramita "No cumple" de una condición (se activa cuando el
+//             origen quedó en 'fail').
+//   - null / 'si' / cualquier otro → arista normal (se activa cuando el origen 'pass').
+// Las aristas viejas (guardadas antes de esta función) no tienen sourceHandle → null →
+// se comportan EXACTO igual que siempre, así que los flujos existentes no cambian.
 export function buildIncomingMap(edges) {
     const incoming = new Map();
     for (const e of edges) {
         if (!incoming.has(e.target)) incoming.set(e.target, []);
-        incoming.get(e.target).push(e.source);
+        incoming.get(e.target).push({ source: e.source, handle: e.sourceHandle || null });
     }
     return incoming;
 }
@@ -454,6 +460,28 @@ export async function evaluateOrExecute(node, candidate, flowId, redis, opts = {
             return true;
         }
 
+        case 'accion_marcar_leido': {
+            // Marca al candidato como "leído" para sacarlo de la lista de no-leídos
+            // (quita la burbuja/badge). El estado de no-leído en Redis se deriva de
+            // lastUserMessageAt > lastHumanMessageAt (ver "ATOMIC UNREAD" en storage.js):
+            // poniendo lastHumanMessageAt = ahora lo dejamos leído, y updateCandidate ya
+            // se encarga de sacarlo del set candidates:unread, decrementar el contador y
+            // emitir el SSE. Si más tarde el candidato vuelve a escribir, lastUserMessageAt
+            // se actualiza y reaparece como no-leído — que es justo lo que se quiere.
+            try {
+                const nowStr = new Date().toISOString();
+                await updateCandidate(candidate.id, {
+                    unreadMsgCount: 0,
+                    lastHumanMessageAt: nowStr
+                });
+                candidate.lastHumanMessageAt = nowStr; // snapshot en memoria en sync
+                candidate.unreadMsgCount = 0;
+            } catch (e) {
+                console.error(`[FLOW-ENGINE] accion_marcar_leido ${flowId}/${node.id}:`, e?.message);
+            }
+            return true;
+        }
+
         case 'accion_recordatorio': {
             if (!data.templateId) return true;
             try {
@@ -583,21 +611,36 @@ async function runOneFlow(redis, flow, candidateId, candidate, opts = {}) {
         const order = topoSort(nodes, edges);
         const incoming = buildIncomingMap(edges);
 
+        // outcome por nodo: 'pass' (cumplió/se ejecutó), 'fail' (se alcanzó pero la
+        // condición NO se cumplió) o 'unreached' (nunca fue elegible). La arista normal
+        // exige que su origen quede en 'pass'; la arista "No" (handle === 'no') exige que
+        // quede en 'fail' — así se rutean los que NO cumplen sin re-ejecutar la condición.
+        // El Map `passed` que se devuelve conserva su semántica de antes (true = cumplió),
+        // para el badge del nodo test.
+        const outcome = new Map();
+        const edgeSatisfied = (dep) => dep.handle === 'no'
+            ? outcome.get(dep.source) === 'fail'
+            : outcome.get(dep.source) === 'pass';
+
         for (const node of order) {
-            const preds = incoming.get(node.id) || [];
-            const eligible = preds.length === 0 || preds.every(p => passed.get(p) === true);
+            const deps = incoming.get(node.id) || [];
+            const eligible = deps.length === 0 || deps.every(edgeSatisfied);
             if (!eligible) {
+                outcome.set(node.id, 'unreached');
                 passed.set(node.id, false);
                 continue;
             }
 
             // Resume: nodo ya hecho en una corrida previa → reusa resultado, no re-ejecuta.
             if (Object.prototype.hasOwnProperty.call(prior, node.id)) {
-                passed.set(node.id, prior[node.id] === '1');
+                const priorPass = prior[node.id] === '1';
+                outcome.set(node.id, priorPass ? 'pass' : 'fail');
+                passed.set(node.id, priorPass);
                 continue;
             }
 
             const result = await evaluateOrExecute(node, candidate, flow.id, redis, opts);
+            outcome.set(node.id, result ? 'pass' : 'fail');
             passed.set(node.id, result);
 
             // Persistir el avance ANTES de seguir: si la instancia muere aquí, el próximo

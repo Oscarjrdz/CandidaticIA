@@ -28,6 +28,7 @@ const DEFAULT_DATA_BY_TYPE = {
     accion_limpiar_etiquetas: {},
     accion_recordatorio: { templateId: '', templateName: '' },
     accion_proyecto: { projectId: '', projectName: '' },
+    accion_marcar_leido: {},
     contador: { label: '' },
     test: { testPhone: '' }
 };
@@ -72,7 +73,16 @@ const FlowEditorInner = ({ flowId, onBack }) => {
         setDirty(true);
     }, []);
 
-    const hydrateEdge = useCallback((e) => ({ ...e, data: { ...e.data, onDelete: handleDeleteEdge } }), [handleDeleteEdge]);
+    // La arista de la rama "No cumple" (sourceHandle === 'no') se pinta roja para que se
+    // distinga de un vistazo de la rama normal (indigo). El resto conserva el indigo de
+    // defaultEdgeOptions.
+    const hydrateEdge = useCallback((e) => ({
+        ...e,
+        style: e.sourceHandle === 'no'
+            ? { stroke: '#f87171', strokeWidth: 2 }
+            : { stroke: '#a5b4fc', strokeWidth: 2 },
+        data: { ...e.data, onDelete: handleDeleteEdge }
+    }), [handleDeleteEdge]);
 
     const handleTestPhoneChange = useCallback((nodeId, phone) => {
         setNodes(nds => nds.map(n => n.id === nodeId ? { ...n, data: { ...n.data, testPhone: phone } } : n));
@@ -110,7 +120,15 @@ const FlowEditorInner = ({ flowId, onBack }) => {
             setFlowMeta({ name: flow.name, active: !!flow.active });
             const loadedNodes = (flow.nodes || []).map(n => hydrateNode(n));
             setNodes(loadedNodes);
-            setEdges((flow.edges || []).map(hydrateEdge));
+            // Migración visual: las aristas guardadas ANTES de que existieran los nodos con
+            // rama (Sí/No) no tienen sourceHandle. Ahora los nodos "branching" pintan dos
+            // handles con id ('si'/'no'); una arista sin handle no se conectaría a ninguno.
+            // Se re-mapean a 'si' (la rama normal), que es EXACTO como el motor ya las trata
+            // (handle null === 'si' === exige que el origen cumpla). No cambia la ejecución.
+            const branchingIds = new Set(loadedNodes.filter(n => NODE_DEFS[n.type]?.branching).map(n => n.id));
+            setEdges((flow.edges || []).map(e => hydrateEdge(
+                (!e.sourceHandle && branchingIds.has(e.source)) ? { ...e, sourceHandle: 'si' } : e
+            )));
 
             if (metaRes.success) {
                 setMeta({
@@ -201,7 +219,7 @@ const FlowEditorInner = ({ flowId, onBack }) => {
         setSaving(true);
         const payload = {
             nodes: nodes.map(n => ({ id: n.id, type: n.type, position: n.position, data: stripTransientData(n.data) })),
-            edges: edges.map(e => ({ id: e.id, source: e.source, target: e.target }))
+            edges: edges.map(e => ({ id: e.id, source: e.source, target: e.target, sourceHandle: e.sourceHandle ?? null, targetHandle: e.targetHandle ?? null }))
         };
         const res = await updateFlow(flowId, payload);
         setSaving(false);

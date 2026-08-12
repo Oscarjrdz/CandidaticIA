@@ -289,6 +289,12 @@ const NodeConfigDrawer = ({ node, meta, quickReplies, reminderTemplates, project
                     </p>
                 )}
 
+                {node.type === 'accion_marcar_leido' && (
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                        No necesita configuración: al ejecutarse, marca al candidato como <strong>leído</strong> y lo saca de la lista de no-leídos (le quita la burbuja/badge). Útil para candidatos que ya están completos pero <strong>no cumplen los filtros</strong> — así dejan de estorbar en la lista. Si el candidato vuelve a escribir, reaparece como no-leído.
+                    </p>
+                )}
+
                 {node.type === 'accion_recordatorio' && (
                     <div>
                         <label className="text-xs text-gray-500 dark:text-gray-400 mb-2 block">Plantilla de recordatorio</label>
@@ -357,6 +363,14 @@ const NodeConfigDrawer = ({ node, meta, quickReplies, reminderTemplates, project
                             className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 dark:bg-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-gray-500"
                         />
                         <p className="mt-2 text-xs text-gray-400">Cuenta candidatos únicos que llegan a este punto del flujo. No manda nada ni modifica al candidato.</p>
+                    </div>
+                )}
+
+                {def.branching && (
+                    <div className="mt-5 pt-4 border-t border-gray-100 dark:border-gray-700">
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                            Este nodo tiene <strong>dos salidas</strong>: la verde <strong className="text-emerald-600 dark:text-emerald-400">Sí</strong> (a la derecha) para los candidatos que <strong>cumplen</strong>, y la roja <strong className="text-red-500">No cumple</strong> (abajo) para los que <strong>no</strong>. Conecta la salida roja a un nodo <strong>Marcar Leído</strong> si quieres sacarlos de la lista sin mandarles nada.
+                        </p>
                     </div>
                 )}
             </div>
