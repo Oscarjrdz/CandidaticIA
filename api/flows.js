@@ -1,7 +1,7 @@
 import { getRedisClient, validateAdminSession, getCandidateByPhone, getCandidateById, getCandidatesForFlowList } from './utils/storage.js';
 import { getCachedConfig, invalidateCache } from './utils/cache.js';
 import { runFlowTest, runFlowForListCandidate } from './utils/flow-engine.js';
-import { getBotVacancies, buildDateKeys, getCapturesByAllTags } from './utils/agent-ia.js';
+import { getBotVacancies, buildDateKeys, getCapturesByAllTags, getCapturesTotal } from './utils/agent-ia.js';
 
 const REDIS_KEY = 'flows:v1';
 const EXEC_SET_PREFIX = 'flow:executed:v1:';
@@ -139,9 +139,13 @@ export default async function handler(req, res) {
         if (method === 'GET' && mode === 'tag_metrics') {
             const { rango, desde, hasta } = req.query;
             const { keys, label } = buildDateKeys({ rango, desde, hasta });
-            const metrics = await getCapturesByAllTags(keys);
-            const total = metrics.reduce((s, m) => s + (m.total || 0), 0);
-            return res.status(200).json({ success: true, metrics, total, label });
+            const [metrics, total, untaggedVals] = await Promise.all([
+                getCapturesByAllTags(keys),
+                getCapturesTotal(keys),
+                redis.hmget('stats:daily:captures:untagged', ...keys)
+            ]);
+            const untagged = (untaggedVals || []).reduce((s, v) => s + (parseInt(v, 10) || 0), 0);
+            return res.status(200).json({ success: true, metrics, total, untagged, label });
         }
 
         if (method === 'GET' && id) {

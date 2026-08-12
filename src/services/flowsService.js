@@ -45,7 +45,7 @@ export const getFlowTagMetrics = async ({ rango, desde, hasta } = {}) => {
         if (hasta) params.set('hasta', hasta);
         const res = await fetch(`/api/flows?${params.toString()}`);
         const data = await res.json();
-        if (data.success) return { success: true, metrics: data.metrics || [], total: data.total || 0, label: data.label || '' };
+        if (data.success) return { success: true, metrics: data.metrics || [], total: data.total || 0, untagged: data.untagged || 0, label: data.label || '' };
         return { success: false, error: data.error };
     } catch (error) {
         return { success: false, error: error.message };

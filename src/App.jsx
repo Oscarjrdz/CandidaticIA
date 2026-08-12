@@ -12,6 +12,7 @@ import { AuthProvider, useAuthContext } from './contexts/AuthContext';
 import { getTheme, saveTheme } from './utils/storage';
 import { usePresence } from './hooks/usePresence';
 import InternalChat from './components/InternalChat';
+import FlowMetricsBoard from './components/flows/FlowMetricsBoard';
 import { useCandidatesSSE } from './hooks/useCandidatesSSE';
 
 // ⚡ React.lazy with auto-retry on stale chunk errors (post-deploy cache mismatch)
@@ -551,6 +552,8 @@ function AppShell() {
         </main>
 
         <InternalChat onlineUsers={onlineUsers} />
+        {/* Tablero de métricas de altas por etiqueta — widget global flotante (todas las secciones) */}
+        <FlowMetricsBoard />
         {/* Footer */}
         <footer className="py-3 sm:py-4 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shrink-0 sticky bottom-0 z-10" style={{ WebkitBackdropFilter: 'blur(12px)', backdropFilter: 'blur(12px)', backgroundColor: 'rgba(255,255,255,0.9)' }}>
           <div className="px-4 sm:px-8">

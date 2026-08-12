@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { BarChart3, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react';
+import { BarChart3, RefreshCw, ChevronDown, ChevronUp, GripVertical } from 'lucide-react';
 import { getFlowTagMetrics } from '../../services/flowsService';
 
 // Tablero de métricas estilo split-flap (letras de aeropuerto / relojes de tarjetas):
-// muestra cuántos candidatos llegaron por ETIQUETA en el rango elegido. Los números
-// "voltean" mecánicamente cuando cambian. Datos: /api/flows?mode=tag_metrics
-// (mismos contadores agregados que usa el copiloto — no escanea candidatos).
+// cuántos candidatos llegaron por ETIQUETA en el rango elegido. Los números "voltean"
+// mecánicamente al cambiar. Es un widget GLOBAL flotante (se ve en todas las secciones),
+// arrastrable a cualquier parte y redimensionable desde la esquina (encoge todo).
+// Datos: /api/flows?mode=tag_metrics (contadores agregados, no escanea candidatos).
 
 const FILTERS = [
     { key: 'hoy', label: 'Hoy' },
@@ -15,10 +16,19 @@ const FILTERS = [
     { key: 'rango', label: 'Rango' }
 ];
 
+const LS = { pos: 'cfm:board:pos', scale: 'cfm:board:scale', collapsed: 'cfm:board:collapsed' };
+const MIN_SCALE = 0.55;
+const MAX_SCALE = 1.4;
+
 const mtyToday = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Monterrey' });
 
-// Un dígito que voltea: a mitad del giro (edge-on, invisible) se cambia el número,
-// igual que una tarjeta de tablero mecánico.
+const loadLS = (key, fallback) => {
+    try { const v = localStorage.getItem(key); return v == null ? fallback : JSON.parse(v); }
+    catch { return fallback; }
+};
+const saveLS = (key, val) => { try { localStorage.setItem(key, JSON.stringify(val)); } catch { /* ignore */ } };
+
+// Un dígito que voltea: a mitad del giro (edge-on, invisible) se cambia el número.
 function FlapDigit({ char }) {
     const [shown, setShown] = useState(char);
     const [flipping, setFlipping] = useState(false);
@@ -49,9 +59,9 @@ function FlapNumber({ value }) {
     );
 }
 
-function TagTile({ name, total }) {
+function TagTile({ name, total, untagged }) {
     return (
-        <div className={`cfm-tile${total === 0 ? ' cfm-tile--zero' : ''}`} title={`${name}: ${total}`}>
+        <div className={`cfm-tile${untagged ? ' cfm-tile--untagged' : ''}`} title={`${name}: ${total}`}>
             <FlapNumber value={total} />
             <span className="cfm-tile__label">{name}</span>
         </div>
@@ -65,24 +75,40 @@ const rangeIncludesToday = (mode, desde, hasta) => {
     return false;
 };
 
+const clampPos = (x, y) => ({
+    x: Math.min(Math.max(0, x), Math.max(0, window.innerWidth - 60)),
+    y: Math.min(Math.max(0, y), Math.max(0, window.innerHeight - 40))
+});
+
 const FlowMetricsBoard = () => {
     const [mode, setMode] = useState('hoy');
     const [desde, setDesde] = useState(mtyToday());
     const [hasta, setHasta] = useState(mtyToday());
     const [metrics, setMetrics] = useState([]);
     const [total, setTotal] = useState(0);
+    const [untagged, setUntagged] = useState(0);
     const [label, setLabel] = useState('');
     const [loading, setLoading] = useState(true);
-    const [collapsed, setCollapsed] = useState(false);
+
+    const [collapsed, setCollapsed] = useState(() => loadLS(LS.collapsed, false));
+    const [pos, setPos] = useState(() => loadLS(LS.pos, { x: 84, y: 76 }));
+    const [scale, setScale] = useState(() => {
+        const s = Number(loadLS(LS.scale, 1));
+        return Number.isFinite(s) ? Math.min(MAX_SCALE, Math.max(MIN_SCALE, s)) : 1;
+    });
+
     const debounceRef = useRef(null);
+    const dragRef = useRef(null);
+    const resizeRef = useRef(null);
 
     const fetchMetrics = useCallback(async () => {
         setLoading(true);
         const params = mode === 'rango' ? { desde, hasta } : { rango: mode };
         const res = await getFlowTagMetrics(params);
         if (res.success) {
-            setMetrics(res.metrics);
+            setMetrics(res.metrics.filter(m => (m.total || 0) > 0)); // ocultar tarjetas en 0
             setTotal(res.total);
+            setUntagged(res.untagged || 0);
             setLabel(res.label);
         }
         setLoading(false);
@@ -90,8 +116,8 @@ const FlowMetricsBoard = () => {
 
     useEffect(() => { fetchMetrics(); }, [fetchMetrics]);
 
-    // Refresco en vivo: cuando llega un candidato nuevo por SSE y el rango incluye hoy,
-    // reconsulta (debounced) para que el número "voltee" solo. Sin polling recurrente.
+    // Refresco en vivo: candidato nuevo por SSE + rango que incluye hoy → reconsulta
+    // (debounced). Sin polling recurrente.
     useEffect(() => {
         if (!rangeIncludesToday(mode, desde, hasta)) return;
         const onNew = () => {
@@ -105,31 +131,74 @@ const FlowMetricsBoard = () => {
         };
     }, [mode, desde, hasta, fetchMetrics]);
 
+    // Reencaja si la ventana se hace más chica y el widget queda fuera.
+    useEffect(() => {
+        const onResize = () => setPos(p => clampPos(p.x, p.y));
+        window.addEventListener('resize', onResize);
+        return () => window.removeEventListener('resize', onResize);
+    }, []);
+
+    // Arrastre desde el encabezado.
+    const onDragStart = useCallback((e) => {
+        e.preventDefault();
+        dragRef.current = { startX: e.clientX, startY: e.clientY, origX: pos.x, origY: pos.y };
+        const onMove = (ev) => {
+            const d = dragRef.current; if (!d) return;
+            setPos(clampPos(d.origX + (ev.clientX - d.startX), d.origY + (ev.clientY - d.startY)));
+        };
+        const onUp = () => {
+            window.removeEventListener('pointermove', onMove);
+            window.removeEventListener('pointerup', onUp);
+            setPos(p => { saveLS(LS.pos, p); return p; });
+            dragRef.current = null;
+        };
+        window.addEventListener('pointermove', onMove);
+        window.addEventListener('pointerup', onUp);
+    }, [pos]);
+
+    // Redimensionar (escala TODO) desde la esquina inferior derecha.
+    const onResizeStart = useCallback((e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        resizeRef.current = { startX: e.clientX, startY: e.clientY, origScale: scale };
+        const onMove = (ev) => {
+            const r = resizeRef.current; if (!r) return;
+            const delta = ((ev.clientX - r.startX) + (ev.clientY - r.startY)) / 2 / 320;
+            setScale(Math.min(MAX_SCALE, Math.max(MIN_SCALE, r.origScale + delta)));
+        };
+        const onUp = () => {
+            window.removeEventListener('pointermove', onMove);
+            window.removeEventListener('pointerup', onUp);
+            setScale(s => { saveLS(LS.scale, s); return s; });
+            resizeRef.current = null;
+        };
+        window.addEventListener('pointermove', onMove);
+        window.addEventListener('pointerup', onUp);
+    }, [scale]);
+
+    const toggleCollapsed = () => setCollapsed(c => { const n = !c; saveLS(LS.collapsed, n); return n; });
+
+    const stop = (e) => e.stopPropagation();
+
     return (
-        <div className="absolute top-[4.25rem] left-3 z-[90] pointer-events-auto">
+        <div
+            className="cfm-root"
+            style={{ left: pos.x, top: pos.y, transform: `scale(${scale})`, transformOrigin: 'top left' }}
+        >
             <style>{CFM_STYLES}</style>
             <div className="cfm-board">
-                <div className="cfm-board__head">
+                <div className="cfm-board__head" onPointerDown={onDragStart}>
                     <div className="cfm-board__title">
+                        <GripVertical className="w-3.5 h-3.5 cfm-grip" />
                         <BarChart3 className="w-3.5 h-3.5" />
                         <span>Altas por etiqueta</span>
-                        <span className="cfm-total">
-                            <FlapNumber value={total} />
-                        </span>
+                        <span className="cfm-total"><FlapNumber value={total} /></span>
                     </div>
-                    <div className="cfm-board__actions">
-                        <button
-                            onClick={fetchMetrics}
-                            className={`cfm-icon-btn${loading ? ' cfm-spin' : ''}`}
-                            title="Actualizar"
-                        >
+                    <div className="cfm-board__actions" onPointerDown={stop}>
+                        <button onClick={fetchMetrics} className={`cfm-icon-btn${loading ? ' cfm-spin' : ''}`} title="Actualizar">
                             <RefreshCw className="w-3.5 h-3.5" />
                         </button>
-                        <button
-                            onClick={() => setCollapsed(c => !c)}
-                            className="cfm-icon-btn"
-                            title={collapsed ? 'Mostrar' : 'Ocultar'}
-                        >
+                        <button onClick={toggleCollapsed} className="cfm-icon-btn" title={collapsed ? 'Mostrar' : 'Ocultar'}>
                             {collapsed ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
                         </button>
                     </div>
@@ -137,13 +206,9 @@ const FlowMetricsBoard = () => {
 
                 {!collapsed && (
                     <>
-                        <div className="cfm-filters">
+                        <div className="cfm-filters" onPointerDown={stop}>
                             {FILTERS.map(f => (
-                                <button
-                                    key={f.key}
-                                    onClick={() => setMode(f.key)}
-                                    className={`cfm-chip${mode === f.key ? ' cfm-chip--on' : ''}`}
-                                >
+                                <button key={f.key} onClick={() => setMode(f.key)} className={`cfm-chip${mode === f.key ? ' cfm-chip--on' : ''}`}>
                                     {f.label}
                                 </button>
                             ))}
@@ -156,36 +221,46 @@ const FlowMetricsBoard = () => {
                             )}
                         </div>
 
-                        <div className="cfm-tiles">
+                        <div className="cfm-tiles" onPointerDown={stop}>
                             {loading && !metrics.length ? (
                                 Array.from({ length: 4 }).map((_, i) => <div key={i} className="cfm-tile cfm-tile--skeleton" />)
-                            ) : metrics.length ? (
-                                metrics.map(m => <TagTile key={m.name} name={m.name} total={m.total} />)
+                            ) : (metrics.length || untagged) ? (
+                                <>
+                                    {metrics.map(m => <TagTile key={m.name} name={m.name} total={m.total} />)}
+                                    <TagTile name="Sin etiqueta" total={untagged} untagged />
+                                </>
                             ) : (
-                                <div className="cfm-empty">Sin etiquetas configuradas</div>
+                                <div className="cfm-empty">Sin altas en este rango</div>
                             )}
                         </div>
                         {!!label && <div className="cfm-caption">{label}</div>}
                     </>
                 )}
+
+                <div className="cfm-resize" onPointerDown={onResizeStart} title="Redimensionar" />
             </div>
         </div>
     );
 };
 
 const CFM_STYLES = `
+.cfm-root { position: fixed; z-index: 150; }
 .cfm-board {
+    position: relative;
     background: linear-gradient(180deg, #1c1c1e 0%, #121214 100%);
     border: 1px solid rgba(255,255,255,0.08);
     border-radius: 16px;
     box-shadow: 0 10px 30px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.05);
     padding: 10px 12px;
     max-width: min(72vw, 760px);
+    user-select: none;
 }
-.cfm-board__head { display:flex; align-items:center; justify-content:space-between; gap:12px; }
-.cfm-board__title { display:flex; align-items:center; gap:8px; color:#cbd0d8; font-size:12px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; }
+.cfm-board__head { display:flex; align-items:center; justify-content:space-between; gap:12px; cursor: grab; }
+.cfm-board__head:active { cursor: grabbing; }
+.cfm-grip { color:#5b616b; margin-right:-2px; }
+.cfm-board__title { display:flex; align-items:center; gap:7px; color:#cbd0d8; font-size:12px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; }
 .cfm-total { margin-left:4px; }
-.cfm-board__actions { display:flex; gap:4px; }
+.cfm-board__actions { display:flex; gap:4px; cursor: default; }
 .cfm-icon-btn { display:flex; align-items:center; justify-content:center; width:26px; height:26px; border-radius:8px; color:#9aa1ac; background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.06); }
 .cfm-icon-btn:hover { color:#e5e7eb; background:rgba(255,255,255,0.09); }
 .cfm-spin svg { animation: cfm-rotate .8s linear infinite; }
@@ -204,8 +279,9 @@ const CFM_STYLES = `
 .cfm-tiles::-webkit-scrollbar-thumb { background:rgba(255,255,255,0.14); border-radius:3px; }
 
 .cfm-tile { display:flex; flex-direction:column; align-items:center; gap:6px; padding:8px 10px; border-radius:12px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.06); min-width:64px; flex:0 0 auto; }
-.cfm-tile--zero { opacity:.45; }
+.cfm-tile--untagged { background:rgba(96,165,250,0.06); border-color:rgba(96,165,250,0.18); }
 .cfm-tile__label { font-size:10px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:#e8c98a; max-width:120px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.cfm-tile--untagged .cfm-tile__label { color:#9cc4f7; }
 .cfm-tile--skeleton { width:64px; height:56px; background:rgba(255,255,255,0.05); animation: cfm-pulse 1.2s ease-in-out infinite; }
 @keyframes cfm-pulse { 0%,100% { opacity:.4; } 50% { opacity:.7; } }
 
@@ -237,6 +313,14 @@ const CFM_STYLES = `
 
 .cfm-empty { color:#7c828c; font-size:12px; padding:10px 4px; }
 .cfm-caption { margin-top:8px; color:#7c828c; font-size:10px; letter-spacing:.03em; }
+
+.cfm-resize {
+    position:absolute; right:2px; bottom:2px; width:16px; height:16px;
+    cursor: nwse-resize; border-radius:0 0 12px 0;
+    background:
+        linear-gradient(135deg, transparent 50%, rgba(255,255,255,0.28) 50%, rgba(255,255,255,0.28) 60%, transparent 60%,
+        transparent 70%, rgba(255,255,255,0.28) 70%, rgba(255,255,255,0.28) 80%, transparent 80%);
+}
 `;
 
 export default FlowMetricsBoard;

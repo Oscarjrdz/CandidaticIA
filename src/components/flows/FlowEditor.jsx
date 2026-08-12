@@ -10,7 +10,6 @@ import { flowNodeTypes, COLOR_CLASSES, NODE_DEFS } from './nodeTypes';
 import FlowEdge from './edgeTypes/FlowEdge';
 import NodeConfigDrawer from './NodeConfigDrawer';
 import FlowToolbar from './FlowToolbar';
-import FlowMetricsBoard from './FlowMetricsBoard';
 
 const flowEdgeTypes = { default: FlowEdge };
 
@@ -359,8 +358,6 @@ const FlowEditorInner = ({ flowId, onBack }) => {
                 onRename={handleRename}
                 onBack={onBack}
             />
-
-            <FlowMetricsBoard />
 
             <ReactFlow
                 nodes={nodes}

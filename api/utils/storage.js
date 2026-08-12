@@ -1512,6 +1512,11 @@ export const saveCandidate = async (candidate) => {
                     const tp = client.pipeline();
                     capturedTags.forEach((t) => tp.hincrby(`stats:daily:captures:tag:${t}`, dateKey, 1));
                     tp.exec().catch(() => {});
+                } else {
+                    // Altas SIN etiqueta por día (para la tarjeta "Sin etiqueta" del tablero
+                    // de Flujos). Mismo criterio/coste que los contadores por etiqueta:
+                    // solo al crearse, fire-and-forget. Empieza a contar desde hoy.
+                    client.hincrby('stats:daily:captures:untagged', dateKey, 1).catch(() => {});
                 }
             } catch {}
         }
