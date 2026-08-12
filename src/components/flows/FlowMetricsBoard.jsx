@@ -16,9 +16,11 @@ const FILTERS = [
     { key: 'rango', label: 'Rango' }
 ];
 
-const LS = { pos: 'cfm:board:pos', width: 'cfm:board:width', collapsed: 'cfm:board:collapsed' };
+const LS = { pos: 'cfm:board:pos', width: 'cfm:board:width', scale: 'cfm:board:scale', collapsed: 'cfm:board:collapsed' };
 const MIN_W = 300;
 const DEFAULT_W = 480;
+const MIN_SCALE = 0.55;
+const MAX_SCALE = 1.35;
 
 const mtyToday = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Monterrey' });
 
@@ -98,10 +100,15 @@ const FlowMetricsBoard = () => {
         const w = Number(loadLS(LS.width, DEFAULT_W));
         return Number.isFinite(w) ? Math.max(MIN_W, w) : DEFAULT_W;
     });
+    const [scale, setScale] = useState(() => {
+        const s = Number(loadLS(LS.scale, 1));
+        return Number.isFinite(s) ? Math.min(MAX_SCALE, Math.max(MIN_SCALE, s)) : 1;
+    });
 
     const debounceRef = useRef(null);
     const dragRef = useRef(null);
     const resizeRef = useRef(null);
+    const scaleRef = useRef(null);
 
     const fetchMetrics = useCallback(async () => {
         setLoading(true);
@@ -181,12 +188,32 @@ const FlowMetricsBoard = () => {
         window.addEventListener('pointerup', onUp);
     }, [width, pos.x]);
 
+    // Escalar TODO (encoger/agrandar) desde la esquina inferior derecha.
+    const onScaleStart = useCallback((e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        scaleRef.current = { startX: e.clientX, startY: e.clientY, origScale: scale };
+        const onMove = (ev) => {
+            const r = scaleRef.current; if (!r) return;
+            const delta = ((ev.clientX - r.startX) + (ev.clientY - r.startY)) / 2 / 320;
+            setScale(Math.min(MAX_SCALE, Math.max(MIN_SCALE, r.origScale + delta)));
+        };
+        const onUp = () => {
+            window.removeEventListener('pointermove', onMove);
+            window.removeEventListener('pointerup', onUp);
+            setScale(s => { saveLS(LS.scale, s); return s; });
+            scaleRef.current = null;
+        };
+        window.addEventListener('pointermove', onMove);
+        window.addEventListener('pointerup', onUp);
+    }, [scale]);
+
     const toggleCollapsed = () => setCollapsed(c => { const n = !c; saveLS(LS.collapsed, n); return n; });
 
     const stop = (e) => e.stopPropagation();
 
     return (
-        <div className="cfm-root" style={{ left: pos.x, top: pos.y }}>
+        <div className="cfm-root" style={{ left: pos.x, top: pos.y, transform: `scale(${scale})`, transformOrigin: 'top left' }}>
             <style>{CFM_STYLES}</style>
             <div className="cfm-board" style={collapsed ? undefined : { width }}>
                 <div className="cfm-board__head" onPointerDown={onDragStart}>
@@ -238,6 +265,7 @@ const FlowMetricsBoard = () => {
                         {!!label && <div className="cfm-caption">{label}</div>}
 
                         <div className="cfm-resize-x" onPointerDown={onResizeStart} title="Ensanchar hacia la derecha" />
+                        <div className="cfm-resize" onPointerDown={onScaleStart} title="Encoger / agrandar todo" />
                     </>
                 )}
             </div>
@@ -278,9 +306,7 @@ const CFM_STYLES = `
 .cfm-date { font-size:11px; color: var(--text-primary, #1a1d29); background: var(--bg-secondary, #fff); border:1px solid var(--border-color, #e5e7eb); border-radius:8px; padding:3px 6px; }
 .cfm-date-sep { color: var(--text-secondary, #6b7280); font-size:12px; }
 
-.cfm-tiles { display:flex; gap:8px; margin-top:12px; overflow-x:auto; padding-bottom:4px; }
-.cfm-tiles::-webkit-scrollbar { height:6px; }
-.cfm-tiles::-webkit-scrollbar-thumb { background: var(--border-color, #cbd5e1); border-radius:3px; }
+.cfm-tiles { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
 
 .cfm-tile { display:flex; flex-direction:column; align-items:center; gap:6px; padding:8px 10px; border-radius:12px; background: var(--accent-brand-light, #eff6ff); border:1px solid var(--border-color, #e5e7eb); min-width:64px; flex:0 0 auto; }
 .cfm-tile--untagged { background: rgba(100,116,139,0.10); }
@@ -323,7 +349,7 @@ const CFM_STYLES = `
 .cfm-caption { margin-top:8px; color: var(--text-secondary, #6b7280); font-size:10px; letter-spacing:.03em; }
 
 .cfm-resize-x {
-    position:absolute; top:10px; bottom:10px; right:-3px; width:10px;
+    position:absolute; top:10px; bottom:26px; right:-3px; width:10px;
     cursor: ew-resize; border-radius:6px;
 }
 .cfm-resize-x::after {
@@ -331,6 +357,19 @@ const CFM_STYLES = `
     width:3px; height:26px; border-radius:3px; background: var(--border-color, #cbd5e1);
 }
 .cfm-resize-x:hover::after { background: var(--accent-brand, #3b82f6); }
+
+.cfm-resize {
+    position:absolute; right:1px; bottom:1px; width:16px; height:16px;
+    cursor: nwse-resize; border-radius:0 0 14px 0;
+    background:
+        linear-gradient(135deg, transparent 45%, var(--border-color, #cbd5e1) 45%, var(--border-color, #cbd5e1) 55%, transparent 55%,
+        transparent 68%, var(--border-color, #cbd5e1) 68%, var(--border-color, #cbd5e1) 78%, transparent 78%);
+}
+.cfm-resize:hover {
+    background:
+        linear-gradient(135deg, transparent 45%, var(--accent-brand, #3b82f6) 45%, var(--accent-brand, #3b82f6) 55%, transparent 55%,
+        transparent 68%, var(--accent-brand, #3b82f6) 68%, var(--accent-brand, #3b82f6) 78%, transparent 78%);
+}
 `;
 
 export default FlowMetricsBoard;
