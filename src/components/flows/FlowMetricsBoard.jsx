@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { BarChart3, RefreshCw, ChevronDown, ChevronUp, GripVertical } from 'lucide-react';
 import { getFlowTagMetrics } from '../../services/flowsService';
+import { useAuthContext } from '../../contexts/AuthContext';
 
 // Tablero de métricas estilo split-flap (letras de aeropuerto / relojes de tarjetas):
 // cuántos candidatos llegaron por ETIQUETA en el rango elegido. Los números "voltean"
@@ -16,19 +17,15 @@ const FILTERS = [
     { key: 'rango', label: 'Rango' }
 ];
 
-const LS = { pos: 'cfm:board:pos', width: 'cfm:board:width', scale: 'cfm:board:scale', collapsed: 'cfm:board:collapsed' };
 const MIN_W = 300;
 const DEFAULT_W = 480;
 const MIN_SCALE = 0.55;
 const MAX_SCALE = 1.35;
+const DEFAULT_POS = { x: 84, y: 76 };
 
 const mtyToday = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Monterrey' });
 
-const loadLS = (key, fallback) => {
-    try { const v = localStorage.getItem(key); return v == null ? fallback : JSON.parse(v); }
-    catch { return fallback; }
-};
-const saveLS = (key, val) => { try { localStorage.setItem(key, JSON.stringify(val)); } catch { /* ignore */ } };
+const clampScale = (s) => Math.min(MAX_SCALE, Math.max(MIN_SCALE, Number(s)));
 
 const maxWidthFor = (x) => Math.min(1400, Math.max(MIN_W, window.innerWidth - x - 16));
 
@@ -94,21 +91,48 @@ const FlowMetricsBoard = () => {
     const [label, setLabel] = useState('');
     const [loading, setLoading] = useState(true);
 
-    const [collapsed, setCollapsed] = useState(() => loadLS(LS.collapsed, false));
-    const [pos, setPos] = useState(() => loadLS(LS.pos, { x: 84, y: 76 }));
-    const [width, setWidth] = useState(() => {
-        const w = Number(loadLS(LS.width, DEFAULT_W));
-        return Number.isFinite(w) ? Math.max(MIN_W, w) : DEFAULT_W;
-    });
-    const [scale, setScale] = useState(() => {
-        const s = Number(loadLS(LS.scale, 1));
-        return Number.isFinite(s) ? Math.min(MAX_SCALE, Math.max(MIN_SCALE, s)) : 1;
-    });
+    // Config del tablero (posición, ancho, escala, colapsado) persistida por usuario en
+    // Redis (perfil del reclutador, preferences.metricsBoard) — mismo patrón que el banco
+    // de respuestas: setUser + PUT /api/users con merge superficial. Así te sigue entre
+    // sesiones y dispositivos, no solo en este navegador.
+    const { user, setUser } = useAuthContext();
+    const savedCfg = user?.preferences?.metricsBoard || {};
+
+    const [collapsed, setCollapsed] = useState(() => !!savedCfg.collapsed);
+    const [pos, setPos] = useState(() => (savedCfg.pos && Number.isFinite(savedCfg.pos.x) ? savedCfg.pos : DEFAULT_POS));
+    const [width, setWidth] = useState(() => (Number.isFinite(savedCfg.width) ? Math.max(MIN_W, savedCfg.width) : DEFAULT_W));
+    const [scale, setScale] = useState(() => (Number.isFinite(savedCfg.scale) ? clampScale(savedCfg.scale) : 1));
 
     const debounceRef = useRef(null);
     const dragRef = useRef(null);
     const resizeRef = useRef(null);
     const scaleRef = useRef(null);
+    const hydratedRef = useRef(false);
+
+    // Si el perfil del usuario llega después del primer render, aplica su config UNA vez.
+    useEffect(() => {
+        if (hydratedRef.current) return;
+        const cfg = user?.preferences?.metricsBoard;
+        if (!cfg) return;
+        hydratedRef.current = true;
+        if (cfg.pos && Number.isFinite(cfg.pos.x)) setPos(cfg.pos);
+        if (Number.isFinite(cfg.width)) setWidth(Math.max(MIN_W, cfg.width));
+        if (Number.isFinite(cfg.scale)) setScale(clampScale(cfg.scale));
+        if (typeof cfg.collapsed === 'boolean') setCollapsed(cfg.collapsed);
+    }, [user?.preferences?.metricsBoard]);
+
+    // Guarda un parche de config en el perfil del usuario (Redis) + estado local.
+    const persistCfg = useCallback((patch) => {
+        if (!user?.id) return;
+        const nextBoard = { ...(user.preferences?.metricsBoard || {}), ...patch };
+        const nextPreferences = { ...(user.preferences || {}), metricsBoard: nextBoard };
+        setUser(prev => prev ? { ...prev, preferences: nextPreferences } : prev);
+        fetch('/api/users', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: user.id, preferences: nextPreferences })
+        }).catch(() => {});
+    }, [user?.id, user?.preferences, setUser]);
 
     const fetchMetrics = useCallback(async () => {
         setLoading(true);
@@ -161,7 +185,7 @@ const FlowMetricsBoard = () => {
         const onUp = () => {
             window.removeEventListener('pointermove', onMove);
             window.removeEventListener('pointerup', onUp);
-            setPos(p => { saveLS(LS.pos, p); return p; });
+            setPos(p => { persistCfg({ pos: p }); return p; });
             dragRef.current = null;
         };
         window.addEventListener('pointermove', onMove);
@@ -181,7 +205,7 @@ const FlowMetricsBoard = () => {
         const onUp = () => {
             window.removeEventListener('pointermove', onMove);
             window.removeEventListener('pointerup', onUp);
-            setWidth(w => { saveLS(LS.width, w); return w; });
+            setWidth(w => { persistCfg({ width: w }); return w; });
             resizeRef.current = null;
         };
         window.addEventListener('pointermove', onMove);
@@ -201,14 +225,14 @@ const FlowMetricsBoard = () => {
         const onUp = () => {
             window.removeEventListener('pointermove', onMove);
             window.removeEventListener('pointerup', onUp);
-            setScale(s => { saveLS(LS.scale, s); return s; });
+            setScale(s => { persistCfg({ scale: s }); return s; });
             scaleRef.current = null;
         };
         window.addEventListener('pointermove', onMove);
         window.addEventListener('pointerup', onUp);
     }, [scale]);
 
-    const toggleCollapsed = () => setCollapsed(c => { const n = !c; saveLS(LS.collapsed, n); return n; });
+    const toggleCollapsed = () => setCollapsed(c => { const n = !c; persistCfg({ collapsed: n }); return n; });
 
     const stop = (e) => e.stopPropagation();
 
@@ -299,9 +323,9 @@ const CFM_STYLES = `
 @keyframes cfm-rotate { to { transform: rotate(360deg); } }
 
 .cfm-filters { display:flex; align-items:center; gap:6px; margin-top:10px; flex-wrap:wrap; }
-.cfm-chip { font-size:11px; font-weight:600; color: var(--text-secondary, #6b7280); padding:4px 10px; border-radius:999px; background: var(--accent-brand-light, #eff6ff); border:1px solid var(--border-color, #e5e7eb); }
-.cfm-chip:hover { color: var(--accent-brand, #3b82f6); }
-.cfm-chip--on { color:#fff; background: var(--accent-brand, #3b82f6); border-color: var(--accent-brand, #3b82f6); }
+.cfm-chip { font-size:11px; font-weight:600; color: var(--text-secondary, #6b7280); padding:4px 10px; border-radius:999px; background: transparent; border:1px solid var(--border-color, #e5e7eb); transition: background .12s ease, color .12s ease, border-color .12s ease; }
+.cfm-chip:hover { background: var(--accent-brand-light, #eff6ff); color: var(--text-primary, #1a1d29); border-color: var(--accent-brand, #3b82f6); }
+.cfm-chip--on, .cfm-chip--on:hover { color:#fff; background: var(--accent-brand, #3b82f6); border-color: var(--accent-brand, #3b82f6); }
 .cfm-daterange { display:inline-flex; align-items:center; gap:6px; margin-left:2px; }
 .cfm-date { font-size:11px; color: var(--text-primary, #1a1d29); background: var(--bg-secondary, #fff); border:1px solid var(--border-color, #e5e7eb); border-radius:8px; padding:3px 6px; }
 .cfm-date-sep { color: var(--text-secondary, #6b7280); font-size:12px; }
