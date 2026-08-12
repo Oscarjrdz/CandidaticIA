@@ -1,4 +1,4 @@
-import { Play, Tag, CalendarRange, MapPin, Briefcase, GraduationCap, MessageCircle, Hash, UserRound, CircleMinus, BellRing, FolderKanban, FlaskConical, Eraser, Filter, MessageSquareText, ListChecks, CheckCheck } from 'lucide-react';
+import { Play, Tag, CalendarRange, MapPin, Briefcase, GraduationCap, MessageCircle, Hash, UserRound, CircleMinus, BellRing, FolderKanban, FlaskConical, Eraser, Filter, MessageSquareText, ListChecks, CheckCheck, BotOff } from 'lucide-react';
 
 export const PROFILE_FILTER_LABELS = {
     active: 'Activos (no bloqueados)',
@@ -178,6 +178,14 @@ export const NODE_DEFS = {
         hasTarget: true,
         hasSource: true,
         summary: () => 'Saca al candidato de la lista de no-leídos (quita la burbuja)'
+    },
+    accion_desactivar_bot: {
+        label: 'Desactivar Bot',
+        icon: BotOff,
+        color: 'amber',
+        hasTarget: true,
+        hasSource: true,
+        summary: () => 'Silencia a Brenda (modo humano, igual que intervención humana)'
     },
     contador: {
         label: 'Contador',

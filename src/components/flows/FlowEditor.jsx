@@ -29,6 +29,7 @@ const DEFAULT_DATA_BY_TYPE = {
     accion_recordatorio: { templateId: '', templateName: '' },
     accion_proyecto: { projectId: '', projectName: '' },
     accion_marcar_leido: {},
+    accion_desactivar_bot: {},
     contador: { label: '' },
     test: { testPhone: '' }
 };

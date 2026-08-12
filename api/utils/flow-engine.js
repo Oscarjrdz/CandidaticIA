@@ -1,4 +1,4 @@
-import { getRedisClient, isProfileComplete, updateCandidate, saveMessage, withCrmProjectLinksLock } from './storage.js';
+import { getRedisClient, isProfileComplete, updateCandidate, saveMessage, withCrmProjectLinksLock, HUMAN_INTERVENTION_SILENCE_MS } from './storage.js';
 import { getCachedConfig } from './cache.js';
 import { getUltraMsgConfig, sendUltraMsgMessage, sendUltraMsgMessageWithRetry } from '../whatsapp/utils.js';
 import { substituteVariables, splitBubbles } from './shortcuts.js';
@@ -456,6 +456,30 @@ export async function evaluateOrExecute(node, candidate, flowId, redis, opts = {
                 }
             } catch (e) {
                 console.error(`[FLOW-ENGINE] accion_limpiar_etiquetas ${flowId}/${node.id}:`, e?.message);
+            }
+            return true;
+        }
+
+        case 'accion_desactivar_bot': {
+            // Silencia a Brenda para este candidato EXACTAMENTE como cuando un humano
+            // interviene en el chat (modo humano). Mismo patch que aplica
+            // api/candidates/block.js (lo que dispara autoSilenceBot en ChatSection.jsx):
+            // blocked + blockedAt + blockedExpiresAt (ahora + HUMAN_INTERVENTION_SILENCE_MS,
+            // 5 días) + blockedReason 'human_intervention'. NO bloquea en WhatsApp — solo
+            // marca al candidato como intervenido para que la IA no responda. Si algún día
+            // cambia la lógica de intervención humana, actualízala en block.js y aquí.
+            try {
+                const now = new Date();
+                const patch = {
+                    blocked: true,
+                    blockedAt: now.toISOString(),
+                    blockedExpiresAt: new Date(now.getTime() + HUMAN_INTERVENTION_SILENCE_MS).toISOString(),
+                    blockedReason: 'human_intervention'
+                };
+                await updateCandidate(candidate.id, patch);
+                Object.assign(candidate, patch); // snapshot en memoria en sync para el resto de la corrida
+            } catch (e) {
+                console.error(`[FLOW-ENGINE] accion_desactivar_bot ${flowId}/${node.id}:`, e?.message);
             }
             return true;
         }
