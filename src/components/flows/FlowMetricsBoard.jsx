@@ -4,9 +4,9 @@ import { getFlowTagMetrics } from '../../services/flowsService';
 
 // Tablero de métricas estilo split-flap (letras de aeropuerto / relojes de tarjetas):
 // cuántos candidatos llegaron por ETIQUETA en el rango elegido. Los números "voltean"
-// mecánicamente al cambiar. Es un widget GLOBAL flotante (se ve en todas las secciones),
-// arrastrable a cualquier parte y redimensionable desde la esquina (encoge todo).
-// Datos: /api/flows?mode=tag_metrics (contadores agregados, no escanea candidatos).
+// mecánicamente al cambiar. Widget GLOBAL flotante (todas las secciones), arrastrable
+// y ensanchable HACIA LA DERECHA para ver más contadores. Usa la paleta de Candidatic
+// (superficie clara, azul de marca) — no negro. Datos: /api/flows?mode=tag_metrics.
 
 const FILTERS = [
     { key: 'hoy', label: 'Hoy' },
@@ -16,9 +16,9 @@ const FILTERS = [
     { key: 'rango', label: 'Rango' }
 ];
 
-const LS = { pos: 'cfm:board:pos', scale: 'cfm:board:scale', collapsed: 'cfm:board:collapsed' };
-const MIN_SCALE = 0.55;
-const MAX_SCALE = 1.4;
+const LS = { pos: 'cfm:board:pos', width: 'cfm:board:width', collapsed: 'cfm:board:collapsed' };
+const MIN_W = 300;
+const DEFAULT_W = 480;
 
 const mtyToday = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Monterrey' });
 
@@ -27,6 +27,8 @@ const loadLS = (key, fallback) => {
     catch { return fallback; }
 };
 const saveLS = (key, val) => { try { localStorage.setItem(key, JSON.stringify(val)); } catch { /* ignore */ } };
+
+const maxWidthFor = (x) => Math.min(1400, Math.max(MIN_W, window.innerWidth - x - 16));
 
 // Un dígito que voltea: a mitad del giro (edge-on, invisible) se cambia el número.
 function FlapDigit({ char }) {
@@ -92,9 +94,9 @@ const FlowMetricsBoard = () => {
 
     const [collapsed, setCollapsed] = useState(() => loadLS(LS.collapsed, false));
     const [pos, setPos] = useState(() => loadLS(LS.pos, { x: 84, y: 76 }));
-    const [scale, setScale] = useState(() => {
-        const s = Number(loadLS(LS.scale, 1));
-        return Number.isFinite(s) ? Math.min(MAX_SCALE, Math.max(MIN_SCALE, s)) : 1;
+    const [width, setWidth] = useState(() => {
+        const w = Number(loadLS(LS.width, DEFAULT_W));
+        return Number.isFinite(w) ? Math.max(MIN_W, w) : DEFAULT_W;
     });
 
     const debounceRef = useRef(null);
@@ -131,12 +133,15 @@ const FlowMetricsBoard = () => {
         };
     }, [mode, desde, hasta, fetchMetrics]);
 
-    // Reencaja si la ventana se hace más chica y el widget queda fuera.
+    // Reencaja posición/ancho si la ventana se hace más chica.
     useEffect(() => {
-        const onResize = () => setPos(p => clampPos(p.x, p.y));
+        const onResize = () => {
+            setPos(p => clampPos(p.x, p.y));
+            setWidth(w => Math.min(w, maxWidthFor(pos.x)));
+        };
         window.addEventListener('resize', onResize);
         return () => window.removeEventListener('resize', onResize);
-    }, []);
+    }, [pos.x]);
 
     // Arrastre desde el encabezado.
     const onDragStart = useCallback((e) => {
@@ -156,41 +161,38 @@ const FlowMetricsBoard = () => {
         window.addEventListener('pointerup', onUp);
     }, [pos]);
 
-    // Redimensionar (escala TODO) desde la esquina inferior derecha.
+    // Ensanchar HACIA LA DERECHA (más contadores visibles), sin escalar nada.
     const onResizeStart = useCallback((e) => {
         e.preventDefault();
         e.stopPropagation();
-        resizeRef.current = { startX: e.clientX, startY: e.clientY, origScale: scale };
+        resizeRef.current = { startX: e.clientX, origW: width };
         const onMove = (ev) => {
             const r = resizeRef.current; if (!r) return;
-            const delta = ((ev.clientX - r.startX) + (ev.clientY - r.startY)) / 2 / 320;
-            setScale(Math.min(MAX_SCALE, Math.max(MIN_SCALE, r.origScale + delta)));
+            const next = r.origW + (ev.clientX - r.startX);
+            setWidth(Math.min(maxWidthFor(pos.x), Math.max(MIN_W, next)));
         };
         const onUp = () => {
             window.removeEventListener('pointermove', onMove);
             window.removeEventListener('pointerup', onUp);
-            setScale(s => { saveLS(LS.scale, s); return s; });
+            setWidth(w => { saveLS(LS.width, w); return w; });
             resizeRef.current = null;
         };
         window.addEventListener('pointermove', onMove);
         window.addEventListener('pointerup', onUp);
-    }, [scale]);
+    }, [width, pos.x]);
 
     const toggleCollapsed = () => setCollapsed(c => { const n = !c; saveLS(LS.collapsed, n); return n; });
 
     const stop = (e) => e.stopPropagation();
 
     return (
-        <div
-            className="cfm-root"
-            style={{ left: pos.x, top: pos.y, transform: `scale(${scale})`, transformOrigin: 'top left' }}
-        >
+        <div className="cfm-root" style={{ left: pos.x, top: pos.y }}>
             <style>{CFM_STYLES}</style>
-            <div className="cfm-board">
+            <div className="cfm-board" style={collapsed ? undefined : { width }}>
                 <div className="cfm-board__head" onPointerDown={onDragStart}>
                     <div className="cfm-board__title">
                         <GripVertical className="w-3.5 h-3.5 cfm-grip" />
-                        <BarChart3 className="w-3.5 h-3.5" />
+                        <BarChart3 className="w-3.5 h-3.5 cfm-title-icon" />
                         <span>Altas por etiqueta</span>
                         <span className="cfm-total"><FlapNumber value={total} /></span>
                     </div>
@@ -234,10 +236,10 @@ const FlowMetricsBoard = () => {
                             )}
                         </div>
                         {!!label && <div className="cfm-caption">{label}</div>}
+
+                        <div className="cfm-resize-x" onPointerDown={onResizeStart} title="Ensanchar hacia la derecha" />
                     </>
                 )}
-
-                <div className="cfm-resize" onPointerDown={onResizeStart} title="Redimensionar" />
             </div>
         </div>
     );
@@ -247,43 +249,45 @@ const CFM_STYLES = `
 .cfm-root { position: fixed; z-index: 150; }
 .cfm-board {
     position: relative;
-    background: linear-gradient(180deg, #1c1c1e 0%, #121214 100%);
-    border: 1px solid rgba(255,255,255,0.08);
+    background: var(--bg-card, #fff);
+    border: 1px solid var(--border-color, #e5e7eb);
     border-radius: 16px;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.05);
+    box-shadow: var(--shadow-lg, 0 10px 15px -3px rgba(0,0,0,0.1));
     padding: 10px 12px;
-    max-width: min(72vw, 760px);
+    color: var(--text-primary, #1a1d29);
     user-select: none;
+    min-width: ${MIN_W}px;
 }
 .cfm-board__head { display:flex; align-items:center; justify-content:space-between; gap:12px; cursor: grab; }
 .cfm-board__head:active { cursor: grabbing; }
-.cfm-grip { color:#5b616b; margin-right:-2px; }
-.cfm-board__title { display:flex; align-items:center; gap:7px; color:#cbd0d8; font-size:12px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; }
+.cfm-grip { color: var(--text-secondary, #6b7280); opacity:.6; margin-right:-2px; }
+.cfm-title-icon { color: var(--accent-brand, #3b82f6); }
+.cfm-board__title { display:flex; align-items:center; gap:7px; color: var(--text-secondary, #6b7280); font-size:12px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; }
 .cfm-total { margin-left:4px; }
 .cfm-board__actions { display:flex; gap:4px; cursor: default; }
-.cfm-icon-btn { display:flex; align-items:center; justify-content:center; width:26px; height:26px; border-radius:8px; color:#9aa1ac; background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.06); }
-.cfm-icon-btn:hover { color:#e5e7eb; background:rgba(255,255,255,0.09); }
+.cfm-icon-btn { display:flex; align-items:center; justify-content:center; width:26px; height:26px; border-radius:8px; color: var(--text-secondary, #6b7280); background: transparent; border:1px solid var(--border-color, #e5e7eb); }
+.cfm-icon-btn:hover { color: var(--accent-brand, #3b82f6); background: var(--accent-brand-light, #eff6ff); }
 .cfm-spin svg { animation: cfm-rotate .8s linear infinite; }
 @keyframes cfm-rotate { to { transform: rotate(360deg); } }
 
 .cfm-filters { display:flex; align-items:center; gap:6px; margin-top:10px; flex-wrap:wrap; }
-.cfm-chip { font-size:11px; font-weight:600; color:#aab0ba; padding:4px 10px; border-radius:999px; background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.07); }
-.cfm-chip:hover { color:#e5e7eb; }
-.cfm-chip--on { color:#0b0b0c; background:#f5e9c8; border-color:#f5e9c8; }
+.cfm-chip { font-size:11px; font-weight:600; color: var(--text-secondary, #6b7280); padding:4px 10px; border-radius:999px; background: var(--accent-brand-light, #eff6ff); border:1px solid var(--border-color, #e5e7eb); }
+.cfm-chip:hover { color: var(--accent-brand, #3b82f6); }
+.cfm-chip--on { color:#fff; background: var(--accent-brand, #3b82f6); border-color: var(--accent-brand, #3b82f6); }
 .cfm-daterange { display:inline-flex; align-items:center; gap:6px; margin-left:2px; }
-.cfm-date { font-size:11px; color:#e5e7eb; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); border-radius:8px; padding:3px 6px; color-scheme:dark; }
-.cfm-date-sep { color:#7c828c; font-size:12px; }
+.cfm-date { font-size:11px; color: var(--text-primary, #1a1d29); background: var(--bg-secondary, #fff); border:1px solid var(--border-color, #e5e7eb); border-radius:8px; padding:3px 6px; }
+.cfm-date-sep { color: var(--text-secondary, #6b7280); font-size:12px; }
 
 .cfm-tiles { display:flex; gap:8px; margin-top:12px; overflow-x:auto; padding-bottom:4px; }
 .cfm-tiles::-webkit-scrollbar { height:6px; }
-.cfm-tiles::-webkit-scrollbar-thumb { background:rgba(255,255,255,0.14); border-radius:3px; }
+.cfm-tiles::-webkit-scrollbar-thumb { background: var(--border-color, #cbd5e1); border-radius:3px; }
 
-.cfm-tile { display:flex; flex-direction:column; align-items:center; gap:6px; padding:8px 10px; border-radius:12px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.06); min-width:64px; flex:0 0 auto; }
-.cfm-tile--untagged { background:rgba(96,165,250,0.06); border-color:rgba(96,165,250,0.18); }
-.cfm-tile__label { font-size:10px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:#e8c98a; max-width:120px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.cfm-tile--untagged .cfm-tile__label { color:#9cc4f7; }
-.cfm-tile--skeleton { width:64px; height:56px; background:rgba(255,255,255,0.05); animation: cfm-pulse 1.2s ease-in-out infinite; }
-@keyframes cfm-pulse { 0%,100% { opacity:.4; } 50% { opacity:.7; } }
+.cfm-tile { display:flex; flex-direction:column; align-items:center; gap:6px; padding:8px 10px; border-radius:12px; background: var(--accent-brand-light, #eff6ff); border:1px solid var(--border-color, #e5e7eb); min-width:64px; flex:0 0 auto; }
+.cfm-tile--untagged { background: rgba(100,116,139,0.10); }
+.cfm-tile__label { font-size:10px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color: var(--accent-brand, #3b82f6); max-width:130px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.cfm-tile--untagged .cfm-tile__label { color: #64748b; }
+.cfm-tile--skeleton { width:64px; height:56px; background: var(--accent-brand-light, #eff6ff); animation: cfm-pulse 1.2s ease-in-out infinite; }
+@keyframes cfm-pulse { 0%,100% { opacity:.5; } 50% { opacity:.85; } }
 
 .cfm-number { display:inline-flex; gap:2px; }
 .cfm-digit { display:inline-block; perspective:140px; }
@@ -291,16 +295,20 @@ const CFM_STYLES = `
     display:flex; align-items:center; justify-content:center;
     width:1.35rem; height:1.9rem;
     font-size:1.15rem; font-weight:800; line-height:1;
-    color:#f7edd2; font-variant-numeric: tabular-nums;
-    background: linear-gradient(#33343a 0%, #26272c 49%, #0e0e10 50%, #1b1c20 100%);
+    color:#fff; font-variant-numeric: tabular-nums;
+    background: linear-gradient(#5b95ff 0%, #3b82f6 49%, #2563eb 50%, #1d4ed8 100%);
     border-radius:5px;
-    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.05), 0 2px 4px rgba(0,0,0,0.5);
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.14), 0 2px 4px rgba(37,99,235,0.30);
     position:relative;
 }
 .cfm-total .cfm-digit__card { width:1.05rem; height:1.5rem; font-size:.9rem; }
+.cfm-tile--untagged .cfm-digit__card {
+    background: linear-gradient(#94a3b8 0%, #7c8798 49%, #64748b 50%, #556072 100%);
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.14), 0 2px 4px rgba(100,116,139,0.30);
+}
 .cfm-digit__card::after {
     content:''; position:absolute; left:0; right:0; top:50%; height:1px;
-    background:rgba(0,0,0,0.65); box-shadow:0 1px 0 rgba(255,255,255,0.05);
+    background:rgba(0,0,0,0.28); box-shadow:0 1px 0 rgba(255,255,255,0.18);
     transform:translateY(-0.5px);
 }
 .cfm-digit__card--flip { animation: cfm-flap 270ms ease-in; transform-origin:center; backface-visibility:hidden; }
@@ -311,16 +319,18 @@ const CFM_STYLES = `
     100% { transform: rotateX(0deg); }
 }
 
-.cfm-empty { color:#7c828c; font-size:12px; padding:10px 4px; }
-.cfm-caption { margin-top:8px; color:#7c828c; font-size:10px; letter-spacing:.03em; }
+.cfm-empty { color: var(--text-secondary, #6b7280); font-size:12px; padding:10px 4px; }
+.cfm-caption { margin-top:8px; color: var(--text-secondary, #6b7280); font-size:10px; letter-spacing:.03em; }
 
-.cfm-resize {
-    position:absolute; right:2px; bottom:2px; width:16px; height:16px;
-    cursor: nwse-resize; border-radius:0 0 12px 0;
-    background:
-        linear-gradient(135deg, transparent 50%, rgba(255,255,255,0.28) 50%, rgba(255,255,255,0.28) 60%, transparent 60%,
-        transparent 70%, rgba(255,255,255,0.28) 70%, rgba(255,255,255,0.28) 80%, transparent 80%);
+.cfm-resize-x {
+    position:absolute; top:10px; bottom:10px; right:-3px; width:10px;
+    cursor: ew-resize; border-radius:6px;
 }
+.cfm-resize-x::after {
+    content:''; position:absolute; top:50%; right:4px; transform:translateY(-50%);
+    width:3px; height:26px; border-radius:3px; background: var(--border-color, #cbd5e1);
+}
+.cfm-resize-x:hover::after { background: var(--accent-brand, #3b82f6); }
 `;
 
 export default FlowMetricsBoard;
