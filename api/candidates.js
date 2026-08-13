@@ -7,7 +7,13 @@
 
 // NO TOP LEVEL IMPORTS to prevent boot crashes
 const CANDIDATES_LIST_CACHE_TTL_MS = 15000;
-const FILTER_COUNTS_CACHE_TTL_SECONDS = 15 * 60;
+// 30 min: cada rebuild lee los ~13.6k blobs de candidato completos (~14 MB de salida),
+// así que menos rebuilds = ahorro directo de ancho de banda. Las mutaciones del dashboard
+// (alta/edición/borrado) siguen invalidando al instante vía clearFilterCountsCache, así
+// que las acciones del usuario se reflejan de inmediato; solo el refresco pasivo pasa de
+// 15 a 30 min. Los cambios que entran por WhatsApp ya no invalidaban este caché (nunca lo
+// hicieron), así que su lag ya era de hasta 15 min — esto solo lo extiende un poco.
+const FILTER_COUNTS_CACHE_TTL_SECONDS = 30 * 60;
 const FILTER_COUNTS_STALE_TTL_SECONDS = 24 * 60 * 60;
 const FILTER_COUNTS_CACHE_KEY = 'cache:candidates:filter_counts:v1';
 const FILTER_COUNTS_STALE_KEY = 'cache:candidates:filter_counts:v1:stale';

@@ -1655,15 +1655,13 @@ export const deleteCandidate = async (id) => {
             }
         } catch (_) {}
 
-        // 4. Clean pipeline processed markers (scan pattern pipeline:*:*:id:processed)
-        try {
-            let cursor = '0';
-            do {
-                const [nextCursor, keys] = await client.scan(cursor, 'MATCH', `pipeline:*:*:${id}:*`, 'COUNT', 50);
-                cursor = nextCursor;
-                if (keys && keys.length > 0) await client.del(...keys);
-            } while (cursor !== '0');
-        } catch (_) {}
+        // 4. Marcadores de pipeline (pipeline:proj:step:id:processed): NO se limpian con
+        // un SCAN del keyspace completo. Antes esto escaneaba las ~103k llaves por cada
+        // borrado (~2,000 round-trips/borrado) — costoso y bursty en días de limpieza.
+        // Es innecesario: TODOS esos marcadores se crean con TTL de 30 días
+        // (automation-engine.js) y el id de candidato (`cand_<ts>_<rand9>`) nunca se
+        // reutiliza, así que un marcador huérfano jamás puede afectar a otro candidato —
+        // simplemente expira solo. Cero impacto funcional, se elimina el scan.
     }
 
     const deleted = await deleteDistributedItem(KEYS.CANDIDATES_LIST, KEYS.CANDIDATE_PREFIX, id);
