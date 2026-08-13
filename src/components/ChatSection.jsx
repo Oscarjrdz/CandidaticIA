@@ -363,6 +363,28 @@ const mergeOutgoingMessage = (messages = [], incoming, replaceId = null) => {
     return sortMessagesChronologically(merged);
 };
 
+// Aplica UN mensaje entrante/eco a una lista (dedup por id/ultraMsgId + swap del optimista
+// temp por el real conservando _clientKey + append con animación de entrada). Extraído tal
+// cual del handler SSE para poder aplicar VARIOS mensajes de una misma ráfaga en un SOLO
+// setMessages (coalescing por frame) reusando exactamente la misma lógica, sin duplicarla.
+const applyIncomingMessageToList = (list = [], newMsg) => {
+    if (!newMsg) return list;
+    // Ya presente (por id o ultraMsgId) → no duplicar
+    if (list.some(m => String(m.id) === String(newMsg.id) || (m.ultraMsgId && String(m.ultraMsgId) === String(newMsg.ultraMsgId)))) {
+        return list;
+    }
+    // Eco de un envío propio: cambiar el optimista temp por el real (mergeOutgoingMessage
+    // conserva _clientKey → Virtuoso no remonta la burbuja)
+    if (newMsg.from === 'me') {
+        const pendingIndex = list.findIndex(m => String(m.id).startsWith('temp') && areSameOutgoingMessage(m, newMsg));
+        if (pendingIndex !== -1) {
+            return mergeOutgoingMessage(list, newMsg, list[pendingIndex].id);
+        }
+        if (list.some(m => areSameOutgoingMessage(m, newMsg))) return list;
+    }
+    return [...list, withMessageEntryAnimation(newMsg)];
+};
+
 const mergeMessageList = (currentMessages = [], freshMessages = []) => {
     if (!Array.isArray(freshMessages)) return currentMessages || [];
     const byIdentity = new Map();
@@ -821,6 +843,12 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
     const virtuosoScrollerRef = useRef(null);
     const scrollFrameRef = useRef(null);
     const messagesByChatRef = useRef(new Map());
+    // Coalescing de ráfagas SSE: bufferea los mensajes nuevos que llegan en el mismo frame
+    // y los aplica en UN solo setMessages (ver flushPendingSseMessages). Bajo alto tráfico
+    // (Brenda + 2 reclutadores + entrantes) esto convierte N renders/sorts/scrolls encimados
+    // en 1 por frame — la causa principal de que la lista "se pusiera loca".
+    const pendingSseMsgsRef = useRef([]);
+    const sseFlushFrameRef = useRef(null);
     const displayMessageCacheRef = useRef(new Map());
     const bottomAnchorRef = useRef(false);
     const prevDisplayLengthRef = useRef(0);
@@ -2918,6 +2946,60 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         prevMessagesLength.current = messages.length;
     }, [messages, selectedChat?.id]);
 
+    // Vacía el buffer de mensajes SSE de la ráfaga en UN solo lote. Se agenda con rAF
+    // (una vez por frame) desde el handler, así que N mensajes que entran juntos = 1
+    // setMessages + 1 medición + 1 scroll, no N ciclos peleándose.
+    //   • Cada entrada trae el chatId al que iba: el chat pudo cambiar entre buffer y
+    //     flush, así que se agrupa por chat. Lo que iba al chat activo se aplica a la
+    //     vista (setMessages); lo que iba a otro chat ya visitado se mete a su store
+    //     por-chat (messagesByChatRef) — misma semántica que el handler mensaje a mensaje.
+    //   • El scroll al fondo se hace UNA vez al final, solo si algún mensaje del lote lo
+    //     pedía (estabas abajo o enviando) y el chat activo recibió algo.
+    const flushPendingSseMessages = () => {
+        const buffered = pendingSseMsgsRef.current;
+        if (!buffered.length) return;
+        pendingSseMsgsRef.current = [];
+
+        const byChat = new Map();
+        for (const entry of buffered) {
+            if (!byChat.has(entry.chatId)) byChat.set(entry.chatId, { msgs: [], preserveBottom: false });
+            const bucket = byChat.get(entry.chatId);
+            bucket.msgs.push(entry.msg);
+            if (entry.preserveBottom) bucket.preserveBottom = true;
+        }
+
+        const activeId = pendingChatIdRef.current ?? selectedChatRef.current?.id;
+        let activeGotMessage = false;
+        let activePreserveBottom = false;
+
+        for (const [chatId, { msgs, preserveBottom }] of byChat) {
+            if (String(chatId) === String(activeId)) {
+                setMessages(prev => {
+                    let next = Array.isArray(prev) ? prev : [];
+                    for (const m of msgs) next = applyIncomingMessageToList(next, m);
+                    return next;
+                });
+                activeGotMessage = true;
+                if (preserveBottom) activePreserveBottom = true;
+            } else {
+                const prev = messagesByChatRef.current.get(chatId) || [];
+                let next = prev;
+                for (const m of msgs) next = applyIncomingMessageToList(next, m);
+                messagesByChatRef.current.set(chatId, next);
+            }
+        }
+
+        if (activeGotMessage && activePreserveBottom) scrollToBottom();
+    };
+
+    const scheduleSseFlush = () => {
+        if (sseFlushFrameRef.current) return;
+        sseFlushFrameRef.current = requestAnimationFrame(() => {
+            sseFlushFrameRef.current = null;
+            flushPendingSseMessages();
+        });
+    };
+
     // 🚀 SSE-DRIVEN: Surgical state updates (zero re-fetch architecture)
     // Uses DOM CustomEvent subscription to guarantee EVERY SSE event fires,
     // bypassing React 18's automatic batching which swallows intermediate useState updates.
@@ -2993,27 +3075,17 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                         }).catch(() => {});
                     }
                     const shouldPreserveBottom = isAtBottomRef.current || isSendingRef.current;
-                    // 🚀 O(1) Instant Message Injection (Meta Standard)
-                    // Functional update chains correctly even when React batches
-                    setMessages(prev => {
-                        const newMsg = sseUpdate.updates.messagePayload;
-                        // Prevent duplicates
-                        if (prev.some(m => String(m.id) === String(newMsg.id) || (m.ultraMsgId && String(m.ultraMsgId) === String(newMsg.ultraMsgId)))) {
-                            return prev;
-                        }
-                        // Smart deduplication: swap optimistic temp message
-                        if (newMsg.from === 'me') {
-                            const pendingIndex = prev.findIndex(m => String(m.id).startsWith('temp') && areSameOutgoingMessage(m, newMsg));
-                            if (pendingIndex !== -1) {
-                                const newArr = mergeOutgoingMessage(prev, newMsg, prev[pendingIndex].id);
-                                return newArr;
-                            }
-                            if (prev.some(m => areSameOutgoingMessage(m, newMsg))) return prev;
-                        }
-
-                        return [...prev, withMessageEntryAnimation(newMsg)];
+                    // 🚀 Inyección Meta-standard con COALESCING: en vez de un setMessages +
+                    // scroll por cada mensaje (N ciclos encimados bajo ráfaga), se bufferea el
+                    // payload y se hace flush UNA vez por frame (flushPendingSseMessages).
+                    // La dedup/swap del optimista es idéntica — ahora vive en
+                    // applyIncomingMessageToList y se aplica a todo el lote de un frame.
+                    pendingSseMsgsRef.current.push({
+                        chatId: activeChatId,
+                        msg: sseUpdate.updates.messagePayload,
+                        preserveBottom: shouldPreserveBottom
                     });
-                    if (shouldPreserveBottom) scrollToBottom();
+                    scheduleSseFlush();
                 } else {
                     // Fallback: SSE hook didn't send payload — do a surgical merge
                     // instead of full array replace (prevents flickering)
