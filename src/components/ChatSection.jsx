@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback, useDeferredValue } from 'react';
 import ConfirmModal from './ui/ConfirmModal';
-import { MapPin, List as ListIcon, ShoppingBag, UserSquare, MousePointerClick, Search, MessageSquare, Plus, Smile, Paperclip, Mic, Square, ArrowLeft, Send, Tag, Pencil, Check, X, Trash2, Briefcase, Kanban, BookOpen, Keyboard, Loader2, Edit2, Reply, Zap, Pin, MessageCirclePlus, Phone, User, Bell, GripVertical, ChevronDown, ChevronUp, Snowflake, LayoutTemplate } from 'lucide-react';
+import { MapPin, List as ListIcon, ShoppingBag, UserSquare, MousePointerClick, Search, MessageSquare, Plus, Smile, Paperclip, Mic, Square, ArrowLeft, Send, Tag, Pencil, Check, X, Trash2, Briefcase, Kanban, BookOpen, Keyboard, Loader2, Edit2, Reply, Zap, Pin, MessageCirclePlus, Phone, User, Bell, GripVertical, ChevronDown, ChevronUp, Snowflake, LayoutTemplate, Workflow } from 'lucide-react';
 import { getCandidates, getCandidateById, blockCandidate, deleteCandidate } from '../services/candidatesService';
+import { getFlows, runFlowListItem } from '../services/flowsService';
 import { substituteVariables } from '../../api/utils/shortcuts.js';
 import ManualProjectsSidepanel from './ManualProjectsSidepanel';
 import { formatRelativeDate } from '../utils/formatters';
@@ -823,6 +824,11 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
     const reminderTemplatesLoadedRef = useRef(false);
     const [reminderTemplateMenuOpen, setReminderTemplateMenuOpen] = useState(false);
     const [applyingReminderTemplateId, setApplyingReminderTemplateId] = useState(null);
+    // Menú "Meter a un flujo" desde el header del chat (lista de flujos existentes).
+    const [flowMenuOpen, setFlowMenuOpen] = useState(false);
+    const [availableFlows, setAvailableFlows] = useState([]);
+    const [flowsLoading, setFlowsLoading] = useState(false);
+    const [runningFlowId, setRunningFlowId] = useState(null);
     // 🎨 Styled Confirm Modal (replaces ugly window.confirm)
     const [confirmModal, setConfirmModal] = useState(null);
 
@@ -1939,6 +1945,19 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         document.addEventListener('click', closeMenu);
         return () => document.removeEventListener('click', closeMenu);
     }, [reminderTemplateMenuOpen]);
+
+    // Menú de flujos: cerrar al clic afuera + cargar la lista de flujos al abrir.
+    useEffect(() => {
+        if (!flowMenuOpen) return;
+        const closeMenu = () => setFlowMenuOpen(false);
+        document.addEventListener('click', closeMenu);
+        setFlowsLoading(true);
+        getFlows().then(res => {
+            setAvailableFlows(res.success ? (res.flows || []) : []);
+            setFlowsLoading(false);
+        });
+        return () => document.removeEventListener('click', closeMenu);
+    }, [flowMenuOpen]);
 
     // HIGH-3: Clean up typing indicator timers on unmount to prevent state updates on unmounted component
     useEffect(() => {
@@ -3521,6 +3540,38 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
             console.error('Failed to auto-silence bot', e);
         }
     };
+
+    // Mete al candidato del chat abierto a un flujo (corre el flujo real para ese candidato,
+    // respetando el dedupe: si ya pasó, no lo re-manda). Pide confirmación porque ejecuta
+    // acciones reales (mensajes, etiquetas, recordatorios).
+    const handleRunCandidateFlow = useCallback(async (flow) => {
+        if (!selectedChat) return;
+        const nombre = selectedChat.nombreReal || selectedChat.nombre || 'este candidato';
+        const confirmed = await new Promise(resolve => setConfirmModal({
+            title: 'Meter al flujo',
+            message: `¿Meter a ${nombre} al flujo "${flow.name}"? Se ejecutarán sus acciones (mensajes, etiquetas, recordatorios, etc.).`,
+            confirmText: 'Meter al flujo',
+            variant: 'warning',
+            onConfirm: () => resolve(true),
+            onCancel: () => resolve(false)
+        }));
+        if (!confirmed) return;
+        setRunningFlowId(flow.id);
+        try {
+            const res = await runFlowListItem(flow.id, selectedChat.id);
+            if (res.success) {
+                showToast && showToast(
+                    res.alreadyExecuted ? `${nombre} ya había pasado por "${flow.name}"` : `${nombre} metido al flujo "${flow.name}"`,
+                    res.alreadyExecuted ? 'info' : 'success'
+                );
+            } else {
+                showToast && showToast(`Error al meter al flujo: ${res.error}`, 'error');
+            }
+        } finally {
+            setRunningFlowId(null);
+            setFlowMenuOpen(false);
+        }
+    }, [selectedChat, showToast]);
 
     const handleBlockToggle = useCallback(async (chatToBlock, e) => {
         if (e) e.stopPropagation();
@@ -5278,12 +5329,16 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                                 </div>
                             </div>
                         </div>
-                        <div className="flex space-x-3 text-[#54656f] dark:text-[#aebac1] items-center">
+                        {/* Iconos del header en 2 renglones (arriba: respuestas/CRM/lupa via order:0;
+                            abajo: los demás via order:2). Se usa flex-wrap + CSS order + un salto de
+                            línea invisible (basis-full) para forzar 2 renglones SIN romper el toolbar
+                            arrastrable (sigue siendo un solo toolbarOrder; el order solo decide el renglón). */}
+                        <div className="flex flex-wrap justify-end gap-x-2 gap-y-1 text-[#54656f] dark:text-[#aebac1] items-center">
                             {/* Silenciar IA Toggle */}
                             {!isMobile && (() => {
                                 const iaSilenced = isIaSilenced(selectedChat);
                                 return (
-                                <div className="flex items-center gap-2 mr-2">
+                                <div className="flex items-center gap-2 mr-2" style={{ order: 2 }}>
                                     <span className={`text-xs font-medium ${iaSilenced ? 'text-red-500' : 'text-gray-400 dark:text-gray-500'} select-none whitespace-nowrap [@container(max-width:1060px)]:hidden`}>
                                         {iaSilenced ? 'IA Silenciada' : 'IA Dinámica'}
                                     </span>
@@ -5296,6 +5351,53 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                                         <div className={`absolute w-3 h-3 rounded-full bg-white shadow-sm transition-transform duration-200 ${iaSilenced ? 'translate-x-4' : 'translate-x-0.5'}`}>
                                         </div>
                                     </button>
+                                    {/* Meter a un flujo (junto al toggle de IA) */}
+                                    <div className="relative">
+                                        <button
+                                            type="button"
+                                            onClick={(e) => { e.stopPropagation(); setFlowMenuOpen(v => !v); }}
+                                            className={`p-2 rounded-full text-[#54656f] dark:text-[#aebac1] hover:text-indigo-500 dark:hover:text-indigo-400 hover:bg-black/5 dark:hover:bg-white/5 transition-colors ${flowMenuOpen ? 'bg-black/5 dark:bg-white/5 text-indigo-500 dark:text-indigo-400' : ''}`}
+                                            title="Meter a un flujo"
+                                            aria-label="Meter a un flujo"
+                                        >
+                                            <Workflow className="w-5 h-5" />
+                                        </button>
+                                        {flowMenuOpen && (
+                                            <div
+                                                onClick={(e) => e.stopPropagation()}
+                                                className="absolute right-0 top-full mt-1 w-64 bg-white dark:bg-[#202c33] rounded-lg shadow-xl z-50 border border-gray-100 dark:border-gray-700 overflow-hidden"
+                                            >
+                                                <div className="px-3 py-2 text-xs font-bold text-[#8696a0] border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-[#111b21]">
+                                                    Meter a un flujo
+                                                </div>
+                                                <div className="max-h-72 overflow-y-auto">
+                                                    {flowsLoading ? (
+                                                        <div className="px-3 py-4 text-center text-xs text-gray-400">Cargando…</div>
+                                                    ) : availableFlows.length === 0 ? (
+                                                        <div className="px-3 py-4 text-center text-xs text-gray-400">No hay flujos creados</div>
+                                                    ) : (
+                                                        availableFlows.map(f => (
+                                                            <button
+                                                                key={f.id}
+                                                                type="button"
+                                                                onClick={() => handleRunCandidateFlow(f)}
+                                                                disabled={runningFlowId === f.id}
+                                                                className="w-full text-left px-3 py-2.5 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors disabled:opacity-50 flex items-center gap-2"
+                                                            >
+                                                                <Workflow className="w-3.5 h-3.5 shrink-0 text-indigo-500" />
+                                                                <span className="flex-1 min-w-0">
+                                                                    <span className="block text-sm font-bold text-slate-800 dark:text-slate-100 truncate">{f.name}</span>
+                                                                    <span className="block text-[10px] text-slate-400 dark:text-slate-500 truncate">
+                                                                        {runningFlowId === f.id ? 'Metiendo…' : (f.active ? 'Activo' : 'Inactivo')}
+                                                                    </span>
+                                                                </span>
+                                                            </button>
+                                                        ))
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
                                     <button
                                         type="button"
                                         onClick={(e) => { e.stopPropagation(); setReminderModalCandidate(selectedChat); }}
@@ -5348,6 +5450,10 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                                 );
                             })()}
 
+                            {/* Salto de línea invisible: fuerza el 2º renglón (order:1, entre el
+                                renglón de arriba order:0 y el de abajo order:2). Alto 0 = no se ve. */}
+                            {!isMobile && <div className="basis-full h-0" style={{ order: 1 }} aria-hidden="true" />}
+
                             {/* Draggable Icon Toolbar */}
                             {!isMobile && toolbarOrder.map((iconId) => {
                                 const dragProps = {
@@ -5368,10 +5474,12 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                                 };
 
                                 const baseClass = `p-2 rounded-full transition-all cursor-grab active:cursor-grabbing ${draggedIcon === iconId ? 'opacity-40 scale-90' : 'opacity-100'}`;
+                                // Renglón: respuestas (banco) y CRM van ARRIBA (order:0); el resto ABAJO (order:2).
+                                const iconOrder = (iconId === 'quick_replies' || iconId === 'crm_manual') ? 0 : 2;
 
                                 if (iconId === 'vacancies') {
                                     return (
-                                        <div key={iconId} className="relative z-50" {...dragProps}>
+                                        <div key={iconId} className="relative z-50" style={{ order: iconOrder }} {...dragProps}>
                                             <button 
                                                 onClick={(e) => { e.stopPropagation(); setShowDropdown(showDropdown === 'vacancies' ? null : 'vacancies'); }}
                                                 className={`${baseClass} hover:bg-black/5 dark:hover:bg-white/5 ${showDropdown === 'vacancies' ? 'bg-black/5 dark:bg-white/5' : ''}`} title="Inyectar información de Vacante">
@@ -5441,7 +5549,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
 
                                 if (iconId === 'tags') {
                                     return (
-                                        <div key={iconId} className="relative z-50" {...dragProps}>
+                                        <div key={iconId} className="relative z-50" style={{ order: iconOrder }} {...dragProps}>
                                             <button 
                                                 onClick={(e) => { e.stopPropagation(); if (showDropdown === 'tags') { setShowDropdown(null); setTagSearch(''); } else { setShowDropdown('tags'); } }}
                                                 className={`${baseClass} hover:bg-black/5 dark:hover:bg-white/5 ${showDropdown === 'tags' ? 'bg-black/5 dark:bg-white/5' : ''}`}>
@@ -5640,9 +5748,10 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
 
                                 if (iconId === 'crm_manual') {
                                     return (
-                                        <button 
+                                        <button
                                             key={iconId}
                                             {...dragProps}
+                                            style={{ order: iconOrder }}
                                             onClick={() => setShowRightPanel(!showRightPanel)}
                                             className={`${baseClass} ml-1 ${showRightPanel ? 'bg-indigo-50 text-indigo-500 dark:bg-indigo-500/20' : 'hover:bg-black/5 dark:hover:bg-white/5 text-[#54656f] dark:text-[#aebac1]'}`}
                                             title="CRM Manual"
@@ -5654,9 +5763,10 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
 
                                 if (iconId === 'quick_replies') {
                                     return (
-                                        <button 
+                                        <button
                                             key={iconId}
                                             {...dragProps}
+                                            style={{ order: iconOrder }}
                                             onClick={() => setQuickRepliesPanelOpen(!showQuickRepliesPanel)}
                                             className={`${baseClass} ${showQuickRepliesPanel ? 'bg-green-50 text-green-600 dark:bg-green-500/20 dark:text-green-400' : 'hover:bg-black/5 dark:hover:bg-white/5 text-[#54656f] dark:text-[#aebac1]'}`}
                                             title="Banco de Respuestas"
@@ -5669,8 +5779,9 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                                 return null;
                             })}
 
-                            {/* Search icon */}
+                            {/* Search icon — renglón de arriba (order:0), junto a respuestas y CRM */}
                             <button
+                                style={{ order: 0 }}
                                 onClick={() => { setShowChatSearch(v => !v); if (!showChatSearch) setTimeout(() => chatSearchInputRef.current?.focus(), 50); }}
                                 className={`p-2 rounded-full transition-all ${showChatSearch ? 'bg-black/10 dark:bg-white/10 text-[#111b21] dark:text-white' : 'hover:bg-black/5 dark:hover:bg-white/5 text-[#54656f] dark:text-[#aebac1]'}`}
                                 title="Buscar en conversación"
