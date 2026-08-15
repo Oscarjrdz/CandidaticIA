@@ -1,7 +1,95 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { X } from 'lucide-react';
 import { NODE_DEFS, COLOR_CLASSES, PROFILE_FILTER_LABELS, ETIQUETA_MODE_LABELS, GENEROS } from './nodeTypes';
 import FlowSelect from './FlowSelect';
+import { getFlowCounters, getFlowCounterRange } from '../../services/flowsService';
+
+const StatCell = ({ label, value }) => (
+    <div className="rounded-xl border border-gray-200 dark:border-gray-700 p-3 text-center">
+        <div className="text-2xl font-bold text-gray-900 dark:text-white tabular-nums">{value ?? '—'}</div>
+        <div className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">{label}</div>
+    </div>
+);
+
+// Desglose por fecha de un nodo Contador. El total incluye el histórico (SET); el
+// desglose hoy/ayer/semana/mes y el rango personalizado salen del ZSET de timestamps,
+// que empezó a registrarse al liberar esta feature (los pasos previos no tienen fecha).
+const ContadorStats = ({ flowId, nodeId }) => {
+    const todayLocal = () => new Date().toLocaleDateString('sv-SE'); // YYYY-MM-DD local (Monterrey)
+    const [stats, setStats] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [from, setFrom] = useState(todayLocal);
+    const [to, setTo] = useState(todayLocal);
+    const [rangeCount, setRangeCount] = useState(null);
+    const [rangeLoading, setRangeLoading] = useState(false);
+    const [rangeError, setRangeError] = useState('');
+
+    useEffect(() => {
+        let alive = true;
+        if (!flowId) { setLoading(false); return; }
+        setLoading(true);
+        getFlowCounters(flowId).then(res => {
+            if (!alive) return;
+            setStats(res.success ? (res.counters?.[nodeId] || null) : null);
+            setLoading(false);
+        });
+        return () => { alive = false; };
+    }, [flowId, nodeId]);
+
+    const calcRange = async () => {
+        setRangeError('');
+        if (from > to) { setRangeError('El "desde" no puede ser posterior al "hasta".'); return; }
+        setRangeLoading(true);
+        setRangeCount(null);
+        const res = await getFlowCounterRange(flowId, nodeId, from, to);
+        setRangeLoading(false);
+        if (res.success) setRangeCount(res.count);
+        else setRangeError(res.error || 'No se pudo calcular');
+    };
+
+    return (
+        <div className="mt-5 pt-4 border-t border-gray-100 dark:border-gray-700">
+            <label className="text-xs text-gray-500 dark:text-gray-400 mb-2 block">Conteo por periodo</label>
+            {loading ? (
+                <p className="text-xs text-gray-400">Cargando…</p>
+            ) : (
+                <>
+                    <div className="grid grid-cols-2 gap-2 mb-2">
+                        <StatCell label="Total (histórico)" value={stats?.total} />
+                        <StatCell label="Hoy" value={stats?.hoy} />
+                        <StatCell label="Ayer" value={stats?.ayer} />
+                        <StatCell label="Esta semana" value={stats?.estaSemana} />
+                    </div>
+                    <div className="grid grid-cols-1 gap-2">
+                        <StatCell label="Este mes" value={stats?.esteMes} />
+                    </div>
+
+                    <div className="mt-4">
+                        <label className="text-xs text-gray-500 dark:text-gray-400 mb-2 block">Rango personalizado</label>
+                        <div className="flex items-center gap-2">
+                            <input type="date" value={from} max={to} onChange={(e) => setFrom(e.target.value)}
+                                className="flex-1 px-2.5 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 dark:bg-gray-800 text-xs focus:outline-none focus:ring-2 focus:ring-gray-500" />
+                            <span className="text-xs text-gray-400">a</span>
+                            <input type="date" value={to} min={from} onChange={(e) => setTo(e.target.value)}
+                                className="flex-1 px-2.5 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 dark:bg-gray-800 text-xs focus:outline-none focus:ring-2 focus:ring-gray-500" />
+                        </div>
+                        <button onClick={calcRange} disabled={rangeLoading}
+                            className="mt-2 w-full px-3 py-2 rounded-lg text-xs font-semibold bg-gray-800 dark:bg-gray-700 text-white hover:bg-gray-700 dark:hover:bg-gray-600 transition-colors disabled:opacity-50">
+                            {rangeLoading ? 'Calculando…' : 'Calcular rango'}
+                        </button>
+                        {rangeError && <p className="mt-2 text-xs text-red-500">{rangeError}</p>}
+                        {rangeCount != null && !rangeError && (
+                            <p className="mt-2 text-sm text-gray-700 dark:text-gray-200">
+                                <strong className="tabular-nums">{rangeCount}</strong> candidato{rangeCount === 1 ? '' : 's'} entre {from} y {to}.
+                            </p>
+                        )}
+                    </div>
+                    <p className="mt-3 text-[11px] text-gray-400">El desglose por fecha cuenta desde que se activó esta función; el total sí incluye el histórico completo.</p>
+                </>
+            )}
+        </div>
+    );
+};
 
 const RadioGroup = ({ options, value, onChange }) => (
     <div className="space-y-2">
@@ -65,7 +153,7 @@ const MultiSelectChecklist = ({ items, selected, onChange, searchable }) => {
     );
 };
 
-const NodeConfigDrawer = ({ node, meta, quickReplies, reminderTemplates, projects, onChange, onClose }) => {
+const NodeConfigDrawer = ({ node, flowId, meta, quickReplies, reminderTemplates, projects, onChange, onClose }) => {
     if (!node) return null;
     const def = NODE_DEFS[node.type] || NODE_DEFS.contador;
     const colors = COLOR_CLASSES[def.color] || COLOR_CLASSES.gray;
@@ -408,6 +496,7 @@ const NodeConfigDrawer = ({ node, meta, quickReplies, reminderTemplates, project
                             className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 dark:bg-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-gray-500"
                         />
                         <p className="mt-2 text-xs text-gray-400">Cuenta candidatos únicos que llegan a este punto del flujo. No manda nada ni modifica al candidato.</p>
+                        <ContadorStats flowId={flowId} nodeId={node.id} />
                     </div>
                 )}
 

@@ -159,7 +159,7 @@ const FlowEditorInner = ({ flowId, onBack }) => {
             const res = await getFlowCounters(flowId);
             if (!res.success) return;
             setNodes(nds => nds.map(n => n.type === 'contador'
-                ? { ...n, data: { ...n.data, liveCount: res.counters[n.id] ?? n.data.liveCount ?? 0 } }
+                ? { ...n, data: { ...n.data, liveCount: res.counters[n.id]?.total ?? n.data.liveCount ?? 0 } }
                 : n));
         })();
     }, [flowId, nodes.length]);
@@ -413,6 +413,7 @@ const FlowEditorInner = ({ flowId, onBack }) => {
             {selectedNode && (
                 <NodeConfigDrawer
                     node={selectedNode}
+                    flowId={flowId}
                     meta={meta}
                     quickReplies={quickReplies}
                     reminderTemplates={reminderTemplates}

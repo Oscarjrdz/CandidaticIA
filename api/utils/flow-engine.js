@@ -44,6 +44,10 @@ function toAbsoluteMediaUrl(u) {
 }
 export const EXEC_SET_PREFIX = 'flow:executed:v1:';   // set: candidatos que COMPLETARON el flujo
 export const COUNTER_PREFIX = 'flow:counter:v1:';
+// ZSET paralelo al contador: member = candidatoId, score = ms de su PRIMER paso por el
+// nodo (ZADD NX no lo pisa en repasos). Habilita el desglose por fecha (hoy/ayer/semana/
+// mes/rango) sin tocar el SET de total (que preserva el histórico previo a esta feature).
+export const COUNTER_TS_PREFIX = 'flow:counter:ts:v1:';
 // Ledger de progreso por candidato/flujo (hash nodeId → '1'/'0'): permite RETOMAR una
 // corrida que quedó a medias sin re-ejecutar los nodos ya hechos (no re-enviar WhatsApp,
 // no re-crear recordatorios). Se borra al completar; TTL como red de seguridad.
@@ -571,9 +575,13 @@ export async function evaluateOrExecute(node, candidate, flowId, redis, opts = {
             if (opts.skipCounters) return true; // modo test: no ensucia las métricas reales
             try {
                 const counterKey = `${COUNTER_PREFIX}${flowId}:${node.id}`;
+                const counterTsKey = `${COUNTER_TS_PREFIX}${flowId}:${node.id}`;
                 const [[, added], [, count]] = await redis.pipeline()
                     .sadd(counterKey, candidate.id)
                     .scard(counterKey)
+                    // Registra el timestamp del primer paso (NX = no lo pisa si ya existe) para el
+                    // desglose por fecha. No rompe nada si falla: el total sigue saliendo del SET.
+                    .zadd(counterTsKey, 'NX', Date.now(), candidate.id)
                     .exec();
                 // Solo empuja el push si el candidato SUMÓ al set (sadd=1) — si ya estaba
                 // (reintento del mismo evento), el número en pantalla no cambió, no hay

@@ -35,6 +35,19 @@ export const getFlowCounters = async (id) => {
     }
 };
 
+// Rango personalizado "desde/hasta" de un nodo contador (fechas YYYY-MM-DD, zona Monterrey).
+export const getFlowCounterRange = async (flowId, nodeId, from, to) => {
+    try {
+        const params = new URLSearchParams({ id: flowId, mode: 'counter_range', nodeId, from, to });
+        const res = await fetch(`/api/flows?${params.toString()}`);
+        const data = await res.json();
+        if (data.success) return { success: true, count: data.count };
+        return { success: false, error: data.error };
+    } catch (error) {
+        return { success: false, error: error.message };
+    }
+};
+
 // Métricas del tablero de Flujos: altas por etiqueta en un rango (hoy/ayer/semana/mes
 // o desde-hasta). Devuelve [{name, total}] ya ordenado desc por el backend.
 export const getFlowTagMetrics = async ({ rango, desde, hasta } = {}) => {

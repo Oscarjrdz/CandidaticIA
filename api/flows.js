@@ -6,6 +6,25 @@ import { getBotVacancies, buildDateKeys, getCapturesByAllTags, getCapturesTotal 
 const REDIS_KEY = 'flows:v1';
 const EXEC_SET_PREFIX = 'flow:executed:v1:';
 const COUNTER_PREFIX = 'flow:counter:v1:';
+const COUNTER_TS_PREFIX = 'flow:counter:ts:v1:'; // ZSET candidatoId → ms del primer paso (desglose por fecha)
+
+// Rangos de fecha en zona horaria Monterrey (UTC-6 todo el año). Devuelve los ms de inicio
+// de: hoy, ayer, lunes de esta semana y día 1 de este mes — para ZCOUNT sobre el ZSET.
+const MTY_OFFSET_MS = 6 * 3600000;
+function mtyDateStartMs(dateStr) {
+    // dateStr = 'YYYY-MM-DD' (fecha local Monterrey) → ms UTC de las 00:00 Monterrey de ese día
+    return new Date(`${dateStr}T00:00:00.000Z`).getTime() + MTY_OFFSET_MS;
+}
+function mtyRanges() {
+    const todayStr = new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Monterrey' });
+    const yesterdayStr = new Date(Date.now() - 86400000).toLocaleDateString('sv-SE', { timeZone: 'America/Monterrey' });
+    const todayStart = mtyDateStartMs(todayStr);
+    const yesterdayStart = mtyDateStartMs(yesterdayStr);
+    const dow = new Date(`${todayStr}T00:00:00.000Z`).getUTCDay(); // 0=Dom … 6=Sáb (del día calendario)
+    const mondayStart = todayStart - ((dow + 6) % 7) * 86400000;    // lunes de esta semana
+    const monthStart = mtyDateStartMs(`${todayStr.slice(0, 8)}01`); // día 1 del mes
+    return { todayStart, yesterdayStart, mondayStart, monthStart };
+}
 
 // 51 municipios oficiales de Nuevo León (nombres canónicos, mismos valores que
 // MUNICIPIO_MAP en api/utils/ai.js — no reinventar la lista aquí si esa cambia).
@@ -115,16 +134,51 @@ export default async function handler(req, res) {
             const counterNodeIds = (flow.nodes || []).filter(n => n.type === 'contador').map(n => n.id);
             if (!counterNodeIds.length) return res.status(200).json({ success: true, counters: {} });
 
+            const { todayStart, yesterdayStart, mondayStart, monthStart } = mtyRanges();
+
+            // Por nodo: total (SET, incluye histórico) + desglose por fecha (ZSET de timestamps).
             const pipeline = redis.pipeline();
-            counterNodeIds.forEach(nodeId => pipeline.scard(`${COUNTER_PREFIX}${flow.id}:${nodeId}`));
+            counterNodeIds.forEach(nodeId => {
+                const setKey = `${COUNTER_PREFIX}${flow.id}:${nodeId}`;
+                const tsKey = `${COUNTER_TS_PREFIX}${flow.id}:${nodeId}`;
+                pipeline.scard(setKey);                                  // total
+                pipeline.zcount(tsKey, todayStart, '+inf');             // hoy
+                pipeline.zcount(tsKey, yesterdayStart, `(${todayStart}`); // ayer
+                pipeline.zcount(tsKey, mondayStart, '+inf');            // esta semana
+                pipeline.zcount(tsKey, monthStart, '+inf');             // este mes
+            });
             const results = await pipeline.exec();
 
             const counters = {};
             counterNodeIds.forEach((nodeId, i) => {
-                counters[nodeId] = results[i]?.[1] || 0;
+                const base = i * 5;
+                counters[nodeId] = {
+                    total: results[base]?.[1] || 0,
+                    hoy: results[base + 1]?.[1] || 0,
+                    ayer: results[base + 2]?.[1] || 0,
+                    estaSemana: results[base + 3]?.[1] || 0,
+                    esteMes: results[base + 4]?.[1] || 0,
+                };
             });
 
             return res.status(200).json({ success: true, counters });
+        }
+
+        // Rango personalizado "desde/hasta" para UN nodo contador (inclusive ambos extremos).
+        if (method === 'GET' && id && mode === 'counter_range') {
+            const nodeId = String(req.query.nodeId || '').trim();
+            const from = String(req.query.from || '').trim(); // YYYY-MM-DD (Monterrey)
+            const to = String(req.query.to || '').trim();     // YYYY-MM-DD (Monterrey)
+            if (!nodeId || !/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to)) {
+                return res.status(400).json({ success: false, error: 'Parámetros inválidos (nodeId, from, to)' });
+            }
+            const fromMs = mtyDateStartMs(from);
+            const toMsExclusive = mtyDateStartMs(to) + 86400000; // incluye todo el día "to"
+            if (toMsExclusive <= fromMs) {
+                return res.status(400).json({ success: false, error: 'El rango "hasta" debe ser igual o posterior a "desde"' });
+            }
+            const count = await redis.zcount(`${COUNTER_TS_PREFIX}${id}:${nodeId}`, fromMs, `(${toMsExclusive}`);
+            return res.status(200).json({ success: true, count: count || 0, from, to });
         }
 
         if (method === 'GET' && id && mode === 'filtered_candidates') {
@@ -273,6 +327,7 @@ export default async function handler(req, res) {
             cleanupPipeline.del(`${EXEC_SET_PREFIX}${id}`);
             (flow.nodes || []).filter(n => n.type === 'contador').forEach(n => {
                 cleanupPipeline.del(`${COUNTER_PREFIX}${id}:${n.id}`);
+                cleanupPipeline.del(`${COUNTER_TS_PREFIX}${id}:${n.id}`);
             });
             // Hashes del nodo de incompletos-en-silencio (contador de pases + último disparo por candidato)
             cleanupPipeline.del(`flow:silence:count:v1:${id}`);
