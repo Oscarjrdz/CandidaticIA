@@ -54,6 +54,19 @@ function defaultFlowNodesLista() {
     };
 }
 
+// Flujo de INCOMPLETOS EN SILENCIO (disparado por cron api/cron/flow-incompletos.js):
+// arranca con el nodo que espera N horas de silencio de un candidato con perfil incompleto.
+// silenceHours = horas sin responder para disparar; maxPasses = tope de veces que un
+// candidato puede pasar por el nodo (0 = una sola vez).
+function defaultFlowNodesIncompletos() {
+    return {
+        nodes: [
+            { id: 'n1', type: 'inicio_incompleto_silencio', position: { x: 80, y: 200 }, data: { silenceHours: 1, maxPasses: 0 } }
+        ],
+        edges: []
+    };
+}
+
 export default async function handler(req, res) {
     const userId = await validateAdminSession(req);
     if (!userId) return res.status(401).json({ error: 'No autorizado' });
@@ -212,7 +225,9 @@ export default async function handler(req, res) {
                 active: false,
                 createdAt: new Date().toISOString(),
                 updatedAt: new Date().toISOString(),
-                ...(rootType === 'lista' ? defaultFlowNodesLista() : defaultFlowNodes())
+                ...(rootType === 'lista' ? defaultFlowNodesLista()
+                    : rootType === 'incompletos' ? defaultFlowNodesIncompletos()
+                    : defaultFlowNodes())
             };
 
             flows.push(newFlow);
@@ -259,6 +274,9 @@ export default async function handler(req, res) {
             (flow.nodes || []).filter(n => n.type === 'contador').forEach(n => {
                 cleanupPipeline.del(`${COUNTER_PREFIX}${id}:${n.id}`);
             });
+            // Hashes del nodo de incompletos-en-silencio (contador de pases + último disparo por candidato)
+            cleanupPipeline.del(`flow:silence:count:v1:${id}`);
+            cleanupPipeline.del(`flow:silence:lastfire:v1:${id}`);
             await cleanupPipeline.exec().catch(() => {});
 
             return res.status(200).json({ success: true, message: 'Flow deleted' });

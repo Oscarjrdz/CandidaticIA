@@ -347,7 +347,7 @@ const FlowEditorInner = ({ flowId, onBack }) => {
     // El toggle también vive dentro del nodo "inicio" (además del botón del toolbar) —
     // se inyecta al vuelo, no se guarda como parte de node.data (stripTransientData lo quita).
     useEffect(() => {
-        setNodes(nds => nds.map(n => n.type === 'inicio'
+        setNodes(nds => nds.map(n => (n.type === 'inicio' || n.type === 'inicio_incompleto_silencio')
             ? { ...n, data: { ...n.data, active: flowMeta.active, onToggleActive: handleToggleActive } }
             : n));
     }, [flowMeta.active, handleToggleActive]);

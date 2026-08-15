@@ -2,7 +2,8 @@ import React, { useState, useRef, useEffect } from 'react';
 import { ArrowLeft, Plus, Save, Check } from 'lucide-react';
 import { NODE_DEFS, COLOR_CLASSES } from './nodeTypes';
 
-const ADDABLE_TYPES = Object.keys(NODE_DEFS).filter(t => t !== 'inicio' && t !== 'inicio_lista');
+const ENTRY_TYPES = ['inicio', 'inicio_lista', 'inicio_incompleto_silencio'];
+const ADDABLE_TYPES = Object.keys(NODE_DEFS).filter(t => !ENTRY_TYPES.includes(t));
 
 const FlowToolbar = ({ flowName, active, dirty, saving, onAddNode, onSave, onToggleActive, onRename, onBack }) => {
     const [menuOpen, setMenuOpen] = useState(false);

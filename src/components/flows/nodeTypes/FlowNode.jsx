@@ -138,7 +138,7 @@ const FlowNode = ({ id, type, data, selected }) => {
                 <Handle type="target" position={Position.Left} className="!w-3 !h-3 !bg-gray-400 !border-2 !border-white dark:!border-gray-900" />
             )}
 
-            {data.onDelete && type !== 'inicio' && type !== 'inicio_lista' && (
+            {data.onDelete && type !== 'inicio' && type !== 'inicio_lista' && type !== 'inicio_incompleto_silencio' && (
                 <button
                     onClick={(e) => { e.stopPropagation(); data.onDelete(id); }}
                     className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-gray-700 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600 z-10"
@@ -167,7 +167,7 @@ const FlowNode = ({ id, type, data, selected }) => {
                             {data.liveCount ?? '—'}
                         </span>
                     )}
-                    {type === 'inicio' && (
+                    {(type === 'inicio' || type === 'inicio_incompleto_silencio') && (
                         <InicioToggle active={!!data.active} onToggle={data.onToggleActive} />
                     )}
                 </div>

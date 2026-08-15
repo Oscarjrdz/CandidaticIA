@@ -132,6 +132,9 @@
         },
         "api/cron/agent-candidatic.js": {
             "maxDuration": 60
+        },
+        "api/cron/flow-incompletos.js": {
+            "maxDuration": 60
         }
     },
     "crons": [
@@ -149,6 +152,10 @@
         },
         {
             "path": "/api/cron/agent-candidatic",
+            "schedule": "*/15 * * * *"
+        },
+        {
+            "path": "/api/cron/flow-incompletos",
             "schedule": "*/15 * * * *"
         }
     ]

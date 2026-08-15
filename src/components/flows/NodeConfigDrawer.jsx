@@ -138,6 +138,40 @@ const NodeConfigDrawer = ({ node, meta, quickReplies, reminderTemplates, project
                     </div>
                 )}
 
+                {node.type === 'inicio_incompleto_silencio' && (
+                    <div className="space-y-5">
+                        <p className="text-xs text-gray-400">
+                            Se dispara solo (por un cron cada 15 min) para candidatos con perfil <b>incompleto</b> que llevan cierto tiempo <b>sin responderle a Brenda</b>. Es como el reenganche, pero corriendo las acciones que armes abajo.
+                        </p>
+                        <div>
+                            <label className="text-xs text-gray-500 dark:text-gray-400 mb-2 block">Horas de silencio para disparar</label>
+                            <input
+                                type="number"
+                                min="1"
+                                step="1"
+                                value={data.silenceHours ?? 1}
+                                onChange={(e) => patch({ silenceHours: Math.max(1, parseInt(e.target.value, 10) || 1) })}
+                                className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 dark:bg-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                            />
+                            <p className="text-xs text-gray-400 mt-1.5">Se mide desde el último mensaje del candidato (o desde el último disparo). Ej. 1 = espera 1 hora de silencio.</p>
+                        </div>
+                        <div>
+                            <label className="text-xs text-gray-500 dark:text-gray-400 mb-2 block">Máximo de veces que puede pasar por el nodo</label>
+                            <input
+                                type="number"
+                                min="0"
+                                step="1"
+                                value={data.maxPasses ?? 0}
+                                onChange={(e) => patch({ maxPasses: Math.max(0, parseInt(e.target.value, 10) || 0) })}
+                                className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 dark:bg-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                            />
+                            <p className="text-xs text-gray-400 mt-1.5">
+                                <b>0</b> = dispara 1 sola vez por candidato (los que nunca han pasado). <b>1</b> = los que nunca pasaron + los que pasaron 1 vez (2 disparos). En general dispara {(Number(data.maxPasses ?? 0)) + 1} {(Number(data.maxPasses ?? 0)) + 1 === 1 ? 'vez' : 'veces'} en total, esperando el silencio entre cada una.
+                            </p>
+                        </div>
+                    </div>
+                )}
+
                 {node.type === 'etiqueta' && (
                     <div className="space-y-4">
                         <RadioGroup

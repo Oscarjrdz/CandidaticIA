@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Workflow, Trash2, Zap, ListChecks } from 'lucide-react';
+import { Plus, Workflow, Trash2, Zap, ListChecks, AlarmClock } from 'lucide-react';
 import Button from '../ui/Button';
 import Modal from '../ui/Modal';
 import { useToastContext } from '../../contexts/ToastContext';
@@ -38,7 +38,8 @@ const FlowsGallery = ({ onOpenFlow }) => {
     const handleCreate = async () => {
         if (!nameDraft.trim()) return;
         setCreating(true);
-        const res = await createFlow(nameDraft.trim(), rootTypeDraft === 'lista' ? 'lista' : undefined);
+        const rootTypeMap = { lista: 'lista', incompletos: 'incompletos' };
+        const res = await createFlow(nameDraft.trim(), rootTypeMap[rootTypeDraft]);
         setCreating(false);
         if (res.success) {
             setShowCreateModal(false);
@@ -170,6 +171,20 @@ const FlowsGallery = ({ onOpenFlow }) => {
                             <span>
                                 <span className="block text-sm font-semibold text-gray-900 dark:text-white">Lista filtrada (manual)</span>
                                 <span className="block text-xs text-gray-500 dark:text-gray-400">Para candidatos que ya existen ("del pasado"). No se dispara solo — filtras, cargas la lista y le das Run.</span>
+                            </span>
+                        </button>
+                        <button
+                            onClick={() => setRootTypeDraft('incompletos')}
+                            className={`w-full flex items-start gap-3 p-3 rounded-xl border text-left transition-colors ${
+                                rootTypeDraft === 'incompletos'
+                                    ? 'border-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 dark:border-indigo-600'
+                                    : 'border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50'
+                            }`}
+                        >
+                            <AlarmClock className="w-4 h-4 text-indigo-500 shrink-0 mt-0.5" />
+                            <span>
+                                <span className="block text-sm font-semibold text-gray-900 dark:text-white">Incompleto sin responder</span>
+                                <span className="block text-xs text-gray-500 dark:text-gray-400">Se dispara solo cuando un candidato con perfil incompleto lleva N horas sin responderle a Brenda (como el reenganche).</span>
                             </span>
                         </button>
                     </div>

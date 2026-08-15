@@ -221,6 +221,13 @@ export async function evaluateOrExecute(node, candidate, flowId, redis, opts = {
         case 'inicio_lista':
             return true;
 
+        // Raíz de un flujo de INCOMPLETOS EN SILENCIO (disparado por cron, no en vivo):
+        // la elegibilidad real (perfil incompleto + N horas de silencio + tope de pases)
+        // ya la resolvió api/cron/flow-incompletos.js antes de llamar al motor, así que
+        // aquí el nodo siempre "pasa" — igual que inicio_lista.
+        case 'inicio_incompleto_silencio':
+            return true;
+
         case 'etiqueta': {
             const mode = data.mode || 'todas';
             const tags = Array.isArray(candidate.tags) ? candidate.tags : [];
@@ -616,6 +623,12 @@ async function runOneFlow(redis, flow, candidateId, candidate, opts = {}) {
     if (!nodes.length) return passed;
 
     const testMode = !!opts.skipClaim;
+    // Modo ephemeral (cron de incompletos-en-silencio): corre el grafo FRESCO en cada
+    // disparo. La cadencia la gobierna el contador de pases del cron, NO el dedupe
+    // permanente (flow:executed) — por eso se salta el claim de "ya completado" y el
+    // ledger de retomar. SÍ toma el lock de concurrencia y SÍ incrementa los contadores.
+    const ephemeral = !!opts.ephemeral;
+    const useClaim = !testMode && !ephemeral;   // idempotencia permanente (flujos normales en vivo)
     const execKey = `${EXEC_SET_PREFIX}${flow.id}`;
     const progressKey = `${PROGRESS_PREFIX}${flow.id}:${candidateId}`;
     const lockKey = `${RUN_LOCK_PREFIX}${flow.id}:${candidateId}`;
@@ -623,11 +636,15 @@ async function runOneFlow(redis, flow, candidateId, candidate, opts = {}) {
     let prior = {};          // ledger de una corrida previa parcial (nodeId → '1'/'0')
     let lockAcquired = false;
 
-    if (!testMode) {
+    if (useClaim) {
         if (await redis.sismember(execKey, candidateId)) return passed; // ya completado
+    }
+    if (!testMode) {
         const lock = await redis.set(lockKey, '1', 'EX', RUN_LOCK_TTL_SEC, 'NX').catch(() => null);
         if (lock !== 'OK') return passed; // otra invocación lo está corriendo (o fallo transitorio)
         lockAcquired = true;
+    }
+    if (useClaim) {
         prior = (await redis.hgetall(progressKey)) || {};
     }
 
@@ -685,7 +702,8 @@ async function runOneFlow(redis, flow, candidateId, candidate, opts = {}) {
 
             // Persistir el avance ANTES de seguir: si la instancia muere aquí, el próximo
             // disparo retoma desde el siguiente nodo (no re-envía lo ya enviado).
-            if (!testMode) {
+            // En modo ephemeral no hay ledger: cada disparo del cron corre fresco.
+            if (useClaim) {
                 await redis.pipeline()
                     .hset(progressKey, node.id, result ? '1' : '0')
                     .expire(progressKey, PROGRESS_TTL_SEC)
@@ -694,7 +712,8 @@ async function runOneFlow(redis, flow, candidateId, candidate, opts = {}) {
         }
 
         // Grafo completo → marcar candidato como terminado y limpiar el ledger.
-        if (!testMode) {
+        // (No en ephemeral: no se marca "completado para siempre" — puede volver a disparar.)
+        if (useClaim) {
             await redis.pipeline().sadd(execKey, candidateId).del(progressKey).exec();
         }
     } finally {
@@ -720,7 +739,11 @@ export async function runFlowsForCandidate(candidateId, candidateSnapshot) {
 
         const raw = await getCachedConfig(redis, FLOWS_KEY);
         const flows = raw ? JSON.parse(raw) : [];
-        const active = flows.filter(f => f.active && Array.isArray(f.nodes) && f.nodes.length);
+        // Los flujos de INCOMPLETOS EN SILENCIO se disparan por cron (por AUSENCIA de
+        // respuesta), no en este path en vivo (que corre al COMPLETAR el perfil). Se
+        // excluyen aquí para que el evento de completado nunca los dispare.
+        const active = flows.filter(f => f.active && Array.isArray(f.nodes) && f.nodes.length
+            && !f.nodes.some(n => n.type === 'inicio_incompleto_silencio'));
         if (!active.length) return;
 
         const candidate = { ...candidateSnapshot };
@@ -750,6 +773,16 @@ export async function runFlowTest(flow, candidateSnapshot) {
 
     const passed = await runOneFlow(redis, flow, candidateSnapshot.id, { ...candidateSnapshot }, { skipClaim: true, skipCounters: true });
     return Object.fromEntries(passed);
+}
+
+// Disparador del cron de INCOMPLETOS EN SILENCIO (api/cron/flow-incompletos.js): corre
+// el flujo REAL para un candidato en modo ephemeral — sin dedupe permanente (la cadencia
+// la controla el contador de pases del cron) pero con lock de concurrencia y contadores.
+// El cron ya validó incompleto + silencio + tope de pases antes de llamar aquí.
+export async function runFlowForIncompleteSilence(flow, candidateId, candidateSnapshot) {
+    const redis = getRedisClient();
+    if (!redis || !candidateSnapshot?.id || !candidateSnapshot?.whatsapp) return new Map();
+    return runOneFlow(redis, flow, candidateId, { ...candidateSnapshot }, { ephemeral: true });
 }
 
 // Nodo "inicio_lista": corre el flujo REAL para un candidato de la lista filtrada,

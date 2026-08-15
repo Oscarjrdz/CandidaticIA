@@ -1,4 +1,4 @@
-import { Play, Tag, CalendarRange, MapPin, Briefcase, GraduationCap, MessageCircle, Hash, UserRound, CircleMinus, BellRing, FolderKanban, FlaskConical, Eraser, Filter, MessageSquareText, ListChecks, CheckCheck, BotOff } from 'lucide-react';
+import { Play, Tag, CalendarRange, MapPin, Briefcase, GraduationCap, MessageCircle, Hash, UserRound, CircleMinus, BellRing, FolderKanban, FlaskConical, Eraser, Filter, MessageSquareText, ListChecks, CheckCheck, BotOff, AlarmClock } from 'lucide-react';
 
 export const PROFILE_FILTER_LABELS = {
     active: 'Activos (no bloqueados)',
@@ -51,6 +51,19 @@ export const NODE_DEFS = {
             if (Array.isArray(data.tags) && data.tags.length) parts.push(formatMultiSummary(data.tags, ''));
             if (data.within24h) parts.push('dentro de ventana 24h');
             return parts.filter(Boolean).join(' · ');
+        }
+    },
+    inicio_incompleto_silencio: {
+        label: 'Inicio: Incompleto sin responder',
+        icon: AlarmClock,
+        color: 'indigo',
+        hasTarget: false,
+        hasSource: true,
+        summary: (data) => {
+            const h = Number(data?.silenceHours ?? 1);
+            const m = Number(data?.maxPasses ?? 0);
+            const total = m + 1;
+            return `${h}h en silencio · máx ${total} ${total === 1 ? 'disparo' : 'disparos'}`;
         }
     },
     etiqueta: {
