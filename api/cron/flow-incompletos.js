@@ -100,6 +100,11 @@ export default async function handler(req, res) {
         const entry = flow.nodes.find(n => n.type === 'inicio_incompleto_silencio');
         const silenceMs = Math.max(1, Number(entry?.data?.silenceHours ?? 1)) * 3_600_000;
         const maxPasses = Math.max(0, Number(entry?.data?.maxPasses ?? 0));
+        // Punto de partida = instante en que se activó el flujo (lo pone el PUT de flows.js).
+        // Solo se dispara a candidatos que le escribieron a Brenda DESPUÉS de activar → nunca
+        // se blastea el histórico y todos caen dentro de la ventana de 24h de Meta (su último
+        // mensaje es posterior a la activación). Si no hay activatedAt (flujo viejo), 0 = sin filtro.
+        const activeFromMs = flow.activatedAt ? new Date(flow.activatedAt).getTime() : 0;
         const countKey = `${COUNT_PREFIX}${flow.id}`;
         const fireKey  = `${FIRE_PREFIX}${flow.id}`;
 
@@ -133,6 +138,8 @@ export default async function handler(req, res) {
                 const silentSince = Math.max(lastMsgTs, lastFireTs);
 
                 if (!forceCandidateId) {
+                    // Solo candidatos que interactuaron DESPUÉS de activar el flujo (histórico fuera).
+                    if (!lastMsgTs || lastMsgTs < activeFromMs) { skipped++; continue; }
                     if (passCount > maxPasses) { skipped++; continue; }        // ya agotó sus pases
                     if (!silentSince) { skipped++; continue; }                 // nunca escribió → no aplica
                     if (now - silentSince < silenceMs) { skipped++; continue; } // aún no cumple el silencio

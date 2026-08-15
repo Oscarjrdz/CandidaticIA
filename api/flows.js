@@ -298,16 +298,35 @@ export default async function handler(req, res) {
             const flowIndex = flows.findIndex(f => f.id === id);
             if (flowIndex === -1) return res.status(404).json({ success: false, error: 'Flow not found' });
 
+            const prevFlow = flows[flowIndex];
+            // Al ACTIVAR (inactivo → activo), se marca el instante de arranque. El cron de
+            // incompletos (flow-incompletos.js) solo dispara a candidatos que le escribieron
+            // a Brenda DESPUÉS de este momento — así nunca se blastea el histórico completo y
+            // se garantiza que todos estén dentro de la ventana de 24h de Meta (su último
+            // mensaje es posterior a la activación, o sea reciente). Cada reactivación resetea
+            // el punto de partida.
+            const becomingActive = active !== undefined && !!active && !prevFlow.active;
+
             flows[flowIndex] = {
-                ...flows[flowIndex],
-                ...(name !== undefined && { name: String(name).trim() || flows[flowIndex].name }),
+                ...prevFlow,
+                ...(name !== undefined && { name: String(name).trim() || prevFlow.name }),
                 ...(active !== undefined && { active: !!active }),
+                ...(becomingActive && { activatedAt: new Date().toISOString() }),
                 ...(Array.isArray(nodes) && { nodes }),
                 ...(Array.isArray(edges) && { edges }),
                 updatedAt: new Date().toISOString()
             };
 
             await saveFlows(redis, flows);
+
+            // Al ACTIVAR: arranca campaña limpia. Se borran contador de pases y últimos
+            // disparos del nodo de incompletos, para que el nuevo "punto de partida" sea
+            // real — un candidato que reingrese tras esta activación vuelve a ser elegible
+            // (no queda bloqueado por un pase de la campaña anterior). Inofensivo para
+            // flujos que no son de este tipo (las llaves no existen).
+            if (becomingActive) {
+                redis.del(`flow:silence:count:v1:${id}`, `flow:silence:lastfire:v1:${id}`).catch(() => {});
+            }
 
             return res.status(200).json({ success: true, flow: flows[flowIndex] });
         }
