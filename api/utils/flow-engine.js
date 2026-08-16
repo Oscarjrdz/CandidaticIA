@@ -1,4 +1,4 @@
-import { getRedisClient, isProfileComplete, updateCandidate, saveMessage, withCrmProjectLinksLock, HUMAN_INTERVENTION_SILENCE_MS } from './storage.js';
+import { getRedisClient, isProfileComplete, updateCandidate, saveMessage, updateMessageStatus, withCrmProjectLinksLock, HUMAN_INTERVENTION_SILENCE_MS } from './storage.js';
 import { getCachedConfig } from './cache.js';
 import { getUltraMsgConfig, sendUltraMsgMessage, sendUltraMsgMessageWithRetry } from '../whatsapp/utils.js';
 import { substituteVariables, splitBubbles } from './shortcuts.js';
@@ -236,6 +236,18 @@ async function pacedSend(opts, sendFn) {
     return result;
 }
 
+// Guarda un mensaje saliente de un flujo con la MISMA lógica de estados que un envío manual
+// (ver api/chat.js): nace 'queued' y sube a 'sent' guardando el wamid de Meta, lo que crea
+// `message:index:<wamid>` para que los webhooks de entrega (delivered/read) lo actualicen —
+// así la palomita se vuelve azul SOLO cuando el candidato lo ve, en vez del 'read' optimista
+// que ponía saveMessage por defecto (azul al instante). Nunca lanza.
+async function saveFlowOutbound(candidateId, msg, sendResult) {
+    const saved = await saveMessage(candidateId, { ...msg, status: 'queued' }).catch(() => null);
+    if (!saved?.id) return;
+    const remoteId = sendResult?.messageId || sendResult?.data?.messages?.[0]?.id || null;
+    await updateMessageStatus(candidateId, saved.id, 'sent', remoteId ? { ultraMsgId: remoteId } : {}).catch(() => {});
+}
+
 export async function evaluateOrExecute(node, candidate, flowId, redis, opts = {}) {
     const data = node.data || {};
 
@@ -328,10 +340,10 @@ export async function evaluateOrExecute(node, candidate, flowId, redis, opts = {
                         name: qr.location.name, address: qr.location.address, lat: qr.location.lat, lng: qr.location.lng
                     }));
                     if (locRes?.success) {
-                        await saveMessage(candidate.id, {
+                        await saveFlowOutbound(candidate.id, {
                             from: 'me', content: `[Ubicación: ${qr.location.name || 'Mapa'}]`, timestamp: new Date().toISOString(),
                             meta: { flow: true, flowId, nodeId: node.id }
-                        }).catch(() => {});
+                        }, locRes);
                     } else {
                         console.error(`[FLOW-ENGINE] accion_whatsapp ${flowId}/${node.id} (ubicación) candidato ${candidate.id}: envío falló —`, locRes?.error);
                     }
@@ -341,10 +353,10 @@ export async function evaluateOrExecute(node, candidate, flowId, redis, opts = {
                 if (qrType === 'audio' && qr.audioUrl) {
                     const audioRes = await pacedSend(opts, () => sendUltraMsgMessageWithRetry(config.instanceId, config.token, cleanTo, toAbsoluteMediaUrl(qr.audioUrl), 'audio', { voice: !!qr.voice }));
                     if (audioRes?.success) {
-                        await saveMessage(candidate.id, {
+                        await saveFlowOutbound(candidate.id, {
                             from: 'me', content: qr.voice ? '🎤 Nota de voz' : '🎵 Audio', type: 'audio', mediaUrl: qr.audioUrl,
                             timestamp: new Date().toISOString(), meta: { flow: true, flowId, nodeId: node.id }
-                        }).catch(() => {});
+                        }, audioRes);
                     } else {
                         console.error(`[FLOW-ENGINE] accion_whatsapp ${flowId}/${node.id} (audio) candidato ${candidate.id}: envío falló —`, audioRes?.error);
                     }
@@ -357,10 +369,10 @@ export async function evaluateOrExecute(node, candidate, flowId, redis, opts = {
                         filename: qr.documentName || 'documento.pdf', caption
                     }));
                     if (docRes?.success) {
-                        await saveMessage(candidate.id, {
+                        await saveFlowOutbound(candidate.id, {
                             from: 'me', content: caption, type: 'document', mediaUrl: qr.documentUrl, filename: qr.documentName || 'documento.pdf',
                             timestamp: new Date().toISOString(), meta: { flow: true, flowId, nodeId: node.id }
-                        }).catch(() => {});
+                        }, docRes);
                     } else {
                         console.error(`[FLOW-ENGINE] accion_whatsapp ${flowId}/${node.id} (documento) candidato ${candidate.id}: envío falló —`, docRes?.error);
                     }
@@ -377,10 +389,10 @@ export async function evaluateOrExecute(node, candidate, flowId, redis, opts = {
                     for (const bubbleText of splitBubbles(text)) {
                         const textRes = await pacedSend(opts, () => sendUltraMsgMessageWithRetry(config.instanceId, config.token, cleanTo, bubbleText, 'chat', { priority: 1 }));
                         if (textRes?.success) {
-                            await saveMessage(candidate.id, {
+                            await saveFlowOutbound(candidate.id, {
                                 from: 'me', content: bubbleText, timestamp: new Date().toISOString(),
                                 meta: { flow: true, flowId, nodeId: node.id }
-                            }).catch(() => {});
+                            }, textRes);
                         } else {
                             console.error(`[FLOW-ENGINE] accion_whatsapp ${flowId}/${node.id} (texto) candidato ${candidate.id}: envío falló tras reintento —`, textRes?.error);
                         }
@@ -390,10 +402,10 @@ export async function evaluateOrExecute(node, candidate, flowId, redis, opts = {
                 for (const imgUrl of bankImages) {
                     const imgRes = await pacedSend(opts, () => sendUltraMsgMessageWithRetry(config.instanceId, config.token, cleanTo, toAbsoluteMediaUrl(imgUrl), 'image', { priority: 1 }));
                     if (imgRes?.success) {
-                        await saveMessage(candidate.id, {
+                        await saveFlowOutbound(candidate.id, {
                             from: 'me', content: '', type: 'image', mediaUrl: imgUrl,
                             timestamp: new Date().toISOString(), meta: { flow: true, flowId, nodeId: node.id }
-                        }).catch(() => {});
+                        }, imgRes);
                     } else {
                         console.error(`[FLOW-ENGINE] accion_whatsapp ${flowId}/${node.id} (imagen) candidato ${candidate.id}: envío falló —`, imgRes?.error);
                     }
@@ -420,10 +432,10 @@ export async function evaluateOrExecute(node, candidate, flowId, redis, opts = {
                 const text = vacancyMessageText(vac);
                 const sendResult = await pacedSend(opts, () => sendUltraMsgMessageWithRetry(config.instanceId, config.token, cleanTo, text, 'chat', { priority: 1 }));
                 if (sendResult?.success) {
-                    await saveMessage(candidate.id, {
+                    await saveFlowOutbound(candidate.id, {
                         from: 'me', content: text, timestamp: new Date().toISOString(),
                         meta: { flow: true, flowId, nodeId: node.id }
-                    }).catch(() => {});
+                    }, sendResult);
                 } else {
                     console.error(`[FLOW-ENGINE] accion_vacante ${flowId}/${node.id} candidato ${candidate.id}: envío falló tras reintento —`, sendResult?.error);
                 }
@@ -444,10 +456,10 @@ export async function evaluateOrExecute(node, candidate, flowId, redis, opts = {
                 for (const bubbleText of splitBubbles(text)) {
                     const sendResult = await pacedSend(opts, () => sendUltraMsgMessageWithRetry(config.instanceId, config.token, cleanTo, bubbleText, 'chat', { priority: 1 }));
                     if (sendResult?.success) {
-                        await saveMessage(candidate.id, {
+                        await saveFlowOutbound(candidate.id, {
                             from: 'me', content: bubbleText, timestamp: new Date().toISOString(),
                             meta: { flow: true, flowId, nodeId: node.id }
-                        }).catch(() => {});
+                        }, sendResult);
                     } else {
                         console.error(`[FLOW-ENGINE] accion_whatsapp_personalizado ${flowId}/${node.id} candidato ${candidate.id}: envío falló tras reintento —`, sendResult?.error);
                     }
