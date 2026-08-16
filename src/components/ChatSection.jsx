@@ -5240,8 +5240,8 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                     
                     {/* Header Chat — container query: cuando los paneles laterales (CRM, Banco)
                         angostan el chat, el texto del toggle IA se oculta para no cortar las etiquetas */}
-                    <div className="min-h-[59px] px-4 py-2 flex items-center justify-between bg-[#f0f2f5] dark:bg-[#202c33] z-20 shadow-sm" style={{ containerType: 'inline-size' }}>
-                        <div className="flex items-center cursor-pointer flex-1 min-w-0 pr-4">
+                    <div className="min-h-[59px] px-4 py-2 flex items-center bg-[#f0f2f5] dark:bg-[#202c33] z-20 shadow-sm" style={{ containerType: 'inline-size' }}>
+                        <div className="flex items-center flex-1 min-w-0 pr-4">
                             <button 
                                 className="md:hidden mr-2 p-1 text-[#54656f] dark:text-[#aebac1]"
                                 onClick={() => setSelectedChat(null)}
@@ -5260,11 +5260,13 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                                 )}
                             </div>
                             <div className="flex flex-col min-w-0 flex-1 overflow-hidden">
-                                {/* Nombre completo + etiquetas: las etiquetas usan flex-wrap para bajar de
-                                    linea en vez de recortarse con scroll horizontal + degradado. Asi un tag
-                                    largo (ej. "Metalsa Anuncio") se ve completo aprovechando el espacio que
-                                    el header ya deja libre arriba del toolbar de iconos, en vez de quedar
-                                    truncado. El header crece verticalmente si hace falta (min-h lo permite). */}
+                                {/* Header en 4 renglones apilados (cada uno al 100% del ancho, a la
+                                    derecha del avatar): 1) nombre + etiquetas  2) toolbar de iconos
+                                    (alineado a la derecha)  3) WhatsApp/último mensaje + estatus +
+                                    Candidatic IA + anuncio  4) datos demográficos en una sola línea.
+                                    Renglón 1 — nombre + etiquetas: las etiquetas usan flex-wrap para bajar
+                                    de línea en vez de recortarse. El header crece verticalmente si hace
+                                    falta (min-h lo permite). */}
                                 <div className="flex items-start min-w-0 w-full flex-wrap gap-y-1">
                                     <h2 className="text-[17px] font-medium text-[#111b21] dark:text-[#e9edef] shrink-0 whitespace-nowrap">
                                         {toTitleCase(selectedChat.nombreReal || selectedChat.nombre) || selectedChat.whatsapp}
@@ -5290,52 +5292,6 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                                         </div>
                                     )}
                                 </div>
-                                {/* Linea 2: WhatsApp + numero + ultimo mensaje — sin badges, espacio completo para el texto */}
-                                <div className="flex items-center gap-x-2 mt-0.5 min-w-0 flex-wrap">
-                                    <p className="text-xs text-[#667781] dark:text-[#8696a0] flex items-center gap-1 whitespace-nowrap">
-                                        <span className="font-semibold" style={{ color: '#25D366' }}>WhatsApp</span>
-                                        {(() => {
-                                            let p = String(selectedChat.whatsapp || '');
-                                            if (p.startsWith('521') && p.length === 13) p = p.slice(3);
-                                            else if (p.startsWith('52') && p.length === 12) p = p.slice(2);
-                                            return p;
-                                        })()}
-                                        <span className="mx-0.5 opacity-50">·</span>
-                                        Último Mensaje {formatRelativeDate(selectedChat.ultimoMensaje)}
-                                    </p>
-                                </div>
-                                {/* Linea 3: estado + numero de entrada + anuncio — badges uniformes (mismo alto/padding/tipografia) */}
-                                <div className="mt-0.5 flex items-center gap-1.5 flex-wrap">
-                                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap ${isProfileComplete(selectedChat) ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400' : 'bg-red-100 dark:bg-red-900/30 text-red-500 dark:text-red-400'}`}>
-                                        {isProfileComplete(selectedChat) ? 'Completo' : 'Incompleto'}
-                                    </span>
-                                    {selectedChat.incomingPhoneNumberId && (
-                                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400">
-                                            {selectedChat.incomingPhoneNumberId === '1249373631587237' ? 'Hr One México' : selectedChat.incomingPhoneNumberId === '1061455557054529' ? 'Candidatic IA' : selectedChat.incomingPhoneNumberId}
-                                        </span>
-                                    )}
-                                    {(selectedChat.adHeadline || selectedChat.adId) && (
-                                        <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap bg-violet-50 dark:bg-violet-500/10 text-violet-500 dark:text-violet-400 border border-violet-200/60 dark:border-violet-500/20 truncate max-w-[180px]" title={selectedChat.adHeadline || selectedChat.adId}>
-                                            📢 {selectedChat.adHeadline || `Ad ${selectedChat.adId}`}
-                                        </span>
-                                    )}
-                                    {/* Datos del candidato — mismo formato que la tarjeta de la lista de chats */}
-                                    {(selectedChat.edad || selectedChat.escolaridad || selectedChat.municipio || selectedChat.colonia || selectedChat.categoria) && (
-                                        <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-[#8696a0] dark:text-[#697882] ml-0.5">
-                                            {selectedChat.edad && <span>{selectedChat.edad} años</span>}
-                                            {selectedChat.edad && selectedChat.escolaridad && <span>•</span>}
-                                            {selectedChat.escolaridad && <span>{selectedChat.escolaridad}</span>}
-                                            {(selectedChat.edad || selectedChat.escolaridad) && selectedChat.municipio && <span>•</span>}
-                                            {selectedChat.municipio && <span>{selectedChat.municipio}</span>}
-                                            {(selectedChat.edad || selectedChat.escolaridad || selectedChat.municipio) && selectedChat.colonia && <span>•</span>}
-                                            {selectedChat.colonia && <span>{toTitleCase(selectedChat.colonia)}</span>}
-                                            {(selectedChat.edad || selectedChat.escolaridad || selectedChat.municipio || selectedChat.colonia) && selectedChat.categoria && <span>•</span>}
-                                            {selectedChat.categoria && <span>{toTitleCase(selectedChat.categoria)}</span>}
-                                        </span>
-                                    )}
-                                </div>
-                            </div>
-                        </div>
                         {/* Iconos del header en 2 renglones (arriba: respuestas/CRM/lupa via order:0;
                             abajo: los demás via order:2). Se usa flex-wrap + CSS order + un salto de
                             línea invisible (basis-full) para forzar 2 renglones SIN romper el toolbar
@@ -5811,6 +5767,49 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                                     <Search className="w-5 h-5" />
                                 </button>
                             )}
+                        </div>
+                                {/* Renglón 3: WhatsApp + último mensaje + estatus + Candidatic IA + anuncio */}
+                                <div className="flex items-center gap-x-2 gap-y-1 mt-0.5 min-w-0 flex-wrap">
+                                    <p className="text-xs text-[#667781] dark:text-[#8696a0] flex items-center gap-1 whitespace-nowrap">
+                                        <span className="font-semibold" style={{ color: '#25D366' }}>WhatsApp</span>
+                                        {(() => {
+                                            let p = String(selectedChat.whatsapp || '');
+                                            if (p.startsWith('521') && p.length === 13) p = p.slice(3);
+                                            else if (p.startsWith('52') && p.length === 12) p = p.slice(2);
+                                            return p;
+                                        })()}
+                                        <span className="mx-0.5 opacity-50">·</span>
+                                        Último Mensaje {formatRelativeDate(selectedChat.ultimoMensaje)}
+                                    </p>
+                                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap ${isProfileComplete(selectedChat) ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400' : 'bg-red-100 dark:bg-red-900/30 text-red-500 dark:text-red-400'}`}>
+                                        {isProfileComplete(selectedChat) ? 'Completo' : 'Incompleto'}
+                                    </span>
+                                    {selectedChat.incomingPhoneNumberId && (
+                                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400">
+                                            {selectedChat.incomingPhoneNumberId === '1249373631587237' ? 'Hr One México' : selectedChat.incomingPhoneNumberId === '1061455557054529' ? 'Candidatic IA' : selectedChat.incomingPhoneNumberId}
+                                        </span>
+                                    )}
+                                    {(selectedChat.adHeadline || selectedChat.adId) && (
+                                        <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap bg-violet-50 dark:bg-violet-500/10 text-violet-500 dark:text-violet-400 border border-violet-200/60 dark:border-violet-500/20 truncate max-w-[180px]" title={selectedChat.adHeadline || selectedChat.adId}>
+                                            📢 {selectedChat.adHeadline || `Ad ${selectedChat.adId}`}
+                                        </span>
+                                    )}
+                                </div>
+                                {/* Renglón 4: datos demográficos en una sola línea (no se envuelve; recorta si no cabe) */}
+                                {(selectedChat.edad || selectedChat.escolaridad || selectedChat.municipio || selectedChat.colonia || selectedChat.categoria) && (
+                                    <div className="mt-0.5 flex flex-nowrap items-center gap-x-2 text-[10px] text-[#8696a0] dark:text-[#697882] overflow-hidden whitespace-nowrap">
+                                        {selectedChat.edad && <span>{selectedChat.edad} años</span>}
+                                        {selectedChat.edad && selectedChat.escolaridad && <span>•</span>}
+                                        {selectedChat.escolaridad && <span>{selectedChat.escolaridad}</span>}
+                                        {(selectedChat.edad || selectedChat.escolaridad) && selectedChat.municipio && <span>•</span>}
+                                        {selectedChat.municipio && <span>{selectedChat.municipio}</span>}
+                                        {(selectedChat.edad || selectedChat.escolaridad || selectedChat.municipio) && selectedChat.colonia && <span>•</span>}
+                                        {selectedChat.colonia && <span>{toTitleCase(selectedChat.colonia)}</span>}
+                                        {(selectedChat.edad || selectedChat.escolaridad || selectedChat.municipio || selectedChat.colonia) && selectedChat.categoria && <span>•</span>}
+                                        {selectedChat.categoria && <span>{toTitleCase(selectedChat.categoria)}</span>}
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     </div>
 
