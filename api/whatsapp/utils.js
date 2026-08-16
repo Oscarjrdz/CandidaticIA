@@ -374,9 +374,22 @@ export const sendMetaMessage = async (to, body, type = 'chat', extraParams = {})
 // (texto), tras una pausa corta. Confirmado en producción (ago 2026): sin esto, un
 // rate-limit momentáneo de Meta bajo mucha carga (muchos candidatos entrando a la vez)
 // perdía mensajes de Flujos en silencio (accion_whatsapp nunca reintentaba ni logueaba).
+// Tipos que vale la pena reintentar tras un hiccup transitorio de Meta. Incluye media
+// (document/image/audio/video/sticker), no solo texto: bajo carga esos envíos también se
+// perdían en silencio (ej. PDFs de rutas que no llegaban), y sin reintento se perdían para
+// siempre — el texto ya se reintentaba, la media no. Ahora todos comparten la misma red de
+// seguridad.
+const RETRYABLE_SEND_TYPES = new Set(['chat', 'text', 'image', 'document', 'audio', 'video', 'sticker']);
+// Errores PERMANENTES de Meta: reintentar no ayuda (falla igual) y gasta una llamada.
+//   131026 = número inválido / no está en WhatsApp   ·   131047 = fuera de la ventana de 24h
+//   131051 = tipo de mensaje no soportado            ·   100    = parámetro inválido
+const NON_RETRYABLE_META_CODES = new Set([131026, 131047, 131051, 100]);
+
 export const sendUltraMsgMessageWithRetry = async (instanceId, token, to, body, type = 'chat', extraParams = {}) => {
     let result = await sendUltraMsgMessage(instanceId, token, to, body, type, extraParams);
-    if (!result?.success && type === 'chat') {
+    const code = result?.data?.error?.code;
+    const permanent = code != null && NON_RETRYABLE_META_CODES.has(code);
+    if (!result?.success && !permanent && RETRYABLE_SEND_TYPES.has(type)) {
         await new Promise(resolve => setTimeout(resolve, 700));
         result = await sendUltraMsgMessage(instanceId, token, to, body, type, extraParams);
     }

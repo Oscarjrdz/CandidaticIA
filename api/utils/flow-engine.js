@@ -309,7 +309,7 @@ export async function evaluateOrExecute(node, candidate, flowId, redis, opts = {
                 }
 
                 if (qrType === 'audio' && qr.audioUrl) {
-                    const audioRes = await pacedSend(opts, () => sendUltraMsgMessage(config.instanceId, config.token, cleanTo, toAbsoluteMediaUrl(qr.audioUrl), 'audio', { voice: !!qr.voice }));
+                    const audioRes = await pacedSend(opts, () => sendUltraMsgMessageWithRetry(config.instanceId, config.token, cleanTo, toAbsoluteMediaUrl(qr.audioUrl), 'audio', { voice: !!qr.voice }));
                     if (audioRes?.success) {
                         await saveMessage(candidate.id, {
                             from: 'me', content: qr.voice ? '🎤 Nota de voz' : '🎵 Audio', type: 'audio', mediaUrl: qr.audioUrl,
@@ -323,7 +323,7 @@ export async function evaluateOrExecute(node, candidate, flowId, redis, opts = {
 
                 if (qrType === 'document' && qr.documentUrl) {
                     const caption = qr.message ? substituteVariables(qr.message, candidate) : '';
-                    const docRes = await pacedSend(opts, () => sendUltraMsgMessage(config.instanceId, config.token, cleanTo, toAbsoluteMediaUrl(qr.documentUrl), 'document', {
+                    const docRes = await pacedSend(opts, () => sendUltraMsgMessageWithRetry(config.instanceId, config.token, cleanTo, toAbsoluteMediaUrl(qr.documentUrl), 'document', {
                         filename: qr.documentName || 'documento.pdf', caption
                     }));
                     if (docRes?.success) {
@@ -358,7 +358,7 @@ export async function evaluateOrExecute(node, candidate, flowId, redis, opts = {
                 }
                 const bankImages = Array.isArray(qr.imageUrls) && qr.imageUrls.length ? qr.imageUrls : [qr.imageUrl].filter(Boolean);
                 for (const imgUrl of bankImages) {
-                    const imgRes = await pacedSend(opts, () => sendUltraMsgMessage(config.instanceId, config.token, cleanTo, toAbsoluteMediaUrl(imgUrl), 'image', { priority: 1 }));
+                    const imgRes = await pacedSend(opts, () => sendUltraMsgMessageWithRetry(config.instanceId, config.token, cleanTo, toAbsoluteMediaUrl(imgUrl), 'image', { priority: 1 }));
                     if (imgRes?.success) {
                         await saveMessage(candidate.id, {
                             from: 'me', content: '', type: 'image', mediaUrl: imgUrl,
