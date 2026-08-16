@@ -5293,9 +5293,9 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                                         </div>
                                     )}
                                 </div>
-                        {/* Renglón 2 del header: toolbar de iconos en UNA sola fila, alineado a la derecha.
+                        {/* Renglón 2 del header: toolbar de iconos en UNA sola fila, alineado a la izquierda.
                             (flex-wrap solo por seguridad si no cabe a lo ancho; ya no se fuerzan 2 filas.) */}
-                        <div className="flex flex-wrap justify-end gap-x-2 gap-y-1 text-[#54656f] dark:text-[#aebac1] items-center">
+                        <div className="flex flex-wrap justify-start gap-x-2 gap-y-1 text-[#54656f] dark:text-[#aebac1] items-center">
                             {/* Silenciar IA Toggle */}
                             {!isMobile && (() => {
                                 const iaSilenced = isIaSilenced(selectedChat);
