@@ -4874,6 +4874,21 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
                     if (aiResult.extracted_data) Object.assign(candidateUpdates, Object.fromEntries(
                         Object.entries(aiResult.extracted_data).filter(([_, v]) => v !== null && v !== undefined && v !== 'null' && v !== 'N/A')
                     ));
+
+                    // 📊 TELEMETRÍA (fire-and-forget): cuenta cierres prematuros atrapados por día
+                    // (zona Monterrey). Contador = total de eventos; set = candidatos únicos afectados.
+                    // Se consulta bajo demanda: guard:premature_closure:YYYY-MM-DD (INCR) y
+                    // guard:premature_closure:list:YYYY-MM-DD (SET de candidateId). Expiran a 90 días.
+                    if (validation.thought_process?.includes('FALLBACK_PREMATURE_CLOSURE')) {
+                        try {
+                            const _rGuard = getRedisClient();
+                            const _dayGuard = new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Monterrey' });
+                            const _kCount = `guard:premature_closure:${_dayGuard}`;
+                            const _kList = `guard:premature_closure:list:${_dayGuard}`;
+                            _rGuard?.incr(_kCount).then(() => _rGuard.expire(_kCount, 60 * 60 * 24 * 90)).catch(() => {});
+                            _rGuard?.sadd(_kList, candidateId).then(() => _rGuard.expire(_kList, 60 * 60 * 24 * 90)).catch(() => {});
+                        } catch (_e) { /* no interrumpir el flujo por telemetría */ }
+                    }
                 }
 
                 // 🔍 JOB INQUIRY INTERCEPT: If candidate asked about vacancies/interviews before
