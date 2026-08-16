@@ -799,17 +799,28 @@ export async function runFlowForIncompleteSilence(flow, candidateId, candidateSn
 // varias veces, o retomar tras cerrar la pestaña a media corrida, sin volver a mandarle
 // nada a un candidato que ya se completó — y una corrida que quedó a medias se RETOMA
 // desde donde se quedó (ver runOneFlow) en vez de re-enviar todo o saltárselo entero.
-export async function runFlowForListCandidate(flow, candidateSnapshot) {
+export async function runFlowForListCandidate(flow, candidateSnapshot, opts = {}) {
     const redis = getRedisClient();
     if (!redis) throw new Error('Redis no disponible');
     if (!candidateSnapshot?.id || !candidateSnapshot?.whatsapp) throw new Error('Candidato inválido');
 
-    if (await redis.sismember(`${EXEC_SET_PREFIX}${flow.id}`, candidateSnapshot.id)) {
+    // force = acción MANUAL desde el chat: el reclutador mete a ESTE candidato a propósito,
+    // aunque ya haya completado el flujo antes. Limpiamos el marcador permanente de "ya
+    // completado" (flow:executed) y el ledger de avance para que corra fresco y vuelva a
+    // ejecutar las acciones. El "run" masivo del editor NO pasa force, así respeta el dedupe.
+    const force = !!opts.force;
+    if (force) {
+        await redis.pipeline()
+            .srem(`${EXEC_SET_PREFIX}${flow.id}`, candidateSnapshot.id)
+            .del(`${PROGRESS_PREFIX}${flow.id}:${candidateSnapshot.id}`)
+            .exec();
+    } else if (await redis.sismember(`${EXEC_SET_PREFIX}${flow.id}`, candidateSnapshot.id)) {
         return { alreadyExecuted: true, passed: {} };
     }
 
     const passed = await runOneFlow(redis, flow, candidateSnapshot.id, { ...candidateSnapshot }, {});
     // passed vacío aquí = otra invocación tomó el lock (corriendo en paralelo) o justo se
     // marcó completado — de cualquier modo no hubo trabajo nuevo que reportar en esta llamada.
-    return { alreadyExecuted: passed.size === 0, passed: Object.fromEntries(passed) };
+    // Con force nunca reportamos "ya pasó" (acabamos de limpiarlo y corrió a propósito).
+    return { alreadyExecuted: !force && passed.size === 0, passed: Object.fromEntries(passed) };
 }

@@ -163,12 +163,12 @@ export const getFilteredFlowCandidates = async (flowId, { profileFilter, tags, w
 // Nodo "inicio_lista", botón Run: corre el flujo real para UN candidato de la lista.
 // Respeta el dedupe de producción — repetir la llamada para el mismo candidato no
 // vuelve a mandarle nada (alreadyExecuted: true).
-export const runFlowListItem = async (flowId, candidateId) => {
+export const runFlowListItem = async (flowId, candidateId, force = false) => {
     try {
         const res = await fetch(`/api/flows?id=${flowId}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'run_list_item', candidateId })
+            body: JSON.stringify({ action: 'run_list_item', candidateId, force })
         });
         const data = await res.json();
         if (data.success) return { success: true, alreadyExecuted: !!data.alreadyExecuted };

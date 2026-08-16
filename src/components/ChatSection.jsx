@@ -3555,7 +3555,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         const nombre = selectedChat.nombreReal || selectedChat.nombre || 'este candidato';
         const confirmed = await new Promise(resolve => setConfirmModal({
             title: 'Meter al flujo',
-            message: `¿Meter a ${nombre} al flujo "${flow.name}"? Se ejecutarán sus acciones (mensajes, etiquetas, recordatorios, etc.).`,
+            message: `¿Meter a ${nombre} al flujo "${flow.name}"? Se ejecutarán sus acciones (mensajes, etiquetas, recordatorios, etc.). Aunque ya haya pasado antes por este flujo, se volverá a ejecutar.`,
             confirmText: 'Meter al flujo',
             variant: 'warning',
             onConfirm: () => resolve(true),
@@ -3564,7 +3564,9 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         if (!confirmed) return;
         setRunningFlowId(flow.id);
         try {
-            const res = await runFlowListItem(flow.id, selectedChat.id);
+            // force=true: es una acción manual y deliberada del reclutador sobre ESTE candidato,
+            // debe correr aunque el dedupe permanente lo marque como "ya completado".
+            const res = await runFlowListItem(flow.id, selectedChat.id, true);
             if (res.success) {
                 showToast && showToast(
                     res.alreadyExecuted ? `${nombre} ya había pasado por "${flow.name}"` : `${nombre} metido al flujo "${flow.name}"`,

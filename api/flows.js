@@ -251,7 +251,7 @@ export default async function handler(req, res) {
         }
 
         if (method === 'POST' && id && req.body?.action === 'run_list_item') {
-            const { candidateId } = req.body || {};
+            const { candidateId, force } = req.body || {};
             if (!candidateId) return res.status(400).json({ success: false, error: 'candidateId requerido' });
 
             const raw = await redis.get(REDIS_KEY);
@@ -262,7 +262,7 @@ export default async function handler(req, res) {
             const candidate = await getCandidateById(candidateId);
             if (!candidate) return res.status(404).json({ success: false, error: 'Candidato no encontrado' });
 
-            const result = await runFlowForListCandidate(flow, candidate);
+            const result = await runFlowForListCandidate(flow, candidate, { force: !!force });
             return res.status(200).json({ success: true, alreadyExecuted: result.alreadyExecuted });
         }
 
