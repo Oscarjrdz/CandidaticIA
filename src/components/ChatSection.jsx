@@ -1141,11 +1141,10 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
     const [_qrSaving, _setQrSaving] = useState(false);
     const [capturingShortcut, setCapturingShortcut] = useState(false);
 
-    // Toolbar icon order (drag & drop). Se muestra en 2 RENGLONES: arriba respuestas/CRM/lupa,
-    // abajo etiquetas/vacantes. Cada renglón se reordena por drag DENTRO de su fila (no se cruza
-    // entre renglones — ver iconRow + el guard en handleToolbarDrop). El renglón lo decide CSS
-    // order (0 arriba, 2 abajo), así el drag sigue operando sobre un solo array.
-    const TOP_ROW_ICON_IDS = ['quick_replies', 'crm_manual', 'search'];
+    // Toolbar icon order (drag & drop). Ahora se muestra en UNA sola fila (el header es de 4
+    // renglones y los iconos son el renglón 2). TOP_ROW_ICON_IDS vacío => iconRow siempre
+    // 'bottom', así el guard de drag nunca bloquea y se puede reordenar entre todos los iconos.
+    const TOP_ROW_ICON_IDS = [];
     const TOOLBAR_ICON_IDS = ['quick_replies', 'crm_manual', 'search', 'tags', 'vacancies'];
     const iconRow = (id) => TOP_ROW_ICON_IDS.includes(id) ? 'top' : 'bottom';
     const [toolbarOrder, setToolbarOrder] = useState(() => {
@@ -5259,7 +5258,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                                     </span>
                                 )}
                             </div>
-                            <div className="flex flex-col min-w-0 flex-1 overflow-hidden">
+                            <div className="flex flex-col min-w-0 flex-1">
                                 {/* Header en 4 renglones apilados (cada uno al 100% del ancho, a la
                                     derecha del avatar): 1) nombre + etiquetas  2) toolbar de iconos
                                     (alineado a la derecha)  3) WhatsApp/último mensaje + estatus +
@@ -5292,10 +5291,8 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                                         </div>
                                     )}
                                 </div>
-                        {/* Iconos del header en 2 renglones (arriba: respuestas/CRM/lupa via order:0;
-                            abajo: los demás via order:2). Se usa flex-wrap + CSS order + un salto de
-                            línea invisible (basis-full) para forzar 2 renglones SIN romper el toolbar
-                            arrastrable (sigue siendo un solo toolbarOrder; el order solo decide el renglón). */}
+                        {/* Renglón 2 del header: toolbar de iconos en UNA sola fila, alineado a la derecha.
+                            (flex-wrap solo por seguridad si no cabe a lo ancho; ya no se fuerzan 2 filas.) */}
                         <div className="flex flex-wrap justify-end gap-x-2 gap-y-1 text-[#54656f] dark:text-[#aebac1] items-center">
                             {/* Silenciar IA Toggle */}
                             {!isMobile && (() => {
@@ -5413,9 +5410,6 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                                 );
                             })()}
 
-                            {/* Salto de línea invisible: fuerza el 2º renglón (order:1, entre el
-                                renglón de arriba order:0 y el de abajo order:2). Alto 0 = no se ve. */}
-                            {!isMobile && <div className="basis-full h-0" style={{ order: 1 }} aria-hidden="true" />}
 
                             {/* Draggable Icon Toolbar */}
                             {!isMobile && toolbarOrder.map((iconId) => {
