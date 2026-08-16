@@ -32,6 +32,25 @@ export class AIGuard {
             return this.getRecoveryResponse("FALLBACK_SILENCE", missingFields, lastInput, isNewFlag, extracted, candidateName, categoriesList);
         }
 
+        // 2b. 🛑 Premature Closure Detection for Incomplete Profiles
+        // Incidente 2026-08-15 (candidato 8124120674): tras capturar la categoría, gpt-4o-mini
+        // saltó la escolaridad y soltó "Perfil completo, estoy feliz por ti. Te aviso en cuanto
+        // salga algo" — el perfil seguía INCOMPLETO. El check #2 solo atrapa respuestas VACÍAS,
+        // no una respuesta no-vacía que finge cierre. Aquí detectamos frases de cierre/celebración
+        // cuando el perfil aún NO está completo y forzamos la recuperación del dato faltante.
+        // Conservador: exige una frase de cierre FUERTE y ausencia de marcadores condicionales
+        // de persuasión ("en cuanto termines tu registro te comparto...") para no pisar mensajes
+        // legítimos que prometen detalles a futuro.
+        if (!hasEmptyResponse && !isProfileComplete) {
+            const lowerResp = responseText.toLowerCase();
+            const closureRe = /perfil\s+(?:est[aá]\s+)?(?:completo|listo|complet[oa]d[oa]|terminad[oa])|registro\s+(?:est[aá]\s+)?(?:completo|listo|finalizad[oa]|terminad[oa])|ya\s+(?:quedaste|est[aá]s)\s+(?:registrad|en\s+(?:nuestro|el)\s+sistema)|estoy\s+feliz\s+por\s+ti|te\s+aviso\s+en\s+cuanto\s+(?:salga|tengamos|haya|surja)|te\s+contactar[eé]|te\s+contacto\s+en\s+cuanto|gracias\s+por\s+(?:tu\s+)?registr|hemos\s+terminado|ya\s+(?:tenemos|tengo)\s+todos?\s+(?:tus\s+)?datos/i;
+            const conditionalRe = /(?:en\s+cuanto|cuando|una\s+vez\s+que|al)\s+(?:termines?|acabes?|completes?|finalices?)|terminando\s+tu\s+registro|para\s+(?:darte|poder|continuar)/i;
+            if (closureRe.test(lowerResp) && !conditionalRe.test(lowerResp)) {
+                console.warn(`[AI GUARD] 🛑 Premature closure detected on incomplete profile: "${responseText.substring(0, 40)}...". Triggering Recovery.`);
+                return this.getRecoveryResponse("FALLBACK_PREMATURE_CLOSURE", missingFields, lastInput, isNewFlag, extracted, candidateName, categoriesList);
+            }
+        }
+
         // 3. Duplicate Detection (Anti-Loop)
         if (responseText && lastBotMessages && lastBotMessages.length > 0) {
             const normalizedResp = responseText.trim().toLowerCase();
