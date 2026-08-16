@@ -59,6 +59,36 @@ const PROGRESS_TTL_SEC = 60 * 60 * 24 * 7; // 7 días
 const RUN_LOCK_PREFIX = 'flow:lock:v1:';
 const RUN_LOCK_TTL_SEC = 130;
 
+// Registro de esperas activas por candidato (nodo "esperando_respuesta"). Hash:
+//   field  = flowId
+//   value  = JSON { nodeId, grupos, matchMode, expiresAt }
+// Lo consulta resumeWaitingFlowIfMatch() (llamado desde el BLOCK SHIELD de agent.js) para
+// reanudar el flujo cuando el candidato responde una frase que coincide. Solo tiene sentido
+// tras un nodo "Desactivar Bot": Brenda queda en silencio y este registro atrapa la respuesta.
+export const WAITING_PREFIX = 'flow:waiting:v1:';
+
+// Normaliza texto para comparar frases: sin acentos, minúsculas, sin espacios de sobra.
+function normalizeFlowText(s) {
+    return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+}
+
+// ¿El texto del candidato coincide con alguna frase del grupo, según el modo?
+//   'exacto'   → el mensaje ES exactamente una de las frases.
+//   'palabra'  → alguna frase aparece como palabra suelta en el mensaje.
+//   'contiene' → (default) alguna frase es substring del mensaje.
+function flowTextMatchesGroup(text, grupo, mode) {
+    const t = normalizeFlowText(text);
+    if (!t) return false;
+    const frases = (Array.isArray(grupo?.frases) ? grupo.frases : []).map(normalizeFlowText).filter(Boolean);
+    if (!frases.length) return false;
+    if (mode === 'exacto') return frases.includes(t);
+    if (mode === 'palabra') {
+        const words = new Set(t.split(/\s+/));
+        return frases.some(f => f.split(/\s+/).every(w => words.has(w)));
+    }
+    return frases.some(f => t.includes(f)); // 'contiene'
+}
+
 // Mismo cálculo que handleApplyReminderTemplate en src/components/ChatSection.jsx,
 // pero AHÍ corre en el navegador del reclutador (hora local = Monterrey) y setHours()
 // da el resultado correcto. Acá corre en una función serverless de Vercel, cuyo
@@ -495,6 +525,62 @@ export async function evaluateOrExecute(node, candidate, flowId, redis, opts = {
             return true;
         }
 
+        case 'accion_reactivar_bot': {
+            // Reactiva a Brenda (deshace lo que hace accion_desactivar_bot / la intervención
+            // humana). Mismo patch que api/candidates/block.js con block=false. Útil al final
+            // de un ciclo "Desactivar Bot → Esperando respuesta → ... → Reactivar Bot".
+            try {
+                const patch = {
+                    blocked: false,
+                    blockedAt: null,
+                    blockedExpiresAt: null,
+                    blockedExpiredAt: null,
+                    blockedReason: null
+                };
+                await updateCandidate(candidate.id, patch);
+                Object.assign(candidate, patch); // snapshot en memoria en sync para el resto de la corrida
+            } catch (e) {
+                console.error(`[FLOW-ENGINE] accion_reactivar_bot ${flowId}/${node.id}:`, e?.message);
+            }
+            return true;
+        }
+
+        case 'esperando_respuesta': {
+            // 👂 MODO OYENTE: registra la espera y PAUSA el flujo (sentinel __pause). El flujo
+            // NO se marca completado; reanuda desde el nodo SIGUIENTE cuando el candidato manda
+            // un mensaje cuya frase coincide (ver resumeWaitingFlowIfMatch + el hook en agent.js).
+            // Debe ir DESPUÉS de un nodo "Desactivar Bot": así Brenda está en silencio y su
+            // BLOCK SHIELD deja pasar el mensaje a este registro en vez de responder.
+            const grupos = (Array.isArray(data.grupos) ? data.grupos : [])
+                .filter(g => Array.isArray(g?.frases) && g.frases.some(f => String(f || '').trim()));
+            const matchMode = data.matchMode || 'contiene';
+            const timeoutHoras = Number(data.timeoutHoras) > 0 ? Number(data.timeoutHoras) : 48;
+
+            // En modo test (skipClaim) o ephemeral (cron) no hay ledger que reanudar → no
+            // tiene sentido pausar: pasa de largo para que el tester vea los nodos siguientes.
+            if (opts.skipClaim || opts.ephemeral) return true;
+
+            // Sin frases configuradas no hay nada que esperar → deja pasar (no cuelga la cadena).
+            if (!grupos.length) return true;
+
+            const ttlSec = Math.max(PROGRESS_TTL_SEC, Math.ceil(timeoutHoras * 3600) + 86400);
+            try {
+                const key = `${WAITING_PREFIX}${candidate.id}`;
+                const payload = JSON.stringify({
+                    nodeId: node.id,
+                    grupos,
+                    matchMode,
+                    expiresAt: Date.now() + timeoutHoras * 3600 * 1000
+                });
+                await redis.hset(key, flowId, payload);
+                await redis.expire(key, ttlSec);
+            } catch (e) {
+                console.error(`[FLOW-ENGINE] esperando_respuesta ${flowId}/${node.id}:`, e?.message);
+                return true; // si el registro falla, no dejes el flujo colgado: continúa
+            }
+            return { __pause: true, ttlSec };
+        }
+
         case 'accion_marcar_leido': {
             // Marca al candidato como "leído" para sacarlo de la lista de no-leídos
             // (quita la burbuja/badge). El estado de no-leído en Redis se deriva de
@@ -668,6 +754,11 @@ async function runOneFlow(redis, flow, candidateId, candidate, opts = {}) {
         // para el badge del nodo test.
         const outcome = new Map();
 
+        // Ruteo por rama para nodos multi-salida (hoy solo "esperando_respuesta" al reanudar):
+        //   Map<sourceNodeId, Set<handle>> con la(s) rama(s) EFECTIVAMENTE tomada(s).
+        // Vacío en toda corrida normal → no altera el comportamiento existente.
+        const branchTaken = new Map();
+
         // Elegibilidad de un nodo según sus aristas entrantes:
         //   • Aristas normales ("Sí"/sin handle) → se unen con Y (AND): TODAS deben venir
         //     de un origen que cumplió. Preserva el patrón de convergencia original
@@ -680,11 +771,17 @@ async function runOneFlow(redis, flow, candidateId, candidate, opts = {}) {
         //   • Si un nodo mezcla ambos tipos, debe cumplir las dos reglas a la vez.
         const isEligible = (deps) => {
             if (deps.length === 0) return true;
-            const normal = deps.filter(d => d.handle !== 'no');
-            const negativos = deps.filter(d => d.handle === 'no');
+            // Aristas cuyo origen es un nodo multi-rama ya reanudado (branchTaken): solo
+            // cuentan si su handle es EXACTAMENTE una de las ramas tomadas. Se unen con O.
+            const branchDeps = deps.filter(d => branchTaken.has(d.source));
+            const rest = deps.filter(d => !branchTaken.has(d.source));
+            const branchOk = branchDeps.length === 0
+                || branchDeps.some(d => branchTaken.get(d.source).has(d.handle || null));
+            const normal = rest.filter(d => d.handle !== 'no');
+            const negativos = rest.filter(d => d.handle === 'no');
             const normalOk = normal.length === 0 || normal.every(d => outcome.get(d.source) === 'pass');
             const negativoOk = negativos.length === 0 || negativos.some(d => outcome.get(d.source) === 'fail');
-            return normalOk && negativoOk;
+            return branchOk && normalOk && negativoOk;
         };
 
         for (const node of order) {
@@ -693,6 +790,17 @@ async function runOneFlow(redis, flow, candidateId, candidate, opts = {}) {
             if (!eligible) {
                 outcome.set(node.id, 'unreached');
                 passed.set(node.id, false);
+                continue;
+            }
+
+            // Reanudación de un nodo "esperando_respuesta": fija la rama tomada (Sí = coincidió
+            // una frase / No = timeout) y continúa DESPUÉS de él, sin re-ejecutar ni re-registrar
+            // la espera. Va ANTES del reuse del ledger porque el nodo quedó marcado '1' al pausar,
+            // y necesitamos setear branchTaken para rutear la rama correcta.
+            if (opts.resumeWait && node.id === opts.resumeWait.nodeId) {
+                branchTaken.set(node.id, new Set([opts.resumeWait.handle]));
+                outcome.set(node.id, 'pass');
+                passed.set(node.id, true);
                 continue;
             }
 
@@ -705,6 +813,22 @@ async function runOneFlow(redis, flow, candidateId, candidate, opts = {}) {
             }
 
             const result = await evaluateOrExecute(node, candidate, flow.id, redis, opts);
+
+            // ⏸️ PAUSA (nodo "esperando_respuesta"): marca el nodo como hecho para reanudar
+            // DESPUÉS de él y detiene la corrida SIN marcar el flujo completado (no sadd execKey,
+            // no borra el ledger). El TTL del ledger se alarga a la ventana de espera para que
+            // una reanudación tardía no re-empiece el flujo desde cero.
+            if (result && typeof result === 'object' && result.__pause) {
+                if (useClaim) {
+                    await redis.pipeline()
+                        .hset(progressKey, node.id, '1')
+                        .expire(progressKey, result.ttlSec || PROGRESS_TTL_SEC)
+                        .exec();
+                }
+                passed.set(node.id, true);
+                return passed;
+            }
+
             outcome.set(node.id, result ? 'pass' : 'fail');
             passed.set(node.id, result);
 
@@ -765,6 +889,58 @@ export async function runFlowsForCandidate(candidateId, candidateSnapshot) {
         }
     } catch (e) {
         console.error('[FLOW-ENGINE] runFlowsForCandidate:', e?.message);
+    }
+}
+
+// 👂 REANUDACIÓN POR MENSAJE (nodo "esperando_respuesta"): lo llama el BLOCK SHIELD de
+// api/ai/agent.js cuando llega un mensaje de un candidato con Brenda en silencio (blocked).
+// Busca si el candidato tiene un flujo pausado esperando una frase; si el texto coincide,
+// reanuda el flujo por la rama "Sí"; si la espera ya expiró, reanuda por la rama "No" (timeout).
+// Devuelve true si reanudó algún flujo (para telemetría/decisiones del caller). Nunca lanza.
+export async function resumeWaitingFlowIfMatch(candidateId, candidateSnapshot, incomingText) {
+    try {
+        const redis = getRedisClient();
+        if (!redis || !candidateId || !incomingText || typeof incomingText !== 'string') return false;
+
+        const key = `${WAITING_PREFIX}${candidateId}`;
+        const all = await redis.hgetall(key);
+        if (!all || !Object.keys(all).length) return false;
+
+        const raw = await getCachedConfig(redis, FLOWS_KEY);
+        const flows = raw ? JSON.parse(raw) : [];
+        const now = Date.now();
+
+        for (const [flowId, val] of Object.entries(all)) {
+            let st;
+            try { st = JSON.parse(val); } catch { await redis.hdel(key, flowId).catch(() => {}); continue; }
+
+            const expired = st.expiresAt && now > Number(st.expiresAt);
+            let matched = false;
+            if (!expired) {
+                for (const g of (Array.isArray(st.grupos) ? st.grupos : [])) {
+                    if (flowTextMatchesGroup(incomingText, g, st.matchMode)) { matched = true; break; }
+                }
+            }
+
+            // Ni coincidió ni expiró → sigue esperando (no consume el registro).
+            if (!matched && !expired) continue;
+
+            // Consume la espera ANTES de reanudar (idempotencia: un mensaje = una reanudación).
+            await redis.hdel(key, flowId).catch(() => {});
+
+            const flow = flows.find(f => f.id === flowId && f.active && Array.isArray(f.nodes) && f.nodes.length);
+            if (!flow) continue; // el flujo se borró/desactivó mientras esperaba → se descarta la espera
+
+            const handle = matched ? 'si' : 'no'; // 'si' = coincidió · 'no' = timeout
+            await runOneFlow(redis, flow, candidateId, { ...candidateSnapshot }, {
+                resumeWait: { nodeId: st.nodeId, handle }
+            });
+            return true; // una reanudación por mensaje
+        }
+        return false;
+    } catch (e) {
+        console.error('[FLOW-ENGINE] resumeWaitingFlowIfMatch:', e?.message);
+        return false;
     }
 }
 

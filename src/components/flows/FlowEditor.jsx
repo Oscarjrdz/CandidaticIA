@@ -30,6 +30,8 @@ const DEFAULT_DATA_BY_TYPE = {
     accion_proyecto: { projectId: '', projectName: '' },
     accion_marcar_leido: {},
     accion_desactivar_bot: {},
+    accion_reactivar_bot: {},
+    esperando_respuesta: { grupos: [{ id: 'g1', label: '', frases: [] }], matchMode: 'contiene', timeoutHoras: 48 },
     contador: { label: '' },
     test: { testPhone: '' }
 };

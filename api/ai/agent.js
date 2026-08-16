@@ -26,7 +26,7 @@ import { processRecruiterMessage } from './recruiter-agent.js';
 
 import { inferGender } from '../utils/gender-helper.js';
 import { maybeSendKatconOnComplete } from '../utils/agent-katcon.js';
-import { runFlowsForCandidate } from '../utils/flow-engine.js';
+import { runFlowsForCandidate, resumeWaitingFlowIfMatch } from '../utils/flow-engine.js';
 import { runInBackground } from '../utils/background.js';
 import { maybeEnqueueForLiveAgent } from '../utils/agent-candidatic.js';
 import { attendLiveCandidate } from '../utils/agent-attend.js';
@@ -1307,6 +1307,13 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
 
         // 🛡️ [BLOCK SHIELD]: Force silence if candidate is blocked
         if (candidateData.blocked === true) {
+            // 👂 NODO "ESPERANDO RESPUESTA": si este candidato tiene un flujo pausado esperando
+            // una frase (siempre precedido por un nodo "Desactivar Bot", por eso está blocked),
+            // aquí atrapamos su mensaje y reanudamos el flujo si coincide. Brenda sigue muda —
+            // por eso NO hay doble respuesta. Si no espera nada o no coincide, return null igual
+            // que siempre. Se hace await (necesitamos que responda antes de cerrar la función),
+            // pero está blindado para nunca lanzar ni bloquear el silencio.
+            await resumeWaitingFlowIfMatch(candidateId, candidateData, incomingMessage).catch(() => {});
             return null;
         }
 

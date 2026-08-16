@@ -1,4 +1,4 @@
-import { Play, Tag, CalendarRange, MapPin, Briefcase, GraduationCap, MessageCircle, Hash, UserRound, CircleMinus, BellRing, FolderKanban, FlaskConical, Eraser, Filter, MessageSquareText, ListChecks, CheckCheck, BotOff, AlarmClock } from 'lucide-react';
+import { Play, Tag, CalendarRange, MapPin, Briefcase, GraduationCap, MessageCircle, Hash, UserRound, CircleMinus, BellRing, FolderKanban, FlaskConical, Eraser, Filter, MessageSquareText, ListChecks, CheckCheck, BotOff, Bot, Ear, AlarmClock } from 'lucide-react';
 
 export const PROFILE_FILTER_LABELS = {
     active: 'Activos (no bloqueados)',
@@ -199,6 +199,28 @@ export const NODE_DEFS = {
         hasTarget: true,
         hasSource: true,
         summary: () => 'Silencia a Brenda (modo humano, igual que intervención humana)'
+    },
+    accion_reactivar_bot: {
+        label: 'Reactivar Bot',
+        icon: Bot,
+        color: 'emerald',
+        hasTarget: true,
+        hasSource: true,
+        summary: () => 'Reactiva a Brenda (deshace Desactivar Bot / intervención humana)'
+    },
+    esperando_respuesta: {
+        label: 'Esperando Respuesta',
+        icon: Ear,
+        color: 'blue',
+        hasTarget: true,
+        hasSource: true,
+        branching: true,
+        summary: (data) => {
+            const grupos = Array.isArray(data.grupos) ? data.grupos : [];
+            const total = grupos.reduce((n, g) => n + (Array.isArray(g?.frases) ? g.frases.filter(f => String(f || '').trim()).length : 0), 0);
+            const h = Number(data.timeoutHoras) > 0 ? Number(data.timeoutHoras) : 48;
+            return total ? `${total} ${total === 1 ? 'frase' : 'frases'} · timeout ${h}h` : 'Configura las frases a esperar';
+        }
     },
     contador: {
         label: 'Contador',

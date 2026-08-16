@@ -177,12 +177,13 @@ const FlowNode = ({ id, type, data, selected }) => {
                 <>
                     {/* Salida "Sí cumple": arista normal (sin sourceHandle 'no'). El id 'si'
                         hace que sea el handle por defecto al que se re-mapean las aristas
-                        viejas (ver migración en FlowEditor). */}
+                        viejas (ver migración en FlowEditor). Para "Esperando Respuesta" las
+                        ramas significan Coincidió (Sí) / Timeout (No), mismo cableado. */}
                     <Handle type="source" id="si" position={Position.Right} className="!w-3 !h-3 !bg-emerald-500 !border-2 !border-white dark:!border-gray-900" />
-                    <span className="absolute top-1/2 -translate-y-1/2 -right-6 text-[10px] font-bold text-emerald-600 dark:text-emerald-400 pointer-events-none">Sí</span>
+                    <span className="absolute top-1/2 -translate-y-1/2 -right-6 text-[10px] font-bold text-emerald-600 dark:text-emerald-400 pointer-events-none whitespace-nowrap">{type === 'esperando_respuesta' ? 'Coincidió' : 'Sí'}</span>
                     {/* Salida "No cumple": los candidatos que NO pasan la condición salen por aquí. */}
                     <Handle type="source" id="no" position={Position.Bottom} className="!w-3 !h-3 !bg-red-500 !border-2 !border-white dark:!border-gray-900" />
-                    <span className="absolute left-1/2 -translate-x-1/2 -bottom-5 text-[10px] font-bold text-red-500 pointer-events-none whitespace-nowrap">No cumple</span>
+                    <span className="absolute left-1/2 -translate-x-1/2 -bottom-5 text-[10px] font-bold text-red-500 pointer-events-none whitespace-nowrap">{type === 'esperando_respuesta' ? 'Timeout' : 'No cumple'}</span>
                 </>
             ) : def.hasSource && (
                 <Handle type="source" position={Position.Right} className="!w-3 !h-3 !bg-gray-400 !border-2 !border-white dark:!border-gray-900" />

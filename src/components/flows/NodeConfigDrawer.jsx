@@ -153,6 +153,60 @@ const MultiSelectChecklist = ({ items, selected, onChange, searchable }) => {
     );
 };
 
+// Editor de "listas de frases" para el nodo Esperando Respuesta. Cada grupo es una lista
+// de frases (una por línea en el textarea). Se puede tener varias listas. Para el motor,
+// basta con que el mensaje del candidato coincida con UNA frase de CUALQUIER lista → rama "Sí".
+const FraseGruposEditor = ({ grupos, onChange }) => {
+    const list = Array.isArray(grupos) && grupos.length ? grupos : [{ id: 'g1', label: '', frases: [] }];
+
+    const updateGroup = (idx, fields) => {
+        onChange(list.map((g, i) => (i === idx ? { ...g, ...fields } : g)));
+    };
+    const addGroup = () => {
+        onChange([...list, { id: `g${Date.now()}`, label: '', frases: [] }]);
+    };
+    const removeGroup = (idx) => {
+        const next = list.filter((_, i) => i !== idx);
+        onChange(next.length ? next : [{ id: 'g1', label: '', frases: [] }]);
+    };
+
+    return (
+        <div className="space-y-3">
+            {list.map((g, idx) => (
+                <div key={g.id || idx} className="rounded-xl border border-gray-200 dark:border-gray-700 p-3 space-y-2">
+                    <div className="flex items-center gap-2">
+                        <input
+                            type="text"
+                            value={g.label || ''}
+                            onChange={(e) => updateGroup(idx, { label: e.target.value })}
+                            placeholder={`Lista ${idx + 1} (nombre opcional)`}
+                            className="flex-1 px-2.5 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 dark:bg-gray-800 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                        {list.length > 1 && (
+                            <button onClick={() => removeGroup(idx)} className="p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-red-500" title="Quitar lista">
+                                <X className="w-4 h-4" />
+                            </button>
+                        )}
+                    </div>
+                    <textarea
+                        value={(Array.isArray(g.frases) ? g.frases : []).join('\n')}
+                        onChange={(e) => updateGroup(idx, { frases: e.target.value.split('\n').map(s => s.trimStart()) })}
+                        placeholder={"Una frase por línea:\nnos vemos\nahí estaré\nconfirmado"}
+                        rows={4}
+                        className="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 dark:bg-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y"
+                    />
+                    <p className="text-[11px] text-gray-400">
+                        {(Array.isArray(g.frases) ? g.frases.filter(f => String(f || '').trim()) : []).length} frase(s) en esta lista.
+                    </p>
+                </div>
+            ))}
+            <button onClick={addGroup} className="w-full px-3 py-2 rounded-lg text-xs font-semibold border border-dashed border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                + Agregar otra lista de frases
+            </button>
+        </div>
+    );
+};
+
 const NodeConfigDrawer = ({ node, flowId, meta, quickReplies, reminderTemplates, projects, onChange, onClose }) => {
     if (!node) return null;
     const def = NODE_DEFS[node.type] || NODE_DEFS.contador;
@@ -428,6 +482,47 @@ const NodeConfigDrawer = ({ node, flowId, meta, quickReplies, reminderTemplates,
                     </p>
                 )}
 
+                {node.type === 'accion_reactivar_bot' && (
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                        No necesita configuración: al ejecutarse, <strong>reactiva a Brenda</strong> para ese candidato — deshace el <strong>Desactivar Bot</strong> (o una intervención humana). La IA vuelve a responderle normalmente. Útil al final de un ciclo <strong>Desactivar Bot → Esperando respuesta → … → Reactivar Bot</strong>.
+                    </p>
+                )}
+
+                {node.type === 'esperando_respuesta' && (
+                    <div className="space-y-5">
+                        <p className="text-xs bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-2.5 text-blue-800 dark:text-blue-300">
+                            <strong>Ponlo siempre DESPUÉS de un “Desactivar Bot”.</strong> El flujo se queda en modo oyente: cuando el candidato responde, si su mensaje coincide con alguna frase, el flujo continúa por la rama <strong>Sí</strong>. Como Brenda está en silencio, no hay doble respuesta.
+                        </p>
+                        <div>
+                            <label className="text-xs text-gray-500 dark:text-gray-400 mb-2 block">Frases que activan la continuación</label>
+                            <FraseGruposEditor grupos={data.grupos} onChange={(v) => patch({ grupos: v })} />
+                        </div>
+                        <div>
+                            <label className="text-xs text-gray-500 dark:text-gray-400 mb-2 block">Cómo comparar</label>
+                            <RadioGroup
+                                options={[
+                                    { value: 'contiene', label: 'Contiene la frase (recomendado)' },
+                                    { value: 'palabra', label: 'La frase aparece como palabra(s) suelta(s)' },
+                                    { value: 'exacto', label: 'El mensaje es exactamente la frase' }
+                                ]}
+                                value={data.matchMode || 'contiene'}
+                                onChange={(v) => patch({ matchMode: v })}
+                            />
+                            <p className="text-xs text-gray-400 mt-1.5">La comparación ignora mayúsculas y acentos.</p>
+                        </div>
+                        <div>
+                            <label className="text-xs text-gray-500 dark:text-gray-400 mb-2 block">Tiempo máximo de espera (horas)</label>
+                            <input
+                                type="number" min="1" step="1"
+                                value={data.timeoutHoras ?? 48}
+                                onChange={(e) => patch({ timeoutHoras: Math.max(1, parseInt(e.target.value, 10) || 1) })}
+                                className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 dark:bg-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                            <p className="text-xs text-gray-400 mt-1.5">Si el candidato no responde algo que coincida dentro de este plazo, la próxima vez que escriba (o si vuelve a entrar) el flujo continúa por la rama <strong>No</strong> (timeout). Conéctale ahí un <strong>Reactivar Bot</strong> si quieres devolvérselo a Brenda.</p>
+                        </div>
+                    </div>
+                )}
+
                 {node.type === 'accion_recordatorio' && (
                     <div>
                         <label className="text-xs text-gray-500 dark:text-gray-400 mb-2 block">Plantilla de recordatorio</label>
@@ -500,7 +595,7 @@ const NodeConfigDrawer = ({ node, flowId, meta, quickReplies, reminderTemplates,
                     </div>
                 )}
 
-                {def.branching && (
+                {def.branching && node.type !== 'esperando_respuesta' && (
                     <div className="mt-5 pt-4 border-t border-gray-100 dark:border-gray-700">
                         <p className="text-xs text-gray-500 dark:text-gray-400">
                             Este nodo tiene <strong>dos salidas</strong>: la verde <strong className="text-emerald-600 dark:text-emerald-400">Sí</strong> (a la derecha) para los candidatos que <strong>cumplen</strong>, y la roja <strong className="text-red-500">No cumple</strong> (abajo) para los que <strong>no</strong>. Conecta la salida roja a un nodo <strong>Marcar Leído</strong> si quieres sacarlos de la lista sin mandarles nada.
