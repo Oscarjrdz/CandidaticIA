@@ -5327,7 +5327,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                                         {flowMenuOpen && (
                                             <div
                                                 onClick={(e) => e.stopPropagation()}
-                                                className="absolute right-0 top-full mt-1 w-64 bg-white dark:bg-[#202c33] rounded-lg shadow-xl z-50 border border-gray-100 dark:border-gray-700 overflow-hidden"
+                                                className="absolute left-0 top-full mt-1 w-64 bg-white dark:bg-[#202c33] rounded-lg shadow-xl z-50 border border-gray-100 dark:border-gray-700 overflow-hidden"
                                             >
                                                 <div className="px-3 py-2 text-xs font-bold text-[#8696a0] border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-[#111b21]">
                                                     Meter a un flujo
@@ -5383,7 +5383,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                                             {reminderTemplateMenuOpen && (
                                                 <div
                                                     onClick={(e) => e.stopPropagation()}
-                                                    className="absolute right-0 top-full mt-1 w-64 bg-white dark:bg-[#202c33] rounded-lg shadow-xl z-50 border border-gray-100 dark:border-gray-700 overflow-hidden"
+                                                    className="absolute left-0 top-full mt-1 w-64 bg-white dark:bg-[#202c33] rounded-lg shadow-xl z-50 border border-gray-100 dark:border-gray-700 overflow-hidden"
                                                 >
                                                     <div className="px-3 py-2 text-xs font-bold text-[#8696a0] border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-[#111b21]">
                                                         Plantillas de recordatorio
@@ -5444,7 +5444,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                                                 className={`${baseClass} hover:bg-black/5 dark:hover:bg-white/5 ${showDropdown === 'vacancies' ? 'bg-black/5 dark:bg-white/5' : ''}`} title="Inyectar información de Vacante">
                                                 <Briefcase className="w-5 h-5 text-gray-500 hover:text-blue-500 transition-colors" />
                                             </button>
-                                            <div className={`absolute right-0 top-full mt-1 w-64 bg-white dark:bg-[#202c33] rounded-lg shadow-xl transition-all z-50 border border-gray-100 dark:border-gray-700 overflow-hidden flex flex-col ${showDropdown === 'vacancies' ? 'opacity-100 pointer-events-auto translate-y-0' : 'opacity-0 pointer-events-none -translate-y-2'}`}>
+                                            <div className={`absolute left-0 top-full mt-1 w-64 bg-white dark:bg-[#202c33] rounded-lg shadow-xl transition-all z-50 border border-gray-100 dark:border-gray-700 overflow-hidden flex flex-col ${showDropdown === 'vacancies' ? 'opacity-100 pointer-events-auto translate-y-0' : 'opacity-0 pointer-events-none -translate-y-2'}`}>
                                                 <div className="px-3 py-2 text-xs font-bold text-[#8696a0] border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-[#111b21] flex items-center justify-between">
                                                     <span>Inyectar Info de Vacante</span>
                                                     <button
@@ -5514,7 +5514,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                                                 className={`${baseClass} hover:bg-black/5 dark:hover:bg-white/5 ${showDropdown === 'tags' ? 'bg-black/5 dark:bg-white/5' : ''}`}>
                                                 <Tag className="w-5 h-5" />
                                             </button>
-                                            <div className={`absolute right-0 top-full mt-1 w-72 bg-white dark:bg-[#202c33] rounded-lg shadow-xl transition-all z-50 border border-gray-100 dark:border-gray-700 overflow-hidden flex flex-col ${showDropdown === 'tags' ? 'opacity-100 pointer-events-auto translate-y-0' : 'opacity-0 pointer-events-none -translate-y-2'}`}>
+                                            <div className={`absolute left-0 top-full mt-1 w-72 bg-white dark:bg-[#202c33] rounded-lg shadow-xl transition-all z-50 border border-gray-100 dark:border-gray-700 overflow-hidden flex flex-col ${showDropdown === 'tags' ? 'opacity-100 pointer-events-auto translate-y-0' : 'opacity-0 pointer-events-none -translate-y-2'}`}>
                                                 <div className="px-3 py-2 text-xs font-bold text-[#8696a0] border-b border-gray-100 dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-[#111b21]">
                                                     <span>Etiquetar candidato</span>
                                                 </div>
