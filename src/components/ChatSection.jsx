@@ -5240,19 +5240,19 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                     {/* Header Chat — container query: cuando los paneles laterales (CRM, Banco)
                         angostan el chat, el texto del toggle IA se oculta para no cortar las etiquetas */}
                     <div className="min-h-[59px] px-4 py-2 flex items-center bg-[#f0f2f5] dark:bg-[#202c33] z-20 shadow-sm" style={{ containerType: 'inline-size' }}>
-                        <div className="flex items-center flex-1 min-w-0 pr-4">
-                            <button 
+                        <div className="flex items-start flex-1 min-w-0 pr-4">
+                            <button
                                 className="md:hidden mr-2 p-1 text-[#54656f] dark:text-[#aebac1]"
                                 onClick={() => setSelectedChat(null)}
                             >
                                 <ArrowLeft className="w-6 h-6" />
                             </button>
-                            <div className="min-w-[40px] w-10 h-10 rounded-full flex items-center justify-center mr-3 overflow-hidden shrink-0">
+                            <div className="min-w-[32px] w-8 h-8 rounded-full flex items-center justify-center mr-2.5 overflow-hidden shrink-0">
                                 {selectedChat.profilePic && !headerImgError ? (
                                     <img src={selectedChat.profilePic} className="w-full h-full object-cover" alt="profile"
                                         onError={() => setHeaderImgError(true)} />
                                 ) : (
-                                    <span className="flex items-center justify-center w-full h-full text-sm font-bold text-white rounded-full"
+                                    <span className="flex items-center justify-center w-full h-full text-xs font-bold text-white rounded-full"
                                         style={{ background: ['#f9a8d4','#a5b4fc','#86efac','#fcd34d','#fdba74','#c4b5fd','#67e8f9','#f0abfc','#fca5a5','#bef264'][((selectedChat.nombre||'C').charCodeAt(0)*7)%10] }}>
                                         {(selectedChat.nombre || 'C')[0].toUpperCase()}
                                     </span>
