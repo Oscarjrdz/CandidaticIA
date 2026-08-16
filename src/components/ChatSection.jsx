@@ -1141,11 +1141,16 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
     const [_qrSaving, _setQrSaving] = useState(false);
     const [capturingShortcut, setCapturingShortcut] = useState(false);
 
-    // Toolbar icon order (drag & drop)
-    const TOOLBAR_ICON_IDS = ['vacancies', 'tags', 'crm_manual', 'quick_replies'];
+    // Toolbar icon order (drag & drop). Se muestra en 2 RENGLONES: arriba respuestas/CRM/lupa,
+    // abajo etiquetas/vacantes. Cada renglón se reordena por drag DENTRO de su fila (no se cruza
+    // entre renglones — ver iconRow + el guard en handleToolbarDrop). El renglón lo decide CSS
+    // order (0 arriba, 2 abajo), así el drag sigue operando sobre un solo array.
+    const TOP_ROW_ICON_IDS = ['quick_replies', 'crm_manual', 'search'];
+    const TOOLBAR_ICON_IDS = ['quick_replies', 'crm_manual', 'search', 'tags', 'vacancies'];
+    const iconRow = (id) => TOP_ROW_ICON_IDS.includes(id) ? 'top' : 'bottom';
     const [toolbarOrder, setToolbarOrder] = useState(() => {
         try {
-            const saved = localStorage.getItem('candidatic:toolbar_order');
+            const saved = localStorage.getItem('candidatic:toolbar_order_v2');
             if (saved) {
                 const parsed = JSON.parse(saved);
                 // Ensure all IDs are present (handles new icons added later)
@@ -1245,6 +1250,8 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         e.preventDefault();
         const draggedId = e.dataTransfer.getData('text/plain');
         if (!draggedId || draggedId === iconId) return;
+        // Solo se reordena DENTRO del mismo renglón — soltar sobre un icono del otro renglón no hace nada.
+        if (iconRow(draggedId) !== iconRow(iconId)) { setDraggedIcon(null); return; }
         setToolbarOrder(prev => {
             const newOrder = [...prev];
             const fromIdx = newOrder.indexOf(draggedId);
@@ -1252,7 +1259,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
             if (fromIdx === -1 || toIdx === -1) return prev;
             newOrder.splice(fromIdx, 1);
             newOrder.splice(toIdx, 0, draggedId);
-            localStorage.setItem('candidatic:toolbar_order', JSON.stringify(newOrder));
+            localStorage.setItem('candidatic:toolbar_order_v2', JSON.stringify(newOrder));
             return newOrder;
         });
         setDraggedIcon(null);
@@ -5314,7 +5321,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                                     )}
                                     {/* Datos del candidato — mismo formato que la tarjeta de la lista de chats */}
                                     {(selectedChat.edad || selectedChat.escolaridad || selectedChat.municipio || selectedChat.colonia || selectedChat.categoria) && (
-                                        <span className="flex items-center gap-2 text-[10px] text-[#8696a0] dark:text-[#697882] whitespace-nowrap ml-0.5">
+                                        <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-[#8696a0] dark:text-[#697882] ml-0.5">
                                             {selectedChat.edad && <span>{selectedChat.edad} años</span>}
                                             {selectedChat.edad && selectedChat.escolaridad && <span>•</span>}
                                             {selectedChat.escolaridad && <span>{selectedChat.escolaridad}</span>}
@@ -5474,8 +5481,8 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                                 };
 
                                 const baseClass = `p-2 rounded-full transition-all cursor-grab active:cursor-grabbing ${draggedIcon === iconId ? 'opacity-40 scale-90' : 'opacity-100'}`;
-                                // Renglón: respuestas (banco) y CRM van ARRIBA (order:0); el resto ABAJO (order:2).
-                                const iconOrder = (iconId === 'quick_replies' || iconId === 'crm_manual') ? 0 : 2;
+                                // Renglón: respuestas/CRM/lupa van ARRIBA (order:0); el resto ABAJO (order:2).
+                                const iconOrder = iconRow(iconId) === 'top' ? 0 : 2;
 
                                 if (iconId === 'vacancies') {
                                     return (
@@ -5776,18 +5783,34 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                                     );
                                 }
 
+                                if (iconId === 'search') {
+                                    return (
+                                        <button
+                                            key={iconId}
+                                            {...dragProps}
+                                            style={{ order: iconOrder }}
+                                            onClick={() => { setShowChatSearch(v => !v); if (!showChatSearch) setTimeout(() => chatSearchInputRef.current?.focus(), 50); }}
+                                            className={`${baseClass} ${showChatSearch ? 'bg-black/10 dark:bg-white/10 text-[#111b21] dark:text-white' : 'hover:bg-black/5 dark:hover:bg-white/5 text-[#54656f] dark:text-[#aebac1]'}`}
+                                            title="Buscar en conversación"
+                                        >
+                                            <Search className="w-5 h-5" />
+                                        </button>
+                                    );
+                                }
+
                                 return null;
                             })}
 
-                            {/* Search icon — renglón de arriba (order:0), junto a respuestas y CRM */}
-                            <button
-                                style={{ order: 0 }}
-                                onClick={() => { setShowChatSearch(v => !v); if (!showChatSearch) setTimeout(() => chatSearchInputRef.current?.focus(), 50); }}
-                                className={`p-2 rounded-full transition-all ${showChatSearch ? 'bg-black/10 dark:bg-white/10 text-[#111b21] dark:text-white' : 'hover:bg-black/5 dark:hover:bg-white/5 text-[#54656f] dark:text-[#aebac1]'}`}
-                                title="Buscar en conversación"
-                            >
-                                <Search className="w-5 h-5" />
-                            </button>
+                            {/* Search en móvil: en desktop la lupa va dentro del toolbar arrastrable de arriba */}
+                            {isMobile && (
+                                <button
+                                    onClick={() => { setShowChatSearch(v => !v); if (!showChatSearch) setTimeout(() => chatSearchInputRef.current?.focus(), 50); }}
+                                    className={`p-2 rounded-full transition-all ${showChatSearch ? 'bg-black/10 dark:bg-white/10 text-[#111b21] dark:text-white' : 'hover:bg-black/5 dark:hover:bg-white/5 text-[#54656f] dark:text-[#aebac1]'}`}
+                                    title="Buscar en conversación"
+                                >
+                                    <Search className="w-5 h-5" />
+                                </button>
+                            )}
                         </div>
                     </div>
 
