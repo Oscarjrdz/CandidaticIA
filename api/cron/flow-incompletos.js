@@ -21,8 +21,11 @@
  *   - El contador es de por vida (no se reinicia si el candidato responde) — coincide con
  *     "veces que ha pasado por este nodo".
  *
- * Nota: usa la MISMA muestra de 500 pendientes que reengagement (srandmember), así que un
- * candidato puede tardar un par de corridas en ser evaluado tras cruzar el silencio.
+ * COBERTURA: evalúa a los RECENT_LIMIT candidatos más recientes (por último mensaje, vía el
+ * índice ordenado `candidates:list`), NO una muestra aleatoria del backlog completo. El flujo
+ * solo dispara a quien escribió DESPUÉS de activarlo (mensaje reciente + 1h de silencio), así
+ * que los elegibles SIEMPRE están arriba de esa lista → cada corrida los cubre de forma
+ * determinista, sin la lotería del srandmember contra miles de pendientes viejos.
  */
 import { getRedisClient, getCandidateById, isProfileComplete } from '../utils/storage.js';
 import { getCachedConfig } from '../utils/cache.js';
@@ -39,6 +42,12 @@ const FIRE_PREFIX  = 'flow:silence:lastfire:v1:';  // hash flowId → { candidat
 //      un backlog grande de incompletos viejos) puede marcar el número como spam. Con el
 //      tope, el backlog se drena de forma gradual (25 × 96 corridas/día ≈ 2,400/día).
 const MAX_FIRES_PER_RUN = 25;
+
+// Cuántos candidatos recientes evaluar por corrida (por último mensaje, desde `candidates:list`).
+// Los elegibles a incompletos escribieron hace poco (post-activación), así que viven arriba de
+// esta lista; 100 cubre de sobra la ventana reciente sin escanear el backlog de miles.
+const RECENT_LIMIT = 100;
+const CANDIDATES_LIST_KEY = 'candidates:list';
 
 export default async function handler(req, res) {
     // Seguridad: Vercel manda Authorization en los crons
@@ -71,14 +80,16 @@ export default async function handler(req, res) {
     // Modo forzado ("Enviar ya" desde UI, opcional): salta los checks de tiempo/contador
     const forceCandidateId = req.body?.forceCandidateId || null;
 
-    // 2. Cargar candidatos incompletos (muestra del índice de pendientes, igual que reengagement)
+    // 2. Cargar los candidatos MÁS RECIENTES (por último mensaje, vía candidates:list ordenado).
+    // Cobertura determinista: los elegibles a incompletos son recientes, así que están arriba.
+    // Los completos que vengan en la lista se filtran abajo con isProfileComplete.
     let candidates = [];
     try {
         if (forceCandidateId) {
             const c = await getCandidateById(forceCandidateId);
             candidates = c ? [c] : [];
         } else {
-            const ids = await redis.srandmember('stats:list:pending', 500);
+            const ids = await redis.zrevrange(CANDIDATES_LIST_KEY, 0, RECENT_LIMIT - 1);
             if (ids?.length) {
                 const pipe = redis.pipeline();
                 ids.forEach(id => pipe.get(`candidate:${id}`));
