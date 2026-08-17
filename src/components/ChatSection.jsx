@@ -2517,6 +2517,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
     const chatListScrollerRef = useRef(null);
     const listAnchorRef = useRef({ id: null, offset: 0 });
     const anchorRafRef = useRef(0);
+    const holdingRef = useRef(false); // true mientras el sostén de salida controla el scroll
 
     // Mide la primera fila visible (id + offset desde el tope del scroller) y la guarda como
     // ancla. Se llama en CADA scroll (throttled por rAF) para que la referencia esté siempre
@@ -2560,6 +2561,9 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         chatListScrollerRef.current = el;
         if (el) {
             const handler = () => {
+                // Mientras el sostén de salida mueve el scroll, NO recapturar: sería medir la
+                // posición que el propio sostén está corrigiendo → contaminaría el objetivo.
+                if (holdingRef.current) return;
                 if (anchorRafRef.current) return;
                 anchorRafRef.current = requestAnimationFrame(() => {
                     anchorRafRef.current = 0;
@@ -2620,17 +2624,24 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         const target = { ...listAnchorRef.current }; // offset a sostener (pre-colapso)
         if (!sc || !target.id) return;
         const scoped = (window.CSS && CSS.escape) ? CSS.escape(target.id) : target.id;
-        const hold = () => {
+        holdingRef.current = true;
+        const snapToTarget = () => {
             const el = sc.querySelector(`[data-cid="${scoped}"]`);
             if (el && !el.classList.contains('chat-card-exit')) {
                 const cur = el.getBoundingClientRect().top - sc.getBoundingClientRect().top;
                 const delta = cur - target.offset;
                 if (Math.abs(delta) > 0.5) sc.scrollTop += delta;
             }
-            holdRafRef.current = requestAnimationFrame(hold);
         };
+        const hold = () => { snapToTarget(); holdRafRef.current = requestAnimationFrame(hold); };
         holdRafRef.current = requestAnimationFrame(hold);
-        return () => { if (holdRafRef.current) cancelAnimationFrame(holdRafRef.current); holdRafRef.current = 0; };
+        return () => {
+            if (holdRafRef.current) cancelAnimationFrame(holdRafRef.current);
+            holdRafRef.current = 0;
+            snapToTarget();               // corrección final exacta al terminar la salida
+            listAnchorRef.current = { id: target.id, offset: target.offset }; // objetivo limpio
+            holdingRef.current = false;
+        };
     }, [isEngaged, leavingCandidates.size]);
 
     // ── Entrada por CAMBIO DE ESTATUS: detecta tarjetas que RECIÉN pasan a matchear el
