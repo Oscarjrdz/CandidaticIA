@@ -1,11 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { ArrowLeft, Plus, Save, Check } from 'lucide-react';
+import { ArrowLeft, Plus, Save, Check, ClipboardPaste } from 'lucide-react';
 import { NODE_DEFS, COLOR_CLASSES } from './nodeTypes';
 
 const ENTRY_TYPES = ['inicio', 'inicio_lista', 'inicio_incompleto_silencio'];
 const ADDABLE_TYPES = Object.keys(NODE_DEFS).filter(t => !ENTRY_TYPES.includes(t));
 
-const FlowToolbar = ({ flowName, active, dirty, saving, onAddNode, onSave, onToggleActive, onRename, onBack }) => {
+const FlowToolbar = ({ flowName, active, dirty, saving, onAddNode, onSave, onToggleActive, onRename, onBack, canPaste, onPaste }) => {
     const [menuOpen, setMenuOpen] = useState(false);
     const [editingName, setEditingName] = useState(false);
     const [nameDraft, setNameDraft] = useState(flowName);
@@ -77,6 +77,16 @@ const FlowToolbar = ({ flowName, active, dirty, saving, onAddNode, onSave, onTog
                         </div>
                     )}
                 </div>
+
+                {canPaste && (
+                    <button
+                        onClick={onPaste}
+                        className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white dark:bg-gray-800 border border-indigo-200 dark:border-indigo-800 text-indigo-600 dark:text-indigo-400 text-sm font-semibold shadow-sm hover:bg-indigo-50 dark:hover:bg-indigo-900/20"
+                        title="Pegar aquí lo que clonaste/copiaste (también de otro flujo)"
+                    >
+                        <ClipboardPaste className="w-4 h-4" /> Pegar
+                    </button>
+                )}
             </div>
 
             <div className="flex items-center gap-2 pointer-events-auto">

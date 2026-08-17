@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
     ReactFlow, ReactFlowProvider, Background, Controls, MiniMap,
-    addEdge, applyNodeChanges, applyEdgeChanges, BackgroundVariant
+    addEdge, applyNodeChanges, applyEdgeChanges, BackgroundVariant,
+    useReactFlow
 } from '@xyflow/react';
+import { Copy, Trash2 } from 'lucide-react';
 import '@xyflow/react/dist/style.css';
 import { useToastContext } from '../../contexts/ToastContext';
 import { getFlow, updateFlow, getFlowsMeta, getFlowCounters, getQuickReplies, getReminderTemplates, getManualProjects, testFlow, getFilteredFlowCandidates, runFlowListItem } from '../../services/flowsService';
@@ -45,6 +47,14 @@ const stripTransientData = (data = {}) => {
     return rest;
 };
 
+// Portapapeles de selección (nodos+aristas) — persiste en localStorage para poder pegar
+// partes de un flujo en OTRO flujo. Los nodos de inicio nunca se clonan/copian (un flujo
+// tiene una sola raíz). IDs nuevos siempre, para no chocar con los existentes.
+const CLIPBOARD_KEY = 'flow_editor_clipboard_v1';
+const ENTRY_TYPES = new Set(['inicio', 'inicio_lista', 'inicio_incompleto_silencio']);
+const genNodeId = () => `n_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+const genEdgeId = () => `e${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
 const FlowEditorInner = ({ flowId, onBack }) => {
     const { showToast } = useToastContext();
     const [flowMeta, setFlowMeta] = useState({ name: '', active: false });
@@ -58,6 +68,11 @@ const FlowEditorInner = ({ flowId, onBack }) => {
     const [saving, setSaving] = useState(false);
     const [dirty, setDirty] = useState(false);
     const [selectedNodeId, setSelectedNodeId] = useState(null);
+    // Selección múltiple (rubber-band): ids seleccionados + posición del mini-menú flotante.
+    const [selectedIds, setSelectedIds] = useState([]);
+    const [selMenu, setSelMenu] = useState(null); // { x, y } en coords de pantalla
+    const [canPaste, setCanPaste] = useState(() => { try { return !!localStorage.getItem(CLIPBOARD_KEY); } catch { return false; } });
+    const rf = useReactFlow();
     const handleTestRunRef = useRef(null);
     const handleLoadListRef = useRef(null);
     const handleRunListRef = useRef(null);
@@ -93,6 +108,9 @@ const FlowEditorInner = ({ flowId, onBack }) => {
 
     const hydrateNode = useCallback((n) => ({
         ...n,
+        // Los nodos de inicio no se pueden borrar (ni con Suprimir ni con la caja de selección):
+        // borrar la raíz corrompería el flujo. Su botón X ya venía oculto en FlowNode.
+        deletable: !ENTRY_TYPES.has(n.type),
         data: {
             ...n.data,
             onConfigure: handleConfigure,
@@ -212,6 +230,135 @@ const FlowEditorInner = ({ flowId, onBack }) => {
         });
         setDirty(true);
     }, [hydrateNode]);
+
+    // ── Selección múltiple (rubber-band) → mini-menú Clonar/Borrar ────────────────
+    // React Flow marca node.selected; onSelectionChange nos entrega los seleccionados.
+    // El menú aparece con 2+ nodos (1 nodo abre su drawer de config como siempre).
+    const onSelectionChange = useCallback(({ nodes: selNodes }) => {
+        const sel = selNodes || [];
+        setSelectedIds(sel.map(n => n.id));
+        if (sel.length >= 2) {
+            setSelectedNodeId(null); // no abrir el drawer de config durante la multi-selección
+            const lefts = sel.map(n => n.position.x);
+            const rights = sel.map(n => n.position.x + (n.measured?.width || 240));
+            const tops = sel.map(n => n.position.y);
+            const midX = (Math.min(...lefts) + Math.max(...rights)) / 2;
+            const topY = Math.min(...tops);
+            const pt = rf.flowToScreenPosition({ x: midX, y: topY });
+            setSelMenu({ x: pt.x, y: pt.y });
+        } else {
+            setSelMenu(null);
+        }
+    }, [rf]);
+
+    // Duplica nodos (+ aristas internas) con IDs nuevos y offset. Ignora nodos de inicio.
+    const buildDuplicate = useCallback((srcNodes, srcEdges, offset = { x: 48, y: 48 }) => {
+        const idMap = new Map();
+        const newNodes = srcNodes
+            .filter(n => !ENTRY_TYPES.has(n.type))
+            .map(n => {
+                const nid = genNodeId();
+                idMap.set(n.id, nid);
+                return hydrateNode({
+                    ...n,
+                    id: nid,
+                    position: { x: (n.position?.x || 0) + offset.x, y: (n.position?.y || 0) + offset.y },
+                    data: { ...stripTransientData(n.data) },
+                    selected: true
+                });
+            });
+        const newEdges = srcEdges
+            .filter(e => idMap.has(e.source) && idMap.has(e.target))
+            .map(e => hydrateEdge({
+                id: genEdgeId(),
+                source: idMap.get(e.source),
+                target: idMap.get(e.target),
+                sourceHandle: e.sourceHandle ?? null,
+                targetHandle: e.targetHandle ?? null,
+                selected: true
+            }));
+        return { newNodes, newEdges };
+    }, [hydrateNode, hydrateEdge]);
+
+    // Copia la selección al portapapeles (localStorage) para pegarla en OTRO flujo.
+    const copySelectionToClipboard = useCallback((ids) => {
+        const idSet = new Set(ids);
+        const clipNodes = nodes
+            .filter(n => idSet.has(n.id) && !ENTRY_TYPES.has(n.type))
+            .map(n => ({ _srcId: n.id, type: n.type, position: n.position, data: stripTransientData(n.data) }));
+        if (!clipNodes.length) return false;
+        const srcIdSet = new Set(clipNodes.map(n => n._srcId));
+        const clipEdges = edges
+            .filter(e => srcIdSet.has(e.source) && srcIdSet.has(e.target))
+            .map(e => ({ source: e.source, target: e.target, sourceHandle: e.sourceHandle ?? null, targetHandle: e.targetHandle ?? null }));
+        try {
+            localStorage.setItem(CLIPBOARD_KEY, JSON.stringify({ nodes: clipNodes, edges: clipEdges }));
+            setCanPaste(true);
+            return true;
+        } catch { return false; }
+    }, [nodes, edges]);
+
+    // CLONAR: duplica la selección aquí mismo (offset) y la copia al portapapeles.
+    const handleCloneSelection = useCallback(() => {
+        const idSet = new Set(selectedIds);
+        const srcNodes = nodes.filter(n => idSet.has(n.id) && !ENTRY_TYPES.has(n.type));
+        if (!srcNodes.length) { showToast('Los nodos de inicio no se pueden clonar', 'error'); return; }
+        const srcEdges = edges.filter(e => idSet.has(e.source) && idSet.has(e.target));
+        const { newNodes, newEdges } = buildDuplicate(srcNodes, srcEdges);
+        setNodes(nds => [...nds.map(n => ({ ...n, selected: false })), ...newNodes]);
+        setEdges(eds => [...eds.map(e => ({ ...e, selected: false })), ...newEdges]);
+        copySelectionToClipboard(selectedIds);
+        setDirty(true);
+        setSelMenu(null);
+        showToast(`Clonados ${newNodes.length} nodo(s) — copiados para pegar en otro flujo`, 'success');
+    }, [selectedIds, nodes, edges, buildDuplicate, copySelectionToClipboard, showToast]);
+
+    // BORRAR: elimina los nodos seleccionados (menos inicios) y sus aristas.
+    const handleDeleteSelection = useCallback(() => {
+        const idSet = new Set(selectedIds.filter(id => {
+            const n = nodes.find(x => x.id === id);
+            return n && !ENTRY_TYPES.has(n.type);
+        }));
+        if (!idSet.size) { showToast('Los nodos de inicio no se pueden borrar', 'error'); return; }
+        setNodes(nds => nds.filter(n => !idSet.has(n.id)));
+        setEdges(eds => eds.filter(e => !idSet.has(e.source) && !idSet.has(e.target)));
+        setDirty(true);
+        setSelMenu(null);
+        setSelectedIds([]);
+        showToast(`Borrados ${idSet.size} nodo(s)`, 'success');
+    }, [selectedIds, nodes, showToast]);
+
+    // PEGAR: inserta el contenido del portapapeles en ESTE flujo (IDs nuevos + offset).
+    const handlePaste = useCallback(() => {
+        let clip;
+        try { clip = JSON.parse(localStorage.getItem(CLIPBOARD_KEY) || 'null'); } catch { clip = null; }
+        if (!clip?.nodes?.length) { showToast('No hay nada copiado', 'error'); return; }
+        const tmpNodes = clip.nodes.map(n => ({ id: n._srcId, type: n.type, position: n.position, data: n.data }));
+        const { newNodes, newEdges } = buildDuplicate(tmpNodes, clip.edges || [], { x: 64, y: 64 });
+        if (!newNodes.length) { showToast('Nada que pegar', 'error'); return; }
+        setNodes(nds => [...nds.map(n => ({ ...n, selected: false })), ...newNodes]);
+        setEdges(eds => [...eds.map(e => ({ ...e, selected: false })), ...newEdges]);
+        setDirty(true);
+        showToast(`Pegados ${newNodes.length} nodo(s) en este flujo`, 'success');
+    }, [buildDuplicate, showToast]);
+
+    // Atajos: Ctrl/Cmd+C copia la selección, Ctrl/Cmd+V pega (sirve entre flujos distintos).
+    useEffect(() => {
+        const onKey = (e) => {
+            const tag = (e.target?.tagName || '').toLowerCase();
+            if (tag === 'input' || tag === 'textarea' || e.target?.isContentEditable) return;
+            const mod = e.metaKey || e.ctrlKey;
+            if (!mod) return;
+            const k = e.key.toLowerCase();
+            if (k === 'c' && selectedIds.length) {
+                if (copySelectionToClipboard(selectedIds)) showToast('Copiado — pégalo en cualquier flujo (Ctrl/Cmd+V)', 'success');
+            } else if (k === 'v') {
+                handlePaste();
+            }
+        };
+        window.addEventListener('keydown', onKey);
+        return () => window.removeEventListener('keydown', onKey);
+    }, [selectedIds, copySelectionToClipboard, handlePaste, showToast]);
 
     const handleNodeConfigChange = useCallback((nodeId, patch) => {
         setNodes(nds => nds.map(n => n.id === nodeId ? { ...n, data: { ...n.data, ...patch } } : n));
@@ -378,6 +525,8 @@ const FlowEditorInner = ({ flowId, onBack }) => {
                 onToggleActive={handleToggleActive}
                 onRename={handleRename}
                 onBack={onBack}
+                canPaste={canPaste}
+                onPaste={handlePaste}
             />
 
             <ReactFlow
@@ -386,11 +535,14 @@ const FlowEditorInner = ({ flowId, onBack }) => {
                 onNodesChange={onNodesChange}
                 onEdgesChange={onEdgesChange}
                 onConnect={onConnect}
+                onSelectionChange={onSelectionChange}
                 nodeTypes={flowNodeTypes}
                 edgeTypes={flowEdgeTypes}
                 fitView
                 minZoom={0.2}
                 maxZoom={1.5}
+                /* Controles por defecto: clic izquierdo panea. La selección múltiple es con
+                   Shift+arrastrar (caja) o Shift+clic (agregar nodos). */
                 defaultEdgeOptions={{ style: { stroke: '#a5b4fc', strokeWidth: 2 }, animated: false }}
                 proOptions={{ hideAttribution: true }}
             >
@@ -411,6 +563,30 @@ const FlowEditorInner = ({ flowId, onBack }) => {
                     }}
                 />
             </ReactFlow>
+
+            {/* Mini-menú flotante de selección múltiple (aparece al soltar con 2+ nodos). */}
+            {selMenu && selectedIds.length >= 2 && (
+                <div
+                    className="fixed z-[300] -translate-x-1/2 -translate-y-full mb-2 flex items-center gap-1 bg-white dark:bg-[#202c33] rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 p-1"
+                    style={{ left: selMenu.x, top: selMenu.y - 10 }}
+                >
+                    <span className="text-[11px] font-semibold text-gray-400 px-2 select-none">{selectedIds.length} sel.</span>
+                    <button
+                        onClick={handleCloneSelection}
+                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20"
+                        title="Clonar aquí y copiar para pegar en otro flujo"
+                    >
+                        <Copy className="w-3.5 h-3.5" /> Clonar
+                    </button>
+                    <button
+                        onClick={handleDeleteSelection}
+                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"
+                        title="Borrar los nodos seleccionados"
+                    >
+                        <Trash2 className="w-3.5 h-3.5" /> Borrar
+                    </button>
+                </div>
+            )}
 
             {selectedNode && (
                 <NodeConfigDrawer
