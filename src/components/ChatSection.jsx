@@ -2599,6 +2599,35 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
 
     useEffect(() => () => { if (anchorRafRef.current) cancelAnimationFrame(anchorRafRef.current); }, []);
 
+    // ── SOSTÉN durante la SALIDA elegante ──────────────────────────────────────────────
+    // Cuando una tarjeta VISIBLE por encima de tu ancla sale del filtro, su animación de
+    // colapso (chat-card-exit, 260ms) empuja tu tarjeta frame a frame. El cambio de firma
+    // solo llega AL FINAL (cuando se remueve el fantasma), así que sin esto tu tarjeta se
+    // desliza durante la animación y luego pega un jalón. Aquí, MIENTRAS haya una tarjeta
+    // saliendo, un rAF corto mantiene el ancla clavada en su offset previo. Es acotado a la
+    // ventana de salida (rara, ~260ms) — NO corre en cada mensaje, así que no reintroduce el
+    // temblor bajo tráfico. Pegado al tope el scroll llega a 0 y ya no puede sostener (límite
+    // físico esperado: no hay nada arriba que traer).
+    const holdRafRef = useRef(0);
+    useEffect(() => {
+        if (!isEngaged || leavingCandidates.size === 0) return;
+        const sc = chatListScrollerRef.current;
+        const target = { ...listAnchorRef.current }; // offset a sostener (pre-colapso)
+        if (!sc || !target.id) return;
+        const scoped = (window.CSS && CSS.escape) ? CSS.escape(target.id) : target.id;
+        const hold = () => {
+            const el = sc.querySelector(`[data-cid="${scoped}"]`);
+            if (el && !el.classList.contains('chat-card-exit')) {
+                const cur = el.getBoundingClientRect().top - sc.getBoundingClientRect().top;
+                const delta = cur - target.offset;
+                if (Math.abs(delta) > 0.5) sc.scrollTop += delta;
+            }
+            holdRafRef.current = requestAnimationFrame(hold);
+        };
+        holdRafRef.current = requestAnimationFrame(hold);
+        return () => { if (holdRafRef.current) cancelAnimationFrame(holdRafRef.current); holdRafRef.current = 0; };
+    }, [isEngaged, leavingCandidates.size]);
+
     // ── Entrada por CAMBIO DE ESTATUS: detecta tarjetas que RECIÉN pasan a matchear el
     // filtro actual (p.ej. un chat leído recibe mensaje → entra a "no leídos", o vuelve a
     // ser el más reciente) para animar su entrada con el mismo fade que un lead nuevo. Se
