@@ -2526,13 +2526,26 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         const sc = chatListScrollerRef.current;
         if (!sc) return;
         const scTop = sc.getBoundingClientRect().top;
+        const clientH = sc.clientHeight;
         // Ignora filas que están SALIENDO (.chat-card-exit): su colapso es intencional
         // (p.ej. contestaste un no-leído que tenías abierto y sale del filtro). Anclar en
         // una fila que colapsa pelearía contra su animación → el ancla siempre es estable.
-        const rows = sc.querySelectorAll('[data-cid]:not(.chat-card-exit)');
-        for (const r of rows) {
-            const off = r.getBoundingClientRect().top - scTop;
-            if (off >= -1) { listAnchorRef.current = { id: r.getAttribute('data-cid'), offset: off }; return; }
+        const rows = [...sc.querySelectorAll('[data-cid]:not(.chat-card-exit)')];
+        // 1) Preferir el CHAT ABIERTO si está visible: es "la tarjeta en la que trabajas",
+        //    la que —por regla del negocio— nunca debe moverse en pantalla. Todo lo demás
+        //    (arriba o abajo) reflowa alrededor de ella.
+        const selId = selectedChatRef.current?.id;
+        if (selId) {
+            const selEl = rows.find(el => el.getAttribute('data-cid') === selId);
+            if (selEl) {
+                const off = selEl.getBoundingClientRect().top - scTop;
+                if (off >= -1 && off <= clientH - 1) { listAnchorRef.current = { id: selId, offset: off }; return; }
+            }
+        }
+        // 2) Si no hay chat abierto (o no está en pantalla): primera fila visible.
+        for (const el of rows) {
+            const off = el.getBoundingClientRect().top - scTop;
+            if (off >= -1) { listAnchorRef.current = { id: el.getAttribute('data-cid'), offset: off }; return; }
         }
         listAnchorRef.current = { id: null, offset: 0 };
     }, []);
