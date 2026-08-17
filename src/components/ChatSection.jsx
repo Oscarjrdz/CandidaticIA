@@ -2526,7 +2526,10 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         const sc = chatListScrollerRef.current;
         if (!sc) return;
         const scTop = sc.getBoundingClientRect().top;
-        const rows = sc.querySelectorAll('[data-cid]');
+        // Ignora filas que están SALIENDO (.chat-card-exit): su colapso es intencional
+        // (p.ej. contestaste un no-leído que tenías abierto y sale del filtro). Anclar en
+        // una fila que colapsa pelearía contra su animación → el ancla siempre es estable.
+        const rows = sc.querySelectorAll('[data-cid]:not(.chat-card-exit)');
         for (const r of rows) {
             const off = r.getBoundingClientRect().top - scTop;
             if (off >= -1) { listAnchorRef.current = { id: r.getAttribute('data-cid'), offset: off }; return; }
@@ -2570,7 +2573,8 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
             const prev = listAnchorRef.current;
             if (prev.id) {
                 const el = sc.querySelector(`[data-cid="${(window.CSS && CSS.escape) ? CSS.escape(prev.id) : prev.id}"]`);
-                if (el) {
+                // Si la fila-ancla arrancó su propia salida, no compensar: dejar colapsar.
+                if (el && !el.classList.contains('chat-card-exit')) {
                     const newOffset = el.getBoundingClientRect().top - sc.getBoundingClientRect().top;
                     const delta = newOffset - prev.offset;
                     if (Math.abs(delta) > 0.5) sc.scrollTop += delta;
