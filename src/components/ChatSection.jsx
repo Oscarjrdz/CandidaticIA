@@ -2599,6 +2599,11 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
 
     useEffect(() => () => { if (anchorRafRef.current) cancelAnimationFrame(anchorRafRef.current); }, []);
 
+    // Al abrir/cambiar de chat, el ancla pasa a ser ESE chat (tu tarjeta de trabajo) aunque
+    // no haya scroll ni cambio de lista — si no, seguiría anclada en la primera fila visible
+    // y un cambio posterior movería tu chat. captureListAnchor ya prioriza el seleccionado.
+    useEffect(() => { captureListAnchor(); }, [selectedChat?.id, captureListAnchor]);
+
     // ── SOSTÉN durante la SALIDA elegante ──────────────────────────────────────────────
     // Cuando una tarjeta VISIBLE por encima de tu ancla sale del filtro, su animación de
     // colapso (chat-card-exit, 260ms) empuja tu tarjeta frame a frame. El cambio de firma
