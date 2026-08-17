@@ -2515,43 +2515,72 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
     //     fluye en vivo sin que la toquemos.
     const chatListVirtuosoRef = useRef(null);
     const chatListScrollerRef = useRef(null);
-    const handleChatListScrollerRef = useCallback((el) => {
-        chatListScrollerRef.current = el;
+    const listAnchorRef = useRef({ id: null, offset: 0 });
+    const anchorRafRef = useRef(0);
+
+    // Mide la primera fila visible (id + offset desde el tope del scroller) y la guarda como
+    // ancla. Se llama en CADA scroll (throttled por rAF) para que la referencia esté siempre
+    // fresca: si solo se refrescara al cambiar el orden, tras un scroll manual la
+    // compensación compararía contra un offset viejo y pegaría un tirón al siguiente cambio.
+    const captureListAnchor = useCallback(() => {
+        const sc = chatListScrollerRef.current;
+        if (!sc) return;
+        const scTop = sc.getBoundingClientRect().top;
+        const rows = sc.querySelectorAll('[data-cid]');
+        for (const r of rows) {
+            const off = r.getBoundingClientRect().top - scTop;
+            if (off >= -1) { listAnchorRef.current = { id: r.getAttribute('data-cid'), offset: off }; return; }
+        }
+        listAnchorRef.current = { id: null, offset: 0 };
     }, []);
+
+    const handleChatListScrollerRef = useCallback((el) => {
+        const prevEl = chatListScrollerRef.current;
+        if (prevEl === el) return;
+        if (prevEl && prevEl._anchorScrollHandler) {
+            prevEl.removeEventListener('scroll', prevEl._anchorScrollHandler);
+            prevEl._anchorScrollHandler = null;
+        }
+        chatListScrollerRef.current = el;
+        if (el) {
+            const handler = () => {
+                if (anchorRafRef.current) return;
+                anchorRafRef.current = requestAnimationFrame(() => {
+                    anchorRafRef.current = 0;
+                    captureListAnchor();
+                });
+            };
+            el._anchorScrollHandler = handler;
+            el.addEventListener('scroll', handler, { passive: true });
+        }
+    }, [captureListAnchor]);
 
     const renderedIdsSig = useMemo(
         () => renderedCandidates.map(c => c.id).join('|'),
         [renderedCandidates]
     );
-    const listAnchorRef = useRef({ sig: null, id: null, offset: 0 });
 
+    // Compensación: al cambiar el orden/altas-bajas (renderedIdsSig), medir dónde quedó la
+    // fila-ancla (fresca gracias al scroll handler) y devolver el scroll para que no se haya
+    // movido en pantalla. Síncrono, antes del paint. Solo mientras estás "engaged".
     useLayoutEffect(() => {
         const sc = chatListScrollerRef.current;
         if (!sc) return;
-        const scTop = sc.getBoundingClientRect().top;
-        const prev = listAnchorRef.current;
-
-        // Compensar: si el orden/altas-bajas cambió y tenemos un ancla previa, medir dónde
-        // quedó esa fila y devolver el scroll para que no se haya movido en pantalla.
-        if (isEngaged && prev.sig !== null && prev.sig !== renderedIdsSig && prev.id) {
-            const el = sc.querySelector(`[data-cid="${(window.CSS && CSS.escape) ? CSS.escape(prev.id) : prev.id}"]`);
-            if (el) {
-                const newOffset = el.getBoundingClientRect().top - scTop;
-                const delta = newOffset - prev.offset;
-                if (Math.abs(delta) > 0.5) sc.scrollTop += delta;
+        if (isEngaged) {
+            const prev = listAnchorRef.current;
+            if (prev.id) {
+                const el = sc.querySelector(`[data-cid="${(window.CSS && CSS.escape) ? CSS.escape(prev.id) : prev.id}"]`);
+                if (el) {
+                    const newOffset = el.getBoundingClientRect().top - sc.getBoundingClientRect().top;
+                    const delta = newOffset - prev.offset;
+                    if (Math.abs(delta) > 0.5) sc.scrollTop += delta;
+                }
             }
         }
+        captureListAnchor();
+    }, [renderedIdsSig, isEngaged, captureListAnchor]);
 
-        // Recapturar el ancla = primera fila cuyo borde superior está en/por debajo del tope
-        // del scroller (la primera visible). Se guarda su id + offset para el próximo cambio.
-        const rows = sc.querySelectorAll('[data-cid]');
-        let anchorId = null, anchorOffset = 0;
-        for (const r of rows) {
-            const off = r.getBoundingClientRect().top - scTop;
-            if (off >= -1) { anchorId = r.getAttribute('data-cid'); anchorOffset = off; break; }
-        }
-        listAnchorRef.current = { sig: renderedIdsSig, id: anchorId, offset: anchorOffset };
-    }, [renderedIdsSig, isEngaged]);
+    useEffect(() => () => { if (anchorRafRef.current) cancelAnimationFrame(anchorRafRef.current); }, []);
 
     // ── Entrada por CAMBIO DE ESTATUS: detecta tarjetas que RECIÉN pasan a matchear el
     // filtro actual (p.ej. un chat leído recibe mensaje → entra a "no leídos", o vuelve a
