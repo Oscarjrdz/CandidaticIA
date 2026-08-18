@@ -272,14 +272,27 @@ export const sendMetaMessage = async (to, body, type = 'chat', extraParams = {})
                     return { success: true, data: { status: 'filtered_internal_tag_or_empty' } };
                 }
 
-                // Liga de descarga de la app → forzar banner GRANDE en vez del preview chico de WhatsApp.
-                // Si el mensaje contiene candidatic.com/app, se manda como imagen (banner) con el
-                // texto original como caption. El link sigue siendo clickeable dentro del caption.
-                const APP_LINK_RE = /https?:\/\/(?:www\.)?candidatic\.com\/app\b/i;
+                // Liga de descarga de la app → banner GRANDE con BOTÓN tappable (interactivo cta_url),
+                // en vez del preview chico de WhatsApp. El banner va de encabezado y el botón
+                // "Descárgala GRATIS" abre la tienda al tocarlo. Se dispara al detectar candidatic.com/app.
+                const APP_LINK_RE = /https?:\/\/(?:www\.)?candidatic\.com\/app\b[^\s]*/i;
                 const APP_BANNER_URL = 'https://www.candidatic.com/lp/og-descarga-app.png';
-                if (APP_LINK_RE.test(bodyStr)) {
-                    payload.type = 'image';
-                    payload.image = { link: APP_BANNER_URL, caption: bodyStr };
+                const appLinkMatch = bodyStr.match(APP_LINK_RE);
+                if (appLinkMatch) {
+                    const appUrl = appLinkMatch[0];
+                    // Quita el link del cuerpo (el botón ya lo lleva); si queda vacío, pon una línea neutral.
+                    let ctaBody = bodyStr.replace(APP_LINK_RE, '').replace(/[ \t]{2,}/g, ' ').trim();
+                    if (!ctaBody) ctaBody = 'Candidatic — Bolsa de empleo · Vacantes operativas 🧡';
+                    payload.type = 'interactive';
+                    payload.interactive = {
+                        type: 'cta_url',
+                        header: { type: 'image', image: { link: APP_BANNER_URL } },
+                        body: { text: ctaBody.slice(0, 1024) },
+                        action: {
+                            name: 'cta_url',
+                            parameters: { display_text: 'Descárgala GRATIS', url: appUrl }
+                        }
+                    };
                     if (extraParams.referenceId) {
                         payload.context = { message_id: extraParams.referenceId };
                     }
