@@ -272,6 +272,20 @@ export const sendMetaMessage = async (to, body, type = 'chat', extraParams = {})
                     return { success: true, data: { status: 'filtered_internal_tag_or_empty' } };
                 }
 
+                // Liga de descarga de la app → forzar banner GRANDE en vez del preview chico de WhatsApp.
+                // Si el mensaje contiene candidatic.com/app, se manda como imagen (banner) con el
+                // texto original como caption. El link sigue siendo clickeable dentro del caption.
+                const APP_LINK_RE = /https?:\/\/(?:www\.)?candidatic\.com\/app\b/i;
+                const APP_BANNER_URL = 'https://www.candidatic.com/lp/og-descarga-app.png';
+                if (APP_LINK_RE.test(bodyStr)) {
+                    payload.type = 'image';
+                    payload.image = { link: APP_BANNER_URL, caption: bodyStr };
+                    if (extraParams.referenceId) {
+                        payload.context = { message_id: extraParams.referenceId };
+                    }
+                    break;
+                }
+
                 payload.type = 'text';
                 // preview_url: true → WhatsApp genera la tarjeta de vista previa (imagen + título)
                 // a partir de las etiquetas OG del link. Global: aplica a cualquier link que mande Brenda.
