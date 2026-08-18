@@ -30,12 +30,12 @@ export default function handler(req, res) {
     res.setHeader('Cache-Control', 'no-store, max-age=0');
 
     if (isIOS && !isPlaceholder(IOS_URL)) {
-        res.writeHead(302, { Location: IOS_URL });
-        return res.end();
+        res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        return res.status(200).send(renderRedirectSplash(IOS_URL, 'App Store'));
     }
     if (isAndroid && !isPlaceholder(ANDROID_URL)) {
-        res.writeHead(302, { Location: ANDROID_URL });
-        return res.end();
+        res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        return res.status(200).send(renderRedirectSplash(ANDROID_URL, 'Google Play'));
     }
 
     // Fallback: Android aún no publicada, compu, o iOS sin URL configurada todavía.
@@ -47,6 +47,56 @@ export default function handler(req, res) {
         androidUrl: ANDROID_URL,
         isAndroid,
     }));
+}
+
+// Splash de marca Candidatic mientras redirige a la tienda (evita el "flash blanco" del 302 crudo).
+function renderRedirectSplash(storeUrl, storeName) {
+    const safe = String(storeUrl).replace(/"/g, '%22');
+    return `<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex">
+<meta http-equiv="refresh" content="1;url=${safe}">
+<title>Abriendo ${storeName}… — Candidatic</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    min-height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    padding:24px; text-align:center; color:#fff;
+    background:linear-gradient(135deg,#FBA83E 0%,#F7941D 48%,#EE7B10 100%);
+  }
+  .icon {
+    width:110px; height:110px; border-radius:26px; margin-bottom:22px;
+    box-shadow:0 18px 44px rgba(120,60,0,.35); animation:pop .5s ease;
+  }
+  @keyframes pop { from { transform:scale(.85); opacity:0; } to { transform:scale(1); opacity:1; } }
+  h1 { font-size:26px; font-weight:900; letter-spacing:-.5px; }
+  h1 span { font-weight:600; opacity:.9; }
+  p { font-size:15px; opacity:.9; margin-top:8px; }
+  .spinner {
+    width:34px; height:34px; margin:26px auto 0; border-radius:50%;
+    border:4px solid rgba(255,255,255,.35); border-top-color:#fff; animation:spin .8s linear infinite;
+  }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  .fallback { margin-top:28px; font-size:14px; }
+  .fallback a { color:#fff; font-weight:700; text-decoration:underline; }
+</style>
+</head>
+<body>
+  <img class="icon" src="https://www.candidatic.com/lp/Candidatic_app_candidato_icono.png" alt="Candidatic">
+  <h1>Candidatic <span>Bolsa de Empleo</span></h1>
+  <p>Abriendo ${storeName}…</p>
+  <div class="spinner"></div>
+  <p class="fallback">Si no abre solo, <a href="${safe}">toca aquí</a>.</p>
+  <script>
+    // Redirección inmediata sin dejar el splash en el historial (el botón "atrás" no vuelve aquí).
+    setTimeout(function(){ window.location.replace(${JSON.stringify(storeUrl)}); }, 250);
+  </script>
+</body>
+</html>`;
 }
 
 function renderFallback({ iosReady, androidReady, iosUrl, androidUrl, isAndroid }) {
