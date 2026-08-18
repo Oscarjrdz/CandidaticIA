@@ -17,7 +17,7 @@
  * ─────────────────────────────────────────────────────────────────────────────
  */
 const IOS_URL = 'https://apps.apple.com/mx/app/candidatic/id6776012569';   // ← App Store (iOS) — publicada
-const ANDROID_URL = '';                        // ← Play Store (Android) — aún no publicada, dejar ''
+const ANDROID_URL = 'https://play.google.com/store/apps/details?id=com.candidatic.candidatos';   // ← Play Store (Android) — publicada
 
 const isPlaceholder = (u) => !u || u.startsWith('PENDIENTE_');
 
