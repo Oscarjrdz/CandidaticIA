@@ -280,9 +280,17 @@ export const sendMetaMessage = async (to, body, type = 'chat', extraParams = {})
                 const appLinkMatch = bodyStr.match(APP_LINK_RE);
                 if (appLinkMatch) {
                     const appUrl = appLinkMatch[0];
-                    // Quita el link del cuerpo (el botón ya lo lleva); si queda vacío, pon una línea neutral.
+                    // Quita el link del cuerpo (el botón ya lo lleva); si queda vacío, pon el copy llamativo.
                     let ctaBody = bodyStr.replace(APP_LINK_RE, '').replace(/[ \t]{2,}/g, ' ').trim();
-                    if (!ctaBody) ctaBody = 'Candidatic — Bolsa de empleo · Vacantes operativas 🧡';
+                    if (!ctaBody) ctaBody =
+                        '🧡 *Candidatic · Bolsa de Empleo*\n\n' +
+                        '¡Tu próximo trabajo te está esperando! 🚀 Encuentra vacantes operativas cerca de ti:\n' +
+                        '✅ Ayudantes generales\n' +
+                        '✅ Montacarguistas\n' +
+                        '✅ Operarios de producción\n' +
+                        '…y muchas más cada semana.\n\n' +
+                        '📲 *Descárgala GRATIS*, regístrate en minutos y postúlate directo desde tu celular.\n' +
+                        '👇 Toca el botón y da el primer paso a tu nuevo empleo.';
                     payload.type = 'interactive';
                     payload.interactive = {
                         type: 'cta_url',
