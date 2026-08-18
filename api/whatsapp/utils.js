@@ -273,7 +273,9 @@ export const sendMetaMessage = async (to, body, type = 'chat', extraParams = {})
                 }
 
                 payload.type = 'text';
-                payload.text = { body: bodyStr };
+                // preview_url: true → WhatsApp genera la tarjeta de vista previa (imagen + título)
+                // a partir de las etiquetas OG del link. Global: aplica a cualquier link que mande Brenda.
+                payload.text = { body: bodyStr, preview_url: true };
 
                 // Reply context (quoting a message)
                 if (extraParams.referenceId) {
