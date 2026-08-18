@@ -577,9 +577,15 @@ export default async function handler(req, res) {
                             for (const l of matching) {
                                 if (!newTags.includes(l.tagName)) { newTags.push(l.tagName); changed = true; }
                             }
-                            if (changed) {
-                                candidate = await updateCandidate(candidate.id, { tags: newTags });
-                            }
+                            // 🔁 vacanteActual = etiqueta del anuncio de AHORA (1 anuncio = 1 etiqueta).
+                            // Se SOBREESCRIBE en cada click → es la "última etiqueta" para el ruteo del
+                            // nodo Etiqueta modo "actual". tags sigue siendo el historial acumulado.
+                            const tagNow = matching[0].tagName;
+                            const upd = { vacanteActual: tagNow };
+                            if (changed) upd.tags = newTags;
+                            candidate = await updateCandidate(candidate.id, upd);
+                            // Marca transitoria "este turno vino de un anuncio" para el despachador de regreso.
+                            if (redis) redis.set(`return:adclick:v1:${candidate.id}`, tagNow, 'EX', 600).catch(() => {});
                         }
                     } catch(e) { /* silent */ }
                 }
@@ -689,6 +695,12 @@ export default async function handler(req, res) {
                             const tags = Array.isArray(updatedCandidate.tags) ? [...updatedCandidate.tags] : [];
                             for (const l of matching) if (!tags.includes(l.tagName)) tags.push(l.tagName);
                             updatedCandidate.tags = tags;
+                            // 🔁 Última etiqueta = anuncio de AHORA (se sobreescribe cada click). Historial
+                            // (tags) intacto arriba; vacanteActual rutea el nodo Etiqueta modo "actual".
+                            const tagNow = matching[0].tagName;
+                            updatedCandidate.vacanteActual = tagNow;
+                            // Marca "este turno vino de un anuncio" para el despachador de regreso.
+                            redis.set(`return:adclick:v1:${updatedCandidate.id || candidateId}`, tagNow, 'EX', 600).catch(() => {});
                         }
                     } catch { /* silent */ }
                 }

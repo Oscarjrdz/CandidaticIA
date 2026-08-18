@@ -12,7 +12,14 @@ export const GENEROS = ['Hombre', 'Mujer'];
 export const ETIQUETA_MODE_LABELS = {
     todas: 'Todas',
     ninguna: 'Sin etiqueta',
-    especifica: 'Etiqueta específica'
+    especifica: 'Etiqueta específica',
+    actual: 'Es su etiqueta actual'
+};
+
+// Disparadores del nodo Inicio. Ausente = ['al_completar'] (compat con flujos viejos).
+export const TRIGGER_LABELS = {
+    al_completar: 'Al completar',
+    al_regresar: 'Al regresar'
 };
 
 function formatMultiSummary(arr, allLabel = 'Todos') {
@@ -38,7 +45,11 @@ export const NODE_DEFS = {
         color: 'indigo',
         hasTarget: false,
         hasSource: true,
-        summary: (data) => PROFILE_FILTER_LABELS[data.profileFilter] || PROFILE_FILTER_LABELS.todos
+        summary: (data) => {
+            const base = PROFILE_FILTER_LABELS[data.profileFilter] || PROFILE_FILTER_LABELS.todos;
+            const trig = (Array.isArray(data.trigger) && data.trigger.length) ? data.trigger : ['al_completar'];
+            return `${base} · ${trig.map(t => TRIGGER_LABELS[t] || t).join(' + ')}`;
+        }
     },
     inicio_lista: {
         label: 'Inicio: Lista Filtrada',

@@ -3,6 +3,7 @@ import { getCachedConfig } from './cache.js';
 import { getUltraMsgConfig, sendUltraMsgMessage, sendUltraMsgMessageWithRetry } from '../whatsapp/utils.js';
 import { substituteVariables, splitBubbles } from './shortcuts.js';
 import { getBotVacancies, vacancyMessageText } from './agent-ia.js';
+import { runInBackground } from './background.js';
 
 // ════════════════════════════════════════════════════════════════════════════
 // MOTOR DE FLOWS — ejecución determinística de automatizaciones post-extracción.
@@ -66,6 +67,28 @@ const RUN_LOCK_TTL_SEC = 130;
 // reanudar el flujo cuando el candidato responde una frase que coincide. Solo tiene sentido
 // tras un nodo "Desactivar Bot": Brenda queda en silencio y este registro atrapa la respuesta.
 export const WAITING_PREFIX = 'flow:waiting:v1:';
+
+// ── DISPARADOR "CANDIDATO QUE REGRESA" (event-driven, en vivo) ────────────────
+// Cadencia por candidato/flujo para el disparo de regreso (evita reenviar la info
+// 3 veces si clickea 3 veces). Espejo del contador de INCOMPLETOS EN SILENCIO
+// (flow:silence:count / lastfire), pero con llaves propias.
+const RETURN_COUNT_PREFIX = 'flow:return:count:v1:';     // hash flowId → { candidateId: nºdisparos }
+const RETURN_FIRE_PREFIX  = 'flow:return:lastfire:v1:';  // hash flowId → { candidateId: msÚltimoDisparo }
+// Marca transitoria que pone el webhook cuando llega un click de anuncio (referral):
+// value = tagName, TTL corto. El despachador de regreso la lee (y la consume) para saber
+// que ESTE turno vino de un anuncio, sin confundirlo con un adId viejo ya persistido.
+export const RETURN_ADCLICK_PREFIX = 'return:adclick:v1:';
+
+// Disparadores configurados en el nodo Inicio (data.trigger, array).
+//   • 'al_completar' → al terminar la extracción (flanco de subida, disparo histórico).
+//   • 'al_regresar'  → cuando un COMPLETO vuelve (click de anuncio o frase).
+// Ausente/vacío = ['al_completar'] — compat: los flujos viejos disparaban al completar.
+function getInicioTrigger(flow) {
+    const inicio = Array.isArray(flow?.nodes) ? flow.nodes.find(n => n.type === 'inicio') : null;
+    const t = inicio?.data?.trigger;
+    if (Array.isArray(t) && t.length) return t;
+    return ['al_completar'];
+}
 
 // Normaliza texto para comparar frases: sin acentos, minúsculas, sin espacios de sobra.
 function normalizeFlowText(s) {
@@ -282,6 +305,15 @@ export async function evaluateOrExecute(node, candidate, flowId, redis, opts = {
             if (mode === 'especifica') {
                 if (!data.tag) return true; // sin configurar aún → no bloquea
                 return tags.includes(data.tag);
+            }
+            if (mode === 'actual') {
+                // Ruteo por ÚLTIMA vacante: solo pasa si la etiqueta del último anuncio
+                // clickeado (candidate.vacanteActual, sobreescrita en cada click desde el
+                // webhook) es JUSTO esta. Así, un candidato con historial [Metalsa, Kemet]
+                // que hoy clickeó Kemet pasa solo por el flujo de Kemet — el de Metalsa se
+                // cae, aunque siga teniendo esa etiqueta en su historial (tags).
+                if (!data.tag) return true; // sin configurar aún → no bloquea
+                return candidate.vacanteActual === data.tag;
             }
             return true;
         }
@@ -887,7 +919,11 @@ export async function runFlowsForCandidate(candidateId, candidateSnapshot) {
         // respuesta), no en este path en vivo (que corre al COMPLETAR el perfil). Se
         // excluyen aquí para que el evento de completado nunca los dispare.
         const active = flows.filter(f => f.active && Array.isArray(f.nodes) && f.nodes.length
-            && !f.nodes.some(n => n.type === 'inicio_incompleto_silencio'));
+            && !f.nodes.some(n => n.type === 'inicio_incompleto_silencio')
+            // Excluye los flujos cuyo Inicio dispara SOLO 'al_regresar': esos no deben
+            // correr en el flanco de completado. Los que incluyen 'al_completar' (o no
+            // tienen trigger = legado) sí corren aquí, exactamente como antes.
+            && getInicioTrigger(f).includes('al_completar'));
         if (!active.length) return;
 
         const candidate = { ...candidateSnapshot };
@@ -901,6 +937,98 @@ export async function runFlowsForCandidate(candidateId, candidateSnapshot) {
         }
     } catch (e) {
         console.error('[FLOW-ENGINE] runFlowsForCandidate:', e?.message);
+    }
+}
+
+// 🔁 DISPARADOR "CANDIDATO QUE REGRESA" (event-driven, en vivo): lo llama agent.js cuando
+// llega un mensaje de un candidato YA COMPLETO, ANTES de la Sala de Espera. Corre los flujos
+// cuyo Inicio dispara 'al_regresar' y que además cumplen la señal (click de anuncio o frase),
+// la antigüedad y la cadencia configuradas en el nodo. Corre en modo `ephemeral` (re-ejecuta
+// las acciones sin el dedupe permanente de flow:executed) — la cadencia la gobierna el
+// contador flow:return:count, no el "ya completado". Devuelve cuántos flujos disparó (0 = no
+// aplicó): agent.js usa eso para callar a Brenda-extractora (que el flujo hable, no la Sala).
+// Espejo estructural de runFlowForIncompleteSilence, pero disparado por evento en vez de cron.
+export async function runReturningFlowsForCandidate(candidateId, candidateSnapshot, { incomingText = '' } = {}) {
+    try {
+        const redis = getRedisClient();
+        if (!redis || !candidateSnapshot?.id || !candidateSnapshot?.whatsapp) return 0;
+        // Solo completos (el caller ya lo garantiza; doble candado barato por si acaso).
+        if (!isProfileComplete(candidateSnapshot)) return 0;
+
+        const raw = await getCachedConfig(redis, FLOWS_KEY);
+        const flows = raw ? JSON.parse(raw) : [];
+        const returnFlows = (Array.isArray(flows) ? flows : []).filter(f =>
+            f.active && Array.isArray(f.nodes) && f.nodes.length
+            && getInicioTrigger(f).includes('al_regresar'));
+        if (!returnFlows.length) return 0;
+
+        // ¿Este turno vino de un click de anuncio? (marca transitoria puesta por el webhook)
+        const adClicked = !!(await redis.get(`${RETURN_ADCLICK_PREFIX}${candidateId}`).catch(() => null));
+        const now = Date.now();
+        const completedAt = candidateSnapshot.paso2CompletadoAt
+            ? new Date(candidateSnapshot.paso2CompletadoAt).getTime() : 0;
+
+        const eligible = [];
+        for (const flow of returnFlows) {
+            const inicio = flow.nodes.find(n => n.type === 'inicio');
+            const d = inicio?.data || {};
+
+            // 1) SEÑAL — anuncio y/o frase (OR). Default: si no configuran nada, exige anuncio.
+            const wantAd = d.returnOnAd !== false;   // default true
+            const wantPhrase = !!d.returnOnPhrase;
+            let signal = false;
+            if (wantAd && adClicked) signal = true;
+            if (!signal && wantPhrase) {
+                const grupos = Array.isArray(d.returnGrupos) ? d.returnGrupos : [];
+                if (grupos.some(g => flowTextMatchesGroup(incomingText, g, d.returnMatchMode))) signal = true;
+            }
+            if (!signal) continue;
+
+            // 2) ANTIGÜEDAD — solo si completó hace ≥ N días. Sin paso2CompletadoAt (completos
+            // viejos, previos a esta feature) no se puede medir → no bloquea.
+            const minDays = Number(d.minReturnDays) || 0;
+            if (minDays > 0 && completedAt && (now - completedAt) < minDays * 86400000) continue;
+
+            // 3) CADENCIA — tope de disparos + cooldown entre disparos.
+            const maxReturns = Number(d.maxReturns) || 0;        // 0 = sin tope
+            const cooldownDays = Number(d.returnCooldownDays) || 0;
+            const [lastFireRaw, countRaw] = await Promise.all([
+                redis.hget(`${RETURN_FIRE_PREFIX}${flow.id}`, candidateId).catch(() => null),
+                redis.hget(`${RETURN_COUNT_PREFIX}${flow.id}`, candidateId).catch(() => null),
+            ]);
+            const lastFire = Number(lastFireRaw) || 0;
+            const count = Number(countRaw) || 0;
+            if (cooldownDays > 0 && lastFire && (now - lastFire) < cooldownDays * 86400000) continue;
+            if (maxReturns > 0 && count >= maxReturns) continue;
+
+            eligible.push(flow);
+        }
+        if (!eligible.length) return 0;
+
+        // Reserva la cadencia YA (antes de ejecutar) para que dos mensajes seguidos no
+        // disparen doble, y consume la marca de adclick (un click = un disparo).
+        const pipe = redis.pipeline();
+        for (const flow of eligible) {
+            pipe.hincrby(`${RETURN_COUNT_PREFIX}${flow.id}`, candidateId, 1);
+            pipe.hset(`${RETURN_FIRE_PREFIX}${flow.id}`, candidateId, String(now));
+        }
+        if (adClicked) pipe.del(`${RETURN_ADCLICK_PREFIX}${candidateId}`);
+        await pipe.exec().catch(() => {});
+
+        // Ejecuta en segundo plano (envíos con pausa no bloquean el turno de Brenda). El
+        // ephemeral re-corre el grafo fresco; el ruteo por vacante lo hace el nodo Etiqueta
+        // en modo "actual" contra vacanteActual.
+        runInBackground((async () => {
+            for (const flow of eligible) {
+                await runOneFlow(redis, flow, candidateId, { ...candidateSnapshot }, { ephemeral: true })
+                    .catch(e => console.error(`[FLOW-RETURN] flujo ${flow.id} candidato ${candidateId}:`, e?.message));
+            }
+        })());
+
+        return eligible.length;
+    } catch (e) {
+        console.error('[FLOW-ENGINE] runReturningFlowsForCandidate:', e?.message);
+        return 0;
     }
 }
 

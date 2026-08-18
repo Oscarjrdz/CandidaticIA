@@ -26,7 +26,7 @@ import { processRecruiterMessage } from './recruiter-agent.js';
 
 import { inferGender } from '../utils/gender-helper.js';
 import { maybeSendKatconOnComplete } from '../utils/agent-katcon.js';
-import { runFlowsForCandidate, resumeWaitingFlowIfMatch } from '../utils/flow-engine.js';
+import { runFlowsForCandidate, resumeWaitingFlowIfMatch, runReturningFlowsForCandidate } from '../utils/flow-engine.js';
 import { runInBackground } from '../utils/background.js';
 import { maybeEnqueueForLiveAgent } from '../utils/agent-candidatic.js';
 import { attendLiveCandidate } from '../utils/agent-attend.js';
@@ -4445,7 +4445,27 @@ Responde ÚNICAMENTE con el número entero de meses. Si evade o no menciona ning
 
         const _paso2EnProceso = ['esperando_colonia', 'esperando_experiencia', 'esperando_meses_experiencia'].includes(candidateData.paso2Estado);
         const _paso2Listo = !_paso2EnProceso && (!candidateData.paso2Requerido || candidateData.paso2Estado === 'completo');
-        if (!isRecruiterMode && !isBridgeActive && isProfileComplete && _paso2Listo && activeAiConfig.gptHostEnabled && !responseTextVal) {
+
+        // 🔁 CANDIDATO QUE REGRESA: si un COMPLETO vuelve (click de anuncio o frase) y hay un
+        // flujo con Inicio "al regresar" que aplica, ese flujo le manda la info de su ÚLTIMA
+        // vacante (el ruteo lo hace el nodo Etiqueta modo "actual" contra vacanteActual). Corre
+        // ANTES de la Sala de Espera: si dispara, Brenda-extractora CALLA — que hable el flujo,
+        // no el "estoy buscando algo para ti" que nunca entrega nada. El envío real corre en
+        // segundo plano dentro del despachador; aquí solo sabemos si aplicó, para decidir el silencio.
+        let _returnHandled = false;
+        if (!isRecruiterMode && !isBridgeActive && isProfileComplete && _paso2Listo && !responseTextVal) {
+            const _returnFired = await runReturningFlowsForCandidate(
+                candidateId,
+                { ...candidateData, ...candidateUpdates },
+                { incomingText: aggregatedText }
+            ).catch(() => 0);
+            if (_returnFired > 0) {
+                _returnHandled = true;
+                isHostMode = true; // el flujo de regreso ya está enviando; el extractor guarda silencio
+            }
+        }
+
+        if (!isRecruiterMode && !isBridgeActive && isProfileComplete && _paso2Listo && !_returnHandled && activeAiConfig.gptHostEnabled && !responseTextVal) {
             isHostMode = true;
             try {
                 const candFirstName = (candidateData.nombreReal || '').split(' ')[0] || 'amig@';
@@ -5335,6 +5355,15 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
                 candidateUpdates.reengagement_converted = true;
                 candidateUpdates.reengagement_converted_at = new Date().toISOString();
             }
+        }
+
+        // 🕐 Sella el instante en que el perfil pasa a COMPLETO (flanco de subida). Lo usa el
+        // disparador "candidato que regresa" para su filtro de antigüedad. Se guarda en el
+        // mismo updateCandidate de abajo. Idempotente: solo la primera vez (no se re-sella).
+        if (candidateData.paso2Estado !== 'completo'
+            && (candidateUpdates.paso2Estado || candidateData.paso2Estado) === 'completo'
+            && !candidateData.paso2CompletadoAt) {
+            candidateUpdates.paso2CompletadoAt = new Date().toISOString();
         }
 
         await Promise.allSettled([

@@ -231,13 +231,98 @@ const NodeConfigDrawer = ({ node, flowId, meta, quickReplies, reminderTemplates,
             </div>
 
             <div className="flex-1 overflow-y-auto p-5">
-                {node.type === 'inicio' && (
-                    <RadioGroup
-                        options={Object.entries(PROFILE_FILTER_LABELS).map(([value, label]) => ({ value, label }))}
-                        value={data.profileFilter || 'completo'}
-                        onChange={(v) => patch({ profileFilter: v })}
-                    />
-                )}
+                {node.type === 'inicio' && (() => {
+                    const trigger = (Array.isArray(data.trigger) && data.trigger.length) ? data.trigger : ['al_completar'];
+                    const toggleTrigger = (val) => {
+                        const has = trigger.includes(val);
+                        let next = has ? trigger.filter(t => t !== val) : [...trigger, val];
+                        if (!next.length) next = [val === 'al_completar' ? 'al_regresar' : 'al_completar']; // nunca vacío
+                        patch({ trigger: next });
+                    };
+                    const showReturn = trigger.includes('al_regresar');
+                    return (
+                    <div className="space-y-5">
+                        <div>
+                            <label className="text-xs text-gray-500 dark:text-gray-400 mb-2 block">¿A quién? (filtro de perfil)</label>
+                            <RadioGroup
+                                options={Object.entries(PROFILE_FILTER_LABELS).map(([value, label]) => ({ value, label }))}
+                                value={data.profileFilter || 'completo'}
+                                onChange={(v) => patch({ profileFilter: v })}
+                            />
+                        </div>
+                        <div>
+                            <label className="text-xs text-gray-500 dark:text-gray-400 mb-2 block">¿Cuándo entra? (disparador)</label>
+                            {[
+                                { value: 'al_completar', label: 'Al completar su registro', hint: 'Justo cuando termina de dar sus datos (disparo clásico).' },
+                                { value: 'al_regresar', label: 'Cuando regresa y pide info', hint: 'Un candidato YA completo que vuelve (click de anuncio o frase).' }
+                            ].map(opt => (
+                                <label key={opt.value} className="flex items-start gap-2.5 p-2.5 rounded-xl border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer mb-2">
+                                    <input type="checkbox" checked={trigger.includes(opt.value)} onChange={() => toggleTrigger(opt.value)} className="w-4 h-4 mt-0.5 rounded text-indigo-600 focus:ring-indigo-500" />
+                                    <span>
+                                        <span className="text-sm text-gray-700 dark:text-gray-200 block">{opt.label}</span>
+                                        <span className="text-xs text-gray-400">{opt.hint}</span>
+                                    </span>
+                                </label>
+                            ))}
+                        </div>
+                        {showReturn && (
+                            <div className="space-y-4 border-l-2 border-indigo-200 dark:border-indigo-800 pl-3">
+                                <p className="text-xs bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-lg p-2.5 text-indigo-800 dark:text-indigo-300">
+                                    Solo para <strong>“cuando regresa”</strong>. El candidato entra al flujo de su <strong>última</strong> vacante — pon un nodo <strong>Filtro: Etiqueta</strong> en modo <strong>“es su etiqueta actual”</strong> después de este Inicio para rutearlo.
+                                </p>
+                                <div>
+                                    <label className="text-xs text-gray-500 dark:text-gray-400 mb-2 block">¿Qué cuenta como “regresó”?</label>
+                                    <label className="flex items-center gap-2.5 p-2.5 rounded-xl border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer mb-2">
+                                        <input type="checkbox" checked={data.returnOnAd !== false} onChange={(e) => patch({ returnOnAd: e.target.checked })} className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500" />
+                                        <span className="text-sm text-gray-700 dark:text-gray-200">Volvió a clickear un anuncio</span>
+                                    </label>
+                                    <label className="flex items-center gap-2.5 p-2.5 rounded-xl border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer">
+                                        <input type="checkbox" checked={!!data.returnOnPhrase} onChange={(e) => patch({ returnOnPhrase: e.target.checked })} className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500" />
+                                        <span className="text-sm text-gray-700 dark:text-gray-200">Escribió una frase</span>
+                                    </label>
+                                </div>
+                                {data.returnOnPhrase && (
+                                    <div className="space-y-3">
+                                        <div>
+                                            <label className="text-xs text-gray-500 dark:text-gray-400 mb-2 block">Frases que cuentan como “pide info”</label>
+                                            <FraseGruposEditor grupos={data.returnGrupos} onChange={(v) => patch({ returnGrupos: v })} />
+                                        </div>
+                                        <div>
+                                            <label className="text-xs text-gray-500 dark:text-gray-400 mb-2 block">Cómo comparar</label>
+                                            <RadioGroup
+                                                options={[
+                                                    { value: 'contiene', label: 'Contiene la frase (recomendado)' },
+                                                    { value: 'palabra', label: 'La frase aparece como palabra(s) suelta(s)' },
+                                                    { value: 'exacto', label: 'El mensaje es exactamente la frase' }
+                                                ]}
+                                                value={data.returnMatchMode || 'contiene'}
+                                                onChange={(v) => patch({ returnMatchMode: v })}
+                                            />
+                                        </div>
+                                    </div>
+                                )}
+                                <div>
+                                    <label className="text-xs text-gray-500 dark:text-gray-400 mb-2 block">Solo si regresó después de (días)</label>
+                                    <input type="number" min="0" step="1" value={data.minReturnDays ?? 0} onChange={(e) => patch({ minReturnDays: Math.max(0, parseInt(e.target.value, 10) || 0) })} className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 dark:bg-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                                    <p className="text-xs text-gray-400 mt-1.5"><b>0</b> = sin importar cuándo completó. Ej. 7 = solo si completó su registro hace 7+ días. (Los completos previos a esta función no tienen fecha → no se filtran.)</p>
+                                </div>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label className="text-xs text-gray-500 dark:text-gray-400 mb-2 block">Máx. de veces</label>
+                                        <input type="number" min="0" step="1" value={data.maxReturns ?? 0} onChange={(e) => patch({ maxReturns: Math.max(0, parseInt(e.target.value, 10) || 0) })} className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 dark:bg-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                                        <p className="text-xs text-gray-400 mt-1.5"><b>0</b> = sin tope.</p>
+                                    </div>
+                                    <div>
+                                        <label className="text-xs text-gray-500 dark:text-gray-400 mb-2 block">Cooldown (días)</label>
+                                        <input type="number" min="0" step="1" value={data.returnCooldownDays ?? 0} onChange={(e) => patch({ returnCooldownDays: Math.max(0, parseInt(e.target.value, 10) || 0) })} className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 dark:bg-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                                        <p className="text-xs text-gray-400 mt-1.5">Mínimo entre disparos.</p>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                    );
+                })()}
 
                 {node.type === 'inicio_lista' && (
                     <div className="space-y-5">
@@ -321,7 +406,7 @@ const NodeConfigDrawer = ({ node, flowId, meta, quickReplies, reminderTemplates,
                             value={data.mode || 'todas'}
                             onChange={(v) => patch({ mode: v })}
                         />
-                        {data.mode === 'especifica' && (
+                        {(data.mode === 'especifica' || data.mode === 'actual') && (
                             <FlowSelect
                                 value={data.tag || ''}
                                 onChange={(v) => patch({ tag: v })}
@@ -330,6 +415,11 @@ const NodeConfigDrawer = ({ node, flowId, meta, quickReplies, reminderTemplates,
                                 ringClass="focus:ring-indigo-500"
                                 emptyLabel="No hay etiquetas creadas todavía"
                             />
+                        )}
+                        {data.mode === 'actual' && (
+                            <p className="text-xs bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-lg p-2.5 text-indigo-800 dark:text-indigo-300">
+                                Pasa solo si esta es la <strong>última vacante</strong> del candidato (el anuncio que clickeó más recientemente), aunque tenga otras etiquetas en su historial. Ideal para rutear un flujo <strong>“cuando regresa”</strong> a la vacante correcta.
+                            </p>
                         )}
                     </div>
                 )}
