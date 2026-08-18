@@ -69,7 +69,23 @@ function renderFallback({ iosReady, androidReady, iosUrl, androidUrl, isAndroid 
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Descarga la app — Candidatic</title>
-<meta name="description" content="Descarga la app de Candidatic para ver tus vacantes y dar seguimiento a tu proceso.">
+<meta name="description" content="Descárgala GRATIS y encuentra tu próximo empleo. Ve tus vacantes y da seguimiento a tu proceso desde tu celular.">
+<!-- Open Graph / vista previa en WhatsApp, Facebook, etc. -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Candidatic — Bolsa de Empleo">
+<meta property="og:title" content="Descárgala GRATIS — Candidatic Bolsa de Empleo">
+<meta property="og:description" content="Encuentra tu próximo empleo. Ve tus vacantes y da seguimiento a tu proceso desde tu celular. 🧡">
+<meta property="og:image" content="https://www.candidatic.com/lp/og-descarga-app.png">
+<meta property="og:image:secure_url" content="https://www.candidatic.com/lp/og-descarga-app.png">
+<meta property="og:image:type" content="image/png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Descarga la app Candidatic Bolsa de Empleo">
+<meta property="og:url" content="https://www.candidatic.com/app">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Descárgala GRATIS — Candidatic Bolsa de Empleo">
+<meta name="twitter:description" content="Encuentra tu próximo empleo desde tu celular. 🧡">
+<meta name="twitter:image" content="https://www.candidatic.com/lp/og-descarga-app.png">
 <style>
   :root { color-scheme: light dark; }
   * { margin:0; padding:0; box-sizing:border-box; }
