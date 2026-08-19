@@ -20,15 +20,6 @@ function minDatetimeLocal() {
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-// Default datetime = tomorrow at 7:00 AM CST
-function defaultDatetime() {
-    const d = new Date();
-    d.setDate(d.getDate() + 1);
-    d.setHours(7, 0, 0, 0);
-    const pad = n => String(n).padStart(2, '0');
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T07:00`;
-}
-
 // Convierte un "YYYY-MM-DDTHH:MM" (datetime-local, hora local) en { dayOffset, timeOfDay }
 // relativos al momento actual, para que una plantilla sea reutilizable en cualquier día
 // (no guarda una fecha absoluta, que quedaría vencida en el segundo uso).
@@ -53,6 +44,36 @@ function fromRelativeOffset(dayOffset, timeOfDay) {
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
+// "Día siguiente hábil" en zona horaria de Monterrey:
+//   Lun–Jue → mañana | Vie → lunes | Sáb → lunes | Dom → lunes (nunca cae en fin de semana).
+// Devuelve un objeto Date con la hora indicada ya puesta.
+function nextBusinessDayDate(timeOfDay) {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'America/Monterrey',
+        year: 'numeric', month: '2-digit', day: '2-digit', weekday: 'short',
+    }).formatToParts(new Date());
+    const p = Object.fromEntries(parts.map(x => [x.type, x.value]));
+    const addByWeekday = { Mon: 1, Tue: 1, Wed: 1, Thu: 1, Fri: 3, Sat: 2, Sun: 1 };
+    const add = addByWeekday[p.weekday] ?? 1;
+    const [hours, minutes] = String(timeOfDay || '07:00').split(':').map(Number);
+    const d = new Date(Number(p.year), Number(p.month) - 1, Number(p.day));
+    d.setDate(d.getDate() + add);
+    d.setHours(hours || 0, minutes || 0, 0, 0);
+    return d;
+}
+
+// "YYYY-MM-DDTHH:MM" del día siguiente hábil a la hora dada (para el input datetime-local / envío).
+function nextBusinessDayDatetime(timeOfDay) {
+    const d = nextBusinessDayDate(timeOfDay);
+    const pad = n => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+// Etiqueta humana del día siguiente hábil (ej. "lunes 25 de agosto") para mostrar junto a la hora.
+function nextBusinessDayLabel(timeOfDay) {
+    return nextBusinessDayDate(timeOfDay).toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' });
+}
+
 function makeTemplateId() {
     return `rt_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
 }
@@ -66,7 +87,9 @@ const CandidateReminderModal = ({ candidate, onClose }) => {
     const [deleting, setDeleting] = useState(null);
 
     // New reminder form state
-    const [scheduledAt, setScheduledAt] = useState(defaultDatetime());
+    const [scheduleMode, setScheduleMode] = useState('nextday'); // 'nextday' (día siguiente hábil) | 'exact'
+    const [nextDayTime, setNextDayTime] = useState('07:00');
+    const [scheduledAt, setScheduledAt] = useState(nextBusinessDayDatetime('07:00'));
     const [message, setMessage] = useState('');
     const [fallbackTemplateId, setFallbackTemplateId] = useState('');
     const [templateMenuOpen, setTemplateMenuOpen] = useState(false);
@@ -94,6 +117,13 @@ const CandidateReminderModal = ({ candidate, onClose }) => {
         document.addEventListener('keydown', handleKey);
         return () => document.removeEventListener('keydown', handleKey);
     }, [onClose]);
+
+    // En modo "día siguiente", la fecha efectiva siempre es el próximo día hábil a la hora elegida.
+    useEffect(() => {
+        if (scheduleMode === 'nextday') {
+            setScheduledAt(nextBusinessDayDatetime(nextDayTime));
+        }
+    }, [scheduleMode, nextDayTime]);
 
     const updateTemplateMenuPosition = useCallback(() => {
         const button = templateButtonRef.current;
@@ -183,7 +213,8 @@ const CandidateReminderModal = ({ candidate, onClose }) => {
                 return;
             }
             setMessage('');
-            setScheduledAt(defaultDatetime());
+            setScheduleMode('nextday');
+            setNextDayTime('07:00');
             setFallbackTemplateId('');
             await fetchReminders();
         } catch {
@@ -210,13 +241,17 @@ const CandidateReminderModal = ({ candidate, onClose }) => {
         if (!name || !message.trim() || !scheduledAt) return;
         setSavingTemplate(true);
         try {
+            const isNextBiz = scheduleMode === 'nextday';
             const { dayOffset, timeOfDay } = toRelativeOffset(scheduledAt);
             const newTemplate = {
                 id: makeTemplateId(),
                 name,
                 message: message.trim(),
+                // 'nextBusinessDay' recalcula el próximo día hábil cada vez que se usa (Vie→Lun);
+                // 'fixedOffset' conserva el offset relativo clásico (compatibilidad con plantillas viejas).
+                scheduleType: isNextBiz ? 'nextBusinessDay' : 'fixedOffset',
                 dayOffset,
-                timeOfDay,
+                timeOfDay: isNextBiz ? nextDayTime : timeOfDay,
                 fallbackTemplateName: selectedTemplate?.name || null,
                 fallbackTemplateLanguage: selectedTemplate?.language || null,
                 createdAt: new Date().toISOString(),
@@ -244,7 +279,14 @@ const CandidateReminderModal = ({ candidate, onClose }) => {
 
     const handleUseTemplate = (tpl) => {
         setMessage(substituteVariables(tpl.message, candidate));
-        setScheduledAt(fromRelativeOffset(tpl.dayOffset, tpl.timeOfDay));
+        if (tpl.scheduleType === 'nextBusinessDay') {
+            // Recalcula el próximo día hábil al momento de usarla (respeta viernes→lunes).
+            setNextDayTime(tpl.timeOfDay || '07:00');
+            setScheduleMode('nextday');
+        } else {
+            setScheduleMode('exact');
+            setScheduledAt(fromRelativeOffset(tpl.dayOffset, tpl.timeOfDay));
+        }
         if (tpl.fallbackTemplateName) {
             const match = templates.find(t => t.name === tpl.fallbackTemplateName && t.language === tpl.fallbackTemplateLanguage);
             setFallbackTemplateId(match ? match.id : '');
@@ -302,15 +344,57 @@ const CandidateReminderModal = ({ candidate, onClose }) => {
 
                     {/* Form */}
                     <div className="space-y-3">
-                        <div className="space-y-1">
+                        <div className="space-y-1.5">
                             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Fecha y hora de envío</label>
-                            <input
-                                type="datetime-local"
-                                value={scheduledAt}
-                                min={minDatetimeLocal()}
-                                onChange={e => setScheduledAt(e.target.value)}
-                                className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 text-sm font-medium focus:ring-2 focus:ring-amber-400 outline-none text-slate-800 dark:text-slate-200"
-                            />
+
+                            {/* Toggle: Día siguiente hábil vs Fecha exacta */}
+                            <div className="flex gap-1 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl">
+                                <button
+                                    type="button"
+                                    onClick={() => setScheduleMode('nextday')}
+                                    className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${scheduleMode === 'nextday'
+                                        ? 'bg-white dark:bg-slate-700 text-amber-600 dark:text-amber-400 shadow-sm'
+                                        : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}
+                                >
+                                    Día siguiente
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setScheduleMode('exact')}
+                                    className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${scheduleMode === 'exact'
+                                        ? 'bg-white dark:bg-slate-700 text-amber-600 dark:text-amber-400 shadow-sm'
+                                        : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}
+                                >
+                                    Fecha exacta
+                                </button>
+                            </div>
+
+                            {scheduleMode === 'nextday' ? (
+                                <div className="space-y-1.5">
+                                    <div className="flex items-center gap-2">
+                                        <input
+                                            type="time"
+                                            value={nextDayTime}
+                                            onChange={e => setNextDayTime(e.target.value || '07:00')}
+                                            className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 text-sm font-medium focus:ring-2 focus:ring-amber-400 outline-none text-slate-800 dark:text-slate-200"
+                                        />
+                                        <p className="text-xs text-slate-600 dark:text-slate-300 leading-tight">
+                                            Se enviará el <b className="capitalize text-amber-600 dark:text-amber-400">{nextBusinessDayLabel(nextDayTime)}</b>
+                                        </p>
+                                    </div>
+                                    <p className="text-[10px] text-slate-400 dark:text-slate-500">
+                                        Calcula solo el próximo día hábil (si cae viernes o fin de semana, pasa al lunes). Hora de Monterrey.
+                                    </p>
+                                </div>
+                            ) : (
+                                <input
+                                    type="datetime-local"
+                                    value={scheduledAt}
+                                    min={minDatetimeLocal()}
+                                    onChange={e => setScheduledAt(e.target.value)}
+                                    className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 text-sm font-medium focus:ring-2 focus:ring-amber-400 outline-none text-slate-800 dark:text-slate-200"
+                                />
+                            )}
                         </div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-start">
                             <div className="space-y-1 min-w-0">
@@ -475,7 +559,9 @@ const CandidateReminderModal = ({ candidate, onClose }) => {
                                             <p className="text-xs font-bold text-violet-700 dark:text-violet-400 truncate">{t.name}</p>
                                             <p className="text-xs text-slate-600 dark:text-slate-300 mt-0.5 leading-relaxed line-clamp-2">{t.message}</p>
                                             <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1">
-                                                {t.dayOffset === 0 ? 'Mismo día' : `+${t.dayOffset} día${t.dayOffset === 1 ? '' : 's'}`} · {t.timeOfDay}
+                                                {t.scheduleType === 'nextBusinessDay'
+                                                    ? 'Día siguiente hábil'
+                                                    : (t.dayOffset === 0 ? 'Mismo día' : `+${t.dayOffset} día${t.dayOffset === 1 ? '' : 's'}`)} · {t.timeOfDay}
                                                 {t.fallbackTemplateName && ` · Template 24h: ${t.fallbackTemplateName.replace(/_/g, ' ')}`}
                                             </p>
                                         </div>

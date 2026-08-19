@@ -6,10 +6,12 @@
  * arreglo JSON completo de plantillas — el frontend manda el arreglo ya modificado
  * (agregado o filtrado) y aquí se sobrescribe entero.
  *
- * Cada plantilla: { id, name, message, dayOffset, timeOfDay, fallbackTemplateName,
- * fallbackTemplateLanguage, createdAt }. dayOffset/timeOfDay son relativos al momento
- * en que se aplica la plantilla (no una fecha absoluta), para que sea reutilizable con
- * cualquier candidato en cualquier día.
+ * Cada plantilla: { id, name, message, scheduleType, dayOffset, timeOfDay,
+ * fallbackTemplateName, fallbackTemplateLanguage, createdAt }. dayOffset/timeOfDay son
+ * relativos al momento en que se aplica la plantilla (no una fecha absoluta), para que sea
+ * reutilizable con cualquier candidato en cualquier día. scheduleType: 'nextBusinessDay'
+ * recalcula el próximo día hábil al usarla (viernes→lunes, hora de Monterrey); 'fixedOffset'
+ * (o ausente, plantillas viejas) usa dayOffset/timeOfDay tal cual.
  *
  * GET  → { success, templates }
  * POST { templates } → sobrescribe el arreglo completo
