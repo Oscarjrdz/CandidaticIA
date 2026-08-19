@@ -1094,12 +1094,29 @@ export default async function handler(req, res) {
                         let isBotActive = isBotGloballyActive;
 
                         const aiCandidate = await getCandidateById(candidateId) || candidate;
-                        if (!isBotActive || aiCandidate?.blocked === true) return;
+                        if (!isBotActive) return;
+                        if (aiCandidate?.blocked === true) {
+                            // Bloqueado = Brenda muda. PERO si el candidato tiene un nodo "Esperando
+                            // Respuesta" armado (flow:waiting) —siempre precedido por un "Desactivar Bot",
+                            // por eso está blocked— hay que dejar pasar el mensaje al agente para que su
+                            // BLOCK SHIELD lo atrape y reanude el flujo. El escudo mantiene a Brenda en
+                            // silencio (no responde), solo reanuda el flujo si la frase coincide. Sin
+                            // espera armada → return como siempre (respeta la intervención humana).
+                            let hasWaiting = 0;
+                            try {
+                                const rc = getRedisClient();
+                                hasWaiting = rc ? await rc.exists(`flow:waiting:v1:${candidateId}`) : 0;
+                            } catch { hasWaiting = 0; }
+                            if (!hasWaiting) return;
+                        }
 
                         let finalAgentInput = agentInput;
 
-                        // 🎙️ AUDIO → Disclaimer determinístico + agente retoma pregunta pendiente
-                        if (messageType === 'audio' || messageType === 'ptt') {
+                        // 🎙️ AUDIO → Disclaimer determinístico + agente retoma pregunta pendiente.
+                        // NO corre si el candidato está bloqueado (llegamos aquí solo por un flujo
+                        // "Esperando Respuesta" armado): Brenda debe seguir muda, el disclaimer la haría
+                        // hablar y rompería la intervención humana. El BLOCK SHIELD del agente se encarga.
+                        if ((messageType === 'audio' || messageType === 'ptt') && aiCandidate?.blocked !== true) {
                             const AUDIO_REPLIES = [
                                 '¡Hola! 😊 Por el momento no puedo escuchar audios. ¿Me podrías escribir tu mensaje? 📝 ¡Con mucho gusto te atiendo!',
                                 '¡Qué tal! 👋 Te cuento que no tengo forma de reproducir notas de voz. Escríbeme por favor y te respondo de inmediato ✍️😊',
