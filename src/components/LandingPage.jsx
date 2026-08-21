@@ -850,7 +850,7 @@ const LandingPage = ({ onLoginSuccess }) => {
                                 </h1>
 
                                 <p className="hero-text-3 text-sm sm:text-base lg:text-lg text-gray-500 max-w-lg mx-auto lg:mx-0 mb-6 sm:mb-8 leading-relaxed">
-                                    Somos tu agencia de reclutamiento masivo con inteligencia artificial. Brenda, nuestra reclutadora IA, contacta candidatos por WhatsApp, gestiona grandes volúmenes de postulantes y te agenda entrevistas con IA.
+                                    Somos tu agencia de reclutamiento masivo con inteligencia artificial hecha plataforma. Brenda, nuestra reclutadora IA, contacta candidatos por WhatsApp, gestiona grandes volúmenes de postulantes y te agenda entrevistas con IA.
                                 </p>
 
                                 {/* ── QR + Formulario ── */}
