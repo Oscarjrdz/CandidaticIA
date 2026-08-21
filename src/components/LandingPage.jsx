@@ -842,7 +842,7 @@ const LandingPage = ({ onLoginSuccess }) => {
                                 </div>
 
                                 {/* Headline */}
-                                <h1 className="hero-text-2 text-3xl sm:text-4xl md:text-5xl lg:text-[3.5rem] xl:text-6xl font-extrabold tracking-tight text-gray-900 mb-4 sm:mb-6 leading-[1.1]">
+                                <h1 className="hero-text-2 text-2xl sm:text-3xl md:text-3xl lg:text-[1.9rem] xl:text-[2.4rem] font-extrabold tracking-tight text-gray-900 mb-4 sm:mb-6 leading-[1.15] lg:whitespace-nowrap">
                                     Tu Agencia de Reclutamiento masivo<br className="hidden sm:inline" />
                                     <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 via-violet-600 to-purple-600">
                                         en una sola plataforma con IA
