@@ -282,8 +282,8 @@ const MobileLandingPage = ({ onLoginSuccess }) => {
                         </div>
 
                         <h1 className="text-3xl font-extrabold tracking-tight text-gray-900 mb-3 leading-[1.15]">
-                            Tu Agencia de Reclutamiento masivo<br />
-                            <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 via-violet-600 to-purple-600">en una sola plataforma con IA</span>
+                            Plataforma con IA<br />
+                            <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 via-violet-600 to-purple-600">para reclutamiento masivo</span>
                         </h1>
 
                         <p className="text-sm text-gray-600 leading-relaxed mb-6 max-w-sm mx-auto">
