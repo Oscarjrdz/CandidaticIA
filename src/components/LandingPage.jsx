@@ -1067,10 +1067,10 @@ const LandingPage = ({ onLoginSuccess }) => {
                                         <Sparkles className="w-3.5 h-3.5" />
                                         Para empresas
                                     </div>
-                                    <h2 className="text-2xl sm:text-3xl md:text-4xl font-extrabold text-white tracking-tight leading-tight">
+                                    <h2 className="text-lg sm:text-2xl md:text-[1.7rem] lg:text-3xl font-extrabold text-white tracking-tight leading-tight whitespace-nowrap">
                                         ¿Quieres implementar <span className="text-cyan-200">Candidatic</span> en tu empresa?
                                     </h2>
-                                    <p className="mt-3 text-base sm:text-lg text-white/85 font-medium max-w-2xl mx-auto lg:mx-0">
+                                    <p className="mt-3 text-xs sm:text-base md:text-[0.95rem] lg:text-lg text-white/85 font-medium whitespace-nowrap">
                                         Por un <span className="font-bold text-white">fee mensual</span> recibe cientos de candidatos al mes, filtrados y atendidos por IA.
                                     </p>
                                 </div>
