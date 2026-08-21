@@ -339,7 +339,7 @@ const MobileLandingPage = ({ onLoginSuccess }) => {
                                 Por un <span className="font-bold text-white">fee mensual</span> recibe cientos de candidatos al mes.
                             </p>
                             <a
-                                href="https://wa.me/528116038195"
+                                href="https://wa.me/5218116038195"
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="mt-5 inline-flex items-center justify-center gap-2 w-full bg-white text-violet-700 font-extrabold text-base px-6 py-3.5 rounded-2xl shadow-lg shadow-black/20 active:scale-95 transition-transform"

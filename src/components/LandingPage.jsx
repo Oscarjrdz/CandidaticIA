@@ -1076,7 +1076,7 @@ const LandingPage = ({ onLoginSuccess }) => {
                                 </div>
 
                                 <a
-                                    href="https://wa.me/528116038195"
+                                    href="https://wa.me/5218116038195"
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className="group shrink-0 inline-flex items-center justify-center gap-2.5 w-full sm:w-auto bg-white text-violet-700 font-extrabold text-base sm:text-lg px-8 py-4 rounded-2xl shadow-xl shadow-black/20 hover:shadow-black/30 hover:-translate-y-0.5 hover:bg-violet-50 transition-all duration-300"
