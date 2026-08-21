@@ -1052,6 +1052,43 @@ const LandingPage = ({ onLoginSuccess }) => {
                     </div>
                 </section>
 
+                {/* ═══ BANNER — IMPLEMENTA CANDIDATIC EN TU EMPRESA ═══ */}
+                <section className="px-4 sm:px-6 py-6 sm:py-10">
+                    <div className="max-w-7xl mx-auto">
+                        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-violet-600 via-indigo-600 to-blue-600 shadow-2xl shadow-violet-500/30">
+                            {/* Glow / patrón decorativo estilo IA */}
+                            <div className="pointer-events-none absolute -top-24 -right-16 w-72 h-72 rounded-full bg-fuchsia-400/30 blur-3xl"></div>
+                            <div className="pointer-events-none absolute -bottom-24 -left-16 w-72 h-72 rounded-full bg-cyan-400/25 blur-3xl"></div>
+                            <div className="pointer-events-none absolute inset-0 opacity-[0.12]" style={{ backgroundImage: 'radial-gradient(circle at center, #ffffff 1px, transparent 1px)', backgroundSize: '22px 22px' }}></div>
+
+                            <div className="relative flex flex-col lg:flex-row items-center gap-6 lg:gap-8 px-6 sm:px-10 py-8 sm:py-10 text-center lg:text-left">
+                                <div className="flex-1">
+                                    <div className="inline-flex items-center gap-2 bg-white/15 backdrop-blur-sm border border-white/20 px-3 py-1 rounded-full text-[11px] sm:text-xs font-bold uppercase tracking-widest text-white/90 mb-4">
+                                        <Sparkles className="w-3.5 h-3.5" />
+                                        Para empresas
+                                    </div>
+                                    <h2 className="text-2xl sm:text-3xl md:text-4xl font-extrabold text-white tracking-tight leading-tight">
+                                        ¿Quieres implementar <span className="text-cyan-200">Candidatic</span> en tu empresa?
+                                    </h2>
+                                    <p className="mt-3 text-base sm:text-lg text-white/85 font-medium max-w-2xl mx-auto lg:mx-0">
+                                        Por un <span className="font-bold text-white">fee mensual</span> recibe cientos de candidatos al mes, filtrados y atendidos por IA.
+                                    </p>
+                                </div>
+
+                                <a
+                                    href="https://wa.me/528116038195"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="group shrink-0 inline-flex items-center justify-center gap-2.5 w-full sm:w-auto bg-white text-violet-700 font-extrabold text-base sm:text-lg px-8 py-4 rounded-2xl shadow-xl shadow-black/20 hover:shadow-black/30 hover:-translate-y-0.5 hover:bg-violet-50 transition-all duration-300"
+                                >
+                                    <WhatsAppIcon className="w-5 h-5 text-green-500" />
+                                    Contáctanos
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
                 {/* ═══ APPS — RECLUTADOR / CANDIDATO ═══ */}
                 <section className="py-12 sm:py-20 px-4 sm:px-6">
                     <div className="max-w-7xl mx-auto">

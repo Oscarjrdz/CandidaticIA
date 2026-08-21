@@ -3,7 +3,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { createPortal, flushSync } from 'react-dom';
 import {
     BrainCircuit, CheckCircle, Loader2, Send, ArrowRight,
-    Bot, Target, FileText, BarChart3, X, Users, Zap, ChevronDown, ChevronUp
+    Bot, Target, FileText, BarChart3, X, Users, Zap, ChevronDown, ChevronUp, Sparkles
 } from 'lucide-react';
 
 const WhatsAppIcon = ({ className = "w-5 h-5" }) => (
@@ -317,6 +317,37 @@ const MobileLandingPage = ({ onLoginSuccess }) => {
                             )}
                         </div>
 
+                    </div>
+                </section>
+
+                {/* ── BANNER — IMPLEMENTA CANDIDATIC EN TU EMPRESA ── */}
+                <section className="px-5 py-6">
+                    <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-violet-600 via-indigo-600 to-blue-600 shadow-xl shadow-violet-500/30 px-6 py-8 text-center">
+                        <div className="pointer-events-none absolute -top-16 -right-10 w-48 h-48 rounded-full bg-fuchsia-400/30 blur-3xl"></div>
+                        <div className="pointer-events-none absolute -bottom-16 -left-10 w-48 h-48 rounded-full bg-cyan-400/25 blur-3xl"></div>
+                        <div className="pointer-events-none absolute inset-0 opacity-[0.12]" style={{ backgroundImage: 'radial-gradient(circle at center, #ffffff 1px, transparent 1px)', backgroundSize: '20px 20px' }}></div>
+
+                        <div className="relative">
+                            <div className="inline-flex items-center gap-1.5 bg-white/15 backdrop-blur-sm border border-white/20 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest text-white/90 mb-3">
+                                <Sparkles className="w-3 h-3" />
+                                Para empresas
+                            </div>
+                            <h2 className="text-xl font-extrabold text-white leading-snug">
+                                ¿Quieres implementar <span className="text-cyan-200">Candidatic</span> en tu empresa?
+                            </h2>
+                            <p className="mt-2 text-sm text-white/85 font-medium">
+                                Por un <span className="font-bold text-white">fee mensual</span> recibe cientos de candidatos al mes.
+                            </p>
+                            <a
+                                href="https://wa.me/528116038195"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="mt-5 inline-flex items-center justify-center gap-2 w-full bg-white text-violet-700 font-extrabold text-base px-6 py-3.5 rounded-2xl shadow-lg shadow-black/20 active:scale-95 transition-transform"
+                            >
+                                <WhatsAppIcon className="w-5 h-5 text-green-500" />
+                                Contáctanos
+                            </a>
+                        </div>
                     </div>
                 </section>
 
