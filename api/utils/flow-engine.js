@@ -25,6 +25,12 @@ import { runInBackground } from './background.js';
 //     el envío falla por un error transitorio (dedupe es de una sola vez).
 // ════════════════════════════════════════════════════════════════════════════
 
+// Tipos de nodo que son RAÍZ del grafo: son los únicos que pueden arrancar sin
+// ninguna arista entrante. Cualquier otro nodo sin conexión es un nodo "suelto"
+// (colgado en el lienzo pero aún no cableado) y NO debe ejecutarse — sin esto,
+// un nodo de acción sin conectar se disparaba solo en cada corrida (bug ago 2026).
+const ENTRY_NODE_TYPES = new Set(['inicio', 'inicio_lista', 'inicio_incompleto_silencio']);
+
 const FLOWS_KEY = 'flows:v1';
 const QUICK_REPLIES_KEY = 'candidatic:quick_replies';
 const REMINDER_TEMPLATES_KEY = 'candidatic:reminder_templates';
@@ -127,8 +133,24 @@ function flowTextMatchesGroup(text, grupo, mode) {
 // exige scheduledAt estrictamente futuro).
 const MTY_UTC_OFFSET_HOURS = 6;
 
+// "Próximo día hábil" en hora de Monterrey — Lun–Jue → mañana, Vie/Sáb/Dom → lunes.
+// DEBE quedar idéntico a nextBusinessDayDate() de CandidateReminderModal.jsx, que es lo
+// que ve el reclutador al crear la plantilla dinámica. Un offset fijo NO sirve aquí: la
+// plantilla se guarda una vez pero se aplica cualquier día, así que hay que recalcular
+// según el día en que corre el flujo (si no, un dinámico creado en viernes/sábado/domingo
+// caía en fin de semana — bug confirmado ago 2026 con el candidato de prueba 8116038195).
+const NEXT_BUSINESS_DAY_ADD = { Mon: 1, Tue: 1, Wed: 1, Thu: 1, Fri: 3, Sat: 2, Sun: 1 };
+
+function daysUntilSend(tpl) {
+    if (tpl.scheduleType === 'nextBusinessDay') {
+        const wd = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Monterrey', weekday: 'short' }).format(new Date());
+        return NEXT_BUSINESS_DAY_ADD[wd] ?? 1;
+    }
+    return Number(tpl.dayOffset) || 0; // 'fixedOffset' / plantillas viejas: offset relativo clásico
+}
+
 export function resolveReminderSendAt(tpl) {
-    const days = Number(tpl.dayOffset) || 0;
+    const days = daysUntilSend(tpl);
     const [hours, minutes] = String(tpl.timeOfDay || '07:00').split(':').map(Number);
 
     const mtyDateStr = new Date(Date.now() + days * 86400000)
@@ -813,8 +835,11 @@ async function runOneFlow(redis, flow, candidateId, candidate, opts = {}) {
         //     recibir la rama roja de muchas condiciones/ramas y dispararse en cuanto el
         //     candidato falle en la rama que le tocó (cada candidato recorre una sola).
         //   • Si un nodo mezcla ambos tipos, debe cumplir las dos reglas a la vez.
-        const isEligible = (deps) => {
-            if (deps.length === 0) return true;
+        const isEligible = (deps, node) => {
+            // Sin aristas entrantes: solo los nodos de INICIO arrancan solos. Un nodo de
+            // acción/condición sin conectar es un nodo suelto y NO se ejecuta (antes se
+            // disparaba en cada corrida, incluidas las pruebas — bug ago 2026).
+            if (deps.length === 0) return ENTRY_NODE_TYPES.has(node.type);
             // Aristas cuyo origen es un nodo multi-rama ya reanudado (branchTaken): solo
             // cuentan si su handle es EXACTAMENTE una de las ramas tomadas. Se unen con O.
             const branchDeps = deps.filter(d => branchTaken.has(d.source));
@@ -830,7 +855,7 @@ async function runOneFlow(redis, flow, candidateId, candidate, opts = {}) {
 
         for (const node of order) {
             const deps = incoming.get(node.id) || [];
-            const eligible = isEligible(deps);
+            const eligible = isEligible(deps, node);
             if (!eligible) {
                 outcome.set(node.id, 'unreached');
                 passed.set(node.id, false);
