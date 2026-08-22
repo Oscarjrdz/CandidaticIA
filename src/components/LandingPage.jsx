@@ -484,7 +484,7 @@ const LandingPage = ({ onLoginSuccess }) => {
                 {/* Tagline bar — full width */}
                 <div className="w-full bg-gradient-to-r from-blue-600 via-violet-600 to-purple-600 py-1 text-center">
                     <span className="text-[10px] sm:text-xs font-bold tracking-[0.18em] text-white/90 uppercase">
-                        Reclutamiento Masivo
+                        Plataforma con IA para Reclutamiento Masivo
                     </span>
                 </div>
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 h-14 sm:h-16 flex items-center justify-between relative">

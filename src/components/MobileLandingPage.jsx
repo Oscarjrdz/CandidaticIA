@@ -145,7 +145,7 @@ const MobileLandingPage = ({ onLoginSuccess }) => {
             {/* ── HEADER ── */}
             <header className="fixed top-0 w-full z-50 bg-white/95 backdrop-blur-xl border-b border-gray-100">
                 <div className="w-full bg-gradient-to-r from-blue-600 via-violet-600 to-purple-600 py-1 text-center">
-                    <span className="text-[10px] font-bold tracking-[0.18em] text-white/90 uppercase">Reclutamiento Masivo con IA</span>
+                    <span className="text-[10px] font-bold tracking-[0.08em] text-white/90 uppercase">Plataforma con IA para Reclutamiento Masivo</span>
                 </div>
                 <div className="px-4 h-14 flex items-center justify-center">
                     <div className="flex items-center gap-2.5">
