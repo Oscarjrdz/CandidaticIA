@@ -1,9 +1,15 @@
-import { getRedisClient } from './utils/storage.js';
+import { getRedisClient, validateAdminSession } from './utils/storage.js';
 
 /**
  * ByPass Rules API - Management of automatic routing rules
  */
 export default async function handler(req, res) {
+    if (req.method === 'OPTIONS') return res.status(200).end();
+
+    // Seguridad: exige sesión admin válida
+    const userId = await validateAdminSession(req);
+    if (!userId) return res.status(401).json({ error: 'No autorizado' });
+
     const redis = getRedisClient();
     const KEYS = {
         BYPASS_LIST: 'bypass:list',

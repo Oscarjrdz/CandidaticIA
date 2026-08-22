@@ -2,7 +2,7 @@
  * GET /api/reengagement-queue
  * Devuelve candidatos pendientes, enviados y saltados para el panel de control.
  */
-import { getRedisClient } from './utils/storage.js';
+import { getRedisClient, validateAdminSession } from './utils/storage.js';
 
 const SETTINGS_KEY = 'reengagement:settings';
 
@@ -48,6 +48,10 @@ function isTodayInMonterrey(timestamp) {
 export default async function handler(req, res) {
     if (req.method === 'OPTIONS') return res.status(200).end();
     if (req.method !== 'GET') return res.status(405).end();
+
+    // Seguridad: exige sesión admin válida
+    const userId = await validateAdminSession(req);
+    if (!userId) return res.status(401).json({ error: 'No autorizado' });
 
     const redis = getRedisClient();
     if (!redis) return res.status(500).json({ error: 'Redis unavailable' });

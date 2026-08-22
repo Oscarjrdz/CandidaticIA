@@ -3,11 +3,15 @@
  * Body: { candidateId, skip: true|false }
  * Marca o desmarca a un candidato para omitir el re-engagement.
  */
-import { updateCandidate, getCandidateById } from './utils/storage.js';
+import { updateCandidate, getCandidateById, validateAdminSession } from './utils/storage.js';
 
 export default async function handler(req, res) {
     if (req.method === 'OPTIONS') return res.status(200).end();
     if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+    // Seguridad: exige sesión admin válida
+    const userId = await validateAdminSession(req);
+    if (!userId) return res.status(401).json({ error: 'No autorizado' });
 
     const { candidateId, skip = true } = req.body || {};
     if (!candidateId) return res.status(400).json({ error: 'Falta candidateId' });

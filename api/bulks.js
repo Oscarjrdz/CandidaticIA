@@ -2,7 +2,7 @@ import { getCandidateById, saveMessage, updateCandidate, updateMessageStatus } f
 import { substituteVariables } from './utils/shortcuts.js';
 import { sendUltraMsgMessage, getUltraMsgConfig, buildMetaTemplateComponents, renderMetaTemplatePreviewText } from './whatsapp/utils.js';
 import axios from 'axios';
-import { getRedisClient } from './utils/storage.js';
+import { getRedisClient, validateAdminSession } from './utils/storage.js';
 import { getCachedConfig } from './utils/cache.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -260,6 +260,10 @@ const tickEngine = async (state) => {
 
 export default async function handler(req, res) {
     if (req.method === 'OPTIONS') return res.status(200).end();
+
+    // Seguridad: exige sesión admin válida (el dashboard ya adjunta el Bearer)
+    const userId = await validateAdminSession(req);
+    if (!userId) return res.status(401).json({ error: 'No autorizado' });
 
     const { action } = req.query;
 

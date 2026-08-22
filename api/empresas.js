@@ -15,9 +15,13 @@ export default async function handler(req, res) {
     if (req.method === 'OPTIONS') return res.status(200).end();
 
     try {
-        const { getRedisClient } = await import('./utils/storage.js');
+        const { getRedisClient, validateAdminSession } = await import('./utils/storage.js');
         const redis = getRedisClient();
         if (!redis) return res.status(503).json({ error: 'Storage no disponible' });
+
+        // Seguridad: exige sesión admin válida
+        const userId = await validateAdminSession(req);
+        if (!userId) return res.status(401).json({ error: 'No autorizado' });
 
         const KEY = 'candidatic_empresas';
 
