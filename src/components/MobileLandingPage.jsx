@@ -286,9 +286,28 @@ const MobileLandingPage = ({ onLoginSuccess }) => {
                             <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 via-violet-600 to-purple-600">para reclutamiento masivo</span>
                         </h1>
 
-                        <p className="text-sm text-gray-600 leading-relaxed mb-6 max-w-sm mx-auto">
+                        <p className="text-sm text-gray-600 leading-relaxed mb-4 max-w-sm mx-auto">
                             Somos tu agencia de reclutamiento masivo con inteligencia artificial hecha plataforma. Brenda, nuestra reclutadora IA, contacta candidatos por WhatsApp, gestiona grandes volúmenes de postulantes y te agenda entrevistas con IA.
                         </p>
+
+                        {/* Sellos / certificaciones */}
+                        <div className="flex flex-wrap items-center justify-center gap-2.5 mb-6">
+                            {[
+                                { src: '/lp/partner-whatsapp-business-trim.png', alt: 'WhatsApp Business Platform', bg: 'bg-[#e9f9f0]', pad: 'px-2.5 py-1.5' },
+                                { src: '/lp/partner-meta-business-trim.png', alt: 'Meta Business Partners', bg: 'bg-[#101c2b]', pad: 'px-2.5 py-1.5' },
+                                { src: '/lp/partner-facebook-marketing-trim.png', alt: 'Facebook Marketing Partner', bg: 'bg-[#3b5a99]', pad: 'px-2 py-1' },
+                            ].map(seal => (
+                                <div key={seal.src} className={`h-12 ${seal.bg} ${seal.pad} rounded-lg ring-1 ring-black/5 shadow-sm overflow-hidden flex items-center`}>
+                                    <img
+                                        src={seal.src}
+                                        alt={seal.alt}
+                                        draggable={false}
+                                        onDragStart={e => e.preventDefault()}
+                                        className="h-full w-auto object-contain select-none pointer-events-none [-webkit-user-drag:none]"
+                                    />
+                                </div>
+                            ))}
+                        </div>
 
                         {/* Form */}
                         <div className="bg-white border border-violet-100 rounded-2xl p-5 shadow-lg shadow-violet-100/40 text-left">

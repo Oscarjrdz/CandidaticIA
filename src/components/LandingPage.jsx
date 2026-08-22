@@ -849,9 +849,28 @@ const LandingPage = ({ onLoginSuccess }) => {
                                     </span>
                                 </h1>
 
-                                <p className="hero-text-3 text-sm sm:text-base lg:text-lg text-gray-500 max-w-lg mx-auto lg:mx-0 mb-6 sm:mb-8 leading-relaxed">
+                                <p className="hero-text-3 text-sm sm:text-base lg:text-lg text-gray-500 max-w-lg mx-auto lg:mx-0 mb-4 sm:mb-5 leading-relaxed">
                                     Somos tu agencia de reclutamiento masivo con inteligencia artificial hecha plataforma. Brenda, nuestra reclutadora IA, contacta candidatos por WhatsApp, gestiona grandes volúmenes de postulantes y te agenda entrevistas con IA.
                                 </p>
+
+                                {/* ── Sellos / certificaciones ── */}
+                                <div className="hero-text-3 flex flex-wrap items-center gap-3 justify-center lg:justify-start mb-5 sm:mb-6">
+                                    {[
+                                        { src: '/lp/partner-whatsapp-business-trim.png', alt: 'WhatsApp Business Platform', bg: 'bg-[#e9f9f0]', pad: 'px-3.5 py-2' },
+                                        { src: '/lp/partner-meta-business-trim.png', alt: 'Meta Business Partners', bg: 'bg-[#101c2b]', pad: 'px-3.5 py-2' },
+                                        { src: '/lp/partner-facebook-marketing-trim.png', alt: 'Facebook Marketing Partner', bg: 'bg-[#3b5a99]', pad: 'px-3 py-1.5' },
+                                    ].map(seal => (
+                                        <div key={seal.src} className={`h-14 sm:h-16 ${seal.bg} ${seal.pad} rounded-xl ring-1 ring-black/5 shadow-sm overflow-hidden flex items-center`}>
+                                            <img
+                                                src={seal.src}
+                                                alt={seal.alt}
+                                                draggable={false}
+                                                onDragStart={e => e.preventDefault()}
+                                                className="h-full w-auto object-contain select-none pointer-events-none [-webkit-user-drag:none]"
+                                            />
+                                        </div>
+                                    ))}
+                                </div>
 
                                 {/* ── QR + Formulario ── */}
                                 <div className="hero-text-4 grid grid-cols-1 sm:grid-cols-[auto_1fr] gap-4 sm:gap-6 items-start bg-white/70 backdrop-blur-md border border-violet-100 rounded-3xl p-5 shadow-xl shadow-violet-100/30 mt-[10px]">
@@ -876,37 +895,39 @@ const LandingPage = ({ onLoginSuccess }) => {
                                             </div>
                                         ) : (
                                             <form onSubmit={handleInfoForm} className="flex flex-col gap-2.5">
-                                                <input
-                                                    type="text"
-                                                    placeholder="Nombre"
-                                                    value={infoForm.nombre}
-                                                    onChange={e => setInfoForm(f => ({ ...f, nombre: e.target.value }))}
-                                                    required
-                                                    className="w-full bg-white border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm text-gray-800 placeholder-gray-400 outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100 transition"
-                                                />
-                                                <input
-                                                    type="tel"
-                                                    placeholder="WhatsApp (10 dígitos)"
-                                                    value={infoForm.wapp}
-                                                    onChange={e => setInfoForm(f => ({ ...f, wapp: e.target.value }))}
-                                                    required
-                                                    maxLength={10}
-                                                    className="w-full bg-white border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm text-gray-800 placeholder-gray-400 outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100 transition"
-                                                />
-                                                <input
-                                                    type="text"
-                                                    placeholder="Empresa"
-                                                    value={infoForm.empresa}
-                                                    onChange={e => setInfoForm(f => ({ ...f, empresa: e.target.value }))}
-                                                    className="w-full bg-white border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm text-gray-800 placeholder-gray-400 outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100 transition"
-                                                />
-                                                <input
-                                                    type="email"
-                                                    placeholder="Correo electrónico"
-                                                    value={infoForm.correo}
-                                                    onChange={e => setInfoForm(f => ({ ...f, correo: e.target.value }))}
-                                                    className="w-full bg-white border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm text-gray-800 placeholder-gray-400 outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100 transition"
-                                                />
+                                                <div className="grid grid-cols-2 gap-2.5">
+                                                    <input
+                                                        type="text"
+                                                        placeholder="Nombre"
+                                                        value={infoForm.nombre}
+                                                        onChange={e => setInfoForm(f => ({ ...f, nombre: e.target.value }))}
+                                                        required
+                                                        className="w-full bg-white border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm text-gray-800 placeholder-gray-400 outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100 transition"
+                                                    />
+                                                    <input
+                                                        type="tel"
+                                                        placeholder="WhatsApp (10 dígitos)"
+                                                        value={infoForm.wapp}
+                                                        onChange={e => setInfoForm(f => ({ ...f, wapp: e.target.value }))}
+                                                        required
+                                                        maxLength={10}
+                                                        className="w-full bg-white border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm text-gray-800 placeholder-gray-400 outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100 transition"
+                                                    />
+                                                    <input
+                                                        type="text"
+                                                        placeholder="Empresa"
+                                                        value={infoForm.empresa}
+                                                        onChange={e => setInfoForm(f => ({ ...f, empresa: e.target.value }))}
+                                                        className="w-full bg-white border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm text-gray-800 placeholder-gray-400 outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100 transition"
+                                                    />
+                                                    <input
+                                                        type="email"
+                                                        placeholder="Correo electrónico"
+                                                        value={infoForm.correo}
+                                                        onChange={e => setInfoForm(f => ({ ...f, correo: e.target.value }))}
+                                                        className="w-full bg-white border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm text-gray-800 placeholder-gray-400 outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100 transition"
+                                                    />
+                                                </div>
                                                 <button
                                                     type="submit"
                                                     disabled={infoFormStatus === 'loading'}
