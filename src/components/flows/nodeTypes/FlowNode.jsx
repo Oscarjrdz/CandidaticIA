@@ -118,12 +118,50 @@ const InicioListaBody = ({ id, data, summary }) => {
 // Un único componente renderiza todos los tipos de nodo — la diferencia visual (ícono,
 // color, texto resumen) sale de NODE_DEFS. La configuración real vive en el drawer
 // lateral (NodeConfigDrawer), salvo "inicio" (toggle inline) y "test" (input+run inline).
+// Post-it de documentación: no ejecuta nada, no se conecta. Se arrastra desde
+// cualquier parte MENOS el textarea (marcado `nodrag`) para poder escribir dentro.
+// Al hacer click NO abre el drawer de config — solo se edita en línea.
+const NotaNode = ({ id, data, selected }) => {
+    const Icon = NODE_DEFS.nota.icon;
+    return (
+        <div
+            className={`group relative w-56 rounded-md shadow-md transition-shadow bg-amber-100 dark:bg-amber-100 border border-amber-300/70 dark:border-amber-400/40 ${selected ? 'ring-2 ring-amber-500' : ''}`}
+            style={{ boxShadow: '0 6px 14px -6px rgba(0,0,0,0.35)' }}
+        >
+            {data.onDelete && (
+                <button
+                    onClick={(e) => { e.stopPropagation(); data.onDelete(id); }}
+                    className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-gray-700 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600 z-10"
+                    title="Eliminar nota"
+                >
+                    <X className="w-3 h-3" />
+                </button>
+            )}
+            {/* Franja superior = zona de agarre para arrastrar la nota */}
+            <div className="flex items-center gap-1.5 px-2.5 pt-2 pb-1 cursor-move text-amber-700">
+                <Icon className="w-3.5 h-3.5" />
+                <span className="text-[11px] font-semibold uppercase tracking-wide">Nota</span>
+            </div>
+            <textarea
+                value={data.text || ''}
+                onChange={(e) => data.onNotaChange?.(id, e.target.value)}
+                onClick={(e) => e.stopPropagation()}
+                placeholder="Escribe aquí qué hace esta parte del flujo…"
+                rows={4}
+                className="nodrag nowheel w-full resize-none bg-transparent px-2.5 pb-2.5 pt-0 text-sm leading-snug text-amber-900 placeholder:text-amber-600/60 focus:outline-none"
+            />
+        </div>
+    );
+};
+
 const FlowNode = ({ id, type, data, selected }) => {
     const def = NODE_DEFS[type] || NODE_DEFS.contador;
     const colors = COLOR_CLASSES[def.color] || COLOR_CLASSES.gray;
     const Icon = def.icon;
     const isTest = type === 'test';
     const isInicioLista = type === 'inicio_lista';
+
+    if (type === 'nota') return <NotaNode id={id} data={data} selected={selected} />;
 
     const testRing = data.testPassed === true ? 'ring-2 ring-emerald-400' : data.testPassed === false ? 'ring-2 ring-gray-300 dark:ring-gray-600' : '';
 

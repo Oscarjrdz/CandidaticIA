@@ -1,4 +1,4 @@
-import { Play, Tag, CalendarRange, MapPin, Briefcase, GraduationCap, MessageCircle, Hash, UserRound, CircleMinus, BellRing, FolderKanban, FlaskConical, Eraser, Filter, MessageSquareText, ListChecks, CheckCheck, BotOff, Bot, Ear, AlarmClock } from 'lucide-react';
+import { Play, Tag, CalendarRange, MapPin, Briefcase, GraduationCap, MessageCircle, Hash, UserRound, CircleMinus, BellRing, FolderKanban, FlaskConical, Eraser, Filter, MessageSquareText, ListChecks, CheckCheck, BotOff, Bot, Ear, AlarmClock, StickyNote } from 'lucide-react';
 
 export const PROFILE_FILTER_LABELS = {
     active: 'Activos (no bloqueados)',
@@ -248,5 +248,15 @@ export const NODE_DEFS = {
         hasTarget: false,
         hasSource: false,
         summary: () => 'Corre el flujo completo con un número real'
+    },
+    // Post-it: solo documentación. No se conecta (sin handles), el motor lo ignora
+    // porque nunca es alcanzable desde la raíz. Se queda clavado donde lo dejes.
+    nota: {
+        label: 'Nota',
+        icon: StickyNote,
+        color: 'amber',
+        hasTarget: false,
+        hasSource: false,
+        summary: (data) => data.text?.trim() ? data.text : 'Escribe aquí una nota…'
     }
 };

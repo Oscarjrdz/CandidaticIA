@@ -35,13 +35,15 @@ const DEFAULT_DATA_BY_TYPE = {
     accion_reactivar_bot: {},
     esperando_respuesta: { grupos: [{ id: 'g1', label: '', frases: [] }], matchMode: 'contiene', timeoutHoras: 48 },
     contador: { label: '' },
-    test: { testPhone: '' }
+    test: { testPhone: '' },
+    nota: { text: '' }
 };
 
 const stripTransientData = (data = {}) => {
     const {
         onConfigure, onDelete, onTestPhoneChange, onTestRun, onToggleActive, liveCount, active,
         testStatus, testMessage, testPassed, onLoadList, onRunList, candidateList, listStatus, runningCandidateId,
+        onNotaChange,
         ...rest
     } = data;
     return rest;
@@ -106,6 +108,11 @@ const FlowEditorInner = ({ flowId, onBack }) => {
         setNodes(nds => nds.map(n => n.id === nodeId ? { ...n, data: { ...n.data, testPhone: phone } } : n));
     }, []);
 
+    const handleNotaChange = useCallback((nodeId, text) => {
+        setNodes(nds => nds.map(n => n.id === nodeId ? { ...n, data: { ...n.data, text } } : n));
+        setDirty(true);
+    }, []);
+
     const hydrateNode = useCallback((n) => ({
         ...n,
         // Los nodos de inicio no se pueden borrar (ni con Suprimir ni con la caja de selección):
@@ -116,11 +123,12 @@ const FlowEditorInner = ({ flowId, onBack }) => {
             onConfigure: handleConfigure,
             onDelete: handleDeleteNode,
             onTestPhoneChange: handleTestPhoneChange,
+            onNotaChange: handleNotaChange,
             onTestRun: (nodeId, phone) => handleTestRunRef.current?.(nodeId, phone),
             onLoadList: (nodeId) => handleLoadListRef.current?.(nodeId),
             onRunList: (nodeId) => handleRunListRef.current?.(nodeId)
         }
-    }), [handleConfigure, handleDeleteNode, handleTestPhoneChange]);
+    }), [handleConfigure, handleDeleteNode, handleTestPhoneChange, handleNotaChange]);
 
     useEffect(() => {
         let cancelled = false;
