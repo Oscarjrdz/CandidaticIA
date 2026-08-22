@@ -5,7 +5,8 @@ import {
     ArrowRight, CheckCircle, Users, Zap, Loader2, MessageSquare, BrainCircuit,
     Bot, Search, Send, BarChart3, Workflow, FileText, Shield, Clock,
     ChevronRight, Star, Play, Sparkles, Globe, Layers, Target, ArrowUpRight,
-    MousePointerClick, Rocket, Check, X, Menu, ChevronDown, Smartphone
+    MousePointerClick, Rocket, Check, X, Menu, ChevronDown, Smartphone,
+    Phone, Video, MoreVertical
 } from 'lucide-react';
 import Button from './ui/Button';
 import Input from './ui/Input';
@@ -83,27 +84,69 @@ const useScrollReveal = () => {
 /* ═══════════════════════════════════════════════════
    LANDING PAGE — FULL ONE-PAGE
    ═══════════════════════════════════════════════════ */
+/* ─── Guion de la conversación DEMO (no interactiva) con todas las preguntas reales de Brenda ─── */
+const BRENDA_DEMO_SCRIPT = [
+    { from: 'brenda', text: '¡Hola, hola! 👋 Soy la Lic. Brenda, reclutadora de Candidatic.' },
+    { from: 'brenda', text: '¿Me compartes tu nombre completo para tu registro? 😊' },
+    { from: 'user',   text: 'Hola, soy Juan Pérez López' },
+    { from: 'brenda', text: '¡Mucho gusto, Juan! 🌟 ¿Cuál es tu fecha de nacimiento? (ejemplo 19 de mayo de 1988)' },
+    { from: 'user',   text: '15 de marzo de 1996' },
+    { from: 'brenda', text: '¡Gracias! ¿En qué municipio vives actualmente?' },
+    { from: 'user',   text: 'En Apodaca' },
+    { from: 'brenda', text: '¡Perfecto! Mira, estas son las opciones que tengo para ti:\n\n✅ Ayudante General\n✅ Operario de Producción\n✅ Almacenista\n✅ Montacarguista\n✅ Soldador\n\n¿Cuál de estas opciones te interesa?' },
+    { from: 'user',   text: 'Montacarguista' },
+    { from: 'brenda', text: '¡Perfecto, Juan! Elegiste Montacarguista. Ahora solo me falta saber tu nivel de escolaridad. Mira las opciones:' },
+    { from: 'brenda', text: '🎒 Primaria\n🏫 Secundaria\n🎓 Preparatoria\n📚 Licenciatura\n🛠️ Técnica\n🧠 Posgrado' },
+    { from: 'brenda', text: '¿Cuál es la tuya? 🌟' },
+    { from: 'user',   text: 'Preparatoria' },
+    { from: 'brenda', text: '¡Genial! 🙌 ¿Me puedes decir en qué colonia vives? Es para validar que te llegue la ruta de transporte 🚌🏘️' },
+    { from: 'user',   text: 'Colonia Huinalá' },
+    { from: 'brenda', text: 'A sí 😊, colonia Huinalá la conozco bien 😊' },
+    { from: 'brenda', text: 'Juan, solo me faltaría saber si tienes experiencia en fábrica 🏭 ¿sí o no?' },
+    { from: 'user',   text: 'Sí, sí tengo' },
+    { from: 'brenda', text: '¿Cuántos meses o años de experiencia tienes en fábrica? 🏭 Un aproximado me sirve 😊' },
+    { from: 'user',   text: 'Como 2 años' },
+    { from: 'brenda', text: '¡Excelente, Juan! 🎉 Tu registro quedó completo. En breve te comparto los detalles de la vacante: ubicación, sueldo y horarios. ¡Muchas gracias! 🙌' },
+];
+
 const LandingPage = ({ onLoginSuccess }) => {
     /* ─── MOBILE NAV ─── */
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
     /* ─── BRENDA CHAT LOGIC ─── */
-    const [brendaMessages, setBrendaMessages] = useState([
-        { from: 'brenda', text: '¡Hola, hola! 👋 Soy la Lic. Brenda, reclutadora de Candidatic.', time: new Date() },
-    ]);
-    const [brendaInput, setBrendaInput] = useState('');
+    const [brendaMessages, setBrendaMessages] = useState([]);
     const [brendaTyping, setBrendaTyping] = useState(false);
     const chatEndRef = useRef(null);
-    const chatInputRef = useRef(null);
-    // Focus chat input for blinking cursor effect
+    // Reproductor de la conversación DEMO (no interactiva): burbujas + "escribiendo…" en bucle
     useEffect(() => {
-        const focusTimer = setTimeout(() => {
-            // Focus chat input for blinking cursor effect - desktop only to avoid keyboard jumps on mobile
-            if (window.innerWidth >= 640) {
-                chatInputRef.current?.focus({ preventScroll: true });
+        let cancelled = false;
+        const wait = (ms) => new Promise(r => setTimeout(r, ms));
+        const play = async () => {
+            while (!cancelled) {
+                setBrendaMessages([]);
+                setBrendaTyping(false);
+                await wait(900);
+                for (const step of BRENDA_DEMO_SCRIPT) {
+                    if (cancelled) return;
+                    if (step.from === 'brenda') {
+                        setBrendaTyping(true);
+                        await wait(Math.min(2200, Math.max(750, step.text.length * 22)));
+                        if (cancelled) return;
+                        setBrendaTyping(false);
+                        setBrendaMessages(prev => [...prev, { from: 'brenda', text: step.text, time: new Date() }]);
+                        await wait(550);
+                    } else {
+                        await wait(1000);
+                        if (cancelled) return;
+                        setBrendaMessages(prev => [...prev, { from: 'user', text: step.text, time: new Date() }]);
+                        await wait(650);
+                    }
+                }
+                await wait(5000); // pausa al terminar y vuelve a empezar
             }
-        }, 2000);
-        return () => clearTimeout(focusTimer);
+        };
+        play();
+        return () => { cancelled = true; };
     }, []);
 
     // Auto-scroll chat (inside iPhone only, don't move page)
@@ -113,43 +156,6 @@ const LandingPage = ({ onLoginSuccess }) => {
             el.parentElement.scrollTop = el.parentElement.scrollHeight;
         }
     }, [brendaMessages, brendaTyping]);
-
-    const sendBrendaMessage = async (e) => {
-        e?.preventDefault();
-        const msg = brendaInput.trim();
-        if (!msg || brendaTyping) return;
-        const userMsg = { from: 'user', text: msg, time: new Date() };
-        setBrendaMessages(prev => [...prev, userMsg]);
-        setBrendaInput('');
-        setBrendaTyping(true);
-        try {
-            const res = await fetch('/api/public/chat-brenda', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    message: msg,
-                    history: [...brendaMessages, userMsg].slice(-10)
-                })
-            });
-            const data = await res.json();
-            const replyText = data.reply || '¡Ups! Intenta de nuevo 😅';
-            // Split multi-bubble responses (same as WhatsApp bot)
-            const bubbles = replyText.split('[MSG_SPLIT]').map(b => b.trim()).filter(Boolean);
-            for (let i = 0; i < bubbles.length; i++) {
-                await new Promise(r => setTimeout(r, 600 + Math.random() * 800));
-                setBrendaTyping(false);
-                setBrendaMessages(prev => [...prev, { from: 'brenda', text: bubbles[i], time: new Date() }]);
-                if (i < bubbles.length - 1) {
-                    await new Promise(r => setTimeout(r, 400));
-                    setBrendaTyping(true);
-                }
-            }
-        } catch {
-            setBrendaTyping(false);
-            setBrendaMessages(prev => [...prev, { from: 'brenda', text: 'Hmm, tuve un problema de conexión. ¿Puedes intentar de nuevo? 😊', time: new Date() }]);
-        }
-        chatInputRef.current?.focus({ preventScroll: true });
-    };
 
     /* ─── WHATSAPP CONTACT LOGIC ─── */
     const [_showWhatsAppInput, _setShowWhatsAppInput] = useState(false);
@@ -968,19 +974,19 @@ const LandingPage = ({ onLoginSuccess }) => {
                                         {/* Screen */}
                                         <div className="relative bg-white rounded-[2rem] sm:rounded-[2.4rem] overflow-hidden" style={{ height: 'clamp(440px, 70vw, 560px)' }}>
                                             {/* WhatsApp Header */}
-                                            <div className="bg-gradient-to-r from-violet-600 to-blue-600 px-4 pt-14 pb-3 flex items-center space-x-3">
-                                                <div className="w-10 h-10 rounded-full bg-white/20 backdrop-blur flex items-center justify-center">
-                                                    <Bot className="w-6 h-6 text-white" />
+                                            <div className="bg-[#008069] px-3 pt-12 pb-2.5 flex items-center gap-2">
+                                                <ChevronRight className="w-5 h-5 text-white/90 rotate-180 shrink-0" />
+                                                <div className="w-9 h-9 rounded-full bg-white/25 flex items-center justify-center shrink-0">
+                                                    <Bot className="w-5 h-5 text-white" />
                                                 </div>
-                                                <div className="flex-1">
-                                                    <p className="font-bold text-white text-sm">Brenda • Reclutadora IA</p>
-                                                    <p className="text-[11px] text-white/70 flex items-center gap-1">
-                                                        <span className="w-1.5 h-1.5 bg-green-400 rounded-full inline-block"></span>
-                                                        en línea
-                                                    </p>
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="font-semibold text-white text-[13px] leading-tight truncate">Brenda · Reclutadora IA</p>
+                                                    <p className="text-[10px] text-white/80 leading-tight">en línea</p>
                                                 </div>
-                                                <div className="flex items-center space-x-3 text-white/70">
-                                                    <Sparkles className="w-4 h-4" />
+                                                <div className="flex items-center gap-3.5 text-white/90 shrink-0 pr-0.5">
+                                                    <Video className="w-[18px] h-[18px]" />
+                                                    <Phone className="w-4 h-4" />
+                                                    <MoreVertical className="w-[18px] h-[18px]" />
                                                 </div>
                                             </div>
 
@@ -988,25 +994,25 @@ const LandingPage = ({ onLoginSuccess }) => {
                                             <div className="flex flex-col h-[calc(100%-140px)]">
                                                 <div className="flex-1 overflow-y-auto px-3 py-3 space-y-2" style={{
                                                     backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%239C92AC' fill-opacity='0.04'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
-                                                    backgroundColor: '#f0f0f0'
+                                                    backgroundColor: '#efeae2'
                                                 }}>
                                                     {/* Date chip */}
                                                     <div className="flex justify-center mb-2">
-                                                        <span className="text-[10px] bg-white/80 rounded-lg px-3 py-1 text-gray-500 shadow-sm">Hoy</span>
+                                                        <span className="text-[10px] bg-[#ffffff] rounded-lg px-3 py-1 text-[#54656f] shadow-sm uppercase tracking-wide">Hoy</span>
                                                     </div>
 
                                                     {/* Messages */}
                                                     {brendaMessages.map((msg, i) => (
                                                         <div key={i} className={`flex ${msg.from === 'user' ? 'justify-end' : 'justify-start'} msg-appear`}>
-                                                            <div className={`max-w-[82%] px-3 py-2 rounded-2xl text-[13px] leading-relaxed shadow-sm relative ${
+                                                            <div className={`max-w-[82%] px-2.5 py-1.5 rounded-lg text-[13px] leading-relaxed shadow-sm relative text-[#111b21] ${
                                                                 msg.from === 'user'
-                                                                    ? 'bg-gradient-to-br from-violet-500 to-blue-600 text-white rounded-br-md'
-                                                                    : 'bg-white text-gray-800 rounded-bl-md'
+                                                                    ? 'bg-[#d9fdd3] rounded-tr-sm'
+                                                                    : 'bg-white rounded-tl-sm'
                                                             }`} style={{ whiteSpace: 'pre-wrap' }}>
                                                                 {msg.text}
-                                                                <span className={`block text-[9px] mt-0.5 text-right ${msg.from === 'user' ? 'text-white/60' : 'text-gray-400'}`}>
+                                                                <span className="block text-[9px] mt-0.5 text-right text-[#667781]">
                                                                     {msg.time ? new Date(msg.time).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }) : ''}
-                                                                    {msg.from === 'user' && ' ✓✓'}
+                                                                    {msg.from === 'user' && <span className="text-[#53bdeb]"> ✓✓</span>}
                                                                 </span>
                                                             </div>
                                                         </div>
@@ -1026,25 +1032,14 @@ const LandingPage = ({ onLoginSuccess }) => {
                                                     <div ref={chatEndRef}></div>
                                                 </div>
 
-                                                {/* Input Area */}
-                                                <div className="px-2 py-2 bg-white border-t border-gray-100">
-                                                    <form onSubmit={sendBrendaMessage} className="flex items-center gap-2">
-                                                        <input
-                                                            ref={chatInputRef}
-                                                            type="text"
-                                                            value={brendaInput}
-                                                            onChange={(e) => setBrendaInput(e.target.value)}
-                                                            placeholder="Escribe un mensaje..."
-                                                            className="flex-1 bg-gray-100 rounded-full px-4 py-2.5 text-[13px] outline-none focus:ring-2 focus:ring-violet-200 transition-all text-gray-800 placeholder-gray-400"
-                                                        />
-                                                        <button
-                                                            type="submit"
-                                                            disabled={!brendaInput.trim() || brendaTyping}
-                                                            className="w-9 h-9 rounded-full bg-gradient-to-r from-violet-500 to-blue-600 flex items-center justify-center shrink-0 disabled:opacity-30 hover:scale-105 active:scale-95 transition-all shadow-md"
-                                                        >
-                                                            <Send className="w-4 h-4 text-white translate-x-[1px]" />
-                                                        </button>
-                                                    </form>
+                                                {/* Input Area — decorativa (conversación de demostración) */}
+                                                <div className="px-2 py-2 bg-[#f0f2f5] flex items-center gap-2 pointer-events-none select-none">
+                                                    <div className="flex-1 bg-white rounded-full px-4 py-2.5 text-[13px] text-gray-400">
+                                                        Mensaje
+                                                    </div>
+                                                    <div className="w-9 h-9 rounded-full bg-[#008069] flex items-center justify-center shrink-0 shadow-md">
+                                                        <Send className="w-4 h-4 text-white translate-x-[1px]" />
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
