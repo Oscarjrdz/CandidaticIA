@@ -293,14 +293,14 @@ const MobileLandingPage = ({ onLoginSuccess }) => {
                         {/* Sellos / certificaciones */}
                         <div className="flex flex-wrap items-center justify-center gap-2.5 mb-6">
                             {[
-                                { src: '/lp/partner-whatsapp-business-trim.png', alt: 'WhatsApp Business Platform', bg: 'bg-[#e9f9f0]', pad: 'px-2.5 py-1.5' },
-                                { src: '/lp/partner-meta-business-trim.png', alt: 'Meta Business Partners', bg: 'bg-[#101c2b]', pad: 'px-2.5 py-1.5' },
-                                { src: '/lp/partner-facebook-marketing-trim.png', alt: 'Facebook Marketing Partner', bg: 'bg-[#3b5a99]', pad: 'px-2 py-1' },
+                                { src: '/lp/agencia_de_reclutamiento_masivo_monterrey_img1.png', alt: 'WhatsApp Business Platform', bg: 'bg-[#e9f9f0]', pad: 'px-2.5 py-1.5' },
+                                { src: '/lp/agencia_de_reclutamiento_masivo_monterrey_img2.png', alt: 'Meta Business Partners', bg: 'bg-[#101c2b]', pad: 'px-2.5 py-1.5' },
+                                { src: '/lp/agencia_de_reclutamiento_masivo_monterrey_img3.png', alt: 'Facebook Marketing Partner', bg: 'bg-[#3b5a99]', pad: 'px-2 py-1' },
                             ].map(seal => (
                                 <div key={seal.src} className={`h-12 ${seal.bg} ${seal.pad} rounded-lg ring-1 ring-black/5 shadow-sm overflow-hidden flex items-center`}>
                                     <img
                                         src={seal.src}
-                                        alt={seal.alt}
+                                        alt="Agencia_de_Reclutamiento_Masivo_Monterrey"
                                         draggable={false}
                                         onDragStart={e => e.preventDefault()}
                                         className="h-full w-auto object-contain select-none pointer-events-none [-webkit-user-drag:none]"
@@ -382,25 +382,25 @@ const MobileLandingPage = ({ onLoginSuccess }) => {
                     <div className="space-y-4">
                         {/* Reclutador */}
                         <div className="rounded-2xl border border-blue-100 bg-gradient-to-br from-blue-50 to-white p-4 flex items-center gap-4">
-                            <img
-                                src="/lp/Candidatic_app_reclutador_icono.png"
-                                alt="Ícono de la app Candidatic Reclutador para App Store, plataforma de reclutamiento masivo en Monterrey"
+                            <img draggable={false} onDragStart={e => e.preventDefault()}
+                                src="/lp/agencia_de_reclutamiento_masivo_monterrey_img5.png"
+                                alt="Agencia_de_Reclutamiento_Masivo_Monterrey"
                                 className="w-16 h-16 rounded-2xl shadow-md shadow-blue-200/60 shrink-0"
                             />
                             <div className="min-w-0">
                                 <p className="text-[10px] font-bold uppercase tracking-widest text-blue-600 mb-0.5">¿Eres reclutador?</p>
                                 <p className="text-sm font-bold text-gray-900 mb-2">Descarga la app y publica gratis</p>
                                 <a href="https://apps.apple.com/mx/app/id6776356939" target="_blank" rel="noopener noreferrer" className="inline-flex">
-                                    <img src="/lp/badge-app-store-es-mx.svg" alt="Descarga Candidatic Reclutador en el App Store" className="h-9" />
+                                    <img draggable={false} onDragStart={e => e.preventDefault()} src="/lp/agencia_de_reclutamiento_masivo_monterrey_img6.svg" alt="Agencia_de_Reclutamiento_Masivo_Monterrey" className="h-9" />
                                 </a>
                             </div>
                         </div>
 
                         {/* Candidato */}
                         <div className="rounded-2xl border border-orange-100 bg-gradient-to-br from-orange-50 to-white p-4 flex items-center gap-4">
-                            <img
-                                src="/lp/Candidatic_app_candidato_icono.png"
-                                alt="Ícono de la app Candidatic Bolsa de Empleo para App Store y Google Play, agencia de reclutamiento masivo en Monterrey"
+                            <img draggable={false} onDragStart={e => e.preventDefault()}
+                                src="/lp/agencia_de_reclutamiento_masivo_monterrey_img7.png"
+                                alt="Agencia_de_Reclutamiento_Masivo_Monterrey"
                                 className="w-16 h-16 rounded-2xl shadow-md shadow-orange-200/60 shrink-0"
                             />
                             <div className="min-w-0">
@@ -408,7 +408,7 @@ const MobileLandingPage = ({ onLoginSuccess }) => {
                                 <p className="text-sm font-bold text-gray-900 mb-2">Descarga la app de Candidatic</p>
                                 <div className="flex flex-wrap items-center gap-2">
                                     <a href="https://apps.apple.com/mx/app/id6776012569" target="_blank" rel="noopener noreferrer" className="inline-flex">
-                                        <img src="/lp/badge-app-store-es-mx.svg" alt="Descarga Candidatic Bolsa de Empleo en el App Store" className="h-9" />
+                                        <img draggable={false} onDragStart={e => e.preventDefault()} src="/lp/agencia_de_reclutamiento_masivo_monterrey_img6.svg" alt="Agencia_de_Reclutamiento_Masivo_Monterrey" className="h-9" />
                                     </a>
                                     <a href="https://play.google.com/store/apps/details?id=com.candidatic.candidatos" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg bg-black text-white active:scale-95 transition-transform">
                                         <svg viewBox="0 0 24 24" className="w-4 h-4"><path fill="currentColor" d="M3.6 2.4c-.4.3-.6.8-.6 1.4v16.4c0 .6.2 1.1.6 1.4l.1.1L13 12.5v-.1L3.7 2.3l-.1.1z" /><path fill="currentColor" d="M16.1 15.6l-3.1-3.1v-.1l3.1-3.1 3.7 2.1c1 .6 1 1.5 0 2.1l-3.7 2.1z" /></svg>
@@ -439,31 +439,31 @@ const MobileLandingPage = ({ onLoginSuccess }) => {
                         <div className="flex">
                             <div className="marquee-mobile flex items-center gap-8">
                                 {[
-                                    { name: 'CEMEX',            logo: '/lp/Agencia_de_Reclutamiento_Masivo_8.png' },
-                                    { name: 'FEMSA',            logo: '/lp/Agencia_de_Reclutamiento_Masivo_9.svg' },
-                                    { name: 'Banorte',          logo: '/lp/Agencia_de_Reclutamiento_Masivo_10.svg' },
-                                    { name: 'ALFA',             logo: '/lp/Agencia_de_Reclutamiento_Masivo_11.svg' },
-                                    { name: 'Vitro',            logo: '/lp/Agencia_de_Reclutamiento_Masivo_12.jpg' },
-                                    { name: 'GRUMA',            logo: '/lp/Agencia_de_Reclutamiento_Masivo_13.svg' },
-                                    { name: 'Arca Continental', logo: '/lp/Agencia_de_Reclutamiento_Masivo_14.svg' },
-                                    { name: 'Softtek',          logo: '/lp/Agencia_de_Reclutamiento_Masivo_15.svg' },
-                                    { name: 'Grupo Bimbo',      logo: '/lp/Agencia_de_Reclutamiento_Masivo_16.svg' },
-                                    { name: 'Liverpool',        logo: '/lp/Agencia_de_Reclutamiento_Masivo_17.png' },
-                                    { name: 'CEMEX',            logo: '/lp/Agencia_de_Reclutamiento_Masivo_8.png' },
-                                    { name: 'FEMSA',            logo: '/lp/Agencia_de_Reclutamiento_Masivo_9.svg' },
-                                    { name: 'Banorte',          logo: '/lp/Agencia_de_Reclutamiento_Masivo_10.svg' },
-                                    { name: 'ALFA',             logo: '/lp/Agencia_de_Reclutamiento_Masivo_11.svg' },
-                                    { name: 'Vitro',            logo: '/lp/Agencia_de_Reclutamiento_Masivo_12.jpg' },
-                                    { name: 'GRUMA',            logo: '/lp/Agencia_de_Reclutamiento_Masivo_13.svg' },
-                                    { name: 'Arca Continental', logo: '/lp/Agencia_de_Reclutamiento_Masivo_14.svg' },
-                                    { name: 'Softtek',          logo: '/lp/Agencia_de_Reclutamiento_Masivo_15.svg' },
-                                    { name: 'Grupo Bimbo',      logo: '/lp/Agencia_de_Reclutamiento_Masivo_16.svg' },
-                                    { name: 'Liverpool',        logo: '/lp/Agencia_de_Reclutamiento_Masivo_17.png' },
+                                    { name: 'CEMEX',            logo: '/lp/agencia_de_reclutamiento_masivo_monterrey_img8.png' },
+                                    { name: 'FEMSA',            logo: '/lp/agencia_de_reclutamiento_masivo_monterrey_img9.svg' },
+                                    { name: 'Banorte',          logo: '/lp/agencia_de_reclutamiento_masivo_monterrey_img10.svg' },
+                                    { name: 'ALFA',             logo: '/lp/agencia_de_reclutamiento_masivo_monterrey_img11.svg' },
+                                    { name: 'Vitro',            logo: '/lp/agencia_de_reclutamiento_masivo_monterrey_img12.jpg' },
+                                    { name: 'GRUMA',            logo: '/lp/agencia_de_reclutamiento_masivo_monterrey_img13.svg' },
+                                    { name: 'Arca Continental', logo: '/lp/agencia_de_reclutamiento_masivo_monterrey_img14.svg' },
+                                    { name: 'Softtek',          logo: '/lp/agencia_de_reclutamiento_masivo_monterrey_img15.svg' },
+                                    { name: 'Grupo Bimbo',      logo: '/lp/agencia_de_reclutamiento_masivo_monterrey_img16.svg' },
+                                    { name: 'Liverpool',        logo: '/lp/agencia_de_reclutamiento_masivo_monterrey_img17.png' },
+                                    { name: 'CEMEX',            logo: '/lp/agencia_de_reclutamiento_masivo_monterrey_img8.png' },
+                                    { name: 'FEMSA',            logo: '/lp/agencia_de_reclutamiento_masivo_monterrey_img9.svg' },
+                                    { name: 'Banorte',          logo: '/lp/agencia_de_reclutamiento_masivo_monterrey_img10.svg' },
+                                    { name: 'ALFA',             logo: '/lp/agencia_de_reclutamiento_masivo_monterrey_img11.svg' },
+                                    { name: 'Vitro',            logo: '/lp/agencia_de_reclutamiento_masivo_monterrey_img12.jpg' },
+                                    { name: 'GRUMA',            logo: '/lp/agencia_de_reclutamiento_masivo_monterrey_img13.svg' },
+                                    { name: 'Arca Continental', logo: '/lp/agencia_de_reclutamiento_masivo_monterrey_img14.svg' },
+                                    { name: 'Softtek',          logo: '/lp/agencia_de_reclutamiento_masivo_monterrey_img15.svg' },
+                                    { name: 'Grupo Bimbo',      logo: '/lp/agencia_de_reclutamiento_masivo_monterrey_img16.svg' },
+                                    { name: 'Liverpool',        logo: '/lp/agencia_de_reclutamiento_masivo_monterrey_img17.png' },
                                 ].map((co, i) => (
                                     <div key={i} className="flex-shrink-0 opacity-40">
-                                        <img
+                                        <img draggable={false} onDragStart={e => e.preventDefault()}
                                             src={co.logo}
-                                            alt={`Logo de ${co.name}, empresa que recluta con Candidatic IA, agencia de reclutamiento masivo en Monterrey`}
+                                            alt="Agencia_de_Reclutamiento_Masivo_Monterrey"
                                             className="h-7 w-auto max-w-[90px] object-contain grayscale"
                                         />
                                     </div>
@@ -519,19 +519,19 @@ const MobileLandingPage = ({ onLoginSuccess }) => {
                         <div className="space-y-6">
                             {[
                                 {
-                                    img: '/lp/Candidatic_reclutamiento_masivo_monterrey_1.png',
+                                    img: '/lp/agencia_de_reclutamiento_masivo_monterrey_img18.png',
                                     alt: 'Dashboard de gestión de candidatos de WhatsApp en Candidatic IA, plataforma de reclutamiento masivo en Monterrey con miles de candidatos y captura automática de datos',
                                     title: 'Miles de candidatos, un solo dashboard',
                                     desc: 'Miles de candidatos capturados desde WhatsApp con nombre, municipio, categoría y escolaridad completados automáticamente.',
                                 },
                                 {
-                                    img: '/lp/Candidatic_reclutamiento_masivo_monterrey_2.png',
+                                    img: '/lp/agencia_de_reclutamiento_masivo_monterrey_img19.png',
                                     alt: 'Chat Web de Candidatic IA con Brenda, el bot de inteligencia artificial, conversando en vivo con un candidato y capturando sus datos por WhatsApp — reclutamiento masivo en Monterrey',
                                     title: 'Brenda IA captura los datos por ti',
                                     desc: 'Nuestro bot conversa 24/7 con cada candidato y llena su perfil solo — sin que un reclutador tenga que preguntar nada a mano.',
                                 },
                                 {
-                                    img: '/lp/Candidatic_reclutamiento_masivo_monterrey_3.png',
+                                    img: '/lp/agencia_de_reclutamiento_masivo_monterrey_img20.png',
                                     alt: 'Pantalla de envíos masivos de WhatsApp a candidatos en Candidatic IA, la plataforma de reclutamiento masivo en Monterrey para reactivar tu base de datos con un clic',
                                     title: 'Reactiva tu base con un clic',
                                     desc: 'Lanza campañas instantáneas con plantillas aprobadas por WhatsApp a cientos de candidatos a la vez.',
@@ -544,7 +544,7 @@ const MobileLandingPage = ({ onLoginSuccess }) => {
                                             <span className="w-2 h-2 rounded-full bg-yellow-400" />
                                             <span className="w-2 h-2 rounded-full bg-green-400" />
                                         </div>
-                                        <img src={shot.img} alt={shot.alt} loading="lazy" className="w-full h-auto object-cover object-top" />
+                                        <img draggable={false} onDragStart={e => e.preventDefault()} src={shot.img} alt="Agencia_de_Reclutamiento_Masivo_Monterrey" loading="lazy" className="w-full h-auto object-cover object-top" />
                                     </div>
                                     <h3 className="text-sm font-bold text-gray-900 mt-3 mb-1">{shot.title}</h3>
                                     <p className="text-xs text-gray-500 leading-relaxed">{shot.desc}</p>
