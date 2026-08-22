@@ -355,7 +355,7 @@ const MobileLandingPage = ({ onLoginSuccess }) => {
                 <section className="px-5 py-9 bg-white">
                     <div className="text-center mb-6">
                         <div className="inline-flex items-center gap-2 bg-violet-50 border border-violet-100 px-3 py-1 rounded-full mb-3">
-                            <span className="text-[10px] font-semibold text-violet-700">Ya disponible en iOS</span>
+                            <span className="text-[10px] font-semibold text-violet-700">Ya disponible en iOS y Android</span>
                         </div>
                         <h2 className="text-xl font-extrabold text-gray-900">Candidatic también vive en tu celular</h2>
                     </div>
@@ -391,9 +391,13 @@ const MobileLandingPage = ({ onLoginSuccess }) => {
                                     <a href="https://apps.apple.com/mx/app/id6776012569" target="_blank" rel="noopener noreferrer" className="inline-flex">
                                         <img src="/lp/badge-app-store-es-mx.svg" alt="Descarga Candidatic Bolsa de Empleo en el App Store" className="h-9" />
                                     </a>
-                                    <span className="inline-flex items-center h-9 px-2.5 rounded-lg border border-gray-200 bg-gray-50 text-gray-400 text-[10px] font-semibold">
-                                        Google Play — Próximamente
-                                    </span>
+                                    <a href="https://play.google.com/store/apps/details?id=com.candidatic.candidatos" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg bg-black text-white active:scale-95 transition-transform">
+                                        <svg viewBox="0 0 24 24" className="w-4 h-4"><path fill="currentColor" d="M3.6 2.4c-.4.3-.6.8-.6 1.4v16.4c0 .6.2 1.1.6 1.4l.1.1L13 12.5v-.1L3.7 2.3l-.1.1z" /><path fill="currentColor" d="M16.1 15.6l-3.1-3.1v-.1l3.1-3.1 3.7 2.1c1 .6 1 1.5 0 2.1l-3.7 2.1z" /></svg>
+                                        <span className="flex flex-col leading-none text-left">
+                                            <span className="text-[7px] font-medium tracking-wide">DISPONIBLE EN</span>
+                                            <span className="text-[11px] font-semibold -mt-0.5">Google Play</span>
+                                        </span>
+                                    </a>
                                 </div>
                             </div>
                         </div>

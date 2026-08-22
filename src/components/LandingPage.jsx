@@ -17,7 +17,7 @@ const WhatsAppIcon = ({ className = "w-5 h-5" }) => (
     </svg>
 );
 
-/* ─── Google Play triangle icon (para el badge "Próximamente") ─── */
+/* ─── Google Play triangle icon (badge de descarga) ─── */
 const GooglePlayIcon = ({ className = "w-4 h-4" }) => (
     <svg viewBox="0 0 24 24" className={className}>
         <path fill="currentColor" d="M3.6 2.4c-.4.3-.6.8-.6 1.4v16.4c0 .6.2 1.1.6 1.4l.1.1L13 12.5v-.1L3.7 2.3l-.1.1z" />
@@ -1095,7 +1095,7 @@ const LandingPage = ({ onLoginSuccess }) => {
                         <div className="text-center mb-10 sm:mb-14">
                             <div className="inline-flex items-center space-x-2 bg-violet-50 px-4 py-1.5 rounded-full text-xs sm:text-sm font-semibold text-violet-700 mb-4 border border-violet-100">
                                 <Smartphone className="w-4 h-4" />
-                                <span>Ya disponible en iOS</span>
+                                <span>Ya disponible en iOS y Android</span>
                             </div>
                             <h2 className="text-2xl sm:text-3xl md:text-5xl font-extrabold text-gray-900 tracking-tight mb-4">
                                 Candidatic también vive en tu celular
@@ -1156,10 +1156,18 @@ const LandingPage = ({ onLoginSuccess }) => {
                                                 className="h-11"
                                             />
                                         </a>
-                                        <span className="inline-flex items-center gap-2 h-11 px-4 rounded-xl border border-gray-200 bg-gray-50 text-gray-400 text-xs font-semibold">
-                                            <GooglePlayIcon className="w-4 h-4" />
-                                            Google Play — Próximamente
-                                        </span>
+                                        <a
+                                            href="https://play.google.com/store/apps/details?id=com.candidatic.candidatos"
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="inline-flex items-center gap-2 h-11 px-4 rounded-xl bg-black text-white hover:scale-[1.03] active:scale-95 transition-transform"
+                                        >
+                                            <GooglePlayIcon className="w-5 h-5" />
+                                            <span className="flex flex-col leading-none text-left">
+                                                <span className="text-[8px] font-medium tracking-wide">DISPONIBLE EN</span>
+                                                <span className="text-sm font-semibold -mt-0.5">Google Play</span>
+                                            </span>
+                                        </a>
                                     </div>
                                 </div>
                             </div>
