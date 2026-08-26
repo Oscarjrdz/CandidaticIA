@@ -2035,13 +2035,29 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
     };
 
     const saveTagsGlobal = async (newGlobalTags) => {
-        setAvailableTags(newGlobalTags);
+        // Conservar los counts conocidos al hacer el update optimista: la respuesta
+        // de POST /api/tags NO trae counts, así que sin esto los paréntesis se
+        // "apagaban" hasta el próximo loadTags. Se mapea por nombre; las etiquetas
+        // nuevas/renombradas quedan sin count hasta que loadTags() traiga el real.
+        const prevCounts = new Map(
+            (Array.isArray(availableTags) ? availableTags : [])
+                .filter(t => t && typeof t !== 'string')
+                .map(t => [t.name, t.count])
+        );
+        const optimistic = newGlobalTags.map(t => {
+            const obj = typeof t === 'string' ? { name: t } : { ...t };
+            if (obj.count === undefined && prevCounts.has(obj.name)) obj.count = prevCounts.get(obj.name);
+            return obj;
+        });
+        setAvailableTags(optimistic);
         try {
             await fetch('/api/tags', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ tags: newGlobalTags })
             });
+            // Traer los counts autoritativos del servidor (etiquetas nuevas → número real).
+            loadTags();
         } catch (e) {
             console.error('Error saving global tags', e);
             showToast && showToast('Error al guardar etiquetas', 'error');
@@ -2065,7 +2081,9 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
             });
             const data = await res.json();
             if (data.success && data.tags) {
-                setAvailableTags(data.tags);
+                // La respuesta DELETE trae la lista SIN counts; recargar desde /api/tags
+                // para no apagar los paréntesis de las etiquetas restantes.
+                loadTags();
                 showToast && showToast('Etiqueta eliminada de la base global', 'success');
             }
         } catch (e) {

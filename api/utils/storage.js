@@ -1522,8 +1522,20 @@ export const saveCandidate = async (candidate) => {
         }
     }
     syncCandidateSecondaryIndexes(client, previousCandidate, finalCandidate).catch(() => {});
-    if (_isNewCandidate && client && cleanTagValues(finalCandidate.tags).length === 0) {
-        client.incr(UNTAGGED_COUNT_KEY).catch(() => {});
+    // ATOMIC TAG COUNTS al CREARSE: mantener candidatic:tag_counts en sync también
+    // en la creación. Antes solo se incrementaba el contador de "sin etiqueta"; un
+    // candidato creado ya con etiqueta (p.ej. viene de un anuncio con la etiqueta
+    // pre-asignada) nunca sumaba a su etiqueta y quedaba subcontado para siempre tras
+    // el seed. Mismo criterio que updateCandidate: fire-and-forget, sin escaneo.
+    if (_isNewCandidate && client) {
+        const createdTags = cleanTagValues(finalCandidate.tags);
+        if (createdTags.length === 0) {
+            client.incr(UNTAGGED_COUNT_KEY).catch(() => {});
+        } else {
+            const tcPipe = client.pipeline();
+            createdTags.forEach(t => tcPipe.hincrby('candidatic:tag_counts', t, 1));
+            tcPipe.exec().catch(() => {});
+        }
     }
     if (_isNewCandidate) {
         if (client) _publishGlobalStats(client).catch(() => {});
