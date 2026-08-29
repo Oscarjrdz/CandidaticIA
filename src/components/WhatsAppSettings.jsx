@@ -37,6 +37,94 @@ const WhatsAppSettings = ({ showToast }) => {
 
     const analytics = status?.analytics;
 
+    const qualityLabel = (q) =>
+        q === 'GREEN' ? '🟢 Calidad Alta' :
+        q === 'YELLOW' ? '🟡 Calidad Media' :
+        q === 'RED' ? '🔴 Calidad Baja' : '⚪ Sin calificación';
+
+    // Tarjeta de un número (loading / conectado / error). Un WABA puede tener varios.
+    const numberCard = ({ n = null, loading: isLoading = false, key = 'card' }) => {
+        const connected = !!n && !isLoading;
+        return (
+            <div key={key} className={`
+                rounded-xl p-4 border smooth-transition
+                ${connected
+                    ? 'border-emerald-200 dark:border-emerald-800 bg-gradient-to-r from-emerald-50/50 to-white dark:from-emerald-950/20 dark:to-gray-800'
+                    : isLoading
+                        ? 'border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800'
+                        : 'border-red-200 dark:border-red-800 bg-gradient-to-r from-red-50/50 to-white dark:from-red-950/20 dark:to-gray-800'}
+            `}>
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                        <div className={`w-3 h-3 rounded-full ${
+                            isLoading ? 'bg-gray-300 animate-pulse' :
+                            connected ? 'bg-emerald-500' : 'bg-red-500'
+                        }`} />
+                        <div>
+                            <div className="flex items-center gap-2">
+                                <span className="font-semibold text-sm text-gray-900 dark:text-white">
+                                    {n?.verifiedName || 'Candidatic IA'}
+                                </span>
+                                <span className="text-[10px] font-bold bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded">
+                                    META CLOUD
+                                </span>
+                                {n?.isPrimary && (
+                                    <span className="text-[10px] font-bold bg-violet-100 dark:bg-violet-900/40 text-violet-700 dark:text-violet-300 px-1.5 py-0.5 rounded">
+                                        PRINCIPAL
+                                    </span>
+                                )}
+                            </div>
+                            <div className="flex items-center gap-2 mt-0.5">
+                                {isLoading ? (
+                                    <span className="text-[11px] text-gray-400">Verificando conexión...</span>
+                                ) : connected ? (
+                                    <>
+                                        <Wifi className="w-3 h-3 text-emerald-500" />
+                                        <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium">
+                                            Conectada — {n.phoneNumber}
+                                        </span>
+                                    </>
+                                ) : (
+                                    <span className="text-[11px] text-red-500">Error de conexión</span>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
+                    {connected && (
+                        <div className="flex items-center gap-1.5">
+                            <Zap className="w-3.5 h-3.5 text-amber-500" />
+                            <span className="text-[10px] text-gray-500 dark:text-gray-400">{qualityLabel(n.qualityRating)}</span>
+                        </div>
+                    )}
+                </div>
+
+                {(connected || isLoading) && (
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4 pt-3 border-t border-gray-100 dark:border-gray-700">
+                        <div>
+                            <p className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">Nombre Verificado</p>
+                            {isLoading ? <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-24 mt-1 animate-pulse"></div> : <p className="text-xs text-gray-800 dark:text-white font-medium mt-0.5">{n?.verifiedName || '—'}</p>}
+                        </div>
+                        <div>
+                            <p className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">Plataforma</p>
+                            {isLoading ? <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-20 mt-1 animate-pulse"></div> : <p className="text-xs text-gray-800 dark:text-white font-medium mt-0.5">{n?.platformType || 'CLOUD_API'}</p>}
+                        </div>
+                        <div>
+                            <p className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">Throughput</p>
+                            {isLoading ? <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-20 mt-1 animate-pulse"></div> : <p className="text-xs text-gray-800 dark:text-white font-medium mt-0.5">{n?.throughput || 'STANDARD'}</p>}
+                        </div>
+                        <div>
+                            <p className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">Verificación</p>
+                            {isLoading ? <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-24 mt-1 animate-pulse"></div> : <p className="text-xs text-gray-800 dark:text-white font-medium mt-0.5">
+                                {n?.codeVerification === 'VERIFIED' ? '✅ Verificado' : n?.codeVerification || '—'}
+                            </p>}
+                        </div>
+                    </div>
+                )}
+            </div>
+        );
+    };
+
     return (
         <Card
             title="WhatsApp Business API"
@@ -48,84 +136,24 @@ const WhatsAppSettings = ({ showToast }) => {
             }
         >
             <div className="space-y-4">
-                {/* Connection Status Card */}
-                <div className={`
-                    rounded-xl p-4 border smooth-transition
-                    ${status?.connected
-                        ? 'border-emerald-200 dark:border-emerald-800 bg-gradient-to-r from-emerald-50/50 to-white dark:from-emerald-950/20 dark:to-gray-800'
-                        : loading
-                            ? 'border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800'
-                            : 'border-red-200 dark:border-red-800 bg-gradient-to-r from-red-50/50 to-white dark:from-red-950/20 dark:to-gray-800'}
-                `}>
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                            <div className={`w-3 h-3 rounded-full ${
-                                loading ? 'bg-gray-300 animate-pulse' :
-                                status?.connected ? 'bg-emerald-500' : 'bg-red-500'
-                            }`} />
-                            <div>
-                                <div className="flex items-center gap-2">
-                                    <span className="font-semibold text-sm text-gray-900 dark:text-white">
-                                        {status?.displayName || 'Candidatic IA'}
-                                    </span>
-                                    <span className="text-[10px] font-bold bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded">
-                                        META CLOUD
-                                    </span>
-                                </div>
-                                <div className="flex items-center gap-2 mt-0.5">
-                                    {loading ? (
-                                        <span className="text-[11px] text-gray-400">Verificando conexión...</span>
-                                    ) : status?.connected ? (
-                                        <>
-                                            <Wifi className="w-3 h-3 text-emerald-500" />
-                                            <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium">
-                                                Conectada — {status?.phoneNumber || '+52 81 8085 9480'}
-                                            </span>
-                                        </>
-                                    ) : (
-                                        <span className="text-[11px] text-red-500">Error de conexión</span>
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-
-                        {status?.connected && (
-                            <div className="flex items-center gap-1.5">
-                                <Zap className="w-3.5 h-3.5 text-amber-500" />
-                                <span className="text-[10px] text-gray-500 dark:text-gray-400">
-                                    {status?.qualityRating === 'GREEN' ? '🟢 Calidad Alta' :
-                                     status?.qualityRating === 'YELLOW' ? '🟡 Calidad Media' :
-                                     status?.qualityRating === 'RED' ? '🔴 Calidad Baja' :
-                                     '⚪ Sin calificación'}
-                                </span>
-                            </div>
-                        )}
-                    </div>
-
-                    {/* Details grid */}
-                    {(status?.connected || loading) && (
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4 pt-3 border-t border-gray-100 dark:border-gray-700">
-                            <div>
-                                <p className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">Nombre Verificado</p>
-                                {loading ? <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-24 mt-1 animate-pulse"></div> : <p className="text-xs text-gray-800 dark:text-white font-medium mt-0.5">{status?.verifiedName || '—'}</p>}
-                            </div>
-                            <div>
-                                <p className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">Plataforma</p>
-                                {loading ? <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-20 mt-1 animate-pulse"></div> : <p className="text-xs text-gray-800 dark:text-white font-medium mt-0.5">{status?.platformType || 'CLOUD_API'}</p>}
-                            </div>
-                            <div>
-                                <p className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">Throughput</p>
-                                {loading ? <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-20 mt-1 animate-pulse"></div> : <p className="text-xs text-gray-800 dark:text-white font-medium mt-0.5">{status?.throughput || 'STANDARD'}</p>}
-                            </div>
-                            <div>
-                                <p className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">Verificación</p>
-                                {loading ? <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-24 mt-1 animate-pulse"></div> : <p className="text-xs text-gray-800 dark:text-white font-medium mt-0.5">
-                                    {status?.codeVerification === 'VERIFIED' ? '✅ Verificado' : status?.codeVerification || '—'}
-                                </p>}
-                            </div>
-                        </div>
-                    )}
-                </div>
+                {/* Connection Status — una tarjeta por número conectado al WABA */}
+                {loading
+                    ? numberCard({ loading: true, key: 'loading' })
+                    : status?.connected
+                        ? (status.numbers && status.numbers.length > 0
+                            ? status.numbers
+                            : [{
+                                phoneNumber: status.phoneNumber,
+                                verifiedName: status.verifiedName,
+                                qualityRating: status.qualityRating,
+                                platformType: status.platformType,
+                                throughput: status.throughput,
+                                codeVerification: status.codeVerification,
+                                isPrimary: true
+                            }]
+                        ).map((n, i) => numberCard({ n, key: n.phoneNumberId || i }))
+                        : numberCard({ key: 'error' })
+                }
 
                 {/* ====== USAGE ANALYTICS ====== */}
                 {((status?.connected && analytics && !analytics.error) || loading) && (

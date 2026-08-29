@@ -37,11 +37,55 @@ export default async function handler(req, res) {
 
     try {
         // 1. Phone number status
-        const phoneRes = await axios.get(
-            `https://graph.facebook.com/v25.0/${phoneNumberId}`,
-            { headers, timeout: 10000 }
-        );
-        const phone = phoneRes.data;
+        // 1. Phone numbers — un WABA puede tener VARIOS números conectados.
+        //    Se listan todos con /{wabaId}/phone_numbers; si no hay wabaId,
+        //    caemos al fetch de un solo número (/{phoneNumberId}).
+        const mapNumber = (n, primary) => ({
+            phoneNumberId: n.id,
+            phoneNumber: n.display_phone_number,
+            verifiedName: n.verified_name,
+            qualityRating: n.quality_rating,
+            platformType: n.platform_type,
+            throughput: n.throughput?.level,
+            codeVerification: n.code_verification_status,
+            nameStatus: n.name_status,
+            status: n.status,
+            webhookUrl: n.webhook_configuration?.application,
+            isPrimary: primary
+        });
+
+        let numbers = [];
+        if (wabaId) {
+            try {
+                const listRes = await axios.get(
+                    `https://graph.facebook.com/v25.0/${wabaId}/phone_numbers`,
+                    {
+                        headers,
+                        timeout: 10000,
+                        params: {
+                            fields: 'id,display_phone_number,verified_name,quality_rating,platform_type,throughput,code_verification_status,name_status,status,webhook_configuration',
+                            limit: 50
+                        }
+                    }
+                );
+                numbers = (listRes.data?.data || []).map(n => mapNumber(n, n.id === phoneNumberId));
+            } catch (e) {
+                console.warn('phone_numbers list failed, fallback a número único:', e.response?.data?.error?.message || e.message);
+            }
+        }
+
+        // Fallback: número único si no se pudo listar (o no hay wabaId)
+        if (numbers.length === 0) {
+            const phoneRes = await axios.get(
+                `https://graph.facebook.com/v25.0/${phoneNumberId}`,
+                { headers, timeout: 10000 }
+            );
+            numbers = [mapNumber(phoneRes.data, true)];
+        }
+
+        // Ordena: el principal (META_PHONE_NUMBER_ID) primero
+        numbers.sort((a, b) => (b.isPrimary ? 1 : 0) - (a.isPrimary ? 1 : 0));
+        const phone = numbers.find(n => n.isPrimary) || numbers[0];
 
         // 2. Pricing analytics (current month)
         let analytics = null;
@@ -153,15 +197,18 @@ export default async function handler(req, res) {
 
         return res.status(200).json({
             connected: true,
-            verifiedName: phone.verified_name,
-            displayName: phone.verified_name || 'Candidatic IA',
-            phoneNumber: phone.display_phone_number,
-            qualityRating: phone.quality_rating,
-            platformType: phone.platform_type,
-            throughput: phone.throughput?.level,
-            codeVerification: phone.code_verification_status,
-            phoneNumberId: phone.id,
-            webhookUrl: phone.webhook_configuration?.application,
+            // Compat: campos del número principal (para UI existente)
+            verifiedName: phone.verifiedName,
+            displayName: phone.verifiedName || 'Candidatic IA',
+            phoneNumber: phone.phoneNumber,
+            qualityRating: phone.qualityRating,
+            platformType: phone.platformType,
+            throughput: phone.throughput,
+            codeVerification: phone.codeVerification,
+            phoneNumberId: phone.phoneNumberId,
+            webhookUrl: phone.webhookUrl,
+            // Todos los números conectados al WABA (principal primero)
+            numbers,
             analytics
         });
     } catch (error) {
