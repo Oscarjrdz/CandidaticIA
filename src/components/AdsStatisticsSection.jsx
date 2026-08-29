@@ -663,8 +663,10 @@ const AdsStatisticsSection = () => {
     const fN = (v) => v ? Number(v).toLocaleString() : '-';
     const fP = (v) => v ? `${Number(v).toFixed(1)}%` : '-';
 
+    // w-full: sin esto, mx-auto sobre un hijo de flex-column encoge el contenedor al
+    // contenido (shrink-to-fit) y el ancho brincaba al abrir/cerrar etiquetas.
     return (
-        <div className="max-w-[1400px] mx-auto space-y-5">
+        <div className="max-w-[1400px] w-full mx-auto space-y-5">
             {/* Header */}
             <div className="flex justify-between items-center">
                 <div>
