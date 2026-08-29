@@ -501,7 +501,7 @@ const LandingPage = ({ onLoginSuccess }) => {
                                 alt="Candidatic IA"
                                 draggable={false}
                                 onDragStart={e => e.preventDefault()}
-                                className="h-7 sm:h-8 w-auto select-none"
+                                className="h-6 sm:h-7 w-auto max-w-[55vw] select-none"
                             />
                             <span className="text-[9px] sm:text-[10px] font-semibold tracking-[0.15em] text-gray-400 uppercase mt-1 ml-0.5">Reclutamiento Masivo</span>
                         </div>
