@@ -116,6 +116,13 @@ const KEYS = {
 const INDEX_KEYS = {
     TAG_PREFIX: 'index:candidates:tag:',
     AD_PREFIX: 'index:candidates:ad:',
+    // Índice de anuncios para Estadísticas Ads (evita full-scan de la BD):
+    //   ADS_ALL      = set con los adIds crudos que existen
+    //   AD_LEADS_Z_* = zset por anuncio, member=candidateId, score=fecha del lead (primerContacto)
+    //   ADS_NOADID_Z = zset de leads de anuncio SIN adId (solo para el total exacto)
+    ADS_ALL: 'index:candidates:ads:all',
+    AD_LEADS_Z_PREFIX: 'index:candidates:adz:',
+    ADS_NOADID_Z: 'index:candidates:ads:noadid',
     MANUAL_PROJECT_PREFIX: 'index:candidates:manual_project:v2:',
     MANUAL_PROJECT_STEP_PREFIX: 'index:candidates:manual_project_step:v2:',
     MANUAL_READY: 'index:candidates:manual_project:v2:ready',
@@ -180,6 +187,15 @@ export async function withCrmProjectLinksLock(projectId, mutate) {
 const indexPart = (value) => Buffer.from(String(value || '').trim().toLowerCase()).toString('base64url');
 const tagIndexKey = (tag) => `${INDEX_KEYS.TAG_PREFIX}${indexPart(typeof tag === 'string' ? tag : tag?.name)}`;
 const adIndexKey = (adId) => `${INDEX_KEYS.AD_PREFIX}${indexPart(adId)}`;
+// Zset de leads por anuncio (para conteos/fechas sin leer candidatos)
+const adLeadsZKey = (adId) => `${INDEX_KEYS.AD_LEADS_Z_PREFIX}${indexPart(adId)}`;
+// Score = fecha del LEAD (primerContacto). No usar ultimoMensaje: cambiaría en cada mensaje.
+const adLeadScore = (c = {}) => {
+    const t = new Date(c.primerContacto || c.createdAt || c.ultimoMensaje || Date.now()).getTime();
+    return Number.isFinite(t) ? t : Date.now();
+};
+// ¿El candidato vino de un anuncio? (mismo criterio que getAdsStatistics)
+const isAdAttributed = (c) => !!(c && (c.origen === 'facebook_ctwa' || c.adId || c.adHeadline));
 const manualProjectIndexKey = (projectId) => `${INDEX_KEYS.MANUAL_PROJECT_PREFIX}${indexPart(projectId)}`;
 const manualProjectStepIndexKey = (projectId, stepId) => `${INDEX_KEYS.MANUAL_PROJECT_STEP_PREFIX}${indexPart(`${projectId}::${stepId}`)}`;
 const cleanTagValues = (tags) => [...new Set((Array.isArray(tags) ? tags : [])
@@ -230,6 +246,19 @@ async function syncCandidateSecondaryIndexes(client, oldCandidate = null, newCan
     for (const tag of newTags) if (!oldTags.has(tag)) pipe.sadd(tagIndexKey(tag), id);
     if (oldAd && oldAd !== newAd) pipe.srem(adIndexKey(oldAd), id);
     if (newAd && oldAd !== newAd) pipe.sadd(adIndexKey(newAd), id);
+    // Índice de Estadísticas Ads (zset por fecha + set maestro). El set adIndexKey de arriba
+    // se conserva intacto (lo usa getCandidatesByAdIds); esto es adicional, no lo reemplaza.
+    const leadScore = adLeadScore(newCandidate || oldCandidate || {});
+    if (oldAd && oldAd !== newAd) pipe.zrem(adLeadsZKey(oldAd), id);
+    if (newAd && oldAd !== newAd) {
+        pipe.zadd(adLeadsZKey(newAd), leadScore, id);
+        pipe.sadd(INDEX_KEYS.ADS_ALL, newAd);
+    }
+    // Bucket de leads de anuncio SIN adId (para el total exacto; no se muestra como anuncio)
+    const oldNoAdIdLead = isAdAttributed(oldCandidate) && !oldAd;
+    const newNoAdIdLead = isAdAttributed(newCandidate) && !newAd;
+    if (oldNoAdIdLead && !newNoAdIdLead) pipe.zrem(INDEX_KEYS.ADS_NOADID_Z, id);
+    if (newNoAdIdLead && !oldNoAdIdLead) pipe.zadd(INDEX_KEYS.ADS_NOADID_Z, leadScore, id);
     if (oldManualProject && oldManualProject !== newManualProject) pipe.srem(manualProjectIndexKey(oldManualProject), id);
     if (newManualProject && oldManualProject !== newManualProject) pipe.sadd(manualProjectIndexKey(newManualProject), id);
     if (oldManualProject && oldManualStep && (oldManualProject !== newManualProject || oldManualStep !== newManualStep)) {
@@ -374,7 +403,13 @@ export async function ensureCandidateSecondaryIndexes() {
                 const tags = cleanTagValues(c.tags);
                 tags.forEach(tag => writePipe.sadd(tagIndexKey(tag), c.id));
                 if (tags.length === 0) writePipe.zadd(INDEX_KEYS.UNTAGGED, candidateSortScore(c), c.id);
-                if (c.adId) writePipe.sadd(adIndexKey(c.adId), c.id);
+                if (c.adId) {
+                    writePipe.sadd(adIndexKey(c.adId), c.id);
+                    writePipe.zadd(adLeadsZKey(c.adId), adLeadScore(c), c.id);
+                    writePipe.sadd(INDEX_KEYS.ADS_ALL, c.adId);
+                } else if (isAdAttributed(c)) {
+                    writePipe.zadd(INDEX_KEYS.ADS_NOADID_Z, adLeadScore(c), c.id);
+                }
             }
             await writePipe.exec();
             await new Promise(r => setTimeout(r, 2));
@@ -3116,10 +3151,11 @@ export const getAITelemetry = async () => {
 };
 
 /**
- * getAdsStatistics
- * Aggregates candidates by ad campaigns.
+ * getAdsStatisticsLegacy — agrega candidatos por anuncio escaneando TODA la BD.
+ * Se conserva como fallback (índice ausente / pre-backfill, o ADS_STATS_LEGACY=1).
+ * La ruta rápida por índice (getAdsStatistics) está definida más abajo.
  */
-export const getAdsStatistics = async () => {
+const getAdsStatisticsLegacy = async () => {
     const client = getClient();
     if (!client) return { ads: [], totalAdsLeads: 0 };
 
@@ -3261,5 +3297,84 @@ export const getAdsStatistics = async () => {
     // Cache for 10 min (fire-and-forget)
     try { await client.set(ADS_CACHE_KEY, JSON.stringify(result), 'EX', ADS_CACHE_TTL); } catch { /* ignore */ }
 
+    return result;
+};
+
+// ⚡ RUTA RÁPIDA: arma las estadísticas desde el índice (ADS_ALL + zsets por anuncio +
+// ad_creative), SIN escanear los ~16k candidatos. Cae a la legacy si el índice no existe
+// aún (pre-backfill) o si ADS_STATS_LEGACY=1. Mismo shape de salida y mismo cache.
+export const getAdsStatistics = async () => {
+    const client = getClient();
+    if (!client) return { ads: [], totalAdsLeads: 0 };
+
+    const ADS_CACHE_KEY = 'stats:ads:cached';
+    const ADS_CACHE_TTL = 10 * 60;
+    try {
+        const cached = await client.get(ADS_CACHE_KEY);
+        if (cached) return JSON.parse(cached);
+    } catch { /* cache miss — rebuild */ }
+
+    // Fallback: índice ausente o forzado → escaneo legacy.
+    const forceLegacy = process.env.ADS_STATS_LEGACY === '1';
+    let adIds = [];
+    if (!forceLegacy) {
+        try { adIds = await client.smembers(INDEX_KEYS.ADS_ALL); } catch { adIds = []; }
+    }
+    if (forceLegacy || adIds.length === 0) return await getAdsStatisticsLegacy();
+
+    // Límites de "hoy" en Monterrey (epoch ms). México sin horario de verano → UTC-6 fijo.
+    const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Monterrey' });
+    const todayStart = new Date(`${todayStr}T00:00:00-06:00`).getTime();
+    const todayEnd = todayStart + 24 * 60 * 60 * 1000 - 1;
+
+    // Un solo pipeline: por anuncio → total, hoy, 1° lead, último lead y su creativo.
+    const pipe = client.pipeline();
+    for (const adId of adIds) {
+        const zk = adLeadsZKey(adId);
+        pipe.zcard(zk);
+        pipe.zcount(zk, todayStart, todayEnd);
+        pipe.zrange(zk, 0, 0, 'WITHSCORES');    // más viejo → 1° lead
+        pipe.zrange(zk, -1, -1, 'WITHSCORES');  // más nuevo → último lead
+        pipe.get(`ad_creative:${adId}`);
+    }
+    const rows = await pipe.exec();
+
+    const ads = [];
+    let totalAdsLeads = 0;
+    for (let i = 0; i < adIds.length; i++) {
+        const base = i * 5;
+        const totalLeads = Number(rows[base]?.[1] || 0);
+        if (totalLeads === 0) continue; // anuncio quedó sin leads (cambio/borrado): no mostrar
+        const todayLeads = Number(rows[base + 1]?.[1] || 0);
+        const minArr = rows[base + 2]?.[1] || [];
+        const maxArr = rows[base + 3]?.[1] || [];
+        const firstScore = minArr.length > 1 ? Number(minArr[1]) : null;
+        const lastScore = maxArr.length > 1 ? Number(maxArr[1]) : null;
+        let creative = {};
+        try { const raw = rows[base + 4]?.[1]; if (raw) creative = JSON.parse(raw); } catch { /* sin creativo */ }
+
+        totalAdsLeads += totalLeads;
+        ads.push({
+            adId: adIds[i],
+            adHeadline: creative.adHeadline || 'Anuncio sin título',
+            adBody: creative.adBody || null,
+            adUrl: creative.adUrl || null,
+            adSource: 'ad', // indexados por adId ⇒ son anuncios (CTWA)
+            adImageUrl: creative.adImageUrl || null,
+            adVideoUrl: creative.adVideoUrl || null,
+            adMediaType: creative.adMediaType || null,
+            totalLeads,
+            todayLeads,
+            firstSeen: (firstScore && Number.isFinite(firstScore)) ? new Date(firstScore).toISOString() : null,
+            lastSeen: (lastScore && Number.isFinite(lastScore)) ? new Date(lastScore).toISOString() : null
+        });
+    }
+
+    // Leads de anuncio SIN adId (ctwa sin ad): suman al total, no se listan como anuncio.
+    try { totalAdsLeads += Number(await client.zcard(INDEX_KEYS.ADS_NOADID_Z)) || 0; } catch { /* ignore */ }
+
+    ads.sort((a, b) => b.totalLeads - a.totalLeads);
+    const result = { ads, totalAdsLeads };
+    try { await client.set(ADS_CACHE_KEY, JSON.stringify(result), 'EX', ADS_CACHE_TTL); } catch { /* ignore */ }
     return result;
 };
