@@ -3,7 +3,7 @@ import { useAuthContext } from '../contexts/AuthContext';
 import { useCandidatesSSE } from '../hooks/useCandidatesSSE';
 import {
     Users, Settings, Bot, History, Zap, Briefcase, Send, User, LogOut, BarChart3,
-    MessageSquare, Smartphone, Folder, FolderKanban, GripVertical, Wifi, BrainCircuit, X, ChevronLeft, ChevronRight, Bell, Sparkles, Workflow
+    MessageSquare, Smartphone, Folder, FolderKanban, GripVertical, Wifi, X, ChevronLeft, ChevronRight, Bell, Sparkles, Workflow
 } from 'lucide-react';
 import {
     DndContext,
@@ -262,15 +262,25 @@ const Sidebar = ({ activeSection, onSectionChange, onLogout, isMobileOpen, onClo
                 {/* Logo/Header */}
                 <div className="relative p-6 mb-2">
                     <div className="flex items-center justify-between">
-                        <div className={`flex items-center space-x-3 ${isCollapsed ? 'lg:justify-center lg:w-full lg:space-x-0' : ''}`}>
-                            <div className="relative flex-shrink-0 candidatic-brand-icon">
-                                <BrainCircuit className="w-8 h-8 text-white stroke-[2] drop-shadow-md rotate-90" />
-                            </div>
+                        <div className={`flex items-center ${isCollapsed ? 'lg:justify-center lg:w-full' : ''}`}>
+                            {isCollapsed && (
+                                <img
+                                    src="/logo-candidatic-c.png"
+                                    alt="Candidatic"
+                                    draggable={false}
+                                    onDragStart={(e) => e.preventDefault()}
+                                    className="hidden lg:block w-9 h-9 select-none drop-shadow-sm"
+                                />
+                            )}
                             <div className={`flex flex-col ${isCollapsed ? 'lg:hidden' : ''}`}>
-                                <h2 className="candidatic-thinking-logo text-[20px] font-extrabold tracking-wider flex items-center drop-shadow-sm ml-1">
-                                    CANDIDATIC&nbsp;<span className="tracking-tighter">IΛ</span>
-                                </h2>
-                                <span className="text-[12px] text-white font-medium tracking-tight text-right ml-1 -mt-1">by Hr One México</span>
+                                <img
+                                    src="/logo-candidatic.png"
+                                    alt="Candidatic IA"
+                                    draggable={false}
+                                    onDragStart={(e) => e.preventDefault()}
+                                    className="w-full h-auto max-w-[180px] select-none drop-shadow-sm"
+                                />
+                                <span className="text-[12px] text-white font-medium tracking-tight text-right -mt-0.5">by Hr One México</span>
                             </div>
                         </div>
                         {/* Mobile close button */}
