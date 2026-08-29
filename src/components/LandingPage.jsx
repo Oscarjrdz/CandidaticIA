@@ -495,14 +495,15 @@ const LandingPage = ({ onLoginSuccess }) => {
                 </div>
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 h-14 sm:h-16 flex items-center justify-between relative">
                     <div className="flex items-center space-x-2">
-                        <div className="w-8 h-8 sm:w-9 sm:h-9 bg-gradient-to-br from-blue-600 to-violet-700 rounded-xl flex items-center justify-center shadow-lg shadow-violet-200">
-                            <BrainCircuit className="w-4 h-4 sm:w-5 sm:h-5 text-white stroke-[1.5] rotate-90" />
-                        </div>
                         <div className="flex flex-col leading-none">
-                            <span className="text-lg sm:text-xl font-extrabold tracking-tight text-gray-900 flex items-center">
-                                CANDIDATIC&nbsp;<span className="tracking-tighter bg-gradient-to-r from-blue-600 to-violet-600 bg-clip-text text-transparent">IΛ</span>
-                            </span>
-                            <span className="text-[9px] sm:text-[10px] font-semibold tracking-[0.15em] text-gray-400 uppercase mt-0.5">Reclutamiento Masivo</span>
+                            <img
+                                src="/logo-candidatic-landing.png"
+                                alt="Candidatic IA"
+                                draggable={false}
+                                onDragStart={e => e.preventDefault()}
+                                className="h-7 sm:h-8 w-auto select-none"
+                            />
+                            <span className="text-[9px] sm:text-[10px] font-semibold tracking-[0.15em] text-gray-400 uppercase mt-1 ml-0.5">Reclutamiento Masivo</span>
                         </div>
                     </div>
 
@@ -1794,7 +1795,17 @@ const LandingPage = ({ onLoginSuccess }) => {
             {/* ═══ FOOTER ═══ */}
             <footer className="bg-gray-950 text-gray-400 py-6 px-4 sm:px-6">
                 <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
-                    <p className="text-xs sm:text-sm text-gray-600 text-center md:text-left">
+                    <div className="flex flex-col items-center md:items-start gap-1">
+                        <img
+                            src="/logo-candidatic.png"
+                            alt="Candidatic IA"
+                            draggable={false}
+                            onDragStart={e => e.preventDefault()}
+                            className="h-6 w-auto select-none opacity-95"
+                        />
+                        <span className="text-[11px] text-gray-500 tracking-tight">by Hr One México</span>
+                    </div>
+                    <p className="text-xs sm:text-sm text-gray-600 text-center">
                         © {new Date().getFullYear()} Candidatic IA. Todos los derechos reservados.
                     </p>
                     <div className="flex items-center space-x-6">

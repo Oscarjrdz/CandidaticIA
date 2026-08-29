@@ -149,14 +149,15 @@ const MobileLandingPage = ({ onLoginSuccess }) => {
                 </div>
                 <div className="px-4 h-14 flex items-center justify-center">
                     <div className="flex items-center gap-2.5">
-                        <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-violet-700 rounded-xl flex items-center justify-center shadow-md shrink-0">
-                            <BrainCircuit className="w-4 h-4 text-white stroke-[1.5] rotate-90" />
-                        </div>
                         <div className="flex flex-col leading-none">
-                            <span className="text-base font-extrabold tracking-tight text-gray-900">
-                                CANDIDATIC&nbsp;<span className="bg-gradient-to-r from-blue-600 to-violet-600 bg-clip-text text-transparent">IΛ</span>
-                            </span>
-                            <span className="text-[9px] font-semibold tracking-[0.15em] text-gray-400 uppercase mt-0.5">Reclutamiento Masivo</span>
+                            <img
+                                src="/logo-candidatic-landing.png"
+                                alt="Candidatic IA"
+                                draggable={false}
+                                onDragStart={e => e.preventDefault()}
+                                className="h-7 w-auto select-none"
+                            />
+                            <span className="text-[9px] font-semibold tracking-[0.15em] text-gray-400 uppercase mt-1 ml-0.5">Reclutamiento Masivo</span>
                         </div>
                     </div>
                 </div>
@@ -653,13 +654,15 @@ const MobileLandingPage = ({ onLoginSuccess }) => {
 
                 {/* ── FOOTER ── */}
                 <footer ref={footerRef} className="bg-gray-950 text-gray-400 px-5 py-8">
-                    <div className="flex items-center gap-2 mb-4">
-                        <div className="w-7 h-7 bg-gradient-to-br from-blue-500 to-violet-600 rounded-lg flex items-center justify-center">
-                            <BrainCircuit className="w-4 h-4 text-white stroke-[1.5] rotate-90" />
-                        </div>
-                        <span className="text-base font-extrabold text-white">
-                            CANDIDATIC&nbsp;<span className="text-violet-400">IΛ</span>
-                        </span>
+                    <div className="flex flex-col gap-1 mb-4">
+                        <img
+                            src="/logo-candidatic.png"
+                            alt="Candidatic IA"
+                            draggable={false}
+                            onDragStart={e => e.preventDefault()}
+                            className="h-6 w-auto self-start select-none opacity-95"
+                        />
+                        <span className="text-[11px] text-gray-500 tracking-tight">by Hr One México</span>
                     </div>
                     <p className="text-xs text-gray-500 mb-4 leading-relaxed">
                         Agencia de reclutamiento potenciada por inteligencia artificial y WhatsApp para el mercado latinoamericano.
