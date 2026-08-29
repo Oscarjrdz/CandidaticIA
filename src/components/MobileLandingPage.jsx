@@ -157,7 +157,9 @@ const MobileLandingPage = ({ onLoginSuccess }) => {
                                 onDragStart={e => e.preventDefault()}
                                 className="h-7 w-auto select-none"
                             />
-                            <span className="text-[9px] font-semibold tracking-[0.15em] text-gray-400 uppercase mt-1 ml-0.5">Reclutamiento Masivo</span>
+                            <span className="w-full mt-1 flex justify-between text-[9px] font-semibold text-gray-400 uppercase">
+                                {'RECLUTAMIENTO MASIVO'.split('').map((ch, i) => <span key={i}>{ch === ' ' ? ' ' : ch}</span>)}
+                            </span>
                         </div>
                     </div>
                 </div>
@@ -662,7 +664,7 @@ const MobileLandingPage = ({ onLoginSuccess }) => {
                             onDragStart={e => e.preventDefault()}
                             className="h-6 w-auto self-start select-none opacity-95"
                         />
-                        <span className="text-[11px] text-gray-500 tracking-tight">by Hr One México</span>
+                        <span className="text-[11px] text-white tracking-tight">by Hr One México</span>
                     </div>
                     <p className="text-xs text-gray-500 mb-4 leading-relaxed">
                         Agencia de reclutamiento potenciada por inteligencia artificial y WhatsApp para el mercado latinoamericano.

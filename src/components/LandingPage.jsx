@@ -503,7 +503,9 @@ const LandingPage = ({ onLoginSuccess }) => {
                                 onDragStart={e => e.preventDefault()}
                                 className="h-6 sm:h-7 w-auto max-w-[55vw] select-none"
                             />
-                            <span className="text-[9px] sm:text-[10px] font-semibold tracking-[0.15em] text-gray-400 uppercase mt-1 ml-0.5">Reclutamiento Masivo</span>
+                            <span className="w-full mt-1 flex justify-between text-[9px] sm:text-[10px] font-semibold text-gray-400 uppercase">
+                                {'RECLUTAMIENTO MASIVO'.split('').map((ch, i) => <span key={i}>{ch === ' ' ? ' ' : ch}</span>)}
+                            </span>
                         </div>
                     </div>
 
@@ -1795,7 +1797,7 @@ const LandingPage = ({ onLoginSuccess }) => {
             {/* ═══ FOOTER ═══ */}
             <footer className="bg-gray-950 text-gray-400 py-6 px-4 sm:px-6">
                 <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
-                    <div className="flex flex-col items-center md:items-start gap-1">
+                    <div className="flex flex-col items-start gap-1">
                         <img
                             src="/logo-candidatic.png"
                             alt="Candidatic IA"
@@ -1803,7 +1805,7 @@ const LandingPage = ({ onLoginSuccess }) => {
                             onDragStart={e => e.preventDefault()}
                             className="h-6 w-auto select-none opacity-95"
                         />
-                        <span className="text-[11px] text-gray-500 tracking-tight">by Hr One México</span>
+                        <span className="text-[11px] text-white tracking-tight">by Hr One México</span>
                     </div>
                     <p className="text-xs sm:text-sm text-gray-600 text-center">
                         © {new Date().getFullYear()} Candidatic IA. Todos los derechos reservados.
