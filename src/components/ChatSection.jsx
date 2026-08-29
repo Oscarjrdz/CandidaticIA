@@ -589,6 +589,16 @@ const MultiSelectDropdown = React.memo(({ label, options, selected, onChange }) 
 // 📝 Profile Edit Modal
 // ─────────────────────────────────────────────────────────────────────────────
 const ProfileModal = React.memo(({ candidate, onClose, onSave }) => {
+    // Candidatos de la app guardan `experiencia` como array estructurado
+    // [{ empresa, puesto, anios }]; el bot la guarda como string "Sí"/"No".
+    // Para el selector la mostramos como "Sí"/"No", pero conservamos el array
+    // (los lugares) intacto en Redis: no se reenvía al guardar salvo que el
+    // reclutador cambie el valor a propósito (ver handleSave).
+    const experienciaEsArray = Array.isArray(candidate.experiencia);
+    const experienciaInicial = experienciaEsArray
+        ? (candidate.experiencia.length ? 'Sí' : 'No')
+        : (candidate.experiencia || '');
+
     const [formData, setFormData] = useState({
         nombreReal: candidate.nombreReal || candidate.nombre || '',
         edad: candidate.edad || candidate.fechaNacimiento || '',
@@ -597,9 +607,18 @@ const ProfileModal = React.memo(({ candidate, onClose, onSave }) => {
         escolaridad: candidate.escolaridad || '',
         categoria: candidate.categoria || '',
         colonia: candidate.colonia || '',
-        experiencia: candidate.experiencia || '',
+        experiencia: experienciaInicial,
         meses: candidate.meses || ''
     });
+
+    const handleSave = () => {
+        const updates = { ...formData };
+        // No sobrescribir el array de lugares si el reclutador no tocó el selector.
+        if (experienciaEsArray && updates.experiencia === experienciaInicial) {
+            delete updates.experiencia;
+        }
+        onSave(updates);
+    };
 
     const [botCategories, setBotCategories] = useState([]);
 
@@ -680,7 +699,7 @@ const ProfileModal = React.memo(({ candidate, onClose, onSave }) => {
                 </div>
                 <div className="px-6 py-4 border-t border-gray-100 dark:border-gray-700 flex justify-end gap-3 bg-gray-50 dark:bg-[#111b21] rounded-b-xl">
                     <button onClick={onClose} className="px-4 py-2 font-medium text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-white transition-colors">Cancelar</button>
-                    <button onClick={() => onSave(formData)} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg transition-colors">Guardar</button>
+                    <button onClick={handleSave} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg transition-colors">Guardar</button>
                 </div>
             </div>
         </div>
