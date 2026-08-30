@@ -35,6 +35,7 @@ const MobileLandingPage = ({ onLoginSuccess }) => {
     const [showBlog, setShowBlog] = useState(false);
     const openBlog = (e) => { if (e) e.preventDefault(); setShowBlog(true); window.scrollTo({ top: 0 }); };
     const goHome = () => { setShowBlog(false); };
+    const goTop = (e) => { if (e) e.preventDefault(); setShowBlog(false); window.scrollTo({ top: 0, behavior: 'smooth' }); };
 
     /* ── HIDE STICKY BUTTON AT BOTTOM ── */
     const [showSticky, setShowSticky] = useState(true);
@@ -691,6 +692,7 @@ const MobileLandingPage = ({ onLoginSuccess }) => {
                         Agencia de reclutamiento potenciada por inteligencia artificial y WhatsApp para el mercado latinoamericano.
                     </p>
                     <div className="flex gap-4 text-xs text-gray-500 mb-4">
+                        <a href="#top" onClick={goTop} className="hover:text-violet-400">Home</a>
                         <a href="/blog" onClick={openBlog} className="hover:text-violet-400">Blog</a>
                         <a href="/privacy" className="hover:text-violet-400">Privacidad</a>
                         <a href="/terms" className="hover:text-violet-400">Términos</a>

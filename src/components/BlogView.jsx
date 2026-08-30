@@ -31,20 +31,26 @@ const ICONS = {
   li: <path d="M20.5 2h-17A1.5 1.5 0 0 0 2 3.5v17A1.5 1.5 0 0 0 3.5 22h17a1.5 1.5 0 0 0 1.5-1.5v-17A1.5 1.5 0 0 0 20.5 2zM8 19H5V9h3v10zM6.5 7.7a1.7 1.7 0 1 1 0-3.5 1.7 1.7 0 0 1 0 3.5zM19 19h-3v-5.4c0-1.3-.5-2.1-1.6-2.1-.9 0-1.4.6-1.6 1.2-.1.2-.1.5-.1.8V19h-3V9h3v1.3a3 3 0 0 1 2.7-1.5c2 0 3.4 1.3 3.4 4V19z" />,
 };
 
+// Caché a nivel de módulo: las entradas se leen una sola vez por sesión,
+// así reabrir el blog es instantáneo (sin estado "cargando" ni salto del footer).
+let POSTS_CACHE = null;
+
 export default function BlogView() {
-  const [posts, setPosts] = useState(null);
-  const [activeSlug, setActiveSlug] = useState(null);
+  const [posts, setPosts] = useState(POSTS_CACHE);
+  const [activeSlug, setActiveSlug] = useState(POSTS_CACHE?.[0]?.slug || null);
   const [progress, setProgress] = useState(0);
   const [copied, setCopied] = useState(false);
 
-  // Cargar entradas una sola vez
+  // Cargar entradas una sola vez (si no están en caché)
   useEffect(() => {
+    if (POSTS_CACHE) return;
     let alive = true;
     fetch('/api/blog/data')
       .then(r => r.json())
       .then(d => {
         if (!alive) return;
         const list = d?.posts || [];
+        POSTS_CACHE = list;
         setPosts(list);
         setActiveSlug(list[0]?.slug || null);
       })
@@ -174,7 +180,7 @@ function ScopedStyles() {
   return (
     <style>{`
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@800;900&family=Lora:ital,wght@0,400;0,500;1,400&display=swap');
-.cdx-blog{--v:#7c3aed;--b:#2563eb;--ink:#111827;--muted:#6b7280;--line:#e5e7eb;background:#f8fafc;min-height:60vh}
+.cdx-blog{--v:#7c3aed;--b:#2563eb;--ink:#111827;--muted:#6b7280;--line:#e5e7eb;background:#f8fafc;min-height:100vh}
 .cdx-loading{max-width:1120px;margin:0 auto;padding:80px 20px;text-align:center;color:var(--muted);font-weight:600}
 .cdx-progress{position:fixed;top:0;left:0;height:3px;background:linear-gradient(90deg,#2563eb,#7c3aed,#9333ea);z-index:60;transition:width .1s linear}
 .cdx-topline{height:3px;background:linear-gradient(90deg,#2563eb,#7c3aed,#9333ea)}

@@ -480,6 +480,7 @@ const LandingPage = ({ onLoginSuccess }) => {
     const [showBlog, setShowBlog] = useState(false);
     const openBlog = (e) => { if (e) e.preventDefault(); setShowBlog(true); window.scrollTo({ top: 0 }); };
     const goHome = () => { setShowBlog(false); };
+    const goTop = (e) => { if (e) e.preventDefault(); setShowBlog(false); window.scrollTo({ top: 0, behavior: 'smooth' }); };
 
     /* ─── SCROLL REVEAL ─── */
     const [featuresRef, featuresVisible] = useScrollReveal();
@@ -528,6 +529,7 @@ const LandingPage = ({ onLoginSuccess }) => {
                     </div>
 
                     <nav className="hidden md:flex items-center space-x-8 text-sm font-medium text-gray-600">
+                        <a href="#top" onClick={goTop} className="hover:text-violet-600 transition-colors duration-300">Home</a>
                         <a href="#features" onClick={goHome} className="hover:text-violet-600 transition-colors duration-300">Características</a>
                         <a href="#how-it-works" onClick={goHome} className="hover:text-violet-600 transition-colors duration-300">Cómo funciona</a>
                         <a href="/blog" onClick={openBlog} className="hover:text-violet-600 transition-colors duration-300">Blog</a>
@@ -636,6 +638,7 @@ const LandingPage = ({ onLoginSuccess }) => {
                 {/* Mobile menu */}
                 {mobileMenuOpen && (
                     <div className="md:hidden bg-white/95 backdrop-blur-xl border-t border-gray-100 px-6 py-4 space-y-1">
+                        <a href="#top" onClick={(e) => { setMobileMenuOpen(false); goTop(e); }} className="block text-sm font-medium text-gray-600 hover:text-violet-600 hover:bg-violet-50 rounded-xl px-4 py-3 transition-all">Home</a>
                         <a href="#features" onClick={() => { setMobileMenuOpen(false); goHome(); }} className="block text-sm font-medium text-gray-600 hover:text-violet-600 hover:bg-violet-50 rounded-xl px-4 py-3 transition-all">Características</a>
                         <a href="#how-it-works" onClick={() => { setMobileMenuOpen(false); goHome(); }} className="block text-sm font-medium text-gray-600 hover:text-violet-600 hover:bg-violet-50 rounded-xl px-4 py-3 transition-all">Cómo funciona</a>
                         <a href="/blog" onClick={(e) => { setMobileMenuOpen(false); openBlog(e); }} className="block text-sm font-medium text-gray-600 hover:text-violet-600 hover:bg-violet-50 rounded-xl px-4 py-3 transition-all">Blog</a>
