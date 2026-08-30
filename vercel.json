@@ -58,6 +58,14 @@
             "destination": "/api/lp/bolsadeempleo"
         },
         {
+            "source": "/blog",
+            "destination": "/api/blog"
+        },
+        {
+            "source": "/blog/:slug",
+            "destination": "/api/blog/post?slug=:slug"
+        },
+        {
             "source": "/app",
             "destination": "/api/app"
         }

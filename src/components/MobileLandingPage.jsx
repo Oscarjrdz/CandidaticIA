@@ -676,7 +676,7 @@ const MobileLandingPage = ({ onLoginSuccess }) => {
                             onDragStart={e => e.preventDefault()}
                             className="h-6 w-auto self-start select-none opacity-95"
                         />
-                        <span className="text-[11px] text-white tracking-tight">by Hr One México</span>
+                        <span className="text-[11px] text-white tracking-tight">by <a href="https://www.hr1.mx" target="_blank" rel="noopener noreferrer" className="text-white hover:underline">Hr One México</a> 🇲🇽</span>
                     </div>
                     <p className="text-xs text-gray-500 mb-4 leading-relaxed">
                         Agencia de reclutamiento potenciada por inteligencia artificial y WhatsApp para el mercado latinoamericano.

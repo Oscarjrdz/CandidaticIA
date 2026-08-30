@@ -479,7 +479,6 @@ const LandingPage = ({ onLoginSuccess }) => {
     const [featuresRef, featuresVisible] = useScrollReveal();
     const [stepsRef, stepsVisible] = useScrollReveal();
     const [statsRef, statsVisible] = useScrollReveal();
-    const [pricingRef, pricingVisible] = useScrollReveal();
 
     /* ────────────────────────────────────────────── */
     return (
@@ -524,7 +523,7 @@ const LandingPage = ({ onLoginSuccess }) => {
                     <nav className="hidden md:flex items-center space-x-8 text-sm font-medium text-gray-600">
                         <a href="#features" className="hover:text-violet-600 transition-colors duration-300">Características</a>
                         <a href="#how-it-works" className="hover:text-violet-600 transition-colors duration-300">Cómo funciona</a>
-                        <a href="#pricing" className="hover:text-violet-600 transition-colors duration-300">Precios</a>
+                        <a href="/blog" target="_blank" rel="noopener noreferrer" className="hover:text-violet-600 transition-colors duration-300">Blog</a>
                         <a href="#faq" className="hover:text-violet-600 transition-colors duration-300">FAQ</a>
                     </nav>
 
@@ -632,7 +631,7 @@ const LandingPage = ({ onLoginSuccess }) => {
                     <div className="md:hidden bg-white/95 backdrop-blur-xl border-t border-gray-100 px-6 py-4 space-y-1">
                         <a href="#features" onClick={() => setMobileMenuOpen(false)} className="block text-sm font-medium text-gray-600 hover:text-violet-600 hover:bg-violet-50 rounded-xl px-4 py-3 transition-all">Características</a>
                         <a href="#how-it-works" onClick={() => setMobileMenuOpen(false)} className="block text-sm font-medium text-gray-600 hover:text-violet-600 hover:bg-violet-50 rounded-xl px-4 py-3 transition-all">Cómo funciona</a>
-                        <a href="#pricing" onClick={() => setMobileMenuOpen(false)} className="block text-sm font-medium text-gray-600 hover:text-violet-600 hover:bg-violet-50 rounded-xl px-4 py-3 transition-all">Precios</a>
+                        <a href="/blog" target="_blank" rel="noopener noreferrer" onClick={() => setMobileMenuOpen(false)} className="block text-sm font-medium text-gray-600 hover:text-violet-600 hover:bg-violet-50 rounded-xl px-4 py-3 transition-all">Blog</a>
                         <a href="#faq" onClick={() => setMobileMenuOpen(false)} className="block text-sm font-medium text-gray-600 hover:text-violet-600 hover:bg-violet-50 rounded-xl px-4 py-3 transition-all">FAQ</a>
                     </div>
                 )}
@@ -1575,99 +1574,6 @@ const LandingPage = ({ onLoginSuccess }) => {
                     </div>
                 </section>
 
-                {/* ═══ PRICING SECTION — hidden ═══ */}
-                <section id="pricing" className="hidden" ref={pricingRef}>
-                    <div className="max-w-7xl mx-auto">
-                        <div className={`text-center mb-10 sm:mb-16 transition-all duration-700 ${pricingVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
-                            <div className="inline-flex items-center space-x-2 bg-amber-50 px-4 py-1.5 rounded-full text-xs sm:text-sm font-semibold text-amber-700 mb-4 border border-amber-100">
-                                <Zap className="w-4 h-4" />
-                                <span>Planes</span>
-                            </div>
-                            <h2 className="text-2xl sm:text-3xl md:text-5xl font-extrabold text-gray-900 tracking-tight mb-4">
-                                Planes a tu medida
-                            </h2>
-                            <p className="text-sm sm:text-lg text-gray-500 max-w-2xl mx-auto px-2">
-                                Elige el servicio que mejor se adapte a tus necesidades de reclutamiento.
-                            </p>
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 sm:gap-8 max-w-5xl mx-auto">
-                            {/* Starter */}
-                            <div className={`bg-white rounded-2xl border border-gray-100 p-8 hover:border-gray-200 hover:shadow-lg transition-all duration-500 ${pricingVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`} style={{ transitionDelay: '0ms' }}>
-                                <div className="mb-6">
-                                    <h3 className="text-lg font-bold text-gray-900 mb-1">Básico</h3>
-                                    <p className="text-sm text-gray-500">Para vacantes puntuales</p>
-                                </div>
-                                <div className="mb-6">
-                                    <span className="text-4xl font-black text-gray-900">$2,999</span>
-                                    <span className="text-gray-500 text-sm"> /vacante MXN</span>
-                                </div>
-                                <div className="space-y-3 mb-8">
-                                    {['Contacto por WhatsApp con IA', 'Hasta 100 candidatos contactados', 'Pre-filtrado automático', 'Entrega de candidatos listos', 'Soporte por chat'].map((f, i) => (
-                                        <div key={i} className="flex items-center space-x-2.5 text-sm">
-                                            <Check className="w-4 h-4 text-green-500 shrink-0" />
-                                            <span className="text-gray-600">{f}</span>
-                                        </div>
-                                    ))}
-                                </div>
-                                <button onClick={() => setIsLoginOpen(true)} className="w-full py-3 rounded-xl border-2 border-gray-200 text-gray-700 font-semibold hover:border-violet-300 hover:text-violet-700 transition-all duration-300 text-sm">
-                                    Solicitar servicio
-                                </button>
-                            </div>
-
-                            {/* Pro — featured */}
-                            <div className={`relative bg-gradient-to-b from-violet-600 to-indigo-700 rounded-2xl p-6 sm:p-8 text-white shadow-2xl shadow-violet-300/30 md:scale-105 transition-all duration-500 ${pricingVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`} style={{ transitionDelay: '100ms' }}>
-                                <div className="absolute top-0 right-6 -translate-y-1/2">
-                                    <span className="bg-gradient-to-r from-amber-400 to-orange-400 text-gray-900 text-xs font-bold px-4 py-1.5 rounded-full shadow-lg">
-                                        ⭐ Más popular
-                                    </span>
-                                </div>
-                                <div className="mb-6">
-                                    <h3 className="text-lg font-bold mb-1">Agencia Pro</h3>
-                                    <p className="text-sm text-violet-200">Para reclutamiento continuo</p>
-                                </div>
-                                <div className="mb-6">
-                                    <span className="text-4xl font-black">$7,999</span>
-                                    <span className="text-violet-200 text-sm"> /mes MXN</span>
-                                </div>
-                                <div className="space-y-3 mb-8">
-                                    {['Vacantes ilimitadas', 'Contacto masivo por WhatsApp', 'Bot IA avanzado (GPT-4)', 'Pre-filtrado + validación humana', 'Candidatos entregados con cita agendada', 'Reportes semanales de avance', 'Reclutador dedicado a tu cuenta', 'Soporte prioritario'].map((f, i) => (
-                                        <div key={i} className="flex items-center space-x-2.5 text-sm">
-                                            <Check className="w-4 h-4 text-green-300 shrink-0" />
-                                            <span className="text-violet-100">{f}</span>
-                                        </div>
-                                    ))}
-                                </div>
-                                <button onClick={() => setIsLoginOpen(true)} className="w-full py-3 rounded-xl bg-white text-violet-700 font-bold hover:bg-violet-50 transition-all duration-300 text-sm shadow-lg">
-                                    Contratar agencia
-                                </button>
-                            </div>
-
-                            {/* Enterprise */}
-                            <div className={`bg-white rounded-2xl border border-gray-100 p-8 hover:border-gray-200 hover:shadow-lg transition-all duration-500 ${pricingVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`} style={{ transitionDelay: '200ms' }}>
-                                <div className="mb-6">
-                                    <h3 className="text-lg font-bold text-gray-900 mb-1">Enterprise</h3>
-                                    <p className="text-sm text-gray-500">Para reclutamiento a gran escala</p>
-                                </div>
-                                <div className="mb-6">
-                                    <span className="text-4xl font-black text-gray-900">Custom</span>
-                                </div>
-                                <div className="space-y-3 mb-8">
-                                    {['Volumen ilimitado de vacantes', 'IA personalizada a tu empresa', 'Equipo dedicado de reclutadores', 'Integración con tu ATS', 'Reportes ejecutivos', 'SLA garantizado', 'Account manager exclusivo', 'Reclutamiento especializado'].map((f, i) => (
-                                        <div key={i} className="flex items-center space-x-2.5 text-sm">
-                                            <Check className="w-4 h-4 text-green-500 shrink-0" />
-                                            <span className="text-gray-600">{f}</span>
-                                        </div>
-                                    ))}
-                                </div>
-                                <button onClick={() => window.open('https://wa.me/528112345678', '_blank')} className="w-full py-3 rounded-xl border-2 border-gray-200 text-gray-700 font-semibold hover:border-violet-300 hover:text-violet-700 transition-all duration-300 text-sm">
-                                    Contactar ventas
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </section>
-
                 {/* ═══ FAQ SECTION ═══ */}
                 <section id="faq" className="py-12 sm:py-20 px-4 sm:px-6 bg-gray-50/50">
                     <div className="max-w-3xl mx-auto">
@@ -1817,7 +1723,7 @@ const LandingPage = ({ onLoginSuccess }) => {
                             onDragStart={e => e.preventDefault()}
                             className="h-6 w-auto select-none opacity-95"
                         />
-                        <span className="text-[11px] text-white tracking-tight">by Hr One México</span>
+                        <span className="text-[11px] text-white tracking-tight">by <a href="https://www.hr1.mx" target="_blank" rel="noopener noreferrer" className="text-white hover:underline">Hr One México</a> 🇲🇽</span>
                     </div>
                     <p className="text-xs sm:text-sm text-gray-600 text-center">
                         © {new Date().getFullYear()} Candidatic IA. Todos los derechos reservados.
