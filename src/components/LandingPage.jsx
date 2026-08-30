@@ -730,7 +730,11 @@ const LandingPage = ({ onLoginSuccess }) => {
                 document.body
             )}
 
-            {showBlog && <BlogView />}
+            {showBlog && (
+                <div className="bg-white" style={{ paddingTop: '128px' }}>
+                    <BlogView />
+                </div>
+            )}
 
             <main style={showBlog ? { display: 'none' } : undefined}>
                 {/* ═══ iPhone CSS Animations ═══ */}

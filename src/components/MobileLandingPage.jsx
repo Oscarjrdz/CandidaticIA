@@ -289,7 +289,7 @@ const MobileLandingPage = ({ onLoginSuccess }) => {
                 document.body
             )}
 
-            {showBlog && <div className="pt-[88px]"><BlogView /></div>}
+            {showBlog && <div className="bg-white pt-[116px]"><BlogView /></div>}
 
             <main className="pt-[88px]" style={showBlog ? { display: 'none' } : undefined}>
 

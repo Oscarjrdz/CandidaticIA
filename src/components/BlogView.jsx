@@ -178,7 +178,7 @@ function ScopedStyles() {
 .cdx-loading{max-width:1120px;margin:0 auto;padding:80px 20px;text-align:center;color:var(--muted);font-weight:600}
 .cdx-progress{position:fixed;top:0;left:0;height:3px;background:linear-gradient(90deg,#2563eb,#7c3aed,#9333ea);z-index:60;transition:width .1s linear}
 .cdx-topline{height:3px;background:linear-gradient(90deg,#2563eb,#7c3aed,#9333ea)}
-.cdx-wrap{max-width:1120px;margin:0 auto;padding:52px 20px 60px;display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:40px;align-items:start}
+.cdx-wrap{max-width:1120px;margin:0 auto;padding:32px 20px 60px;display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:40px;align-items:start}
 .cdx-article{background:#fff;border:1px solid var(--line);border-radius:18px;overflow:hidden;box-shadow:0 6px 30px rgba(15,23,42,.05)}
 .cdx-cover{width:100%;height:auto;display:block;background:#eef2f7}
 .cdx-pad{padding:32px 34px 40px}
