@@ -5,6 +5,7 @@ import {
     BrainCircuit, CheckCircle, Loader2, Send, ArrowRight,
     Bot, Target, FileText, BarChart3, X, Users, Zap, ChevronDown, ChevronUp, Sparkles
 } from 'lucide-react';
+import BlogView from './BlogView';
 
 const WhatsAppIcon = ({ className = "w-5 h-5" }) => (
     <svg viewBox="0 0 24 24" className={`${className} fill-current`}>
@@ -29,6 +30,11 @@ const MobileLandingPage = ({ onLoginSuccess }) => {
 
     /* ── FAQ STATE ── */
     const [openFaq, setOpenFaq] = useState(null);
+
+    /* ── BLOG (sección dentro de la SPA — sin reload ni cambio de URL) ── */
+    const [showBlog, setShowBlog] = useState(false);
+    const openBlog = (e) => { if (e) e.preventDefault(); setShowBlog(true); window.scrollTo({ top: 0 }); };
+    const goHome = () => { setShowBlog(false); };
 
     /* ── HIDE STICKY BUTTON AT BOTTOM ── */
     const [showSticky, setShowSticky] = useState(true);
@@ -155,7 +161,8 @@ const MobileLandingPage = ({ onLoginSuccess }) => {
                                 alt="Candidatic IA"
                                 draggable={false}
                                 onDragStart={e => e.preventDefault()}
-                                className="h-7 w-auto select-none"
+                                onClick={goHome}
+                                className="h-7 w-auto select-none cursor-pointer"
                             />
                             <span className="w-full mt-1 flex justify-between text-[9px] font-semibold text-gray-400 uppercase">
                                 {'RECLUTAMIENTO MASIVO'.split('').map((ch, i) => <span key={i}>{ch === ' ' ? ' ' : ch}</span>)}
@@ -282,7 +289,9 @@ const MobileLandingPage = ({ onLoginSuccess }) => {
                 document.body
             )}
 
-            <main className="pt-[88px]">
+            {showBlog && <div className="pt-[88px]"><BlogView /></div>}
+
+            <main className="pt-[88px]" style={showBlog ? { display: 'none' } : undefined}>
 
                 {/* ── HERO ── */}
                 <section className="px-5 pt-8 pb-10 text-center relative overflow-hidden">
@@ -682,6 +691,7 @@ const MobileLandingPage = ({ onLoginSuccess }) => {
                         Agencia de reclutamiento potenciada por inteligencia artificial y WhatsApp para el mercado latinoamericano.
                     </p>
                     <div className="flex gap-4 text-xs text-gray-500 mb-4">
+                        <a href="/blog" onClick={openBlog} className="hover:text-violet-400">Blog</a>
                         <a href="/privacy" className="hover:text-violet-400">Privacidad</a>
                         <a href="/terms" className="hover:text-violet-400">Términos</a>
                         <a href="mailto:contacto@candidatic.com" className="hover:text-violet-400">Contacto</a>
@@ -692,7 +702,7 @@ const MobileLandingPage = ({ onLoginSuccess }) => {
             </main>
 
             {/* ── STICKY BOTTOM CTA ── */}
-            <div className={`fixed bottom-0 left-0 right-0 z-40 p-4 bg-white/90 backdrop-blur-md border-t border-gray-100 transition-all duration-300 ${showSticky ? 'translate-y-0 opacity-100' : 'translate-y-full opacity-0'}`}>
+            <div className={`fixed bottom-0 left-0 right-0 z-40 p-4 bg-white/90 backdrop-blur-md border-t border-gray-100 transition-all duration-300 ${showSticky && !showBlog ? 'translate-y-0 opacity-100' : 'translate-y-full opacity-0'}`}>
                 <a href="https://wa.me/5218116038195" target="_blank" rel="noopener noreferrer"
                     className="w-full bg-green-500 text-white font-bold py-3.5 rounded-2xl shadow-lg shadow-green-300/40 flex items-center justify-center gap-2 text-sm">
                     <WhatsAppIcon className="w-5 h-5" />

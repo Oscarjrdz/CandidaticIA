@@ -8,6 +8,13 @@
 //      subiendo la imagen a /public/blog/). Se usa también para el preview al compartir.
 //   4. `content` es HTML: <p>, <h2>, <blockquote>, <ul>, <img>, etc. Diseño simple:
 //      foto grande arriba, texto abajo.
+//   5. Para que la entrada viva en candidatic.com/<slug> (URL limpia SEO), ponle
+//      `root: true` Y agrega UNA línea de rewrite en vercel.json:
+//        { "source": "/<slug>", "destination": "/api/blog/post?slug=<slug>" }
+//      (ponla junto a las otras rutas /blog en vercel.json). Sin root:true la
+//      entrada queda en candidatic.com/blog/<slug>, que también funciona.
+//   6. Nombra la imagen con keywords SEO del sitio (ej. reclutamiento-masivo-whatsapp-*.png)
+//      y súbela a /public/blog/.
 // ─────────────────────────────────────────────────────────────
 
 // ── Entradas reales ──────────────────────────────────────────
@@ -18,7 +25,11 @@ const REAL_POSTS = [
     date: '2026-08-30',
     author: 'Equipo Candidatic',
     category: 'Reclutamiento con IA',
-    cover: '/blog/portada-conversaciones.png',
+    // root:true → la entrada vive en candidatic.com/<slug> (URL limpia para SEO).
+    // Requiere una línea de rewrite en vercel.json (ver instrucciones abajo).
+    root: true,
+    // Imagen con nombre SEO (reutiliza keywords del sitio: reclutamiento masivo + WhatsApp).
+    cover: '/blog/reclutamiento-masivo-whatsapp-conversaciones.png',
     excerpt:
       'El siguiente gran cambio en Recursos Humanos no será encontrar más candidatos. Será poder conversar con ellos.',
     content: `

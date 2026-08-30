@@ -1,0 +1,19 @@
+// /api/blog/data → JSON con todas las entradas (para el blog dentro de la SPA).
+import { getAllPosts } from './posts.js';
+
+export default function handler(req, res) {
+  const posts = getAllPosts().map((p) => ({
+    slug: p.slug,
+    title: p.title,
+    date: p.date,
+    author: p.author,
+    category: p.category,
+    cover: p.cover,
+    excerpt: p.excerpt,
+    content: p.content,
+    root: !!p.root,
+  }));
+  res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=600');
+  res.status(200).json({ posts });
+}

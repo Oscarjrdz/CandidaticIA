@@ -66,6 +66,10 @@
             "destination": "/api/blog/post?slug=:slug"
         },
         {
+            "source": "/reclutar-con-conversaciones-no-con-formularios",
+            "destination": "/api/blog/post?slug=reclutar-con-conversaciones-no-con-formularios"
+        },
+        {
             "source": "/app",
             "destination": "/api/app"
         }

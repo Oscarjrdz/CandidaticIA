@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import Button from './ui/Button';
 import Input from './ui/Input';
+import BlogView from './BlogView';
 
 /* ─── WhatsApp SVG Icon ─── */
 const WhatsAppIcon = ({ className = "w-5 h-5" }) => (
@@ -475,6 +476,11 @@ const LandingPage = ({ onLoginSuccess }) => {
         { num: '04', title: 'Recibe candidatos', desc: 'Te entregamos candidatos listos para entrevista con datos completos y citas agendadas. ¡Así de fácil!', icon: <WhatsAppIcon className="w-6 h-6" /> },
     ];
 
+    /* ─── BLOG (sección dentro de la SPA — sin reload ni cambio de URL) ─── */
+    const [showBlog, setShowBlog] = useState(false);
+    const openBlog = (e) => { if (e) e.preventDefault(); setShowBlog(true); window.scrollTo({ top: 0 }); };
+    const goHome = () => { setShowBlog(false); };
+
     /* ─── SCROLL REVEAL ─── */
     const [featuresRef, featuresVisible] = useScrollReveal();
     const [stepsRef, stepsVisible] = useScrollReveal();
@@ -500,7 +506,8 @@ const LandingPage = ({ onLoginSuccess }) => {
                                 alt="Candidatic IA"
                                 draggable={false}
                                 onDragStart={e => e.preventDefault()}
-                                className="h-6 sm:h-7 w-auto max-w-[55vw] select-none"
+                                onClick={goHome}
+                                className="h-6 sm:h-7 w-auto max-w-[55vw] select-none cursor-pointer"
                             />
                             <span className="w-full mt-1 flex justify-between text-[9px] sm:text-[10px] font-semibold text-gray-400 uppercase">
                                 {'RECLUTAMIENTO MASIVO'.split('').map((ch, i) => <span key={i}>{ch === ' ' ? ' ' : ch}</span>)}
@@ -521,10 +528,10 @@ const LandingPage = ({ onLoginSuccess }) => {
                     </div>
 
                     <nav className="hidden md:flex items-center space-x-8 text-sm font-medium text-gray-600">
-                        <a href="#features" className="hover:text-violet-600 transition-colors duration-300">Características</a>
-                        <a href="#how-it-works" className="hover:text-violet-600 transition-colors duration-300">Cómo funciona</a>
-                        <a href="/blog" target="_blank" rel="noopener noreferrer" className="hover:text-violet-600 transition-colors duration-300">Blog</a>
-                        <a href="#faq" className="hover:text-violet-600 transition-colors duration-300">FAQ</a>
+                        <a href="#features" onClick={goHome} className="hover:text-violet-600 transition-colors duration-300">Características</a>
+                        <a href="#how-it-works" onClick={goHome} className="hover:text-violet-600 transition-colors duration-300">Cómo funciona</a>
+                        <a href="/blog" onClick={openBlog} className="hover:text-violet-600 transition-colors duration-300">Blog</a>
+                        <a href="#faq" onClick={goHome} className="hover:text-violet-600 transition-colors duration-300">FAQ</a>
                     </nav>
 
                     <div className="flex items-center space-x-2 sm:space-x-3">
@@ -629,10 +636,10 @@ const LandingPage = ({ onLoginSuccess }) => {
                 {/* Mobile menu */}
                 {mobileMenuOpen && (
                     <div className="md:hidden bg-white/95 backdrop-blur-xl border-t border-gray-100 px-6 py-4 space-y-1">
-                        <a href="#features" onClick={() => setMobileMenuOpen(false)} className="block text-sm font-medium text-gray-600 hover:text-violet-600 hover:bg-violet-50 rounded-xl px-4 py-3 transition-all">Características</a>
-                        <a href="#how-it-works" onClick={() => setMobileMenuOpen(false)} className="block text-sm font-medium text-gray-600 hover:text-violet-600 hover:bg-violet-50 rounded-xl px-4 py-3 transition-all">Cómo funciona</a>
-                        <a href="/blog" target="_blank" rel="noopener noreferrer" onClick={() => setMobileMenuOpen(false)} className="block text-sm font-medium text-gray-600 hover:text-violet-600 hover:bg-violet-50 rounded-xl px-4 py-3 transition-all">Blog</a>
-                        <a href="#faq" onClick={() => setMobileMenuOpen(false)} className="block text-sm font-medium text-gray-600 hover:text-violet-600 hover:bg-violet-50 rounded-xl px-4 py-3 transition-all">FAQ</a>
+                        <a href="#features" onClick={() => { setMobileMenuOpen(false); goHome(); }} className="block text-sm font-medium text-gray-600 hover:text-violet-600 hover:bg-violet-50 rounded-xl px-4 py-3 transition-all">Características</a>
+                        <a href="#how-it-works" onClick={() => { setMobileMenuOpen(false); goHome(); }} className="block text-sm font-medium text-gray-600 hover:text-violet-600 hover:bg-violet-50 rounded-xl px-4 py-3 transition-all">Cómo funciona</a>
+                        <a href="/blog" onClick={(e) => { setMobileMenuOpen(false); openBlog(e); }} className="block text-sm font-medium text-gray-600 hover:text-violet-600 hover:bg-violet-50 rounded-xl px-4 py-3 transition-all">Blog</a>
+                        <a href="#faq" onClick={() => { setMobileMenuOpen(false); goHome(); }} className="block text-sm font-medium text-gray-600 hover:text-violet-600 hover:bg-violet-50 rounded-xl px-4 py-3 transition-all">FAQ</a>
                     </div>
                 )}
             </header>
@@ -723,7 +730,9 @@ const LandingPage = ({ onLoginSuccess }) => {
                 document.body
             )}
 
-            <main>
+            {showBlog && <BlogView />}
+
+            <main style={showBlog ? { display: 'none' } : undefined}>
                 {/* ═══ iPhone CSS Animations ═══ */}
                 <style>{`
                     @keyframes iphoneFloat {

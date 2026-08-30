@@ -19,6 +19,12 @@ function absUrl(origin, path) {
   return origin + (path.startsWith('/') ? path : '/' + path);
 }
 
+// Ruta pública de una entrada. Entradas reales (root:true) → /slug (URL limpia).
+// Entradas de relleno → /blog/slug (ruta universal, sin rewrite dedicado).
+function postPath(post) {
+  return post.root ? `/${post.slug}` : `/blog/${post.slug}`;
+}
+
 function formatDate(iso) {
   // iso: "2026-08-28" -> "28 de agosto de 2026"
   const meses = [
@@ -82,7 +88,7 @@ function sidebar(allPosts, origin, currentSlug) {
     .map((p) => {
       const active = p.slug === currentSlug ? ' class="active"' : '';
       return `<li${active}>
-        <a href="${origin}/blog/${escapeHtml(p.slug)}">
+        <a href="${origin}${escapeHtml(postPath(p))}">
           <img src="${escapeHtml(absUrl(origin, p.cover))}" alt="" loading="lazy">
           <div class="s-meta">
             <span class="s-title">${escapeHtml(p.title)}</span>
@@ -105,7 +111,7 @@ function sidebar(allPosts, origin, currentSlug) {
  * @param {string} origin        ej. "https://www.candidatic.com"
  */
 export function renderPostPage(post, allPosts, origin) {
-  const canonical = `${origin}/blog/${post.slug}`;
+  const canonical = `${origin}${postPath(post)}`;
   const coverAbs = absUrl(origin, post.cover);
   const desc = post.excerpt || '';
   const title = `${post.title} — Blog Candidatic IA`;
@@ -150,14 +156,16 @@ export function renderPostPage(post, allPosts, origin) {
 
   /* Header */
   .site-header{position:sticky;top:0;z-index:50;background:rgba(255,255,255,.9);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}
-  .site-header .bar{height:4px;background:linear-gradient(90deg,#2563eb,#7c3aed,#9333ea)}
+  .site-header .bar{background:linear-gradient(90deg,#2563eb,#7c3aed,#9333ea);padding:4px 16px;text-align:center}
+  .site-header .bar span{font-size:11px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:rgba(255,255,255,.92)}
   .site-header .inner{max-width:1120px;margin:0 auto;padding:12px 20px;display:flex;align-items:center;justify-content:space-between}
   .brand{display:flex;flex-direction:column;line-height:1}
-  .brand img{height:26px;width:auto}
-  .brand .by{margin-top:3px;font-size:9px;font-weight:600;color:#111}
+  .brand img{height:27px;width:auto}
+  .brand .reclu{width:100%;margin-top:4px;display:flex;justify-content:space-between;font-size:9px;font-weight:600;color:#9ca3af;text-transform:uppercase}
+  .brand .by{margin-top:2px;text-align:right;font-size:9px;font-weight:600;color:#111}
   .brand .by a{color:#111;text-decoration:none}
   .brand .by a:hover{text-decoration:underline}
-  .nav-back{font-size:13px;font-weight:600;color:var(--violet)}
+  .nav-back{font-size:13px;font-weight:700;color:var(--violet)}
   .nav-back:hover{text-decoration:underline}
 
   /* Layout */
@@ -216,8 +224,17 @@ export function renderPostPage(post, allPosts, origin) {
   .s-date{font-size:11.5px;color:var(--muted)}
 
   /* Footer */
-  .site-footer{border-top:1px solid var(--line);background:#fff;padding:26px 20px;text-align:center;color:var(--muted);font-size:13px}
-  .site-footer a{color:var(--violet)}
+  .site-footer{background:#0a0a0f;padding:26px 20px;color:#6b7280;font-size:13px}
+  .site-footer .finner{max-width:1120px;margin:0 auto;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:14px}
+  .site-footer .fbrand{display:flex;flex-direction:column;gap:5px}
+  .site-footer .fbrand img{height:24px;width:auto;opacity:.95}
+  .site-footer .fbrand .by{font-size:11px;color:#fff}
+  .site-footer .fbrand .by a{color:#fff;text-decoration:none}
+  .site-footer .fbrand .by a:hover{text-decoration:underline}
+  .site-footer .fcopy{font-size:12.5px;color:#6b7280}
+  .site-footer .flinks{display:flex;gap:22px}
+  .site-footer .flinks a{color:#6b7280;font-size:13px;text-decoration:none}
+  .site-footer .flinks a:hover{color:var(--violet)}
 
   /* Toast */
   .toast{position:fixed;bottom:26px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--ink);color:#fff;padding:10px 18px;border-radius:999px;font-size:13.5px;font-weight:600;opacity:0;pointer-events:none;transition:opacity .25s,transform .25s;z-index:100}
@@ -234,10 +251,11 @@ export function renderPostPage(post, allPosts, origin) {
 <body>
   <div class="progress" id="progress"></div>
   <header class="site-header">
-    <div class="bar"></div>
+    <div class="bar"><span>Plataforma con IA para Reclutamiento Masivo</span></div>
     <div class="inner">
-      <a class="brand" href="${origin}/blog">
+      <a class="brand" href="/" aria-label="Candidatic IA">
         <img src="/logo-candidatic-landing.png" alt="Candidatic IA">
+        <span class="reclu">${'RECLUTAMIENTO MASIVO'.split('').map((c) => `<span>${c === ' ' ? '&nbsp;' : c}</span>`).join('')}</span>
         <span class="by">by <a href="https://www.hr1.mx" target="_blank" rel="noopener noreferrer">Hr One México</a> 🇲🇽</span>
       </a>
       <a class="nav-back" href="/">← Volver al sitio</a>
@@ -266,7 +284,18 @@ export function renderPostPage(post, allPosts, origin) {
   </main>
 
   <footer class="site-footer">
-    © ${(post.date || '').slice(0, 4)} Candidatic IA · by <a href="https://www.hr1.mx" target="_blank" rel="noopener noreferrer">Hr One México</a> 🇲🇽
+    <div class="finner">
+      <div class="fbrand">
+        <img src="/logo-candidatic.png" alt="Candidatic IA">
+        <span class="by">by <a href="https://www.hr1.mx" target="_blank" rel="noopener noreferrer">Hr One México</a> 🇲🇽</span>
+      </div>
+      <p class="fcopy">© ${(post.date || '2026').slice(0, 4)} Candidatic IA. Todos los derechos reservados.</p>
+      <div class="flinks">
+        <a href="/privacy">Privacidad</a>
+        <a href="/terms">Términos</a>
+        <a href="mailto:contacto@candidatic.com">Contacto</a>
+      </div>
+    </div>
   </footer>
 
   <div class="toast" id="toast">Enlace copiado ✓</div>
