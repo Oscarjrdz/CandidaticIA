@@ -989,7 +989,7 @@ const AdsStatisticsSection = () => {
                                     {ad.adMediaType === 'video' && !ad.adImageUrl ? (
                                         <Video className="w-10 h-10 text-gray-300" />
                                     ) : ad.adImageUrl ? (
-                                        <img src={ad.adImageUrl} alt="" className="max-w-full max-h-full object-contain"
+                                        <img src={ad.adImageUrl} alt="" loading="lazy" decoding="async" className="max-w-full max-h-full object-contain"
                                             onError={(e) => { e.target.onerror = null; e.target.style.display='none'; }} />
                                     ) : (
                                         <Megaphone className="w-10 h-10 text-gray-200 dark:text-gray-700" />

@@ -91,6 +91,29 @@ export default async function handler(req, res) {
             //    (50 anuncios por lote, sub-requests aisladas — un anuncio borrado no
             //    tumba el lote). Antes: 2 llamadas por anuncio (~146 para 73 anuncios).
             if (!data) {
+                // 🔒 Lock anti-estampida: un solo request reconstruye (índice + Batch a Meta)
+                //    a la vez. Los demás esperan corto y sirven lo que ese publique, en vez de
+                //    disparar N reconstrucciones full en paralelo.
+                const REBUILD_LOCK_KEY = 'ads:stats:rebuild:lock';
+                let haveRebuildLock = true;
+                if (client) {
+                    try { haveRebuildLock = (await client.set(REBUILD_LOCK_KEY, '1', 'EX', 45, 'NX')) === 'OK'; }
+                    catch { haveRebuildLock = true; }
+                }
+                if (!haveRebuildLock) {
+                    // Otro request ya reconstruye: espera ~3s a que publique cache (fresco/stale).
+                    for (let i = 0; i < 20 && !data; i++) {
+                        await new Promise(r => setTimeout(r, 150));
+                        try {
+                            const c2 = (await client.get(ENRICHED_CACHE_KEY)) || (await client.get(ENRICHED_STALE_KEY));
+                            if (c2) { data = JSON.parse(c2); servedStale = true; }
+                        } catch { /* seguir esperando al que reconstruye */ }
+                    }
+                    // Si tras ~3s sigue sin nada (primer build lento), construimos igual (evita deadlock).
+                }
+
+              if (!data) {
+                try {
                 // Refresh explicito: tambien renovar el agregado local (leads/conteos),
                 // no solo las metricas de Meta.
                 if (forceRefresh && client) await client.del('stats:ads:cached').catch(() => {});
@@ -167,6 +190,13 @@ export default async function handler(req, res) {
                         // Non-fatal: we still return Redis data even if Meta API fails
                     }
                 }
+                } finally {
+                    if (haveRebuildLock && client) client.del(REBUILD_LOCK_KEY).catch(() => {});
+                }
+              } else if (haveRebuildLock && client) {
+                // El otro request publicó el cache mientras esperábamos: soltamos el lock.
+                client.del(REBUILD_LOCK_KEY).catch(() => {});
+              }
             }
 
             // 3) Archivados SIEMPRE al final (sobre el cache o lo fresco), para que

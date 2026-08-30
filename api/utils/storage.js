@@ -3370,8 +3370,28 @@ export const getAdsStatistics = async () => {
         });
     }
 
-    // Leads de anuncio SIN adId (ctwa sin ad): suman al total, no se listan como anuncio.
-    try { totalAdsLeads += Number(await client.zcard(INDEX_KEYS.ADS_NOADID_Z)) || 0; } catch { /* ignore */ }
+    // Leads de anuncio SIN adId (ctwa sin ad): se agregan como UN grupo "organic" —igual que
+    // el legacy— para que totalAdsLeads == suma de ads[] y el filtro de archivados del endpoint
+    // (que resta hiddenLeads del total) se comporte idéntico. La UI no lo muestra (adId null +
+    // headline por defecto). Sin esto, el total quedaba desbalanceado e inflaba el KPI.
+    try {
+        const zk = INDEX_KEYS.ADS_NOADID_Z;
+        const noAdIdTotal = Number(await client.zcard(zk)) || 0;
+        if (noAdIdTotal > 0) {
+            const noAdIdToday = Number(await client.zcount(zk, todayStart, todayEnd)) || 0;
+            ads.push({
+                adId: null,
+                adHeadline: 'Anuncio sin título',
+                adBody: null, adUrl: null, adSource: null,
+                adImageUrl: null, adVideoUrl: null, adMediaType: null,
+                totalLeads: noAdIdTotal,
+                todayLeads: noAdIdToday,
+                firstSeen: null,
+                lastSeen: null
+            });
+            totalAdsLeads += noAdIdTotal;
+        }
+    } catch { /* sin bucket noadid */ }
 
     ads.sort((a, b) => b.totalLeads - a.totalLeads);
     const result = { ads, totalAdsLeads };
