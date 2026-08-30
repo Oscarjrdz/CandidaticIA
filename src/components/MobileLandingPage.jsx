@@ -676,32 +676,33 @@ const MobileLandingPage = ({ onLoginSuccess }) => {
                     </a>
                 </section>
 
-                {/* ── FOOTER ── */}
-                <footer ref={footerRef} className="bg-gray-950 text-gray-400 px-5 py-8">
-                    <div className="flex flex-col gap-1 mb-4">
-                        <img
-                            src="/logo-candidatic.png"
-                            alt="Candidatic IA"
-                            draggable={false}
-                            onDragStart={e => e.preventDefault()}
-                            className="h-6 w-auto self-start select-none opacity-95"
-                        />
-                        <span className="text-[11px] text-white tracking-tight">by <a href="https://www.hr1.mx" target="_blank" rel="noopener noreferrer" className="text-white hover:underline">Hr One México</a> 🇲🇽</span>
-                    </div>
-                    <p className="text-xs text-gray-500 mb-4 leading-relaxed">
-                        Agencia de reclutamiento potenciada por inteligencia artificial y WhatsApp para el mercado latinoamericano.
-                    </p>
-                    <div className="flex gap-4 text-xs text-gray-500 mb-4">
-                        <a href="#top" onClick={goTop} className="hover:text-violet-400">Home</a>
-                        <a href="/blog" onClick={openBlog} className="hover:text-violet-400">Blog</a>
-                        <a href="/privacy" className="hover:text-violet-400">Privacidad</a>
-                        <a href="/terms" className="hover:text-violet-400">Términos</a>
-                        <a href="mailto:contacto@candidatic.com" className="hover:text-violet-400">Contacto</a>
-                        <button onClick={() => setIsLoginOpen(true)} className="hover:text-violet-400">Ingresar</button>
-                    </div>
-                    <p className="text-xs text-gray-600">© {new Date().getFullYear()} Candidatic IA. Todos los derechos reservados.</p>
-                </footer>
             </main>
+
+            {/* ── FOOTER (fuera de main para que persista también en el blog) ── */}
+            <footer ref={footerRef} className="bg-gray-950 text-gray-400 px-5 py-8">
+                <div className="flex flex-col gap-1 mb-4">
+                    <img
+                        src="/logo-candidatic.png"
+                        alt="Candidatic IA"
+                        draggable={false}
+                        onDragStart={e => e.preventDefault()}
+                        className="h-6 w-auto self-start select-none opacity-95"
+                    />
+                    <span className="text-[11px] text-white tracking-tight">by <a href="https://www.hr1.mx" target="_blank" rel="noopener noreferrer" className="text-white hover:underline">Hr One México</a> 🇲🇽</span>
+                </div>
+                <p className="text-xs text-gray-500 mb-4 leading-relaxed">
+                    Agencia de reclutamiento potenciada por inteligencia artificial y WhatsApp para el mercado latinoamericano.
+                </p>
+                <div className="flex gap-4 text-xs text-gray-500 mb-4">
+                    <a href="#top" onClick={goTop} className="hover:text-violet-400">Home</a>
+                    <a href="/blog" onClick={openBlog} className="hover:text-violet-400">Blog</a>
+                    <a href="/privacy" className="hover:text-violet-400">Privacidad</a>
+                    <a href="/terms" className="hover:text-violet-400">Términos</a>
+                    <a href="mailto:contacto@candidatic.com" className="hover:text-violet-400">Contacto</a>
+                    <button onClick={() => setIsLoginOpen(true)} className="hover:text-violet-400">Ingresar</button>
+                </div>
+                <p className="text-xs text-gray-600">© {new Date().getFullYear()} Candidatic IA. Todos los derechos reservados.</p>
+            </footer>
 
             {/* ── STICKY BOTTOM CTA ── */}
             <div className={`fixed bottom-0 left-0 right-0 z-40 p-4 bg-white/90 backdrop-blur-md border-t border-gray-100 transition-all duration-300 ${showSticky && !showBlog ? 'translate-y-0 opacity-100' : 'translate-y-full opacity-0'}`}>

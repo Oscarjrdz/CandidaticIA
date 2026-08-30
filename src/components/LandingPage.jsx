@@ -532,7 +532,10 @@ const LandingPage = ({ onLoginSuccess }) => {
                         <a href="#top" onClick={goTop} className="hover:text-violet-600 transition-colors duration-300">Home</a>
                         <a href="#features" onClick={goHome} className="hover:text-violet-600 transition-colors duration-300">Características</a>
                         <a href="#how-it-works" onClick={goHome} className="hover:text-violet-600 transition-colors duration-300">Cómo funciona</a>
-                        <a href="/blog" onClick={openBlog} className="hover:text-violet-600 transition-colors duration-300">Blog</a>
+                        <a href="/blog" onClick={openBlog} className="relative hover:text-violet-600 transition-colors duration-300">
+                            Blog
+                            <span className="absolute -top-2.5 -right-7 bg-red-500 text-white text-[9px] font-bold leading-none px-1.5 py-[3px] rounded-full shadow-sm shadow-red-300/50 animate-pulse">New</span>
+                        </a>
                         <a href="#faq" onClick={goHome} className="hover:text-violet-600 transition-colors duration-300">FAQ</a>
                     </nav>
 
