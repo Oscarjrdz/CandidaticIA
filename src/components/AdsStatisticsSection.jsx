@@ -573,10 +573,10 @@ const AdsStatisticsSection = () => {
 
     const [showArchived, setShowArchived] = useState(false);
     const showArchivedRef = useRef(false);
-    // #7 Rango de fechas seleccionado. Ref para que el refresh en segundo plano (stale)
-    // use el rango vigente sin depender del closure.
-    const [dateRange, setDateRange] = useState('all');
-    const dateRangeRef = useRef('all');
+    // #7 Rango de fechas seleccionado. Default 'today' (por pedido: al abrir se ve HOY).
+    // Ref para que el refresh en segundo plano (stale) use el rango vigente sin depender del closure.
+    const [dateRange, setDateRange] = useState('today');
+    const dateRangeRef = useRef('today');
 
     const loadStats = async (includeArchived = showArchivedRef.current, opts = {}) => {
         if (!opts.silent) setLoading(true);
@@ -691,6 +691,7 @@ const AdsStatisticsSection = () => {
                     </h1>
                     <p className="text-gray-400 text-xs mt-0.5">
                         Campañas Click-to-WhatsApp
+                        {dateRange === 'today' && ' · hoy'}
                         {dateRange === '7d' && ' · últimos 7 días'}
                         {dateRange === '30d' && ' · últimos 30 días'}
                     </p>
@@ -698,7 +699,7 @@ const AdsStatisticsSection = () => {
                 <div className="flex items-center gap-2">
                     {/* #7 Selector de rango de fechas */}
                     <div className="flex items-center bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-0.5 shadow-sm">
-                        {[{ k: '7d', l: '7 días' }, { k: '30d', l: '30 días' }, { k: 'all', l: 'Histórico' }].map(opt => (
+                        {[{ k: 'today', l: 'Hoy' }, { k: '7d', l: '7 días' }, { k: '30d', l: '30 días' }, { k: 'all', l: 'Histórico' }].map(opt => (
                             <button key={opt.k} onClick={() => changeRange(opt.k)} disabled={loading}
                                 className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-colors disabled:opacity-50 ${
                                     dateRange === opt.k

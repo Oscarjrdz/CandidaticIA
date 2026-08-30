@@ -3309,7 +3309,7 @@ export const getAdsStatistics = async (range = 'all') => {
 
     // #7 Rango de fechas. 'all' (histórico) mantiene el comportamiento y cache original;
     // '7d'/'30d' filtran leads/calificados por fecha del lead y usan cache aparte.
-    const rangeKey = (range === '7d' || range === '30d') ? range : 'all';
+    const rangeKey = (range === 'today' || range === '7d' || range === '30d') ? range : 'all';
     const inRange = rangeKey !== 'all';
     const ADS_CACHE_KEY = inRange ? `stats:ads:cached:${rangeKey}` : 'stats:ads:cached';
     const ADS_CACHE_TTL = 10 * 60;
@@ -3332,12 +3332,17 @@ export const getAdsStatistics = async (range = 'all') => {
     const todayStart = new Date(`${todayStr}T00:00:00-06:00`).getTime();
     const todayEnd = todayStart + 24 * 60 * 60 * 1000 - 1;
 
-    // Ventana del rango (epoch ms). 'all' → sin filtro.
+    // Ventana del rango (epoch ms). 'all' → sin filtro; 'today' → el día de hoy (Monterrey).
     let rangeStart = 0, rangeEnd = Number.MAX_SAFE_INTEGER;
     if (inRange) {
-        const days = rangeKey === '7d' ? 7 : 30;
-        rangeEnd = Date.now();
-        rangeStart = rangeEnd - days * 24 * 60 * 60 * 1000;
+        if (rangeKey === 'today') {
+            rangeStart = todayStart;
+            rangeEnd = todayEnd;
+        } else {
+            const days = rangeKey === '7d' ? 7 : 30;
+            rangeEnd = Date.now();
+            rangeStart = rangeEnd - days * 24 * 60 * 60 * 1000;
+        }
     }
 
     // Pipeline fase 1: por anuncio → total, hoy, 1° lead, último lead, creativo y calificados.

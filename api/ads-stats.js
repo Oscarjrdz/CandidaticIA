@@ -19,16 +19,17 @@ const enrichedKey = (range) => range === 'all' ? ENRICHED_CACHE_KEY_BASE : `${EN
 const staleKey = (range) => range === 'all' ? ENRICHED_STALE_KEY_BASE : `${ENRICHED_STALE_KEY_BASE}:${range}`;
 const ENRICHED_TTL_SECONDS = 5 * 60;
 const ENRICHED_STALE_TTL_SECONDS = 60 * 60 * 24;
-const normalizeRange = (r) => (r === '7d' || r === '30d') ? r : 'all';
+const normalizeRange = (r) => (r === 'today' || r === '7d' || r === '30d') ? r : 'all';
 
 // Modificador de insights según el rango: histórico = date_preset(maximum); 7/30d = time_range
 // por fechas calendario (Monterrey). El resto de campos por anuncio no cambian.
 const insightsModifier = (range) => {
     if (range === 'all') return 'date_preset(maximum)';
-    const days = range === '7d' ? 7 : 30;
     const dstr = (ms) => new Date(ms).toLocaleDateString('en-CA', { timeZone: 'America/Monterrey' });
     const until = dstr(Date.now());
-    const since = dstr(Date.now() - (days - 1) * 24 * 60 * 60 * 1000);
+    let since;
+    if (range === 'today') since = until;
+    else { const days = range === '7d' ? 7 : 30; since = dstr(Date.now() - (days - 1) * 24 * 60 * 60 * 1000); }
     return `time_range({'since':'${since}','until':'${until}'})`;
 };
 // Campos pedidos por anuncio en UNA sola sub-request del Batch API. creative.thumbnail: imagen
