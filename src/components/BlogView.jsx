@@ -180,7 +180,7 @@ function ScopedStyles() {
 .cdx-topline{height:3px;background:linear-gradient(90deg,#2563eb,#7c3aed,#9333ea)}
 .cdx-wrap{max-width:1120px;margin:0 auto;padding:52px 20px 60px;display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:40px;align-items:start}
 .cdx-article{background:#fff;border:1px solid var(--line);border-radius:18px;overflow:hidden;box-shadow:0 6px 30px rgba(15,23,42,.05)}
-.cdx-cover{width:100%;aspect-ratio:16/9;object-fit:cover;background:#eef2f7;display:block}
+.cdx-cover{width:100%;height:auto;display:block;background:#eef2f7}
 .cdx-pad{padding:32px 34px 40px}
 .cdx-kicker{display:inline-block;font-size:11px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--v);margin-bottom:12px}
 .cdx-h1{font-family:'Inter',system-ui,sans-serif;font-size:clamp(2.1rem,5.2vw,3.6rem);font-weight:900;line-height:1.08;color:var(--ink);letter-spacing:-.035em;margin-bottom:18px;text-wrap:balance}

@@ -174,7 +174,7 @@ export function renderPostPage(post, allPosts, origin) {
 
   /* Article */
   .article{background:var(--card);border:1px solid var(--line);border-radius:18px;overflow:hidden;box-shadow:0 6px 30px rgba(15,23,42,.05)}
-  .cover{width:100%;aspect-ratio:16/9;object-fit:cover;background:#eef2f7}
+  .cover{width:100%;height:auto;display:block;background:#eef2f7}
   .article .pad{padding:32px 34px 40px}
   .kicker{display:inline-block;font-size:11px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--violet);margin-bottom:12px}
   .article h1{font-family:'Inter',sans-serif;font-size:clamp(2.1rem,5.2vw,3.6rem);font-weight:900;line-height:1.08;color:var(--ink);letter-spacing:-.035em;margin-bottom:18px;text-wrap:balance}
