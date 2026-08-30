@@ -656,6 +656,9 @@ const AdsStatisticsSection = () => {
 
     const todayLeadsTotal = stats.ads.reduce((a, ad) => a + (ad.todayLeads || 0), 0);
     const totalSpend = stats.ads.reduce((a, ad) => a + (parseFloat(ad.spend) || 0), 0);
+    // #5 Costo por candidato: gasto de Meta / candidatos calificados (completos) del CRM.
+    const totalComplete = stats.ads.reduce((a, ad) => a + (ad.completeLeads || 0), 0);
+    const costPerCand = (totalSpend > 0 && totalComplete > 0) ? totalSpend / totalComplete : null;
     const _fId = (id) => id || '';
     const cp = (t) => { navigator.clipboard.writeText(t); showToast?.('Copiado', 'success'); };
     const fD = (d) => !d ? '-' : new Date(d).toLocaleDateString('es-MX', { day:'2-digit', month:'short', timeZone:'America/Monterrey' });
@@ -856,10 +859,11 @@ const AdsStatisticsSection = () => {
             </div>
 
             {/* KPI Row */}
-            <div className="grid grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                 {loading ? (
                     <>
                         <KpiSkeleton accent />
+                        <KpiSkeleton />
                         <KpiSkeleton />
                         <KpiSkeleton />
                         <KpiSkeleton />
@@ -877,6 +881,10 @@ const AdsStatisticsSection = () => {
                         <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-3 shadow-sm">
                             <p className="text-[10px] text-gray-400 font-medium">Gasto</p>
                             <p className="text-2xl font-bold text-gray-900 dark:text-white">{f$(totalSpend)}</p>
+                        </div>
+                        <div className="bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl p-3 text-white shadow-md" title="Gasto de Meta ÷ candidatos calificados (perfil completo)">
+                            <p className="text-[10px] text-emerald-100 font-medium">$/Candidato</p>
+                            <p className="text-2xl font-bold">{costPerCand ? f$(costPerCand) : '-'}</p>
                         </div>
                         <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-3 shadow-sm">
                             <p className="text-[10px] text-gray-400 font-medium">Anuncios</p>
@@ -897,6 +905,10 @@ const AdsStatisticsSection = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                     {stats.ads.filter(ad => ad.adId || ad.adHeadline !== 'Anuncio sin título' || ad.adBody || ad.adImageUrl).map((ad, i) => {
                         const has = ad.impressions || ad.spend;
+                        // #5 Costo por lead y por candidato calificado (completo) de este anuncio.
+                        const adSpend = parseFloat(ad.spend) || 0;
+                        const cLead = (adSpend > 0 && ad.totalLeads > 0) ? adSpend / ad.totalLeads : null;
+                        const cQual = (adSpend > 0 && ad.completeLeads > 0) ? adSpend / ad.completeLeads : null;
                         return (
                             <div key={i} className={`bg-white dark:bg-gray-800 border rounded-2xl shadow-sm overflow-hidden hover:shadow-lg transition-shadow group/card relative ${
                                     ad.archived ? 'border-amber-300 dark:border-amber-700 opacity-75' : 'border-gray-200 dark:border-gray-700'
@@ -1031,9 +1043,12 @@ const AdsStatisticsSection = () => {
                                             </div>
                                             <div className="flex flex-wrap gap-1">
                                                 {ad.spend && <T l="Gasto" v={f$(ad.spend)} />}
+                                                {cLead && <T l="$/Lead" v={f$(cLead)} hl />}
+                                                {cQual && <T l="$/Calif" v={f$(cQual)} hl />}
+                                                {ad.completeLeads > 0 && <T l="Calif" v={fN(ad.completeLeads)} />}
                                                 {ad.cpc && <T l="CPC" v={f$(ad.cpc)} />}
                                                 {ad.cpm && <T l="CPM" v={f$(ad.cpm)} />}
-                                                {ad.costPerConversation && <T l="$/Chat" v={f$(ad.costPerConversation)} hl />}
+                                                {ad.costPerConversation && <T l="$/Chat" v={f$(ad.costPerConversation)} />}
                                                 {ad.frequency && <T l="Freq" v={`${Number(ad.frequency).toFixed(1)}x`} />}
                                             </div>
                                         </div>

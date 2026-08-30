@@ -3336,13 +3336,19 @@ export const getAdsStatistics = async () => {
         pipe.zrange(zk, 0, 0, 'WITHSCORES');    // más viejo → 1° lead
         pipe.zrange(zk, -1, -1, 'WITHSCORES');  // más nuevo → último lead
         pipe.get(`ad_creative:${adId}`);
+        // Candidatos calificados (completos) de este anuncio: intersección del MISMO zset
+        // de leads (adLeadsZKey) con el set global de completos. Se usa el zset —no el set
+        // viejo ad_leads:<adId>— porque el set puede tener miembros stale y completeLeads
+        // saldría > totalLeads. ZINTERCARD solo devuelve el conteo (no miembros) → barato.
+        pipe.zintercard(2, zk, KEYS.LIST_COMPLETE);
     }
     const rows = await pipe.exec();
 
+    const PER_AD = 6; // comandos por anuncio en el pipeline
     const ads = [];
     let totalAdsLeads = 0;
     for (let i = 0; i < adIds.length; i++) {
-        const base = i * 5;
+        const base = i * PER_AD;
         const totalLeads = Number(rows[base]?.[1] || 0);
         if (totalLeads === 0) continue; // anuncio quedó sin leads (cambio/borrado): no mostrar
         const todayLeads = Number(rows[base + 1]?.[1] || 0);
@@ -3352,6 +3358,7 @@ export const getAdsStatistics = async () => {
         const lastScore = maxArr.length > 1 ? Number(maxArr[1]) : null;
         let creative = {};
         try { const raw = rows[base + 4]?.[1]; if (raw) creative = JSON.parse(raw); } catch { /* sin creativo */ }
+        const completeLeads = Number(rows[base + 5]?.[1] || 0);
 
         totalAdsLeads += totalLeads;
         ads.push({
@@ -3365,6 +3372,7 @@ export const getAdsStatistics = async () => {
             adMediaType: creative.adMediaType || null,
             totalLeads,
             todayLeads,
+            completeLeads,
             firstSeen: (firstScore && Number.isFinite(firstScore)) ? new Date(firstScore).toISOString() : null,
             lastSeen: (lastScore && Number.isFinite(lastScore)) ? new Date(lastScore).toISOString() : null
         });
@@ -3386,6 +3394,7 @@ export const getAdsStatistics = async () => {
                 adImageUrl: null, adVideoUrl: null, adMediaType: null,
                 totalLeads: noAdIdTotal,
                 todayLeads: noAdIdToday,
+                completeLeads: 0,
                 firstSeen: null,
                 lastSeen: null
             });
