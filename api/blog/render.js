@@ -169,7 +169,8 @@ export function renderPostPage(post, allPosts, origin) {
   .nav-back:hover{text-decoration:underline}
 
   /* Layout */
-  .wrap{max-width:1120px;margin:0 auto;padding:28px 20px 60px;display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:40px;align-items:start}
+  .topline{height:3px;background:linear-gradient(90deg,#2563eb,#7c3aed,#9333ea)}
+  .wrap{max-width:1120px;margin:0 auto;padding:52px 20px 60px;display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:40px;align-items:start}
 
   /* Article */
   .article{background:var(--card);border:1px solid var(--line);border-radius:18px;overflow:hidden;box-shadow:0 6px 30px rgba(15,23,42,.05)}
@@ -261,6 +262,7 @@ export function renderPostPage(post, allPosts, origin) {
       <a class="nav-back" href="/">← Volver al sitio</a>
     </div>
   </header>
+  <div class="topline"></div>
 
   <main class="wrap">
     <article class="article">
