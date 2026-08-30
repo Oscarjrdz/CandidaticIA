@@ -122,7 +122,7 @@ export default function BlogView() {
 
       <div className="cdx-wrap">
         <article className="cdx-article">
-          <img className="cdx-cover" src={active.cover} alt={active.title} />
+          <img className="cdx-cover" src={active.cover} alt={active.title} width={active.coverW || undefined} height={active.coverH || undefined} decoding="async" />
           <div className="cdx-pad">
             <span className="cdx-kicker">{active.category || 'Blog'}</span>
             <h1 className="cdx-h1">{active.title}</h1>
@@ -228,6 +228,13 @@ function ScopedStyles() {
   .cdx-sidebar{position:static;top:auto}
   .cdx-pad{padding:24px 22px 32px}
   .cdx-content{font-size:17px}
+}
+@media(max-width:480px){
+  .cdx-share{gap:10px}
+  .cdx-share-btns{gap:8px;flex-wrap:nowrap}
+  .cdx-sb{width:34px;height:34px}
+  .cdx-sb svg{width:16px;height:16px}
+  .cdx-copied-tip{position:absolute;right:0;top:-20px;white-space:nowrap}
 }
 `}</style>
   );

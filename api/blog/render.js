@@ -247,6 +247,12 @@ export function renderPostPage(post, allPosts, origin) {
     .article .pad{padding:24px 22px 32px}
     .content{font-size:17px}
   }
+  @media(max-width:480px){
+    .share{gap:10px}
+    .share-btns{gap:8px;flex-wrap:nowrap}
+    .sb{width:34px;height:34px}
+    .sb svg{width:16px;height:16px}
+  }
 </style>
 </head>
 <body>
@@ -266,7 +272,7 @@ export function renderPostPage(post, allPosts, origin) {
 
   <main class="wrap">
     <article class="article">
-      <img class="cover" src="${escapeHtml(coverAbs)}" alt="${escapeHtml(post.title)}">
+      <img class="cover" src="${escapeHtml(coverAbs)}" alt="${escapeHtml(post.title)}"${post.coverW ? ` width="${post.coverW}"` : ''}${post.coverH ? ` height="${post.coverH}"` : ''} decoding="async">
       <div class="pad">
         <span class="kicker">${escapeHtml(post.category || 'Blog')}</span>
         <h1>${escapeHtml(post.title)}</h1>

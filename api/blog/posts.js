@@ -30,6 +30,7 @@ const REAL_POSTS = [
     root: true,
     // Imagen con nombre SEO (reutiliza keywords del sitio: reclutamiento masivo + WhatsApp).
     cover: '/blog/reclutamiento-masivo-whatsapp-conversaciones.png',
+    coverW: 1536, coverH: 1024,
     excerpt:
       'El siguiente gran cambio en Recursos Humanos no será encontrar más candidatos. Será poder conversar con ellos.',
     content: `
@@ -100,6 +101,7 @@ const LOREM_POSTS = LOREM_TITLES.map((title, i) => {
     author: 'Equipo Candidatic',
     category: LOREM_CATEGORIES[i],
     cover: `https://picsum.photos/seed/candidatic-blog-${n}/1200/675`,
+    coverW: 1200, coverH: 675,
     excerpt:
       'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam.',
     content: LOREM_BODY,

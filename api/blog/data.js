@@ -9,6 +9,8 @@ export default function handler(req, res) {
     author: p.author,
     category: p.category,
     cover: p.cover,
+    coverW: p.coverW || null,
+    coverH: p.coverH || null,
     excerpt: p.excerpt,
     content: p.content,
     root: !!p.root,
