@@ -676,6 +676,8 @@ const AdsStatisticsSection = () => {
     const f$ = (v) => v ? `$${Number(v).toFixed(2)}` : '-';
     const fN = (v) => v ? Number(v).toLocaleString() : '-';
     const fP = (v) => v ? `${Number(v).toFixed(1)}%` : '-';
+    // #6 Tasa de conversión entre etapas del embudo (a de b).
+    const pct = (a, b) => (Number(b) > 0) ? `${Math.round((Number(a) / Number(b)) * 100)}%` : '-';
 
     // w-full: sin esto, mx-auto sobre un hijo de flex-column encoge el contenedor al
     // contenido (shrink-to-fit) y el ancho brincaba al abrir/cerrar etiquetas.
@@ -1079,6 +1081,32 @@ const AdsStatisticsSection = () => {
                                                 {ad.costPerConversation && <T l="$/Chat" v={f$(ad.costPerConversation)} />}
                                                 {ad.frequency && <T l="Freq" v={`${Number(ad.frequency).toFixed(1)}x`} />}
                                             </div>
+
+                                            {/* #6 Embudo Clics → Leads → Calificados (con tasas de conversión) */}
+                                            {ad.clicks && ad.totalLeads > 0 && (
+                                                <div className="mt-2 pt-2 border-t border-gray-100 dark:border-gray-700 flex items-center justify-between gap-1 text-center">
+                                                    <div className="flex-1">
+                                                        <p className="text-xs font-black text-amber-500 leading-none">{fN(ad.clicks)}</p>
+                                                        <p className="text-[7px] uppercase font-bold text-gray-400 mt-0.5">Clics</p>
+                                                    </div>
+                                                    <div className="flex flex-col items-center leading-none">
+                                                        <span className="text-[10px] text-gray-300 dark:text-gray-600">→</span>
+                                                        <span className="text-[8px] font-bold text-gray-400">{pct(ad.totalLeads, ad.clicks)}</span>
+                                                    </div>
+                                                    <div className="flex-1">
+                                                        <p className="text-xs font-black text-indigo-500 leading-none">{fN(ad.totalLeads)}</p>
+                                                        <p className="text-[7px] uppercase font-bold text-gray-400 mt-0.5">Leads</p>
+                                                    </div>
+                                                    <div className="flex flex-col items-center leading-none">
+                                                        <span className="text-[10px] text-gray-300 dark:text-gray-600">→</span>
+                                                        <span className="text-[8px] font-bold text-gray-400">{pct(ad.completeLeads, ad.totalLeads)}</span>
+                                                    </div>
+                                                    <div className="flex-1">
+                                                        <p className="text-xs font-black text-emerald-500 leading-none">{fN(ad.completeLeads)}</p>
+                                                        <p className="text-[7px] uppercase font-bold text-gray-400 mt-0.5">Calif</p>
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
                                     )}
 
