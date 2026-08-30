@@ -3303,18 +3303,23 @@ const getAdsStatisticsLegacy = async () => {
 // ⚡ RUTA RÁPIDA: arma las estadísticas desde el índice (ADS_ALL + zsets por anuncio +
 // ad_creative), SIN escanear los ~16k candidatos. Cae a la legacy si el índice no existe
 // aún (pre-backfill) o si ADS_STATS_LEGACY=1. Mismo shape de salida y mismo cache.
-export const getAdsStatistics = async () => {
+export const getAdsStatistics = async (range = 'all') => {
     const client = getClient();
     if (!client) return { ads: [], totalAdsLeads: 0 };
 
-    const ADS_CACHE_KEY = 'stats:ads:cached';
+    // #7 Rango de fechas. 'all' (histórico) mantiene el comportamiento y cache original;
+    // '7d'/'30d' filtran leads/calificados por fecha del lead y usan cache aparte.
+    const rangeKey = (range === '7d' || range === '30d') ? range : 'all';
+    const inRange = rangeKey !== 'all';
+    const ADS_CACHE_KEY = inRange ? `stats:ads:cached:${rangeKey}` : 'stats:ads:cached';
     const ADS_CACHE_TTL = 10 * 60;
     try {
         const cached = await client.get(ADS_CACHE_KEY);
         if (cached) return JSON.parse(cached);
     } catch { /* cache miss — rebuild */ }
 
-    // Fallback: índice ausente o forzado → escaneo legacy.
+    // Fallback: índice ausente o forzado → escaneo legacy (solo histórico; el legacy no
+    // sabe filtrar por fecha, así que en rango también devuelve histórico como mejor esfuerzo).
     const forceLegacy = process.env.ADS_STATS_LEGACY === '1';
     let adIds = [];
     if (!forceLegacy) {
@@ -3327,30 +3332,57 @@ export const getAdsStatistics = async () => {
     const todayStart = new Date(`${todayStr}T00:00:00-06:00`).getTime();
     const todayEnd = todayStart + 24 * 60 * 60 * 1000 - 1;
 
-    // Un solo pipeline: por anuncio → total, hoy, 1° lead, último lead y su creativo.
+    // Ventana del rango (epoch ms). 'all' → sin filtro.
+    let rangeStart = 0, rangeEnd = Number.MAX_SAFE_INTEGER;
+    if (inRange) {
+        const days = rangeKey === '7d' ? 7 : 30;
+        rangeEnd = Date.now();
+        rangeStart = rangeEnd - days * 24 * 60 * 60 * 1000;
+    }
+
+    // Pipeline fase 1: por anuncio → total, hoy, 1° lead, último lead, creativo y calificados.
+    //  - histórico: zcard + zintercard (conteo directo, barato).
+    //  - rango: zcount(ventana) + zrangebyscore(ventana) para obtener IDs (calificados en fase 2).
     const pipe = client.pipeline();
     for (const adId of adIds) {
         const zk = adLeadsZKey(adId);
-        pipe.zcard(zk);
+        if (inRange) pipe.zcount(zk, rangeStart, rangeEnd); else pipe.zcard(zk);
         pipe.zcount(zk, todayStart, todayEnd);
-        pipe.zrange(zk, 0, 0, 'WITHSCORES');    // más viejo → 1° lead
+        pipe.zrange(zk, 0, 0, 'WITHSCORES');    // más viejo → 1° lead (histórico del anuncio)
         pipe.zrange(zk, -1, -1, 'WITHSCORES');  // más nuevo → último lead
         pipe.get(`ad_creative:${adId}`);
-        // Candidatos calificados (completos) de este anuncio: intersección del MISMO zset
-        // de leads (adLeadsZKey) con el set global de completos. Se usa el zset —no el set
-        // viejo ad_leads:<adId>— porque el set puede tener miembros stale y completeLeads
-        // saldría > totalLeads. ZINTERCARD solo devuelve el conteo (no miembros) → barato.
-        pipe.zintercard(2, zk, KEYS.LIST_COMPLETE);
+        // Calificados: histórico = ZINTERCARD (conteo); rango = IDs en ventana para intersectar
+        // en fase 2 (no hay ZINTERCARD por rango). Se usa el MISMO zset que los leads → consistente.
+        if (inRange) pipe.zrangebyscore(zk, rangeStart, rangeEnd); else pipe.zintercard(2, zk, KEYS.LIST_COMPLETE);
     }
     const rows = await pipe.exec();
-
     const PER_AD = 6; // comandos por anuncio en el pipeline
+
+    // Fase 2 (solo rango): calificados en ventana = IDs del rango que están en LIST_COMPLETE.
+    // SMISMEMBER por anuncio (solo los que tienen IDs). Ventanas 7/30d ⇒ pocos IDs ⇒ barato.
+    const qualifiedByIdx = new Array(adIds.length).fill(0);
+    if (inRange) {
+        const pipe2 = client.pipeline();
+        const map2 = [];
+        for (let i = 0; i < adIds.length; i++) {
+            const ids = rows[i * PER_AD + 5]?.[1] || [];
+            if (ids.length > 0) { pipe2.smismember(KEYS.LIST_COMPLETE, ...ids); map2.push(i); }
+        }
+        if (map2.length) {
+            const res2 = await pipe2.exec();
+            res2.forEach((r, j) => {
+                const flags = r?.[1] || [];
+                qualifiedByIdx[map2[j]] = flags.reduce((s, f) => s + (Number(f) ? 1 : 0), 0);
+            });
+        }
+    }
+
     const ads = [];
     let totalAdsLeads = 0;
     for (let i = 0; i < adIds.length; i++) {
         const base = i * PER_AD;
         const totalLeads = Number(rows[base]?.[1] || 0);
-        if (totalLeads === 0) continue; // anuncio quedó sin leads (cambio/borrado): no mostrar
+        if (totalLeads === 0) continue; // sin leads en la ventana (o borrado): no mostrar
         const todayLeads = Number(rows[base + 1]?.[1] || 0);
         const minArr = rows[base + 2]?.[1] || [];
         const maxArr = rows[base + 3]?.[1] || [];
@@ -3358,7 +3390,7 @@ export const getAdsStatistics = async () => {
         const lastScore = maxArr.length > 1 ? Number(maxArr[1]) : null;
         let creative = {};
         try { const raw = rows[base + 4]?.[1]; if (raw) creative = JSON.parse(raw); } catch { /* sin creativo */ }
-        const completeLeads = Number(rows[base + 5]?.[1] || 0);
+        const completeLeads = inRange ? qualifiedByIdx[i] : Number(rows[base + 5]?.[1] || 0);
 
         totalAdsLeads += totalLeads;
         ads.push({
@@ -3381,10 +3413,12 @@ export const getAdsStatistics = async () => {
     // Leads de anuncio SIN adId (ctwa sin ad): se agregan como UN grupo "organic" —igual que
     // el legacy— para que totalAdsLeads == suma de ads[] y el filtro de archivados del endpoint
     // (que resta hiddenLeads del total) se comporte idéntico. La UI no lo muestra (adId null +
-    // headline por defecto). Sin esto, el total quedaba desbalanceado e inflaba el KPI.
+    // headline por defecto). En rango se cuenta por ventana igual que los demás.
     try {
         const zk = INDEX_KEYS.ADS_NOADID_Z;
-        const noAdIdTotal = Number(await client.zcard(zk)) || 0;
+        const noAdIdTotal = inRange
+            ? (Number(await client.zcount(zk, rangeStart, rangeEnd)) || 0)
+            : (Number(await client.zcard(zk)) || 0);
         if (noAdIdTotal > 0) {
             const noAdIdToday = Number(await client.zcount(zk, todayStart, todayEnd)) || 0;
             ads.push({
@@ -3403,7 +3437,7 @@ export const getAdsStatistics = async () => {
     } catch { /* sin bucket noadid */ }
 
     ads.sort((a, b) => b.totalLeads - a.totalLeads);
-    const result = { ads, totalAdsLeads };
+    const result = { ads, totalAdsLeads, range: rangeKey };
     try { await client.set(ADS_CACHE_KEY, JSON.stringify(result), 'EX', ADS_CACHE_TTL); } catch { /* ignore */ }
     return result;
 };

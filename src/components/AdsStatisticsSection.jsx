@@ -573,10 +573,14 @@ const AdsStatisticsSection = () => {
 
     const [showArchived, setShowArchived] = useState(false);
     const showArchivedRef = useRef(false);
+    // #7 Rango de fechas seleccionado. Ref para que el refresh en segundo plano (stale)
+    // use el rango vigente sin depender del closure.
+    const [dateRange, setDateRange] = useState('all');
+    const dateRangeRef = useRef('all');
 
     const loadStats = async (includeArchived = showArchivedRef.current, opts = {}) => {
         if (!opts.silent) setLoading(true);
-        const data = await getAdsStats(includeArchived, !!opts.refresh);
+        const data = await getAdsStats(includeArchived, !!opts.refresh, dateRangeRef.current);
         if (data.success) {
             setStats({ ads: data.ads || [], totalAdsLeads: data.totalAdsLeads || 0 });
             // Respuesta stale (copia instantanea): refrescar en segundo plano sin
@@ -597,6 +601,13 @@ const AdsStatisticsSection = () => {
         setShowArchived(next);
         showArchivedRef.current = next;
         loadStats(next);
+    };
+
+    const changeRange = (r) => {
+        if (r === dateRangeRef.current) return;
+        setDateRange(r);
+        dateRangeRef.current = r;
+        loadStats(showArchivedRef.current, { refresh: true });
     };
 
     const handleRestoreAd = async (ad) => {
@@ -676,9 +687,26 @@ const AdsStatisticsSection = () => {
                     <h1 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
                         <Target className="w-5 h-5 text-indigo-500" /> Estadísticas Meta Ads
                     </h1>
-                    <p className="text-gray-400 text-xs mt-0.5">Campañas Click-to-WhatsApp</p>
+                    <p className="text-gray-400 text-xs mt-0.5">
+                        Campañas Click-to-WhatsApp
+                        {dateRange === '7d' && ' · últimos 7 días'}
+                        {dateRange === '30d' && ' · últimos 30 días'}
+                    </p>
                 </div>
                 <div className="flex items-center gap-2">
+                    {/* #7 Selector de rango de fechas */}
+                    <div className="flex items-center bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-0.5 shadow-sm">
+                        {[{ k: '7d', l: '7 días' }, { k: '30d', l: '30 días' }, { k: 'all', l: 'Histórico' }].map(opt => (
+                            <button key={opt.k} onClick={() => changeRange(opt.k)} disabled={loading}
+                                className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-colors disabled:opacity-50 ${
+                                    dateRange === opt.k
+                                        ? 'bg-indigo-500 text-white shadow-sm'
+                                        : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                                }`}>
+                                {opt.l}
+                            </button>
+                        ))}
+                    </div>
                     <button onClick={toggleArchivedView} disabled={loading}
                         className={`flex items-center px-3 py-1.5 text-xs border rounded-lg transition-colors shadow-sm disabled:opacity-50 ${
                             showArchived

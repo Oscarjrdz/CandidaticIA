@@ -12,16 +12,28 @@ const META_FETCH_TIMEOUT_MS = 20000; // lotes de 50 anuncios con insights tardan
 // Se guarda ANTES de filtrar ocultos para que ocultar/mostrar un anuncio aplique al instante.
 // STALE: copia de larga vida para responder INSTANTANEO cuando el cache fresco expiro —
 // el frontend detecta stale:true y dispara un refresh en segundo plano (?refresh=true).
-const ENRICHED_CACHE_KEY = 'ads:stats:enriched:v1';
-const ENRICHED_STALE_KEY = 'ads:stats:enriched:stale';
+// Caché por rango (#7): 'all' conserva las llaves originales; 7d/30d usan sufijo.
+const ENRICHED_CACHE_KEY_BASE = 'ads:stats:enriched:v1';
+const ENRICHED_STALE_KEY_BASE = 'ads:stats:enriched:stale';
+const enrichedKey = (range) => range === 'all' ? ENRICHED_CACHE_KEY_BASE : `${ENRICHED_CACHE_KEY_BASE}:${range}`;
+const staleKey = (range) => range === 'all' ? ENRICHED_STALE_KEY_BASE : `${ENRICHED_STALE_KEY_BASE}:${range}`;
 const ENRICHED_TTL_SECONDS = 5 * 60;
 const ENRICHED_STALE_TTL_SECONDS = 60 * 60 * 24;
+const normalizeRange = (r) => (r === '7d' || r === '30d') ? r : 'all';
 
-// Campos pedidos por anuncio en UNA sola sub-request del Batch API (antes eran 2 llamadas
-// sueltas por anuncio: insights + status = ~146 llamadas para 73 anuncios; ahora ~2 lotes).
-// creative.thumbnail: imagen fresca del creativo — las URLs de referral guardadas expiran
-// (CDN firmado de Meta), por eso habia imagenes rotas; el thumbnail se renueva en cada lote.
-const AD_FIELDS = 'effective_status,name,creative.thumbnail_width(512).thumbnail_height(512){thumbnail_url},insights.date_preset(maximum){impressions,clicks,spend,cpc,cpm,ctr,reach,frequency,actions,cost_per_action_type}';
+// Modificador de insights según el rango: histórico = date_preset(maximum); 7/30d = time_range
+// por fechas calendario (Monterrey). El resto de campos por anuncio no cambian.
+const insightsModifier = (range) => {
+    if (range === 'all') return 'date_preset(maximum)';
+    const days = range === '7d' ? 7 : 30;
+    const dstr = (ms) => new Date(ms).toLocaleDateString('en-CA', { timeZone: 'America/Monterrey' });
+    const until = dstr(Date.now());
+    const since = dstr(Date.now() - (days - 1) * 24 * 60 * 60 * 1000);
+    return `time_range({'since':'${since}','until':'${until}'})`;
+};
+// Campos pedidos por anuncio en UNA sola sub-request del Batch API. creative.thumbnail: imagen
+// fresca del creativo — las URLs de referral guardadas expiran (CDN firmado de Meta).
+const buildAdFields = (range) => `effective_status,name,creative.thumbnail_width(512).thumbnail_height(512){thumbnail_url},insights.${insightsModifier(range)}{impressions,clicks,spend,cpc,cpm,ctr,reach,frequency,actions,cost_per_action_type}`;
 
 export default async function handler(req, res) {
     if (req.method === 'OPTIONS') {
@@ -66,13 +78,18 @@ export default async function handler(req, res) {
             const client = getRedisClient();
 
             const forceRefresh = req.query?.refresh === 'true';
+            // #7 Rango: 'all' (histórico) | '7d' | '30d'. Llaves de caché por rango.
+            const range = normalizeRange(req.query?.range);
+            const ECK = enrichedKey(range);
+            const ESK = staleKey(range);
+            const localCacheKey = range === 'all' ? 'stats:ads:cached' : `stats:ads:cached:${range}`;
 
             // 1) Cache de respuesta enriquecida completa (5 min): carga repetida = instantanea.
             let data = null;
             let servedStale = false;
             if (client && !forceRefresh) {
                 try {
-                    const cached = await client.get(ENRICHED_CACHE_KEY);
+                    const cached = await client.get(ECK);
                     if (cached) data = JSON.parse(cached);
                 } catch { /* cache miss */ }
 
@@ -81,7 +98,7 @@ export default async function handler(req, res) {
                 //     la reconstruccion completa cuando ni siquiera hay copia stale.
                 if (!data) {
                     try {
-                        const stale = await client.get(ENRICHED_STALE_KEY);
+                        const stale = await client.get(ESK);
                         if (stale) { data = JSON.parse(stale); servedStale = true; }
                     } catch { /* sin stale */ }
                 }
@@ -94,7 +111,7 @@ export default async function handler(req, res) {
                 // 🔒 Lock anti-estampida: un solo request reconstruye (índice + Batch a Meta)
                 //    a la vez. Los demás esperan corto y sirven lo que ese publique, en vez de
                 //    disparar N reconstrucciones full en paralelo.
-                const REBUILD_LOCK_KEY = 'ads:stats:rebuild:lock';
+                const REBUILD_LOCK_KEY = `ads:stats:rebuild:lock:${range}`;
                 let haveRebuildLock = true;
                 if (client) {
                     try { haveRebuildLock = (await client.set(REBUILD_LOCK_KEY, '1', 'EX', 45, 'NX')) === 'OK'; }
@@ -105,7 +122,7 @@ export default async function handler(req, res) {
                     for (let i = 0; i < 20 && !data; i++) {
                         await new Promise(r => setTimeout(r, 150));
                         try {
-                            const c2 = (await client.get(ENRICHED_CACHE_KEY)) || (await client.get(ENRICHED_STALE_KEY));
+                            const c2 = (await client.get(ECK)) || (await client.get(ESK));
                             if (c2) { data = JSON.parse(c2); servedStale = true; }
                         } catch { /* seguir esperando al que reconstruye */ }
                     }
@@ -116,16 +133,17 @@ export default async function handler(req, res) {
                 try {
                 // Refresh explicito: tambien renovar el agregado local (leads/conteos),
                 // no solo las metricas de Meta.
-                if (forceRefresh && client) await client.del('stats:ads:cached').catch(() => {});
-                data = await getAdsStatistics();
+                if (forceRefresh && client) await client.del(localCacheKey).catch(() => {});
+                data = await getAdsStatistics(range);
                 const adsToken = process.env.META_ADS_TOKEN;
                 const adIds = (data.ads || []).map(a => a.adId).filter(Boolean);
+                const adFields = buildAdFields(range);
 
                 if (adsToken && adIds.length > 0) {
                     try {
                         const chunks = [];
                         for (let i = 0; i < adIds.length; i += 50) chunks.push(adIds.slice(i, i + 50));
-                        const batchResponses = await Promise.all(chunks.map(chunk => fetchGraphBatch(chunk, adsToken)));
+                        const batchResponses = await Promise.all(chunks.map(chunk => fetchGraphBatch(chunk, adsToken, adFields)));
 
                         // Las sub-respuestas llegan en el MISMO orden que las sub-requests
                         // (garantia del Batch API) — mapear por indice, no por body.id.
@@ -182,8 +200,8 @@ export default async function handler(req, res) {
                         // en la proxima visita en vez de congelar datos sin enriquecer 5 min.
                         if (client && metaById.size > 0) {
                             const blob = JSON.stringify(data);
-                            client.set(ENRICHED_CACHE_KEY, blob, 'EX', ENRICHED_TTL_SECONDS).catch(() => {});
-                            client.set(ENRICHED_STALE_KEY, blob, 'EX', ENRICHED_STALE_TTL_SECONDS).catch(() => {});
+                            client.set(ECK, blob, 'EX', ENRICHED_TTL_SECONDS).catch(() => {});
+                            client.set(ESK, blob, 'EX', ENRICHED_STALE_TTL_SECONDS).catch(() => {});
                         }
                     } catch (metaError) {
                         console.error('Meta Marketing API error (non-fatal):', metaError.message);
@@ -232,6 +250,7 @@ export default async function handler(req, res) {
                 success: true,
                 ads: data.ads,
                 totalAdsLeads: data.totalAdsLeads,
+                range,
                 stale: servedStale
             });
         } catch (error) {
@@ -252,10 +271,10 @@ export default async function handler(req, res) {
  * afectar a los demas (verificado contra la API real con un ID falso mezclado).
  * Regresa el array de sub-respuestas [{ code, body }] en el mismo orden que adIds.
  */
-async function fetchGraphBatch(adIds, adsToken) {
+async function fetchGraphBatch(adIds, adsToken, adFields) {
     const batch = JSON.stringify(adIds.map(id => ({
         method: 'GET',
-        relative_url: `${id}?fields=${encodeURIComponent(AD_FIELDS)}`
+        relative_url: `${id}?fields=${encodeURIComponent(adFields)}`
     })));
 
     const controller = new AbortController();
