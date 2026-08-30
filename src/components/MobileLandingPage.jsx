@@ -160,6 +160,18 @@ const MobileLandingPage = ({ onLoginSuccess }) => {
                             <span className="w-full mt-1 flex justify-between text-[9px] font-semibold text-gray-400 uppercase">
                                 {'RECLUTAMIENTO MASIVO'.split('').map((ch, i) => <span key={i}>{ch === ' ' ? ' ' : ch}</span>)}
                             </span>
+                            <span className="w-full mt-0.5 text-right text-[8px] font-semibold text-black">
+                                by{' '}
+                                <a
+                                    href="https://www.hr1.mx"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-black hover:underline"
+                                >
+                                    Hr One México
+                                </a>{' '}
+                                🇲🇽
+                            </span>
                         </div>
                     </div>
                 </div>
