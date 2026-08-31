@@ -7,6 +7,8 @@ export default function handler(req, res) {
     title: p.title,
     date: p.date,
     author: p.author,
+    authorPhoto: p.authorPhoto || null,
+    authorRole: p.authorRole || null,
     category: p.category,
     cover: p.cover || null,
     coverW: p.coverW || null,

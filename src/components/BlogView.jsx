@@ -136,9 +136,12 @@ export default function BlogView() {
             {active.cover && <span className="cdx-kicker">{active.category || 'Blog'}</span>}
             {active.cover && <h1 className="cdx-h1">{active.title}</h1>}
             <div className="cdx-meta">
-              <span className="cdx-avatar">{initials(active.author || 'Candidatic IA')}</span>
+              {active.authorPhoto
+                ? <img className="cdx-avatar cdx-avatar-img" src={active.authorPhoto} alt={active.author} />
+                : <span className="cdx-avatar">{initials(active.author || 'Candidatic IA')}</span>}
               <span className="cdx-who">
                 <span className="cdx-name">{active.author || 'Candidatic'}</span>
+                {active.authorRole && <span className="cdx-role">{active.authorRole}</span>}
                 <span className="cdx-sub">{formatDate(active.date)} · {readingTime(active.content)} min de lectura</span>
               </span>
             </div>
@@ -209,9 +212,11 @@ function ScopedStyles() {
 .cdx-kicker{display:inline-block;font-size:11px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--v);margin-bottom:12px}
 .cdx-h1{font-family:'Inter',system-ui,sans-serif;font-size:clamp(2.1rem,5.2vw,3.6rem);font-weight:900;line-height:1.08;color:var(--ink);letter-spacing:-.035em;margin-bottom:18px;text-wrap:balance}
 .cdx-meta{display:flex;align-items:center;gap:12px;font-size:13.5px;color:var(--muted);margin-bottom:26px;padding-bottom:24px;border-bottom:1px solid var(--line)}
-.cdx-avatar{width:42px;height:42px;border-radius:50%;background:linear-gradient(135deg,#2563eb,#7c3aed);color:#fff;display:inline-flex;align-items:center;justify-content:center;font-weight:800;font-size:15px;flex-shrink:0}
-.cdx-who{display:flex;flex-direction:column;gap:2px}
+.cdx-avatar{width:46px;height:46px;border-radius:50%;background:linear-gradient(135deg,#2563eb,#7c3aed);color:#fff;display:inline-flex;align-items:center;justify-content:center;font-weight:800;font-size:15px;flex-shrink:0}
+.cdx-avatar-img{object-fit:cover;object-position:center;background:#111827}
+.cdx-who{display:flex;flex-direction:column;gap:1px}
 .cdx-name{font-weight:700;color:var(--ink);font-size:14px}
+.cdx-role{font-size:12.5px;font-weight:600;color:var(--v)}
 .cdx-sub{font-size:12.5px;color:var(--muted)}
 .cdx-content{font-family:'Lora',Georgia,serif;font-size:19px;line-height:1.78;color:#33404f;max-width:68ch}
 .cdx-content p{margin:0 0 22px}

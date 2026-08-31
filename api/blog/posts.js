@@ -341,6 +341,16 @@ const POSTS = [
   },
 ];
 
+// Perfil del autor de la serie: foto + rol (se muestra en el avatar y bajo el nombre).
+const AUTOR_FOTO = '/blog/oscar-rodriguez-martinez-ceo-candidatic.png';
+const AUTOR_ROLE = 'CEO de Candidatic';
+POSTS.forEach((p) => {
+  if (p.author === AUTOR) {
+    p.authorPhoto = AUTOR_FOTO;
+    p.authorRole = AUTOR_ROLE;
+  }
+});
+
 /** Todas las entradas ordenadas de más reciente a más antigua. */
 export function getAllPosts() {
   return [...POSTS].sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
