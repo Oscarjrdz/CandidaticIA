@@ -137,7 +137,7 @@ export default function BlogView() {
             {active.cover && <h1 className="cdx-h1">{active.title}</h1>}
             <div className="cdx-meta">
               {active.authorPhoto
-                ? <img className="cdx-avatar cdx-avatar-img" src={active.authorPhoto} alt={active.author} />
+                ? <span className="cdx-avatar"><img className="cdx-avatar-img" src={active.authorPhoto} alt={active.author} draggable={false} onDragStart={e => e.preventDefault()} /></span>
                 : <span className="cdx-avatar">{initials(active.author || 'Candidatic IA')}</span>}
               <span className="cdx-who">
                 <span className="cdx-name">{active.author || 'Candidatic'}</span>
@@ -212,8 +212,8 @@ function ScopedStyles() {
 .cdx-kicker{display:inline-block;font-size:11px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--v);margin-bottom:12px}
 .cdx-h1{font-family:'Inter',system-ui,sans-serif;font-size:clamp(2.1rem,5.2vw,3.6rem);font-weight:900;line-height:1.08;color:var(--ink);letter-spacing:-.035em;margin-bottom:18px;text-wrap:balance}
 .cdx-meta{display:flex;align-items:center;gap:12px;font-size:13.5px;color:var(--muted);margin-bottom:26px;padding-bottom:24px;border-bottom:1px solid var(--line)}
-.cdx-avatar{width:46px;height:46px;border-radius:50%;background:linear-gradient(135deg,#2563eb,#7c3aed);color:#fff;display:inline-flex;align-items:center;justify-content:center;font-weight:800;font-size:15px;flex-shrink:0}
-.cdx-avatar-img{object-fit:cover;object-position:center;background:#111827}
+.cdx-avatar{width:46px;height:46px;border-radius:50%;overflow:hidden;background:linear-gradient(135deg,#2563eb,#7c3aed);color:#fff;display:inline-flex;align-items:center;justify-content:center;font-weight:800;font-size:15px;flex-shrink:0}
+.cdx-avatar-img{width:100%;height:100%;object-fit:cover;object-position:center 42%;display:block;transform:scale(1.28);-webkit-user-drag:none;user-select:none}
 .cdx-who{display:flex;flex-direction:column;gap:1px}
 .cdx-name{font-weight:700;color:var(--ink);font-size:14px}
 .cdx-role{font-size:12.5px;font-weight:600;color:var(--v)}

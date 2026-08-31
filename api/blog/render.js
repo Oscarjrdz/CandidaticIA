@@ -189,8 +189,8 @@ export function renderPostPage(post, allPosts, origin) {
   .kicker{display:inline-block;font-size:11px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--violet);margin-bottom:12px}
   .article h1{font-family:'Inter',sans-serif;font-size:clamp(2.1rem,5.2vw,3.6rem);font-weight:900;line-height:1.08;color:var(--ink);letter-spacing:-.035em;margin-bottom:18px;text-wrap:balance}
   .post-meta{display:flex;align-items:center;gap:12px;font-size:13.5px;color:var(--muted);margin-bottom:26px;padding-bottom:24px;border-bottom:1px solid var(--line)}
-  .post-meta .avatar{width:46px;height:46px;border-radius:50%;background:linear-gradient(135deg,#2563eb,#7c3aed);color:#fff;display:inline-flex;align-items:center;justify-content:center;font-family:'Inter',sans-serif;font-weight:800;font-size:15px;flex-shrink:0}
-  .post-meta .avatar-img{object-fit:cover;object-position:center;background:#111827}
+  .post-meta .avatar{width:46px;height:46px;border-radius:50%;overflow:hidden;background:linear-gradient(135deg,#2563eb,#7c3aed);color:#fff;display:inline-flex;align-items:center;justify-content:center;font-family:'Inter',sans-serif;font-weight:800;font-size:15px;flex-shrink:0}
+  .post-meta .avatar-img{width:100%;height:100%;object-fit:cover;object-position:center 42%;display:block;transform:scale(1.28);-webkit-user-drag:none;user-select:none}
   .post-meta .who{display:flex;flex-direction:column;gap:1px}
   .post-meta .who .name{font-weight:700;color:var(--ink);font-size:14px}
   .post-meta .who .role{font-size:12.5px;font-weight:600;color:var(--violet)}
@@ -298,7 +298,7 @@ export function renderPostPage(post, allPosts, origin) {
         <h1>${escapeHtml(post.title)}</h1>` : ''}
         <div class="post-meta">
           ${post.authorPhoto
-            ? `<img class="avatar avatar-img" src="${escapeHtml(absUrl(origin, post.authorPhoto))}" alt="${escapeHtml(post.author || '')}">`
+            ? `<span class="avatar"><img class="avatar-img" src="${escapeHtml(absUrl(origin, post.authorPhoto))}" alt="${escapeHtml(post.author || '')}" draggable="false" ondragstart="return false"></span>`
             : `<span class="avatar">${escapeHtml(initials(post.author || 'Candidatic IA'))}</span>`}
           <span class="who">
             <span class="name">${escapeHtml(post.author || 'Candidatic')}</span>
