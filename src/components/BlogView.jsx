@@ -122,10 +122,19 @@ export default function BlogView() {
 
       <div className="cdx-wrap">
         <article className="cdx-article">
-          <img className="cdx-cover" src={active.cover} alt={active.title} width={active.coverW || undefined} height={active.coverH || undefined} decoding="async" />
+          {active.cover ? (
+            <img className="cdx-cover" src={active.cover} alt={active.title} width={active.coverW || undefined} height={active.coverH || undefined} decoding="async" />
+          ) : (
+            <div className="cdx-cover cdx-cover-grad">
+              <span className="cg-series">{active.series || 'Blog'}</span>
+              <span className="cg-kicker">{active.category || 'Blog'}</span>
+              <h1 className="cg-h1">{active.title}</h1>
+              <span className="cg-brand">CANDIDATIC IA</span>
+            </div>
+          )}
           <div className="cdx-pad">
-            <span className="cdx-kicker">{active.category || 'Blog'}</span>
-            <h1 className="cdx-h1">{active.title}</h1>
+            {active.cover && <span className="cdx-kicker">{active.category || 'Blog'}</span>}
+            {active.cover && <h1 className="cdx-h1">{active.title}</h1>}
             <div className="cdx-meta">
               <span className="cdx-avatar">{initials(active.author || 'Candidatic IA')}</span>
               <span className="cdx-who">
@@ -158,7 +167,9 @@ export default function BlogView() {
             {posts.map(p => (
               <li key={p.slug} className={p.slug === active.slug ? 'active' : ''}>
                 <button type="button" onClick={() => openPost(p.slug)}>
-                  <img src={p.cover} alt="" loading="lazy" />
+                  {p.cover
+                    ? <img src={p.cover} alt="" loading="lazy" />
+                    : <span className="cdx-s-thumb cdx-s-grad" aria-hidden="true" />}
                   <span className="cdx-s-meta">
                     <span className="cdx-s-title">{p.title}</span>
                     <span className="cdx-s-date">{formatDate(p.date)}</span>
@@ -187,6 +198,13 @@ function ScopedStyles() {
 .cdx-wrap{max-width:1120px;margin:0 auto;padding:32px 20px 60px;display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:40px;align-items:start}
 .cdx-article{background:#fff;border:1px solid var(--line);border-radius:18px;overflow:hidden;box-shadow:0 6px 30px rgba(15,23,42,.05)}
 .cdx-cover{width:100%;height:auto;display:block;background:#eef2f7}
+.cdx-cover-grad{aspect-ratio:16/9;height:auto;display:flex;flex-direction:column;justify-content:center;padding:34px 38px;color:#fff;background:linear-gradient(135deg,#1d4ed8 0%,#7c3aed 55%,#9333ea 100%);position:relative;overflow:hidden}
+.cdx-cover-grad::after{content:"";position:absolute;inset:0;background-image:radial-gradient(rgba(255,255,255,.16) 1px,transparent 1px);background-size:18px 18px;opacity:.5}
+.cdx-cover-grad>*{position:relative;z-index:1}
+.cdx-cover-grad .cg-series{font-size:11px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;color:rgba(255,255,255,.85);margin-bottom:14px}
+.cdx-cover-grad .cg-kicker{font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:rgba(255,255,255,.9);margin-bottom:10px}
+.cdx-cover-grad .cg-h1{font-family:'Inter',system-ui,sans-serif;font-size:clamp(1.6rem,3.6vw,2.6rem);font-weight:900;line-height:1.12;letter-spacing:-.03em;color:#fff;text-wrap:balance;margin:0}
+.cdx-cover-grad .cg-brand{margin-top:20px;font-size:12px;font-weight:800;letter-spacing:.12em;color:rgba(255,255,255,.75)}
 .cdx-pad{padding:32px 34px 40px}
 .cdx-kicker{display:inline-block;font-size:11px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--v);margin-bottom:12px}
 .cdx-h1{font-family:'Inter',system-ui,sans-serif;font-size:clamp(2.1rem,5.2vw,3.6rem);font-weight:900;line-height:1.08;color:var(--ink);letter-spacing:-.035em;margin-bottom:18px;text-wrap:balance}
@@ -219,7 +237,8 @@ function ScopedStyles() {
 .cdx-slist li button{width:100%;text-align:left;background:none;border:none;cursor:pointer;display:flex;gap:12px;padding:9px;border-radius:12px;transition:background .15s}
 .cdx-slist li button:hover{background:#f3f4f6}
 .cdx-slist li.active button{background:#f5f3ff}
-.cdx-slist img{width:64px;height:44px;border-radius:8px;object-fit:cover;flex-shrink:0;background:#eef2f7}
+.cdx-slist img,.cdx-s-thumb{width:64px;height:44px;border-radius:8px;object-fit:cover;flex-shrink:0;background:#eef2f7}
+.cdx-s-grad{background:linear-gradient(135deg,#1d4ed8,#7c3aed 55%,#9333ea)}
 .cdx-s-meta{display:flex;flex-direction:column;gap:3px;min-width:0}
 .cdx-s-title{font-size:13px;font-weight:600;color:var(--ink);line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .cdx-s-date{font-size:11.5px;color:var(--muted)}

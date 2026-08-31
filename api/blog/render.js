@@ -87,9 +87,12 @@ function sidebar(allPosts, origin, currentSlug) {
   const items = allPosts
     .map((p) => {
       const active = p.slug === currentSlug ? ' class="active"' : '';
+      const thumb = p.cover
+        ? `<img src="${escapeHtml(absUrl(origin, p.cover))}" alt="" loading="lazy">`
+        : `<span class="s-thumb s-grad" aria-hidden="true"></span>`;
       return `<li${active}>
         <a href="${origin}${escapeHtml(postPath(p))}">
-          <img src="${escapeHtml(absUrl(origin, p.cover))}" alt="" loading="lazy">
+          ${thumb}
           <div class="s-meta">
             <span class="s-title">${escapeHtml(p.title)}</span>
             <span class="s-date">${formatDate(p.date)}</span>
@@ -112,7 +115,9 @@ function sidebar(allPosts, origin, currentSlug) {
  */
 export function renderPostPage(post, allPosts, origin) {
   const canonical = `${origin}${postPath(post)}`;
-  const coverAbs = absUrl(origin, post.cover);
+  // Imagen para el preview al compartir: portada real, o fallback raster de marca
+  // (las portadas de gradiente no son imagen, así que se usa candidatic_preview.jpg).
+  const ogImageAbs = absUrl(origin, post.ogImage || post.cover || '/candidatic_preview.jpg');
   const desc = post.excerpt || '';
   const title = `${post.title} — Blog Candidatic IA`;
 
@@ -131,15 +136,13 @@ export function renderPostPage(post, allPosts, origin) {
 <meta property="og:site_name" content="Candidatic IA">
 <meta property="og:title" content="${escapeHtml(post.title)}">
 <meta property="og:description" content="${escapeHtml(desc)}">
-<meta property="og:image" content="${escapeHtml(coverAbs)}">
-<meta property="og:image:width" content="1200">
-<meta property="og:image:height" content="675">
+<meta property="og:image" content="${escapeHtml(ogImageAbs)}">
 <meta property="og:url" content="${escapeHtml(canonical)}">
 <meta property="article:published_time" content="${escapeHtml(post.date)}">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="${escapeHtml(post.title)}">
 <meta name="twitter:description" content="${escapeHtml(desc)}">
-<meta name="twitter:image" content="${escapeHtml(coverAbs)}">
+<meta name="twitter:image" content="${escapeHtml(ogImageAbs)}">
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Lora:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
@@ -175,6 +178,13 @@ export function renderPostPage(post, allPosts, origin) {
   /* Article */
   .article{background:var(--card);border:1px solid var(--line);border-radius:18px;overflow:hidden;box-shadow:0 6px 30px rgba(15,23,42,.05)}
   .cover{width:100%;height:auto;display:block;background:#eef2f7}
+  .cover-grad{aspect-ratio:16/9;display:flex;flex-direction:column;justify-content:center;padding:34px 38px;color:#fff;background:linear-gradient(135deg,#1d4ed8 0%,#7c3aed 55%,#9333ea 100%);position:relative;overflow:hidden}
+  .cover-grad::after{content:"";position:absolute;inset:0;background-image:radial-gradient(rgba(255,255,255,.16) 1px,transparent 1px);background-size:18px 18px;opacity:.5}
+  .cover-grad>*{position:relative;z-index:1}
+  .cover-grad .cg-series{font-size:11px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;color:rgba(255,255,255,.85);margin-bottom:14px}
+  .cover-grad .cg-kicker{font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:rgba(255,255,255,.9);margin-bottom:10px}
+  .cover-grad .cg-h1{font-family:'Inter',sans-serif;font-size:clamp(1.6rem,3.6vw,2.6rem);font-weight:900;line-height:1.12;letter-spacing:-.03em;color:#fff;margin:0;text-wrap:balance}
+  .cover-grad .cg-brand{margin-top:20px;font-size:12px;font-weight:800;letter-spacing:.12em;color:rgba(255,255,255,.75)}
   .article .pad{padding:32px 34px 40px}
   .kicker{display:inline-block;font-size:11px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--violet);margin-bottom:12px}
   .article h1{font-family:'Inter',sans-serif;font-size:clamp(2.1rem,5.2vw,3.6rem);font-weight:900;line-height:1.08;color:var(--ink);letter-spacing:-.035em;margin-bottom:18px;text-wrap:balance}
@@ -219,7 +229,8 @@ export function renderPostPage(post, allPosts, origin) {
   .s-list li a{display:flex;gap:12px;padding:9px;border-radius:12px;transition:background .15s}
   .s-list li a:hover{background:#f3f4f6}
   .s-list li.active a{background:#f5f3ff}
-  .s-list img{width:64px;height:44px;border-radius:8px;object-fit:cover;flex-shrink:0;background:#eef2f7}
+  .s-list img,.s-thumb{width:64px;height:44px;border-radius:8px;object-fit:cover;flex-shrink:0;background:#eef2f7;display:block}
+  .s-grad{background:linear-gradient(135deg,#1d4ed8,#7c3aed 55%,#9333ea)}
   .s-meta{display:flex;flex-direction:column;gap:3px;min-width:0}
   .s-title{font-size:13px;font-weight:600;color:var(--ink);line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
   .s-date{font-size:11.5px;color:var(--muted)}
@@ -272,10 +283,17 @@ export function renderPostPage(post, allPosts, origin) {
 
   <main class="wrap">
     <article class="article">
-      <img class="cover" src="${escapeHtml(coverAbs)}" alt="${escapeHtml(post.title)}"${post.coverW ? ` width="${post.coverW}"` : ''}${post.coverH ? ` height="${post.coverH}"` : ''} decoding="async">
+      ${post.cover
+        ? `<img class="cover" src="${escapeHtml(absUrl(origin, post.cover))}" alt="${escapeHtml(post.title)}"${post.coverW ? ` width="${post.coverW}"` : ''}${post.coverH ? ` height="${post.coverH}"` : ''} decoding="async">`
+        : `<div class="cover cover-grad">
+        <span class="cg-series">${escapeHtml(post.series || 'Blog')}</span>
+        <span class="cg-kicker">${escapeHtml(post.category || 'Blog')}</span>
+        <h1 class="cg-h1">${escapeHtml(post.title)}</h1>
+        <span class="cg-brand">CANDIDATIC IA</span>
+      </div>`}
       <div class="pad">
-        <span class="kicker">${escapeHtml(post.category || 'Blog')}</span>
-        <h1>${escapeHtml(post.title)}</h1>
+        ${post.cover ? `<span class="kicker">${escapeHtml(post.category || 'Blog')}</span>
+        <h1>${escapeHtml(post.title)}</h1>` : ''}
         <div class="post-meta">
           <span class="avatar">${escapeHtml(initials(post.author || 'Candidatic IA'))}</span>
           <span class="who">
