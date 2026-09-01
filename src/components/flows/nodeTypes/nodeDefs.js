@@ -162,7 +162,7 @@ export const NODE_DEFS = {
         color: 'violet',
         hasTarget: true,
         hasSource: true,
-        summary: (data) => data.value?.trim() ? (data.value.length > 60 ? `${data.value.slice(0, 60)}…` : data.value) : 'Fija el valor de {{frase dinamica}}'
+        summary: (data) => data.linkedQuickReplyId ? '🔗 Frase vinculada del banco' : (data.value?.trim() ? (data.value.length > 60 ? `${data.value.slice(0, 60)}…` : data.value) : 'Fija el valor de {{frase dinamica}}')
     },
     accion_etiqueta: {
         label: 'Agregar Etiqueta',

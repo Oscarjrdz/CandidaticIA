@@ -390,7 +390,27 @@ export async function evaluateOrExecute(node, candidate, flowId, redis, opts = {
         // setea una variable en memoria, por eso es idempotente y seguro re-aplicarlo al
         // reanudar un flujo pausado. Otro nodo Frase Dinámica más adelante lo sobrescribe.
         case 'frase_dinamica': {
-            opts._dynamicPhrase = typeof data.value === 'string' ? data.value : '';
+            // Vínculo en vivo: si el nodo referencia una respuesta del banco
+            // (linkedQuickReplyId), usa la frase amarilla ACTUAL de esa respuesta — así se
+            // actualiza sola al cambiarla en el banco. Lectura DIRECTA sin caché (redis.get,
+            // no getCachedConfig) para que el cambio sea INMEDIATO: la caché en memoria es por
+            // instancia serverless y no se puede invalidar de forma confiable desde el
+            // endpoint que guarda el banco (otro proceso). El costo extra (un GET) solo aplica
+            // a nodos VINCULADOS; los manuales no leen nada. Si no hay vínculo, o la respuesta
+            // ya no existe / se quedó sin frase, cae al texto manual (data.value). Sin efectos
+            // externos → idempotente al reanudar.
+            let phrase = typeof data.value === 'string' ? data.value : '';
+            if (data.linkedQuickReplyId) {
+                try {
+                    const raw = await redis.get(QUICK_REPLIES_KEY);
+                    const replies = raw ? JSON.parse(raw) : [];
+                    const qr = replies.find(r => r.id === data.linkedQuickReplyId);
+                    if (qr && typeof qr.dynamicPhrase === 'string' && qr.dynamicPhrase.trim()) {
+                        phrase = qr.dynamicPhrase;
+                    }
+                } catch (_) {}
+            }
+            opts._dynamicPhrase = phrase;
             return true;
         }
 

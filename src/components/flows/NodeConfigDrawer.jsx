@@ -515,43 +515,64 @@ const NodeConfigDrawer = ({ node, flowId, meta, quickReplies, reminderTemplates,
                     </div>
                 )}
 
-                {node.type === 'frase_dinamica' && (
+                {node.type === 'frase_dinamica' && (() => {
+                    // Vínculo EN VIVO a una frase del banco: el nodo guarda solo la referencia
+                    // (linkedQuickReplyId) y el motor lee la frase amarilla actual al enviar.
+                    // Vinculado y texto manual son excluyentes: escribir desvincula; vincular
+                    // limpia el texto. linkedQr = la respuesta referida (para preview/avisos).
+                    const linked = !!data.linkedQuickReplyId;
+                    const linkedQr = linked ? (quickReplies || []).find(r => r.id === data.linkedQuickReplyId) : null;
+                    const linkedPhrase = (linkedQr?.dynamicPhrase || '').trim();
+                    return (
                     <div>
                         <label className="text-xs text-gray-500 dark:text-gray-400 mb-2 block">Frase</label>
                         <textarea
-                            value={data.value || ''}
-                            onChange={(e) => patch({ value: e.target.value })}
-                            placeholder="Ej: Este jueves 4 de septiembre"
+                            value={linked ? linkedPhrase : (data.value || '')}
+                            onChange={(e) => patch({ value: e.target.value, linkedQuickReplyId: '' })}
+                            disabled={linked}
+                            placeholder={linked ? 'Vinculada a una frase del banco (abajo)' : 'Ej: Este jueves 4 de septiembre'}
                             rows={3}
-                            className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 dark:bg-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 resize-y"
+                            className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 dark:bg-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 resize-y disabled:opacity-60 disabled:cursor-not-allowed"
                         />
                         <p className="mt-2 text-xs text-gray-400">
                             Esta frase reemplaza el token <strong>{'{{frase dinamica}}'}</strong> en los mensajes de <strong>Mandar WhatsApp</strong> / <strong>WhatsApp Personalizado</strong> que vengan <strong>después</strong> de este nodo. Pon otro nodo Frase Dinámica más adelante para cambiar el valor de ahí en adelante.
                         </p>
 
-                        {/* Segunda opción: en vez de escribir, copiar el texto de una respuesta del
-                            banco. Solo respuestas CON texto (ubicación/audio sin mensaje no sirven).
-                            El selector es un "copiar de" (no guarda referencia): deja el texto en el
-                            campo de arriba y se puede editar; por eso su value queda siempre vacío. */}
+                        {/* Segunda opción: VINCULAR (en vivo) una frase dinámica del banco — el campo
+                            amarillo "Con qué reemplazar {{frase dinamica}}" de cada respuesta, NO su
+                            mensaje. Guarda la referencia; el motor usa la frase actual al enviar, así
+                            se actualiza sola al cambiarla en el banco. */}
                         <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700/60">
-                            <label className="text-xs text-gray-500 dark:text-gray-400 mb-2 block">O usa el texto de una respuesta del banco</label>
+                            <label className="text-xs text-gray-500 dark:text-gray-400 mb-2 block">O vincula una frase dinámica del banco (se actualiza sola)</label>
                             <FlowSelect
-                                value=""
-                                onChange={(v) => {
-                                    const qr = (quickReplies || []).find(r => r.id === v);
-                                    if (qr) patch({ value: qr.message || '' });
-                                }}
+                                value={data.linkedQuickReplyId || ''}
+                                onChange={(v) => patch({ linkedQuickReplyId: v, value: '' })}
                                 options={(quickReplies || [])
-                                    .filter(r => (r.message || '').trim())
-                                    .map(r => ({ value: r.id, label: r.name }))}
-                                placeholder="Elegir del banco de respuestas..."
+                                    .filter(r => (r.dynamicPhrase || '').trim())
+                                    .map(r => ({ value: r.id, label: `${r.name} — ${r.dynamicPhrase}` }))}
+                                placeholder="Elegir una frase del banco..."
                                 ringClass="focus:ring-violet-500"
-                                emptyLabel="No hay respuestas con texto en el banco"
+                                emptyLabel="Ninguna respuesta del banco tiene frase dinámica guardada"
                             />
-                            <p className="mt-1 text-xs text-gray-400">Copia el texto de esa respuesta en el campo de arriba; puedes editarlo después.</p>
+                            {linked ? (
+                                linkedPhrase ? (
+                                    <p className="mt-1.5 text-xs text-violet-500 dark:text-violet-400 leading-snug">
+                                        🔗 Vinculada a <strong>«{linkedQr.name}»</strong> — se actualiza sola si cambias esta frase en el banco.{' '}
+                                        <button type="button" onClick={() => patch({ linkedQuickReplyId: '' })} className="underline hover:no-underline">Desvincular</button>
+                                    </p>
+                                ) : (
+                                    <p className="mt-1.5 text-xs text-red-500 leading-snug">
+                                        ⚠️ La respuesta vinculada ya no existe o se quedó sin frase.{' '}
+                                        <button type="button" onClick={() => patch({ linkedQuickReplyId: '' })} className="underline hover:no-underline">Desvincular</button>
+                                    </p>
+                                )
+                            ) : (
+                                <p className="mt-1 text-xs text-gray-400">Al vincular, el nodo usa siempre la frase actual de esa respuesta del banco.</p>
+                            )}
                         </div>
                     </div>
-                )}
+                    );
+                })()}
 
                 {node.type === 'accion_vacante' && (
                     <div>
