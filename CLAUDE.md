@@ -2,6 +2,8 @@
 
 Plataforma de reclutamiento por WhatsApp. Un bot con IA ("Brenda") conversa con candidatos, extrae sus datos (nombre, edad, municipio, escolaridad, categoría, colonia, experiencia), y un equipo de reclutadores humanos da seguimiento desde un dashboard tipo WhatsApp Web.
 
+> **Herramientas de desarrollo:** Candidatic se construye únicamente con **Claude dentro de Antigravity**. Ya **no se usa Codex** (dejó de usarse en agosto 2026). Las menciones a Codex en `docs/auditoria-consumo-recordatorios-claude.md` son registro histórico de auditorías pasadas — no reflejan el flujo actual.
+
 ## Stack
 
 - **Frontend:** React + Vite, Tailwind, `react-virtuoso` para listas largas (candidatos, mensajes de chat).
@@ -109,6 +111,6 @@ El botón flotante `FloatingCopilot.jsx` (burbuja "Brenda IA" en el dashboard, p
 ```
 git add <archivos específicos>
 git commit -m "..."
-git fetch origin main   # confirmar que no hay commits nuevos de otra sesión (Codex corre en paralelo a veces)
+git fetch origin main   # confirmar que no hay commits nuevos de otra sesión de Claude/Antigravity corriendo en paralelo
 git push origin main    # esto YA despliega a producción — no corras vercel --prod después
 ```
