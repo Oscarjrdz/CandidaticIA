@@ -1969,6 +1969,23 @@ export const updateCandidate = async (id, data) => {
                         1,
                         UNTAGGED_COUNT_KEY
                     );
+                    // Contador DIARIO de "sin etiqueta" (tarjeta del tablero de Flujos): al
+                    // crearse sin etiqueta se sumó +1 en el bucket del día de CREACIÓN. Cuando la
+                    // etiqueta de anuncio se asigna aquí (segundos después), hay que revertir ese
+                    // +1 en el MISMO bucket — si no, el candidato queda contado a la vez en "Sin
+                    // etiqueta" Y en su etiqueta (doble conteo). Guardado para no bajar de 0.
+                    const rawCreated = candidate.createdAt || candidate.primerContacto;
+                    if (rawCreated) {
+                        const parsedCreated = new Date(rawCreated);
+                        const untaggedDateKey = (Number.isNaN(parsedCreated.getTime()) ? new Date() : parsedCreated)
+                            .toLocaleDateString('sv-SE', { timeZone: 'America/Monterrey' });
+                        p.eval(
+                            "local c = tonumber(redis.call('HGET', KEYS[1], ARGV[1]) or '0'); if c > 0 then return redis.call('HINCRBY', KEYS[1], ARGV[1], -1); end; return c;",
+                            1,
+                            'stats:daily:captures:untagged',
+                            untaggedDateKey
+                        );
+                    }
                 }
                 if (!wasUntagged && isUntagged) p.incr(UNTAGGED_COUNT_KEY);
                 p.exec().catch(() => {});
