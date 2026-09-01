@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Handle, Position, NodeToolbar, NodeResizer } from '@xyflow/react';
-import { X, Play, Loader2, Check, RefreshCw, Minus, Plus } from 'lucide-react';
+import { X, Play, Loader2, Check, RefreshCw, Minus, Plus, Lock, LockOpen } from 'lucide-react';
 import { NODE_DEFS, COLOR_CLASSES } from './nodeDefs';
 
 // #RRGGBB (o #RGB) + alpha → rgba(). Para pintar el fondo del BG con su transparencia.
@@ -16,6 +16,26 @@ function hexToRgba(hex, alpha) {
 const BG_COLORS = ['#6366f1', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#64748b'];
 const TEXT_COLORS = ['#111827', '#ffffff', '#6366f1', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#ec4899'];
 
+// Candado discreto por nodo: SOLO se ve al pasar el mouse (opacity-0 group-hover:opacity-100),
+// para no ensuciar la vista. Cerrado = el nodo no se mueve ni se edita (el editor aplica
+// draggable/deletable/readOnly según data.locked). El estado se guarda por usuario en Redis.
+// El contenedor del nodo debe tener la clase `group` para el hover.
+const LockToggle = ({ id, locked, onToggleLock }) => {
+    if (!onToggleLock) return null;
+    const Icon = locked ? Lock : LockOpen;
+    return (
+        <button
+            onClick={(e) => { e.stopPropagation(); onToggleLock(id); }}
+            className={`nodrag absolute -top-2 -left-2 w-5 h-5 rounded-full flex items-center justify-center shadow z-20 opacity-0 group-hover:opacity-100 transition-opacity ${
+                locked ? 'bg-gray-800 text-white' : 'bg-white text-gray-500 border border-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600'
+            }`}
+            title={locked ? 'Bloqueado — clic para desbloquear (podrás moverlo y editarlo)' : 'Bloquear: no se moverá ni se editará'}
+        >
+            <Icon className="w-3 h-3" />
+        </button>
+    );
+};
+
 // ── Elemento decorativo "Fondo de sección" (bg) ────────────────────────────────
 // Caja de color semitransparente y redimensionable que va DETRÁS de los nodos (su zIndex
 // lo fija FlowEditor). El motor la ignora (sin handles). Estilo en un menú flotante que
@@ -23,12 +43,14 @@ const TEXT_COLORS = ['#111827', '#ffffff', '#6366f1', '#3b82f6', '#10b981', '#f5
 const BgNode = ({ id, data, selected }) => {
     const color = data.color || '#6366f1';
     const opacity = typeof data.opacity === 'number' ? data.opacity : 0.14;
+    const locked = !!data.locked;
     const change = (patch) => data.onElementChange?.(id, patch);
     return (
         <>
-            <NodeResizer isVisible={selected} minWidth={120} minHeight={80}
+            {/* Bloqueado: sin manijas de redimensionar ni menú de estilo (no se edita). */}
+            <NodeResizer isVisible={selected && !locked} minWidth={120} minHeight={80}
                 lineClassName="!border-gray-400" handleClassName="!bg-white !border-2 !border-gray-400 !w-2.5 !h-2.5 !rounded-sm" />
-            <NodeToolbar isVisible={selected} position={Position.Top}
+            <NodeToolbar isVisible={selected && !locked} position={Position.Top}
                 className="flex items-center gap-2 bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 px-2 py-1.5">
                 <div className="flex items-center gap-1">
                     {BG_COLORS.map(c => (
@@ -48,8 +70,11 @@ const BgNode = ({ id, data, selected }) => {
                     <X className="w-4 h-4" />
                 </button>
             </NodeToolbar>
-            <div className="w-full h-full rounded-2xl border-2 border-dashed"
-                style={{ backgroundColor: hexToRgba(color, opacity), borderColor: hexToRgba(color, Math.min(1, opacity + 0.4)) }} />
+            <div className="group relative w-full h-full">
+                <LockToggle id={id} locked={locked} onToggleLock={data.onToggleLock} />
+                <div className="w-full h-full rounded-2xl border-2 border-dashed"
+                    style={{ backgroundColor: hexToRgba(color, opacity), borderColor: hexToRgba(color, Math.min(1, opacity + 0.4)) }} />
+            </div>
         </>
     );
 };
@@ -61,12 +86,13 @@ const TextoNode = ({ id, data, selected }) => {
     const [editing, setEditing] = useState(false);
     const fontSize = Number(data.fontSize) || 18;
     const color = data.color || '#111827';
+    const locked = !!data.locked;
     const change = (patch) => data.onElementChange?.(id, patch);
     return (
         <>
-            <NodeResizer isVisible={selected} minWidth={60} minHeight={28}
+            <NodeResizer isVisible={selected && !locked} minWidth={60} minHeight={28}
                 lineClassName="!border-gray-400" handleClassName="!bg-white !border-2 !border-gray-400 !w-2.5 !h-2.5 !rounded-sm" />
-            <NodeToolbar isVisible={selected} position={Position.Top}
+            <NodeToolbar isVisible={selected && !locked} position={Position.Top}
                 className="flex items-center gap-2 bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 px-2 py-1.5">
                 <div className="flex items-center gap-1">
                     <button type="button" onClick={() => change({ fontSize: Math.max(10, fontSize - 2) })}
@@ -91,27 +117,30 @@ const TextoNode = ({ id, data, selected }) => {
                     <X className="w-4 h-4" />
                 </button>
             </NodeToolbar>
-            {editing ? (
-                <textarea
-                    autoFocus
-                    value={data.text || ''}
-                    onChange={(e) => change({ text: e.target.value })}
-                    onBlur={() => setEditing(false)}
-                    onClick={(e) => e.stopPropagation()}
-                    placeholder="Escribe aquí…"
-                    className="nodrag nowheel w-full h-full resize-none bg-transparent focus:outline-none leading-snug font-semibold"
-                    style={{ fontSize, color }}
-                />
-            ) : (
-                <div
-                    onDoubleClick={() => setEditing(true)}
-                    className="w-full h-full whitespace-pre-wrap break-words cursor-move leading-snug font-semibold"
-                    style={{ fontSize, color }}
-                    title="Doble-click para editar"
-                >
-                    {data.text?.trim() ? data.text : <span className="opacity-40">Doble-click para editar</span>}
-                </div>
-            )}
+            <div className="group relative w-full h-full">
+                <LockToggle id={id} locked={locked} onToggleLock={data.onToggleLock} />
+                {editing && !locked ? (
+                    <textarea
+                        autoFocus
+                        value={data.text || ''}
+                        onChange={(e) => change({ text: e.target.value })}
+                        onBlur={() => setEditing(false)}
+                        onClick={(e) => e.stopPropagation()}
+                        placeholder="Escribe aquí…"
+                        className="nodrag nowheel w-full h-full resize-none bg-transparent focus:outline-none leading-snug font-semibold"
+                        style={{ fontSize, color }}
+                    />
+                ) : (
+                    <div
+                        onDoubleClick={locked ? undefined : () => setEditing(true)}
+                        className={`w-full h-full whitespace-pre-wrap break-words leading-snug font-semibold ${locked ? 'cursor-default' : 'cursor-move'}`}
+                        style={{ fontSize, color }}
+                        title={locked ? 'Bloqueado' : 'Doble-click para editar'}
+                    >
+                        {data.text?.trim() ? data.text : <span className="opacity-40">{locked ? 'Texto' : 'Doble-click para editar'}</span>}
+                    </div>
+                )}
+            </div>
         </>
     );
 };
@@ -236,12 +265,14 @@ const InicioListaBody = ({ id, data, summary }) => {
 // Al hacer click NO abre el drawer de config — solo se edita en línea.
 const NotaNode = ({ id, data, selected }) => {
     const Icon = NODE_DEFS.nota.icon;
+    const locked = !!data.locked;
     return (
         <div
             className={`group relative w-56 rounded-md shadow-md transition-shadow bg-amber-100 dark:bg-amber-100 border border-amber-300/70 dark:border-amber-400/40 ${selected ? 'ring-2 ring-amber-500' : ''}`}
             style={{ boxShadow: '0 6px 14px -6px rgba(0,0,0,0.35)' }}
         >
-            {data.onDelete && (
+            <LockToggle id={id} locked={locked} onToggleLock={data.onToggleLock} />
+            {data.onDelete && !locked && (
                 <button
                     onClick={(e) => { e.stopPropagation(); data.onDelete(id); }}
                     className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-gray-700 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600 z-10"
@@ -251,7 +282,7 @@ const NotaNode = ({ id, data, selected }) => {
                 </button>
             )}
             {/* Franja superior = zona de agarre para arrastrar la nota */}
-            <div className="flex items-center gap-1.5 px-2.5 pt-2 pb-1 cursor-move text-amber-700">
+            <div className={`flex items-center gap-1.5 px-2.5 pt-2 pb-1 text-amber-700 ${locked ? 'cursor-default' : 'cursor-move'}`}>
                 <Icon className="w-3.5 h-3.5" />
                 <span className="text-[11px] font-semibold uppercase tracking-wide">Nota</span>
             </div>
@@ -259,6 +290,7 @@ const NotaNode = ({ id, data, selected }) => {
                 value={data.text || ''}
                 onChange={(e) => data.onNotaChange?.(id, e.target.value)}
                 onClick={(e) => e.stopPropagation()}
+                readOnly={locked}
                 placeholder="Escribe aquí qué hace esta parte del flujo…"
                 rows={4}
                 className="nodrag nowheel w-full resize-none bg-transparent px-2.5 pb-2.5 pt-0 text-sm leading-snug text-amber-900 placeholder:text-amber-600/60 focus:outline-none"
@@ -279,19 +311,21 @@ const FlowNode = ({ id, type, data, selected }) => {
     if (type === 'texto') return <TextoNode id={id} data={data} selected={selected} />;
 
     const testRing = data.testPassed === true ? 'ring-2 ring-emerald-400' : data.testPassed === false ? 'ring-2 ring-gray-300 dark:ring-gray-600' : '';
+    const locked = !!data.locked;
 
     return (
         <div
-            className={`group relative w-60 rounded-2xl border-2 shadow-sm transition-shadow ${colors.bg} ${isTest ? '' : 'cursor-pointer'} ${selected ? 'border-gray-900 dark:border-white shadow-md' : colors.border} ${testRing}`}
-            onClick={isTest ? undefined : () => data.onConfigure?.(id)}
+            className={`group relative w-60 rounded-2xl border-2 shadow-sm transition-shadow ${colors.bg} ${(isTest || locked) ? 'cursor-default' : 'cursor-pointer'} ${selected ? 'border-gray-900 dark:border-white shadow-md' : colors.border} ${testRing}`}
+            onClick={(isTest || locked) ? undefined : () => data.onConfigure?.(id)}
         >
             <TestResultBadge testPassed={data.testPassed} />
+            <LockToggle id={id} locked={locked} onToggleLock={data.onToggleLock} />
 
             {def.hasTarget && (
                 <Handle type="target" position={Position.Left} className="!w-3 !h-3 !bg-gray-400 !border-2 !border-white dark:!border-gray-900" />
             )}
 
-            {data.onDelete && type !== 'inicio' && type !== 'inicio_lista' && type !== 'inicio_incompleto_silencio' && (
+            {data.onDelete && !locked && type !== 'inicio' && type !== 'inicio_lista' && type !== 'inicio_incompleto_silencio' && (
                 <button
                     onClick={(e) => { e.stopPropagation(); data.onDelete(id); }}
                     className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-gray-700 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600 z-10"

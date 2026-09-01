@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
     ReactFlow, ReactFlowProvider, Background, Controls, MiniMap,
     addEdge, applyNodeChanges, applyEdgeChanges, BackgroundVariant,
@@ -7,6 +7,8 @@ import {
 import { Copy, Trash2 } from 'lucide-react';
 import '@xyflow/react/dist/style.css';
 import { useToastContext } from '../../contexts/ToastContext';
+import { useAuthContext } from '../../contexts/AuthContext';
+import { getFlowLocks, toggleNodeLock, initFlowLocksIfNeeded } from '../../utils/nodeLocks';
 import { getFlow, updateFlow, getFlowsMeta, getFlowCounters, getQuickReplies, getReminderTemplates, getManualProjects, testFlow, getFilteredFlowCandidates, runFlowListItem } from '../../services/flowsService';
 import { flowNodeTypes, COLOR_CLASSES, NODE_DEFS } from './nodeTypes';
 import FlowEdge from './edgeTypes/FlowEdge';
@@ -58,11 +60,18 @@ const stripTransientData = (data = {}) => {
 // tiene una sola raíz). IDs nuevos siempre, para no chocar con los existentes.
 const CLIPBOARD_KEY = 'flow_editor_clipboard_v1';
 const ENTRY_TYPES = new Set(['inicio', 'inicio_lista', 'inicio_incompleto_silencio']);
+const EMPTY_LOCKS = {}; // ref estable para el default de candados (evita recalcular el memo)
 const genNodeId = () => `n_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 const genEdgeId = () => `e${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
 const FlowEditorInner = ({ flowId, onBack }) => {
     const { showToast } = useToastContext();
+    const { user, setUser } = useAuthContext();
+    // Ref al usuario actual: la migración de candados corre dentro del efecto de carga
+    // (deps [flowId]); leer por ref evita meter `user` a las deps (recargaría el flujo en
+    // cada toggle) y evita cierre obsoleto.
+    const userRef = useRef(user);
+    userRef.current = user;
     const [flowMeta, setFlowMeta] = useState({ name: '', active: false });
     const [nodes, setNodes] = useState([]);
     const [edges, setEdges] = useState([]);
@@ -125,6 +134,22 @@ const FlowEditorInner = ({ flowId, onBack }) => {
         setDirty(true);
     }, []);
 
+    // Candado POR USUARIO POR NODO: no es parte del flujo (compartido) sino de las
+    // preferencias del reclutador (user.preferences.flowNodeLocks[flowId][nodeId] = true).
+    // Mismo patrón de persistencia que el banco de respuestas / orden de columnas: se
+    // manda el objeto `preferences` COMPLETO porque saveUser mergea shallow al top-level.
+    // NO usa setDirty: el candado se guarda solo, aparte del guardado del flujo.
+    const handleToggleLock = useCallback((nodeId) => {
+        if (!user?.id) return;
+        const nextPreferences = toggleNodeLock(user.preferences, flowId, nodeId);
+        setUser(prev => prev ? { ...prev, preferences: nextPreferences } : prev);
+        fetch('/api/users', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: user.id, preferences: nextPreferences })
+        }).catch(() => {});
+    }, [user, setUser, flowId]);
+
     const hydrateNode = useCallback((n) => ({
         ...n,
         // Los nodos de inicio no se pueden borrar (ni con Suprimir ni con la caja de selección):
@@ -166,6 +191,21 @@ const FlowEditorInner = ({ flowId, onBack }) => {
             setFlowMeta({ name: flow.name, active: !!flow.active });
             const loadedNodes = (flow.nodes || []).map(n => hydrateNode(n));
             setNodes(loadedNodes);
+            // Migración una-sola-vez: los nodos que YA existían nacen CERRADOS (protege lo ya
+            // hecho); los que se agreguen después nacen abiertos. No hace nada si este flujo ya
+            // se inicializó para este usuario (aunque los haya abierto todos a mano).
+            const u = userRef.current;
+            if (u?.id) {
+                const { preferences: nextPreferences, changed } = initFlowLocksIfNeeded(u.preferences, flowId, loadedNodes.map(n => n.id));
+                if (changed) {
+                    setUser(prev => prev ? { ...prev, preferences: nextPreferences } : prev);
+                    fetch('/api/users', {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ id: u.id, preferences: nextPreferences })
+                    }).catch(() => {});
+                }
+            }
             // Migración visual: las aristas guardadas ANTES de que existieran los nodos con
             // rama (Sí/No) no tienen sourceHandle. Ahora los nodos "branching" pintan dos
             // handles con id ('si'/'no'); una arista sin handle no se conectaría a ninguno.
@@ -346,9 +386,10 @@ const FlowEditorInner = ({ flowId, onBack }) => {
 
     // BORRAR: elimina los nodos seleccionados (menos inicios) y sus aristas.
     const handleDeleteSelection = useCallback(() => {
+        const locks = getFlowLocks(user?.preferences, flowId);
         const idSet = new Set(selectedIds.filter(id => {
             const n = nodes.find(x => x.id === id);
-            return n && !ENTRY_TYPES.has(n.type);
+            return n && !ENTRY_TYPES.has(n.type) && !locks[id]; // los bloqueados no se borran
         }));
         if (!idSet.size) { showToast('Los nodos de inicio no se pueden borrar', 'error'); return; }
         setNodes(nds => nds.filter(n => !idSet.has(n.id)));
@@ -357,7 +398,7 @@ const FlowEditorInner = ({ flowId, onBack }) => {
         setSelMenu(null);
         setSelectedIds([]);
         showToast(`Borrados ${idSet.size} nodo(s)`, 'success');
-    }, [selectedIds, nodes, showToast]);
+    }, [selectedIds, nodes, showToast, user, flowId]);
 
     // PEGAR: inserta el contenido del portapapeles en ESTE flujo (IDs nuevos + offset).
     const handlePaste = useCallback(() => {
@@ -547,6 +588,21 @@ const FlowEditorInner = ({ flowId, onBack }) => {
 
     const selectedNode = nodes.find(n => n.id === selectedNodeId) || null;
 
+    // Candados del usuario para ESTE flujo. displayNodes inyecta a cada nodo su estado de
+    // candado (data.locked + onToggleLock) y, si está cerrado, lo hace no-arrastrable y
+    // no-borrable. onNodesChange sigue aplicando los cambios sobre `nodes` (base); esto es
+    // solo la capa de render. Los nodos de inicio nunca son borrables (ya lo eran).
+    const nodeLocks = user?.preferences?.flowNodeLocks?.[flowId] || EMPTY_LOCKS; // getFlowLocks devuelve {} nuevo; aquí usamos ref estable para el memo
+    const displayNodes = useMemo(() => nodes.map(n => {
+        const locked = !!nodeLocks[n.id];
+        return {
+            ...n,
+            draggable: !locked,
+            deletable: ENTRY_TYPES.has(n.type) ? false : !locked,
+            data: { ...n.data, locked, onToggleLock: handleToggleLock }
+        };
+    }), [nodes, nodeLocks, handleToggleLock]);
+
     if (loading) {
         return <div className="h-full flex items-center justify-center text-gray-400 text-sm">Cargando flujo...</div>;
     }
@@ -568,7 +624,7 @@ const FlowEditorInner = ({ flowId, onBack }) => {
             />
 
             <ReactFlow
-                nodes={nodes}
+                nodes={displayNodes}
                 edges={edges}
                 onNodesChange={onNodesChange}
                 onEdgesChange={onEdgesChange}
