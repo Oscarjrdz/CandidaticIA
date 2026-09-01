@@ -1952,16 +1952,28 @@ export const updateCandidate = async (id, data) => {
                 const p = tc.pipeline();
                 added.forEach(t => p.hincrby('candidatic:tag_counts', t, 1));
                 removed.forEach(t => p.hincrby('candidatic:tag_counts', t, -1));
-                // Altas por ETIQUETA y día (para "cuántos de Yageo llegaron hoy"), sumado
-                // también aquí y no solo al crearse (ver saveCandidate): en la práctica las
-                // etiquetas de anuncio se asignan en un updateCandidate() posterior a la
-                // creación, así que el contador de creación casi nunca las veía — quedaba
-                // en 0 aunque el candidato sí tuviera la etiqueta. Se cuenta el día en que
-                // se ASIGNA la etiqueta (no el de creación del candidato), mismo pipeline
-                // ya en vuelo — no agrega ninguna llamada extra a Redis.
-                if (added.length) {
-                    const tagDateKey = new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Monterrey' });
-                    added.forEach(t => p.hincrby(`stats:daily:captures:tag:${t}`, tagDateKey, 1));
+                // Altas por ETIQUETA y día (tablero de Flujos): las etiquetas de anuncio se
+                // asignan en un updateCandidate() posterior a la creación, así que el contador
+                // se mantiene también aquí. TODO se imputa al bucket del día de CREACIÓN del
+                // candidato (no al de hoy) para que sea CONSISTENTE con el total del día
+                // (stats:daily:captures) y con el contador de "sin etiqueta": así siempre se
+                // cumple suma(tiles) + sin_etiqueta = total del día. Simétrico: al AGREGAR una
+                // etiqueta suma, al QUITARLA (re-etiquetado) resta — si no, la etiqueta vieja
+                // queda inflada para siempre. Todo en el mismo pipeline ya en vuelo.
+                const rawCreated = candidate.createdAt || candidate.primerContacto;
+                const creationDateKey = rawCreated
+                    ? (Number.isNaN(new Date(rawCreated).getTime()) ? new Date() : new Date(rawCreated))
+                        .toLocaleDateString('sv-SE', { timeZone: 'America/Monterrey' })
+                    : null;
+                if (creationDateKey) {
+                    added.forEach(t => p.hincrby(`stats:daily:captures:tag:${t}`, creationDateKey, 1));
+                    // Guardado para no bajar de 0 en cada campo del hash.
+                    removed.forEach(t => p.eval(
+                        "local c = tonumber(redis.call('HGET', KEYS[1], ARGV[1]) or '0'); if c > 0 then return redis.call('HINCRBY', KEYS[1], ARGV[1], -1); end; return c;",
+                        1,
+                        `stats:daily:captures:tag:${t}`,
+                        creationDateKey
+                    ));
                 }
                 if (wasUntagged && !isUntagged) {
                     p.eval(
@@ -1969,25 +1981,24 @@ export const updateCandidate = async (id, data) => {
                         1,
                         UNTAGGED_COUNT_KEY
                     );
-                    // Contador DIARIO de "sin etiqueta" (tarjeta del tablero de Flujos): al
-                    // crearse sin etiqueta se sumó +1 en el bucket del día de CREACIÓN. Cuando la
-                    // etiqueta de anuncio se asigna aquí (segundos después), hay que revertir ese
-                    // +1 en el MISMO bucket — si no, el candidato queda contado a la vez en "Sin
-                    // etiqueta" Y en su etiqueta (doble conteo). Guardado para no bajar de 0.
-                    const rawCreated = candidate.createdAt || candidate.primerContacto;
-                    if (rawCreated) {
-                        const parsedCreated = new Date(rawCreated);
-                        const untaggedDateKey = (Number.isNaN(parsedCreated.getTime()) ? new Date() : parsedCreated)
-                            .toLocaleDateString('sv-SE', { timeZone: 'America/Monterrey' });
+                    // Contador DIARIO de "sin etiqueta": al crearse sin etiqueta se sumó +1 en el
+                    // bucket del día de CREACIÓN. Al asignarle etiqueta hay que revertir ese +1 en
+                    // el MISMO bucket — si no, el candidato queda contado a la vez en "Sin etiqueta"
+                    // Y en su etiqueta. Guardado para no bajar de 0.
+                    if (creationDateKey) {
                         p.eval(
                             "local c = tonumber(redis.call('HGET', KEYS[1], ARGV[1]) or '0'); if c > 0 then return redis.call('HINCRBY', KEYS[1], ARGV[1], -1); end; return c;",
                             1,
                             'stats:daily:captures:untagged',
-                            untaggedDateKey
+                            creationDateKey
                         );
                     }
                 }
-                if (!wasUntagged && isUntagged) p.incr(UNTAGGED_COUNT_KEY);
+                // Volvió a quedar SIN etiqueta (le quitaron todas): re-suma al bucket del día.
+                if (!wasUntagged && isUntagged) {
+                    p.incr(UNTAGGED_COUNT_KEY);
+                    if (creationDateKey) p.hincrby('stats:daily:captures:untagged', creationDateKey, 1);
+                }
                 p.exec().catch(() => {});
             }
         }
