@@ -8,4 +8,4 @@ export const flowNodeTypes = Object.keys(NODE_DEFS).reduce((acc, type) => {
     return acc;
 }, {});
 
-export { NODE_DEFS, COLOR_CLASSES, PROFILE_FILTER_LABELS, ETIQUETA_MODE_LABELS, GENEROS } from './nodeDefs';
+export { NODE_DEFS, COLOR_CLASSES, PROFILE_FILTER_LABELS, ETIQUETA_MODE_LABELS, GENEROS, ELEMENT_TYPES } from './nodeDefs';

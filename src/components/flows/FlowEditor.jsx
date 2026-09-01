@@ -37,7 +37,10 @@ const DEFAULT_DATA_BY_TYPE = {
     esperando_respuesta: { grupos: [{ id: 'g1', label: '', frases: [] }], matchMode: 'contiene', timeoutHoras: 48 },
     contador: { label: '' },
     test: { testPhone: '' },
-    nota: { text: '' }
+    nota: { text: '' },
+    // Elementos decorativos (el motor los ignora, van a la par de "Agregar nodo"):
+    bg: { color: '#6366f1', opacity: 0.14 },              // fondo de sección: color + transparencia
+    texto: { text: '', fontSize: 18, color: '#111827' }    // texto libre: contenido + tamaño + color
 };
 
 const stripTransientData = (data = {}) => {
@@ -114,22 +117,35 @@ const FlowEditorInner = ({ flowId, onBack }) => {
         setDirty(true);
     }, []);
 
+    // Cambios de estilo/contenido de los elementos decorativos (bg / texto): color,
+    // transparencia, tamaño de letra, texto. Igual que handleNodeConfigChange pero definido
+    // antes de hydrateNode para poder inyectarlo en node.data sin caer en TDZ.
+    const handleElementChange = useCallback((nodeId, patch) => {
+        setNodes(nds => nds.map(n => n.id === nodeId ? { ...n, data: { ...n.data, ...patch } } : n));
+        setDirty(true);
+    }, []);
+
     const hydrateNode = useCallback((n) => ({
         ...n,
         // Los nodos de inicio no se pueden borrar (ni con Suprimir ni con la caja de selección):
         // borrar la raíz corrompería el flujo. Su botón X ya venía oculto en FlowNode.
         deletable: !ENTRY_TYPES.has(n.type),
+        // z-index por banda: el fondo (bg) SIEMPRE detrás, el texto encima de todo, los
+        // nodos funcionales en medio. Con elevateNodesOnSelect desactivado, seleccionar un bg
+        // para recolorearlo no lo trae al frente tapando los nodos (igual que n8n).
+        zIndex: n.zIndex ?? (n.type === 'bg' ? 0 : n.type === 'texto' ? 20 : 10),
         data: {
             ...n.data,
             onConfigure: handleConfigure,
             onDelete: handleDeleteNode,
             onTestPhoneChange: handleTestPhoneChange,
             onNotaChange: handleNotaChange,
+            onElementChange: handleElementChange,
             onTestRun: (nodeId, phone) => handleTestRunRef.current?.(nodeId, phone),
             onLoadList: (nodeId) => handleLoadListRef.current?.(nodeId),
             onRunList: (nodeId) => handleRunListRef.current?.(nodeId)
         }
-    }), [handleConfigure, handleDeleteNode, handleTestPhoneChange, handleNotaChange]);
+    }), [handleConfigure, handleDeleteNode, handleTestPhoneChange, handleNotaChange, handleElementChange]);
 
     useEffect(() => {
         let cancelled = false;
@@ -229,12 +245,18 @@ const FlowEditorInner = ({ flowId, onBack }) => {
         setNodes(nds => {
             const last = nds[nds.length - 1];
             const position = last ? { x: last.position.x, y: last.position.y + 160 } : { x: 420, y: 80 };
-            const newNode = hydrateNode({
+            const base = {
                 id: `n_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
                 type,
                 position,
                 data: { ...(DEFAULT_DATA_BY_TYPE[type] || {}) }
-            });
+            };
+            // Tamaño inicial de los elementos decorativos (redimensionables con NodeResizer):
+            // el fondo nace amplio (es una "sección"); el texto una caja chica. hydrateNode
+            // fija el zIndex por tipo.
+            if (type === 'bg') { base.width = 340; base.height = 220; }
+            else if (type === 'texto') { base.width = 220; base.height = 60; }
+            const newNode = hydrateNode(base);
             return [...nds, newNode];
         });
         setDirty(true);
@@ -377,7 +399,14 @@ const FlowEditorInner = ({ flowId, onBack }) => {
     const handleSave = useCallback(async ({ silent = false } = {}) => {
         setSaving(true);
         const payload = {
-            nodes: nodes.map(n => ({ id: n.id, type: n.type, position: n.position, data: stripTransientData(n.data) })),
+            nodes: nodes.map(n => ({
+                id: n.id, type: n.type, position: n.position, data: stripTransientData(n.data),
+                // Tamaño (redimensionado con NodeResizer) y capa de los elementos bg/texto —
+                // sin esto, el tamaño se perdería al recargar. Solo se guardan si existen.
+                ...(typeof n.width === 'number' ? { width: n.width } : {}),
+                ...(typeof n.height === 'number' ? { height: n.height } : {}),
+                ...(typeof n.zIndex === 'number' ? { zIndex: n.zIndex } : {})
+            })),
             edges: edges.map(e => ({ id: e.id, source: e.source, target: e.target, sourceHandle: e.sourceHandle ?? null, targetHandle: e.targetHandle ?? null }))
         };
         const res = await updateFlow(flowId, payload);
@@ -550,6 +579,9 @@ const FlowEditorInner = ({ flowId, onBack }) => {
                 fitView
                 minZoom={0.2}
                 maxZoom={1.5}
+                /* Sin elevar al seleccionar: mantiene el fondo (bg) SIEMPRE detrás según su
+                   zIndex por banda, incluso cuando lo seleccionas para recolorearlo. */
+                elevateNodesOnSelect={false}
                 /* Controles por defecto: clic izquierdo panea. La selección múltiple es con
                    Shift+arrastrar (caja) o Shift+clic (agregar nodos). */
                 defaultEdgeOptions={{ style: { stroke: '#a5b4fc', strokeWidth: 2 }, animated: false }}

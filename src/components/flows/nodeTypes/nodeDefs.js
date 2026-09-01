@@ -1,4 +1,4 @@
-import { Play, Tag, CalendarRange, MapPin, Briefcase, GraduationCap, MessageCircle, Hash, UserRound, CircleMinus, BellRing, FolderKanban, FlaskConical, Eraser, Filter, MessageSquareText, ListChecks, CheckCheck, BotOff, Bot, Ear, AlarmClock, StickyNote, Quote } from 'lucide-react';
+import { Play, Tag, CalendarRange, MapPin, Briefcase, GraduationCap, MessageCircle, Hash, UserRound, CircleMinus, BellRing, FolderKanban, FlaskConical, Eraser, Filter, MessageSquareText, ListChecks, CheckCheck, BotOff, Bot, Ear, AlarmClock, StickyNote, Quote, Square, Type } from 'lucide-react';
 
 export const PROFILE_FILTER_LABELS = {
     active: 'Activos (no bloqueados)',
@@ -267,5 +267,30 @@ export const NODE_DEFS = {
         hasTarget: false,
         hasSource: false,
         summary: (data) => data.text?.trim() ? data.text : 'Escribe aquí una nota…'
+    },
+    // Elementos decorativos (van con iconos aparte de "Agregar nodo", no en el desplegable).
+    // Sin handles → el motor nunca los alcanza, igual que la Nota. Se renderizan especial en
+    // FlowNode (fondo redimensionable / texto libre) con su propio menú flotante.
+    bg: {
+        label: 'Fondo',
+        icon: Square,
+        color: 'gray',
+        hasTarget: false,
+        hasSource: false,
+        isElement: true,
+        summary: () => 'Fondo de sección'
+    },
+    texto: {
+        label: 'Texto',
+        icon: Type,
+        color: 'gray',
+        hasTarget: false,
+        hasSource: false,
+        isElement: true,
+        summary: (data) => data.text?.trim() ? data.text : 'Texto'
     }
 };
+
+// Tipos "elemento" (decorativos): se agregan con iconos propios, NO aparecen en el
+// desplegable "Agregar nodo".
+export const ELEMENT_TYPES = Object.keys(NODE_DEFS).filter(t => NODE_DEFS[t].isElement);

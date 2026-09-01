@@ -1,7 +1,120 @@
-import React from 'react';
-import { Handle, Position } from '@xyflow/react';
-import { X, Play, Loader2, Check, RefreshCw } from 'lucide-react';
+import React, { useState } from 'react';
+import { Handle, Position, NodeToolbar, NodeResizer } from '@xyflow/react';
+import { X, Play, Loader2, Check, RefreshCw, Minus, Plus } from 'lucide-react';
 import { NODE_DEFS, COLOR_CLASSES } from './nodeDefs';
+
+// #RRGGBB (o #RGB) + alpha → rgba(). Para pintar el fondo del BG con su transparencia.
+function hexToRgba(hex, alpha) {
+    const h = String(hex || '#6366f1').replace('#', '');
+    const n = h.length === 3 ? h.split('').map(c => c + c).join('') : h;
+    const r = parseInt(n.slice(0, 2), 16) || 0;
+    const g = parseInt(n.slice(2, 4), 16) || 0;
+    const b = parseInt(n.slice(4, 6), 16) || 0;
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+const BG_COLORS = ['#6366f1', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#64748b'];
+const TEXT_COLORS = ['#111827', '#ffffff', '#6366f1', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#ec4899'];
+
+// ── Elemento decorativo "Fondo de sección" (bg) ────────────────────────────────
+// Caja de color semitransparente y redimensionable que va DETRÁS de los nodos (su zIndex
+// lo fija FlowEditor). El motor la ignora (sin handles). Estilo en un menú flotante que
+// la acompaña (NodeToolbar), tamaño arrastrando las esquinas (NodeResizer).
+const BgNode = ({ id, data, selected }) => {
+    const color = data.color || '#6366f1';
+    const opacity = typeof data.opacity === 'number' ? data.opacity : 0.14;
+    const change = (patch) => data.onElementChange?.(id, patch);
+    return (
+        <>
+            <NodeResizer isVisible={selected} minWidth={120} minHeight={80}
+                lineClassName="!border-gray-400" handleClassName="!bg-white !border-2 !border-gray-400 !w-2.5 !h-2.5 !rounded-sm" />
+            <NodeToolbar isVisible={selected} position={Position.Top}
+                className="flex items-center gap-2 bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 px-2 py-1.5">
+                <div className="flex items-center gap-1">
+                    {BG_COLORS.map(c => (
+                        <button key={c} type="button" onClick={() => change({ color: c })}
+                            className={`w-5 h-5 rounded-full transition-transform hover:scale-110 ${color === c ? 'ring-2 ring-offset-1 ring-gray-500 dark:ring-offset-gray-800' : 'border border-black/10'}`}
+                            style={{ backgroundColor: c }} title="Color del fondo" />
+                    ))}
+                </div>
+                <div className="flex items-center gap-1.5 pl-2 border-l border-gray-200 dark:border-gray-700">
+                    <span className="text-[10px] font-semibold text-gray-400">Opacidad</span>
+                    <input type="range" min="5" max="80" value={Math.round(opacity * 100)}
+                        onChange={(e) => change({ opacity: Number(e.target.value) / 100 })}
+                        className="w-20 accent-gray-500 cursor-pointer" />
+                </div>
+                <button type="button" onClick={() => data.onDelete?.(id)}
+                    className="pl-2 border-l border-gray-200 dark:border-gray-700 text-gray-400 hover:text-red-500" title="Eliminar fondo">
+                    <X className="w-4 h-4" />
+                </button>
+            </NodeToolbar>
+            <div className="w-full h-full rounded-2xl border-2 border-dashed"
+                style={{ backgroundColor: hexToRgba(color, opacity), borderColor: hexToRgba(color, Math.min(1, opacity + 0.4)) }} />
+        </>
+    );
+};
+
+// ── Elemento decorativo "Texto" ────────────────────────────────────────────────
+// Texto libre para comentar un nodo o titular un BG. Doble-click para editar (igual que
+// Figma/FigJam), single-drag para moverlo. Tamaño de letra y color en el menú flotante.
+const TextoNode = ({ id, data, selected }) => {
+    const [editing, setEditing] = useState(false);
+    const fontSize = Number(data.fontSize) || 18;
+    const color = data.color || '#111827';
+    const change = (patch) => data.onElementChange?.(id, patch);
+    return (
+        <>
+            <NodeResizer isVisible={selected} minWidth={60} minHeight={28}
+                lineClassName="!border-gray-400" handleClassName="!bg-white !border-2 !border-gray-400 !w-2.5 !h-2.5 !rounded-sm" />
+            <NodeToolbar isVisible={selected} position={Position.Top}
+                className="flex items-center gap-2 bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 px-2 py-1.5">
+                <div className="flex items-center gap-1">
+                    <button type="button" onClick={() => change({ fontSize: Math.max(10, fontSize - 2) })}
+                        className="p-1 rounded-md text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700" title="Más chico">
+                        <Minus className="w-3.5 h-3.5" />
+                    </button>
+                    <span className="text-xs font-semibold text-gray-500 w-6 text-center tabular-nums">{fontSize}</span>
+                    <button type="button" onClick={() => change({ fontSize: Math.min(80, fontSize + 2) })}
+                        className="p-1 rounded-md text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700" title="Más grande">
+                        <Plus className="w-3.5 h-3.5" />
+                    </button>
+                </div>
+                <div className="flex items-center gap-1 pl-2 border-l border-gray-200 dark:border-gray-700">
+                    {TEXT_COLORS.map(c => (
+                        <button key={c} type="button" onClick={() => change({ color: c })}
+                            className={`w-5 h-5 rounded-full transition-transform hover:scale-110 ${color === c ? 'ring-2 ring-offset-1 ring-gray-500 dark:ring-offset-gray-800' : 'border border-black/10'}`}
+                            style={{ backgroundColor: c }} title="Color del texto" />
+                    ))}
+                </div>
+                <button type="button" onClick={() => data.onDelete?.(id)}
+                    className="pl-2 border-l border-gray-200 dark:border-gray-700 text-gray-400 hover:text-red-500" title="Eliminar texto">
+                    <X className="w-4 h-4" />
+                </button>
+            </NodeToolbar>
+            {editing ? (
+                <textarea
+                    autoFocus
+                    value={data.text || ''}
+                    onChange={(e) => change({ text: e.target.value })}
+                    onBlur={() => setEditing(false)}
+                    onClick={(e) => e.stopPropagation()}
+                    placeholder="Escribe aquí…"
+                    className="nodrag nowheel w-full h-full resize-none bg-transparent focus:outline-none leading-snug font-semibold"
+                    style={{ fontSize, color }}
+                />
+            ) : (
+                <div
+                    onDoubleClick={() => setEditing(true)}
+                    className="w-full h-full whitespace-pre-wrap break-words cursor-move leading-snug font-semibold"
+                    style={{ fontSize, color }}
+                    title="Doble-click para editar"
+                >
+                    {data.text?.trim() ? data.text : <span className="opacity-40">Doble-click para editar</span>}
+                </div>
+            )}
+        </>
+    );
+};
 
 // Badge de resultado de la última corrida del nodo "test": verde con check si el nodo
 // SÍ pasó/se ejecutó, gris con X si no se alcanzó (bloqueado por una condición previa
@@ -162,6 +275,8 @@ const FlowNode = ({ id, type, data, selected }) => {
     const isInicioLista = type === 'inicio_lista';
 
     if (type === 'nota') return <NotaNode id={id} data={data} selected={selected} />;
+    if (type === 'bg') return <BgNode id={id} data={data} selected={selected} />;
+    if (type === 'texto') return <TextoNode id={id} data={data} selected={selected} />;
 
     const testRing = data.testPassed === true ? 'ring-2 ring-emerald-400' : data.testPassed === false ? 'ring-2 ring-gray-300 dark:ring-gray-600' : '';
 

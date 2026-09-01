@@ -1,9 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { ArrowLeft, Plus, Save, Check, ClipboardPaste } from 'lucide-react';
-import { NODE_DEFS, COLOR_CLASSES } from './nodeTypes';
+import { ArrowLeft, Plus, Save, Check, ClipboardPaste, Square, Type } from 'lucide-react';
+import { NODE_DEFS, COLOR_CLASSES, ELEMENT_TYPES } from './nodeTypes';
 
 const ENTRY_TYPES = ['inicio', 'inicio_lista', 'inicio_incompleto_silencio'];
-const ADDABLE_TYPES = Object.keys(NODE_DEFS).filter(t => !ENTRY_TYPES.includes(t));
+// Los elementos decorativos (bg/texto) se agregan con iconos aparte, no en el desplegable.
+const ADDABLE_TYPES = Object.keys(NODE_DEFS).filter(t => !ENTRY_TYPES.includes(t) && !ELEMENT_TYPES.includes(t));
 
 const FlowToolbar = ({ flowName, active, dirty, saving, onAddNode, onSave, onToggleActive, onRename, onBack, canPaste, onPaste }) => {
     const [menuOpen, setMenuOpen] = useState(false);
@@ -76,6 +77,24 @@ const FlowToolbar = ({ flowName, active, dirty, saving, onAddNode, onSave, onTog
                             })}
                         </div>
                     )}
+                </div>
+
+                {/* Elementos decorativos: iconos sueltos junto a "Agregar nodo" (no van al motor). */}
+                <div className="flex items-center gap-1 pl-1 border-l border-gray-200 dark:border-gray-700">
+                    <button
+                        onClick={() => onAddNode('bg')}
+                        className="p-2 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-sm text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                        title="Agregar fondo de sección"
+                    >
+                        <Square className="w-4 h-4" />
+                    </button>
+                    <button
+                        onClick={() => onAddNode('texto')}
+                        className="p-2 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-sm text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                        title="Agregar texto / comentario"
+                    >
+                        <Type className="w-4 h-4" />
+                    </button>
                 </div>
 
                 {canPaste && (
