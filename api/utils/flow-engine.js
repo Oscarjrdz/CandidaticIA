@@ -4,6 +4,7 @@ import { getUltraMsgConfig, sendUltraMsgMessage, sendUltraMsgMessageWithRetry } 
 import { substituteVariables, splitBubbles } from './shortcuts.js';
 import { getBotVacancies, vacancyMessageText } from './agent-ia.js';
 import { runInBackground } from './background.js';
+import { businessDayOffset, isPastCutoff } from './reminder-schedule.js';
 
 // ════════════════════════════════════════════════════════════════════════════
 // MOTOR DE FLOWS — ejecución determinística de automatizaciones post-extracción.
@@ -134,17 +135,26 @@ function flowTextMatchesGroup(text, grupo, mode) {
 const MTY_UTC_OFFSET_HOURS = 6;
 
 // "Próximo día hábil" en hora de Monterrey — Lun–Jue → mañana, Vie/Sáb/Dom → lunes.
-// DEBE quedar idéntico a nextBusinessDayDate() de CandidateReminderModal.jsx, que es lo
-// que ve el reclutador al crear la plantilla dinámica. Un offset fijo NO sirve aquí: la
-// plantilla se guarda una vez pero se aplica cualquier día, así que hay que recalcular
-// según el día en que corre el flujo (si no, un dinámico creado en viernes/sábado/domingo
-// caía en fin de semana — bug confirmado ago 2026 con el candidato de prueba 8116038195).
-const NEXT_BUSINESS_DAY_ADD = { Mon: 1, Tue: 1, Wed: 1, Thu: 1, Fri: 3, Sat: 2, Sun: 1 };
+// El cálculo vive en ./reminder-schedule.js (fuente única compartida con el frontend),
+// porque un offset fijo NO sirve aquí: la plantilla se guarda una vez pero se aplica
+// cualquier día, así que hay que recalcular según el día en que corre el flujo (si no,
+// un dinámico creado en viernes/sábado/domingo caía en fin de semana — bug confirmado
+// ago 2026 con el candidato de prueba 8116038195).
+//
+// tpl.cutoffTime ("HH:MM", opcional): si el flujo corre a esa hora o después (Monterrey),
+// brinca un día hábil más — demasiado tarde para agendar cita para el día siguiente.
 
 function daysUntilSend(tpl) {
     if (tpl.scheduleType === 'nextBusinessDay') {
-        const wd = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Monterrey', weekday: 'short' }).format(new Date());
-        return NEXT_BUSINESS_DAY_ADD[wd] ?? 1;
+        // Un solo formateo saca día de la semana Y hora en Monterrey (el proceso Node de
+        // Vercel corre en UTC, así que no se puede usar getDay()/getHours() del server).
+        const parts = new Intl.DateTimeFormat('en-US', {
+            timeZone: 'America/Monterrey', weekday: 'short',
+            hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+        }).formatToParts(new Date());
+        const map = Object.fromEntries(parts.map(p => [p.type, p.value]));
+        const nowMinutes = Number(map.hour) * 60 + Number(map.minute);
+        return businessDayOffset(map.weekday, isPastCutoff(nowMinutes, tpl.cutoffTime));
     }
     return Number(tpl.dayOffset) || 0; // 'fixedOffset' / plantillas viejas: offset relativo clásico
 }

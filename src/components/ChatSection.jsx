@@ -4,6 +4,7 @@ import { MapPin, List as ListIcon, ShoppingBag, UserSquare, MousePointerClick, S
 import { getCandidates, getCandidateById, blockCandidate, deleteCandidate } from '../services/candidatesService';
 import { getFlows, runFlowListItem } from '../services/flowsService';
 import { substituteVariables } from '../../api/utils/shortcuts.js';
+import { businessDayOffset, isPastCutoff } from '../../api/utils/reminder-schedule.js';
 import ManualProjectsSidepanel from './ManualProjectsSidepanel';
 import { formatRelativeDate } from '../utils/formatters';
 import { useCandidatesSSE, useSSECandidateUpdate } from '../hooks/useCandidatesSSE';
@@ -1650,8 +1651,23 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         setReminderTemplateMenuOpen(false);
         try {
             const nombre = selectedChat.nombreReal || selectedChat.nombre || selectedChat.whatsapp;
+            // El offset depende del tipo de plantilla. Para 'nextBusinessDay' se recalcula el
+            // próximo día hábil en hora de Monterrey (con la hora de corte opcional), usando el
+            // mismo motor que el flujo automático y la vista previa (api/utils/reminder-schedule.js).
+            let daysToAdd;
+            if (tpl.scheduleType === 'nextBusinessDay') {
+                const p = new Intl.DateTimeFormat('en-US', {
+                    timeZone: 'America/Monterrey', weekday: 'short',
+                    hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+                }).formatToParts(new Date());
+                const map = Object.fromEntries(p.map(x => [x.type, x.value]));
+                const nowMinutes = Number(map.hour) * 60 + Number(map.minute);
+                daysToAdd = businessDayOffset(map.weekday, isPastCutoff(nowMinutes, tpl.cutoffTime));
+            } else {
+                daysToAdd = Number(tpl.dayOffset) || 0;
+            }
             const sendAt = new Date();
-            sendAt.setDate(sendAt.getDate() + (Number(tpl.dayOffset) || 0));
+            sendAt.setDate(sendAt.getDate() + daysToAdd);
             const [hours, minutes] = String(tpl.timeOfDay || '07:00').split(':').map(Number);
             sendAt.setHours(hours || 0, minutes || 0, 0, 0);
             // Si el offset guardado ya quedó en el pasado (ej. "mismo día" aplicado después

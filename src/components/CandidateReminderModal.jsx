@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { X, Bell, Trash2, Clock, Send, ChevronDown, Check, Save, LayoutTemplate } from 'lucide-react';
+import { X, Bell, Trash2, Clock, Send, ChevronDown, Check, Save, LayoutTemplate, Pencil } from 'lucide-react';
 import { renderMetaTemplatePreviewText } from '../utils/metaTemplatePreview';
 import { substituteVariables } from '../../api/utils/shortcuts.js';
+import { businessDayOffset, isPastCutoff } from '../../api/utils/reminder-schedule.js';
 
 const API = '/api/candidate-reminders';
 const TEMPLATES_API = '/api/reminder-templates';
@@ -44,17 +45,20 @@ function fromRelativeOffset(dayOffset, timeOfDay) {
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-// "Día siguiente hábil" en zona horaria de Monterrey:
-//   Lun–Jue → mañana | Vie → lunes | Sáb → lunes | Dom → lunes (nunca cae en fin de semana).
+// "Día siguiente hábil" en zona horaria de Monterrey (Lun–Jue → mañana, Vie/Sáb/Dom →
+// lunes). El cálculo del salto vive en api/utils/reminder-schedule.js (compartido con el
+// backend) para que la vista previa que ve el reclutador quede idéntica a lo que hará el
+// flujo. `cutoffTime` ("HH:MM", opcional): pasada esa hora se brinca un día hábil más.
 // Devuelve un objeto Date con la hora indicada ya puesta.
-function nextBusinessDayDate(timeOfDay) {
-    const parts = new Intl.DateTimeFormat('en-CA', {
+function nextBusinessDayDate(timeOfDay, cutoffTime) {
+    const parts = new Intl.DateTimeFormat('en-US', {
         timeZone: 'America/Monterrey',
         year: 'numeric', month: '2-digit', day: '2-digit', weekday: 'short',
+        hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
     }).formatToParts(new Date());
     const p = Object.fromEntries(parts.map(x => [x.type, x.value]));
-    const addByWeekday = { Mon: 1, Tue: 1, Wed: 1, Thu: 1, Fri: 3, Sat: 2, Sun: 1 };
-    const add = addByWeekday[p.weekday] ?? 1;
+    const nowMinutes = Number(p.hour) * 60 + Number(p.minute);
+    const add = businessDayOffset(p.weekday, isPastCutoff(nowMinutes, cutoffTime));
     const [hours, minutes] = String(timeOfDay || '07:00').split(':').map(Number);
     const d = new Date(Number(p.year), Number(p.month) - 1, Number(p.day));
     d.setDate(d.getDate() + add);
@@ -63,15 +67,15 @@ function nextBusinessDayDate(timeOfDay) {
 }
 
 // "YYYY-MM-DDTHH:MM" del día siguiente hábil a la hora dada (para el input datetime-local / envío).
-function nextBusinessDayDatetime(timeOfDay) {
-    const d = nextBusinessDayDate(timeOfDay);
+function nextBusinessDayDatetime(timeOfDay, cutoffTime) {
+    const d = nextBusinessDayDate(timeOfDay, cutoffTime);
     const pad = n => String(n).padStart(2, '0');
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 // Etiqueta humana del día siguiente hábil (ej. "lunes 25 de agosto") para mostrar junto a la hora.
-function nextBusinessDayLabel(timeOfDay) {
-    return nextBusinessDayDate(timeOfDay).toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' });
+function nextBusinessDayLabel(timeOfDay, cutoffTime) {
+    return nextBusinessDayDate(timeOfDay, cutoffTime).toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' });
 }
 
 function makeTemplateId() {
@@ -89,6 +93,7 @@ const CandidateReminderModal = ({ candidate, onClose }) => {
     // New reminder form state
     const [scheduleMode, setScheduleMode] = useState('nextday'); // 'nextday' (día siguiente hábil) | 'exact'
     const [nextDayTime, setNextDayTime] = useState('07:00');
+    const [nextDayCutoff, setNextDayCutoff] = useState(''); // hora de corte (''=sin corte): pasada esa hora, brinca un día hábil más
     const [scheduledAt, setScheduledAt] = useState(nextBusinessDayDatetime('07:00'));
     const [message, setMessage] = useState('');
     const [fallbackTemplateId, setFallbackTemplateId] = useState('');
@@ -102,6 +107,13 @@ const CandidateReminderModal = ({ candidate, onClose }) => {
     const [newTemplateName, setNewTemplateName] = useState('');
     const [savingTemplate, setSavingTemplate] = useState(false);
     const [deletingTemplateId, setDeletingTemplateId] = useState(null);
+
+    // Edición de una plantilla guardada: se carga en el formulario de arriba (con todos sus
+    // campos) y el botón primario pasa a "Guardar cambios" (actualiza en su lugar en vez de
+    // crear una nueva). Así se editan modo, hora, corte, mensaje y template 24h, no solo el texto.
+    const [editingTemplateId, setEditingTemplateId] = useState(null);
+    const [savingEdit, setSavingEdit] = useState(false);
+    const formTopRef = useRef(null);
 
     const nombre = candidate.nombreReal || candidate.nombre || candidate.whatsapp;
     const firstName = String(nombre || '').trim().split(/\s+/)[0] || 'Candidato';
@@ -121,9 +133,9 @@ const CandidateReminderModal = ({ candidate, onClose }) => {
     // En modo "día siguiente", la fecha efectiva siempre es el próximo día hábil a la hora elegida.
     useEffect(() => {
         if (scheduleMode === 'nextday') {
-            setScheduledAt(nextBusinessDayDatetime(nextDayTime));
+            setScheduledAt(nextBusinessDayDatetime(nextDayTime, nextDayCutoff));
         }
-    }, [scheduleMode, nextDayTime]);
+    }, [scheduleMode, nextDayTime, nextDayCutoff]);
 
     const updateTemplateMenuPosition = useCallback(() => {
         const button = templateButtonRef.current;
@@ -215,6 +227,7 @@ const CandidateReminderModal = ({ candidate, onClose }) => {
             setMessage('');
             setScheduleMode('nextday');
             setNextDayTime('07:00');
+            setNextDayCutoff('');
             setFallbackTemplateId('');
             await fetchReminders();
         } catch {
@@ -252,6 +265,7 @@ const CandidateReminderModal = ({ candidate, onClose }) => {
                 scheduleType: isNextBiz ? 'nextBusinessDay' : 'fixedOffset',
                 dayOffset,
                 timeOfDay: isNextBiz ? nextDayTime : timeOfDay,
+                cutoffTime: isNextBiz ? (nextDayCutoff || null) : null,
                 fallbackTemplateName: selectedTemplate?.name || null,
                 fallbackTemplateLanguage: selectedTemplate?.language || null,
                 createdAt: new Date().toISOString(),
@@ -280,8 +294,9 @@ const CandidateReminderModal = ({ candidate, onClose }) => {
     const handleUseTemplate = (tpl) => {
         setMessage(substituteVariables(tpl.message, candidate));
         if (tpl.scheduleType === 'nextBusinessDay') {
-            // Recalcula el próximo día hábil al momento de usarla (respeta viernes→lunes).
+            // Recalcula el próximo día hábil al momento de usarla (respeta viernes→lunes y la hora de corte).
             setNextDayTime(tpl.timeOfDay || '07:00');
+            setNextDayCutoff(tpl.cutoffTime || '');
             setScheduleMode('nextday');
         } else {
             setScheduleMode('exact');
@@ -316,6 +331,62 @@ const CandidateReminderModal = ({ candidate, onClose }) => {
         }
     };
 
+    const startEditTemplate = (tpl) => {
+        handleUseTemplate(tpl);          // carga mensaje, modo, hora, corte y template 24h en el formulario de arriba
+        setNewTemplateName(tpl.name);
+        setEditingTemplateId(tpl.id);
+        setCreatingTemplate(false);
+        // Sube al formulario para que el reclutador vea qué está editando.
+        requestAnimationFrame(() => formTopRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+    };
+
+    const cancelEditTemplate = () => {
+        setEditingTemplateId(null);
+        setNewTemplateName('');
+        setMessage('');
+        setScheduleMode('nextday');
+        setNextDayTime('07:00');
+        setNextDayCutoff('');
+        setFallbackTemplateId('');
+    };
+
+    const handleUpdateTemplate = async () => {
+        const name = newTemplateName.trim();
+        if (!editingTemplateId || !name || !message.trim() || !scheduledAt) return;
+        setSavingEdit(true);
+        try {
+            const isNextBiz = scheduleMode === 'nextday';
+            const { dayOffset, timeOfDay } = toRelativeOffset(scheduledAt);
+            const updated = savedTemplates.map(t => t.id === editingTemplateId ? {
+                ...t,
+                name,
+                message: message.trim(),
+                scheduleType: isNextBiz ? 'nextBusinessDay' : 'fixedOffset',
+                dayOffset,
+                timeOfDay: isNextBiz ? nextDayTime : timeOfDay,
+                cutoffTime: isNextBiz ? (nextDayCutoff || null) : null,
+                fallbackTemplateName: selectedTemplate?.name || null,
+                fallbackTemplateLanguage: selectedTemplate?.language || null,
+            } : t);
+            const res = await fetch(TEMPLATES_API, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ templates: updated }),
+            });
+            if (!res.ok) {
+                const d = await res.json().catch(() => ({}));
+                alert(d.error || 'Error al guardar los cambios');
+                return;
+            }
+            setSavedTemplates(updated);
+            cancelEditTemplate();
+        } catch {
+            alert('Error de red al guardar los cambios');
+        } finally {
+            setSavingEdit(false);
+        }
+    };
+
     const pendingReminders = reminders.filter(r => r.status === 'pending');
     const sentReminders    = reminders.filter(r => r.status === 'sent');
 
@@ -343,7 +414,15 @@ const CandidateReminderModal = ({ candidate, onClose }) => {
                 <div className="flex-1 overflow-y-auto p-5 space-y-5">
 
                     {/* Form */}
-                    <div className="space-y-3">
+                    <div ref={formTopRef} className="space-y-3">
+                        {editingTemplateId && (
+                            <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-violet-50 dark:bg-violet-900/15 border border-violet-200 dark:border-violet-800/40">
+                                <Pencil className="w-3.5 h-3.5 text-violet-500 shrink-0" />
+                                <p className="text-xs font-bold text-violet-700 dark:text-violet-300 flex-1 min-w-0">
+                                    Editando plantilla — ajusta los campos y guarda los cambios.
+                                </p>
+                            </div>
+                        )}
                         <div className="space-y-1.5">
                             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Fecha y hora de envío</label>
 
@@ -379,12 +458,35 @@ const CandidateReminderModal = ({ candidate, onClose }) => {
                                             className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 text-sm font-medium focus:ring-2 focus:ring-amber-400 outline-none text-slate-800 dark:text-slate-200"
                                         />
                                         <p className="text-xs text-slate-600 dark:text-slate-300 leading-tight">
-                                            Se enviará el <b className="capitalize text-amber-600 dark:text-amber-400">{nextBusinessDayLabel(nextDayTime)}</b>
+                                            Se enviará el <b className="capitalize text-amber-600 dark:text-amber-400">{nextBusinessDayLabel(nextDayTime, nextDayCutoff)}</b>
                                         </p>
                                     </div>
                                     <p className="text-[10px] text-slate-400 dark:text-slate-500">
                                         Calcula solo el próximo día hábil (si cae viernes o fin de semana, pasa al lunes). Hora de Monterrey.
                                     </p>
+
+                                    {/* Hora de corte (opcional): pasada esta hora, brinca un día hábil más */}
+                                    <div className="flex items-center gap-2 pt-1.5 border-t border-slate-100 dark:border-slate-800 mt-1">
+                                        <input
+                                            type="time"
+                                            value={nextDayCutoff}
+                                            onChange={e => setNextDayCutoff(e.target.value)}
+                                            className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm font-medium focus:ring-2 focus:ring-amber-400 outline-none text-slate-800 dark:text-slate-200"
+                                        />
+                                        <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-tight flex-1 min-w-0">
+                                            <b className="text-slate-600 dark:text-slate-300">Hora de corte</b> (opcional): si el flujo pasa a esta hora o después, brinca un día hábil más (ej. lunes 10pm → miércoles). Vacío = sin corte.
+                                        </p>
+                                        {nextDayCutoff && (
+                                            <button
+                                                type="button"
+                                                onClick={() => setNextDayCutoff('')}
+                                                className="p-1 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors shrink-0"
+                                                title="Quitar hora de corte"
+                                            >
+                                                <X className="w-3.5 h-3.5" />
+                                            </button>
+                                        )}
+                                    </div>
                                 </div>
                             ) : (
                                 <input
@@ -490,6 +592,38 @@ const CandidateReminderModal = ({ candidate, onClose }) => {
                             </div>
                         </div>
 
+                        {editingTemplateId ? (
+                            <div className="flex items-center gap-1.5 p-1.5 rounded-xl border border-violet-300 dark:border-violet-700 bg-violet-50/70 dark:bg-violet-900/10 min-w-0">
+                                <input
+                                    type="text"
+                                    value={newTemplateName}
+                                    onChange={e => setNewTemplateName(e.target.value)}
+                                    onKeyDown={e => {
+                                        if (e.key === 'Enter') handleUpdateTemplate();
+                                        if (e.key === 'Escape') cancelEditTemplate();
+                                    }}
+                                    placeholder="Nombre de la plantilla"
+                                    className="flex-1 min-w-0 bg-white dark:bg-slate-800 border border-violet-200 dark:border-violet-700 rounded-lg px-2.5 py-1.5 text-sm font-bold outline-none focus:ring-2 focus:ring-violet-400 text-violet-700 dark:text-violet-300 placeholder-slate-400"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={handleUpdateTemplate}
+                                    disabled={!newTemplateName.trim() || !message.trim() || !scheduledAt || savingEdit}
+                                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-violet-500 hover:bg-violet-600 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-bold transition-colors shrink-0"
+                                >
+                                    <Save className="w-3.5 h-3.5" />
+                                    {savingEdit ? '...' : 'Guardar cambios'}
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={cancelEditTemplate}
+                                    className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors shrink-0"
+                                    title="Cancelar edición"
+                                >
+                                    <X className="w-4 h-4" />
+                                </button>
+                            </div>
+                        ) : (
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-start">
                             <button
                                 onClick={handleCreate}
@@ -543,6 +677,7 @@ const CandidateReminderModal = ({ candidate, onClose }) => {
                                 </div>
                             )}
                         </div>
+                        )}
                     </div>
 
                     {/* Plantillas guardadas */}
@@ -554,7 +689,12 @@ const CandidateReminderModal = ({ candidate, onClose }) => {
                             </p>
                             <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
                                 {savedTemplates.map(t => (
-                                    <div key={t.id} className="flex items-start gap-3 p-3 rounded-2xl bg-violet-50 dark:bg-violet-900/10 border border-violet-100 dark:border-violet-800/30">
+                                    <div
+                                        key={t.id}
+                                        className={`flex items-start gap-3 p-3 rounded-2xl bg-violet-50 dark:bg-violet-900/10 border transition-colors ${editingTemplateId === t.id
+                                            ? 'border-violet-400 dark:border-violet-500 ring-2 ring-violet-300/60 dark:ring-violet-600/40'
+                                            : 'border-violet-100 dark:border-violet-800/30'}`}
+                                    >
                                         <div className="flex-1 min-w-0">
                                             <p className="text-xs font-bold text-violet-700 dark:text-violet-400 truncate">{t.name}</p>
                                             <p className="text-xs text-slate-600 dark:text-slate-300 mt-0.5 leading-relaxed line-clamp-2">{t.message}</p>
@@ -562,6 +702,7 @@ const CandidateReminderModal = ({ candidate, onClose }) => {
                                                 {t.scheduleType === 'nextBusinessDay'
                                                     ? 'Día siguiente hábil'
                                                     : (t.dayOffset === 0 ? 'Mismo día' : `+${t.dayOffset} día${t.dayOffset === 1 ? '' : 's'}`)} · {t.timeOfDay}
+                                                {t.scheduleType === 'nextBusinessDay' && t.cutoffTime && ` · Corte ${t.cutoffTime}`}
                                                 {t.fallbackTemplateName && ` · Template 24h: ${t.fallbackTemplateName.replace(/_/g, ' ')}`}
                                             </p>
                                         </div>
@@ -572,6 +713,14 @@ const CandidateReminderModal = ({ candidate, onClose }) => {
                                                 className="px-2.5 py-1.5 rounded-lg bg-violet-500 hover:bg-violet-600 text-white text-[11px] font-bold transition-colors"
                                             >
                                                 Usar
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => startEditTemplate(t)}
+                                                className="p-1.5 rounded-lg text-slate-300 hover:text-violet-500 hover:bg-violet-50 dark:hover:bg-violet-900/20 transition-colors"
+                                                title="Editar plantilla"
+                                            >
+                                                <Pencil className="w-3.5 h-3.5" />
                                             </button>
                                             <button
                                                 type="button"
