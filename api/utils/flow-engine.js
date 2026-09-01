@@ -1,7 +1,7 @@
 import { getRedisClient, isProfileComplete, updateCandidate, saveMessage, updateMessageStatus, withCrmProjectLinksLock, HUMAN_INTERVENTION_SILENCE_MS } from './storage.js';
 import { getCachedConfig } from './cache.js';
 import { getUltraMsgConfig, sendUltraMsgMessage, sendUltraMsgMessageWithRetry } from '../whatsapp/utils.js';
-import { substituteVariables, splitBubbles } from './shortcuts.js';
+import { substituteVariables, splitBubbles, substituteDynamicPhrase } from './shortcuts.js';
 import { getBotVacancies, vacancyMessageText } from './agent-ia.js';
 import { runInBackground } from './background.js';
 import { businessDayOffset, isPastCutoff } from './reminder-schedule.js';
@@ -384,6 +384,16 @@ export async function evaluateOrExecute(node, candidate, flowId, redis, opts = {
             return values.includes(candidate.escolaridad);
         }
 
+        // Fija el valor del token {{frase dinamica}} para los nodos "Mandar WhatsApp" /
+        // "WhatsApp Personalizado" que vienen DESPUÉS en la misma corrida. Se arrastra en
+        // `opts` (mismo carrier mutable que _lastFlowSendAt). Sin efectos externos: solo
+        // setea una variable en memoria, por eso es idempotente y seguro re-aplicarlo al
+        // reanudar un flujo pausado. Otro nodo Frase Dinámica más adelante lo sobrescribe.
+        case 'frase_dinamica': {
+            opts._dynamicPhrase = typeof data.value === 'string' ? data.value : '';
+            return true;
+        }
+
         case 'accion_whatsapp': {
             if (!data.quickReplyId) return true; // sin configurar → no rompe la cadena
             try {
@@ -428,7 +438,7 @@ export async function evaluateOrExecute(node, candidate, flowId, redis, opts = {
                 }
 
                 if (qrType === 'document' && qr.documentUrl) {
-                    const caption = qr.message ? substituteVariables(qr.message, candidate) : '';
+                    const caption = qr.message ? substituteDynamicPhrase(substituteVariables(qr.message, candidate), opts._dynamicPhrase) : '';
                     const docRes = await pacedSend(opts, () => sendUltraMsgMessageWithRetry(config.instanceId, config.token, cleanTo, toAbsoluteMediaUrl(qr.documentUrl), 'document', {
                         filename: qr.documentName || 'documento.pdf', caption
                     }));
@@ -449,7 +459,7 @@ export async function evaluateOrExecute(node, candidate, flowId, redis, opts = {
                 // confirmado en producción, ago 2026: bajo mucha carga se perdían mensajes
                 // en silencio, sin reintento ni log con contexto de flujo/nodo/candidato).
                 if (qr.message) {
-                    const text = substituteVariables(qr.message, candidate);
+                    const text = substituteDynamicPhrase(substituteVariables(qr.message, candidate), opts._dynamicPhrase);
                     for (const bubbleText of splitBubbles(text)) {
                         const textRes = await pacedSend(opts, () => sendUltraMsgMessageWithRetry(config.instanceId, config.token, cleanTo, bubbleText, 'chat', { priority: 1 }));
                         if (textRes?.success) {
@@ -516,7 +526,7 @@ export async function evaluateOrExecute(node, candidate, flowId, redis, opts = {
                 if (!config?.token || !config?.instanceId) throw new Error('sin credenciales de WhatsApp');
                 const cleanTo = String(candidate.whatsapp).replace(/\D/g, '');
 
-                const text = substituteVariables(data.message, candidate);
+                const text = substituteDynamicPhrase(substituteVariables(data.message, candidate), opts._dynamicPhrase);
                 for (const bubbleText of splitBubbles(text)) {
                     const sendResult = await pacedSend(opts, () => sendUltraMsgMessageWithRetry(config.instanceId, config.token, cleanTo, bubbleText, 'chat', { priority: 1 }));
                     if (sendResult?.success) {
@@ -886,6 +896,13 @@ async function runOneFlow(redis, flow, candidateId, candidate, opts = {}) {
             // Resume: nodo ya hecho en una corrida previa → reusa resultado, no re-ejecuta.
             if (Object.prototype.hasOwnProperty.call(prior, node.id)) {
                 const priorPass = prior[node.id] === '1';
+                // Excepción: 'frase_dinamica' no tiene efectos externos (solo fija una variable
+                // en memoria para los WhatsApp siguientes). Al reanudar un flujo pausado hay que
+                // re-aplicar su valor aunque ya cuente como ejecutado, o los mensajes posteriores
+                // a la pausa perderían la frase.
+                if (priorPass && node.type === 'frase_dinamica') {
+                    opts._dynamicPhrase = typeof node.data?.value === 'string' ? node.data.value : '';
+                }
                 outcome.set(node.id, priorPass ? 'pass' : 'fail');
                 passed.set(node.id, priorPass);
                 continue;

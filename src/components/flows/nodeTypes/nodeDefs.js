@@ -1,4 +1,4 @@
-import { Play, Tag, CalendarRange, MapPin, Briefcase, GraduationCap, MessageCircle, Hash, UserRound, CircleMinus, BellRing, FolderKanban, FlaskConical, Eraser, Filter, MessageSquareText, ListChecks, CheckCheck, BotOff, Bot, Ear, AlarmClock, StickyNote } from 'lucide-react';
+import { Play, Tag, CalendarRange, MapPin, Briefcase, GraduationCap, MessageCircle, Hash, UserRound, CircleMinus, BellRing, FolderKanban, FlaskConical, Eraser, Filter, MessageSquareText, ListChecks, CheckCheck, BotOff, Bot, Ear, AlarmClock, StickyNote, Quote } from 'lucide-react';
 
 export const PROFILE_FILTER_LABELS = {
     active: 'Activos (no bloqueados)',
@@ -35,7 +35,8 @@ export const COLOR_CLASSES = {
     blue: { bg: 'bg-blue-50 dark:bg-blue-900/20', border: 'border-blue-200 dark:border-blue-800', icon: 'bg-blue-500', text: 'text-blue-700 dark:text-blue-300' },
     emerald: { bg: 'bg-emerald-50 dark:bg-emerald-900/20', border: 'border-emerald-200 dark:border-emerald-800', icon: 'bg-emerald-500', text: 'text-emerald-700 dark:text-emerald-300' },
     amber: { bg: 'bg-amber-50 dark:bg-amber-900/20', border: 'border-amber-200 dark:border-amber-800', icon: 'bg-amber-500', text: 'text-amber-700 dark:text-amber-300' },
-    gray: { bg: 'bg-gray-50 dark:bg-gray-800', border: 'border-gray-200 dark:border-gray-700', icon: 'bg-gray-500', text: 'text-gray-700 dark:text-gray-300' }
+    gray: { bg: 'bg-gray-50 dark:bg-gray-800', border: 'border-gray-200 dark:border-gray-700', icon: 'bg-gray-500', text: 'text-gray-700 dark:text-gray-300' },
+    violet: { bg: 'bg-violet-50 dark:bg-violet-900/20', border: 'border-violet-200 dark:border-violet-800', icon: 'bg-violet-500', text: 'text-violet-700 dark:text-violet-300' }
 };
 
 export const NODE_DEFS = {
@@ -154,6 +155,14 @@ export const NODE_DEFS = {
         hasTarget: true,
         hasSource: true,
         summary: (data) => data.message?.trim() ? (data.message.length > 60 ? `${data.message.slice(0, 60)}…` : data.message) : 'Escribe el mensaje'
+    },
+    frase_dinamica: {
+        label: 'Frase Dinámica',
+        icon: Quote,
+        color: 'violet',
+        hasTarget: true,
+        hasSource: true,
+        summary: (data) => data.value?.trim() ? (data.value.length > 60 ? `${data.value.slice(0, 60)}…` : data.value) : 'Fija el valor de {{frase dinamica}}'
     },
     accion_etiqueta: {
         label: 'Agregar Etiqueta',

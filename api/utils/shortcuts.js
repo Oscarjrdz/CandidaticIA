@@ -57,6 +57,25 @@ export const substituteVariables = (text, candidate) => {
     });
 };
 
+// Token de "frase dinámica" de Flujos: un ÚNICO marcador {{frase dinamica}} cuyo valor NO
+// viene del candidato sino que lo fija un nodo "Frase Dinámica" del flujo (ver
+// api/utils/flow-engine.js, case 'frase_dinamica'). Por eso vive aparte de
+// substituteVariables. Tolerante a mayúsculas, espacio o guion bajo, y acento:
+// {{frase dinamica}}, {{Frase_Dinámica}}, {{FRASE DINAMICA}} — todos valen.
+const DYNAMIC_PHRASE_REGEX = /\{\{\s*frase[\s_]*din[aá]mica\s*\}\}/gi;
+
+/**
+ * Reemplaza el token {{frase dinamica}} por `phrase`. Si `phrase` es null/undefined,
+ * lo reemplaza por cadena vacía (nunca deja el token literal en un mensaje enviado).
+ * @param {string} text
+ * @param {string} phrase
+ * @returns {string}
+ */
+export const substituteDynamicPhrase = (text, phrase) => {
+    if (!text) return text;
+    return String(text).replace(DYNAMIC_PHRASE_REGEX, phrase == null ? '' : String(phrase));
+};
+
 // Marcador [burbuja] (tolerante a mayúsculas/espacios) que un reclutador escribe dentro
 // de un texto — banco de respuestas, nodo "WhatsApp Personalizado" de Flujos, o una
 // plantilla de recordatorio — para partirlo en varios mensajes de WhatsApp seguidos en

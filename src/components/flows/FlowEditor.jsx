@@ -25,6 +25,7 @@ const DEFAULT_DATA_BY_TYPE = {
     accion_whatsapp: { quickReplyId: '', quickReplyName: '' },
     accion_vacante: { vacancyId: '', vacancyName: '' },
     accion_whatsapp_personalizado: { message: '' },
+    frase_dinamica: { value: '' },
     accion_etiqueta: { tag: '' },
     accion_quitar_etiqueta: { tag: '' },
     accion_limpiar_etiquetas: {},

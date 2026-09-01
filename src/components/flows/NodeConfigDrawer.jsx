@@ -515,6 +515,22 @@ const NodeConfigDrawer = ({ node, flowId, meta, quickReplies, reminderTemplates,
                     </div>
                 )}
 
+                {node.type === 'frase_dinamica' && (
+                    <div>
+                        <label className="text-xs text-gray-500 dark:text-gray-400 mb-2 block">Frase</label>
+                        <textarea
+                            value={data.value || ''}
+                            onChange={(e) => patch({ value: e.target.value })}
+                            placeholder="Ej: Este jueves 4 de septiembre"
+                            rows={3}
+                            className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 dark:bg-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 resize-y"
+                        />
+                        <p className="mt-2 text-xs text-gray-400">
+                            Esta frase reemplaza el token <strong>{'{{frase dinamica}}'}</strong> en los mensajes de <strong>Mandar WhatsApp</strong> / <strong>WhatsApp Personalizado</strong> que vengan <strong>después</strong> de este nodo. Pon otro nodo Frase Dinámica más adelante para cambiar el valor de ahí en adelante.
+                        </p>
+                    </div>
+                )}
+
                 {node.type === 'accion_vacante' && (
                     <div>
                         <label className="text-xs text-gray-500 dark:text-gray-400 mb-2 block">Vacante (maletín)</label>
