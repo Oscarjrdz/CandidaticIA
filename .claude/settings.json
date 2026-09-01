@@ -187,7 +187,8 @@
       "Bash(node /private/tmp/claude-501/-Users-oscar-Candidatic-IA/5f5a80de-108b-480e-880c-7e00307a76a5/scratchpad/test-elementos.mjs)",
       "Bash(node /private/tmp/claude-501/-Users-oscar-Candidatic-IA/5f5a80de-108b-480e-880c-7e00307a76a5/scratchpad/test-node-locks.mjs)",
       "Bash(echo \"build exit: $?\")",
-      "Bash(node --input-type=module -e ' *)"
+      "Bash(node --input-type=module -e ' *)",
+      "Bash(node -r dotenv/config _scratch_trace_yageo.mjs dotenv_config_path=.env.vercel.prod)"
     ],
     "additionalDirectories": [
       "/Users/oscar/App Candidatic/Candidatic_App/utils",
