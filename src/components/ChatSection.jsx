@@ -3,7 +3,7 @@ import ConfirmModal from './ui/ConfirmModal';
 import { MapPin, List as ListIcon, ShoppingBag, UserSquare, MousePointerClick, Search, MessageSquare, Plus, Smile, Paperclip, Mic, Square, ArrowLeft, Send, Tag, Pencil, Check, X, Trash2, Briefcase, Kanban, BookOpen, Keyboard, Loader2, Edit2, Reply, Zap, Pin, MessageCirclePlus, Phone, User, Bell, GripVertical, ChevronDown, ChevronUp, Snowflake, LayoutTemplate, Workflow } from 'lucide-react';
 import { getCandidates, getCandidateById, blockCandidate, deleteCandidate } from '../services/candidatesService';
 import { getFlows, runFlowListItem } from '../services/flowsService';
-import { substituteVariables } from '../../api/utils/shortcuts.js';
+import { substituteVariables, substituteDynamicPhrase, hasDynamicPhrase } from '../../api/utils/shortcuts.js';
 import { businessDayOffset, isPastCutoff } from '../../api/utils/reminder-schedule.js';
 import ManualProjectsSidepanel from './ManualProjectsSidepanel';
 import { formatRelativeDate } from '../utils/formatters';
@@ -1122,7 +1122,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         persistVacancyOrder(ids);
     }, [vacancyDraggedId, orderedVacancies, persistVacancyOrder]);
 
-    const [qrForm, setQrForm] = useState({ name: '', message: '', shortcut: '', imageUrl: '', imageUrl2: '', imageUrl3: '', imageUrl4: '', type: 'text', locName: '', locAddress: '', locLat: '', locLng: '', audioUrl: '', audioMime: '', audioVoice: false, audioDurationMs: 0, documentUrl: '', documentName: '' });
+    const [qrForm, setQrForm] = useState({ name: '', message: '', shortcut: '', dynamicPhrase: '', imageUrl: '', imageUrl2: '', imageUrl3: '', imageUrl4: '', type: 'text', locName: '', locAddress: '', locLat: '', locLng: '', audioUrl: '', audioMime: '', audioVoice: false, audioDurationMs: 0, documentUrl: '', documentName: '' });
     const [qrImageUploading, setQrImageUploading] = useState(false);
     const [qrDocumentUploading, setQrDocumentUploading] = useState(false);
     // Grabación de audio para banco de respuestas (nota de voz nativa ogg/opus)
@@ -1943,7 +1943,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
             markReplyHandledOptimistically(currentCandidateId);
             const optimisticId = 'temp-doc-' + Date.now();
             const candidatoFresh = candidates.find(c => c.id === selectedChat?.id) || selectedChat;
-            const caption = qr.message ? substituteVariables(qr.message, candidatoFresh || {}).replace(/[^\S\n]{2,}/g, ' ').trim() : '';
+            const caption = qr.message ? substituteDynamicPhrase(substituteVariables(qr.message, candidatoFresh || {}), qr.dynamicPhrase).replace(/[^\S\n]{2,}/g, ' ').trim() : '';
             updateChatMessages(currentCandidateId, prev => [...(prev || []), withMessageEntryAnimation({
                 id: optimisticId, content: caption, type: 'document', mediaUrl: qr.documentUrl, filename: qr.documentName || 'documento.pdf',
                 from: 'me', enviado_por_agente: 1, status: 'pending', fecha: new Date().toISOString(), _clientAnchoredTime: true,
@@ -1975,7 +1975,12 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
             // esto solo reconocia {{nombre}} exacto (sin espacios internos, y ninguna otra
             // variable), asi que cualquier otro placeholder o variante de formato quedaba
             // sin resolver aqui aunque el envio final si lo hubiera resuelto bien.
-            const resolved = substituteVariables(qr.message, candidatoFresh || {})
+            // Primero las variables del candidato ({{nombre}}, etc.), luego el token
+            // {{frase dinamica}} con el valor guardado en esta respuesta (vacío = se quita).
+            const resolved = substituteDynamicPhrase(
+                    substituteVariables(qr.message, candidatoFresh || {}),
+                    qr.dynamicPhrase
+                )
                 .replace(/[^\S\n]{2,}/g, ' ')
                 .trim();
             messageInputRef.current?.injectText(resolved);
@@ -6511,6 +6516,23 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                                 </div>
                             </>
                         )}
+                        {/* Frase dinámica: solo aparece si el mensaje trae el token {{frase dinamica}}.
+                            Fuera de un flujo nadie fija ese valor, así que aquí se define con qué
+                            se sustituye al aplicar esta respuesta (vacío = el token se quita). */}
+                        {hasDynamicPhrase(qrForm.message) && (
+                            <div className="flex flex-col gap-1">
+                                <input
+                                    type="text"
+                                    placeholder="Con qué reemplazar {{frase dinamica}}"
+                                    value={qrForm.dynamicPhrase}
+                                    onChange={(e) => setQrForm({ ...qrForm, dynamicPhrase: e.target.value })}
+                                    className="w-full text-xs px-3 py-2 rounded-lg border border-amber-300 dark:border-amber-500/50 bg-amber-50 dark:bg-amber-500/10 text-[#111b21] dark:text-[#e9edef] outline-none focus:border-amber-500 transition-colors"
+                                />
+                                <p className="text-[10px] text-amber-600 dark:text-amber-400 leading-snug">
+                                    Este mensaje trae <strong>{'{{frase dinamica}}'}</strong>. Escribe con qué reemplazarlo al enviarlo desde aquí. Si lo dejas vacío, el token se quita.
+                                </p>
+                            </div>
+                        )}
                         <div className="flex items-center gap-2">
                             <div className="flex-1 relative">
                                 <Keyboard className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
@@ -6548,7 +6570,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                             {editingQuickReply !== null && (
                                 <button
                                     type="button"
-                                    onClick={() => { setEditingQuickReply(null); setQrForm({ name: '', message: '', shortcut: '', imageUrl: '', imageUrl2: '', imageUrl3: '', imageUrl4: '', type: 'text', locName: '', locAddress: '', locLat: '', locLng: '', audioUrl: '', audioMime: '', audioVoice: false, audioDurationMs: 0, documentUrl: '', documentName: '' }); }}
+                                    onClick={() => { setEditingQuickReply(null); setQrForm({ name: '', message: '', shortcut: '', dynamicPhrase: '', imageUrl: '', imageUrl2: '', imageUrl3: '', imageUrl4: '', type: 'text', locName: '', locAddress: '', locLat: '', locLng: '', audioUrl: '', audioMime: '', audioVoice: false, audioDurationMs: 0, documentUrl: '', documentName: '' }); }}
                                     className="flex-1 text-xs py-2 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-[#202c33] transition-colors font-medium"
                                 >
                                     Cancelar
@@ -6572,6 +6594,9 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                                         id: editingQuickReply?.id || `qr_${Date.now()}`,
                                         name: qrForm.name.trim() || qrForm.locName.trim(),
                                         shortcut: qrForm.shortcut.trim(),
+                                        // Valor con el que se sustituye {{frase dinamica}} al aplicar esta respuesta
+                                        // fuera de un flujo. Vacío = el token se quita (nunca sale literal).
+                                        dynamicPhrase: qrForm.dynamicPhrase.trim(),
                                         type: qrForm.type || 'text',
                                         ...(isLoc ? {
                                             location: { lat: parseFloat(qrForm.locLat), lng: parseFloat(qrForm.locLng), name: qrForm.locName.trim(), address: qrForm.locAddress.trim() }
@@ -6596,7 +6621,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                                         newList = [...quickReplies, entry];
                                     }
                                     await saveQuickReplies(newList);
-                                    setQrForm({ name: '', message: '', shortcut: '', imageUrl: '', imageUrl2: '', imageUrl3: '', imageUrl4: '', type: 'text', locName: '', locAddress: '', locLat: '', locLng: '', audioUrl: '', audioMime: '', audioVoice: false, audioDurationMs: 0, documentUrl: '', documentName: '' });
+                                    setQrForm({ name: '', message: '', shortcut: '', dynamicPhrase: '', imageUrl: '', imageUrl2: '', imageUrl3: '', imageUrl4: '', type: 'text', locName: '', locAddress: '', locLat: '', locLng: '', audioUrl: '', audioMime: '', audioVoice: false, audioDurationMs: 0, documentUrl: '', documentName: '' });
                                     setEditingQuickReply(null);
                                     showToast && showToast(editingQuickReply ? 'Respuesta actualizada' : 'Respuesta creada', 'success');
                                 }}
@@ -6705,7 +6730,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                                         </div>
                                         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
                                             <button
-                                                onClick={(e) => { e.stopPropagation(); setEditingQuickReply(qr); const imgs = qr.imageUrls || (qr.imageUrl ? [qr.imageUrl] : []); setQrForm({ name: qr.name, message: qr.message || '', shortcut: qr.shortcut || '', imageUrl: imgs[0] || '', imageUrl2: imgs[1] || '', imageUrl3: imgs[2] || '', imageUrl4: imgs[3] || '', type: qr.type || 'text', locName: qr.location?.name || '', locAddress: qr.location?.address || '', locLat: qr.location?.lat ? String(qr.location.lat) : '', locLng: qr.location?.lng ? String(qr.location.lng) : '', audioUrl: qr.audioUrl || '', audioMime: qr.audioMime || '', audioVoice: !!qr.voice, audioDurationMs: qr.audioDurationMs || 0, documentUrl: qr.documentUrl || '', documentName: qr.documentName || '' }); }}
+                                                onClick={(e) => { e.stopPropagation(); setEditingQuickReply(qr); const imgs = qr.imageUrls || (qr.imageUrl ? [qr.imageUrl] : []); setQrForm({ name: qr.name, message: qr.message || '', shortcut: qr.shortcut || '', dynamicPhrase: qr.dynamicPhrase || '', imageUrl: imgs[0] || '', imageUrl2: imgs[1] || '', imageUrl3: imgs[2] || '', imageUrl4: imgs[3] || '', type: qr.type || 'text', locName: qr.location?.name || '', locAddress: qr.location?.address || '', locLat: qr.location?.lat ? String(qr.location.lat) : '', locLng: qr.location?.lng ? String(qr.location.lng) : '', audioUrl: qr.audioUrl || '', audioMime: qr.audioMime || '', audioVoice: !!qr.voice, audioDurationMs: qr.audioDurationMs || 0, documentUrl: qr.documentUrl || '', documentName: qr.documentName || '' }); }}
                                                 className="p-1.5 text-gray-400 hover:text-blue-500 transition-colors rounded-full hover:bg-blue-50 dark:hover:bg-blue-900/20"
                                                 title="Editar"
                                             >

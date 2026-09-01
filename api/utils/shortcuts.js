@@ -76,6 +76,11 @@ export const substituteDynamicPhrase = (text, phrase) => {
     return String(text).replace(DYNAMIC_PHRASE_REGEX, phrase == null ? '' : String(phrase));
 };
 
+// ¿El texto trae el token {{frase dinamica}}? (misma tolerancia que substituteDynamicPhrase).
+// Regex fresco sin flag /g para que .test() no arrastre lastIndex entre llamadas.
+export const hasDynamicPhrase = (text) =>
+    !!text && /\{\{\s*frase[\s_]*din[aá]mica\s*\}\}/i.test(String(text));
+
 // Marcador [burbuja] (tolerante a mayúsculas/espacios) que un reclutador escribe dentro
 // de un texto — banco de respuestas, nodo "WhatsApp Personalizado" de Flujos, o una
 // plantilla de recordatorio — para partirlo en varios mensajes de WhatsApp seguidos en
