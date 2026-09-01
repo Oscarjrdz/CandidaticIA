@@ -3,28 +3,36 @@
  *
  * Tag counts are maintained as a Redis HASH (candidatic:tag_counts) via
  * HINCRBY/HDECRBY in updateCandidate / deleteCandidate — O(1) reads, no full scan.
- * First request seeds the hash once if it's missing (with stampede protection).
+ * The incremental counters are the fast path, but they CAN drift (missed adds,
+ * double-counted removals under concurrency, or the historical delete-then-decrement
+ * bug). So getCountsSummary self-heals with a full recount when it detects the hash
+ * is untrustworthy — any negative value, never seeded, or older than the reseed TTL —
+ * or when explicitly forced (?reseed=1). A full recount reads every candidate (~1KB
+ * each ⇒ ~17MB for 16k), cheap enough to run at most once per RESEED_STALE_MS.
  */
 
 const TAG_COUNTS_KEY      = 'candidatic:tag_counts';
 const TAG_COUNTS_INIT_LOCK = 'candidatic:tag_counts:init_lock';
+const TAG_COUNTS_SEEDED_AT_KEY = 'candidatic:tag_counts:seeded_at';
 const UNTAGGED_COUNT_KEY = 'candidatic:untagged_count';
 const UNTAGGED_COUNT_READY_KEY = 'candidatic:untagged_count:ready';
+// Reconciliación de seguridad: reseedea a lo más una vez cada 24h (barato: ~17MB).
+const RESEED_STALE_MS = 24 * 60 * 60 * 1000;
 
 const cleanTagValues = (tags) => [...new Set((Array.isArray(tags) ? tags : [])
     .map(t => typeof t === 'string' ? t : t?.name)
     .map(t => String(t || '').trim())
     .filter(Boolean))];
 
-// One-time full recount: seeds the tag_counts hash and the untagged counter.
-// Normal reads stay O(1); this only runs when the hash has never been built.
+// Full recount: rebuilds the tag_counts hash and the untagged counter from the
+// authoritative candidate data. Escanea TODO candidates:list (no se apoya en
+// scard, que puede subcontar y cortar el barrido antes de tiempo).
 async function seedCounts(redis) {
-    const total = (await redis.scard('stats:list:complete')) + (await redis.scard('stats:list:pending'));
     const tagCounts = {};
     let untaggedCount = 0;
     const CHUNK = 500;
 
-    for (let offset = 0; offset < total; offset += CHUNK) {
+    for (let offset = 0; ; offset += CHUNK) {
         const ids = await redis.zrevrange('candidates:list', offset, offset + CHUNK - 1);
         if (!ids?.length) break;
         const readPipe = redis.pipeline();
@@ -52,28 +60,37 @@ async function seedCounts(redis) {
     Object.entries(tagCounts).forEach(([tag, count]) => writePipe.hset(TAG_COUNTS_KEY, tag, count));
     writePipe.set(UNTAGGED_COUNT_KEY, String(untaggedCount));
     writePipe.set(UNTAGGED_COUNT_READY_KEY, '1');
+    writePipe.set(TAG_COUNTS_SEEDED_AT_KEY, String(Date.now()));
     await writePipe.exec();
 }
 
-async function getCountsSummary(redis) {
+async function getCountsSummary(redis, { force = false } = {}) {
     const ready = (await redis.get(UNTAGGED_COUNT_READY_KEY)) === '1';
-    if (!ready) {
-        // Become the seeder only if nobody else already is. If another request
-        // holds the lock, DON'T return all-zeros — fall through and serve whatever
-        // partial data already exists in the hash (avoids the "todo en (0)" flash
-        // while the one-time seed scans the whole candidate base).
+    let raw = await redis.hgetall(TAG_COUNTS_KEY);
+
+    // ¿El hash es confiable? Se reseedea si: nunca se construyó, tiene algún valor
+    // NEGATIVO (un conteo real jamás puede ser < 0 → corrupción segura), ya venció
+    // la ventana de reconciliación, o se forzó (?reseed=1).
+    const hasNegative = Object.values(raw || {}).some(v => parseInt(v) < 0);
+    const seededAt = parseInt(await redis.get(TAG_COUNTS_SEEDED_AT_KEY)) || 0;
+    const stale = !seededAt || (Date.now() - seededAt) > RESEED_STALE_MS;
+
+    if (force || !ready || hasNegative || stale) {
+        // Solo un request reseedea a la vez. Si otro tiene el lock, NO devolvemos
+        // ceros: seguimos con lo que haya en el hash (piso a 0 abajo).
         const locked = await redis.set(TAG_COUNTS_INIT_LOCK, '1', 'EX', 120, 'NX');
         if (locked) {
-            try { await seedCounts(redis); }
-            finally { await redis.del(TAG_COUNTS_INIT_LOCK); }
+            try {
+                await seedCounts(redis);
+                raw = await redis.hgetall(TAG_COUNTS_KEY);
+            } finally { await redis.del(TAG_COUNTS_INIT_LOCK); }
         }
     }
 
-    const raw = await redis.hgetall(TAG_COUNTS_KEY);
     const map = {};
     Object.entries(raw || {}).forEach(([k, v]) => {
         const n = parseInt(v);
-        if (n > 0) map[k] = n;
+        if (n > 0) map[k] = n; // pisa negativos/ceros: nunca sirve un conteo inválido
     });
     const untaggedCount = Math.max(0, parseInt(await redis.get(UNTAGGED_COUNT_KEY)) || 0);
     return { map, untaggedCount };
@@ -100,7 +117,9 @@ export default async function handler(req, res) {
             ];
             const tags = savedTags.map(t => typeof t === 'string' ? { name: t, color: '#3b82f6' } : t);
 
-            const { map: countsMap, untaggedCount } = await getCountsSummary(redis);
+            // ?reseed=1 fuerza una reconciliación completa bajo demanda.
+            const force = req.query.reseed === '1' || req.query.reseed === 'true';
+            const { map: countsMap, untaggedCount } = await getCountsSummary(redis, { force });
             // Case/whitespace-tolerant fallback: the hash is keyed by the exact tag
             // string stored on each candidate, which can drift in casing/spacing from
             // the saved tag name. Build a normalized index (summing any variants) so a
@@ -134,10 +153,11 @@ export default async function handler(req, res) {
             const raw = await redis.get('candidatic:chat_tags');
             let savedTags = raw ? JSON.parse(raw) : [];
             const newTags = savedTags.filter(t => (typeof t === 'string' ? t : t.name) !== tagName);
-            await Promise.all([
-                redis.set('candidatic:chat_tags', JSON.stringify(newTags)),
-                redis.hdel(TAG_COUNTS_KEY, tagName),
-            ]);
+            // Ojo: NO borrar aquí la llave del hash de conteos. El cleanup en background
+            // llama updateCandidate por cada candidato, y cada uno hace HDECRBY sobre esa
+            // llave; si la borramos antes, esos decrementos la RECREAN en negativo (este
+            // fue el origen de METALSA en -2085). El hdel va AL FINAL del cleanup.
+            await redis.set('candidatic:chat_tags', JSON.stringify(newTags));
 
             // Background cleanup: remove tag from all candidate profiles (non-blocking)
             (async () => {
@@ -150,6 +170,8 @@ export default async function handler(req, res) {
                         ));
                     }
                 } catch (_) {}
+                // Ya sin candidatos con la etiqueta, la llave queda en 0 → borrarla limpio.
+                finally { await redis.hdel(TAG_COUNTS_KEY, tagName).catch(() => {}); }
             })();
 
             return res.status(200).json({ success: true, message: `Etiqueta '${tagName}' eliminada`, tags: newTags });
