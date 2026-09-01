@@ -49,10 +49,27 @@ const stripTransientData = (data = {}) => {
     const {
         onConfigure, onDelete, onTestPhoneChange, onTestRun, onToggleActive, liveCount, active,
         testStatus, testMessage, testPassed, onLoadList, onRunList, candidateList, listStatus, runningCandidateId,
-        onNotaChange,
+        onNotaChange, onElementChange, onDuplicate,
         ...rest
     } = data;
     return rest;
+};
+
+// Dimensiones a PERSISTIR de un nodo. Los elementos decorativos (bg/texto) son
+// redimensionables y su tamaño debe guardarse; si nunca se redimensionaron a mano el tamaño
+// vive en `measured` (React Flow) y NO en top-level → se usa measured como respaldo. Sin
+// esto, un bg recargado nacería sin dimensiones (invisible, no tiene contenido que lo
+// dimensione) y un texto se colapsaría — el bug de "el clon desaparece al recargar". Los
+// nodos funcionales no guardan tamaño (se auto-ajustan al contenido).
+const persistableDims = (n) => {
+    const resizable = n.type === 'bg' || n.type === 'texto';
+    const w = Number.isFinite(n.width) ? n.width : (resizable && Number.isFinite(n.measured?.width) ? n.measured.width : undefined);
+    const h = Number.isFinite(n.height) ? n.height : (resizable && Number.isFinite(n.measured?.height) ? n.measured.height : undefined);
+    const out = {};
+    if (Number.isFinite(w)) out.width = w;
+    if (Number.isFinite(h)) out.height = h;
+    if (typeof n.zIndex === 'number') out.zIndex = n.zIndex;
+    return out;
 };
 
 // Portapapeles de selección (nodos+aristas) — persiste en localStorage para poder pegar
@@ -332,12 +349,16 @@ const FlowEditorInner = ({ flowId, onBack }) => {
             .map(n => {
                 const nid = genNodeId();
                 idMap.set(n.id, nid);
+                // Nodo LIMPIO (sin internals de React Flow como measured/dragging/positionAbsolute):
+                // solo los campos persistibles + id/posición nuevos. persistableDims garantiza el
+                // tamaño (cae a measured) para que el clon nunca nazca sin dimensiones.
                 return hydrateNode({
-                    ...n,
                     id: nid,
+                    type: n.type,
                     position: { x: (n.position?.x || 0) + offset.x, y: (n.position?.y || 0) + offset.y },
                     data: { ...stripTransientData(n.data) },
-                    selected: true
+                    selected: true,
+                    ...persistableDims(n)
                 });
             });
         const newEdges = srcEdges
@@ -457,11 +478,9 @@ const FlowEditorInner = ({ flowId, onBack }) => {
         const payload = {
             nodes: nodes.map(n => ({
                 id: n.id, type: n.type, position: n.position, data: stripTransientData(n.data),
-                // Tamaño (redimensionado con NodeResizer) y capa de los elementos bg/texto —
-                // sin esto, el tamaño se perdería al recargar. Solo se guardan si existen.
-                ...(typeof n.width === 'number' ? { width: n.width } : {}),
-                ...(typeof n.height === 'number' ? { height: n.height } : {}),
-                ...(typeof n.zIndex === 'number' ? { zIndex: n.zIndex } : {})
+                // Tamaño y capa de los elementos bg/texto — sin esto se perderían al recargar.
+                // persistableDims cae a `measured` si nunca se redimensionaron a mano.
+                ...persistableDims(n)
             })),
             edges: edges.map(e => ({ id: e.id, source: e.source, target: e.target, sourceHandle: e.sourceHandle ?? null, targetHandle: e.targetHandle ?? null }))
         };
