@@ -555,3 +555,25 @@ input[type="color"]::-moz-color-swatch {
   border: none;
   border-radius: 8px;
 }
+
+/* Cargador de puntos flotantes (loading de página) — movimiento circular */
+.dots-loader {
+  width: 60px;
+  height: 60px;
+  position: relative;
+  animation: dots-loader-spin 2s linear infinite;
+}
+.dots-loader div {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  background: #6366f1;
+  border-radius: 50%;
+}
+.dots-loader div:nth-child(1) { top: 0; left: 50%; transform: translateX(-50%); }
+.dots-loader div:nth-child(2) { top: 50%; right: 0; transform: translateY(-50%); }
+.dots-loader div:nth-child(3) { bottom: 0; left: 50%; transform: translateX(-50%); }
+.dots-loader div:nth-child(4) { top: 50%; left: 0; transform: translateY(-50%); }
+@keyframes dots-loader-spin {
+  to { transform: rotate(360deg); }
+}
