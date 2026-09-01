@@ -528,6 +528,28 @@ const NodeConfigDrawer = ({ node, flowId, meta, quickReplies, reminderTemplates,
                         <p className="mt-2 text-xs text-gray-400">
                             Esta frase reemplaza el token <strong>{'{{frase dinamica}}'}</strong> en los mensajes de <strong>Mandar WhatsApp</strong> / <strong>WhatsApp Personalizado</strong> que vengan <strong>después</strong> de este nodo. Pon otro nodo Frase Dinámica más adelante para cambiar el valor de ahí en adelante.
                         </p>
+
+                        {/* Segunda opción: en vez de escribir, copiar el texto de una respuesta del
+                            banco. Solo respuestas CON texto (ubicación/audio sin mensaje no sirven).
+                            El selector es un "copiar de" (no guarda referencia): deja el texto en el
+                            campo de arriba y se puede editar; por eso su value queda siempre vacío. */}
+                        <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700/60">
+                            <label className="text-xs text-gray-500 dark:text-gray-400 mb-2 block">O usa el texto de una respuesta del banco</label>
+                            <FlowSelect
+                                value=""
+                                onChange={(v) => {
+                                    const qr = (quickReplies || []).find(r => r.id === v);
+                                    if (qr) patch({ value: qr.message || '' });
+                                }}
+                                options={(quickReplies || [])
+                                    .filter(r => (r.message || '').trim())
+                                    .map(r => ({ value: r.id, label: r.name }))}
+                                placeholder="Elegir del banco de respuestas..."
+                                ringClass="focus:ring-violet-500"
+                                emptyLabel="No hay respuestas con texto en el banco"
+                            />
+                            <p className="mt-1 text-xs text-gray-400">Copia el texto de esa respuesta en el campo de arriba; puedes editarlo después.</p>
+                        </div>
                     </div>
                 )}
 
