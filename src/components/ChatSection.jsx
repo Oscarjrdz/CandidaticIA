@@ -4533,7 +4533,12 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         // Ubicación, audio y documento ya se envían por su propia vía (POST directo) en handleApplyQuickReply.
         if (qr.type === 'location' || qr.type === 'audio' || qr.type === 'document') { handleApplyQuickReply(qr); return; }
         const candidatoFresh = candidates.find(c => c.id === selectedChat?.id) || selectedChat;
-        const resolved = substituteVariables(qr.message || '', candidatoFresh || {}).replace(/[^\S\n]{2,}/g, ' ').trim();
+        // Igual que la vía de inyección: variables del candidato y luego {{frase dinamica}}
+        // con el valor guardado en esta respuesta (vacío = se quita, nunca sale literal).
+        const resolved = substituteDynamicPhrase(
+            substituteVariables(qr.message || '', candidatoFresh || {}),
+            qr.dynamicPhrase
+        ).replace(/[^\S\n]{2,}/g, ' ').trim();
         const imgs = qr.imageUrls?.length ? qr.imageUrls : (qr.imageUrl ? [qr.imageUrl] : []);
         if (!resolved && !imgs.length) return;
 
@@ -6528,9 +6533,6 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                                     onChange={(e) => setQrForm({ ...qrForm, dynamicPhrase: e.target.value })}
                                     className="w-full text-xs px-3 py-2 rounded-lg border border-amber-300 dark:border-amber-500/50 bg-amber-50 dark:bg-amber-500/10 text-[#111b21] dark:text-[#e9edef] outline-none focus:border-amber-500 transition-colors"
                                 />
-                                <p className="text-[10px] text-amber-600 dark:text-amber-400 leading-snug">
-                                    Este mensaje trae <strong>{'{{frase dinamica}}'}</strong>. Escribe con qué reemplazarlo al enviarlo desde aquí. Si lo dejas vacío, el token se quita.
-                                </p>
                             </div>
                         )}
                         <div className="flex items-center gap-2">
