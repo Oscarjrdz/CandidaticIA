@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Handle, Position, NodeToolbar, NodeResizer } from '@xyflow/react';
-import { X, Play, Loader2, Check, RefreshCw, Minus, Plus, Lock, LockOpen } from 'lucide-react';
+import { X, Play, Loader2, Check, RefreshCw, Minus, Plus, Lock, LockOpen, Copy } from 'lucide-react';
 import { NODE_DEFS, COLOR_CLASSES } from './nodeDefs';
 
 // #RRGGBB (o #RGB) + alpha → rgba(). Para pintar el fondo del BG con su transparencia.
@@ -65,8 +65,12 @@ const BgNode = ({ id, data, selected }) => {
                         onChange={(e) => change({ opacity: Number(e.target.value) / 100 })}
                         className="w-20 accent-gray-500 cursor-pointer" />
                 </div>
+                <button type="button" onClick={() => data.onDuplicate?.(id)}
+                    className="pl-2 border-l border-gray-200 dark:border-gray-700 text-gray-400 hover:text-indigo-500" title="Clonar fondo">
+                    <Copy className="w-4 h-4" />
+                </button>
                 <button type="button" onClick={() => data.onDelete?.(id)}
-                    className="pl-2 border-l border-gray-200 dark:border-gray-700 text-gray-400 hover:text-red-500" title="Eliminar fondo">
+                    className="text-gray-400 hover:text-red-500" title="Eliminar fondo">
                     <X className="w-4 h-4" />
                 </button>
             </NodeToolbar>
@@ -112,8 +116,12 @@ const TextoNode = ({ id, data, selected }) => {
                             style={{ backgroundColor: c }} title="Color del texto" />
                     ))}
                 </div>
+                <button type="button" onClick={() => data.onDuplicate?.(id)}
+                    className="pl-2 border-l border-gray-200 dark:border-gray-700 text-gray-400 hover:text-indigo-500" title="Clonar texto">
+                    <Copy className="w-4 h-4" />
+                </button>
                 <button type="button" onClick={() => data.onDelete?.(id)}
-                    className="pl-2 border-l border-gray-200 dark:border-gray-700 text-gray-400 hover:text-red-500" title="Eliminar texto">
+                    className="text-gray-400 hover:text-red-500" title="Eliminar texto">
                     <X className="w-4 h-4" />
                 </button>
             </NodeToolbar>

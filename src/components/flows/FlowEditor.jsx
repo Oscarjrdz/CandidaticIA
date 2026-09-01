@@ -91,6 +91,7 @@ const FlowEditorInner = ({ flowId, onBack }) => {
     const handleTestRunRef = useRef(null);
     const handleLoadListRef = useRef(null);
     const handleRunListRef = useRef(null);
+    const handleDuplicateNodeRef = useRef(null);
 
     const handleConfigure = useCallback((nodeId) => setSelectedNodeId(nodeId), []);
 
@@ -168,7 +169,8 @@ const FlowEditorInner = ({ flowId, onBack }) => {
             onElementChange: handleElementChange,
             onTestRun: (nodeId, phone) => handleTestRunRef.current?.(nodeId, phone),
             onLoadList: (nodeId) => handleLoadListRef.current?.(nodeId),
-            onRunList: (nodeId) => handleRunListRef.current?.(nodeId)
+            onRunList: (nodeId) => handleRunListRef.current?.(nodeId),
+            onDuplicate: (nodeId) => handleDuplicateNodeRef.current?.(nodeId)
         }
     }), [handleConfigure, handleDeleteNode, handleTestPhoneChange, handleNotaChange, handleElementChange]);
 
@@ -384,6 +386,19 @@ const FlowEditorInner = ({ flowId, onBack }) => {
         showToast(`Clonados ${newNodes.length} nodo(s) — copiados para pegar en otro flujo`, 'success');
     }, [selectedIds, nodes, edges, buildDuplicate, copySelectionToClipboard, showToast]);
 
+    // CLONAR UNO: duplica un solo elemento (texto / fondo) con offset. Su botón vive en la
+    // barra flotante del propio elemento (FlowNode). Reusa buildDuplicate (ya hidrata, filtra
+    // inicios y pone id/offset nuevos). Un elemento decorativo no tiene aristas → [].
+    const handleDuplicateNode = useCallback((nodeId) => {
+        const src = nodes.find(n => n.id === nodeId);
+        if (!src || ENTRY_TYPES.has(src.type)) return;
+        const { newNodes } = buildDuplicate([src], []);
+        if (!newNodes.length) return;
+        setNodes(nds => [...nds.map(n => ({ ...n, selected: false })), ...newNodes]);
+        setDirty(true);
+        showToast('Elemento clonado', 'success');
+    }, [nodes, buildDuplicate, showToast]);
+
     // BORRAR: elimina los nodos seleccionados (menos inicios) y sus aristas.
     const handleDeleteSelection = useCallback(() => {
         const locks = getFlowLocks(user?.preferences, flowId);
@@ -559,6 +574,7 @@ const FlowEditorInner = ({ flowId, onBack }) => {
 
     useEffect(() => { handleLoadListRef.current = handleLoadFilteredList; }, [handleLoadFilteredList]);
     useEffect(() => { handleRunListRef.current = handleRunFilteredList; }, [handleRunFilteredList]);
+    useEffect(() => { handleDuplicateNodeRef.current = handleDuplicateNode; }, [handleDuplicateNode]);
 
     const handleToggleActive = useCallback(async () => {
         const nextActive = !flowMeta.active;
