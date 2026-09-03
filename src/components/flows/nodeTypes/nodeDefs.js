@@ -1,4 +1,4 @@
-import { Play, Tag, CalendarRange, MapPin, Briefcase, GraduationCap, MessageCircle, Hash, UserRound, CircleMinus, BellRing, FolderKanban, FlaskConical, Eraser, Filter, MessageSquareText, ListChecks, CheckCheck, BotOff, Bot, Ear, AlarmClock, StickyNote, Quote, Square, Type } from 'lucide-react';
+import { Play, Tag, CalendarRange, MapPin, Briefcase, GraduationCap, MessageCircle, Hash, UserRound, CircleMinus, BellRing, FolderKanban, FlaskConical, Eraser, Filter, MessageSquareText, ListChecks, CheckCheck, BotOff, Bot, Ear, AlarmClock, StickyNote, Quote, Square, Type, Flag } from 'lucide-react';
 
 export const PROFILE_FILTER_LABELS = {
     active: 'Activos (no bloqueados)',
@@ -36,7 +36,8 @@ export const COLOR_CLASSES = {
     emerald: { bg: 'bg-emerald-50 dark:bg-emerald-900/20', border: 'border-emerald-200 dark:border-emerald-800', icon: 'bg-emerald-500', text: 'text-emerald-700 dark:text-emerald-300' },
     amber: { bg: 'bg-amber-50 dark:bg-amber-900/20', border: 'border-amber-200 dark:border-amber-800', icon: 'bg-amber-500', text: 'text-amber-700 dark:text-amber-300' },
     gray: { bg: 'bg-gray-50 dark:bg-gray-800', border: 'border-gray-200 dark:border-gray-700', icon: 'bg-gray-500', text: 'text-gray-700 dark:text-gray-300' },
-    violet: { bg: 'bg-violet-50 dark:bg-violet-900/20', border: 'border-violet-200 dark:border-violet-800', icon: 'bg-violet-500', text: 'text-violet-700 dark:text-violet-300' }
+    violet: { bg: 'bg-violet-50 dark:bg-violet-900/20', border: 'border-violet-200 dark:border-violet-800', icon: 'bg-violet-500', text: 'text-violet-700 dark:text-violet-300' },
+    rose: { bg: 'bg-rose-50 dark:bg-rose-900/20', border: 'border-rose-200 dark:border-rose-800', icon: 'bg-rose-500', text: 'text-rose-700 dark:text-rose-300' }
 };
 
 export const NODE_DEFS = {
@@ -249,6 +250,14 @@ export const NODE_DEFS = {
         hasTarget: true,
         hasSource: true,
         summary: (data) => data.label || 'Cuenta candidatos que llegan aquí'
+    },
+    checkpoint: {
+        label: 'Check Point',
+        icon: Flag,
+        color: 'rose',
+        hasTarget: true,
+        hasSource: true,
+        summary: (data) => data.name?.trim() ? data.name : 'Marca el paso por este punto (ponle nombre)'
     },
     test: {
         label: 'Nodo Test',

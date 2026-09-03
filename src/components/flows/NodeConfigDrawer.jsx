@@ -744,6 +744,20 @@ const NodeConfigDrawer = ({ node, flowId, meta, quickReplies, reminderTemplates,
                     </div>
                 )}
 
+                {node.type === 'checkpoint' && (
+                    <div>
+                        <label className="text-xs text-gray-500 dark:text-gray-400 mb-2 block">Nombre del Check Point</label>
+                        <input
+                            type="text"
+                            value={data.name || ''}
+                            onChange={(e) => patch({ name: e.target.value })}
+                            placeholder="Ej. Fin de flujo, Aceptó vacante, Confirmó cita"
+                            className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 dark:bg-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-rose-500"
+                        />
+                        <p className="mt-2 text-xs text-gray-400">Registra cada vez que un candidato pasa por este punto (fecha + este nodo). Guarda todos los pasos; el más nuevo es el relevante. El flujo continúa después de él. Cambiar el nombre aplica retroactivamente a todo el historial.</p>
+                    </div>
+                )}
+
                 {def.branching && node.type !== 'esperando_respuesta' && (
                     <div className="mt-5 pt-4 border-t border-gray-100 dark:border-gray-700">
                         <p className="text-xs text-gray-500 dark:text-gray-400">

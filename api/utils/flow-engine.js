@@ -56,6 +56,15 @@ export const COUNTER_PREFIX = 'flow:counter:v1:';
 // nodo (ZADD NX no lo pisa en repasos). Habilita el desglose por fecha (hoy/ayer/semana/
 // mes/rango) sin tocar el SET de total (que preserva el histórico previo a esta feature).
 export const COUNTER_TS_PREFIX = 'flow:counter:ts:v1:';
+// Check Points ("bandera a cuadros"): nodos de PASO que registran CADA vez que un candidato
+// pasa por ESE nodo (no por el flujo). Se puede poner en el final o en puntos intermedios.
+// Por checkpoint (base = `${CHECKPOINT_PREFIX}${flowId}:${nodeId}`) se guardan DOS llaves:
+//   • `${base}:log:${candidateId}`  (LIST)  → historial COMPLETO: un elemento (ms) por paso.
+//   • `${base}:last`                (HASH)  → candidateId → ms del paso MÁS NUEVO (HSET pisa)
+//                                             y a la vez el roster de quién pasó (HKEYS).
+// El NOMBRE del checkpoint NO se guarda aquí: vive en node.data.name del flujo, así que
+// renombrarlo aplica retroactivamente a todo el historial (se resuelve por nodeId al leer).
+export const CHECKPOINT_PREFIX = 'flow:checkpoint:v1:';
 // Ledger de progreso por candidato/flujo (hash nodeId → '1'/'0'): permite RETOMAR una
 // corrida que quedó a medias sin re-ejecutar los nodos ya hechos (no re-enviar WhatsApp,
 // no re-crear recordatorios). Se borra al completar; TTL como red de seguridad.
@@ -788,6 +797,24 @@ export async function evaluateOrExecute(node, candidate, flowId, redis, opts = {
                 console.error(`[FLOW-ENGINE] contador ${flowId}/${node.id}:`, e?.message);
             }
             return true;
+        }
+
+        case 'checkpoint': {
+            if (opts.skipCounters) return true; // modo test/simulador: no ensucia los datos reales
+            try {
+                const base = `${CHECKPOINT_PREFIX}${flowId}:${node.id}`;
+                const now = Date.now();
+                await redis.pipeline()
+                    // Historial COMPLETO: un elemento por cada paso por este checkpoint.
+                    .rpush(`${base}:log:${candidate.id}`, now)
+                    // Paso MÁS NUEVO por candidato (HSET pisa = siempre el último) + roster.
+                    // Lectura en O(1) sin recorrer el log.
+                    .hset(`${base}:last`, candidate.id, now)
+                    .exec();
+            } catch (e) {
+                console.error(`[FLOW-ENGINE] checkpoint ${flowId}/${node.id}:`, e?.message);
+            }
+            return true; // nodo de paso: el flujo continúa después de él
         }
 
         default:

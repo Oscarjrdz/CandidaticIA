@@ -38,6 +38,7 @@ const DEFAULT_DATA_BY_TYPE = {
     accion_reactivar_bot: {},
     esperando_respuesta: { grupos: [{ id: 'g1', label: '', frases: [] }], matchMode: 'contiene', timeoutHoras: 48 },
     contador: { label: '' },
+    checkpoint: { name: '' },
     test: { testPhone: '' },
     nota: { text: '' },
     // Elementos decorativos (el motor los ignora, van a la par de "Agregar nodo"):
