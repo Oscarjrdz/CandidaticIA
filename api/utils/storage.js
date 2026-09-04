@@ -136,7 +136,7 @@ const INDEX_KEYS = {
 const UNTAGGED_TAG_FILTER = '__candidatic_untagged__';
 const UNTAGGED_COUNT_KEY = 'candidatic:untagged_count';
 export const MANUAL_PROJECT_LINKS_PREFIX = 'crm_links:';
-export const HUMAN_INTERVENTION_SILENCE_MS = 5 * 24 * 60 * 60 * 1000;
+export const HUMAN_INTERVENTION_SILENCE_MS = 1 * 24 * 60 * 60 * 1000;
 
 const CRM_LINKS_LOCK_SCOPE = 'crm_links';
 const CRM_LINKS_LOCK_TTL_SECONDS = 10;

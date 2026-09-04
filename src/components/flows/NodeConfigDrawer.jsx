@@ -627,7 +627,7 @@ const NodeConfigDrawer = ({ node, flowId, meta, quickReplies, reminderTemplates,
 
                 {node.type === 'accion_desactivar_bot' && (
                     <p className="text-sm text-gray-500 dark:text-gray-400">
-                        No necesita configuración: al ejecutarse, <strong>silencia a Brenda</strong> para ese candidato — exactamente igual que cuando un humano interviene en el chat (modo humano). El candidato queda marcado como intervenido y la IA <strong>deja de responderle</strong>. No lo bloquea en WhatsApp: un reclutador puede seguir escribiéndole. Se reactiva sola a los 5 días, o manualmente desde el chat.
+                        No necesita configuración: al ejecutarse, <strong>silencia a Brenda</strong> para ese candidato — exactamente igual que cuando un humano interviene en el chat (modo humano). El candidato queda marcado como intervenido y la IA <strong>deja de responderle</strong>. No lo bloquea en WhatsApp: un reclutador puede seguir escribiéndole. Se reactiva sola a las 24 horas, o manualmente desde el chat.
                     </p>
                 )}
 

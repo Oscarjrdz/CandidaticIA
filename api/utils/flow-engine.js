@@ -621,7 +621,7 @@ export async function evaluateOrExecute(node, candidate, flowId, redis, opts = {
             // interviene en el chat (modo humano). Mismo patch que aplica
             // api/candidates/block.js (lo que dispara autoSilenceBot en ChatSection.jsx):
             // blocked + blockedAt + blockedExpiresAt (ahora + HUMAN_INTERVENTION_SILENCE_MS,
-            // 5 días) + blockedReason 'human_intervention'. NO bloquea en WhatsApp — solo
+            // 24 horas) + blockedReason 'human_intervention'. NO bloquea en WhatsApp — solo
             // marca al candidato como intervenido para que la IA no responda. Si algún día
             // cambia la lógica de intervención humana, actualízala en block.js y aquí.
             try {
