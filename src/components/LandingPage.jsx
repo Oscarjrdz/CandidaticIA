@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import Button from './ui/Button';
 import Input from './ui/Input';
+import LandingVisitCounter from './LandingVisitCounter';
 import BlogView from './BlogView';
 
 /* ─── WhatsApp SVG Icon ─── */
@@ -1744,9 +1745,12 @@ const LandingPage = ({ onLoginSuccess }) => {
                         />
                         <span className="text-[11px] text-white tracking-tight">by <a href="https://www.hr1.mx" target="_blank" rel="noopener noreferrer" className="text-white hover:underline">Hr One México</a> 🇲🇽</span>
                     </div>
-                    <p className="text-xs sm:text-sm text-gray-600 text-center">
-                        © {new Date().getFullYear()} Candidatic IA. Todos los derechos reservados.
-                    </p>
+                    <div className="flex flex-col items-center gap-1.5">
+                        <p className="text-xs sm:text-sm text-gray-600 text-center">
+                            © {new Date().getFullYear()} Candidatic IA. Todos los derechos reservados.
+                        </p>
+                        <LandingVisitCounter />
+                    </div>
                     <div className="flex items-center space-x-6">
                         <a href="/privacy" className="text-gray-600 hover:text-violet-400 transition-colors text-xs sm:text-sm">Privacidad</a>
                         <a href="/terms" className="text-gray-600 hover:text-violet-400 transition-colors text-xs sm:text-sm">Términos</a>

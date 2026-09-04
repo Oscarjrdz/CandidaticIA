@@ -6,6 +6,7 @@ import {
     Bot, Target, FileText, BarChart3, X, Users, Zap, ChevronDown, ChevronUp, Sparkles
 } from 'lucide-react';
 import BlogView from './BlogView';
+import LandingVisitCounter from './LandingVisitCounter';
 
 const WhatsAppIcon = ({ className = "w-5 h-5" }) => (
     <svg viewBox="0 0 24 24" className={`${className} fill-current`}>
@@ -702,6 +703,7 @@ const MobileLandingPage = ({ onLoginSuccess }) => {
                     <button onClick={() => setIsLoginOpen(true)} className="hover:text-violet-400">Ingresar</button>
                 </div>
                 <p className="text-xs text-gray-600">© {new Date().getFullYear()} Candidatic IA. Todos los derechos reservados.</p>
+                <div className="mt-3"><LandingVisitCounter /></div>
             </footer>
 
             {/* ── STICKY BOTTOM CTA ── */}

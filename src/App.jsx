@@ -200,6 +200,17 @@ function AppShell() {
     return () => clearTimeout(timer);
   }, [user, isAppReady, activeSection]);
 
+  // Analítica de la landing: se activa solo cuando el visitante NO ha iniciado
+  // sesión (que es cuando se muestra la landing). Ver src/utils/lpAnalytics.js.
+  useEffect(() => {
+    if (isAuthChecking || user) return undefined;
+    let cleanup = () => {};
+    import('./utils/lpAnalytics.js')
+      .then((m) => { cleanup = m.trackLandingVisit(); })
+      .catch(() => {});
+    return () => cleanup();
+  }, [isAuthChecking, user]);
+
   // AUTH GUARD
   if (isAuthChecking) {
     return <LoadingOverlay />;
