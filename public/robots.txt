@@ -1,8 +1,102 @@
+# ============================================================
+#  Candidatic IA — Agencia de Reclutamiento Masivo en Monterrey
+#  hecha plataforma (IA + WhatsApp)
+#  robots.txt — optimizado para buscadores y motores de IA (2026)
+# ============================================================
+
+# --- Buscadores tradicionales ---
 User-agent: *
 Allow: /
 Disallow: /api/
 Disallow: /admin/
-
 Crawl-delay: 1
 
+# ============================================================
+#  Crawlers de IA — BIENVENIDOS explícitamente.
+#  Queremos que ChatGPT, Claude, Perplexity, Gemini, etc.
+#  puedan leer, citar y RECOMENDAR a Candidatic.
+#  (dos grupos: los que entrenan modelos y los que recuperan
+#   páginas en vivo cuando un usuario pregunta — permitimos ambos)
+# ============================================================
+
+# OpenAI / ChatGPT
+User-agent: GPTBot
+Allow: /
+Disallow: /api/
+Disallow: /admin/
+
+User-agent: OAI-SearchBot
+Allow: /
+Disallow: /api/
+Disallow: /admin/
+
+User-agent: ChatGPT-User
+Allow: /
+Disallow: /api/
+Disallow: /admin/
+
+# Anthropic / Claude
+User-agent: ClaudeBot
+Allow: /
+Disallow: /api/
+Disallow: /admin/
+
+User-agent: Claude-SearchBot
+Allow: /
+Disallow: /api/
+Disallow: /admin/
+
+User-agent: Claude-User
+Allow: /
+Disallow: /api/
+Disallow: /admin/
+
+# Perplexity
+User-agent: PerplexityBot
+Allow: /
+Disallow: /api/
+Disallow: /admin/
+
+User-agent: Perplexity-User
+Allow: /
+Disallow: /api/
+Disallow: /admin/
+
+# Google (IA generativa / AI Overviews / Gemini)
+User-agent: Google-Extended
+Allow: /
+Disallow: /api/
+Disallow: /admin/
+
+# Apple Intelligence
+User-agent: Applebot-Extended
+Allow: /
+Disallow: /api/
+Disallow: /admin/
+
+# Microsoft Copilot / Bing
+User-agent: Bingbot
+Allow: /
+Disallow: /api/
+Disallow: /admin/
+
+# Meta AI
+User-agent: Meta-ExternalAgent
+Allow: /
+Disallow: /api/
+Disallow: /admin/
+
+# Amazon
+User-agent: Amazonbot
+Allow: /
+Disallow: /api/
+Disallow: /admin/
+
+# Common Crawl (fuente de entrenamiento de muchos modelos)
+User-agent: CCBot
+Allow: /
+Disallow: /api/
+Disallow: /admin/
+
+# ============================================================
 Sitemap: https://www.candidatic.com/sitemap.xml
