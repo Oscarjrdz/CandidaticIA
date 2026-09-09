@@ -9,6 +9,93 @@
     <mobile:mobile/>
   </url>
   <url>
+    <loc>https://www.candidatic.com/blog</loc>
+    <lastmod>2026-08-30</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+    <mobile:mobile/>
+  </url>
+
+  <!-- Artículos del blog (server-rendered en /api/blog) -->
+  <url>
+    <loc>https://www.candidatic.com/reclutar-con-conversaciones-no-con-formularios</loc>
+    <lastmod>2026-08-30</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+    <mobile:mobile/>
+  </url>
+  <url>
+    <loc>https://www.candidatic.com/blog/la-nueva-guerra-por-el-talento-operativo-en-nuevo-leon</loc>
+    <lastmod>2026-08-29</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+    <mobile:mobile/>
+  </url>
+  <url>
+    <loc>https://www.candidatic.com/blog/el-costo-invisible-de-una-vacante-operativa</loc>
+    <lastmod>2026-08-27</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+    <mobile:mobile/>
+  </url>
+  <url>
+    <loc>https://www.candidatic.com/blog/de-reclutamiento-masivo-a-talent-intelligence</loc>
+    <lastmod>2026-08-25</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+    <mobile:mobile/>
+  </url>
+  <url>
+    <loc>https://www.candidatic.com/blog/whatsapp-como-infraestructura-de-reclutamiento</loc>
+    <lastmod>2026-08-22</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+    <mobile:mobile/>
+  </url>
+  <url>
+    <loc>https://www.candidatic.com/blog/inteligencia-artificial-y-reclutadores-nuevo-modelo</loc>
+    <lastmod>2026-08-20</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+    <mobile:mobile/>
+  </url>
+  <url>
+    <loc>https://www.candidatic.com/blog/la-experiencia-del-candidato-como-ventaja-competitiva</loc>
+    <lastmod>2026-08-18</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+    <mobile:mobile/>
+  </url>
+  <url>
+    <loc>https://www.candidatic.com/blog/nearshoring-y-recursos-humanos-el-reto-de-nuevo-leon</loc>
+    <lastmod>2026-08-15</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+    <mobile:mobile/>
+  </url>
+  <url>
+    <loc>https://www.candidatic.com/blog/time-to-hire-la-velocidad-como-ventaja-competitiva</loc>
+    <lastmod>2026-08-13</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+    <mobile:mobile/>
+  </url>
+  <url>
+    <loc>https://www.candidatic.com/blog/el-nuevo-reclutamiento-operativo-humanos-datos-whatsapp-ia</loc>
+    <lastmod>2026-08-11</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+    <mobile:mobile/>
+  </url>
+  <url>
+    <loc>https://www.candidatic.com/blog/el-futuro-del-director-de-rh-estratega-del-talento</loc>
+    <lastmod>2026-08-08</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+    <mobile:mobile/>
+  </url>
+
+  <url>
     <loc>https://www.candidatic.com/privacy</loc>
     <lastmod>2026-09-08</lastmod>
     <changefreq>monthly</changefreq>

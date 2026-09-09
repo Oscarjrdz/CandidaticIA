@@ -49,6 +49,11 @@ export default defineConfig({
           /^\/privacy$/,
           /^\/terms$/,
           /^\/s\//,
+          // Blog server-rendered (/api/blog): sin esto el service worker de la PWA
+          // serviría el app shell (landing) para visitantes recurrentes en vez de
+          // las páginas reales del blog. Incluye el post con URL limpia (root:true).
+          /^\/blog/,
+          /^\/reclutar-con-conversaciones-no-con-formularios$/,
         ],
         runtimeCaching: [
           {

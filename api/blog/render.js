@@ -121,6 +121,40 @@ export function renderPostPage(post, allPosts, origin) {
   const desc = post.excerpt || '';
   const title = `${post.title} — Blog Candidatic IA`;
 
+  // JSON-LD: BlogPosting + BreadcrumbList para SEO/GEO (que las IA citen el artículo).
+  // Se serializa escapando "<" para no romper el <script>.
+  const structuredData = JSON.stringify({
+    '@context': 'https://schema.org',
+    '@graph': [
+      {
+        '@type': 'BlogPosting',
+        'headline': post.title,
+        'description': desc,
+        'image': ogImageAbs,
+        'datePublished': post.date,
+        'dateModified': post.date,
+        'inLanguage': 'es-MX',
+        'articleSection': post.category || 'Reclutamiento',
+        'mainEntityOfPage': { '@type': 'WebPage', '@id': canonical },
+        'url': canonical,
+        'author': { '@type': 'Organization', 'name': post.author || 'Candidatic IA' },
+        'publisher': {
+          '@type': 'Organization',
+          'name': 'Candidatic IA',
+          'logo': { '@type': 'ImageObject', 'url': `${origin}/Agencia_de_Reclutamiento_Masivo_1.svg` }
+        }
+      },
+      {
+        '@type': 'BreadcrumbList',
+        'itemListElement': [
+          { '@type': 'ListItem', 'position': 1, 'name': 'Inicio', 'item': `${origin}/` },
+          { '@type': 'ListItem', 'position': 2, 'name': 'Blog', 'item': `${origin}/blog` },
+          { '@type': 'ListItem', 'position': 3, 'name': post.title, 'item': canonical }
+        ]
+      }
+    ]
+  }).replace(/</g, '\\u003c');
+
   return `<!DOCTYPE html>
 <html lang="es">
 <head>
@@ -143,6 +177,8 @@ export function renderPostPage(post, allPosts, origin) {
 <meta name="twitter:title" content="${escapeHtml(post.title)}">
 <meta name="twitter:description" content="${escapeHtml(desc)}">
 <meta name="twitter:image" content="${escapeHtml(ogImageAbs)}">
+
+<script type="application/ld+json">${structuredData}</script>
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Lora:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
