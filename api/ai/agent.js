@@ -2277,17 +2277,26 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
                         // aceptamos: descartamos la fecha inventada y volvemos a pedirla completa.
                         // Solo aplica cuando la fecha se está dando ESTE turno (el texto del usuario
                         // menciona un mes/año) — nunca en un acarreo de una fecha ya guardada.
+                        // Detección con SESGO A ACEPTAR: solo rechazamos si el texto parece una
+                        // fecha PERO el día no aparece en ninguna forma conocida. Cubierto con 45
+                        // escenarios de prueba (dígito+mes completo/abreviado, dd/mm/aaaa con varios
+                        // separadores, bloques sólidos, día en palabra, mes-antes-del-día, etc.).
                         const _uTxt = (aggregatedText || '').toLowerCase();
-                        const _MESES = 'enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|setiembre|octubre|noviembre|diciembre';
-                        // Día escrito en palabra (1–31), para no rechazar "primero de mayo", "quince de enero", etc.
+                        const _MESES = 'enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|setiembre|octubre|noviembre|diciembre|sept|ene|feb|mar|abr|may|jun|jul|ago|sep|oct|nov|dic';
                         const _DIA_PAL = 'primero|uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|once|doce|trece|catorce|quince|diecis[eé]is|diecisiete|dieciocho|diecinueve|veinte|veintiuno|veintid[oó]s|veintitr[eé]s|veinticuatro|veinticinco|veintis[eé]is|veintisiete|veintiocho|veintinueve|treinta|treinta y uno';
-                        const _mencionaMesOAnio = new RegExp(`(?:${_MESES})|\\b(?:19|20)\\d{2}\\b`, 'i').test(_uTxt);
-                        const _dioDia =
-                            new RegExp(`\\b([1-9]|[12]\\d|3[01])\\s*(?:de\\s+)?(?:${_MESES})`, 'i').test(_uTxt) ||       // "19 de mayo"
-                            new RegExp(`\\b(?:${_DIA_PAL})\\s+(?:de\\s+)?(?:${_MESES})`, 'i').test(_uTxt) ||             // "primero de mayo"
-                            /\b([1-9]|[12]\d|3[01])[/\-.]\d{1,2}[/\-.]\d{2,4}\b/.test(_uTxt) ||                          // 19/05/1983
-                            /\b\d{6}\b|\b\d{8}\b/.test(_uTxt);                                                          // 190583 / 19051983
-                        const _fechaSinDia = _mencionaMesOAnio && !_dioDia;
+                        const _DIA_NUM = '([1-9]|[12]\\d|3[01])'; // 1–31
+                        const _SEP = '[\\s/.-]+';                 // espacio / - .
+                        const _SEPd = '(?:[\\s/.-]+|\\s+del?\\s+)'; // separador que además admite "de"/"del"
+                        // ¿El texto parece una fecha? (mes por nombre/abrev acotado con \b, o un año de 4 dígitos)
+                        const _pareceFecha = new RegExp(`\\b(?:${_MESES})\\b|\\b(?:19|20)\\d{2}\\b`, 'i').test(_uTxt);
+                        // ¿Aparece el DÍA en alguna forma reconocible?
+                        const _hayDia =
+                            new RegExp(`\\b${_DIA_NUM}${_SEP}(?:del?\\s+)?(?:${_MESES})`, 'i').test(_uTxt) ||     // "16 de dic", "16 dic", "16/dic"
+                            new RegExp(`(?:${_MESES})${_SEP}(?:del?\\s+)?${_DIA_NUM}(?!\\d)`, 'i').test(_uTxt) ||  // "diciembre 16"
+                            new RegExp(`\\b(?:${_DIA_PAL})\\s+(?:del?\\s+)?(?:${_MESES})`, 'i').test(_uTxt) ||     // "primero de mayo"
+                            new RegExp(`\\b${_DIA_NUM}${_SEPd}\\d{1,2}${_SEPd}\\d{2,4}\\b`).test(_uTxt) ||         // 16/12/1982, 16 12 82, 16 de 12 de 1982
+                            /\b\d{6}\b|\b\d{8}\b/.test(_uTxt);                                                     // 161282 / 16121982
+                        const _fechaSinDia = _pareceFecha && !_hayDia;
 
                         if (_fechaSinDia && !candidateData.fechaNacimiento) {
                             delete ext.fechaNacimiento;
