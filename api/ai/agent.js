@@ -1766,7 +1766,12 @@ REGLAS:
                         candidateUpdates.colonia = coloniaRaw;
                         candidateUpdates.paso2Estado = 'esperando_experiencia';
                         const _expName = p2FirstName ? `Oye ${p2FirstName}, ya` : 'Ya';
-                        responseTextVal = `A sí 😊, colonia ${coloniaRaw} la conozco bien 😊[MSG_SPLIT]${_expName} solo me faltaría saber si tienes experiencia en fábrica 🏭 ¿sí o no?`;
+                        // Personaliza la pregunta con la categoría que eligió el candidato (ej.
+                        // "experiencia de Soldador"). Fallback a "en fábrica" si por alguna razón
+                        // no hubiera categoría (no debería pasar: paso 1 ya está completo aquí).
+                        const _expCat = (candidateUpdates.categoria || candidateData.categoria || '').trim();
+                        const _expArea = _expCat ? `de ${_expCat}` : 'en fábrica';
+                        responseTextVal = `A sí 😊, colonia ${coloniaRaw} la conozco bien 😊[MSG_SPLIT]${_expName} solo me faltaría saber si tienes experiencia ${_expArea} 🏭 ¿sí o no?`;
                     } else {
                         // Evasion — persuade using promptAvanzado + ADN
                         const evasionSys = `${promptAvanzado ? promptAvanzado + '\n\n' : ''}Eres Brenda Rodríguez, reclutadora de ${brand}. El candidato no dio claramente el nombre de su colonia. Tu misión es pedirle amablemente que comparta su colonia. REGLA CRÍTICA: NUNCA digas que ya tienes la colonia ni confirmes haberla recibido — aún no la tienes. Genera 2 burbujas separadas con [MSG_SPLIT]: la primera reconoce su respuesta con calidez, la segunda pide la colonia con una razón concreta (validar transporte). Máximo 2 líneas cada una. Sin markdown.\n[ADN]: ${JSON.stringify(cleanAdnBase)}`;
@@ -1908,9 +1913,12 @@ Responde ÚNICAMENTE con el número entero de meses. Si evade o no menciona ning
                     } else {
                         // Duración no detectada — preguntar
                         candidateUpdates.paso2Estado = 'esperando_meses_experiencia';
+                        // Misma personalización por categoría que la pregunta inicial de experiencia.
+                        const _expCat = (candidateUpdates.categoria || candidateData.categoria || '').trim();
+                        const _expArea = _expCat ? `de ${_expCat}` : 'en fábrica';
                         const _expQ = p2FirstName
-                            ? `Perfecto ${p2FirstName} 🌟 ¿y cuánto tiempo más o menos tienes de experiencia en fábrica? 😮[MSG_SPLIT]Un aproximado ${p2FirstName} no tiene que ser tan exacto 😅`
-                            : `Perfecto 🌟 ¿y cuánto tiempo más o menos tienes de experiencia en fábrica? 😮[MSG_SPLIT]Un aproximado, no tiene que ser tan exacto 😅`;
+                            ? `Perfecto ${p2FirstName} 🌟 ¿y cuánto tiempo más o menos tienes de experiencia ${_expArea}? 😮[MSG_SPLIT]Un aproximado ${p2FirstName} no tiene que ser tan exacto 😅`
+                            : `Perfecto 🌟 ¿y cuánto tiempo más o menos tienes de experiencia ${_expArea}? 😮[MSG_SPLIT]Un aproximado, no tiene que ser tan exacto 😅`;
                         responseTextVal = _expQ;
                     }
                 } else {
