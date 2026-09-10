@@ -3,37 +3,24 @@
  * These are pure functions with zero React dependencies.
  */
 
-// ✅ META AUDIT: Intl.DateTimeFormat singletons — created ONCE, reused forever
+// ✅ META AUDIT: Intl.DateTimeFormat singleton — created ONCE, reused forever
 const _fmtTime = new Intl.DateTimeFormat('es-MX', { timeZone: 'America/Monterrey', hour: 'numeric', minute: '2-digit', hour12: true });
-const _fmtMidnight = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Monterrey', year: 'numeric', month: '2-digit', day: '2-digit' });
-const _fmtWeekday = new Intl.DateTimeFormat('es-MX', { timeZone: 'America/Monterrey', weekday: 'long' });
-const _fmtDate = new Intl.DateTimeFormat('es-MX', { timeZone: 'America/Monterrey', day: '2-digit', month: '2-digit', year: 'numeric' });
 
+// Hora del mensaje (estilo WhatsApp): SOLO la hora. El día lo maneja el chip
+// separador de fecha entre grupos de mensajes, así que meter la fecha completa aquí
+// era redundante y ensanchaba la burbuja en mensajes cortos (ej. un solo emoji).
 export const safeFormatTime = (dateStr) => {
     if (!dateStr) return '';
     const d = new Date(dateStr);
     if (isNaN(d.getTime())) return '';
 
-    const timeStr = _fmtTime.format(d).replace(' p. m.', ' pm').replace(' a. m.', ' am').toLowerCase();
-
-    // Calculate elapsed days accurately in Monterrey timezone
-    const getMid = (dateObj) => {
-        const str = _fmtMidnight.format(dateObj);
-        const [m, day, y] = str.split('/');
-        return new Date(y, m - 1, day);
-    };
-
-    const diffDays = Math.round((getMid(new Date()) - getMid(d)) / 86400000);
-
-    if (diffDays === 0) return `Hoy ${timeStr}`;
-    if (diffDays === 1) return `Ayer ${timeStr}`;
-    if (diffDays > 1 && diffDays < 7) {
-        const weekdayStr = _fmtWeekday.format(d);
-        const capitalized = weekdayStr.charAt(0).toUpperCase() + weekdayStr.slice(1);
-        return `${capitalized} ${timeStr}`;
-    }
-
-    return `${_fmtDate.format(d)} ${timeStr}`;
+    // formatToParts evita depender del formato exacto de dayPeriod, que varía entre
+    // versiones de Intl ("a. m.", "a.m.", "AM"…) — lo normalizamos a "a.m."/"p.m." aquí.
+    const parts = _fmtTime.formatToParts(d);
+    const hour = parts.find(p => p.type === 'hour')?.value || '';
+    const minute = parts.find(p => p.type === 'minute')?.value || '';
+    const isPM = /p/i.test(parts.find(p => p.type === 'dayPeriod')?.value || '');
+    return `${hour}:${minute} ${isPM ? 'p.m.' : 'a.m.'}`;
 };
 
 export const toTitleCase = (str) => {
