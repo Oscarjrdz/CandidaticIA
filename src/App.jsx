@@ -42,7 +42,6 @@ const CandidatesSection = lazyWithRetry(() => import('./components/CandidatesSec
 const ChatSection = lazyWithRetry(importChatSection, 'ChatSection');
 const BulksSection = lazyWithRetry(() => import('./components/BulksSection'), 'BulksSection');
 const SettingsSection = lazyWithRetry(() => import('./components/SettingsSection'), 'SettingsSection');
-const AutomationsSection = lazyWithRetry(() => import('./components/AutomationsSection'), 'AutomationsSection');
 const FlowsSection = lazyWithRetry(() => import('./components/FlowsSection'), 'FlowsSection');
 const VacanciesSection = lazyWithRetry(() => import('./components/VacanciesSection'), 'VacanciesSection');
 const BolsaSection = lazyWithRetry(() => import('./components/BolsaSection'), 'BolsaSection');
@@ -280,7 +279,6 @@ function AppShell() {
                       : activeSection === 'bulks' ? 'Envíos Masivos'
                       : activeSection === 'ads-stats' ? 'Estadísticas de Ads'
                       : activeSection === 'bot-ia' ? 'Bot IA'
-                      : activeSection === 'automations' ? 'Automatizaciones'
                       : activeSection === 'flows' ? 'Flows'
                       : activeSection === 'vacancies' ? 'Vacantes'
                       : activeSection === 'bolsa' ? 'Bolsa de Empleo (App)'
@@ -335,7 +333,6 @@ function AppShell() {
                       : activeSection === 'bulks' ? 'Manda mensajes en secuencia a múltiples candidatos a la vez'
                       : activeSection === 'ads-stats' ? 'Seguimiento y rendimiento de campañas de Meta Ads'
                       : activeSection === 'bot-ia' ? 'Configuración del comportamiento del Bot'
-                      : activeSection === 'automations' ? 'Reglas de extracción inteligente de datos'
                       : activeSection === 'flows' ? 'Automatiza acciones cuando un candidato completa su perfil'
                       : activeSection === 'vacancies' ? 'Gestión y publicación de vacantes'
                       : activeSection === 'history' ? 'Historial de conversaciones'
@@ -401,8 +398,6 @@ function AppShell() {
             <BotIASection />
           ) : activeSection === 'ads-stats' ? (
             <AdsStatisticsSection />
-          ) : activeSection === 'automations' ? (
-            <AutomationsSection />
           ) : activeSection === 'flows' ? (
             <FlowsSection />
           ) : activeSection === 'vacancies' ? (

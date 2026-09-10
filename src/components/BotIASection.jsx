@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Bot, Save, Power, Settings as SettingsIcon, MessageSquare, Smartphone, Clock, Shield, Sparkles, Trash2, Send, RefreshCw, CheckCircle } from 'lucide-react';
 import ReengagementPanel from './bot/ReengagementPanel';
+import AutomationsSection from './AutomationsSection';
 import Card from './ui/Card';
 import Button from './ui/Button';
 import Input from './ui/Input';
@@ -440,6 +441,11 @@ const BotIASection = () => {
                     <Save className="w-4 h-4 mr-2" />
                     <span>Guardar Cambios</span>
                 </Button>
+            </div>
+
+            {/* Extracción Inteligente (antes sección "Automatizaciones") */}
+            <div className="pt-6 mt-2 border-t border-gray-100 dark:border-gray-800">
+                <AutomationsSection />
             </div>
 
             {/* Re-engagement Proactivo */}

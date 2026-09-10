@@ -14,7 +14,6 @@ const AVAILABLE_SECTIONS = [
     { id: 'chat', name: 'Chat Web' },
     { id: 'bulks', name: 'Envíos Masivos' },
     { id: 'bot-ia', name: 'Bot IA' },
-    { id: 'automations', name: 'Automatizaciones' },
     { id: 'vacancies', name: 'Vacantes' },
     { id: 'history', name: 'Historial' },
     { id: 'users', name: 'Usuarios' },
