@@ -105,9 +105,14 @@ const _SINGLE_HOUR_CTAS = [
     "¿Quieres que confirme tu asistencia a esta hora? ✨"
 ];
 
-const NEW_CANDIDATE_GREETING = '¡Hola! 😇 Soy Brenda Rodríguez, reclutadora de Candidatic.';
+// ── Marca por número de WhatsApp ────────────────────────────────────────────
+// Cada phone_number_id de Meta mapea a la marca con la que Brenda se presenta.
+// El número Hr One México usa "Hr One Reclutamiento"; cualquier otro usa "Candidatic".
+const HR_ONE_PHONE_ID = '1249373631587237';
+const brandForPhoneId = (phoneId) => (String(phoneId || '') === HR_ONE_PHONE_ID ? 'Hr One Reclutamiento' : 'Candidatic');
+
 const NEW_CANDIDATE_NAME_ASK = '¿Me puedes compartir tu Nombre y Apellidos completos? 🌟';
-const buildNewCandidateWelcome = () => `${NEW_CANDIDATE_GREETING}[MSG_SPLIT]${NEW_CANDIDATE_NAME_ASK}`;
+const buildNewCandidateWelcome = (brand = 'Candidatic') => `¡Hola! 😇 Soy Brenda Rodríguez, reclutadora de ${brand}.[MSG_SPLIT]${NEW_CANDIDATE_NAME_ASK}`;
 
 const _AMBIGUITY_VARIANTS = [
     'Solo por confirmar, ¿te gustaría agendar tu entrevista? 😊',
@@ -857,7 +862,7 @@ export const DEFAULT_EXTRACTION_RULES = `
 [EXTRAER]: nombreReal, genero, fechaNacimiento, edad, municipio, categoria, escolaridad.
 1. REFINAR: Si el dato en [ESTADO] ya existe y es válido, mantenlo. Si el candidato da info nueva, actualiza.
 2. FORMATO: Nombres en Title Case. Fecha DD/MM/YYYY (Si el usuario te da números amontonados como "191274" o "190590", INTUYE LA FECHA y guárdala formateada como "19/12/1974". No se la rechaces si puedes deducirla).
-3. MUNICIPIO: Extrae el nombre OFICIAL COMPLETO del municipio (ej: "Monterrey", "Apodaca", "Benito Juárez", "General Escobedo", "Cadereyta Jiménez", "San Nicolás de los Garza", "San Pedro Garza García", "General Zuazua", "Salinas Victoria", "Sabinas Hidalgo", "El Carmen", "Los Aldamas", "Los Herreras", "Los Ramones", "Lampazos de Naranjo", "Ciénega de Flores"). Si el usuario incluye su colonia o fraccionamiento (ej: "Centro Apodaca", "Valle del roble Cadereyta"), IGNORA la colonia y extrae SÓLO el municipio con su nombre oficial. Si el usuario dice solo "Escobedo" → guarda "General Escobedo"; "San Nicolás" → "San Nicolás de los Garza"; "San Pedro" → "San Pedro Garza García"; "Juárez" → "Benito Juárez"; "Zuazua" → "General Zuazua"; "Cadereyta" → "Cadereyta Jiménez"; "Sabinas" → "Sabinas Hidalgo"; "Salinas" → "Salinas Victoria". Si ya está en [ESTADO], mantenlo intacto. CONTEXTO TEMPORAL (CRÍTICO): extrae el municipio SÓLO si el candidato indica que vive AHÍ ACTUALMENTE. Si lo menciona en pasado o con negación ("antes vivía en X", "vivía en X", "ya no vivo en X", "me mudé de X", "antes estaba en X", "viví en X"), NO lo extraigas (deja municipio vacío): te está diciendo dónde vivía ANTES, no dónde vive hoy. En ese caso, en tu respuesta reconoce lo que dijo y pregúntale explícitamente en qué municipio vive ACTUALMENTE (ej: "Entendido, ¿y en qué municipio vives actualmente? 😊").
+3. MUNICIPIO: Extrae el nombre OFICIAL COMPLETO del municipio (ej: "Monterrey", "Apodaca", "Benito Juárez", "General Escobedo", "Cadereyta Jiménez", "San Nicolás de los Garza", "San Pedro Garza García", "General Zuazua", "Salinas Victoria", "Sabinas Hidalgo", "El Carmen", "Los Aldamas", "Los Herreras", "Los Ramones", "Lampazos de Naranjo", "Ciénega de Flores"). Si el usuario incluye su colonia o fraccionamiento (ej: "Centro Apodaca", "Valle del roble Cadereyta"), IGNORA la colonia y extrae SÓLO el municipio con su nombre oficial. Si el usuario dice solo "Escobedo" → guarda "General Escobedo"; "San Nicolás" → "San Nicolás de los Garza"; "San Pedro" → "San Pedro Garza García"; "Juárez" → "Benito Juárez"; "Zuazua" → "General Zuazua"; "Cadereyta" → "Cadereyta Jiménez"; "Sabinas" → "Sabinas Hidalgo"; "Salinas" → "Salinas Victoria". Si ya está en [ESTADO], mantenlo intacto. CONTEXTO TEMPORAL (CRÍTICO): extrae el municipio SÓLO si el candidato indica que vive AHÍ ACTUALMENTE. Si lo menciona en pasado o con negación ("antes vivía en X", "vivía en X", "ya no vivo en X", "me mudé de X", "antes estaba en X", "viví en X"), NO lo extraigas (deja municipio vacío): te está diciendo dónde vivía ANTES, no dónde vive hoy. En ese caso, en tu respuesta reconoce lo que dijo y pregúntale explícitamente en qué municipio vive ACTUALMENTE (ej: "Entendido, ¿y en qué municipio vives actualmente? 😊"). PERO si en el MISMO mensaje menciona un municipio pasado Y uno actual (ej: "antes en Apodaca pero ahora vivo en Monterrey", "vivía en X y me mudé a Y", "ya no vivo en X, ahora en Y"), SÍ extrae el ACTUAL (el que va después de "ahora"/"actualmente"/"me mudé a") e ignora el pasado.
 4. ESCOLARIDAD: Primaria, Secundaria, Preparatoria, Licenciatura, Técnica, Posgrado.
 5. CATEGORÍA: Solo de: {{categorias}}.
 `;
@@ -1181,6 +1186,12 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
             const freshInstanceId = await redis?.get(`candidate_instance:${phone}`);
             if (freshInstanceId && isValidMetaPhoneId(freshInstanceId)) resolvedInstanceId = freshInstanceId;
         } catch (e) { /* fallback to incomingPhoneNumberId */ }
+
+        // 🏷️ Marca con la que Brenda se presenta, según el número que recibió el mensaje.
+        // brandize() re-marca un prompt por defecto (sustituye "Candidatic" por la marca del
+        // número); si el número es Candidatic no cambia nada.
+        const brand = brandForPhoneId(resolvedInstanceId);
+        const brandize = (s) => (brand === 'Candidatic' || !s) ? s : String(s).replace(/Candidatic/g, brand);
 
         // 1. High-Speed Parallel Acquisition (Memory Boost: 40 messages)
         const configKeys = [
@@ -1587,7 +1598,9 @@ SOLO responde al mensaje actual, de forma corta (máximo 2 oraciones). NO mencio
         const auditForMode = audit;
 
         const customPrompt = batchConfig.bot_ia_prompt || '';
-        let systemInstruction = getIdentityLayer(customPrompt);
+        // Solo re-marcamos el prompt POR DEFECTO. Los prompts custom del reclutador se
+        // respetan tal cual (pueden traer URLs u otra marca a propósito).
+        let systemInstruction = customPrompt ? getIdentityLayer(customPrompt) : brandize(getIdentityLayer());
 
         // --- GRACE & SILENCE ARCHITECTURE ---
         const isProfileComplete = audit.paso1Status === 'COMPLETO';
@@ -1746,7 +1759,7 @@ REGLAS:
                         responseTextVal = `A sí 😊, colonia ${coloniaRaw} la conozco bien 😊[MSG_SPLIT]${_expName} solo me faltaría saber si tienes experiencia en fábrica 🏭 ¿sí o no?`;
                     } else {
                         // Evasion — persuade using promptAvanzado + ADN
-                        const evasionSys = `${promptAvanzado ? promptAvanzado + '\n\n' : ''}Eres Brenda Rodríguez, reclutadora de Candidatic. El candidato no dio claramente el nombre de su colonia. Tu misión es pedirle amablemente que comparta su colonia. REGLA CRÍTICA: NUNCA digas que ya tienes la colonia ni confirmes haberla recibido — aún no la tienes. Genera 2 burbujas separadas con [MSG_SPLIT]: la primera reconoce su respuesta con calidez, la segunda pide la colonia con una razón concreta (validar transporte). Máximo 2 líneas cada una. Sin markdown.\n[ADN]: ${JSON.stringify(cleanAdnBase)}`;
+                        const evasionSys = `${promptAvanzado ? promptAvanzado + '\n\n' : ''}Eres Brenda Rodríguez, reclutadora de ${brand}. El candidato no dio claramente el nombre de su colonia. Tu misión es pedirle amablemente que comparta su colonia. REGLA CRÍTICA: NUNCA digas que ya tienes la colonia ni confirmes haberla recibido — aún no la tienes. Genera 2 burbujas separadas con [MSG_SPLIT]: la primera reconoce su respuesta con calidez, la segunda pide la colonia con una razón concreta (validar transporte). Máximo 2 líneas cada una. Sin markdown.\n[ADN]: ${JSON.stringify(cleanAdnBase)}`;
                         const evasionGpt = await getOpenAIResponse(
                             allMessages.slice(-4),
                             evasionSys,
@@ -1793,7 +1806,7 @@ Responde ÚNICAMENTE con el número entero de meses. Si evade o no menciona ning
                     // la agrega el código SIEMPRE para garantizar que se reconduce la plática.
                     const _mName = p2FirstName ? `${p2FirstName}, ` : '';
                     const fallbackEvasion = `${_mName}no te preocupes, solo dime un aproximado 😊[MSG_SPLIT]¿Cuántos meses o años llevas trabajando en fábrica? 🏭`;
-                    const evasionSys = `${promptAvanzado ? promptAvanzado + '\n\n' : ''}Eres Brenda Rodríguez, reclutadora de Candidatic. Ya le preguntaste al candidato cuánto tiempo de experiencia tiene en fábrica y en vez de responder evadió (broma, coqueteo, pregunta, tema distinto). Genera UNA sola línea MUY corta (máximo 15 palabras) que reconozca con gracia y calidez lo que acaba de decir. REGLAS CRÍTICAS: NUNCA le sigas la corriente (no coquetees, no respondas su juego, no desarrolles su tema) — solo reconócelo con simpatía y deja claro que estás trabajando. PROHIBIDO hacer preguntas o mencionar la pregunta de experiencia — esa la agrega el sistema después de tu línea. NUNCA digas que ya tienes el dato ni inventes información. Sin markdown.\n[ADN]: ${JSON.stringify(cleanAdnBase)}`;
+                    const evasionSys = `${promptAvanzado ? promptAvanzado + '\n\n' : ''}Eres Brenda Rodríguez, reclutadora de ${brand}. Ya le preguntaste al candidato cuánto tiempo de experiencia tiene en fábrica y en vez de responder evadió (broma, coqueteo, pregunta, tema distinto). Genera UNA sola línea MUY corta (máximo 15 palabras) que reconozca con gracia y calidez lo que acaba de decir. REGLAS CRÍTICAS: NUNCA le sigas la corriente (no coquetees, no respondas su juego, no desarrolles su tema) — solo reconócelo con simpatía y deja claro que estás trabajando. PROHIBIDO hacer preguntas o mencionar la pregunta de experiencia — esa la agrega el sistema después de tu línea. NUNCA digas que ya tienes el dato ni inventes información. Sin markdown.\n[ADN]: ${JSON.stringify(cleanAdnBase)}`;
                     const EVASION_QUESTION_VARIANTS = [
                         '¿Cuántos meses o años llevas trabajando en fábrica? 🏭 Un aproximado basta 😊',
                         'Dime, ¿como cuánto tiempo llevas trabajando en fábrica? 🏭 No tiene que ser exacto 😊',
@@ -1892,7 +1905,7 @@ Responde ÚNICAMENTE con el número entero de meses. Si evade o no menciona ning
                     }
                 } else {
                     // Evasion — persuade
-                    const evasionSys = `${promptAvanzado ? promptAvanzado + '\n\n' : ''}Eres Brenda Rodríguez, reclutadora de Candidatic. El candidato evadió la pregunta sobre experiencia en fábrica. Tu misión es reconocer lo que dijo con calidez y redirigirlo con mucha persuasión a responder si tiene o no experiencia en fábrica/maquiladora. Genera 2 burbujas con [MSG_SPLIT]. Sin markdown. Sin inventar datos.\n[ADN]: ${JSON.stringify(cleanAdnBase)}`;
+                    const evasionSys = `${promptAvanzado ? promptAvanzado + '\n\n' : ''}Eres Brenda Rodríguez, reclutadora de ${brand}. El candidato evadió la pregunta sobre experiencia en fábrica. Tu misión es reconocer lo que dijo con calidez y redirigirlo con mucha persuasión a responder si tiene o no experiencia en fábrica/maquiladora. Genera 2 burbujas con [MSG_SPLIT]. Sin markdown. Sin inventar datos.\n[ADN]: ${JSON.stringify(cleanAdnBase)}`;
                     try {
                         const evasionGpt = await getOpenAIResponse(
                             allMessages.slice(-4),
@@ -1938,7 +1951,7 @@ Responde ÚNICAMENTE con el número entero de meses. Si evade o no menciona ning
                 const candFirstName = (candidateData.nombreReal || '').split(' ')[0] || 'amig@';
                 const customSalaPrompt = activeAiConfig.gptHostPrompt || '';
 
-                const salaDeEsperaPrompt = `Eres Brenda Rodríguez, reclutadora profesional de Candidatic. El candidato se llama ${candFirstName} y ya completó su registro exitosamente. Tu misión de extracción de datos TERMINÓ.
+                const salaDeEsperaPrompt = `Eres Brenda Rodríguez, reclutadora profesional de ${brand}. El candidato se llama ${candFirstName} y ya completó su registro exitosamente. Tu misión de extracción de datos TERMINÓ.
 
 ${customSalaPrompt ? `[CONTEXTO ADICIONAL]: ${customSalaPrompt}\n` : ''}
 REGLAS DE SALA DE ESPERA (OBLIGATORIAS - NO NEGOCIABLES):
@@ -2078,9 +2091,9 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
                                 .replace(/{{categorias}}/g, maskedCategoriesList)
                                 .replace(/\[LISTA DE CATEGORÍAS\]/g, maskedCategoriesList);
                             // [MSG_SPLIT] obligatorio: burbuja 1 = saludo + respuesta, burbuja 2 = pregunta del dato faltante
-                            systemInstruction += `\n[MISION: BIENVENIDA CON PREGUNTA]: Es el primer mensaje. OBLIGATORIO usar [MSG_SPLIT] para dividir en DOS burbujas: Burbuja 1 = preséntate en UNA SOLA ORACIÓN como Brenda Rodríguez de Candidatic (NO termines en "Lic.") + responde brevemente la pregunta con info real. Burbuja 2 = pide ÚNICAMENTE el dato faltante: ${auditForMode.missingLabels[0]} — con emoji. Ejemplo de formato: "¡Hola! Soy Brenda Rodríguez... [respuesta breve].[MSG_SPLIT]¿Me compartes tu Nombre y Apellidos completos? 😊"\n${cerebro1Rules}\n`;
+                            systemInstruction += `\n[MISION: BIENVENIDA CON PREGUNTA]: Es el primer mensaje. OBLIGATORIO usar [MSG_SPLIT] para dividir en DOS burbujas: Burbuja 1 = preséntate en UNA SOLA ORACIÓN como Brenda Rodríguez de ${brand} (NO termines en "Lic.") + responde brevemente la pregunta con info real. Burbuja 2 = pide ÚNICAMENTE el dato faltante: ${auditForMode.missingLabels[0]} — con emoji. Ejemplo de formato: "¡Hola! Soy Brenda Rodríguez... [respuesta breve].[MSG_SPLIT]¿Me compartes tu Nombre y Apellidos completos? 😊"\n${cerebro1Rules}\n`;
                         } else {
-                            systemInstruction += `\n[MISION: BIENVENIDA]: Es el inicio. Preséntate en UNA SOLA ORACIÓN como Brenda Rodríguez de Candidatic (NO termines la frase en "Lic."). Luego en otra línea pide el Nombre Y Apellidos completos del candidato — siempre incluye al menos un emoji en esa segunda línea. ✨🌸\n`;
+                            systemInstruction += `\n[MISION: BIENVENIDA]: Es el inicio. Preséntate en UNA SOLA ORACIÓN como Brenda Rodríguez de ${brand} (NO termines la frase en "Lic."). Luego en otra línea pide el Nombre Y Apellidos completos del candidato — siempre incluye al menos un emoji en esa segunda línea. ✨🌸\n`;
                         }
                     }
                 } else if (auditForMode.paso1Status !== 'COMPLETO') {
@@ -2140,7 +2153,7 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
                 if (bypassGpt) {
                     gptResult = {
                         content: JSON.stringify({
-                            response_text: buildNewCandidateWelcome(),
+                            response_text: buildNewCandidateWelcome(brand),
                             extracted_data: {},
                             reaction: '✨',
                             thought_process: "AUTO_GREETING_BYPASS: Deterministic new-candidate welcome."
@@ -2168,7 +2181,7 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
                         // Nuevo candidato: la primera respuesta debe ser fija y predecible.
                         // Si viene de Ads, la burbuja de empresa se inserta abajo entre estas dos.
                         if (isNewFlag) {
-                            responseTextVal = buildNewCandidateWelcome();
+                            responseTextVal = buildNewCandidateWelcome(brand);
                             aiResult.response_text = responseTextVal;
                         }
 
