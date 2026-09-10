@@ -202,11 +202,21 @@ function formatRecruiterMessage(text, candidateData = null, stepContext = {}) {
         text = text.split('[MSG_SPLIT]').map(seg => seg.replace(_PRAISE_RE, '')).join('[MSG_SPLIT]');
     }
 
-    // 🔧 DATE-EXAMPLE GUARD: Strip "(ejemplo ...)" from segments NOT about birth date (per-segment).
+    // 🔧 DATE-EXAMPLE GUARD: Strip "(ejemplo ...)" from segments whose ACTUAL question no es
+    // sobre la fecha de nacimiento. Antes se checaba si el segmento MENCIONABA "fecha" en
+    // cualquier parte — pero GPT combina el acuse ("Gracias por tu fecha de nacimiento") con
+    // la siguiente pregunta ("¿en qué municipio vives? (ejemplo 19 de mayo de 1988)") en UN
+    // solo segmento, y el acuse hacía que el guard conservara el ejemplo pegado a una pregunta
+    // que no es de fecha. Ahora se mira SOLO la última pregunta del segmento (la que antecede
+    // al ejemplo); si esa pregunta no es de fecha, se quita el ejemplo mal colocado.
     {
         const _DATE_EJ_RE = /\s*\((?:ej\.?|ejemplo)\s*(?:\d{1,2}[/-]\d{1,2}[/-]\d{2,4}|\d{1,2}\s+de\s+\w+\s+de\s+\d{4})\)/gi;
         const _DATE_KEYWORDS = /fecha|nacimiento|cumplea|cu[aá]ndo naciste|nac[íi]|d[íi]a.*mes|cuantos a[nñ]os/i;
-        text = text.split('[MSG_SPLIT]').map(seg => _DATE_KEYWORDS.test(seg) ? seg : seg.replace(_DATE_EJ_RE, '')).join('[MSG_SPLIT]');
+        text = text.split('[MSG_SPLIT]').map(seg => {
+            const _questions = seg.match(/¿[^?]*\?/g);
+            const _lastQ = (_questions && _questions.length) ? _questions[_questions.length - 1] : seg;
+            return _DATE_KEYWORDS.test(_lastQ) ? seg : seg.replace(_DATE_EJ_RE, '');
+        }).join('[MSG_SPLIT]');
     }
 
     // 🗓️ DATE FORMAT NORMALIZER: Convert any "(ej. DD/MM/YYYY)" GPT outputs → "(ejemplo DD de MES de YYYY)"
@@ -861,7 +871,7 @@ function formatRecruiterMessage(text, candidateData = null, stepContext = {}) {
 export const DEFAULT_EXTRACTION_RULES = `
 [EXTRAER]: nombreReal, genero, fechaNacimiento, edad, municipio, categoria, escolaridad.
 1. REFINAR: Si el dato en [ESTADO] ya existe y es válido, mantenlo. Si el candidato da info nueva, actualiza.
-2. FORMATO: Nombres en Title Case. Fecha DD/MM/YYYY (Si el usuario te da números amontonados como "191274" o "190590", INTUYE LA FECHA y guárdala formateada como "19/12/1974". No se la rechaces si puedes deducirla).
+2. FORMATO: Nombres en Title Case. Fecha DD/MM/YYYY (Si el usuario te da números amontonados como "191274" o "190590", INTUYE LA FECHA y guárdala formateada como "19/12/1974". No se la rechaces si puedes deducirla). PERO si el usuario da SOLO el mes y el año SIN el día (ej. "en mayo de 1983", "mayo 1983", "05/1983"), NO inventes el día: deja fechaNacimiento en null y pídele que te confirme la fecha COMPLETA con el día.
 3. MUNICIPIO: Extrae el nombre OFICIAL COMPLETO del municipio (ej: "Monterrey", "Apodaca", "Benito Juárez", "General Escobedo", "Cadereyta Jiménez", "San Nicolás de los Garza", "San Pedro Garza García", "General Zuazua", "Salinas Victoria", "Sabinas Hidalgo", "El Carmen", "Los Aldamas", "Los Herreras", "Los Ramones", "Lampazos de Naranjo", "Ciénega de Flores"). Si el usuario incluye su colonia o fraccionamiento (ej: "Centro Apodaca", "Valle del roble Cadereyta"), IGNORA la colonia y extrae SÓLO el municipio con su nombre oficial. Si el usuario dice solo "Escobedo" → guarda "General Escobedo"; "San Nicolás" → "San Nicolás de los Garza"; "San Pedro" → "San Pedro Garza García"; "Juárez" → "Benito Juárez"; "Zuazua" → "General Zuazua"; "Cadereyta" → "Cadereyta Jiménez"; "Sabinas" → "Sabinas Hidalgo"; "Salinas" → "Salinas Victoria". Si ya está en [ESTADO], mantenlo intacto. CONTEXTO TEMPORAL (CRÍTICO): extrae el municipio SÓLO si el candidato indica que vive AHÍ ACTUALMENTE. Si lo menciona en pasado o con negación ("antes vivía en X", "vivía en X", "ya no vivo en X", "me mudé de X", "antes estaba en X", "viví en X"), NO lo extraigas (deja municipio vacío): te está diciendo dónde vivía ANTES, no dónde vive hoy. En ese caso, en tu respuesta reconoce lo que dijo y pregúntale explícitamente en qué municipio vive ACTUALMENTE (ej: "Entendido, ¿y en qué municipio vives actualmente? 😊"). PERO si en el MISMO mensaje menciona un municipio pasado Y uno actual (ej: "antes en Apodaca pero ahora vivo en Monterrey", "vivía en X y me mudé a Y", "ya no vivo en X, ahora en Y"), SÍ extrae el ACTUAL (el que va después de "ahora"/"actualmente"/"me mudé a") e ignora el pasado.
 4. ESCOLARIDAD: Primaria, Secundaria, Preparatoria, Licenciatura, Técnica, Posgrado.
 5. CATEGORÍA: Solo de: {{categorias}}.
@@ -2254,15 +2264,39 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
                     }
 
                     if (ext.fechaNacimiento) {
-                        ext.fechaNacimiento = coalesceDate(candidateData.fechaNacimiento, ext.fechaNacimiento);
-                        // 🎂 AUTO-EDAD: Calculate age from valid birth date
-                        const _dateParts = (ext.fechaNacimiento || '').split('/');
-                        if (_dateParts.length === 3) {
-                            const _bd = new Date(+_dateParts[2], +_dateParts[1] - 1, +_dateParts[0]);
-                            const _ageDiff = Date.now() - _bd.getTime();
-                            const _ageDate = new Date(_ageDiff);
-                            const _calcAge = Math.abs(_ageDate.getUTCFullYear() - 1970);
-                            if (_calcAge >= 15 && _calcAge <= 80) ext.edad = _calcAge;
+                        // 🚫 FECHA SIN DÍA: si el candidato dio SOLO mes y año (ej. "en mayo de 1983")
+                        // y aún no teníamos su fecha, GPT tiende a rellenar el día con "01". No lo
+                        // aceptamos: descartamos la fecha inventada y volvemos a pedirla completa.
+                        // Solo aplica cuando la fecha se está dando ESTE turno (el texto del usuario
+                        // menciona un mes/año) — nunca en un acarreo de una fecha ya guardada.
+                        const _uTxt = (aggregatedText || '').toLowerCase();
+                        const _MESES = 'enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|setiembre|octubre|noviembre|diciembre';
+                        // Día escrito en palabra (1–31), para no rechazar "primero de mayo", "quince de enero", etc.
+                        const _DIA_PAL = 'primero|uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|once|doce|trece|catorce|quince|diecis[eé]is|diecisiete|dieciocho|diecinueve|veinte|veintiuno|veintid[oó]s|veintitr[eé]s|veinticuatro|veinticinco|veintis[eé]is|veintisiete|veintiocho|veintinueve|treinta|treinta y uno';
+                        const _mencionaMesOAnio = new RegExp(`(?:${_MESES})|\\b(?:19|20)\\d{2}\\b`, 'i').test(_uTxt);
+                        const _dioDia =
+                            new RegExp(`\\b([1-9]|[12]\\d|3[01])\\s*(?:de\\s+)?(?:${_MESES})`, 'i').test(_uTxt) ||       // "19 de mayo"
+                            new RegExp(`\\b(?:${_DIA_PAL})\\s+(?:de\\s+)?(?:${_MESES})`, 'i').test(_uTxt) ||             // "primero de mayo"
+                            /\b([1-9]|[12]\d|3[01])[/\-.]\d{1,2}[/\-.]\d{2,4}\b/.test(_uTxt) ||                          // 19/05/1983
+                            /\b\d{6}\b|\b\d{8}\b/.test(_uTxt);                                                          // 190583 / 19051983
+                        const _fechaSinDia = _mencionaMesOAnio && !_dioDia;
+
+                        if (_fechaSinDia && !candidateData.fechaNacimiento) {
+                            delete ext.fechaNacimiento;
+                            delete ext.edad;
+                            responseTextVal = 'Me falta el día para completar tu fecha 😊 ¿me confirmas el día, mes y año en que naciste? (ejemplo 19 de mayo de 1988)';
+                            if (aiResult) aiResult.response_text = responseTextVal;
+                        } else {
+                            ext.fechaNacimiento = coalesceDate(candidateData.fechaNacimiento, ext.fechaNacimiento);
+                            // 🎂 AUTO-EDAD: Calculate age from valid birth date
+                            const _dateParts = (ext.fechaNacimiento || '').split('/');
+                            if (_dateParts.length === 3) {
+                                const _bd = new Date(+_dateParts[2], +_dateParts[1] - 1, +_dateParts[0]);
+                                const _ageDiff = Date.now() - _bd.getTime();
+                                const _ageDate = new Date(_ageDiff);
+                                const _calcAge = Math.abs(_ageDate.getUTCFullYear() - 1970);
+                                if (_calcAge >= 15 && _calcAge <= 80) ext.edad = _calcAge;
+                            }
                         }
                     }
                     // 🧹 CLEANER PIPELINE: Normalize extracted values through dictionary before saving
@@ -2846,16 +2880,23 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
             candidateUpdates.paso2CompletadoAt = new Date().toISOString();
         }
 
-        await Promise.allSettled([
+        // El historial NO debe recibir una burbuja en blanco: cuando no hubo texto principal
+        // (ej. al completar paso 1, responseTextVal quedó null y dbContentToSave cayó a ' '),
+        // los mensajes reales del turno (sticker, colonia, felicitación) se guardan por su
+        // propio path. Solo persistimos aquí si hay contenido real (texto o marca de reacción).
+        const _persistPromises = [
             deliveryPromise,
             reactionPromise,
-            updateCandidate(candidateId, candidateUpdates),
-            saveMessage(candidateId, {
+            updateCandidate(candidateId, candidateUpdates)
+        ];
+        if (dbContentToSave && dbContentToSave.trim() !== '') {
+            _persistPromises.push(saveMessage(candidateId, {
                 from: 'bot',
                 content: dbContentToSave,
                 timestamp: new Date().toISOString()
-            })
-        ]);
+            }));
+        }
+        await Promise.allSettled(_persistPromises);
 
         // ── AGENTE KATCON (event-driven): si Brenda ACABA de terminar la extracción
         // (paso2Estado → 'completo' EN ESTE TURNO) disparamos el PUNTO KATCON al instante.
