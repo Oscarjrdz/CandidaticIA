@@ -19,7 +19,11 @@ Patrón estándar de faceted search: un **SET de candidateIds por cada valor de 
 - `bulk:idx:v1:meta` → JSON `{ generatedAt, total, dims: { dim: [valores...] } }` (evita `SCAN`)
 - `bulk:idx:v1:counts` / `:counts_stale` / `:lock` → cache de conteos + fallback + lock de build
 
-Dimensiones: `genero` (Hombre/Mujer/Sin dato), `municipio` (nombres oficiales), `escolaridad` (Primaria/Secundaria/Preparatoria/Técnica/Licenciatura/Posgrado/Sin dato), `edad` (buckets 18-24/25-34/35-44/45-54/55+/Sin dato), `estatus` (completo/incompleto vía `auditProfile`), `ventana24h` (`si`), `tags` (multi-valor). Cada dimensión tiene bucket "Sin dato" para que los conteos cuadren con el total. Dentro de una dimensión = **OR**; entre dimensiones = **AND**.
+Dimensiones: `genero` (Hombre/Mujer/Sin dato), `municipio` (nombres oficiales), `escolaridad` (Primaria/Secundaria/Preparatoria/Técnica/Licenciatura/Posgrado/Sin dato), `edad` (**edad exacta** `bulk:idx:v1:edad:<n>` para rangos desde/hasta), `estatus` (completo/incompleto vía `auditProfile`), `ventana24h` (`si`), `tags` (multi-valor). Dentro de una dimensión = **OR**; entre dimensiones = **AND**.
+
+**Edad (rango desde/hasta):** se indexa por edad exacta. Un rango `{min,max}` (`selection.edadRange`) se resuelve con `SUNIONSTORE` de los sets de edad en `[min,max]` (cap 15–99). No se expone `edad` en `meta.dims` (se filtra por rango, no por lista).
+
+**Municipio (solo Nuevo León):** el dropdown solo muestra los 51 municipios de NL. La lista es **única fuente de verdad** reutilizada de `NL_MUNICIPIOS` en `api/flows.js` (no se duplicó); `bulks.js` filtra `meta.dims.municipio` contra ese set antes de responder.
 
 ### Frescura: materializado desde el escaneo cacheado (NO ruta de escritura)
 - **Un solo escaneo** de `candidates:list` alimenta a la vez los conteos legados (`candidates.js` action=`filter_counts`) **y** el índice invertido. No se duplica el escaneo de ~14 MB.
@@ -33,6 +37,12 @@ Dimensiones: `genero` (Hombre/Mujer/Sin dato), `municipio` (nombres oficiales), 
 2. El endpoint: `ensureFacetIndex` (build si falta) → `computeFacets` (total + conteos drill-down por dimensión, todo con `SINTERCARD` dentro de Redis) → `resolveSegmentIds(limit=100)` + `hydratePreview` (solo esos 100, sin campos pesados de anuncio).
 3. Devuelve `{ total, counts, meta:{dims}, preview }`. El navegador pinta "**X coinciden**", los conteos por valor y la vista previa.
 4. **Al enviar**, el front manda `POST ?action=start` con `{ segment: { selection, excludeIds } }` (NO la lista de IDs). El servidor resuelve la **lista completa** con `resolveSegmentIds(limit=0)` (ordenada por recencia vía `ZINTERSTORE` contra `candidates:list`, restando `excludeIds`) y arranca el motor de envío existente **sin cambios** en `tickEngine`.
+
+## UI de filtros
+- **Género, Escolaridad, Municipio, Etiquetas** → dropdowns **multi-select** con conteo drill-down por opción (Municipio y Etiquetas con buscador interno; Etiquetas con color).
+- **Edad** → dos inputs **Desde / Hasta**.
+- **Estatus** (Todos/Completos/Incompletos) → chips; **Últimas 24h** → toggle.
+- Municipio solo lista municipios de NL (ver arriba).
 
 ## Modelo de selección (UI)
 - El segmento lo definen los **filtros** (facetas), no checkboxes uno por uno.

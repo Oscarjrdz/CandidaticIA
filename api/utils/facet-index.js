@@ -37,8 +37,10 @@ const CHUNK_SIZE = 500;
 
 const SIN_DATO = 'Sin dato';
 
-// Dimensiones con valores fijos y orden estable para la UI.
-export const AGE_BUCKETS = ['18-24', '25-34', '35-44', '45-54', '55+'];
+// La edad se indexa por edad EXACTA (bulk:idx:v1:edad:<n>) para permitir rangos
+// arbitrarios "desde/hasta" (SUNIONSTORE de las edades del rango). Sin buckets fijos.
+const AGE_MIN = 15;
+const AGE_MAX = 99;
 export const ESCOLARIDAD_CANON = ['Primaria', 'Secundaria', 'Preparatoria', 'Técnica', 'Licenciatura', 'Posgrado'];
 export const ESTATUS_VALUES = ['completo', 'incompleto'];
 
@@ -53,16 +55,6 @@ function isMeaningful(raw) {
     if (v.length < 2) return false;
     if (v.includes('proporcionad')) return false;
     return true;
-}
-
-export function ageBucket(edad) {
-    const n = parseInt(edad, 10);
-    if (!Number.isFinite(n) || n < 18 || n > 120) return SIN_DATO;
-    if (n <= 24) return '18-24';
-    if (n <= 34) return '25-34';
-    if (n <= 44) return '35-44';
-    if (n <= 54) return '45-54';
-    return '55+';
 }
 
 export function generoCanonico(genero) {
@@ -167,7 +159,9 @@ export async function buildCandidateFacetIndex(redis, { manualProjects = [], pro
             push('genero', generoCanonico(c.genero), id);
             push('municipio', municipioCanonico(c.municipio), id);
             push('escolaridad', escolaridadCanonica(c.escolaridad), id);
-            push('edad', ageBucket(c.edad), id);
+            // Edad exacta (para rangos desde/hasta). Sin dato/invalida → no entra a ningún set.
+            const ageNum = parseInt(c.edad, 10);
+            if (Number.isFinite(ageNum) && ageNum >= AGE_MIN && ageNum <= AGE_MAX) push('edad', String(ageNum), id);
             push('estatus', auditProfile(c).isComplete ? 'completo' : 'incompleto', id);
             if (within24h(c)) push('ventana24h', 'si', id);
             candidateTags(c).forEach(t => push('tags', t, id));
@@ -230,7 +224,9 @@ export async function buildCandidateFacetIndex(redis, { manualProjects = [], pro
             return ra - rb;
         });
     };
-    if (dims.edad) dims.edad = orderBy(dims.edad, AGE_BUCKETS);
+    // La edad se filtra por rango (desde/hasta), no por lista de valores → no la exponemos
+    // en meta.dims (los sets por edad exacta sí existen para el SUNIONSTORE del rango).
+    delete dims.edad;
     if (dims.escolaridad) dims.escolaridad = orderBy(dims.escolaridad, ESCOLARIDAD_CANON);
     if (dims.estatus) dims.estatus = orderBy(dims.estatus, ESTATUS_VALUES);
     if (dims.genero) dims.genero = orderBy(dims.genero, ['Hombre', 'Mujer']);
@@ -355,7 +351,7 @@ async function countIntersection(redis, keys) {
 async function buildConstraintKeys(redis, selection) {
     const constraints = {};
     const tempKeys = [];
-    const dimsMulti = ['genero', 'municipio', 'escolaridad', 'edad', 'tags'];
+    const dimsMulti = ['genero', 'municipio', 'escolaridad', 'tags'];
 
     for (const dim of dimsMulti) {
         const vals = Array.isArray(selection?.[dim]) ? selection[dim].filter(Boolean) : [];
@@ -369,6 +365,25 @@ async function buildConstraintKeys(redis, selection) {
             constraints[dim] = tmp;
             tempKeys.push(tmp);
         }
+    }
+
+    // Edad: rango desde/hasta → unión de los sets de edad exacta en [min, max].
+    const range = selection?.edadRange;
+    if (range && (range.min !== '' && range.min != null || range.max !== '' && range.max != null)) {
+        let lo = parseInt(range.min, 10);
+        let hi = parseInt(range.max, 10);
+        if (!Number.isFinite(lo)) lo = AGE_MIN;
+        if (!Number.isFinite(hi)) hi = AGE_MAX;
+        if (lo > hi) [lo, hi] = [hi, lo];
+        lo = Math.max(AGE_MIN, lo);
+        hi = Math.min(AGE_MAX, hi);
+        const ageKeys = [];
+        for (let a = lo; a <= hi; a++) ageKeys.push(idxKey('edad', String(a)));
+        const tmp = `${V}:u:edad:${Date.now()}:${Math.random().toString(36).slice(2, 6)}`;
+        await redis.sunionstore(tmp, ...ageKeys).catch(() => {});
+        await redis.pexpire(tmp, 8000).catch(() => {});
+        constraints.edad = tmp;
+        tempKeys.push(tmp);
     }
 
     // Dimensiones single-value

@@ -5,8 +5,11 @@ import axios from 'axios';
 import { getRedisClient, validateAdminSession } from './utils/storage.js';
 import { getCachedConfig } from './utils/cache.js';
 import { ensureFacetIndex, computeFacets, resolveSegmentIds, hydratePreview } from './utils/facet-index.js';
+import { NL_MUNICIPIOS } from './flows.js';
 
 const PREVIEW_LIMIT = 100;
+// Única fuente de verdad de los 51 municipios de NL (definida en api/flows.js).
+const NL_MUNICIPIOS_SET = new Set(NL_MUNICIPIOS);
 
 // Carga proyectos manuales + links para que el build del índice compartido pueda contar
 // steps (mismo escaneo único que alimenta filter_counts). Fire-and-safe: si falla, {}.
@@ -298,11 +301,16 @@ export default async function handler(req, res) {
             const { total, counts } = await computeFacets(redis, selection, meta);
             const previewIds = await resolveSegmentIds(redis, selection, [], PREVIEW_LIMIT);
             const preview = await hydratePreview(redis, previewIds);
+            // El dropdown de municipio solo debe mostrar municipios de Nuevo León.
+            const dims = { ...(meta.dims || {}) };
+            if (Array.isArray(dims.municipio)) {
+                dims.municipio = dims.municipio.filter(m => NL_MUNICIPIOS_SET.has(m));
+            }
             return res.status(200).json({
                 success: true,
                 total,
                 counts,
-                meta: { dims: meta.dims || {}, generatedAt: meta.generatedAt, total: meta.total },
+                meta: { dims, generatedAt: meta.generatedAt, total: meta.total },
                 preview
             });
         } catch (e) {

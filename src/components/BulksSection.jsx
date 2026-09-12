@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useConfirmModal } from './ui/ConfirmModal';
-import { Search, Trash2, Send, XCircle, Tag, ChevronDown, CheckCircle2, Users, RotateCcw, SlidersHorizontal } from 'lucide-react';
+import { Search, Trash2, Send, XCircle, Tag, X, ChevronDown, CheckCircle2, Users, RotateCcw, SlidersHorizontal } from 'lucide-react';
 import { useToastContext } from '../contexts/ToastContext';
 import { extractTemplateVariables, renderMetaTemplatePreviewText } from '../utils/metaTemplatePreview';
 
@@ -47,7 +47,7 @@ const getRelativeTime = (c) => {
 };
 
 // ─── Faceta: dimensiones y estado inicial ──────────────────────────────────────
-const EMPTY_SELECTION = { genero: [], municipio: [], escolaridad: [], edad: [], tags: [], estatus: '', ventana24h: false };
+const EMPTY_SELECTION = { genero: [], municipio: [], escolaridad: [], edadRange: { min: '', max: '' }, tags: [], estatus: '', ventana24h: false };
 
 const CampaignHistoryItem = ({ h, reuseCampaign, deleteCampaign }) => {
     const [stats, setStats] = useState(null);
@@ -107,71 +107,84 @@ const CampaignHistoryItem = ({ h, reuseCampaign, deleteCampaign }) => {
     );
 };
 
-// ─── Chip de valor de faceta (con conteo drill-down) ───────────────────────────
-const FacetChip = ({ label, count, active, disabled, onClick, color }) => (
-    <button
-        onClick={onClick}
-        disabled={disabled || (count === 0 && !active)}
-        className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors border flex items-center gap-1.5 ${
-            active
-                ? 'bg-[#d9fdd3] text-[#111b21] border-[#25d366] dark:bg-[#0a332c] dark:text-[#25d366] dark:border-[#0a5c4a]'
-                : 'bg-[#f0f2f5] text-[#54656f] border-transparent hover:bg-[#e9edef] dark:bg-[#202c33] dark:text-[#aebac1] dark:hover:bg-[#2a3942]'
-        } ${(count === 0 && !active) ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
-    >
-        {color && <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: color }} />}
-        <span className="truncate max-w-[160px]">{label}</span>
-        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${active ? 'bg-[#25d366]/20 text-[#0a5c4a] dark:text-[#25d366]' : 'bg-black/5 dark:bg-white/10 text-gray-500 dark:text-gray-400'}`}>
-            {count ?? 0}
-        </span>
-    </button>
-);
-
-// ─── Grupo de faceta colapsable ─────────────────────────────────────────────────
-const FacetGroup = ({ title, icon, values, counts, selected, onToggle, searchable = false, colorForValue }) => {
-    const [open, setOpen] = useState(true);
+// ─── Dropdown multi-select con conteos drill-down ──────────────────────────────
+const MultiSelectDropdown = ({ title, icon, values, counts, selected, onToggle, onClear, searchable = false, colorForValue, disabled }) => {
+    const [open, setOpen] = useState(false);
     const [q, setQ] = useState('');
-    const activeCount = selected.length;
-    const list = searchable && q
-        ? values.filter(v => v.toLowerCase().includes(q.toLowerCase()))
-        : values;
+    const ref = useRef(null);
+
+    useEffect(() => {
+        const handle = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+        document.addEventListener('mousedown', handle);
+        return () => document.removeEventListener('mousedown', handle);
+    }, []);
 
     if (!values || values.length === 0) return null;
 
+    const list = searchable && q ? values.filter(v => v.toLowerCase().includes(q.toLowerCase())) : values;
+    const summary = selected.length === 0 ? 'Todas' : (selected.length === 1 ? selected[0] : `${selected.length} seleccionadas`);
+
     return (
-        <div className="border-b border-[#f0f2f5] dark:border-[#202c33] pb-2 mb-2">
-            <button onClick={() => setOpen(o => !o)} className="w-full flex items-center justify-between py-1.5 text-left">
-                <span className="text-[11px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
-                    {icon}{title}
-                    {activeCount > 0 && <span className="bg-blue-500 text-white text-[10px] px-1.5 py-0.5 rounded-full">{activeCount}</span>}
-                </span>
-                <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${open ? 'rotate-180' : ''}`} />
+        <div className="relative" ref={ref}>
+            <label className="flex items-center gap-1.5 text-[11px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">
+                {icon}{title}
+                {selected.length > 0 && <span className="bg-blue-500 text-white text-[10px] px-1.5 py-0.5 rounded-full normal-case">{selected.length}</span>}
+            </label>
+            <button
+                type="button"
+                onClick={() => !disabled && setOpen(o => !o)}
+                disabled={disabled}
+                className={`w-full flex items-center justify-between bg-[#f0f2f5] dark:bg-[#202c33] rounded-lg px-3 py-2.5 text-sm text-left transition-colors border ${
+                    selected.length > 0 ? 'border-[#25d366]/60 text-[#111b21] dark:text-[#e9edef]' : 'border-transparent text-[#54656f] dark:text-[#aebac1]'
+                } ${disabled ? 'opacity-50 cursor-not-allowed' : 'hover:bg-[#e9edef] dark:hover:bg-[#2a3942] cursor-pointer'}`}
+            >
+                <span className="truncate">{summary}</span>
+                <ChevronDown className={`w-4 h-4 text-gray-400 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
             </button>
+
             {open && (
-                <div className="mt-1">
+                <div className="absolute z-[60] left-0 right-0 mt-1 bg-white dark:bg-[#202c33] border border-gray-200 dark:border-gray-700 rounded-xl shadow-2xl py-1.5 animate-expand-in origin-top">
                     {searchable && (
-                        <div className="bg-[#f0f2f5] dark:bg-[#202c33] rounded-lg px-2.5 py-1 flex items-center mb-2">
-                            <Search className="w-3.5 h-3.5 text-[#54656f] dark:text-[#aebac1] mr-2" />
-                            <input
-                                type="text"
-                                placeholder={`Buscar ${title.toLowerCase()}...`}
-                                className="flex-1 bg-transparent border-none outline-none text-xs text-[#111b21] dark:text-[#d1d7db]"
-                                value={q}
-                                onChange={(e) => setQ(e.target.value)}
-                            />
+                        <div className="px-2 pb-1.5">
+                            <div className="bg-[#f0f2f5] dark:bg-[#111b21] rounded-lg px-2.5 py-1.5 flex items-center">
+                                <Search className="w-3.5 h-3.5 text-[#54656f] dark:text-[#aebac1] mr-2" />
+                                <input
+                                    autoFocus
+                                    type="text"
+                                    placeholder={`Buscar ${title.toLowerCase()}...`}
+                                    className="flex-1 bg-transparent border-none outline-none text-xs text-[#111b21] dark:text-[#d1d7db]"
+                                    value={q}
+                                    onChange={(e) => setQ(e.target.value)}
+                                />
+                            </div>
                         </div>
                     )}
-                    <div className={`flex flex-wrap gap-1.5 ${searchable ? 'max-h-48 overflow-y-auto custom-scrollbar pr-1' : ''}`}>
-                        {list.map(v => (
-                            <FacetChip
-                                key={v}
-                                label={v}
-                                count={counts?.[v] ?? 0}
-                                active={selected.includes(v)}
-                                color={colorForValue ? colorForValue(v) : null}
-                                onClick={() => onToggle(v)}
-                            />
-                        ))}
-                        {list.length === 0 && <span className="text-xs text-gray-400 py-1">Sin coincidencias</span>}
+                    {selected.length > 0 && (
+                        <button onClick={() => onClear && onClear()} className="w-full text-left px-3 py-1.5 text-[11px] font-bold text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-1">
+                            <X className="w-3 h-3" /> Limpiar selección
+                        </button>
+                    )}
+                    <div className="max-h-60 overflow-y-auto custom-scrollbar">
+                        {list.length === 0 ? (
+                            <div className="px-3 py-2 text-xs text-gray-400">Sin coincidencias</div>
+                        ) : list.map(v => {
+                            const isSel = selected.includes(v);
+                            const count = counts?.[v] ?? 0;
+                            return (
+                                <div
+                                    key={v}
+                                    onClick={() => onToggle(v)}
+                                    className={`px-3 py-2 flex items-center gap-2.5 cursor-pointer text-sm transition-colors ${isSel ? 'bg-[#d9fdd3]/50 dark:bg-[#0a332c]/60' : 'hover:bg-gray-50 dark:hover:bg-[#111b21]'}`}
+                                >
+                                    <span className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${isSel ? 'bg-[#25d366] border-[#25d366]' : 'border-gray-300 dark:border-gray-600'}`}>
+                                        {isSel && <CheckCircle2 className="w-3 h-3 text-white" />}
+                                    </span>
+                                    {colorForValue && <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: colorForValue(v) }} />}
+                                    <span className={`flex-1 truncate ${isSel ? 'font-semibold text-[#111b21] dark:text-[#e9edef]' : 'text-gray-700 dark:text-gray-300'}`}>{v}</span>
+                                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-black/5 dark:bg-white/10 text-gray-500 dark:text-gray-400">{count}</span>
+                                </div>
+                            );
+                        })}
                     </div>
                 </div>
             )}
@@ -466,6 +479,20 @@ const BulksSection = () => {
         setSelection(prev => ({ ...prev, ventana24h: !prev.ventana24h }));
     };
 
+    const setEdadRange = (field, value) => {
+        if (isRunning) return;
+        // Solo dígitos, máx 2 (edades 15-99)
+        const clean = String(value).replace(/\D/g, '').slice(0, 3);
+        setExcludeIds(new Set());
+        setSelection(prev => ({ ...prev, edadRange: { ...prev.edadRange, [field]: clean } }));
+    };
+
+    const clearFacet = (dim) => {
+        if (isRunning) return;
+        setExcludeIds(new Set());
+        setSelection(prev => ({ ...prev, [dim]: [] }));
+    };
+
     const clearAllFilters = () => {
         if (isRunning) return;
         setExcludeIds(new Set());
@@ -591,8 +618,9 @@ const BulksSection = () => {
 
     const isCompleted = engineState && !engineState.isRunning && (engineState.currentCandidateIndex >= (engineState.candidates?.length || 1) || engineState.isAborted);
 
+    const edadActive = (selection.edadRange?.min || selection.edadRange?.max) ? 1 : 0;
     const activeFilterCount = selection.genero.length + selection.municipio.length + selection.escolaridad.length +
-        selection.edad.length + selection.tags.length + (selection.estatus ? 1 : 0) + (selection.ventana24h ? 1 : 0);
+        edadActive + selection.tags.length + (selection.estatus ? 1 : 0) + (selection.ventana24h ? 1 : 0);
 
     return (
         <div className="flex flex-col lg:flex-row h-full w-full bg-[#f0f2f5] dark:bg-[#111b21] font-sans">
@@ -682,18 +710,39 @@ const BulksSection = () => {
                         </button>
                     </div>
 
-                    {/* Grupos de faceta */}
-                    <div className="max-h-[38vh] lg:max-h-none overflow-y-auto custom-scrollbar pr-1">
-                        <FacetGroup title="Género" icon="👤 " values={dims.genero || []} counts={counts.genero}
-                            selected={selection.genero} onToggle={(v) => toggleFacetValue('genero', v)} />
-                        <FacetGroup title="Edad" icon="🎂 " values={dims.edad || []} counts={counts.edad}
-                            selected={selection.edad} onToggle={(v) => toggleFacetValue('edad', v)} />
-                        <FacetGroup title="Escolaridad" icon="🎓 " values={dims.escolaridad || []} counts={counts.escolaridad}
-                            selected={selection.escolaridad} onToggle={(v) => toggleFacetValue('escolaridad', v)} />
-                        <FacetGroup title="Municipio" icon="📍 " values={dims.municipio || []} counts={counts.municipio}
-                            selected={selection.municipio} onToggle={(v) => toggleFacetValue('municipio', v)} searchable />
-                        <FacetGroup title="Etiquetas" icon={<Tag className="w-3.5 h-3.5 inline mr-1" />} values={dims.tags || []} counts={counts.tags}
-                            selected={selection.tags} onToggle={(v) => toggleFacetValue('tags', v)} searchable colorForValue={tagColor} />
+                    {/* Filtros (dropdowns multi-select + rango de edad) */}
+                    <div className="grid grid-cols-2 gap-2 mb-2">
+                        <MultiSelectDropdown title="Género" icon="👤" values={dims.genero || []} counts={counts.genero}
+                            selected={selection.genero} onToggle={(v) => toggleFacetValue('genero', v)} onClear={() => clearFacet('genero')} disabled={isRunning} />
+                        {/* Edad: desde / hasta */}
+                        <div>
+                            <label className="flex items-center gap-1.5 text-[11px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">
+                                🎂 Edad {edadActive > 0 && <span className="bg-blue-500 text-white text-[10px] px-1.5 py-0.5 rounded-full normal-case">1</span>}
+                            </label>
+                            <div className="flex items-center gap-1.5">
+                                <input
+                                    type="number" inputMode="numeric" min="15" max="99" placeholder="Desde" disabled={isRunning}
+                                    value={selection.edadRange.min}
+                                    onChange={(e) => setEdadRange('min', e.target.value)}
+                                    className="w-full bg-[#f0f2f5] dark:bg-[#202c33] rounded-lg px-2.5 py-2.5 text-sm text-center outline-none border border-transparent focus:border-[#25d366]/60 text-[#111b21] dark:text-[#e9edef] disabled:opacity-50"
+                                />
+                                <span className="text-gray-400 text-xs">—</span>
+                                <input
+                                    type="number" inputMode="numeric" min="15" max="99" placeholder="Hasta" disabled={isRunning}
+                                    value={selection.edadRange.max}
+                                    onChange={(e) => setEdadRange('max', e.target.value)}
+                                    className="w-full bg-[#f0f2f5] dark:bg-[#202c33] rounded-lg px-2.5 py-2.5 text-sm text-center outline-none border border-transparent focus:border-[#25d366]/60 text-[#111b21] dark:text-[#e9edef] disabled:opacity-50"
+                                />
+                            </div>
+                        </div>
+                        <MultiSelectDropdown title="Escolaridad" icon="🎓" values={dims.escolaridad || []} counts={counts.escolaridad}
+                            selected={selection.escolaridad} onToggle={(v) => toggleFacetValue('escolaridad', v)} onClear={() => clearFacet('escolaridad')} disabled={isRunning} />
+                        <MultiSelectDropdown title="Municipio" icon="📍" values={dims.municipio || []} counts={counts.municipio}
+                            selected={selection.municipio} onToggle={(v) => toggleFacetValue('municipio', v)} onClear={() => clearFacet('municipio')} searchable disabled={isRunning} />
+                        <div className="col-span-2">
+                            <MultiSelectDropdown title="Etiquetas" icon={<Tag className="w-3 h-3 inline" />} values={dims.tags || []} counts={counts.tags}
+                                selected={selection.tags} onToggle={(v) => toggleFacetValue('tags', v)} onClear={() => clearFacet('tags')} searchable colorForValue={tagColor} disabled={isRunning} />
+                        </div>
                     </div>
                 </div>
 
