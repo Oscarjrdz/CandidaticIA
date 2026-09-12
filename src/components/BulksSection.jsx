@@ -1527,6 +1527,56 @@ const BulksSection = () => {
                 </div>
             )}
 
+            {/* CREATE AUDIENCE MODAL */}
+            {showCreateAudience && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md" style={{ animation: 'fadeIn 0.2s ease-out' }}>
+                    <div className="bg-white dark:bg-[#111b21] w-full max-w-md rounded-[24px] shadow-2xl overflow-hidden p-8 flex flex-col border border-gray-100 dark:border-gray-800" style={{ animation: 'popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)' }}>
+                        <div className="w-16 h-16 bg-indigo-100 dark:bg-indigo-900/30 rounded-full flex items-center justify-center mb-5 self-center">
+                            <Users className="w-8 h-8 text-indigo-600 dark:text-indigo-400" />
+                        </div>
+                        <h2 className="text-xl font-black text-gray-800 dark:text-white mb-1 text-center">Nuevo Público</h2>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mb-5 text-center">
+                            Se guarda con los filtros actuales ({adHocCount.toLocaleString('es-MX')} candidatos hoy). Es dinámico: se recalcula solo cuando lo uses.
+                        </p>
+
+                        {summarizeSelection(selection).length > 0 && (
+                            <div className="flex flex-wrap gap-1 justify-center mb-5">
+                                {summarizeSelection(selection).map((c, i) => (
+                                    <span key={i} className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-gray-100 dark:bg-[#202c33] text-gray-600 dark:text-gray-300">{c}</span>
+                                ))}
+                            </div>
+                        )}
+
+                        <input
+                            autoFocus
+                            type="text"
+                            value={newAudienceName}
+                            onChange={(e) => setNewAudienceName(e.target.value)}
+                            onKeyDown={(e) => { if (e.key === 'Enter') confirmCreateAudience(); }}
+                            placeholder="Ej: Mujeres jóvenes Monterrey"
+                            maxLength={80}
+                            className="w-full bg-[#f0f2f5] dark:bg-[#202c33] border border-gray-200 dark:border-gray-700 focus:border-indigo-500 rounded-xl p-3 text-sm text-[#111b21] dark:text-[#e9edef] outline-none transition-colors mb-5"
+                        />
+
+                        <div className="flex gap-3">
+                            <button
+                                onClick={() => setShowCreateAudience(false)}
+                                className="flex-1 bg-gray-100 hover:bg-gray-200 dark:bg-[#202c33] dark:hover:bg-[#2a3942] text-gray-700 dark:text-gray-300 font-bold py-3 rounded-xl transition-colors text-sm"
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                onClick={confirmCreateAudience}
+                                disabled={!newAudienceName.trim()}
+                                className="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold py-3 rounded-xl shadow-sm transition-colors text-sm flex items-center justify-center gap-2"
+                            >
+                                <Plus className="w-4 h-4" /> Crear público
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Diálogo de confirmación (Abortar campaña / Eliminar historial) */}
             {_confirmModalJSX}
         </div>
