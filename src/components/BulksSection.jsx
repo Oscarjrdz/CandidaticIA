@@ -242,6 +242,8 @@ const BulksSection = () => {
     const [facetData, setFacetData] = useState(() => facetCache || EMPTY_FACETS);
     const [facetLoading, setFacetLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState(""); // localizador dentro de la vista previa
+    const [directRecipients, setDirectRecipients] = useState([]); // envío directo a teléfonos puntuales (allowlist, sin público)
+    const [phoneLookupLoading, setPhoneLookupLoading] = useState(false);
     const [availableTags, setAvailableTags] = useState([]);
     const [mobileTab, setMobileTab] = useState('candidates'); // 'candidates' | 'audiences' | 'messages'
 
@@ -599,9 +601,11 @@ const BulksSection = () => {
     // Total del segmento y cuántos se enviarán (segmento menos exclusiones dentro de la vista previa)
     const segmentTotal = facetData.total || 0;
     const adHocCount = Math.max(0, segmentTotal - excludeIds.size);
-    // Destinatario del envío: un público seleccionado (conteo en vivo) o el segmento ad-hoc.
+    // Destinatario del envío. Prioridad: envío directo (allowlist a teléfonos puntuales)
+    // > público seleccionado (conteo en vivo) > segmento ad-hoc (filtros).
+    const directMode = directRecipients.length > 0;
     const selectedAudience = selectedAudienceId ? (audiences.find(a => a.id === selectedAudienceId) || null) : null;
-    const sendCount = selectedAudience ? (selectedAudience.count || 0) : adHocCount;
+    const sendCount = directMode ? directRecipients.length : (selectedAudience ? (selectedAudience.count || 0) : adHocCount);
 
     // Vista previa filtrada por el buscador (localizador — no redefine el segmento)
     const previewList = (facetData.preview || []).filter(c => {
@@ -654,10 +658,12 @@ const BulksSection = () => {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    // Si hay un público seleccionado, el server resuelve sus filtros FRESCOS
+                    // Envío directo: lista explícita de IDs (allowlist), ignora filtros y público.
+                    // Si no, y hay público seleccionado, el server resuelve sus filtros FRESCOS
                     // (dinámico). Si no, resuelve el segmento ad-hoc de la Col 1.
-                    audienceId: selectedAudience?.id || null,
-                    segment: { selection, excludeIds: Array.from(excludeIds) },
+                    candidates: directMode ? directRecipients.map(r => r.id) : undefined,
+                    audienceId: directMode ? null : (selectedAudience?.id || null),
+                    segment: directMode ? null : { selection, excludeIds: Array.from(excludeIds) },
                     bulkType,
                     messages: startModalData.validMsgs,
                     templateData: startModalData.tplData,
@@ -703,6 +709,7 @@ const BulksSection = () => {
             await fetch('/api/bulks?action=clear', { method: 'POST' });
             setEngineState(null);
             setExcludeIds(new Set());
+            setDirectRecipients([]);
             setCustomCampaignName('');
             setTemplateParams({});
             loadAudiences(); // refresca stats del público (última campaña / total enviado)
@@ -710,6 +717,45 @@ const BulksSection = () => {
     };
 
     // ─── Handlers de Públicos ────────────────────────────────────────────────────
+    // ─── Envío directo a un teléfono (sin crear público) ─────────────────────────
+    const addDirectRecipient = async (rawPhone) => {
+        if (isRunning) return;
+        const digits = String(rawPhone || '').replace(/\D/g, '');
+        if (digits.length < 10) return showToast && showToast('Escribe un teléfono válido (10 dígitos)', 'error');
+        // ¿ya está en la lista? (compara por dígitos)
+        if (directRecipients.some(r => String(r.whatsapp || '').replace(/\D/g, '').endsWith(digits.slice(-10)))) {
+            setSearchQuery('');
+            return showToast && showToast('Ese teléfono ya está en la lista', 'info');
+        }
+        setPhoneLookupLoading(true);
+        try {
+            const res = await fetch('/api/bulks?action=phone_lookup', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ phone: digits })
+            });
+            const data = await res.json();
+            if (data.success && data.candidate) {
+                setSelectedAudienceId(null); // envío directo manda; no mezclar con público
+                setDirectRecipients(prev => [...prev, data.candidate]);
+                setSearchQuery('');
+                showToast && showToast(`Agregado: ${data.candidate.nombreReal || data.candidate.nombre || data.candidate.whatsapp}`, 'success');
+                if (window.innerWidth < 1024) setMobileTab('messages');
+            } else {
+                showToast && showToast('No encontré a nadie con ese teléfono en la base', 'error');
+            }
+        } catch (e) {
+            showToast && showToast('Error de red al buscar el teléfono', 'error');
+        } finally {
+            setPhoneLookupLoading(false);
+        }
+    };
+
+    const removeDirectRecipient = (id) => {
+        if (isRunning) return;
+        setDirectRecipients(prev => prev.filter(r => r.id !== id));
+    };
+
     const openCreateAudience = () => {
         if (isRunning) return; // sin filtros = público de toda la base
         setNewAudienceName('');
@@ -747,6 +793,7 @@ const BulksSection = () => {
 
     const selectAudience = (aud) => {
         if (isRunning) return;
+        setDirectRecipients([]); // público y envío directo son excluyentes
         setSelectedAudienceId(prev => (prev === aud.id ? null : aud.id));
         if (window.innerWidth < 1024) setMobileTab('messages');
         setGlowTemplateCol(true);
@@ -1046,33 +1093,22 @@ const BulksSection = () => {
                             )}
                         </div>
                     </div>
-                    {/* Warning when search is active — search does NOT limit the send */}
-                    {searchQuery && previewList.length > 0 && !isRunning && (
-                        <div className="mt-1.5 px-1 flex items-center justify-between gap-2">
-                            <p className="text-[10px] text-amber-600 dark:text-amber-400 leading-tight">
-                                ⚠️ El buscador es solo vista previa. El envio va al segmento completo.
-                            </p>
-                            <button
-                                onClick={() => {
-                                    // Get all preview IDs (unfiltered) and exclude everyone NOT in the search results
-                                    const searchResultIds = new Set(previewList.map(c => c.id));
-                                    const allPreviewIds = (facetData.preview || []).map(c => c.id);
-                                    setExcludeIds(prev => {
-                                        const next = new Set(prev);
-                                        // Exclude all from preview that are NOT in the search results
-                                        allPreviewIds.forEach(id => {
-                                            if (!searchResultIds.has(id)) next.add(id);
-                                            else next.delete(id); // ensure search results are included
-                                        });
-                                        return next;
-                                    });
-                                    setSearchQuery('');
-                                }}
-                                className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline whitespace-nowrap shrink-0"
-                            >
-                                Enviar solo a {previewList.length === 1 ? 'este' : `estos ${previewList.length}`}
-                            </button>
-                        </div>
+                    {/* Envío directo: buscar un teléfono en TODA la base y mandarle sin crear público */}
+                    {(searchQuery || '').replace(/\D/g, '').length >= 10 && !isRunning && (
+                        <button
+                            onClick={() => addDirectRecipient(searchQuery)}
+                            disabled={phoneLookupLoading}
+                            className="mt-2 w-full bg-[#25d366] hover:bg-[#1fb356] disabled:opacity-50 text-white font-bold py-2.5 px-3 rounded-lg text-xs flex items-center justify-center gap-2 transition-colors shadow-sm"
+                        >
+                            {phoneLookupLoading
+                                ? 'Buscando…'
+                                : <>📲 Enviar directo a este teléfono ({(searchQuery || '').replace(/\D/g, '')})</>}
+                        </button>
+                    )}
+                    {searchQuery && (searchQuery || '').replace(/\D/g, '').length < 10 && previewList.length > 0 && !isRunning && (
+                        <p className="mt-1.5 px-1 text-[10px] text-amber-600 dark:text-amber-400 leading-tight">
+                            ⚠️ El buscador es solo vista previa. Escribe un teléfono completo para enviarle directo.
+                        </p>
                     )}
                 </div>
 
@@ -1350,31 +1386,54 @@ const BulksSection = () => {
 
                 {/* Primary Action Buttons */}
                 <div className="p-4 bg-white dark:bg-[#111b21] border-t border-[#d1d7db] dark:border-[#222e35] shadow-2xl relative z-20">
-                    {/* Destinatario: público seleccionado o segmento ad-hoc */}
+                    {/* Destinatario: envío directo (allowlist) > público > segmento ad-hoc */}
                     {!isRunning && !isCompleted && (
-                        <div className={`mb-4 rounded-xl px-3 py-2.5 border flex items-center justify-between gap-2 ${
-                            selectedAudience
-                                ? 'bg-[#d9fdd3]/40 dark:bg-[#0a332c]/50 border-[#25d366]/50'
-                                : 'bg-[#f0f2f5] dark:bg-[#202c33] border-transparent'
+                        <div className={`mb-4 rounded-xl px-3 py-2.5 border ${
+                            directMode
+                                ? 'bg-[#25d366]/10 dark:bg-[#0a332c]/60 border-[#25d366]/60'
+                                : selectedAudience
+                                    ? 'bg-[#d9fdd3]/40 dark:bg-[#0a332c]/50 border-[#25d366]/50'
+                                    : 'bg-[#f0f2f5] dark:bg-[#202c33] border-transparent'
                         }`}>
-                            <div className="min-w-0">
-                                <div className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Enviando a</div>
-                                <div className="text-sm font-bold text-[#111b21] dark:text-[#e9edef] truncate flex items-center gap-1.5">
-                                    {selectedAudience ? (
-                                        <><UserCheck className="w-4 h-4 text-[#25d366] shrink-0" /> {selectedAudience.name}</>
-                                    ) : (
-                                        <><SlidersHorizontal className="w-4 h-4 text-[#54656f] shrink-0" /> Segmento actual (filtros)</>
-                                    )}
-                                    <span className="text-indigo-600 dark:text-indigo-400">· {sendCount.toLocaleString('es-MX')}</span>
-                                    {excludeIds.size > 0 && !selectedAudience && (
-                                        <span className="text-[10px] text-red-400 font-normal">({excludeIds.size} excluidos)</span>
-                                    )}
+                            <div className="flex items-center justify-between gap-2">
+                                <div className="min-w-0">
+                                    <div className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Enviando a</div>
+                                    <div className="text-sm font-bold text-[#111b21] dark:text-[#e9edef] truncate flex items-center gap-1.5">
+                                        {directMode ? (
+                                            <>📲 Envío directo</>
+                                        ) : selectedAudience ? (
+                                            <><UserCheck className="w-4 h-4 text-[#25d366] shrink-0" /> {selectedAudience.name}</>
+                                        ) : (
+                                            <><SlidersHorizontal className="w-4 h-4 text-[#54656f] shrink-0" /> Segmento actual (filtros)</>
+                                        )}
+                                        <span className="text-indigo-600 dark:text-indigo-400">· {sendCount.toLocaleString('es-MX')}</span>
+                                        {!directMode && excludeIds.size > 0 && !selectedAudience && (
+                                            <span className="text-[10px] text-red-400 font-normal">({excludeIds.size} excluidos)</span>
+                                        )}
+                                    </div>
                                 </div>
+                                {directMode ? (
+                                    <button onClick={() => setDirectRecipients([])} title="Volver al segmento por filtros" className="text-xs text-gray-500 hover:text-red-500 font-medium flex items-center gap-1 shrink-0">
+                                        <X className="w-3.5 h-3.5" /> Quitar
+                                    </button>
+                                ) : selectedAudience && (
+                                    <button onClick={() => setSelectedAudienceId(null)} title="Usar el segmento actual en su lugar" className="text-xs text-gray-500 hover:text-red-500 font-medium flex items-center gap-1 shrink-0">
+                                        <X className="w-3.5 h-3.5" /> Quitar
+                                    </button>
+                                )}
                             </div>
-                            {selectedAudience && (
-                                <button onClick={() => setSelectedAudienceId(null)} title="Usar el segmento actual en su lugar" className="text-xs text-gray-500 hover:text-red-500 font-medium flex items-center gap-1 shrink-0">
-                                    <X className="w-3.5 h-3.5" /> Quitar
-                                </button>
+                            {/* Chips de destinatarios directos */}
+                            {directMode && (
+                                <div className="flex flex-wrap gap-1.5 mt-2">
+                                    {directRecipients.map(r => (
+                                        <span key={r.id} className="inline-flex items-center gap-1 text-[11px] font-medium pl-2 pr-1 py-0.5 rounded-full bg-white dark:bg-[#202c33] border border-[#25d366]/40 text-[#111b21] dark:text-[#e9edef]">
+                                            {r.nombreReal || r.nombre || r.whatsapp}
+                                            <button onClick={() => removeDirectRecipient(r.id)} className="text-gray-400 hover:text-red-500" title="Quitar">
+                                                <X className="w-3 h-3" />
+                                            </button>
+                                        </span>
+                                    ))}
+                                </div>
                             )}
                         </div>
                     )}

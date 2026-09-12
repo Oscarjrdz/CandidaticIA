@@ -1,11 +1,6 @@
 {
     "redirects": [
         {
-            "source": "/kemet",
-            "destination": "https://maps.app.goo.gl/RTfkk3ySMfP8yiYc7",
-            "permanent": false
-        },
-        {
             "source": "/(.*)",
             "has": [{ "type": "host", "value": "candidatic.com.mx" }],
             "destination": "https://www.candidatic.com/$1",
@@ -77,6 +72,10 @@
         {
             "source": "/app",
             "destination": "/api/app"
+        },
+        {
+            "source": "/kemet",
+            "destination": "/api/kemet"
         }
     ],
     "headers": [
