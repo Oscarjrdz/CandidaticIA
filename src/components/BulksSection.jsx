@@ -49,6 +49,11 @@ const getRelativeTime = (c) => {
 // ─── Faceta: dimensiones y estado inicial ──────────────────────────────────────
 const EMPTY_SELECTION = { genero: [], municipio: [], escolaridad: [], edadRange: { min: '', max: '' }, tags: [], estatus: '', ventana24h: false };
 
+// Caché a nivel de módulo: sobrevive al desmontar/montar la sección (cambiar de pestaña),
+// así al volver a Envíos Masivos los números aparecen al instante (se refrescan en 2º plano).
+const EMPTY_FACETS = { total: 0, counts: {}, meta: { dims: {} }, preview: [] };
+let facetCache = null;
+
 const CampaignHistoryItem = ({ h, reuseCampaign, deleteCampaign }) => {
     const [stats, setStats] = useState(null);
     const [loading, setLoading] = useState(false);
@@ -212,7 +217,7 @@ const BulksSection = () => {
     // Col 1: Filtrado facetado (segmento)
     const [selection, setSelection] = useState(EMPTY_SELECTION);
     const [excludeIds, setExcludeIds] = useState(new Set()); // destildados dentro de la vista previa
-    const [facetData, setFacetData] = useState({ total: 0, counts: {}, meta: { dims: {} }, preview: [] });
+    const [facetData, setFacetData] = useState(() => facetCache || EMPTY_FACETS);
     const [facetLoading, setFacetLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState(""); // localizador dentro de la vista previa
     const [availableTags, setAvailableTags] = useState([]);
@@ -280,12 +285,14 @@ const BulksSection = () => {
             });
             const data = await res.json();
             if (data.success) {
-                setFacetData({
+                const next = {
                     total: data.total || 0,
                     counts: data.counts || {},
                     meta: data.meta || { dims: {} },
                     preview: data.preview || []
-                });
+                };
+                facetCache = next; // persiste entre montajes
+                setFacetData(next);
             }
         } catch (e) {
             if (e.name !== 'AbortError') console.error('Error fetching facets', e);
@@ -684,7 +691,14 @@ const BulksSection = () => {
                         </div>
                         <div className="flex-1 min-w-0">
                             <div className="text-2xl font-black text-[#111b21] dark:text-[#e9edef] leading-none flex items-center gap-2">
-                                {facetLoading ? <span className="text-base text-gray-400 animate-pulse">calculando…</span> : segmentTotal.toLocaleString('es-MX')}
+                                {initialLoading ? (
+                                    <span className="inline-block h-6 w-24 rounded-md bg-gray-300/60 dark:bg-gray-600/60 animate-pulse" />
+                                ) : (
+                                    <>
+                                        <span className={facetLoading ? 'opacity-60 transition-opacity' : 'transition-opacity'}>{segmentTotal.toLocaleString('es-MX')}</span>
+                                        {facetLoading && <span className="w-3.5 h-3.5 border-2 border-[#25d366]/30 border-t-[#25d366] rounded-full animate-spin inline-block" />}
+                                    </>
+                                )}
                             </div>
                             <div className="text-[11px] text-[#54656f] dark:text-[#8696a0] font-medium mt-0.5">
                                 {activeFilterCount === 0
