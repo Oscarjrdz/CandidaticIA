@@ -360,11 +360,20 @@ export const sendMetaMessage = async (to, body, type = 'chat', extraParams = {})
             // sin su wamid de Meta). TTL corto: las citas casi siempre son recientes.
             try {
                 const wamid = response.data?.messages?.[0]?.id;
-                if (wamid && (type === 'chat' || type === 'interactive') && typeof body === 'string' && body.trim()) {
+                if (wamid && (type === 'chat' || type === 'interactive' || type === 'template') && typeof body === 'string' && body.trim()) {
                     const { getRedisClient } = await import('../utils/storage.js');
                     const redis = getRedisClient();
                     if (redis) {
-                        redis.set(`wamid:text:${wamid}`, String(body).slice(0, 300), 'EX', 72 * 3600).catch(() => { });
+                        // Para plantillas, quitar el prefijo interno "⚡ Plantilla ...: *nombre*\n\n"
+                        // y los asteriscos de markdown, para que la cita muestre el cuerpo real que
+                        // vio el candidato (no la etiqueta administrativa ni "Mensaje multimedia").
+                        let previewText = String(body);
+                        if (type === 'template') {
+                            previewText = previewText.replace(/^⚡[^\n]*\n+/, '').replace(/\*/g, '').trim();
+                        }
+                        if (previewText.trim()) {
+                            redis.set(`wamid:text:${wamid}`, previewText.slice(0, 300), 'EX', 72 * 3600).catch(() => { });
+                        }
                     }
                 }
             } catch (e) { }
