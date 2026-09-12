@@ -108,7 +108,7 @@ const CampaignHistoryItem = ({ h, reuseCampaign, deleteCampaign }) => {
 };
 
 // ─── Dropdown multi-select con conteos drill-down ──────────────────────────────
-const MultiSelectDropdown = ({ title, icon, values, counts, selected, onToggle, onClear, searchable = false, colorForValue, disabled }) => {
+const MultiSelectDropdown = ({ title, icon, values, counts, selected, onToggle, onClear, searchable = false, colorForValue, disabled, loading }) => {
     const [open, setOpen] = useState(false);
     const [q, setQ] = useState('');
     const ref = useRef(null);
@@ -118,6 +118,19 @@ const MultiSelectDropdown = ({ title, icon, values, counts, selected, onToggle, 
         document.addEventListener('mousedown', handle);
         return () => document.removeEventListener('mousedown', handle);
     }, []);
+
+    // Esqueleto mientras carga la primera vez (evita el brinco de layout)
+    if (loading && (!values || values.length === 0)) {
+        return (
+            <div>
+                <label className="flex items-center gap-1.5 text-[11px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">{icon}{title}</label>
+                <div className="w-full flex items-center justify-between bg-[#f0f2f5] dark:bg-[#202c33] rounded-lg px-3 py-2.5 border border-transparent">
+                    <span className="h-3 w-16 rounded bg-gray-300/60 dark:bg-gray-600/60 animate-pulse" />
+                    <ChevronDown className="w-4 h-4 text-gray-300 dark:text-gray-600" />
+                </div>
+            </div>
+        );
+    }
 
     if (!values || values.length === 0) return null;
 
@@ -281,9 +294,12 @@ const BulksSection = () => {
         }
     }, []);
 
-    // Debounce de 350ms sobre cambios de selección
+    // Primera carga inmediata; cambios posteriores con debounce de 350ms (evita el brinco)
+    const firstFacetRef = useRef(true);
     useEffect(() => {
-        const t = setTimeout(() => fetchFacets(selection), 350);
+        const delay = firstFacetRef.current ? 0 : 350;
+        firstFacetRef.current = false;
+        const t = setTimeout(() => fetchFacets(selection), delay);
         return () => clearTimeout(t);
     }, [selection, fetchFacets]);
 
@@ -528,6 +544,8 @@ const BulksSection = () => {
 
     const dims = facetData.meta?.dims || {};
     const counts = facetData.counts || {};
+    // Solo la PRIMERA carga (antes de recibir datos): muestra esqueletos, no brinco.
+    const initialLoading = facetLoading && !facetData.meta?.generatedAt;
     const tagColor = (name) => (availableTags.find(t => (typeof t === 'string' ? t : t.name) === name)?.color) || '#64748b';
 
     // Engine Actions
@@ -669,7 +687,9 @@ const BulksSection = () => {
                                 {facetLoading ? <span className="text-base text-gray-400 animate-pulse">calculando…</span> : segmentTotal.toLocaleString('es-MX')}
                             </div>
                             <div className="text-[11px] text-[#54656f] dark:text-[#8696a0] font-medium mt-0.5">
-                                {segmentTotal === 1 ? 'candidato coincide' : 'candidatos coinciden'}
+                                {activeFilterCount === 0
+                                    ? (segmentTotal === 1 ? 'candidato en base' : 'candidatos en base')
+                                    : (segmentTotal === 1 ? 'candidato coincide' : 'candidatos coinciden')}
                                 {excludeIds.size > 0 && ` · enviarás a ${sendCount.toLocaleString('es-MX')}`}
                             </div>
                         </div>
@@ -713,7 +733,7 @@ const BulksSection = () => {
                     {/* Filtros (dropdowns multi-select + rango de edad) */}
                     <div className="grid grid-cols-2 gap-2 mb-2">
                         <MultiSelectDropdown title="Género" icon="👤" values={dims.genero || []} counts={counts.genero}
-                            selected={selection.genero} onToggle={(v) => toggleFacetValue('genero', v)} onClear={() => clearFacet('genero')} disabled={isRunning} />
+                            selected={selection.genero} onToggle={(v) => toggleFacetValue('genero', v)} onClear={() => clearFacet('genero')} disabled={isRunning} loading={initialLoading} />
                         {/* Edad: desde / hasta */}
                         <div>
                             <label className="flex items-center gap-1.5 text-[11px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">
@@ -736,12 +756,12 @@ const BulksSection = () => {
                             </div>
                         </div>
                         <MultiSelectDropdown title="Escolaridad" icon="🎓" values={dims.escolaridad || []} counts={counts.escolaridad}
-                            selected={selection.escolaridad} onToggle={(v) => toggleFacetValue('escolaridad', v)} onClear={() => clearFacet('escolaridad')} disabled={isRunning} />
+                            selected={selection.escolaridad} onToggle={(v) => toggleFacetValue('escolaridad', v)} onClear={() => clearFacet('escolaridad')} disabled={isRunning} loading={initialLoading} />
                         <MultiSelectDropdown title="Municipio" icon="📍" values={dims.municipio || []} counts={counts.municipio}
-                            selected={selection.municipio} onToggle={(v) => toggleFacetValue('municipio', v)} onClear={() => clearFacet('municipio')} searchable disabled={isRunning} />
+                            selected={selection.municipio} onToggle={(v) => toggleFacetValue('municipio', v)} onClear={() => clearFacet('municipio')} searchable disabled={isRunning} loading={initialLoading} />
                         <div className="col-span-2">
                             <MultiSelectDropdown title="Etiquetas" icon={<Tag className="w-3 h-3 inline" />} values={dims.tags || []} counts={counts.tags}
-                                selected={selection.tags} onToggle={(v) => toggleFacetValue('tags', v)} onClear={() => clearFacet('tags')} searchable colorForValue={tagColor} disabled={isRunning} />
+                                selected={selection.tags} onToggle={(v) => toggleFacetValue('tags', v)} onClear={() => clearFacet('tags')} searchable colorForValue={tagColor} disabled={isRunning} loading={initialLoading} />
                         </div>
                     </div>
                 </div>
