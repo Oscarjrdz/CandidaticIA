@@ -711,7 +711,7 @@ const BulksSection = () => {
 
     // ─── Handlers de Públicos ────────────────────────────────────────────────────
     const openCreateAudience = () => {
-        if (isRunning || activeFilterCount === 0) return;
+        if (isRunning) return; // sin filtros = público de toda la base
         setNewAudienceName('');
         setShowCreateAudience(true);
     };
@@ -1046,6 +1046,34 @@ const BulksSection = () => {
                             )}
                         </div>
                     </div>
+                    {/* Warning when search is active — search does NOT limit the send */}
+                    {searchQuery && previewList.length > 0 && !isRunning && (
+                        <div className="mt-1.5 px-1 flex items-center justify-between gap-2">
+                            <p className="text-[10px] text-amber-600 dark:text-amber-400 leading-tight">
+                                ⚠️ El buscador es solo vista previa. El envio va al segmento completo.
+                            </p>
+                            <button
+                                onClick={() => {
+                                    // Get all preview IDs (unfiltered) and exclude everyone NOT in the search results
+                                    const searchResultIds = new Set(previewList.map(c => c.id));
+                                    const allPreviewIds = (facetData.preview || []).map(c => c.id);
+                                    setExcludeIds(prev => {
+                                        const next = new Set(prev);
+                                        // Exclude all from preview that are NOT in the search results
+                                        allPreviewIds.forEach(id => {
+                                            if (!searchResultIds.has(id)) next.add(id);
+                                            else next.delete(id); // ensure search results are included
+                                        });
+                                        return next;
+                                    });
+                                    setSearchQuery('');
+                                }}
+                                className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline whitespace-nowrap shrink-0"
+                            >
+                                Enviar solo a {previewList.length === 1 ? 'este' : `estos ${previewList.length}`}
+                            </button>
+                        </div>
+                    )}
                 </div>
 
                 <div className="flex-1 overflow-y-auto">
@@ -1106,11 +1134,11 @@ const BulksSection = () => {
                     <div className="p-3 border-t border-[#d1d7db] dark:border-[#222e35] bg-white dark:bg-[#111b21] shrink-0">
                         <button
                             onClick={openCreateAudience}
-                            disabled={isRunning || activeFilterCount === 0}
-                            title={activeFilterCount === 0 ? 'Aplica al menos un filtro para guardar un público' : 'Guarda estos filtros como un público reutilizable'}
+                            disabled={isRunning}
+                            title={activeFilterCount === 0 ? 'Guarda TODA la base como un público reutilizable' : 'Guarda estos filtros como un público reutilizable'}
                             className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold py-3 px-4 rounded-xl shadow-sm transition-colors flex items-center justify-center gap-2 text-sm"
                         >
-                            <Plus className="w-5 h-5" /> Crear público con esta configuración
+                            <Plus className="w-5 h-5" /> {activeFilterCount === 0 ? 'Crear público con toda la base' : 'Crear público con esta configuración'}
                         </button>
                     </div>
                 )}
@@ -1159,13 +1187,15 @@ const BulksSection = () => {
                                         </span>
                                     </div>
 
-                                    {chips.length > 0 && (
-                                        <div className="flex flex-wrap gap-1 mt-2">
-                                            {chips.map((c, i) => (
+                                    <div className="flex flex-wrap gap-1 mt-2">
+                                        {chips.length > 0 ? (
+                                            chips.map((c, i) => (
                                                 <span key={i} className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-gray-100 dark:bg-[#202c33] text-gray-600 dark:text-gray-300">{c}</span>
-                                            ))}
-                                        </div>
-                                    )}
+                                            ))
+                                        ) : (
+                                            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-300">Toda la base</span>
+                                        )}
+                                    </div>
 
                                     {(aud.lastCampaignAt || aud.totalEverSent > 0) && (
                                         <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-2">
@@ -1569,16 +1599,20 @@ const BulksSection = () => {
                         </div>
                         <h2 className="text-xl font-black text-gray-800 dark:text-white mb-1 text-center">Nuevo Público</h2>
                         <p className="text-sm text-gray-500 dark:text-gray-400 mb-5 text-center">
-                            Se guarda con los filtros actuales ({adHocCount.toLocaleString('es-MX')} candidatos hoy). Es dinámico: se recalcula solo cuando lo uses.
+                            {activeFilterCount === 0
+                                ? <>Se guarda <span className="font-bold">toda la base</span> ({adHocCount.toLocaleString('es-MX')} candidatos hoy). Es dinámico: crece solo cuando entra gente nueva.</>
+                                : <>Se guarda con los filtros actuales ({adHocCount.toLocaleString('es-MX')} candidatos hoy). Es dinámico: se recalcula solo cuando lo uses.</>}
                         </p>
 
-                        {summarizeSelection(selection).length > 0 && (
-                            <div className="flex flex-wrap gap-1 justify-center mb-5">
-                                {summarizeSelection(selection).map((c, i) => (
+                        <div className="flex flex-wrap gap-1 justify-center mb-5">
+                            {activeFilterCount === 0 ? (
+                                <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-300">Toda la base</span>
+                            ) : (
+                                summarizeSelection(selection).map((c, i) => (
                                     <span key={i} className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-gray-100 dark:bg-[#202c33] text-gray-600 dark:text-gray-300">{c}</span>
-                                ))}
-                            </div>
-                        )}
+                                ))
+                            )}
+                        </div>
 
                         <input
                             autoFocus
