@@ -1418,19 +1418,29 @@ export const syncCandidateStats = async (id, candidateData = null, pipeline = nu
         // la gran mayoria sin ningun cambio real de estado.
         const statusChanged = isFirstSync || (wasIncomplete === isComplete);
 
-        // 📊 Meta Conversions API — fire once when profile first becomes complete
-        if (isComplete && wasIncomplete && c.adClickId) {
-            sendConversionEvent({
-                eventName: 'CompleteRegistration',
-                phone: c.whatsapp,
-                ctwaClid: c.adClickId,
-                customData: {
-                    ...(c.adId && { ad_id: c.adId }),
-                    ...(c.adHeadline && { ad_title: c.adHeadline }),
-                    ...(c.categoria && { vacancy: c.categoria }),
-                    ...(c.municipio && { city: c.municipio }),
-                }
-            }).catch(() => {});
+        // 📊 Meta Conversions API — fire once when profile first becomes complete.
+        // adClickId (ctwa_clid) vive FUERA del blob desde 2026-09-12 (side-key
+        // `candidate:ctwa:<id>`) para no viajar ~10.5% de bytes en CADA GET de candidato
+        // (lista, índice facetado, broadcasts). Candidatos creados antes de esa fecha aún
+        // lo traen en el blob → se lee de ahí primero (fallback), luego de la side-key.
+        // Así nunca se pierde una conversión. El GET extra solo corre en la transición
+        // a completo (una vez por candidato), no en cada mensaje.
+        if (isComplete && wasIncomplete) {
+            let clid = c.adClickId;
+            if (!clid) clid = await client.get(`candidate:ctwa:${id}`).catch(() => null);
+            if (clid) {
+                sendConversionEvent({
+                    eventName: 'CompleteRegistration',
+                    phone: c.whatsapp,
+                    ctwaClid: clid,
+                    customData: {
+                        ...(c.adId && { ad_id: c.adId }),
+                        ...(c.adHeadline && { ad_title: c.adHeadline }),
+                        ...(c.categoria && { vacancy: c.categoria }),
+                        ...(c.municipio && { city: c.municipio }),
+                    }
+                }).catch(() => {});
+            }
         }
 
         // 3. Update Sets Atomically — solo si el estado realmente cambio (o es la

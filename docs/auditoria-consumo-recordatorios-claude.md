@@ -626,3 +626,43 @@ No se pudo confirmar por CLI si el plan actual soporta 120s (Hobby tope 60s, Pro
 - `npx eslint`: sin errores nuevos (confirmado con `git diff`).
 - `npm run build` exitoso.
 - Resultado del deploy: ver mensaje de seguimiento inmediato despues de esta entrada.
+
+---
+
+## Catorceava auditoria (Claude) — `adClickId` fuera del blob (segundo campo pesado de anuncio)
+
+Fecha: 2026-09-12. El usuario pidio una revision fresca del consumo de ancho de banda (panel marcaba 26.3 GB del mes, ~13% del plan de 200 GB) para encontrar donde ahorrar sin afectar funcionalidad. Se midio **directo contra Redis de produccion** (solo lectura), no adivinando.
+
+### Medicion real (INFO stats + muestras de blob)
+
+- Output acumulado: 95.35 GB en 238.5 dias de uptime = **~400 MB/dia promedio**, ratio lectura/escritura **12.2x** (los GET dominan el ancho de banda, como en toda la serie).
+- Dias recientes (medidor propio `bandwidth:daily`): 3.3 / 2.1 / **5.3** / 1.6 GB (8–11 sep). El pico del 10 sep fue **2.8M GET** — leer la base entera (~18K candidatos) ~156 veces en un dia. Causa: broadcasts de Envios Masivos + rebuilds del indice facetado (cada uno recorre los 18K blobs completos via `getCandidateById`). Trafico legitimo, no fuga.
+- **PING (~57K/dia), REPLCONF (~40K/dia), HELLO (~8K/dia)**: son comandos de conexion/replicacion de Redis Cloud (health-checks, replicas, handshakes de cada invocacion serverless). Bytes despreciables y **no controlables por la app** — se descartaron como objetivo. El churn de HELLO lo amplifica el auto-disconnect por inactividad (120s) pero el costo en bytes es nulo; no se toco.
+
+### El hallazgo: `adClickId` (ctwa_clid) seguia viajando en cada GET de candidato
+
+Los campos de anuncio verdaderamente pesados (`adBody`/`adImageUrl`/`adUrl`/`adVideoUrl`) **ya se habian sacado del blob** hacia `ad_creative:<adId>` (fix posterior a la Sexta auditoria — confirmado: no aparecen en las muestras). Pero quedaba `adClickId` (el `ctwa_clid` de Meta, ~137 chars):
+
+- Muestra amplia de 998 candidatos a lo largo de toda la base: **75.2% tienen `adClickId`**, y pesa **10.5% del blob promedio** (1092 bytes).
+- Se lee en **cada** `GET candidate:*` de los tres hot paths (hidratacion de lista 100/carga, rebuild del indice facetado 18K/rebuild, envio de broadcasts N/campaña) — aunque solo se usa en **2 momentos** de conversiones Meta: evento `Lead` (primer click) y `CompleteRegistration` (al completar perfil).
+
+### Fix aplicado (retrocompatible, no puede perder una conversion)
+
+`adClickId` sale del blob del candidato hacia una side-key `candidate:ctwa:<id>` (TTL 180d — sobra para que un candidato complete su registro):
+
+- **`api/whatsapp/webhook.js`** (creacion): ya no se guarda `adClickId` en el `saveCandidate`; se escribe la side-key. El evento `Lead` usa el `referral.ctwa_clid` en scope (mas confiable que releerlo). El bloque de retargeting (candidato existente que vuelve desde un anuncio) tambien escribe la side-key en vez del blob.
+- **`api/utils/storage.js`** (`syncCandidateStats`, transicion a completo): el `CompleteRegistration` resuelve el clid como `c.adClickId || await client.get('candidate:ctwa:<id>')`. **Fallback doble**: candidatos viejos (creados antes de hoy) siguen leyendo del blob; candidatos nuevos leen la side-key. El `GET` extra solo corre en la transicion a completo (una vez por candidato), **no** en cada mensaje.
+
+Impacto: **~10.5% menos bytes en cada lectura de candidato** para todo candidato nuevo (y para los viejos una vez que se corra el backfill — ver abajo). Como la lista va ordenada por recencia, el beneficio en el path mas caliente se nota rapido conforme entran candidatos nuevos.
+
+### Verificacion (contra Redis real, no solo lint)
+
+- `node --check` + `npx eslint` en los 2 archivos: limpios, cero errores.
+- `npm run build`: OK.
+- **Prueba de integracion contra Redis de produccion** (candidato de prueba desechable, limpiado al final; env de Meta borrado para no disparar conversiones reales):
+  - Resolucion del clid: candidato nuevo lo toma de la side-key; candidato viejo lo toma del blob (fallback); sin clid en ningun lado → no dispara. 3/3.
+  - `saveCandidate`/`updateCandidate` con perfil realmente completo (core + `paso2Estado:'completo'`, `fechaNacimiento` en DD/MM/YYYY): la rama de `CompleteRegistration` (con el `await client.get` nuevo) corre sin excepcion, el candidato queda en `stats:list:complete`, el blob queda **sin** `adClickId`, y la side-key persiste para la conversion. 3/3.
+
+### Pendiente — backfill de los ~18K candidatos existentes (NO incluido en este deploy, a proposito)
+
+El cambio es forward-only: los 13.5K candidatos ya existentes conservan `adClickId` en su blob (siguen funcionando via fallback). Para reclamar el 10.5% tambien en el path del indice facetado/broadcasts sobre base completa, hace falta un backfill (mover `adClickId` del blob a la side-key y borrarlo del blob). **No se bundleo en este deploy** porque reescribir 18K blobs con trafico en vivo tiene riesgo de carrera (una actualizacion concurrente del mismo candidato podria pisarse) — debe correrse supervisado y en horario de bajo trafico, como operacion aparte. Recomendado como siguiente paso.

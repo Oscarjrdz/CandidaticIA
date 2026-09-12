@@ -531,11 +531,13 @@ export default async function handler(req, res) {
                     primerContacto: new Date().toISOString(),
                     ...(referral && {
                         // Solo guardamos lo que realmente se usa: adId (etiquetas), adHeadline
-                        // y adClickId (conversiones Meta), + adSource/adMediaType (metadata chica).
+                        // + adSource/adMediaType (metadata chica).
                         // adBody/adImageUrl/adVideoUrl/adUrl NO se guardan: pesaban ~61% del blob
                         // del candidato y no se usan para nada (solo id + etiqueta). Ver medidor de
                         // ancho de banda — eran la mayor fuga de lectura de candidate:*.
-                        adClickId: referral.ctwa_clid || null,
+                        // adClickId (ctwa_clid) TAMPOCO va en el blob desde 2026-09-12: pesaba
+                        // ~10.5% de CADA lectura de candidato pero solo se usa en 2 momentos de
+                        // conversiones Meta. Vive en la side-key `candidate:ctwa:<id>` (abajo).
                         adSource: referral.source_type || null,
                         adId: referral.source_id || null,
                         adHeadline: referral.headline || null,
@@ -544,6 +546,13 @@ export default async function handler(req, res) {
                 });
                 candidateId = candidate.id;
                 isNewCandidate = true;
+
+                // ctwa_clid fuera del blob (side-key). Se lee al completar el perfil
+                // (CompleteRegistration) y para retargeting. TTL 180d: sobra para que un
+                // candidato complete su registro; más allá de eso la atribución ya no aporta.
+                if (referral?.ctwa_clid) {
+                    redis.set(`candidate:ctwa:${candidateId}`, referral.ctwa_clid, 'EX', 60 * 60 * 24 * 180).catch(() => {});
+                }
 
                 // 🖼️ Creativo del anuncio (foto/texto) guardado UNA vez por adId — para
                 // Estadisticas Ads, fuera del blob del candidato (que ya no lo trae). NX =
@@ -590,12 +599,14 @@ export default async function handler(req, res) {
                     } catch(e) { /* silent */ }
                 }
 
-                // 📊 Meta Conversions API — Lead event for CTWA ad candidates
-                if (candidate.adClickId) {
+                // 📊 Meta Conversions API — Lead event for CTWA ad candidates.
+                // ctwa_clid ya no vive en el blob; se usa el valor del referral en scope
+                // (más confiable que releerlo — es el mismo click que originó este candidato).
+                if (referral?.ctwa_clid) {
                     sendConversionEvent({
                         eventName: 'Lead',
                         phone,
-                        ctwaClid: candidate.adClickId,
+                        ctwaClid: referral.ctwa_clid,
                         customData: {
                             ...(candidate.adId && { ad_id: candidate.adId }),
                             ...(candidate.adHeadline && { ad_title: candidate.adHeadline }),
@@ -665,7 +676,11 @@ export default async function handler(req, res) {
                 if (metaMsg.referral.source_id) updatedCandidate.adId = metaMsg.referral.source_id;
                 if (metaMsg.referral.headline) updatedCandidate.adHeadline = metaMsg.referral.headline;
                 if (metaMsg.referral.source_type) updatedCandidate.adSource = metaMsg.referral.source_type;
-                if (metaMsg.referral.ctwa_clid) updatedCandidate.adClickId = metaMsg.referral.ctwa_clid;
+                // ctwa_clid → side-key `candidate:ctwa:<id>` (no en el blob) — retargeting:
+                // refresca el click más reciente para la próxima CompleteRegistration.
+                if (metaMsg.referral.ctwa_clid) {
+                    redis.set(`candidate:ctwa:${candidateId}`, metaMsg.referral.ctwa_clid, 'EX', 60 * 60 * 24 * 180).catch(() => {});
+                }
                 // adUrl/adBody/adImageUrl no se guardan (bytes pesados no usados) — ver bloque de creacion arriba.
 
                 // Guarda el creativo del anuncio (foto/texto) una vez por adId, tambien para
