@@ -226,6 +226,8 @@ const BulksSection = () => {
     // Col 2: Messages & Templates
     const [bulkType, setBulkType] = useState('template'); // 'text' | 'template'
     const [metaTemplates, setMetaTemplates] = useState([]);
+    const [waNumbers, setWaNumbers] = useState([]);
+    const [senderNumberId, setSenderNumberId] = useState(''); // '' = Automático (número original de cada candidato)
     const [selectedTemplateId, setSelectedTemplateId] = useState('');
     const [templateParams, setTemplateParams] = useState({});
     const [messageText, setMessageText] = useState('');
@@ -356,6 +358,7 @@ const BulksSection = () => {
                     if (parsed.messageText) setMessageText(parsed.messageText);
                     if (parsed.selection) setSelection({ ...EMPTY_SELECTION, ...parsed.selection });
                     if (Array.isArray(parsed.excludeIds)) setExcludeIds(new Set(parsed.excludeIds));
+                    if (parsed.senderNumberId) setSenderNumberId(parsed.senderNumberId);
                 }
             })
             .catch(e => console.error("Could not load draft", e));
@@ -364,6 +367,12 @@ const BulksSection = () => {
         fetch('/api/whatsapp/templates')
             .then(res => res.json())
             .then(data => { if(data.success && data.data) setMetaTemplates(data.data.filter(t => t.status==='APPROVED')); })
+            .catch(() => {});
+
+        // Fetch números de WhatsApp configurados (para elegir el emisor del broadcast)
+        fetch('/api/wa-numbers')
+            .then(res => res.json())
+            .then(data => { if (data.success && Array.isArray(data.numbers)) setWaNumbers(data.numbers); })
             .catch(() => {});
 
         return () => {
@@ -379,7 +388,8 @@ const BulksSection = () => {
         const draft = {
             messageText,
             selection,
-            excludeIds: Array.from(excludeIds)
+            excludeIds: Array.from(excludeIds),
+            senderNumberId
         };
         const timer = setTimeout(() => {
             fetch('/api/bulks?action=save_draft', {
@@ -390,7 +400,7 @@ const BulksSection = () => {
         }, 1200);
 
         return () => clearTimeout(timer);
-    }, [messageText, selection, excludeIds]);
+    }, [messageText, selection, excludeIds, senderNumberId]);
 
     // 🏎️ BANDWIDTH SAVER: Toggle fast Worker polling based on campaign state
     useEffect(() => {
@@ -597,7 +607,8 @@ const BulksSection = () => {
                     messages: startModalData.validMsgs,
                     templateData: startModalData.tplData,
                     templateParams: Object.keys(templateParams).length > 0 ? templateParams : null,
-                    campaignName: customCampaignName.trim() || null
+                    campaignName: customCampaignName.trim() || null,
+                    fromNumberId: senderNumberId || null
                 })
             });
             const data = await res.json();
@@ -1001,6 +1012,28 @@ const BulksSection = () => {
 
                 {/* Primary Action Buttons */}
                 <div className="p-4 bg-white dark:bg-[#111b21] border-t border-[#d1d7db] dark:border-[#222e35] shadow-2xl relative z-20">
+                    {/* Sender number selector */}
+                    {!isRunning && !isCompleted && (
+                        <div className="mb-4">
+                            <label className="block text-[11px] font-bold text-gray-500 uppercase mb-1.5 ml-1">📤 Enviar desde</label>
+                            <select
+                                value={senderNumberId}
+                                onChange={(e) => setSenderNumberId(e.target.value)}
+                                className="w-full bg-[#f0f2f5] dark:bg-[#202c33] border border-gray-200 dark:border-gray-700 focus:border-blue-500 rounded-lg p-3 text-sm text-[#111b21] dark:text-[#e9edef] outline-none transition-colors font-bold"
+                            >
+                                <option value="">Automático (número original de cada candidato)</option>
+                                {waNumbers.map(n => (
+                                    <option key={n.id} value={n.id}>{n.label || n.phone || n.id}</option>
+                                ))}
+                            </select>
+                            {senderNumberId && bulkType === 'text' && (
+                                <p className="text-[10px] text-amber-600 dark:text-amber-400 mt-1 ml-1">
+                                    ⚠️ En texto libre, solo llegará a quienes escribieron a ESTE número en las últimas 24h. Para el resto, usa plantillas.
+                                </p>
+                            )}
+                        </div>
+                    )}
+
                     {/* Custom Campaign Name Input */}
                     {!isRunning && !isCompleted && (
                         <div className="mb-4">

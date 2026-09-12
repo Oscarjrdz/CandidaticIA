@@ -44,6 +44,17 @@ Dimensiones: `genero` (Hombre/Mujer/Sin dato), `municipio` (nombres oficiales), 
 - **Estatus** (Todos/Completos/Incompletos) → chips; **Últimas 24h** → toggle.
 - Municipio solo lista municipios de NL (ver arriba).
 
+## Número emisor ("Enviar desde")
+En el panel de envío (columna 2) hay un selector **📤 Enviar desde**:
+- **Automático** (default): cada mensaje sale del número por el que **llegó cada candidato** (`candidate.incomingPhoneNumberId`) — mantiene la continuidad de la conversación.
+- **Un número específico**: todos los mensajes salen de ese `phoneNumberId`.
+
+La lista de números viene de `GET /api/wa-numbers` (`config:wa_numbers` + `KNOWN_NUMBERS`). Todos los números comparten el mismo `accessToken` (misma WABA), así que solo cambia el `phoneNumberId` de salida; las plantillas funcionan desde cualquiera.
+
+- Implementación: el front manda `fromNumberId` en `?action=start`; se guarda en `state.fromNumberId`; en `tickEngine` el emisor es `state.fromNumberId || candidate.incomingPhoneNumberId || candidate.instanceId` → `getUltraMsgConfig(senderId)`.
+- **Aviso (texto libre):** la ventana de 24h es por número. Si eliges un número específico y envías texto libre, solo llegará a quienes escribieron a ESE número en las últimas 24h; para el resto, plantillas. La UI muestra esta advertencia.
+- Se persiste en el borrador (`senderNumberId`).
+
 ## Modelo de selección (UI)
 - El segmento lo definen los **filtros** (facetas), no checkboxes uno por uno.
 - Botón de envío muestra el conteo: `INICIAR CAMPAÑA (N)`.

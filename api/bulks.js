@@ -148,7 +148,10 @@ const tickEngine = async (state) => {
                 addLog(state, `⚠️ Candidato ${candidateId} no encontrado en DB. Saltando.`);
             } else {
                 const finalMessage = state.bulkType === 'template' ? '' : substituteVariables(messageTemplate, candidate);
-                const ultraConfig = await getUltraMsgConfig(candidate.incomingPhoneNumberId || candidate.instanceId);
+                // Número emisor: el elegido en la campaña (fromNumberId) o, en Automático,
+                // el número por el que llegó cada candidato.
+                const senderId = state.fromNumberId || candidate.incomingPhoneNumberId || candidate.instanceId;
+                const ultraConfig = await getUltraMsgConfig(senderId);
 
                 if (!ultraConfig) {
                     addLog(state, `🔴 Sin config UltraMsg para ${candidateId}. Saltando.`);
@@ -326,7 +329,7 @@ export default async function handler(req, res) {
             return res.status(400).json({ error: 'Ya hay un envío en curso. Aborta primero.' });
         }
 
-        const { candidates: candidatesInput, segment, messages, bulkType, templateData, templateParams, _minDelay, _maxDelay, _pauseEvery, _pauseFor, campaignName } = req.body;
+        const { candidates: candidatesInput, segment, messages, bulkType, templateData, templateParams, _minDelay, _maxDelay, _pauseEvery, _pauseFor, campaignName, fromNumberId } = req.body;
 
         // El segmento (filtros facetados) se resuelve a la lista COMPLETA en el servidor,
         // así el navegador nunca sube miles de IDs. Alternativamente acepta IDs explícitos.
@@ -357,6 +360,7 @@ export default async function handler(req, res) {
             bulkType: bulkType || 'text',
             templateData: templateData || null,
             templateParams: templateParams || null,
+            fromNumberId: fromNumberId || null, // número emisor elegido; null = Automático
             candidates,
             messages: messages || [],
             minDelay: 0,
