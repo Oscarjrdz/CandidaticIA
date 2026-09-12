@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useConfirmModal } from './ui/ConfirmModal';
-import { Search, Trash2, Send, XCircle, Tag, X, ChevronDown, CheckCircle2, Users, RotateCcw, SlidersHorizontal } from 'lucide-react';
+import { Search, Trash2, Send, XCircle, Tag, X, ChevronDown, CheckCircle2, Users, RotateCcw, SlidersHorizontal, Plus, Save, Pencil, Copy, UserCheck } from 'lucide-react';
 import { useToastContext } from '../contexts/ToastContext';
 import { extractTemplateVariables, renderMetaTemplatePreviewText } from '../utils/metaTemplatePreview';
 
@@ -53,6 +53,28 @@ const EMPTY_SELECTION = { genero: [], municipio: [], escolaridad: [], edadRange:
 // así al volver a Envíos Masivos los números aparecen al instante (se refrescan en 2º plano).
 const EMPTY_FACETS = { total: 0, counts: {}, meta: { dims: {} }, preview: [] };
 let facetCache = null;
+// Caché de públicos: sobrevive al cambiar de pestaña (aparecen al instante, se refrescan en 2º plano).
+let audienceCache = null;
+
+// Resumen legible de un `selection` → chips de criterios ("Mujeres · 18-30 · Monterrey · Completos").
+const summarizeSelection = (sel) => {
+    if (!sel) return [];
+    const chips = [];
+    const estatusLabel = { completo: 'Completos', incompleto: 'Incompletos' };
+    if (sel.estatus && estatusLabel[sel.estatus]) chips.push(estatusLabel[sel.estatus]);
+    if (Array.isArray(sel.genero) && sel.genero.length) chips.push(sel.genero.join('/'));
+    const min = sel.edadRange?.min, max = sel.edadRange?.max;
+    if (min || max) chips.push(`${min || '15'}–${max || '99'} años`);
+    if (Array.isArray(sel.municipio) && sel.municipio.length) {
+        chips.push(sel.municipio.length <= 2 ? sel.municipio.join(', ') : `${sel.municipio.length} municipios`);
+    }
+    if (Array.isArray(sel.escolaridad) && sel.escolaridad.length) {
+        chips.push(sel.escolaridad.length <= 2 ? sel.escolaridad.join(', ') : `${sel.escolaridad.length} escolaridades`);
+    }
+    if (Array.isArray(sel.tags) && sel.tags.length) chips.push(`${sel.tags.length} etiqueta${sel.tags.length > 1 ? 's' : ''}`);
+    if (sel.ventana24h) chips.push('Últimas 24h');
+    return chips;
+};
 
 const CampaignHistoryItem = ({ h, reuseCampaign, deleteCampaign }) => {
     const [stats, setStats] = useState(null);
@@ -221,7 +243,15 @@ const BulksSection = () => {
     const [facetLoading, setFacetLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState(""); // localizador dentro de la vista previa
     const [availableTags, setAvailableTags] = useState([]);
-    const [mobileTab, setMobileTab] = useState('candidates'); // 'candidates', 'messages'
+    const [mobileTab, setMobileTab] = useState('candidates'); // 'candidates' | 'audiences' | 'messages'
+
+    // Col central: Públicos (audiencias dinámicas guardadas)
+    const [audiences, setAudiences] = useState(() => audienceCache || []);
+    const [audiencesLoading, setAudiencesLoading] = useState(true);
+    const [selectedAudienceId, setSelectedAudienceId] = useState(null); // público destinatario del envío (null = segmento ad-hoc)
+    const [editingAudienceId, setEditingAudienceId] = useState(null);   // público en edición dentro de la Col 1
+    const [showCreateAudience, setShowCreateAudience] = useState(false);
+    const [newAudienceName, setNewAudienceName] = useState('');
 
     // Col 2: Messages & Templates
     const [bulkType, setBulkType] = useState('template'); // 'text' | 'template'
@@ -303,6 +333,22 @@ const BulksSection = () => {
         }
     }, []);
 
+    // ─── Públicos: carga (con conteo en vivo) ───────────────────────────────────
+    const loadAudiences = useCallback(async () => {
+        try {
+            const res = await fetch('/api/bulks?action=audiences_list');
+            const data = await res.json();
+            if (data.success && Array.isArray(data.audiences)) {
+                audienceCache = data.audiences;
+                setAudiences(data.audiences);
+            }
+        } catch (e) {
+            console.error('Error cargando públicos', e);
+        } finally {
+            setAudiencesLoading(false);
+        }
+    }, []);
+
     // Primera carga inmediata; cambios posteriores con debounce de 350ms (evita el brinco)
     const firstFacetRef = useRef(true);
     useEffect(() => {
@@ -348,6 +394,9 @@ const BulksSection = () => {
 
         // Initial status check
         fetchEngineStatus();
+
+        // Cargar públicos (audiencias guardadas)
+        loadAudiences();
 
         // Recover draft from redis
         fetch('/api/bulks?action=get_draft')
@@ -548,7 +597,10 @@ const BulksSection = () => {
 
     // Total del segmento y cuántos se enviarán (segmento menos exclusiones dentro de la vista previa)
     const segmentTotal = facetData.total || 0;
-    const sendCount = Math.max(0, segmentTotal - excludeIds.size);
+    const adHocCount = Math.max(0, segmentTotal - excludeIds.size);
+    // Destinatario del envío: un público seleccionado (conteo en vivo) o el segmento ad-hoc.
+    const selectedAudience = selectedAudienceId ? (audiences.find(a => a.id === selectedAudienceId) || null) : null;
+    const sendCount = selectedAudience ? (selectedAudience.count || 0) : adHocCount;
 
     // Vista previa filtrada por el buscador (localizador — no redefine el segmento)
     const previewList = (facetData.preview || []).filter(c => {
@@ -601,7 +653,9 @@ const BulksSection = () => {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    // El servidor resuelve la lista COMPLETA del segmento (sin subir miles de IDs)
+                    // Si hay un público seleccionado, el server resuelve sus filtros FRESCOS
+                    // (dinámico). Si no, resuelve el segmento ad-hoc de la Col 1.
+                    audienceId: selectedAudience?.id || null,
                     segment: { selection, excludeIds: Array.from(excludeIds) },
                     bulkType,
                     messages: startModalData.validMsgs,
@@ -617,6 +671,7 @@ const BulksSection = () => {
                 setCustomCampaignName('');
                 if (data.state) setEngineState(data.state);
                 setTimeout(fetchEngineStatus, 1000);
+                loadAudiences(); // refresca "última campaña" / total enviado del público
             } else {
                 showToast && showToast(data.error || "Error al iniciar", "error");
             }
@@ -649,7 +704,134 @@ const BulksSection = () => {
             setExcludeIds(new Set());
             setCustomCampaignName('');
             setTemplateParams({});
+            loadAudiences(); // refresca stats del público (última campaña / total enviado)
         } catch(e) {}
+    };
+
+    // ─── Handlers de Públicos ────────────────────────────────────────────────────
+    const openCreateAudience = () => {
+        if (isRunning || activeFilterCount === 0) return;
+        setNewAudienceName('');
+        setShowCreateAudience(true);
+    };
+
+    const confirmCreateAudience = async () => {
+        const name = newAudienceName.trim();
+        if (!name) return showToast && showToast('Ponle un nombre al público', 'error');
+        try {
+            const res = await fetch('/api/bulks?action=audience_create', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    name,
+                    selection,
+                    excludeIds: Array.from(excludeIds),
+                    criteriaSummary: summarizeSelection(selection).join(' · ')
+                })
+            });
+            const data = await res.json();
+            if (data.success) {
+                setShowCreateAudience(false);
+                setNewAudienceName('');
+                showToast && showToast(`Público "${name}" creado`, 'success');
+                await loadAudiences();
+                if (data.audience?.id) setSelectedAudienceId(data.audience.id); // queda listo para enviar
+            } else {
+                showToast && showToast(data.error || 'No se pudo crear', 'error');
+            }
+        } catch (e) {
+            showToast && showToast('Error de red', 'error');
+        }
+    };
+
+    const selectAudience = (aud) => {
+        if (isRunning) return;
+        setSelectedAudienceId(prev => (prev === aud.id ? null : aud.id));
+    };
+
+    const editAudience = (aud) => {
+        if (isRunning) return;
+        // Carga los filtros del público en la Col 1 en modo edición ("editable aparte").
+        setSelection({ ...EMPTY_SELECTION, ...(aud.selection || {}) });
+        setExcludeIds(new Set(Array.isArray(aud.excludeIds) ? aud.excludeIds : []));
+        setEditingAudienceId(aud.id);
+        setMobileTab('candidates');
+        showToast && showToast(`Editando "${aud.name}". Ajusta filtros y guarda.`, 'info');
+    };
+
+    const cancelEditAudience = () => {
+        setEditingAudienceId(null);
+        setSelection(EMPTY_SELECTION);
+        setExcludeIds(new Set());
+    };
+
+    const saveEditAudience = async () => {
+        if (!editingAudienceId) return;
+        try {
+            const res = await fetch('/api/bulks?action=audience_update', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    id: editingAudienceId,
+                    selection,
+                    excludeIds: Array.from(excludeIds),
+                    criteriaSummary: summarizeSelection(selection).join(' · ')
+                })
+            });
+            const data = await res.json();
+            if (data.success) {
+                showToast && showToast('Público actualizado', 'success');
+                setEditingAudienceId(null);
+                setSelection(EMPTY_SELECTION);
+                setExcludeIds(new Set());
+                loadAudiences();
+            } else {
+                showToast && showToast(data.error || 'No se pudo actualizar', 'error');
+            }
+        } catch (e) {
+            showToast && showToast('Error de red', 'error');
+        }
+    };
+
+    const duplicateAudience = async (aud) => {
+        try {
+            const res = await fetch('/api/bulks?action=audience_create', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    name: `${aud.name} (copia)`,
+                    selection: aud.selection || {},
+                    excludeIds: aud.excludeIds || [],
+                    criteriaSummary: aud.criteriaSummary || summarizeSelection(aud.selection).join(' · ')
+                })
+            });
+            const data = await res.json();
+            if (data.success) {
+                showToast && showToast('Público duplicado', 'success');
+                loadAudiences();
+            }
+        } catch (e) { showToast && showToast('Error de red', 'error'); }
+    };
+
+    const deleteAudience = async (aud) => {
+        const ok = await showConfirm({
+            title: 'Eliminar Público',
+            message: `¿Borrar el público "${aud.name}"? El historial de envíos que se le hicieron se conserva. Esta acción no se puede deshacer.`,
+            confirmText: 'Eliminar',
+            variant: 'danger'
+        });
+        if (!ok) return;
+        try {
+            await fetch('/api/bulks?action=audience_delete', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: aud.id })
+            });
+            if (selectedAudienceId === aud.id) setSelectedAudienceId(null);
+            if (editingAudienceId === aud.id) cancelEditAudience();
+            showToast && showToast('Público eliminado', 'info');
+            loadAudiences();
+        } catch (e) {}
     };
 
     const isCompleted = engineState && !engineState.isRunning && (engineState.currentCandidateIndex >= (engineState.candidates?.length || 1) || engineState.isAborted);
@@ -663,7 +845,7 @@ const BulksSection = () => {
 
             {/* Mobile Tab Bar */}
             <div className="lg:hidden flex border-b border-[#d1d7db] dark:border-[#222e35] bg-white dark:bg-[#111b21] shrink-0">
-                {[{id:'candidates',label:'Destinatarios',emoji:'👥'},{id:'messages',label:'Mensaje y Enviar',emoji:'💬'}].map(tab => (
+                {[{id:'candidates',label:'Filtros',emoji:'🎛️'},{id:'audiences',label:'Públicos',emoji:'👥'},{id:'messages',label:'Enviar',emoji:'💬'}].map(tab => (
                     <button
                         key={tab.id}
                         onClick={() => setMobileTab(tab.id)}
@@ -674,15 +856,34 @@ const BulksSection = () => {
                         }`}
                     >
                         <span className="mr-1">{tab.emoji}</span>{tab.label}
-                        {tab.id === 'candidates' && sendCount > 0 && (
-                            <span className="ml-1 bg-blue-500 text-white text-[10px] px-1.5 py-0.5 rounded-full">{sendCount}</span>
+                        {tab.id === 'candidates' && adHocCount > 0 && (
+                            <span className="ml-1 bg-blue-500 text-white text-[10px] px-1.5 py-0.5 rounded-full">{adHocCount}</span>
+                        )}
+                        {tab.id === 'audiences' && audiences.length > 0 && (
+                            <span className="ml-1 bg-indigo-500 text-white text-[10px] px-1.5 py-0.5 rounded-full">{audiences.length}</span>
                         )}
                     </button>
                 ))}
             </div>
 
             {/* COLUMN 1: SEGMENTO (filtros facetados) */}
-            <div className={`${mobileTab === 'candidates' ? 'flex' : 'hidden'} lg:flex w-full lg:w-[40%] flex-col border-r border-[#d1d7db] dark:border-[#222e35] bg-white dark:bg-[#111b21] min-h-0`}>
+            <div className={`${mobileTab === 'candidates' ? 'flex' : 'hidden'} lg:flex w-full lg:w-[35%] flex-col border-r border-[#d1d7db] dark:border-[#222e35] bg-white dark:bg-[#111b21] min-h-0`}>
+                {/* Banner de modo edición de público */}
+                {editingAudienceId && (
+                    <div className="px-3 py-2 bg-amber-50 dark:bg-amber-900/20 border-b border-amber-200 dark:border-amber-800 flex items-center justify-between gap-2">
+                        <span className="text-xs font-bold text-amber-700 dark:text-amber-300 flex items-center gap-1.5 truncate">
+                            <Pencil className="w-3.5 h-3.5 shrink-0" /> Editando: {audiences.find(a => a.id === editingAudienceId)?.name || 'público'}
+                        </span>
+                        <div className="flex gap-1.5 shrink-0">
+                            <button onClick={saveEditAudience} className="px-2.5 py-1 rounded-lg bg-[#25d366] hover:bg-[#1faa53] text-white text-xs font-bold flex items-center gap-1">
+                                <Save className="w-3 h-3" /> Guardar
+                            </button>
+                            <button onClick={cancelEditAudience} className="px-2.5 py-1 rounded-lg bg-gray-200 dark:bg-[#2a3942] text-gray-600 dark:text-gray-300 text-xs font-bold">
+                                Cancelar
+                            </button>
+                        </div>
+                    </div>
+                )}
                 <div className="p-3 bg-white dark:bg-[#111b21] border-b border-[#f0f2f5] dark:border-[#222e35]">
                     <div className="flex items-center justify-between mb-2">
                         <h2 className="text-lg font-bold text-[#111b21] dark:text-[#d1d7db] flex items-center gap-2">
@@ -865,10 +1066,110 @@ const BulksSection = () => {
                         })
                     )}
                 </div>
+
+                {/* Footer Col 1: crear público con la configuración actual */}
+                {!editingAudienceId && (
+                    <div className="p-3 border-t border-[#d1d7db] dark:border-[#222e35] bg-white dark:bg-[#111b21] shrink-0">
+                        <button
+                            onClick={openCreateAudience}
+                            disabled={isRunning || activeFilterCount === 0}
+                            title={activeFilterCount === 0 ? 'Aplica al menos un filtro para guardar un público' : 'Guarda estos filtros como un público reutilizable'}
+                            className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold py-3 px-4 rounded-xl shadow-sm transition-colors flex items-center justify-center gap-2 text-sm"
+                        >
+                            <Plus className="w-5 h-5" /> Crear público con esta configuración
+                        </button>
+                    </div>
+                )}
             </div>
 
-            {/* COLUMN 2: PLANTILLA & ACTIONS */}
-            <div className={`${mobileTab === 'messages' ? 'flex' : 'hidden'} lg:flex w-full lg:w-[60%] flex-col border-r border-[#d1d7db] dark:border-[#222e35] bg-[#efeae2] dark:bg-[#0b141a] min-h-0 relative`}>
+            {/* COLUMN 2: PÚBLICOS (audiencias dinámicas guardadas) */}
+            <div className={`${mobileTab === 'audiences' ? 'flex' : 'hidden'} lg:flex w-full lg:w-[25%] flex-col border-r border-[#d1d7db] dark:border-[#222e35] bg-[#f7f8fa] dark:bg-[#0e171d] min-h-0`}>
+                <div className="p-3 bg-white dark:bg-[#111b21] border-b border-[#f0f2f5] dark:border-[#222e35] flex items-center justify-between">
+                    <h2 className="text-lg font-bold text-[#111b21] dark:text-[#d1d7db] flex items-center gap-2">
+                        <Users className="w-4 h-4 text-indigo-500" /> Públicos
+                    </h2>
+                    <span className="text-xs font-bold text-gray-400">{audiences.length}</span>
+                </div>
+
+                <div className="flex-1 overflow-y-auto p-2.5 space-y-2.5">
+                    {audiencesLoading && audiences.length === 0 ? (
+                        <div className="p-6 text-center text-[#54656f] text-sm">Cargando públicos…</div>
+                    ) : audiences.length === 0 ? (
+                        <div className="p-6 text-center text-[#54656f] dark:text-[#8696a0] text-sm">
+                            <Users className="w-10 h-10 mx-auto mb-2 opacity-30" />
+                            Aún no tienes públicos.<br/>
+                            Arma filtros a la izquierda y pulsa <span className="font-bold">"Crear público"</span>.
+                        </div>
+                    ) : (
+                        audiences.map(aud => {
+                            const isSel = selectedAudienceId === aud.id;
+                            const isEditing = editingAudienceId === aud.id;
+                            const chips = summarizeSelection(aud.selection);
+                            return (
+                                <div
+                                    key={aud.id}
+                                    onClick={() => selectAudience(aud)}
+                                    className={`rounded-xl p-3 border cursor-pointer transition-all ${
+                                        isSel
+                                            ? 'border-[#25d366] bg-[#d9fdd3]/40 dark:bg-[#0a332c]/60 shadow-sm'
+                                            : 'border-gray-200 dark:border-[#222e35] bg-white dark:bg-[#111b21] hover:border-indigo-300 dark:hover:border-indigo-800'
+                                    } ${isRunning ? 'cursor-not-allowed opacity-60' : ''}`}
+                                >
+                                    <div className="flex items-start justify-between gap-2">
+                                        <h3 className="font-bold text-sm text-[#111b21] dark:text-[#e9edef] truncate flex items-center gap-1.5">
+                                            {isSel && <UserCheck className="w-4 h-4 text-[#25d366] shrink-0" />}
+                                            {aud.name}
+                                        </h3>
+                                        <span className="text-sm font-black text-indigo-600 dark:text-indigo-400 shrink-0">
+                                            {(aud.count ?? 0).toLocaleString('es-MX')}
+                                        </span>
+                                    </div>
+
+                                    {chips.length > 0 && (
+                                        <div className="flex flex-wrap gap-1 mt-2">
+                                            {chips.map((c, i) => (
+                                                <span key={i} className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-gray-100 dark:bg-[#202c33] text-gray-600 dark:text-gray-300">{c}</span>
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    {(aud.lastCampaignAt || aud.totalEverSent > 0) && (
+                                        <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-2">
+                                            {aud.lastCampaignAt ? `Últ. envío: ${new Date(aud.lastCampaignAt).toLocaleDateString('es-MX', { day: '2-digit', month: 'short' })}` : ''}
+                                            {aud.totalEverSent > 0 ? ` · ${aud.totalEverSent.toLocaleString('es-MX')} enviados` : ''}
+                                        </p>
+                                    )}
+
+                                    {/* Acciones */}
+                                    <div className="flex items-center gap-1 mt-2.5 pt-2.5 border-t border-gray-100 dark:border-white/5" onClick={(e) => e.stopPropagation()}>
+                                        <button
+                                            onClick={() => selectAudience(aud)}
+                                            disabled={isRunning}
+                                            className={`flex-1 text-[11px] font-bold py-1.5 rounded-lg transition-colors ${
+                                                isSel ? 'bg-[#25d366] text-white' : 'bg-gray-100 dark:bg-[#202c33] text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-[#2a3942]'
+                                            } disabled:opacity-40`}
+                                        >
+                                            {isSel ? '✓ Seleccionado' : 'Seleccionar'}
+                                        </button>
+                                        <button onClick={() => editAudience(aud)} disabled={isRunning} title="Editar filtros" className={`p-1.5 rounded-lg transition-colors disabled:opacity-40 ${isEditing ? 'bg-amber-100 dark:bg-amber-900/40 text-amber-600' : 'text-gray-400 hover:bg-gray-100 dark:hover:bg-[#202c33] hover:text-indigo-500'}`}>
+                                            <Pencil className="w-3.5 h-3.5" />
+                                        </button>
+                                        <button onClick={() => duplicateAudience(aud)} disabled={isRunning} title="Duplicar" className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 dark:hover:bg-[#202c33] hover:text-indigo-500 transition-colors disabled:opacity-40">
+                                            <Copy className="w-3.5 h-3.5" />
+                                        </button>
+                                        <button onClick={() => deleteAudience(aud)} disabled={isRunning} title="Borrar" className="p-1.5 rounded-lg text-gray-400 hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-500 transition-colors disabled:opacity-40">
+                                            <Trash2 className="w-3.5 h-3.5" />
+                                        </button>
+                                    </div>
+                                </div>
+                            );
+                        })
+                    )}
+                </div>
+            </div>
+
+            {/* COLUMN 3: PLANTILLA & ACTIONS */}
+            <div className={`${mobileTab === 'messages' ? 'flex' : 'hidden'} lg:flex w-full lg:w-[40%] flex-col border-r border-[#d1d7db] dark:border-[#222e35] bg-[#efeae2] dark:bg-[#0b141a] min-h-0 relative`}>
                 <div className="p-3 bg-white dark:bg-[#111b21] border-b border-[#f0f2f5] dark:border-[#222e35] shadow-sm relative z-10 flex justify-between items-center">
                     <div className="flex items-center gap-4">
                         <h2 className="text-lg font-bold text-[#111b21] dark:text-[#d1d7db]">Mensaje a enviar</h2>
@@ -1012,6 +1313,31 @@ const BulksSection = () => {
 
                 {/* Primary Action Buttons */}
                 <div className="p-4 bg-white dark:bg-[#111b21] border-t border-[#d1d7db] dark:border-[#222e35] shadow-2xl relative z-20">
+                    {/* Destinatario: público seleccionado o segmento ad-hoc */}
+                    {!isRunning && !isCompleted && (
+                        <div className={`mb-4 rounded-xl px-3 py-2.5 border flex items-center justify-between gap-2 ${
+                            selectedAudience
+                                ? 'bg-[#d9fdd3]/40 dark:bg-[#0a332c]/50 border-[#25d366]/50'
+                                : 'bg-[#f0f2f5] dark:bg-[#202c33] border-transparent'
+                        }`}>
+                            <div className="min-w-0">
+                                <div className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Enviando a</div>
+                                <div className="text-sm font-bold text-[#111b21] dark:text-[#e9edef] truncate flex items-center gap-1.5">
+                                    {selectedAudience ? (
+                                        <><UserCheck className="w-4 h-4 text-[#25d366] shrink-0" /> {selectedAudience.name}</>
+                                    ) : (
+                                        <><SlidersHorizontal className="w-4 h-4 text-[#54656f] shrink-0" /> Segmento actual (filtros)</>
+                                    )}
+                                    <span className="text-indigo-600 dark:text-indigo-400">· {sendCount.toLocaleString('es-MX')}</span>
+                                </div>
+                            </div>
+                            {selectedAudience && (
+                                <button onClick={() => setSelectedAudienceId(null)} title="Usar el segmento actual en su lugar" className="text-xs text-gray-500 hover:text-red-500 font-medium flex items-center gap-1 shrink-0">
+                                    <X className="w-3.5 h-3.5" /> Quitar
+                                </button>
+                            )}
+                        </div>
+                    )}
                     {/* Sender number selector */}
                     {!isRunning && !isCompleted && (
                         <div className="mb-4">
@@ -1168,6 +1494,56 @@ const BulksSection = () => {
                         </div>
                     </div>
                 </>
+            )}
+
+            {/* CREATE AUDIENCE MODAL */}
+            {showCreateAudience && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md" style={{ animation: 'fadeIn 0.2s ease-out' }}>
+                    <div className="bg-white dark:bg-[#111b21] w-full max-w-md rounded-[24px] shadow-2xl overflow-hidden p-8 flex flex-col border border-gray-100 dark:border-gray-800" style={{ animation: 'popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)' }}>
+                        <div className="w-16 h-16 bg-indigo-100 dark:bg-indigo-900/30 rounded-full flex items-center justify-center mb-5 self-center">
+                            <Users className="w-8 h-8 text-indigo-600 dark:text-indigo-400" />
+                        </div>
+                        <h2 className="text-xl font-black text-gray-800 dark:text-white mb-1 text-center">Nuevo Público</h2>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mb-5 text-center">
+                            Se guarda con los filtros actuales ({adHocCount.toLocaleString('es-MX')} candidatos hoy). Es dinámico: se recalcula solo cuando lo uses.
+                        </p>
+
+                        {summarizeSelection(selection).length > 0 && (
+                            <div className="flex flex-wrap gap-1 justify-center mb-5">
+                                {summarizeSelection(selection).map((c, i) => (
+                                    <span key={i} className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-gray-100 dark:bg-[#202c33] text-gray-600 dark:text-gray-300">{c}</span>
+                                ))}
+                            </div>
+                        )}
+
+                        <input
+                            autoFocus
+                            type="text"
+                            value={newAudienceName}
+                            onChange={(e) => setNewAudienceName(e.target.value)}
+                            onKeyDown={(e) => { if (e.key === 'Enter') confirmCreateAudience(); }}
+                            placeholder="Ej: Mujeres jóvenes Monterrey"
+                            maxLength={80}
+                            className="w-full bg-[#f0f2f5] dark:bg-[#202c33] border border-gray-200 dark:border-gray-700 focus:border-indigo-500 rounded-xl p-3 text-sm text-[#111b21] dark:text-[#e9edef] outline-none transition-colors mb-5"
+                        />
+
+                        <div className="flex gap-3">
+                            <button
+                                onClick={() => setShowCreateAudience(false)}
+                                className="flex-1 bg-gray-100 hover:bg-gray-200 dark:bg-[#202c33] dark:hover:bg-[#2a3942] text-gray-700 dark:text-gray-300 font-bold py-3 rounded-xl transition-colors text-sm"
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                onClick={confirmCreateAudience}
+                                disabled={!newAudienceName.trim()}
+                                className="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold py-3 rounded-xl shadow-sm transition-colors text-sm flex items-center justify-center gap-2"
+                            >
+                                <Plus className="w-4 h-4" /> Crear público
+                            </button>
+                        </div>
+                    </div>
+                </div>
             )}
 
             {/* Diálogo de confirmación (Abortar campaña / Eliminar historial) */}

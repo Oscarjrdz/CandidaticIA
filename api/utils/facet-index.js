@@ -432,6 +432,21 @@ export async function computeFacets(redis, selection, meta) {
 }
 
 /**
+ * Conteo total del segmento SIN drill-down (solo el entero final).
+ * Ligero: una intersección de universo + restricciones. Usado por la lista de
+ * Públicos (audiencias guardadas), donde solo importa "cuántos caen hoy".
+ */
+export async function countSegment(redis, selection) {
+    const { constraints, tempKeys } = await buildConstraintKeys(redis, selection);
+    try {
+        const keys = [FACET_ALL_KEY, ...Object.keys(constraints).map(d => constraints[d])];
+        return await countIntersection(redis, keys);
+    } finally {
+        if (tempKeys.length) redis.del(...tempKeys).catch(() => {});
+    }
+}
+
+/**
  * Resuelve la lista COMPLETA de candidateIds del segmento, ordenada por recencia
  * (misma que candidates:list), restando excludeIds. limit=0 → todos.
  */

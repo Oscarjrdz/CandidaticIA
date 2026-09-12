@@ -4,7 +4,7 @@ import { sendUltraMsgMessage, getUltraMsgConfig, buildMetaTemplateComponents, re
 import axios from 'axios';
 import { getRedisClient, validateAdminSession } from './utils/storage.js';
 import { getCachedConfig } from './utils/cache.js';
-import { ensureFacetIndex, computeFacets, resolveSegmentIds, hydratePreview } from './utils/facet-index.js';
+import { ensureFacetIndex, computeFacets, resolveSegmentIds, hydratePreview, countSegment } from './utils/facet-index.js';
 import { NL_MUNICIPIOS } from './flows.js';
 
 const PREVIEW_LIMIT = 100;
@@ -49,6 +49,20 @@ const loadProjectData = async (redis) => {
 const REDIS_KEY_STATE = 'bulks:engine_state';
 const REDIS_KEY_DRAFT = 'bulks:draft';
 const REDIS_KEY_HISTORY = 'bulks:history';
+const REDIS_KEY_AUDIENCES = 'bulks:audiences'; // públicos guardados (audiencias dinámicas)
+
+// ─── Públicos (audiencias dinámicas) ───────────────────────────────────────────
+// Un público = un `selection` guardado con nombre. Es DINÁMICO: solo persiste los
+// filtros; el conteo se recalcula en vivo con countSegment(). Los envíos hechos a un
+// público quedan ligados vía `audienceId` en bulks:history (no hay estructura aparte).
+const getAudiences = async (redis) => {
+    try {
+        const raw = await redis.get(REDIS_KEY_AUDIENCES);
+        const arr = raw ? (typeof raw === 'string' ? JSON.parse(raw) : raw) : [];
+        return Array.isArray(arr) ? arr : [];
+    } catch { return []; }
+};
+const saveAudiences = (redis, list) => redis.set(REDIS_KEY_AUDIENCES, JSON.stringify(list));
 
 // Lock para evitar que 2 polls concurrentes procesen al mismo candidato
 let processingLock = false;
@@ -322,6 +336,108 @@ export default async function handler(req, res) {
         }
     }
 
+    // ─── PÚBLICOS: LISTAR (con conteo en vivo) ─────────────────────────────────
+    if (req.method === 'GET' && action === 'audiences_list') {
+        const redis = getRedisClient();
+        if (!redis) return res.status(200).json({ success: true, audiences: [] });
+        try {
+            const audiences = await getAudiences(redis);
+            // Conteo en vivo por público (dinámico). Es barato: solo enteros por SINTERCARD.
+            const withCounts = await Promise.all(audiences.map(async (a) => {
+                let count = 0;
+                try { count = await countSegment(redis, a.selection || {}); } catch { count = 0; }
+                const exCount = Array.isArray(a.excludeIds) ? a.excludeIds.length : 0;
+                return { ...a, count: Math.max(0, count - exCount) };
+            }));
+            return res.status(200).json({ success: true, audiences: withCounts });
+        } catch (e) {
+            console.error('[AUDIENCES] list error:', e?.message);
+            return res.status(500).json({ error: 'Error listando públicos' });
+        }
+    }
+
+    // ─── PÚBLICOS: CREAR ───────────────────────────────────────────────────────
+    if (req.method === 'POST' && action === 'audience_create') {
+        const redis = getRedisClient();
+        if (!redis) return res.status(500).json({ error: 'Sin conexión a Redis' });
+        try {
+            const { name, selection, excludeIds, criteriaSummary } = req.body || {};
+            if (!name || !String(name).trim()) return res.status(400).json({ error: 'Falta el nombre del público' });
+            const audiences = await getAudiences(redis);
+            const audience = {
+                id: `aud_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+                name: String(name).trim().slice(0, 80),
+                selection: selection || {},
+                excludeIds: Array.isArray(excludeIds) ? excludeIds : [],
+                criteriaSummary: criteriaSummary || '',
+                createdAt: new Date().toISOString(),
+                lastCampaignAt: null,
+                totalEverSent: 0
+            };
+            audiences.unshift(audience);
+            await saveAudiences(redis, audiences);
+            return res.status(200).json({ success: true, audience });
+        } catch (e) {
+            console.error('[AUDIENCES] create error:', e?.message);
+            return res.status(500).json({ error: 'Error creando público' });
+        }
+    }
+
+    // ─── PÚBLICOS: ACTUALIZAR (nombre / filtros) ───────────────────────────────
+    if (req.method === 'POST' && action === 'audience_update') {
+        const redis = getRedisClient();
+        if (!redis) return res.status(500).json({ error: 'Sin conexión a Redis' });
+        try {
+            const { id, name, selection, excludeIds, criteriaSummary } = req.body || {};
+            if (!id) return res.status(400).json({ error: 'Falta id del público' });
+            const audiences = await getAudiences(redis);
+            const idx = audiences.findIndex(a => a.id === id);
+            if (idx === -1) return res.status(404).json({ error: 'Público no encontrado' });
+            if (name != null) audiences[idx].name = String(name).trim().slice(0, 80);
+            if (selection !== undefined) audiences[idx].selection = selection || {};
+            if (excludeIds !== undefined) audiences[idx].excludeIds = Array.isArray(excludeIds) ? excludeIds : [];
+            if (criteriaSummary !== undefined) audiences[idx].criteriaSummary = criteriaSummary || '';
+            audiences[idx].updatedAt = new Date().toISOString();
+            await saveAudiences(redis, audiences);
+            return res.status(200).json({ success: true, audience: audiences[idx] });
+        } catch (e) {
+            console.error('[AUDIENCES] update error:', e?.message);
+            return res.status(500).json({ error: 'Error actualizando público' });
+        }
+    }
+
+    // ─── PÚBLICOS: BORRAR ──────────────────────────────────────────────────────
+    if (req.method === 'POST' && action === 'audience_delete') {
+        const redis = getRedisClient();
+        if (!redis) return res.status(500).json({ error: 'Sin conexión a Redis' });
+        try {
+            const { id } = req.body || {};
+            if (!id) return res.status(400).json({ error: 'Falta id del público' });
+            const audiences = await getAudiences(redis);
+            await saveAudiences(redis, audiences.filter(a => a.id !== id));
+            return res.status(200).json({ success: true });
+        } catch (e) {
+            console.error('[AUDIENCES] delete error:', e?.message);
+            return res.status(500).json({ error: 'Error borrando público' });
+        }
+    }
+
+    // ─── PÚBLICOS: HISTORIAL DE ENVÍOS (campañas ligadas a este público) ────────
+    if (req.method === 'GET' && action === 'audience_history') {
+        const redis = getRedisClient();
+        if (!redis) return res.status(200).json({ success: true, history: [] });
+        try {
+            const { id } = req.query;
+            if (!id) return res.status(400).json({ error: 'Falta id del público' });
+            const raw = await redis.get(REDIS_KEY_HISTORY);
+            const history = raw ? (typeof raw === 'string' ? JSON.parse(raw) : raw) : [];
+            return res.status(200).json({ success: true, history: history.filter(h => h.audienceId === id) });
+        } catch (e) {
+            console.error('[AUDIENCES] history error:', e?.message);
+            return res.status(500).json({ error: 'Error obteniendo historial del público' });
+        }
+    }
+
     // ─── START ───────────────────────────────────────────────────────────────
     if (req.method === 'POST' && action === 'start') {
         const existingState = await getState();
@@ -329,15 +445,29 @@ export default async function handler(req, res) {
             return res.status(400).json({ error: 'Ya hay un envío en curso. Aborta primero.' });
         }
 
-        const { candidates: candidatesInput, segment, messages, bulkType, templateData, templateParams, _minDelay, _maxDelay, _pauseEvery, _pauseFor, campaignName, fromNumberId } = req.body;
+        const { candidates: candidatesInput, segment, messages, bulkType, templateData, templateParams, _minDelay, _maxDelay, _pauseEvery, _pauseFor, campaignName, fromNumberId, audienceId } = req.body;
 
         // El segmento (filtros facetados) se resuelve a la lista COMPLETA en el servidor,
         // así el navegador nunca sube miles de IDs. Alternativamente acepta IDs explícitos.
+        // Si viene un audienceId (público guardado), sus filtros son la fuente de verdad
+        // y se resuelven FRESCOS aquí (dinámico) — sin confiar en lo que mandó el cliente.
         let candidates = candidatesInput;
-        if ((!candidates || !candidates.length) && segment && segment.selection) {
+        let audience = null;
+        let effectiveSegment = segment;
+        if (audienceId) {
             const redis = getRedisClient();
             if (redis) {
-                candidates = await resolveSegmentIds(redis, segment.selection, segment.excludeIds || [], 0);
+                const audiences = await getAudiences(redis);
+                audience = audiences.find(a => a.id === audienceId) || null;
+            }
+            if (!audience) return res.status(404).json({ error: 'Público no encontrado.' });
+            effectiveSegment = { selection: audience.selection || {}, excludeIds: audience.excludeIds || [] };
+            candidates = null; // forzar resolución fresca desde los filtros del público
+        }
+        if ((!candidates || !candidates.length) && effectiveSegment && effectiveSegment.selection) {
+            const redis = getRedisClient();
+            if (redis) {
+                candidates = await resolveSegmentIds(redis, effectiveSegment.selection, effectiveSegment.excludeIds || [], 0);
             }
         }
 
@@ -372,6 +502,8 @@ export default async function handler(req, res) {
             logs: [],
             campaignId,
             campaignName: displayName,
+            audienceId: audience?.id || null,
+            audienceName: audience?.name || null,
             startedAt: Date.now(),
             nextSendAt: Date.now()
         };
@@ -398,9 +530,27 @@ export default async function handler(req, res) {
                         pauseFor: newState.pauseFor,
                         totalTargets: candidates.length,
                         totalSent: 0,
-                        status: 'running'
+                        status: 'running',
+                        audienceId: audience?.id || null,
+                        audienceName: audience?.name || null
                     });
                     await redis.set(REDIS_KEY_HISTORY, JSON.stringify(history));
+                }
+            } catch (e) { /* non-critical */ }
+        }
+
+        // Actualiza stats del público (última campaña + total histórico de destinatarios).
+        if (audience) {
+            try {
+                const redis = getRedisClient();
+                if (redis) {
+                    const audiences = await getAudiences(redis);
+                    const idx = audiences.findIndex(a => a.id === audience.id);
+                    if (idx !== -1) {
+                        audiences[idx].lastCampaignAt = new Date().toISOString();
+                        audiences[idx].totalEverSent = (audiences[idx].totalEverSent || 0) + candidates.length;
+                        await saveAudiences(redis, audiences);
+                    }
                 }
             } catch (e) { /* non-critical */ }
         }
