@@ -1,6 +1,6 @@
-import { getCandidateById, saveMessage, updateCandidate, updateMessageStatus } from './utils/storage.js';
+import { getCandidateById, saveMessage, updateCandidate, updateMessageStatus, getCandidateByPhone } from './utils/storage.js';
 import { substituteVariables } from './utils/shortcuts.js';
-import { sendUltraMsgMessage, getUltraMsgConfig, buildMetaTemplateComponents, renderMetaTemplatePreviewText } from './whatsapp/utils.js';
+import { sendUltraMsgMessage, getUltraMsgConfig, buildMetaTemplateComponents, renderMetaTemplatePreviewText, resolveTemplateHeaderMedia } from './whatsapp/utils.js';
 import axios from 'axios';
 import { getRedisClient, validateAdminSession } from './utils/storage.js';
 import { getCachedConfig } from './utils/cache.js';
@@ -197,11 +197,19 @@ const tickEngine = async (state) => {
                                     languageCode
                                 };
                                 
+                                // Header multimedia: media id entregable (subido/cacheado por
+                                // número emisor). El link de header_handle NO entrega.
+                                const headerMediaId = await resolveTemplateHeaderMedia(state.templateData, {
+                                    phoneNumberId: ultraConfig.instanceId,
+                                    accessToken: ultraConfig.token,
+                                    redis: getRedisClient()
+                                });
+
                                 // Construcción dinámica de componentes (DRY helper)
                                 const componentsToSend = buildMetaTemplateComponents(
                                     state.templateData.components,
                                     candidateNameFallback,
-                                    { templateParams: state.templateParams, parameterFormat: state.templateData.parameter_format }
+                                    { templateParams: state.templateParams, mediaId: headerMediaId, parameterFormat: state.templateData.parameter_format }
                                 );
 
                                 if (componentsToSend.length > 0) {
@@ -341,6 +349,34 @@ export default async function handler(req, res) {
         } catch (e) {
             console.error('[BULK FACETS] error:', e?.message);
             return res.status(500).json({ success: false, error: 'Error calculando filtros' });
+        }
+    }
+
+    // ─── BÚSQUEDA POR TELÉFONO (envío directo, en toda la base) ────────────────
+    // Localiza UN candidato por teléfono para el flujo "enviar directo a este número"
+    // sin crear público. Tolera variantes MX (10 dígitos, 52+, 521+).
+    if (action === 'phone_lookup') {
+        try {
+            const phone = (req.method === 'POST' ? req.body?.phone : req.query?.phone) || '';
+            const digits = String(phone).replace(/\D/g, '');
+            if (digits.length < 10) return res.status(200).json({ success: true, candidate: null });
+            const c = await getCandidateByPhone(digits);
+            if (!c) return res.status(200).json({ success: true, candidate: null });
+            // Solo los campos que la UI necesita (chip + variables del envío).
+            return res.status(200).json({
+                success: true,
+                candidate: {
+                    id: c.id,
+                    whatsapp: c.whatsapp || c.telefono || digits,
+                    nombre: c.nombre || null,
+                    nombreReal: c.nombreReal || null,
+                    municipio: c.municipio || null,
+                    edad: c.edad || null
+                }
+            });
+        } catch (e) {
+            console.error('[BULKS] phone_lookup error:', e?.message);
+            return res.status(500).json({ error: 'Error buscando el teléfono' });
         }
     }
 

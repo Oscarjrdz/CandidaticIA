@@ -17,7 +17,8 @@
  * de ahí este archivo, en vez de tener la lógica duplicada en los dos lados.
  */
 
-import { getUltraMsgConfig, sendUltraMsgMessage, buildMetaTemplateComponents, renderMetaTemplatePreviewText } from '../whatsapp/utils.js';
+import { getUltraMsgConfig, sendUltraMsgMessage, buildMetaTemplateComponents, renderMetaTemplatePreviewText, resolveTemplateHeaderMedia } from '../whatsapp/utils.js';
+import { getRedisClient } from './storage.js';
 
 export const META_24H_WINDOW_ERROR_CODE = 131047;
 
@@ -64,10 +65,16 @@ export async function attemptReminderTemplateFallback({ reminder, candidate }) {
         languageCode: templateData.language || 'es_MX',
         priority: 1
     };
+    // Header multimedia: media id entregable (el link de header_handle NO entrega).
+    const headerMediaId = await resolveTemplateHeaderMedia(templateData, {
+        phoneNumberId: config.instanceId,
+        accessToken: config.token,
+        redis: getRedisClient()
+    });
     const componentsToSend = buildMetaTemplateComponents(
         templateData.components,
         fallbackName,
-        { templateParams, parameterFormat: templateData.parameter_format }
+        { templateParams, mediaId: headerMediaId, parameterFormat: templateData.parameter_format }
     );
     if (componentsToSend.length > 0) {
         extraParams.components = componentsToSend;

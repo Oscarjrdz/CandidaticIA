@@ -630,7 +630,7 @@ export const uploadMediaToMeta = async (buffer, mimeType, filename = 'file') => 
  * @returns {Array} componentsToSend ready for Meta API
  */
 export const buildMetaTemplateComponents = (templateComponents, candidateNameFallback, options = {}) => {
-    const { templateParams, mediaUrl, parameterFormat } = options;
+    const { templateParams, mediaUrl, mediaId, parameterFormat } = options;
     const componentsToSend = [];
 
     (templateComponents || []).forEach(comp => {
@@ -675,12 +675,18 @@ export const buildMetaTemplateComponents = (templateComponents, candidateNameFal
             } else if (cType === 'header') {
                 const format = (comp.format || '').toLowerCase();
                 if (['image', 'video', 'document'].includes(format)) {
-                    // Only send a header component if the caller provides an explicit mediaUrl to
-                    // override the template's pre-approved media. If no mediaUrl is given, Meta
-                    // already has the approved asset stored server-side and will use it automatically.
-                    // Sending a placeholder link here causes Meta to reject the request or show a
-                    // broken image — so we simply skip the header component in that case.
-                    if (mediaUrl) {
+                    // Meta EXIGE el parámetro del header multimedia al enviar; omitirlo => error
+                    // #132012. IMPORTANTE: el link de example.header_handle (scontent.whatsapp.net)
+                    // NO entrega — Meta lo acepta pero el mensaje nunca llega (fallo silencioso).
+                    // La vía confiable es un `media id` subido a Meta (resolveTemplateHeaderMedia,
+                    // hecho por el caller) o un `link` a una URL pública propia. Prioridad:
+                    // mediaId > mediaUrl. Si no hay ninguno, se omite (nada entregable).
+                    if (mediaId) {
+                        componentsToSend.push({
+                            type: 'header',
+                            parameters: [{ type: format, [format]: { id: mediaId } }]
+                        });
+                    } else if (mediaUrl) {
                         componentsToSend.push({
                             type: 'header',
                             parameters: [{ type: format, [format]: { link: mediaUrl } }]
@@ -707,6 +713,65 @@ export const buildMetaTemplateComponents = (templateComponents, candidateNameFal
     });
 
     return componentsToSend;
+};
+
+/**
+ * Resuelve un `media id` ENTREGABLE para el header multimedia de una plantilla.
+ *
+ * El link que Meta expone en example.header_handle (scontent.whatsapp.net) sirve para
+ * la revisión de la plantilla pero NO como media de mensaje: Meta acepta el envío y
+ * nunca lo entrega (fallo silencioso). Aquí descargamos esa imagen aprobada y la
+ * subimos a Meta (/{phoneNumberId}/media) para obtener un media id real, que sí entrega.
+ *
+ * Los media id están atados al número que los subió, así que se cachea por
+ * (phoneNumberId, nombre de plantilla). Se reusa entre envíos (cache ~25 días).
+ *
+ * @returns {Promise<string|null>} media id, o null si la plantilla no tiene header multimedia.
+ */
+export const resolveTemplateHeaderMedia = async (templateData, { phoneNumberId, accessToken, redis } = {}) => {
+    try {
+        const components = templateData?.components || [];
+        const header = components.find(c => (c.type || '').toUpperCase() === 'HEADER');
+        if (!header) return null;
+        const format = (header.format || '').toLowerCase();
+        if (!['image', 'video', 'document'].includes(format)) return null;
+        const handle = Array.isArray(header.example?.header_handle)
+            ? header.example.header_handle[0]
+            : (typeof header.example?.header_handle === 'string' ? header.example.header_handle : null);
+        if (!handle) return null;
+
+        const cfg = (!phoneNumberId || !accessToken) ? getMetaConfig() : null;
+        const phoneId = phoneNumberId || cfg?.phoneNumberId;
+        const token = accessToken || cfg?.accessToken;
+        if (!phoneId || !token) return null;
+
+        const tplName = templateData?.name || 'tpl';
+        const cacheKey = `tpl:hdrmedia:${phoneId}:${tplName}`;
+        if (redis) {
+            try { const cached = await redis.get(cacheKey); if (cached) return cached; } catch { /* cache best-effort */ }
+        }
+
+        // Descargar la imagen aprobada y subirla a Meta -> media id entregable.
+        const img = await axios.get(handle, { responseType: 'arraybuffer', timeout: 20000 });
+        const buf = Buffer.from(img.data);
+        const contentType = img.headers['content-type'] || 'image/png';
+        const FormData = (await import('form-data')).default;
+        const fd = new FormData();
+        fd.append('messaging_product', 'whatsapp');
+        fd.append('file', buf, { filename: `header_${tplName}`, contentType });
+        const up = await axios.post(`https://graph.facebook.com/v21.0/${phoneId}/media`, fd, {
+            headers: { Authorization: `Bearer ${token}`, ...fd.getHeaders() }
+        });
+        const mediaId = up.data?.id || null;
+        if (mediaId && redis) {
+            // Media id reusable; se cachea ~25 días (por si Meta lo expira a los ~30).
+            try { await redis.set(cacheKey, mediaId, 'EX', 60 * 60 * 24 * 25); } catch { /* cache best-effort */ }
+        }
+        return mediaId;
+    } catch (e) {
+        console.error('[TEMPLATE] resolveTemplateHeaderMedia error:', e?.response?.data?.error?.message || e?.message);
+        return null;
+    }
 };
 
 const TEMPLATE_MEDIA_LABELS = {

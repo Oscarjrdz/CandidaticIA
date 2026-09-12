@@ -1,6 +1,6 @@
 import { getMessages, getRecentMessages, saveMessage, getCandidateById, updateCandidate, updateMessageStatus, getRedisClient, validateAdminSession, getUsers, getRoles, isProfileComplete } from './utils/storage.js';
 import { substituteVariables } from './utils/shortcuts.js';
-import { sendUltraMsgMessage, getUltraMsgConfig, buildMetaTemplateComponents, renderMetaTemplatePreviewText } from './whatsapp/utils.js';
+import { sendUltraMsgMessage, getUltraMsgConfig, buildMetaTemplateComponents, renderMetaTemplatePreviewText, resolveTemplateHeaderMedia } from './whatsapp/utils.js';
 import { getCachedConfig } from './utils/cache.js';
 
 // Candidatic legacy URLs removed as per UltraMsg migration.
@@ -469,11 +469,21 @@ export default async function handler(req, res) {
                     extraParams.templateName = tData.name;
                     extraParams.languageCode = tData.language || 'es_MX';
                     
+                    // Header multimedia: subir la imagen aprobada a Meta y mandar por media id
+                    // (el link de header_handle NO entrega). Override explícito con req.body.mediaUrl.
+                    const headerMediaId = req.body.mediaUrl
+                        ? null
+                        : await resolveTemplateHeaderMedia(tData, {
+                            phoneNumberId: ultraConfig.instanceId,
+                            accessToken: ultraConfig.token,
+                            redis: getRedisClient()
+                        });
+
                     // Construcción dinámica de componentes (DRY helper)
                     const componentsToSend = buildMetaTemplateComponents(
                         tData.components,
                         candidateNameFallback,
-                        { mediaUrl: req.body.mediaUrl, parameterFormat: tData.parameter_format }
+                        { mediaUrl: req.body.mediaUrl, mediaId: headerMediaId, parameterFormat: tData.parameter_format }
                     );
 
                     if (componentsToSend.length > 0) {
