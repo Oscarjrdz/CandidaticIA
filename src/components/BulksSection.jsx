@@ -256,7 +256,7 @@ const MultiSelectDropdown = ({ title, icon, values, counts, selected, onToggle, 
 
 const BulksSection = () => {
     const { showToast } = useToastContext();
-    const { _confirmModalJSX, showConfirm } = useConfirmModal();
+    const { confirmModalJSX, showConfirm } = useConfirmModal();
 
     // Col 1: Filtrado facetado (segmento)
     const [selection, setSelection] = useState(EMPTY_SELECTION);
@@ -551,14 +551,21 @@ const BulksSection = () => {
         });
         if (!ok) return;
         try {
-            await fetch('/api/bulks?action=history_delete', {
+            const res = await fetch('/api/bulks?action=history_delete', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({id})
             });
-            showToast && showToast("Eliminado", "info");
-            loadHistory();
-        } catch(e) {}
+            const data = await res.json().catch(() => ({}));
+            if (res.ok && data.success) {
+                showToast && showToast("Campaña eliminada", "success");
+                await loadHistory();
+            } else {
+                showToast && showToast(data.error || "No se pudo eliminar", "error");
+            }
+        } catch(e) {
+            showToast && showToast("Error de red al eliminar", "error");
+        }
     };
 
     const isRunning = engineState?.isRunning;
@@ -1726,7 +1733,7 @@ const BulksSection = () => {
             )}
 
             {/* Diálogo de confirmación (Abortar campaña / Eliminar historial) */}
-            {_confirmModalJSX}
+            {confirmModalJSX}
         </div>
     );
 };

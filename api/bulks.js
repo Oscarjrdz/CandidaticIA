@@ -753,6 +753,8 @@ export default async function handler(req, res) {
                 let history = raw ? (typeof raw === 'string' ? JSON.parse(raw) : raw) : [];
                 history = history.filter(h => h.id !== id);
                 await redis.set(REDIS_KEY_HISTORY, JSON.stringify(history));
+                // Limpiar también las estadísticas de la campaña (no dejar hash huérfano).
+                redis.del(`bulk_stats:${id}`).catch(() => {});
                 return res.status(200).json({ success: true });
             }
         } catch (e) { /* non-critical */ }
