@@ -142,7 +142,15 @@ const tickEngine = async (state) => {
 
     try {
         let sentInTick = 0;
-        const BATCH_SIZE = 5;
+        // Ritmo adaptativo: plantillas con imagen/video/documento van LENTAS PERO SEGURAS
+        // (lote chico + pausa larga) para no saturar a Meta ni arriesgar la entrega, y para
+        // que cada tick termine muy por debajo del lock (30s) y del maxDuration (60s) —
+        // así nunca hay ticks concurrentes ni cortes a media que causen duplicados.
+        // Texto va rápido (lote grande, pausa mínima).
+        const isMediaCampaign = state.bulkType === 'template' && (state.templateData?.components || [])
+            .some(c => (c.type || '').toUpperCase() === 'HEADER' && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes((c.format || '').toUpperCase()));
+        const BATCH_SIZE = isMediaCampaign ? 3 : 5;
+        const perMsgDelay = isMediaCampaign ? 3000 : 50;
 
         while (sentInTick < BATCH_SIZE && state.currentCandidateIndex < state.candidates.length && state.isRunning && !state.isAborted) {
             // ─── ENVIAR MENSAJE ──────────────────────────────────────────────────
@@ -286,13 +294,8 @@ const tickEngine = async (state) => {
             state.currentCandidateIndex++;
             sentInTick++;
 
-            // Wait before sending the next. For media templates, yield for 2.5s to prevent rate limiting. For text, yield 50ms.
-            let delayMs = 50;
-            if (state.bulkType === 'template' && state.templateData?.components) {
-                const hasMedia = state.templateData.components.some(c => c.type === 'HEADER' && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(c.format));
-                if (hasMedia) delayMs = 2500;
-            }
-            await new Promise(r => setTimeout(r, delayMs));
+            // Pausa entre envíos según el ritmo adaptativo (media = lento y seguro; ver arriba).
+            await new Promise(r => setTimeout(r, perMsgDelay));
         }
 
         // ¿Ya terminó todo el lote/campaña?
@@ -661,7 +664,10 @@ export default async function handler(req, res) {
             let lockAcquired = false;
             
             if (redis) {
-                const lock = await redis.set('bulk_lock', '1', 'EX', 10, 'NX');
+                // TTL 30s: debe superar la duración de un tick (media = 3 envíos × 3s ≈ 9s) para
+                // que el lock NO expire a media y arranque un tick paralelo (=> duplicados). Se
+                // libera en el finally al terminar; el TTL solo es red de seguridad si el proceso muere.
+                const lock = await redis.set('bulk_lock', '1', 'EX', 30, 'NX');
                 if (lock) lockAcquired = true;
             } else {
                 // Si no hay redis, pasamos (aunque para este serverless es vital tenerlo)

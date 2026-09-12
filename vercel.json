@@ -128,6 +128,9 @@
         }
     ],
     "functions": {
+        "api/bulks.js": {
+            "maxDuration": 60
+        },
         "api/sse/candidates.js": {
             "maxDuration": 60
         },
