@@ -675,16 +675,17 @@ export const buildMetaTemplateComponents = (templateComponents, candidateNameFal
             } else if (cType === 'header') {
                 const format = (comp.format || '').toLowerCase();
                 if (['image', 'video', 'document'].includes(format)) {
-                    const placeholders = {
-                        image: 'https://raw.githubusercontent.com/davidcelis/logo/master/logo.png',
-                        video: 'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4',
-                        document: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf'
-                    };
-                    const mUrl = mediaUrl || placeholders[format] || placeholders.image;
-                    componentsToSend.push({
-                        type: 'header',
-                        parameters: [{ type: format, [format]: { link: mUrl } }]
-                    });
+                    // Only send a header component if the caller provides an explicit mediaUrl to
+                    // override the template's pre-approved media. If no mediaUrl is given, Meta
+                    // already has the approved asset stored server-side and will use it automatically.
+                    // Sending a placeholder link here causes Meta to reject the request or show a
+                    // broken image — so we simply skip the header component in that case.
+                    if (mediaUrl) {
+                        componentsToSend.push({
+                            type: 'header',
+                            parameters: [{ type: format, [format]: { link: mediaUrl } }]
+                        });
+                    }
                 }
             }
         } else if (cType === 'buttons') {

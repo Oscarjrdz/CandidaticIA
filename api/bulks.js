@@ -186,8 +186,11 @@ const tickEngine = async (state) => {
                                 const templateName = state.templateData.name;
                                 const languageCode = state.templateData.language || 'es_MX';
                                 
-                                const _nr = candidate.nombreReal?.trim().split(/\s+/)[0];
-                                const candidateNameFallback = _nr || candidate.nombre?.trim().split(/\s+/)[0] || 'Candidato';
+                                // Nombre simple del candidato: primero nombreReal, luego nombre,
+                                // y si nada está disponible — 'Candidato'. Blindado contra null/undefined.
+                                const _nr = (candidate.nombreReal || '').trim().split(/\s+/)[0];
+                                const _n = (candidate.nombre || '').trim().split(/\s+/)[0];
+                                const candidateNameFallback = _nr || _n || 'Candidato';
                                 
                                 extraParams = {
                                     templateName,
