@@ -13,11 +13,9 @@ const CANDIDATES_LIST_CACHE_TTL_MS = 15000;
 // que las acciones del usuario se reflejan de inmediato; solo el refresco pasivo pasa de
 // 15 a 30 min. Los cambios que entran por WhatsApp ya no invalidaban este caché (nunca lo
 // hicieron), así que su lag ya era de hasta 15 min — esto solo lo extiende un poco.
-const FILTER_COUNTS_CACHE_TTL_SECONDS = 30 * 60;
-const FILTER_COUNTS_STALE_TTL_SECONDS = 24 * 60 * 60;
-const FILTER_COUNTS_CACHE_KEY = 'cache:candidates:filter_counts:v1';
-const FILTER_COUNTS_STALE_KEY = 'cache:candidates:filter_counts:v1:stale';
-const FILTER_COUNTS_LOCK_KEY = 'cache:candidates:filter_counts:v1:lock';
+// Los conteos de filtros y el índice invertido facetado se construyen de un SOLO
+// escaneo compartido en api/utils/facet-index.js (cache 30 min + stale + lock).
+const FILTER_COUNTS_CACHE_KEY = 'cache:candidates:filter_counts:v1'; // legado (se limpia en invalidación)
 const candidatesListCache = new Map();
 const MANUAL_PROJECTS_KEY = 'candidatic_manual_projects';
 const MANUAL_PROJECT_LINKS_PREFIX = 'crm_links:';
@@ -49,102 +47,28 @@ function clearCandidatesListCache() {
 
 function clearFilterCountsCache(redis) {
     if (!redis) return;
-    redis.del(FILTER_COUNTS_CACHE_KEY).catch(() => {});
+    redis.del(FILTER_COUNTS_CACHE_KEY).catch(() => {}); // legado
+    // Invalida conteos + índice invertido facetado (rebuild perezoso en la próxima petición).
+    import('./utils/facet-index.js').then(m => m.clearFacetIndex(redis)).catch(() => {});
 }
 
-function incrementCount(map, rawValue) {
-    const value = String(rawValue || '').trim();
-    if (!value) return;
-    map[value] = (map[value] || 0) + 1;
-}
-
-async function buildFilterCounts(redis) {
-    const cached = await redis.get(FILTER_COUNTS_CACHE_KEY);
-    if (cached) return JSON.parse(cached);
-
-    const lockValue = `${Date.now()}:${Math.random().toString(36).slice(2)}`;
-    const lockAcquired = await redis.set(FILTER_COUNTS_LOCK_KEY, lockValue, 'EX', 45, 'NX').catch(() => null);
-
-    if (lockAcquired !== 'OK') {
-        const stale = await redis.get(FILTER_COUNTS_STALE_KEY).catch(() => null);
-        if (stale) return JSON.parse(stale);
-
-        for (let i = 0; i < 6; i++) {
-            await new Promise(resolve => setTimeout(resolve, 200));
-            const fresh = await redis.get(FILTER_COUNTS_CACHE_KEY).catch(() => null);
-            if (fresh) return JSON.parse(fresh);
-        }
-    } else {
-        const fresh = await redis.get(FILTER_COUNTS_CACHE_KEY).catch(() => null);
-        if (fresh) {
-            await redis.del(FILTER_COUNTS_LOCK_KEY).catch(() => {});
-            return JSON.parse(fresh);
-        }
-    }
-
-    // Monitor: registra que corrio un scan completo de candidatos (dato para el medidor)
-    import('./utils/redis-bandwidth.js').then(m => m.recordScanEvent(redis, 'filter_counts')).catch(() => {});
-
-    const ids = await redis.zrevrange('candidates:list', 0, -1);
-    const existingCandidateIds = new Set();
-    const counts = {
-        ages: {},
-        genders: {},
-        municipalities: {},
-        projects: {},
-        stepsByProject: {}
-    };
-
-    const CHUNK_SIZE = 500;
-    for (let i = 0; i < ids.length; i += CHUNK_SIZE) {
-        const chunk = ids.slice(i, i + CHUNK_SIZE);
-        const pipe = redis.pipeline();
-        chunk.forEach(id => pipe.get(`candidate:${id}`));
-        const rows = await pipe.exec();
-
-        rows.forEach(([err, raw]) => {
-            if (err || !raw) return;
-            try {
-                const c = JSON.parse(raw);
-                if (c?.id) existingCandidateIds.add(String(c.id));
-                incrementCount(counts.ages, c.edad);
-                incrementCount(counts.genders, c.genero);
-                incrementCount(counts.municipalities, c.municipio);
-                incrementCount(counts.projects, c.manualProjectId);
-            } catch {
-                // Ignore malformed candidate payloads while building aggregate filters.
-            }
-        });
-    }
-
+// Carga proyectos manuales + sus links para el conteo de steps (usado por el escaneo único).
+async function loadManualProjectData(redis) {
     const projectsRaw = await redis.get(MANUAL_PROJECTS_KEY).catch(() => null);
     const projects = projectsRaw ? JSON.parse(projectsRaw) : [];
+    const projectLinks = {};
     await Promise.all((Array.isArray(projects) ? projects : []).map(async project => {
         if (!project?.id) return;
-        const validStepIds = new Set((project.steps || []).map(step => String(step.id || '').trim()).filter(Boolean));
         const linksRaw = await redis.get(`${MANUAL_PROJECT_LINKS_PREFIX}${project.id}`).catch(() => null);
-        let links = [];
-        try { links = linksRaw ? JSON.parse(linksRaw) : []; } catch { links = []; }
-        links.forEach(link => {
-            const candidateId = String(link?.candidateId || '').trim();
-            const stepId = String(link?.stepId || '').trim();
-            if (!candidateId || !existingCandidateIds.has(candidateId)) return;
-            if (validStepIds.size > 0 && (!stepId || !validStepIds.has(stepId))) return;
-            if (stepId) {
-                if (!counts.stepsByProject[project.id]) counts.stepsByProject[project.id] = {};
-                incrementCount(counts.stepsByProject[project.id], stepId);
-            }
-        });
+        try { projectLinks[project.id] = linksRaw ? JSON.parse(linksRaw) : []; } catch { projectLinks[project.id] = []; }
     }));
+    return { manualProjects: Array.isArray(projects) ? projects : [], projectLinks };
+}
 
-    const payload = { ...counts, total: ids.length, generatedAt: new Date().toISOString() };
-    const payloadRaw = JSON.stringify(payload);
-    const pipe = redis.pipeline();
-    pipe.set(FILTER_COUNTS_CACHE_KEY, payloadRaw, 'EX', FILTER_COUNTS_CACHE_TTL_SECONDS);
-    pipe.set(FILTER_COUNTS_STALE_KEY, payloadRaw, 'EX', FILTER_COUNTS_STALE_TTL_SECONDS);
-    if (lockAcquired === 'OK') pipe.del(FILTER_COUNTS_LOCK_KEY);
-    await pipe.exec().catch(() => {});
-    return payload;
+// Delega en el motor compartido: un solo escaneo alimenta conteos + índice invertido.
+async function buildFilterCounts(redis) {
+    const { getFilterCountsWithIndex } = await import('./utils/facet-index.js');
+    return getFilterCountsWithIndex(redis, () => loadManualProjectData(redis));
 }
 
 // Campos de anuncio (Meta Ads) que solo usa AdsStatisticsSection.jsx (via

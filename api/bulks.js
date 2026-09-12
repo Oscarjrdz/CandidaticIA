@@ -4,6 +4,25 @@ import { sendUltraMsgMessage, getUltraMsgConfig, buildMetaTemplateComponents, re
 import axios from 'axios';
 import { getRedisClient, validateAdminSession } from './utils/storage.js';
 import { getCachedConfig } from './utils/cache.js';
+import { ensureFacetIndex, computeFacets, resolveSegmentIds, hydratePreview } from './utils/facet-index.js';
+
+const PREVIEW_LIMIT = 100;
+
+// Carga proyectos manuales + links para que el build del índice compartido pueda contar
+// steps (mismo escaneo único que alimenta filter_counts). Fire-and-safe: si falla, {}.
+const loadProjectData = async (redis) => {
+    try {
+        const projectsRaw = await redis.get('candidatic_manual_projects').catch(() => null);
+        const projects = projectsRaw ? JSON.parse(projectsRaw) : [];
+        const projectLinks = {};
+        await Promise.all((Array.isArray(projects) ? projects : []).map(async project => {
+            if (!project?.id) return;
+            const linksRaw = await redis.get(`crm_links:${project.id}`).catch(() => null);
+            try { projectLinks[project.id] = linksRaw ? JSON.parse(linksRaw) : []; } catch { projectLinks[project.id] = []; }
+        }));
+        return { manualProjects: Array.isArray(projects) ? projects : [], projectLinks };
+    } catch { return {}; }
+};
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // POLL-DRIVEN BULK ENGINE v2.0
@@ -267,6 +286,31 @@ export default async function handler(req, res) {
 
     const { action } = req.query;
 
+    // ─── FACETS (motor de filtrado facetado) ───────────────────────────────────
+    // Devuelve conteos drill-down por dimensión + total del segmento + vista previa.
+    // El cruce de filtros se resuelve dentro de Redis (SINTERCARD) → solo enteros por la red.
+    if (action === 'facets') {
+        const redis = getRedisClient();
+        if (!redis) return res.status(200).json({ success: true, total: 0, counts: {}, meta: { dims: {} }, preview: [] });
+        try {
+            const selection = (req.method === 'POST' ? req.body?.selection : null) || {};
+            const meta = await ensureFacetIndex(redis, () => loadProjectData(redis));
+            const { total, counts } = await computeFacets(redis, selection, meta);
+            const previewIds = await resolveSegmentIds(redis, selection, [], PREVIEW_LIMIT);
+            const preview = await hydratePreview(redis, previewIds);
+            return res.status(200).json({
+                success: true,
+                total,
+                counts,
+                meta: { dims: meta.dims || {}, generatedAt: meta.generatedAt, total: meta.total },
+                preview
+            });
+        } catch (e) {
+            console.error('[BULK FACETS] error:', e?.message);
+            return res.status(500).json({ success: false, error: 'Error calculando filtros' });
+        }
+    }
+
     // ─── START ───────────────────────────────────────────────────────────────
     if (req.method === 'POST' && action === 'start') {
         const existingState = await getState();
@@ -274,7 +318,17 @@ export default async function handler(req, res) {
             return res.status(400).json({ error: 'Ya hay un envío en curso. Aborta primero.' });
         }
 
-        const { candidates, messages, bulkType, templateData, templateParams, _minDelay, _maxDelay, _pauseEvery, _pauseFor, campaignName } = req.body;
+        const { candidates: candidatesInput, segment, messages, bulkType, templateData, templateParams, _minDelay, _maxDelay, _pauseEvery, _pauseFor, campaignName } = req.body;
+
+        // El segmento (filtros facetados) se resuelve a la lista COMPLETA en el servidor,
+        // así el navegador nunca sube miles de IDs. Alternativamente acepta IDs explícitos.
+        let candidates = candidatesInput;
+        if ((!candidates || !candidates.length) && segment && segment.selection) {
+            const redis = getRedisClient();
+            if (redis) {
+                candidates = await resolveSegmentIds(redis, segment.selection, segment.excludeIds || [], 0);
+            }
+        }
 
         if (!candidates?.length) {
             return res.status(400).json({ error: 'Faltan candidatos.' });

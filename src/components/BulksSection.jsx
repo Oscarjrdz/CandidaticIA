@@ -1,21 +1,20 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useConfirmModal } from './ui/ConfirmModal';
-import { Search, Plus, Trash2, Copy, Sparkles, Send, PauseCircle, PlayCircle, XCircle, Tag, X, ChevronDown, CheckCircle2, ArrowUpDown } from 'lucide-react';
-import { getCandidates } from '../services/candidatesService';
+import { Search, Trash2, Send, XCircle, Tag, ChevronDown, CheckCircle2, Users, RotateCcw, SlidersHorizontal } from 'lucide-react';
 import { useToastContext } from '../contexts/ToastContext';
 import { extractTemplateVariables, renderMetaTemplatePreviewText } from '../utils/metaTemplatePreview';
 
 const getCandidateTimestamp = (c) => {
     // Priority: primerContacto (real creation date) > createdAt > ID-embedded timestamp
     let timestamp = c.primerContacto || c.createdAt || c.timestamp;
-    
+
     if (!timestamp && c.id && String(c.id).startsWith('cand_')) {
         const parts = String(c.id).split('_');
         if (parts.length > 1 && !isNaN(parseInt(parts[1]))) {
             timestamp = parseInt(parts[1]);
         }
     }
-    
+
     if (!timestamp) return 0;
     const date = new Date(timestamp);
     return isNaN(date.getTime()) ? 0 : date.getTime();
@@ -25,27 +24,30 @@ const getRelativeTime = (c) => {
     const ts = getCandidateTimestamp(c);
     if (!ts) return '';
     const date = new Date(ts);
-    
+
     const now = new Date();
     const diffMs = now - date;
     const diffMins = Math.floor(diffMs / 60000);
     const diffHours = Math.floor(diffMins / 60);
     const diffDays = Math.floor(diffHours / 24);
-    
+
     if (diffMins < 1) return 'hace un momento';
     if (diffMins < 60) return `hace ${diffMins} min`;
     if (diffHours < 24 && now.getDate() === date.getDate()) {
         return `hace ${diffHours} hora${diffHours > 1 ? 's' : ''}`;
     }
-    
+
     if (diffDays === 1 || (diffHours < 48 && now.getDate() !== date.getDate())) return 'ayer';
     if (diffDays < 7) {
         const days = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
         return `el ${days[date.getDay()]}`;
     }
-    
+
     return date.toLocaleDateString();
 };
+
+// ─── Faceta: dimensiones y estado inicial ──────────────────────────────────────
+const EMPTY_SELECTION = { genero: [], municipio: [], escolaridad: [], edad: [], tags: [], estatus: '', ventana24h: false };
 
 const CampaignHistoryItem = ({ h, reuseCampaign, deleteCampaign }) => {
     const [stats, setStats] = useState(null);
@@ -105,16 +107,88 @@ const CampaignHistoryItem = ({ h, reuseCampaign, deleteCampaign }) => {
     );
 };
 
+// ─── Chip de valor de faceta (con conteo drill-down) ───────────────────────────
+const FacetChip = ({ label, count, active, disabled, onClick, color }) => (
+    <button
+        onClick={onClick}
+        disabled={disabled || (count === 0 && !active)}
+        className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors border flex items-center gap-1.5 ${
+            active
+                ? 'bg-[#d9fdd3] text-[#111b21] border-[#25d366] dark:bg-[#0a332c] dark:text-[#25d366] dark:border-[#0a5c4a]'
+                : 'bg-[#f0f2f5] text-[#54656f] border-transparent hover:bg-[#e9edef] dark:bg-[#202c33] dark:text-[#aebac1] dark:hover:bg-[#2a3942]'
+        } ${(count === 0 && !active) ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
+    >
+        {color && <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: color }} />}
+        <span className="truncate max-w-[160px]">{label}</span>
+        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${active ? 'bg-[#25d366]/20 text-[#0a5c4a] dark:text-[#25d366]' : 'bg-black/5 dark:bg-white/10 text-gray-500 dark:text-gray-400'}`}>
+            {count ?? 0}
+        </span>
+    </button>
+);
+
+// ─── Grupo de faceta colapsable ─────────────────────────────────────────────────
+const FacetGroup = ({ title, icon, values, counts, selected, onToggle, searchable = false, colorForValue }) => {
+    const [open, setOpen] = useState(true);
+    const [q, setQ] = useState('');
+    const activeCount = selected.length;
+    const list = searchable && q
+        ? values.filter(v => v.toLowerCase().includes(q.toLowerCase()))
+        : values;
+
+    if (!values || values.length === 0) return null;
+
+    return (
+        <div className="border-b border-[#f0f2f5] dark:border-[#202c33] pb-2 mb-2">
+            <button onClick={() => setOpen(o => !o)} className="w-full flex items-center justify-between py-1.5 text-left">
+                <span className="text-[11px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
+                    {icon}{title}
+                    {activeCount > 0 && <span className="bg-blue-500 text-white text-[10px] px-1.5 py-0.5 rounded-full">{activeCount}</span>}
+                </span>
+                <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${open ? 'rotate-180' : ''}`} />
+            </button>
+            {open && (
+                <div className="mt-1">
+                    {searchable && (
+                        <div className="bg-[#f0f2f5] dark:bg-[#202c33] rounded-lg px-2.5 py-1 flex items-center mb-2">
+                            <Search className="w-3.5 h-3.5 text-[#54656f] dark:text-[#aebac1] mr-2" />
+                            <input
+                                type="text"
+                                placeholder={`Buscar ${title.toLowerCase()}...`}
+                                className="flex-1 bg-transparent border-none outline-none text-xs text-[#111b21] dark:text-[#d1d7db]"
+                                value={q}
+                                onChange={(e) => setQ(e.target.value)}
+                            />
+                        </div>
+                    )}
+                    <div className={`flex flex-wrap gap-1.5 ${searchable ? 'max-h-48 overflow-y-auto custom-scrollbar pr-1' : ''}`}>
+                        {list.map(v => (
+                            <FacetChip
+                                key={v}
+                                label={v}
+                                count={counts?.[v] ?? 0}
+                                active={selected.includes(v)}
+                                color={colorForValue ? colorForValue(v) : null}
+                                onClick={() => onToggle(v)}
+                            />
+                        ))}
+                        {list.length === 0 && <span className="text-xs text-gray-400 py-1">Sin coincidencias</span>}
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
 const BulksSection = () => {
     const { showToast } = useToastContext();
     const { _confirmModalJSX, showConfirm } = useConfirmModal();
-    // Col 1: Candidates
-    const [candidates, setCandidates] = useState([]);
-    const [searchQuery, setSearchQuery] = useState("");
-    const [loadingChats, setLoadingChats] = useState(true);
-    const [selectedCandIds, setSelectedCandIds] = useState(new Set());
-    const [activeFilter, setActiveFilter] = useState('all'); // 'all', 'complete', 'incomplete'
-    const [selectedTagFilter, setSelectedTagFilter] = useState(null); // tag name or null
+
+    // Col 1: Filtrado facetado (segmento)
+    const [selection, setSelection] = useState(EMPTY_SELECTION);
+    const [excludeIds, setExcludeIds] = useState(new Set()); // destildados dentro de la vista previa
+    const [facetData, setFacetData] = useState({ total: 0, counts: {}, meta: { dims: {} }, preview: [] });
+    const [facetLoading, setFacetLoading] = useState(true);
+    const [searchQuery, setSearchQuery] = useState(""); // localizador dentro de la vista previa
     const [availableTags, setAvailableTags] = useState([]);
     const [mobileTab, setMobileTab] = useState('candidates'); // 'candidates', 'messages'
 
@@ -124,7 +198,7 @@ const BulksSection = () => {
     const [selectedTemplateId, setSelectedTemplateId] = useState('');
     const [templateParams, setTemplateParams] = useState({});
     const [messageText, setMessageText] = useState('');
-    
+
     // Engine State
     const [engineState, setEngineState] = useState(null);
 
@@ -133,24 +207,11 @@ const BulksSection = () => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [customCampaignName, setCustomCampaignName] = useState('');
     const [historyList, setHistoryList] = useState([]);
-    
+
     // Custom UI States
     const [showCompletionModal, setShowCompletionModal] = useState(false);
     const [showStartModal, setShowStartModal] = useState(false);
     const [startModalData, setStartModalData] = useState(null);
-    const [tagDropdownOpen, setTagDropdownOpen] = useState(false);
-    const [timeSortOrder, setTimeSortOrder] = useState('desc'); // 'desc' o 'asc'
-    const tagDropdownRef = useRef(null);
-
-    useEffect(() => {
-        const handleClickOutside = (e) => {
-            if (tagDropdownRef.current && !tagDropdownRef.current.contains(e.target)) {
-                setTagDropdownOpen(false);
-            }
-        };
-        document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, []);
 
     const POPULAR_EMOJIS = ["😀","😂","🤣","😉","😊","😍","😘","🥰","🤔","🤫","👍","👎","👏","🙌","🔥","✨","💯","🎉"];
 
@@ -158,8 +219,9 @@ const BulksSection = () => {
     const isFetchingRef = useRef(false);
     const fastPollStartRef = useRef(null);
     const fastPollStopRef = useRef(null);
+    // Aborta peticiones de facetas obsoletas (debounce + cancelación)
+    const facetAbortRef = useRef(null);
 
-    // Load Candidates & Persistence
     // Load tags
     useEffect(() => {
         const loadTags = () => fetch('/api/tags')
@@ -176,9 +238,43 @@ const BulksSection = () => {
         loadTags().catch(e => console.error('Error fetching tags', e));
     }, []);
 
+    // ─── Motor de facetas: consulta debounced al servidor ───────────────────────
+    const fetchFacets = useCallback(async (sel) => {
+        // Cancela la petición anterior si sigue en vuelo (evita respuestas fuera de orden)
+        if (facetAbortRef.current) facetAbortRef.current.abort();
+        const controller = new AbortController();
+        facetAbortRef.current = controller;
+        setFacetLoading(true);
+        try {
+            const res = await fetch('/api/bulks?action=facets', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ selection: sel }),
+                signal: controller.signal
+            });
+            const data = await res.json();
+            if (data.success) {
+                setFacetData({
+                    total: data.total || 0,
+                    counts: data.counts || {},
+                    meta: data.meta || { dims: {} },
+                    preview: data.preview || []
+                });
+            }
+        } catch (e) {
+            if (e.name !== 'AbortError') console.error('Error fetching facets', e);
+        } finally {
+            setFacetLoading(false);
+        }
+    }, []);
+
+    // Debounce de 350ms sobre cambios de selección
     useEffect(() => {
-        loadCandidates();
-        
+        const t = setTimeout(() => fetchFacets(selection), 350);
+        return () => clearTimeout(t);
+    }, [selection, fetchFacets]);
+
+    useEffect(() => {
         // Fast polling ONLY when campaign is active (2s = responsive + bandwidth-friendly)
         const workerCode = `
             self.onmessage = function(e) {
@@ -204,7 +300,6 @@ const BulksSection = () => {
             if (worker) { worker.terminate(); worker = null; }
         };
 
-        // Expose to outer scope via refs
         fastPollStartRef.current = startFastPoll;
         fastPollStopRef.current = stopFastPoll;
 
@@ -223,7 +318,8 @@ const BulksSection = () => {
                 if (data.success && data.draft) {
                     const parsed = data.draft;
                     if (parsed.messageText) setMessageText(parsed.messageText);
-                    if (parsed.selectedCandIds) setSelectedCandIds(new Set(parsed.selectedCandIds));
+                    if (parsed.selection) setSelection({ ...EMPTY_SELECTION, ...parsed.selection });
+                    if (Array.isArray(parsed.excludeIds)) setExcludeIds(new Set(parsed.excludeIds));
                 }
             })
             .catch(e => console.error("Could not load draft", e));
@@ -238,14 +334,16 @@ const BulksSection = () => {
             stopFastPoll();
             clearInterval(slowPoll);
             URL.revokeObjectURL(workerUrl);
+            if (facetAbortRef.current) facetAbortRef.current.abort();
         };
     }, []);
 
-    // Save draft state on change
+    // Save draft state on change (selección + exclusiones + texto)
     useEffect(() => {
         const draft = {
             messageText,
-            selectedCandIds: Array.from(selectedCandIds)
+            selection,
+            excludeIds: Array.from(excludeIds)
         };
         const timer = setTimeout(() => {
             fetch('/api/bulks?action=save_draft', {
@@ -254,9 +352,9 @@ const BulksSection = () => {
                 body: JSON.stringify(draft)
             }).catch(e => console.error("Could not save draft", e));
         }, 1200);
-        
+
         return () => clearTimeout(timer);
-    }, [messageText, selectedCandIds]);
+    }, [messageText, selection, excludeIds]);
 
     // 🏎️ BANDWIDTH SAVER: Toggle fast Worker polling based on campaign state
     useEffect(() => {
@@ -273,28 +371,15 @@ const BulksSection = () => {
         if (engineState) {
             const isCurrentlyCompleted = !engineState.isRunning && (engineState.currentCandidateIndex >= (engineState.candidates?.length || 1));
             const wasRunning = prevEngineStateRef.current && prevEngineStateRef.current.isRunning;
-            
+
             if (isCurrentlyCompleted && wasRunning) {
                 setTimeout(() => {
                     setShowCompletionModal(true);
-                }, 300); // 300ms delay down below lets React render the 100% progress bar before showing the modal
+                }, 300);
             }
         }
         prevEngineStateRef.current = engineState;
     }, [engineState]);
-
-    const loadCandidates = async () => {
-        try {
-            const result = await getCandidates(2000, 0, "");
-            if (result.success) {
-                setCandidates(result.candidates || []);
-            }
-        } catch (e) {
-            console.error(e);
-        } finally {
-            setLoadingChats(false);
-        }
-    };
 
     const fetchEngineStatus = async () => {
         if (isFetchingRef.current) return;
@@ -327,14 +412,14 @@ const BulksSection = () => {
     const reuseCampaign = (camp) => {
         const rawMsgs = camp.messages || [];
         setMessageText(rawMsgs[0] && typeof rawMsgs[0] === 'string' ? rawMsgs[0] : (rawMsgs[0]?.text || ''));
-        
+
         setBulkType(camp.bulkType || 'text');
         if (camp.bulkType === 'template' && camp.templateData) {
             setSelectedTemplateId(camp.templateData.id);
         }
-        
+
         setShowHistory(false);
-        showToast && showToast("Campaña cargada. Selecciona a tus destinatarios.", "success");
+        showToast && showToast("Campaña cargada. Ajusta tus filtros de destinatarios.", "success");
     };
 
     const deleteCampaign = async (id) => {
@@ -356,60 +441,40 @@ const BulksSection = () => {
         } catch(e) {}
     };
 
-    const isProfileComplete = (c) => {
-        if (!c) return false;
-        const valToStr = (v) => v ? String(v).trim().toLowerCase() : '-';
-        const coreFields = ['nombreReal', 'municipio', 'escolaridad', 'categoria', 'genero'];
-        const hasCoreData = coreFields.every(f => {
-            const val = valToStr(c[f]);
-            if (val === '-' || val === 'null' || val === 'n/a' || val === 'na' || val === 'ninguno' || val === 'ninguna' || val === 'none' || val === 'desconocido' || val.includes('proporcionado') || val.length < 2) return false;
-            if (f === 'escolaridad') {
-                const junk = ['kinder', 'ninguna', 'sin estudios', 'no tengo', 'no curse', 'preescolar', 'maternal'];
-                if (junk.some(j => val.includes(j))) return false;
-            }
-            return true;
-        });
+    const isRunning = engineState?.isRunning;
 
-        const ageVal = valToStr(c.edad || c.fechaNacimiento);
-        const hasAgeData = ageVal !== '-' && ageVal !== 'null' && ageVal !== 'n/a' && ageVal !== 'na';
-        return hasCoreData && hasAgeData;
+    // ─── Handlers de selección (limpian exclusiones al cambiar el segmento) ──────
+    const toggleFacetValue = (dim, value) => {
+        if (isRunning) return;
+        setExcludeIds(new Set());
+        setSelection(prev => {
+            const cur = prev[dim] || [];
+            const next = cur.includes(value) ? cur.filter(v => v !== value) : [...cur, value];
+            return { ...prev, [dim]: next };
+        });
     };
 
-    // Filter Logic
-    const filteredCandidates = (candidates || []).filter(c => {
-        const searchVal = (searchQuery || "").toLowerCase();
-        let matchesSearch = true;
-        if (searchVal) {
-            matchesSearch = (c?.nombreReal && String(c.nombreReal).toLowerCase().includes(searchVal)) ||
-                            (c?.nombre && String(c.nombre).toLowerCase().includes(searchVal)) ||
-                            (c?.whatsapp && String(c.whatsapp).includes(searchVal));
-        }
+    const setEstatus = (value) => {
+        if (isRunning) return;
+        setExcludeIds(new Set());
+        setSelection(prev => ({ ...prev, estatus: prev.estatus === value ? '' : value }));
+    };
 
-        if (!matchesSearch) return false;
+    const toggleVentana24h = () => {
+        if (isRunning) return;
+        setExcludeIds(new Set());
+        setSelection(prev => ({ ...prev, ventana24h: !prev.ventana24h }));
+    };
 
-        if (activeFilter === 'complete' && !isProfileComplete(c)) return false;
-        if (activeFilter === 'incomplete' && isProfileComplete(c)) return false;
-        if (activeFilter === 'empty' && (c.lastUserMessageAt || c.ultimoMensajeBot || c.lastBotMessageAt || c.unreadMsgCount > 0)) return false;
+    const clearAllFilters = () => {
+        if (isRunning) return;
+        setExcludeIds(new Set());
+        setSelection(EMPTY_SELECTION);
+    };
 
-        // Tag filter
-        if (selectedTagFilter) {
-            const candidateTags = c.tags || [];
-            const hasTag = candidateTags.some(t => {
-                const tName = typeof t === 'string' ? t : t.name;
-                return tName === selectedTagFilter;
-            });
-            if (!hasTag) return false;
-        }
-
-        return true;
-    }).sort((a, b) => {
-        const tsA = getCandidateTimestamp(a);
-        const tsB = getCandidateTimestamp(b);
-        return timeSortOrder === 'desc' ? tsB - tsA : tsA - tsB;
-    });
-
-    const toggleCandidate = (id) => {
-        setSelectedCandIds(prev => {
+    const toggleExclude = (id) => {
+        if (isRunning) return;
+        setExcludeIds(prev => {
             const next = new Set(prev);
             if (next.has(id)) next.delete(id);
             else next.add(id);
@@ -417,22 +482,31 @@ const BulksSection = () => {
         });
     };
 
-    const toggleAll = () => {
-        if (selectedCandIds.size === filteredCandidates.length) {
-            setSelectedCandIds(new Set());
-        } else {
-            setSelectedCandIds(new Set(filteredCandidates.map(c => c.id)));
-        }
-    };
-
     const insertEmoji = (emoji) => {
         setMessageText(prev => prev + emoji);
     };
 
+    // Total del segmento y cuántos se enviarán (segmento menos exclusiones dentro de la vista previa)
+    const segmentTotal = facetData.total || 0;
+    const sendCount = Math.max(0, segmentTotal - excludeIds.size);
+
+    // Vista previa filtrada por el buscador (localizador — no redefine el segmento)
+    const previewList = (facetData.preview || []).filter(c => {
+        const v = (searchQuery || "").toLowerCase();
+        if (!v) return true;
+        return (c?.nombreReal && String(c.nombreReal).toLowerCase().includes(v)) ||
+               (c?.nombre && String(c.nombre).toLowerCase().includes(v)) ||
+               (c?.whatsapp && String(c.whatsapp).includes(v));
+    });
+
+    const dims = facetData.meta?.dims || {};
+    const counts = facetData.counts || {};
+    const tagColor = (name) => (availableTags.find(t => (typeof t === 'string' ? t : t.name) === name)?.color) || '#64748b';
+
     // Engine Actions
     const handleStartClick = () => {
-        if (selectedCandIds.size === 0) return showToast && showToast("Selecciona al menos un candidato", "error");
-        
+        if (sendCount === 0) return showToast && showToast("No hay destinatarios en el segmento", "error");
+
         let validMsgs = [];
         let tplData = null;
 
@@ -446,9 +520,9 @@ const BulksSection = () => {
         }
 
         const qtyMsgStr = bulkType === 'text' ? `enviando texto libre` : `usando la plantilla '${tplData.name}'`;
-        
+
         setStartModalData({
-            count: selectedCandIds.size,
+            count: sendCount,
             qtyMsgStr,
             validMsgs,
             tplData
@@ -465,7 +539,8 @@ const BulksSection = () => {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    candidates: Array.from(selectedCandIds),
+                    // El servidor resuelve la lista COMPLETA del segmento (sin subir miles de IDs)
+                    segment: { selection, excludeIds: Array.from(excludeIds) },
                     bulkType,
                     messages: startModalData.validMsgs,
                     templateData: startModalData.tplData,
@@ -477,7 +552,6 @@ const BulksSection = () => {
             if (data.success) {
                 showToast && showToast("Campaña iniciada", "success");
                 setCustomCampaignName('');
-                // Establecer estado localmente para garantizar que wasRunning sea true
                 if (data.state) setEngineState(data.state);
                 setTimeout(fetchEngineStatus, 1000);
             } else {
@@ -509,18 +583,20 @@ const BulksSection = () => {
         try {
             await fetch('/api/bulks?action=clear', { method: 'POST' });
             setEngineState(null);
-            setSelectedCandIds(new Set());
+            setExcludeIds(new Set());
             setCustomCampaignName('');
             setTemplateParams({});
         } catch(e) {}
     };
 
-    const isRunning = engineState?.isRunning;
     const isCompleted = engineState && !engineState.isRunning && (engineState.currentCandidateIndex >= (engineState.candidates?.length || 1) || engineState.isAborted);
+
+    const activeFilterCount = selection.genero.length + selection.municipio.length + selection.escolaridad.length +
+        selection.edad.length + selection.tags.length + (selection.estatus ? 1 : 0) + (selection.ventana24h ? 1 : 0);
 
     return (
         <div className="flex flex-col lg:flex-row h-full w-full bg-[#f0f2f5] dark:bg-[#111b21] font-sans">
-            
+
             {/* Mobile Tab Bar */}
             <div className="lg:hidden flex border-b border-[#d1d7db] dark:border-[#222e35] bg-white dark:bg-[#111b21] shrink-0">
                 {[{id:'candidates',label:'Destinatarios',emoji:'👥'},{id:'messages',label:'Mensaje y Enviar',emoji:'💬'}].map(tab => (
@@ -534,207 +610,165 @@ const BulksSection = () => {
                         }`}
                     >
                         <span className="mr-1">{tab.emoji}</span>{tab.label}
-                        {tab.id === 'candidates' && selectedCandIds.size > 0 && (
-                            <span className="ml-1 bg-blue-500 text-white text-[10px] px-1.5 py-0.5 rounded-full">{selectedCandIds.size}</span>
+                        {tab.id === 'candidates' && sendCount > 0 && (
+                            <span className="ml-1 bg-blue-500 text-white text-[10px] px-1.5 py-0.5 rounded-full">{sendCount}</span>
                         )}
                     </button>
                 ))}
             </div>
 
-            {/* COLUMN 1: CANDIDATES */}
+            {/* COLUMN 1: SEGMENTO (filtros facetados) */}
             <div className={`${mobileTab === 'candidates' ? 'flex' : 'hidden'} lg:flex w-full lg:w-[40%] flex-col border-r border-[#d1d7db] dark:border-[#222e35] bg-white dark:bg-[#111b21] min-h-0`}>
                 <div className="p-3 bg-white dark:bg-[#111b21] border-b border-[#f0f2f5] dark:border-[#222e35]">
-                    <h2 className="text-lg font-bold text-[#111b21] dark:text-[#d1d7db] mb-2">Destinatarios</h2>
-                    
-                    <div className="bg-[#f0f2f5] dark:bg-[#202c33] rounded-lg px-3 py-1.5 flex items-center mb-2">
+                    <div className="flex items-center justify-between mb-2">
+                        <h2 className="text-lg font-bold text-[#111b21] dark:text-[#d1d7db] flex items-center gap-2">
+                            <SlidersHorizontal className="w-4 h-4 text-[#25d366]" /> Segmento
+                        </h2>
+                        {activeFilterCount > 0 && (
+                            <button onClick={clearAllFilters} disabled={isRunning} className="text-xs flex items-center gap-1 text-gray-500 hover:text-red-500 transition-colors disabled:opacity-40">
+                                <RotateCcw className="w-3.5 h-3.5" /> Limpiar ({activeFilterCount})
+                            </button>
+                        )}
+                    </div>
+
+                    {/* Total del segmento */}
+                    <div className="bg-gradient-to-br from-[#25d366]/10 to-[#0a5c4a]/5 dark:from-[#0a332c] dark:to-[#0b141a] border border-[#25d366]/30 dark:border-[#0a5c4a] rounded-xl p-3 flex items-center gap-3 mb-3">
+                        <div className="w-11 h-11 rounded-full bg-[#25d366]/20 flex items-center justify-center shrink-0">
+                            <Users className="w-5 h-5 text-[#0a5c4a] dark:text-[#25d366]" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                            <div className="text-2xl font-black text-[#111b21] dark:text-[#e9edef] leading-none flex items-center gap-2">
+                                {facetLoading ? <span className="text-base text-gray-400 animate-pulse">calculando…</span> : segmentTotal.toLocaleString('es-MX')}
+                            </div>
+                            <div className="text-[11px] text-[#54656f] dark:text-[#8696a0] font-medium mt-0.5">
+                                {segmentTotal === 1 ? 'candidato coincide' : 'candidatos coinciden'}
+                                {excludeIds.size > 0 && ` · enviarás a ${sendCount.toLocaleString('es-MX')}`}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Estatus */}
+                    <div className="flex flex-wrap gap-2 mb-2">
+                        {[
+                            { key: '', label: 'Todos' },
+                            { key: 'completo', label: 'Completos' },
+                            { key: 'incompleto', label: 'Incompletos' }
+                        ].map(opt => (
+                            <button
+                                key={opt.key || 'all'}
+                                onClick={() => setEstatus(opt.key)}
+                                disabled={isRunning}
+                                className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors border border-transparent ${
+                                    (selection.estatus || '') === opt.key
+                                    ? 'bg-[#d9fdd3] text-[#111b21] dark:bg-[#0a332c] dark:text-[#25d366]'
+                                    : 'bg-[#f0f2f5] text-[#54656f] hover:bg-[#e9edef] dark:bg-[#202c33] dark:text-[#aebac1] dark:hover:bg-[#2a3942]'
+                                }`}
+                            >
+                                {opt.label}{opt.key ? ` (${counts.estatus?.[opt.key] ?? 0})` : ''}
+                            </button>
+                        ))}
+                        {/* Ventana 24h */}
+                        <button
+                            onClick={toggleVentana24h}
+                            disabled={isRunning}
+                            title="Solo quienes te escribieron en las últimas 24h (necesario para texto libre)"
+                            className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors border ${
+                                selection.ventana24h
+                                ? 'bg-blue-100 text-blue-700 border-blue-300 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800'
+                                : 'bg-[#f0f2f5] text-[#54656f] border-transparent hover:bg-[#e9edef] dark:bg-[#202c33] dark:text-[#aebac1] dark:hover:bg-[#2a3942]'
+                            }`}
+                        >
+                            🕒 Últimas 24h ({counts.ventana24h?.si ?? 0})
+                        </button>
+                    </div>
+
+                    {/* Grupos de faceta */}
+                    <div className="max-h-[38vh] lg:max-h-none overflow-y-auto custom-scrollbar pr-1">
+                        <FacetGroup title="Género" icon="👤 " values={dims.genero || []} counts={counts.genero}
+                            selected={selection.genero} onToggle={(v) => toggleFacetValue('genero', v)} />
+                        <FacetGroup title="Edad" icon="🎂 " values={dims.edad || []} counts={counts.edad}
+                            selected={selection.edad} onToggle={(v) => toggleFacetValue('edad', v)} />
+                        <FacetGroup title="Escolaridad" icon="🎓 " values={dims.escolaridad || []} counts={counts.escolaridad}
+                            selected={selection.escolaridad} onToggle={(v) => toggleFacetValue('escolaridad', v)} />
+                        <FacetGroup title="Municipio" icon="📍 " values={dims.municipio || []} counts={counts.municipio}
+                            selected={selection.municipio} onToggle={(v) => toggleFacetValue('municipio', v)} searchable />
+                        <FacetGroup title="Etiquetas" icon={<Tag className="w-3.5 h-3.5 inline mr-1" />} values={dims.tags || []} counts={counts.tags}
+                            selected={selection.tags} onToggle={(v) => toggleFacetValue('tags', v)} searchable colorForValue={tagColor} />
+                    </div>
+                </div>
+
+                {/* Vista previa del segmento (~100 más recientes) */}
+                <div className="px-3 pt-2 pb-1 border-b border-[#f0f2f5] dark:border-[#202c33]">
+                    <div className="bg-[#f0f2f5] dark:bg-[#202c33] rounded-lg px-3 py-1.5 flex items-center">
                         <Search className="w-4 h-4 text-[#54656f] dark:text-[#aebac1] mr-3" />
-                        <input 
-                            type="text" 
-                            placeholder="Buscar candidatos..." 
+                        <input
+                            type="text"
+                            placeholder="Buscar en la vista previa..."
                             className="flex-1 bg-transparent border-none outline-none text-sm text-[#111b21] dark:text-[#d1d7db]"
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
                         />
                     </div>
-
-                    <div className="flex flex-wrap gap-2 pb-2">
-                        <button 
-                            onClick={() => setActiveFilter('all')}
-                            className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors border border-transparent ${
-                                activeFilter === 'all' 
-                                ? 'bg-[#d9fdd3] text-[#111b21] dark:bg-[#0a332c] dark:text-[#25d366]' 
-                                : 'bg-[#f0f2f5] text-[#54656f] hover:bg-[#e9edef] dark:bg-[#202c33] dark:text-[#aebac1] dark:hover:bg-[#2a3942]'
-                            }`}
-                        >
-                            Todos ({(candidates || []).length})
-                        </button>
-                        <button 
-                            onClick={() => setActiveFilter('complete')}
-                            className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors border border-transparent ${
-                                activeFilter === 'complete' 
-                                ? 'bg-[#d9fdd3] text-[#111b21] dark:bg-[#0a332c] dark:text-[#25d366]' 
-                                : 'bg-[#f0f2f5] text-[#54656f] hover:bg-[#e9edef] dark:bg-[#202c33] dark:text-[#aebac1] dark:hover:bg-[#2a3942]'
-                            }`}
-                        >
-                            Completos ({(candidates || []).filter(c => isProfileComplete(c)).length})
-                        </button>
-                        <button 
-                            onClick={() => setActiveFilter('incomplete')}
-                            className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors border border-transparent ${
-                                activeFilter === 'incomplete' 
-                                ? 'bg-[#d9fdd3] text-[#111b21] dark:bg-[#0a332c] dark:text-[#25d366]' 
-                                : 'bg-[#f0f2f5] text-[#54656f] hover:bg-[#e9edef] dark:bg-[#202c33] dark:text-[#aebac1] dark:hover:bg-[#2a3942]'
-                            }`}
-                        >
-                            Incompletos ({(candidates || []).filter(c => !isProfileComplete(c)).length})
-                        </button>
-                        <button 
-                            onClick={() => setActiveFilter('empty')}
-                            className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors border border-transparent ${
-                                activeFilter === 'empty' 
-                                ? 'bg-[#d9fdd3] text-[#111b21] dark:bg-[#0a332c] dark:text-[#25d366]' 
-                                : 'bg-[#f0f2f5] text-[#54656f] hover:bg-[#e9edef] dark:bg-[#202c33] dark:text-[#aebac1] dark:hover:bg-[#2a3942]'
-                            }`}
-                        >
-                            Vacíos ({(candidates || []).filter(c => !(c.lastUserMessageAt || c.ultimoMensajeBot || c.lastBotMessageAt || c.unreadMsgCount > 0)).length})
-                        </button>
-                    </div>
-
-                    {/* Tag Filter Dropdown */}
-                    {availableTags.length > 0 && (
-                        <div className="flex items-center gap-2 pb-2">
-                            <div className="relative flex-1" ref={tagDropdownRef}>
-                                <div 
-                                    onClick={() => setTagDropdownOpen(!tagDropdownOpen)}
-                                    className={`w-full bg-[#f0f2f5] dark:bg-[#202c33] border ${selectedTagFilter ? 'border-transparent' : 'border-gray-200 dark:border-gray-700'} rounded-lg pl-9 pr-8 py-2.5 text-sm outline-none font-medium text-left cursor-pointer transition-all flex items-center shadow-sm relative`}
-                                    style={selectedTagFilter ? {
-                                        boxShadow: `0 0 0 2px ${(availableTags.find(t => (typeof t === 'string' ? t : t.name) === selectedTagFilter))?.color || '#3b82f6'}`,
-                                        borderColor: 'transparent'
-                                    } : {}}
-                                >
-                                    <Tag className={`w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 ${selectedTagFilter ? 'text-[#111b21] dark:text-[#e9edef]' : 'text-gray-400 dark:text-gray-500'}`} style={selectedTagFilter ? { color: (availableTags.find(t => (typeof t === 'string' ? t : t.name) === selectedTagFilter))?.color } : {}} />
-                                    <span className="flex-1 truncate text-[#111b21] dark:text-[#e9edef]">{selectedTagFilter || 'Todas las etiquetas'}</span>
-                                    <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${tagDropdownOpen ? 'rotate-180' : ''}`} />
-                                </div>
-                                
-                                {tagDropdownOpen && (
-                                    <div className="absolute z-50 w-full mt-2 bg-white dark:bg-[#202c33] border border-gray-200 dark:border-gray-700 rounded-xl shadow-2xl py-2 max-h-72 overflow-y-auto custom-scrollbar transform origin-top animate-expand-in">
-                                        <div 
-                                            onClick={() => { setSelectedTagFilter(null); setTagDropdownOpen(false); }}
-                                            className={`px-4 py-2.5 text-sm cursor-pointer transition-colors flex items-center gap-2 ${!selectedTagFilter ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 font-bold' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-[#111b21]'}`}
-                                        >
-                                            <div className="w-4 h-4 rounded border border-gray-300 dark:border-gray-600 flex items-center justify-center">
-                                                {!selectedTagFilter && <div className="w-2 h-2 rounded-sm bg-indigo-500"></div>}
-                                            </div>
-                                            Todas las etiquetas
-                                        </div>
-                                        {availableTags.map((tag, idx) => {
-                                            const tName = typeof tag === 'string' ? tag : tag.name;
-                                            const tColor = typeof tag === 'string' ? '#3b82f6' : tag.color;
-                                            const countWithTag = (candidates || []).filter(c =>
-                                                (c.tags || []).some(t => (typeof t === 'string' ? t : t.name) === tName)
-                                            ).length;
-                                            const isSelected = selectedTagFilter === tName;
-                                            
-                                            // Solo mostrar etiquetas que tienen candidatos en esta vista
-                                            if (countWithTag === 0 && !isSelected) return null;
-                                            
-                                            return (
-                                                <div 
-                                                    key={idx}
-                                                    onClick={() => { setSelectedTagFilter(tName); setTagDropdownOpen(false); }}
-                                                    className={`px-4 py-2.5 text-sm cursor-pointer transition-colors flex items-center justify-between ${isSelected ? 'bg-indigo-50 dark:bg-indigo-900/30 text-[#111b21] dark:text-[#e9edef] font-bold' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-[#111b21]'}`}
-                                                >
-                                                    <div className="flex items-center gap-2">
-                                                        <div className="w-4 h-4 rounded-full" style={{ backgroundColor: tColor }}></div>
-                                                        <span className="truncate">{tName}</span>
-                                                    </div>
-                                                    <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-gray-100 dark:bg-[#111b21] text-gray-500 dark:text-gray-400">
-                                                        {countWithTag}
-                                                    </span>
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-                                )}
-                            </div>
-                            {selectedTagFilter && (
-                                <button
-                                    onClick={() => setSelectedTagFilter(null)}
-                                    className="p-2 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-500 hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors shrink-0"
-                                    title="Quitar filtro"
-                                >
-                                    <X className="w-4 h-4" />
-                                </button>
-                            )}
-                        </div>
-                    )}
-
-                    <div className="flex justify-between items-center text-sm px-1">
-                        <div className="flex items-center gap-3">
-                            <span className="text-[#54656f] dark:text-[#8696a0] font-medium">{selectedCandIds.size} seleccionados</span>
-                            
-                            {/* Ordenamiento por tiempo */}
-                            <button 
-                                onClick={() => setTimeSortOrder(prev => prev === 'desc' ? 'asc' : 'desc')}
-                                className="flex items-center gap-1.5 text-gray-500 hover:text-blue-600 transition-colors bg-gray-50 hover:bg-blue-50 dark:bg-gray-800 dark:hover:bg-blue-900/20 px-2 py-1 rounded-md"
-                                title={timeSortOrder === 'desc' ? "Viendo los más recientes primero" : "Viendo los más antiguos primero"}
-                            >
-                                <ArrowUpDown className="w-3.5 h-3.5" />
-                                <span className="text-[11px] font-semibold">{timeSortOrder === 'desc' ? 'Recientes' : 'Antiguos'}</span>
+                    <div className="flex justify-between items-center text-[11px] text-[#54656f] dark:text-[#8696a0] mt-1.5 px-1">
+                        <span>Vista previa ({previewList.length} de {segmentTotal.toLocaleString('es-MX')})</span>
+                        {excludeIds.size > 0 && (
+                            <button onClick={() => setExcludeIds(new Set())} className="text-blue-500 hover:text-blue-600 font-medium flex items-center gap-1">
+                                <RotateCcw className="w-3 h-3" /> Incluir {excludeIds.size} excluidos
                             </button>
-                        </div>
-                        <button onClick={toggleAll} className="text-blue-500 hover:text-blue-600 font-medium cursor-pointer" disabled={isRunning}>
-                            {selectedCandIds.size === filteredCandidates.length ? "Deseleccionar todos" : "Seleccionar todos"}
-                        </button>
+                        )}
                     </div>
                 </div>
 
                 <div className="flex-1 overflow-y-auto">
-                    {loadingChats ? (
-                        <div className="p-6 text-center text-[#54656f] text-sm">Cargando...</div>
-                    ) : filteredCandidates.length === 0 ? (
-                        <div className="p-6 text-center text-[#54656f] text-sm">Ningún candidato coincide.</div>
+                    {facetLoading && previewList.length === 0 ? (
+                        <div className="p-6 text-center text-[#54656f] text-sm">Calculando segmento…</div>
+                    ) : previewList.length === 0 ? (
+                        <div className="p-6 text-center text-[#54656f] text-sm">
+                            {segmentTotal === 0 ? 'Ningún candidato coincide con estos filtros.' : 'Nadie coincide con la búsqueda en la vista previa.'}
+                        </div>
                     ) : (
-                        filteredCandidates.map(c => (
-                            <div 
-                                key={c.id} 
-                                onClick={() => !isRunning && toggleCandidate(c.id)}
-                                className={`flex items-center gap-3 p-3 border-b border-[#f0f2f5] dark:border-[#202c33] cursor-pointer hover:bg-[#f5f6f6] dark:hover:bg-[#202c33] transition-colors ${selectedCandIds.has(c.id) ? 'bg-[#ebf5ff] dark:bg-[#1c2f3d]' : ''} ${isRunning ? 'opacity-50 cursor-not-allowed' : ''}`}
-                            >
-                                <input 
-                                    type="checkbox" 
-                                    checked={selectedCandIds.has(c.id)} 
-                                    readOnly 
-                                    className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                                />
-                                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center text-white font-bold text-lg shadow-sm shrink-0">
-                                    {(c.nombreReal || c.nombre || c.whatsapp || "?").charAt(0).toUpperCase()}
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                    <div className="flex justify-between items-start mb-0.5">
-                                        <h3 className="font-semibold text-sm text-[#111b21] dark:text-[#e9edef] truncate pr-2 pt-0.5">
-                                            {c.nombreReal || c.nombre || c.whatsapp}
-                                        </h3>
-                                        <div className="flex flex-col items-end shrink-0">
-                                            {getRelativeTime(c) && (
-                                                <span className="text-[11px] text-[#8696a0] whitespace-nowrap font-medium" title="Fecha de captura">
-                                                    {getRelativeTime(c)}
-                                                </span>
-                                            )}
-                                            {c.campaignName && (
-                                                <span className="text-[10px] text-indigo-500 dark:text-indigo-400 font-bold whitespace-nowrap mt-0.5" title={`Campaña Masiva: ${c.campaignName}`}>
-                                                    Campaña Masiva: {c.campaignName}
-                                                </span>
-                                            )}
-                                        </div>
+                        previewList.map(c => {
+                            const excluded = excludeIds.has(c.id);
+                            return (
+                                <div
+                                    key={c.id}
+                                    onClick={() => toggleExclude(c.id)}
+                                    className={`flex items-center gap-3 p-3 border-b border-[#f0f2f5] dark:border-[#202c33] cursor-pointer hover:bg-[#f5f6f6] dark:hover:bg-[#202c33] transition-colors ${excluded ? 'opacity-45' : ''} ${isRunning ? 'cursor-not-allowed' : ''}`}
+                                >
+                                    <input
+                                        type="checkbox"
+                                        checked={!excluded}
+                                        readOnly
+                                        className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                    />
+                                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center text-white font-bold text-lg shadow-sm shrink-0">
+                                        {(c.nombreReal || c.nombre || c.whatsapp || "?").charAt(0).toUpperCase()}
                                     </div>
-                                    <p className="text-[13px] text-[#54656f] dark:text-[#8696a0] truncate">
-                                        {c.whatsapp} • {c.tags?.length || 0} etiquetas
-                                    </p>
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex justify-between items-start mb-0.5">
+                                            <h3 className="font-semibold text-sm text-[#111b21] dark:text-[#e9edef] truncate pr-2 pt-0.5">
+                                                {c.nombreReal || c.nombre || c.whatsapp}
+                                            </h3>
+                                            <div className="flex flex-col items-end shrink-0">
+                                                {getRelativeTime(c) && (
+                                                    <span className="text-[11px] text-[#8696a0] whitespace-nowrap font-medium" title="Fecha de captura">
+                                                        {getRelativeTime(c)}
+                                                    </span>
+                                                )}
+                                                {c.campaignName && (
+                                                    <span className="text-[10px] text-indigo-500 dark:text-indigo-400 font-bold whitespace-nowrap mt-0.5" title={`Campaña Masiva: ${c.campaignName}`}>
+                                                        Campaña Masiva: {c.campaignName}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </div>
+                                        <p className="text-[13px] text-[#54656f] dark:text-[#8696a0] truncate">
+                                            {c.whatsapp}{c.municipio ? ` • ${c.municipio}` : ''}{c.edad ? ` • ${c.edad}a` : ''}
+                                        </p>
+                                    </div>
                                 </div>
-                            </div>
-                        ))
+                            );
+                        })
                     )}
                 </div>
             </div>
@@ -744,14 +778,14 @@ const BulksSection = () => {
                 <div className="p-3 bg-white dark:bg-[#111b21] border-b border-[#f0f2f5] dark:border-[#222e35] shadow-sm relative z-10 flex justify-between items-center">
                     <div className="flex items-center gap-4">
                         <h2 className="text-lg font-bold text-[#111b21] dark:text-[#d1d7db]">Mensaje a enviar</h2>
-                        <button 
-                            onClick={openHistory} 
+                        <button
+                            onClick={openHistory}
                             className="text-xs bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 py-1.5 px-3 rounded shadow-sm flex items-center gap-1 font-bold transition-colors"
                         >
                             📜 Historial
                         </button>
                     </div>
-                    <button 
+                    <button
                         onClick={() => setBulkType(bulkType === 'text' ? 'template' : 'text')}
                         className="text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 underline cursor-pointer"
                         disabled={isRunning}
@@ -759,7 +793,7 @@ const BulksSection = () => {
                         {bulkType === 'template' ? 'Usar texto libre' : 'Volver a plantillas (Recomendado)'}
                     </button>
                 </div>
-                
+
                 <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
                     {bulkType === 'template' ? (
                         <div className="bg-white dark:bg-[#111b21] rounded-xl shadow-sm p-4 relative border border-green-200 dark:border-green-900 flex flex-col gap-4">
@@ -772,8 +806,8 @@ const BulksSection = () => {
                             </div>
                             <div>
                                 <label className="block text-[11px] font-bold text-gray-500 uppercase mb-1.5">Selecciona tu plantilla</label>
-                                <select 
-                                    value={selectedTemplateId} 
+                                <select
+                                    value={selectedTemplateId}
                                     onChange={(e) => {
                                         setSelectedTemplateId(e.target.value);
                                         setTemplateParams({});
@@ -899,7 +933,7 @@ const BulksSection = () => {
                     )}
 
                     {isRunning ? (
-                        <button 
+                        <button
                             onClick={abortBulk}
                             className="w-full bg-red-500 hover:bg-red-600 text-white font-bold py-4 px-4 rounded-xl shadow-lg transition-transform transform active:scale-[0.98] flex items-center justify-center gap-2 text-xl"
                         >
@@ -907,7 +941,7 @@ const BulksSection = () => {
                             ABORTAR ENVÍOS
                         </button>
                     ) : isCompleted ? (
-                        <button 
+                        <button
                             onClick={clearBulk}
                             className="w-full bg-green-600 hover:bg-green-700 text-white font-black tracking-wide py-4 px-4 rounded-xl shadow-[0_10px_20px_rgba(22,163,74,0.2)] transition-all transform hover:-translate-y-1 active:scale-[0.98] flex items-center justify-center gap-2 text-xl"
                         >
@@ -915,18 +949,18 @@ const BulksSection = () => {
                             CREAR NUEVA CAMPAÑA
                         </button>
                     ) : (
-                        <button 
+                        <button
                             onClick={handleStartClick}
                             className={`w-full ${isSubmitting ? 'bg-blue-400' : 'bg-blue-600 hover:bg-blue-700'} text-white font-black tracking-wide py-4 px-4 rounded-xl shadow-[0_10px_20px_rgba(37,99,235,0.2)] transition-all transform ${isSubmitting ? '' : 'hover:-translate-y-1 active:scale-[0.98]'} flex items-center justify-center gap-3 text-xl disabled:opacity-50 disabled:cursor-not-allowed`}
-                            disabled={selectedCandIds.size === 0 || isSubmitting}
+                            disabled={sendCount === 0 || isSubmitting}
                         >
                             {isSubmitting ? <span className="animate-spin text-2xl">⏳</span> : <Send size={24} />}
-                            {isSubmitting ? 'PREPARANDO ENVÍOS...' : 'INICIAR CAMPAÑA INSTANTÁNEA'}
+                            {isSubmitting ? 'PREPARANDO ENVÍOS...' : `INICIAR CAMPAÑA (${sendCount.toLocaleString('es-MX')})`}
                         </button>
                     )}
                 </div>
             </div>
-            
+
             {/* HISTORY MODAL */}
             {showHistory && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
@@ -943,11 +977,11 @@ const BulksSection = () => {
                             ) : (
                                 <div className="space-y-3">
                                     {historyList.map(h => (
-                                        <CampaignHistoryItem 
-                                            key={h.id} 
-                                            h={h} 
-                                            reuseCampaign={reuseCampaign} 
-                                            deleteCampaign={deleteCampaign} 
+                                        <CampaignHistoryItem
+                                            key={h.id}
+                                            h={h}
+                                            reuseCampaign={reuseCampaign}
+                                            deleteCampaign={deleteCampaign}
                                         />
                                     ))}
                                 </div>
@@ -956,7 +990,7 @@ const BulksSection = () => {
                     </div>
                 </div>
             )}
-            
+
             {/* CONFIRM START MODAL */}
             {showStartModal && startModalData && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md" style={{ animation: 'fadeIn 0.2s ease-out' }}>
@@ -966,18 +1000,18 @@ const BulksSection = () => {
                         </div>
                         <h2 className="text-2xl font-black text-gray-800 dark:text-white mb-2">Confirmar Lanzamiento</h2>
                         <p className="text-gray-500 dark:text-gray-400 mb-8 font-medium">
-                            ¿Estás seguro de contactar a <strong className="text-gray-800 dark:text-gray-200">{startModalData.count}</strong> candidatos {startModalData.qtyMsgStr}?
+                            ¿Estás seguro de contactar a <strong className="text-gray-800 dark:text-gray-200">{startModalData.count.toLocaleString('es-MX')}</strong> candidatos {startModalData.qtyMsgStr}?
                             <br/><span className="text-sm mt-2 block opacity-80">(Los envíos serán inmediatos y sin demoras)</span>
                         </p>
-                        
+
                         <div className="flex gap-3 w-full">
-                            <button 
+                            <button
                                 onClick={() => setShowStartModal(false)}
                                 className="flex-1 bg-gray-100 hover:bg-gray-200 dark:bg-[#202c33] dark:hover:bg-[#2a3942] text-gray-700 dark:text-gray-300 font-bold py-4 rounded-xl transition-all text-sm tracking-wide"
                             >
                                 CANCELAR
                             </button>
-                            <button 
+                            <button
                                 onClick={confirmStartBulk}
                                 className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl shadow-[0_8px_16px_rgba(37,99,235,0.2)] transition-all transform hover:-translate-y-1 active:scale-[0.98] text-sm tracking-wide"
                             >
@@ -993,9 +1027,9 @@ const BulksSection = () => {
                 <>
                     <style>{`
                         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-                        @keyframes popIn { 
-                            0% { opacity: 0; transform: scale(0.9) translateY(10px); } 
-                            100% { opacity: 1; transform: scale(1) translateY(0); } 
+                        @keyframes popIn {
+                            0% { opacity: 0; transform: scale(0.9) translateY(10px); }
+                            100% { opacity: 1; transform: scale(1) translateY(0); }
                         }
                     `}</style>
                     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md" style={{ animation: 'fadeIn 0.2s ease-out' }}>
@@ -1005,8 +1039,8 @@ const BulksSection = () => {
                             </div>
                             <h2 className="text-2xl font-black text-gray-800 dark:text-white mb-2">¡Campaña Finalizada!</h2>
                             <p className="text-gray-500 dark:text-gray-400 mb-8 font-medium">Los mensajes masivos han sido procesados exitosamente.</p>
-                            
-                            <button 
+
+                            <button
                                 onClick={() => {
                                     setShowCompletionModal(false);
                                     clearBulk();
@@ -1019,6 +1053,9 @@ const BulksSection = () => {
                     </div>
                 </>
             )}
+
+            {/* Diálogo de confirmación (Abortar campaña / Eliminar historial) */}
+            {_confirmModalJSX}
         </div>
     );
 };
