@@ -263,6 +263,12 @@ const tickEngine = async (state) => {
                                 });
                                 addLog(state, `🟢 Enviado a ${candidate.nombreReal || candidate.whatsapp}`);
                                 sendSuccess = true;
+                                // 💬 Ventana de atribución de RESPUESTA: si este candidato contesta
+                                // (aunque sea días después, retroactivo), su PRIMERA respuesta cuenta
+                                // como "respondido" de esta campaña. TTL 90d. El webhook hace GETDEL.
+                                if (state.campaignId) {
+                                    getRedisClient()?.set(`campaign:reply_await:${candidateId}`, state.campaignId, 'EX', 60 * 60 * 24 * 90).catch(() => {});
+                                }
                             } else {
                                 addLog(state, `🔴 Error de API para ${candidate.whatsapp}: ${sendResult?.error || 'respuesta no exitosa'}`);
                                 // Marcar como fallido

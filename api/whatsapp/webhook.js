@@ -521,6 +521,21 @@ export default async function handler(req, res) {
                 if (!candidate) candidateId = null;
             }
 
+            // 💬 Respondidos por campaña: si este candidato tenía una campaña esperando su
+            // respuesta, cuenta su PRIMERA respuesta (retroactivo dentro de la ventana de 90d).
+            // GETDEL garantiza que solo cuente una vez. Reacciones no cuentan como respuesta.
+            if (candidateId && redis && metaMsgType !== 'reaction') {
+                (async () => {
+                    try {
+                        const k = `campaign:reply_await:${candidateId}`;
+                        const campId = typeof redis.getdel === 'function'
+                            ? await redis.getdel(k)
+                            : await (async () => { const v = await redis.get(k); if (v) await redis.del(k); return v; })();
+                        if (campId) redis.hincrby(`bulk_stats:${campId}`, 'replied', 1).catch(() => {});
+                    } catch { /* atribución best-effort */ }
+                })();
+            }
+
             if (!candidateId) {
                 const referral = metaMsg?.referral;
                 candidate = await saveCandidate({

@@ -76,6 +76,13 @@ const summarizeSelection = (sel) => {
     return chips;
 };
 
+// Porcentaje seguro para tasas (CTR). Devuelve '—' si no hay base todavía.
+const pct = (num, den) => {
+    const n = Number(num) || 0, d = Number(den) || 0;
+    if (d <= 0) return '—';
+    return `${Math.round((n / d) * 100)}%`;
+};
+
 const CampaignHistoryItem = ({ h, reuseCampaign, deleteCampaign }) => {
     const [stats, setStats] = useState(null);
     const [loading, setLoading] = useState(false);
@@ -116,20 +123,35 @@ const CampaignHistoryItem = ({ h, reuseCampaign, deleteCampaign }) => {
                 </div>
             </div>
             {/* Stats Row */}
-            <div className="flex gap-6 mt-1 pt-3 border-t border-gray-100 dark:border-white/5">
+            <div className="flex flex-wrap gap-x-5 gap-y-2 mt-1 pt-3 border-t border-gray-100 dark:border-white/5">
                 <div className="flex flex-col">
                     <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">🟢 Enviados</span>
                     <span className="font-mono text-sm text-gray-700 dark:text-gray-300">{loading ? '...' : (stats?.sent || 0)}</span>
                 </div>
                 <div className="flex flex-col">
-                    <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">🔘 Entregados</span>
+                    <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">🔘 Recibidos</span>
                     <span className="font-mono text-sm text-gray-700 dark:text-gray-300">{loading ? '...' : (stats?.delivered || 0)}</span>
                 </div>
                 <div className="flex flex-col">
                     <span className="text-[10px] text-blue-400 font-bold uppercase tracking-wider">💙 Leídos</span>
                     <span className="font-mono text-sm text-blue-600 dark:text-blue-400">{loading ? '...' : (stats?.read || 0)}</span>
                 </div>
+                <div className="flex flex-col">
+                    <span className="text-[10px] text-green-500 font-bold uppercase tracking-wider">💬 Respondidos</span>
+                    <span className="font-mono text-sm text-green-600 dark:text-green-400">{loading ? '...' : (stats?.replied || 0)}</span>
+                </div>
             </div>
+            {/* Tasas: CTR de llegada (recibidos/enviados) y de respuesta (respondidos/recibidos) */}
+            {!loading && (stats?.sent > 0) && (
+                <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-[11px]">
+                    <span className="text-gray-500 dark:text-gray-400">
+                        📩 Entrega <b className="text-gray-700 dark:text-gray-200">{pct(stats?.delivered, stats?.sent)}</b>
+                    </span>
+                    <span className="text-gray-500 dark:text-gray-400">
+                        💬 Respuesta <b className="text-green-600 dark:text-green-400">{pct(stats?.replied, stats?.delivered || stats?.sent)}</b>
+                    </span>
+                </div>
+            )}
         </div>
     );
 };
@@ -1583,7 +1605,7 @@ const BulksSection = () => {
                                 <div className="flex justify-center gap-6 w-full mb-10">
                                     <div className="text-center">
                                         <div className="text-3xl font-black text-indigo-600 dark:text-indigo-400">{engineState?.totalSent || 0}</div>
-                                        <div className="text-xs uppercase font-bold text-gray-400 mt-1">Entregados</div>
+                                        <div className="text-xs uppercase font-bold text-gray-400 mt-1">Enviados</div>
                                     </div>
                                     <div className="text-center border-l border-gray-200 dark:border-gray-800 pl-6">
                                         <div className="text-3xl font-black text-gray-700 dark:text-gray-300">{engineState?.candidates?.length || 0}</div>
