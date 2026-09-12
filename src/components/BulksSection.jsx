@@ -252,6 +252,7 @@ const BulksSection = () => {
     const [editingAudienceId, setEditingAudienceId] = useState(null);   // público en edición dentro de la Col 1
     const [showCreateAudience, setShowCreateAudience] = useState(false);
     const [newAudienceName, setNewAudienceName] = useState('');
+    const [glowTemplateCol, setGlowTemplateCol] = useState(false);
 
     // Col 2: Messages & Templates
     const [bulkType, setBulkType] = useState('template'); // 'text' | 'template'
@@ -747,6 +748,9 @@ const BulksSection = () => {
     const selectAudience = (aud) => {
         if (isRunning) return;
         setSelectedAudienceId(prev => (prev === aud.id ? null : aud.id));
+        if (window.innerWidth < 1024) setMobileTab('messages');
+        setGlowTemplateCol(true);
+        setTimeout(() => setGlowTemplateCol(false), 2000);
     };
 
     const editAudience = (aud) => {
@@ -1169,7 +1173,7 @@ const BulksSection = () => {
             </div>
 
             {/* COLUMN 3: PLANTILLA & ACTIONS */}
-            <div className={`${mobileTab === 'messages' ? 'flex' : 'hidden'} lg:flex w-full lg:w-[40%] flex-col border-r border-[#d1d7db] dark:border-[#222e35] bg-[#efeae2] dark:bg-[#0b141a] min-h-0 relative`}>
+            <div className={`${mobileTab === 'messages' ? 'flex' : 'hidden'} lg:flex w-full lg:w-[40%] flex-col border-r border-[#d1d7db] dark:border-[#222e35] bg-[#efeae2] dark:bg-[#0b141a] min-h-0 relative ${glowTemplateCol ? 'ring-inset ring-4 ring-indigo-500/50 shadow-[inset_0_0_30px_rgba(99,102,241,0.2)] transition-all duration-500' : 'transition-all duration-500'}`}>
                 <div className="p-3 bg-white dark:bg-[#111b21] border-b border-[#f0f2f5] dark:border-[#222e35] shadow-sm relative z-10 flex justify-between items-center">
                     <div className="flex items-center gap-4">
                         <h2 className="text-lg font-bold text-[#111b21] dark:text-[#d1d7db]">Mensaje a enviar</h2>
@@ -1279,33 +1283,6 @@ const BulksSection = () => {
                                         {em}
                                     </button>
                                 ))}
-                            </div>
-                        </div>
-                    )}
-
-                                {/* Progress Engine Summary */}
-                    {engineState && (
-                        <div className={`mt-4 border ${engineState.isRunning ? 'border-indigo-100 dark:border-indigo-900/50' : 'border-green-100 dark:border-green-900/50'} rounded-xl overflow-hidden bg-white dark:bg-[#111b21] shadow-sm transition-colors`}>
-                            <div className={`p-3 text-white font-bold flex items-center justify-between ${engineState.isRunning ? 'bg-indigo-600' : (engineState.currentCandidateIndex >= (engineState.candidates?.length || 1) ? 'bg-green-600' : 'bg-gray-600')}`}>
-                                <div className="flex items-center gap-2">
-                                    {engineState.isRunning ? <span className="animate-spin">⚙️</span> : (engineState.currentCandidateIndex >= (engineState.candidates?.length || 1) ? '✅' : '⏹️')}
-                                    <span>{engineState.isRunning ? 'Progreso de Envío' : (engineState.currentCandidateIndex >= (engineState.candidates?.length || 1) ? 'Campaña Completada' : 'Envío Detenido')}</span>
-                                </div>
-                                <span className="text-xs bg-black/20 px-2 py-0.5 rounded-full">{engineState.isRunning ? 'Enviando...' : (engineState.currentCandidateIndex >= (engineState.candidates?.length || 1) ? '100%' : 'Detenido')}</span>
-                            </div>
-                            <div className="p-4">
-                                <div className="mb-4">
-                                    <div className="flex justify-between text-sm font-bold text-gray-700 dark:text-gray-300 uppercase mb-2">
-                                        <span>Progreso</span>
-                                        <span>{Math.min(engineState.currentCandidateIndex, engineState.candidates?.length || 0)} / {engineState.candidates?.length || 0}</span>
-                                    </div>
-                                    <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3">
-                                        <div className="bg-indigo-600 h-3 rounded-full transition-all duration-300" style={{width: `${(engineState.currentCandidateIndex / (engineState.candidates?.length || 1)) * 100}%`}}></div>
-                                    </div>
-                                </div>
-                                <div className="text-sm text-gray-600 dark:text-gray-300 font-bold bg-gray-50 dark:bg-[#202c33] p-3 rounded-lg border border-gray-100 dark:border-gray-800">
-                                    Entregados exitosamente: <strong className="text-indigo-600 dark:text-indigo-400 text-lg ml-1">{engineState.totalSent}</strong>
-                                </div>
                             </div>
                         </div>
                     )}
@@ -1464,84 +1441,88 @@ const BulksSection = () => {
                 </div>
             )}
 
-            {/* COMPLETION MODAL */}
-            {showCompletionModal && (
-                <>
-                    <style>{`
-                        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-                        @keyframes popIn {
-                            0% { opacity: 0; transform: scale(0.9) translateY(10px); }
-                            100% { opacity: 1; transform: scale(1) translateY(0); }
-                        }
-                    `}</style>
-                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md" style={{ animation: 'fadeIn 0.2s ease-out' }}>
-                        <div className="bg-white dark:bg-[#111b21] w-full max-w-sm rounded-[24px] shadow-2xl overflow-hidden p-8 text-center flex flex-col items-center border border-gray-100 dark:border-gray-800" style={{ animation: 'popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)' }}>
-                            <div className="w-20 h-20 bg-[#d9fdd3] dark:bg-[#0a332c] rounded-full flex items-center justify-center mb-6">
-                                <CheckCircle2 className="w-10 h-10 text-[#10a37f] dark:text-[#25d366]" />
+            {/* AAA SENDING OVERLAY */}
+            {(isRunning || (isCompleted && showCompletionModal)) && (
+                <div className="absolute inset-0 z-[60] bg-white/95 dark:bg-[#0b141a]/95 backdrop-blur-xl flex flex-col items-center justify-center p-6" style={{ animation: 'fadeIn 0.4s ease-out' }}>
+                    <div className="max-w-xl w-full bg-white dark:bg-[#111b21] rounded-3xl shadow-2xl border border-gray-100 dark:border-gray-800 p-8 md:p-12 flex flex-col items-center text-center relative overflow-hidden">
+                        {/* Glowing Background pulse */}
+                        <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-400 via-indigo-500 to-purple-600"></div>
+                        <div className="absolute -top-24 -left-24 w-48 h-48 bg-blue-500/10 rounded-full blur-3xl animate-pulse"></div>
+                        <div className="absolute -bottom-24 -right-24 w-48 h-48 bg-purple-500/10 rounded-full blur-3xl animate-pulse"></div>
+
+                        {isCompleted ? (
+                            <div className="flex flex-col items-center" style={{ animation: 'popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275)' }}>
+                                <div className="w-24 h-24 bg-[#d9fdd3] dark:bg-[#0a332c] rounded-full flex items-center justify-center mb-6 shadow-[0_0_30px_rgba(37,211,102,0.3)]">
+                                    <CheckCircle2 className="w-12 h-12 text-[#10a37f] dark:text-[#25d366]" />
+                                </div>
+                                <h2 className="text-3xl font-black text-gray-800 dark:text-white mb-3">¡Campaña Finalizada!</h2>
+                                <p className="text-gray-500 dark:text-gray-400 mb-8 font-medium text-lg">Los mensajes masivos han sido procesados exitosamente.</p>
+                                
+                                <div className="flex justify-center gap-6 w-full mb-10">
+                                    <div className="text-center">
+                                        <div className="text-3xl font-black text-indigo-600 dark:text-indigo-400">{engineState?.totalSent || 0}</div>
+                                        <div className="text-xs uppercase font-bold text-gray-400 mt-1">Entregados</div>
+                                    </div>
+                                    <div className="text-center border-l border-gray-200 dark:border-gray-800 pl-6">
+                                        <div className="text-3xl font-black text-gray-700 dark:text-gray-300">{engineState?.candidates?.length || 0}</div>
+                                        <div className="text-xs uppercase font-bold text-gray-400 mt-1">Destinatarios</div>
+                                    </div>
+                                </div>
+
+                                <button
+                                    onClick={() => {
+                                        setShowCompletionModal(false);
+                                        clearBulk();
+                                    }}
+                                    className="w-full bg-[#10a37f] hover:bg-[#0e906f] dark:bg-[#25d366] dark:hover:bg-[#1faa53] dark:text-[#111b21] text-white font-bold py-4 rounded-xl shadow-[0_8px_20px_rgba(16,163,127,0.3)] dark:shadow-[0_8px_20px_rgba(37,211,102,0.2)] transition-all transform hover:-translate-y-1 active:scale-[0.98] text-lg tracking-wide"
+                                >
+                                    CERRAR Y VOLVER
+                                </button>
                             </div>
-                            <h2 className="text-2xl font-black text-gray-800 dark:text-white mb-2">¡Campaña Finalizada!</h2>
-                            <p className="text-gray-500 dark:text-gray-400 mb-8 font-medium">Los mensajes masivos han sido procesados exitosamente.</p>
+                        ) : (
+                            <div className="w-full flex flex-col items-center z-10 relative">
+                                <div className="w-20 h-20 relative mb-6">
+                                    <div className="absolute inset-0 border-4 border-gray-100 dark:border-gray-800 rounded-full"></div>
+                                    <div className="absolute inset-0 border-4 border-indigo-600 rounded-full border-t-transparent animate-spin"></div>
+                                    <div className="absolute inset-0 flex items-center justify-center">
+                                        <Send className="w-8 h-8 text-indigo-600 animate-pulse" />
+                                    </div>
+                                </div>
+                                <h2 className="text-2xl font-black text-gray-800 dark:text-white mb-2 tracking-tight">Enviando Campaña</h2>
+                                <p className="text-indigo-600 dark:text-indigo-400 font-bold mb-8 flex items-center gap-2">
+                                    <span className="w-2 h-2 rounded-full bg-indigo-600 animate-ping"></span>
+                                    Procesando en segundo plano...
+                                </p>
 
-                            <button
-                                onClick={() => {
-                                    setShowCompletionModal(false);
-                                    clearBulk();
-                                }}
-                                className="w-full bg-[#10a37f] hover:bg-[#0e906f] dark:bg-[#25d366] dark:hover:bg-[#1faa53] dark:text-[#111b21] text-white font-bold py-4 rounded-xl shadow-[0_8px_16px_rgba(16,163,127,0.2)] dark:shadow-[0_8px_16px_rgba(37,211,102,0.1)] transition-all transform hover:-translate-y-1 active:scale-[0.98] text-lg tracking-wide"
-                            >
-                                ACEPTAR Y LIMPIAR
-                            </button>
-                        </div>
-                    </div>
-                </>
-            )}
+                                <div className="w-full mb-8 relative">
+                                    <div className="flex justify-between text-sm font-bold text-gray-700 dark:text-gray-300 uppercase mb-3">
+                                        <span>Progreso</span>
+                                        <span>{Math.min(engineState?.currentCandidateIndex || 0, engineState?.candidates?.length || 0)} / {engineState?.candidates?.length || 0}</span>
+                                    </div>
+                                    <div className="w-full bg-gray-100 dark:bg-gray-800 rounded-full h-4 shadow-inner relative overflow-hidden">
+                                        <div className="absolute top-0 left-0 bottom-0 bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 rounded-full transition-all duration-300 ease-out flex items-center justify-end pr-2" style={{width: `${((engineState?.currentCandidateIndex || 0) / (engineState?.candidates?.length || 1)) * 100}%`}}>
+                                            <div className="w-1.5 h-1.5 bg-white rounded-full opacity-50 animate-ping"></div>
+                                        </div>
+                                    </div>
+                                </div>
 
-            {/* CREATE AUDIENCE MODAL */}
-            {showCreateAudience && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md" style={{ animation: 'fadeIn 0.2s ease-out' }}>
-                    <div className="bg-white dark:bg-[#111b21] w-full max-w-md rounded-[24px] shadow-2xl overflow-hidden p-8 flex flex-col border border-gray-100 dark:border-gray-800" style={{ animation: 'popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)' }}>
-                        <div className="w-16 h-16 bg-indigo-100 dark:bg-indigo-900/30 rounded-full flex items-center justify-center mb-5 self-center">
-                            <Users className="w-8 h-8 text-indigo-600 dark:text-indigo-400" />
-                        </div>
-                        <h2 className="text-xl font-black text-gray-800 dark:text-white mb-1 text-center">Nuevo Público</h2>
-                        <p className="text-sm text-gray-500 dark:text-gray-400 mb-5 text-center">
-                            Se guarda con los filtros actuales ({adHocCount.toLocaleString('es-MX')} candidatos hoy). Es dinámico: se recalcula solo cuando lo uses.
-                        </p>
+                                <div className="w-full h-12 bg-gray-50 dark:bg-[#1a2329] border border-gray-100 dark:border-gray-800 rounded-lg flex items-center justify-center px-4 overflow-hidden mb-8 relative">
+                                    <div className="absolute left-0 w-8 h-full bg-gradient-to-r from-gray-50 dark:from-[#1a2329] to-transparent z-10"></div>
+                                    <div className="absolute right-0 w-8 h-full bg-gradient-to-l from-gray-50 dark:from-[#1a2329] to-transparent z-10"></div>
+                                    <span className="text-xs font-mono text-gray-500 dark:text-gray-400 truncate">
+                                        {engineState?.logs?.[0] || 'Iniciando motores...'}
+                                    </span>
+                                </div>
 
-                        {summarizeSelection(selection).length > 0 && (
-                            <div className="flex flex-wrap gap-1 justify-center mb-5">
-                                {summarizeSelection(selection).map((c, i) => (
-                                    <span key={i} className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-gray-100 dark:bg-[#202c33] text-gray-600 dark:text-gray-300">{c}</span>
-                                ))}
+                                <button
+                                    onClick={abortBulk}
+                                    className="px-8 py-3 bg-red-50 dark:bg-red-900/20 text-red-600 hover:bg-red-100 dark:hover:bg-red-900/40 rounded-xl font-bold transition-all text-sm flex items-center gap-2 group"
+                                >
+                                    <XCircle className="w-4 h-4 group-hover:scale-110 transition-transform" />
+                                    DETENER ENVÍOS
+                                </button>
                             </div>
                         )}
-
-                        <input
-                            autoFocus
-                            type="text"
-                            value={newAudienceName}
-                            onChange={(e) => setNewAudienceName(e.target.value)}
-                            onKeyDown={(e) => { if (e.key === 'Enter') confirmCreateAudience(); }}
-                            placeholder="Ej: Mujeres jóvenes Monterrey"
-                            maxLength={80}
-                            className="w-full bg-[#f0f2f5] dark:bg-[#202c33] border border-gray-200 dark:border-gray-700 focus:border-indigo-500 rounded-xl p-3 text-sm text-[#111b21] dark:text-[#e9edef] outline-none transition-colors mb-5"
-                        />
-
-                        <div className="flex gap-3">
-                            <button
-                                onClick={() => setShowCreateAudience(false)}
-                                className="flex-1 bg-gray-100 hover:bg-gray-200 dark:bg-[#202c33] dark:hover:bg-[#2a3942] text-gray-700 dark:text-gray-300 font-bold py-3 rounded-xl transition-colors text-sm"
-                            >
-                                Cancelar
-                            </button>
-                            <button
-                                onClick={confirmCreateAudience}
-                                disabled={!newAudienceName.trim()}
-                                className="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold py-3 rounded-xl shadow-sm transition-colors text-sm flex items-center justify-center gap-2"
-                            >
-                                <Plus className="w-4 h-4" /> Crear público
-                            </button>
-                        </div>
                     </div>
                 </div>
             )}

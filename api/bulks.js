@@ -269,8 +269,13 @@ const tickEngine = async (state) => {
             state.currentCandidateIndex++;
             sentInTick++;
 
-            // Wait 50ms before sending the next to briefly yield event loop
-            await new Promise(r => setTimeout(r, 50));
+            // Wait before sending the next. For media templates, yield for 2.5s to prevent rate limiting. For text, yield 50ms.
+            let delayMs = 50;
+            if (state.bulkType === 'template' && state.templateData?.components) {
+                const hasMedia = state.templateData.components.some(c => c.type === 'HEADER' && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(c.format));
+                if (hasMedia) delayMs = 2500;
+            }
+            await new Promise(r => setTimeout(r, delayMs));
         }
 
         // ¿Ya terminó todo el lote/campaña?
