@@ -751,6 +751,8 @@ const BulksSection = () => {
         if (window.innerWidth < 1024) setMobileTab('messages');
         setGlowTemplateCol(true);
         setTimeout(() => setGlowTemplateCol(false), 2000);
+        // Recalculate live count for the selected audience so "Enviando a" shows accurate numbers
+        loadAudiences();
     };
 
     const editAudience = (aud) => {
@@ -1010,11 +1012,39 @@ const BulksSection = () => {
                     </div>
                     <div className="flex justify-between items-center text-[11px] text-[#54656f] dark:text-[#8696a0] mt-1.5 px-1">
                         <span>Vista previa ({previewList.length} de {segmentTotal.toLocaleString('es-MX')})</span>
-                        {excludeIds.size > 0 && (
-                            <button onClick={() => setExcludeIds(new Set())} className="text-blue-500 hover:text-blue-600 font-medium flex items-center gap-1">
-                                <RotateCcw className="w-3 h-3" /> Incluir {excludeIds.size} excluidos
-                            </button>
-                        )}
+                        <div className="flex items-center gap-2">
+                            {/* Select All / Deselect All — afecta la vista previa cargada */}
+                            {previewList.length > 0 && !isRunning && (
+                                <button
+                                    onClick={() => {
+                                        const allExcluded = previewList.every(c => excludeIds.has(c.id));
+                                        if (allExcluded) {
+                                            // Deselect all → remove all preview IDs from excludeIds
+                                            setExcludeIds(prev => {
+                                                const next = new Set(prev);
+                                                previewList.forEach(c => next.delete(c.id));
+                                                return next;
+                                            });
+                                        } else {
+                                            // Select all → exclude everyone in preview
+                                            setExcludeIds(prev => {
+                                                const next = new Set(prev);
+                                                previewList.forEach(c => next.add(c.id));
+                                                return next;
+                                            });
+                                        }
+                                    }}
+                                    className="text-[10px] font-bold text-indigo-500 hover:text-indigo-700 dark:hover:text-indigo-300 transition-colors"
+                                >
+                                    {previewList.every(c => excludeIds.has(c.id)) ? '✓ Incluir todos' : '✗ Excluir todos'}
+                                </button>
+                            )}
+                            {excludeIds.size > 0 && (
+                                <button onClick={() => setExcludeIds(new Set())} className="text-blue-500 hover:text-blue-600 font-medium flex items-center gap-1">
+                                    <RotateCcw className="w-3 h-3" /> Incluir {excludeIds.size} excluidos
+                                </button>
+                            )}
+                        </div>
                     </div>
                 </div>
 
@@ -1306,6 +1336,9 @@ const BulksSection = () => {
                                         <><SlidersHorizontal className="w-4 h-4 text-[#54656f] shrink-0" /> Segmento actual (filtros)</>
                                     )}
                                     <span className="text-indigo-600 dark:text-indigo-400">· {sendCount.toLocaleString('es-MX')}</span>
+                                    {excludeIds.size > 0 && !selectedAudience && (
+                                        <span className="text-[10px] text-red-400 font-normal">({excludeIds.size} excluidos)</span>
+                                    )}
                                 </div>
                             </div>
                             {selectedAudience && (
