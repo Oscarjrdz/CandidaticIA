@@ -1,4 +1,4 @@
-import { getRedisClient } from '../utils/storage.js';
+import { getRedisClient, validateAdminSession } from '../utils/storage.js';
 import { IncomingForm } from 'formidable';
 import { readFileSync } from 'fs';
 import os from 'os';
@@ -23,6 +23,11 @@ export default async function handler(req, res) {
     if (req.method !== 'POST') {
         return res.status(405).json({ error: 'Method not allowed' });
     }
+
+    // Seguridad: solo reclutadores autenticados suben a la biblioteca de medios.
+    // Sin esto, cualquiera podía subir archivos arbitrarios a nuestro storage/dominio.
+    const userId = await validateAdminSession(req);
+    if (!userId) return res.status(401).json({ error: 'No autorizado' });
 
     try {
         const redis = getRedisClient();

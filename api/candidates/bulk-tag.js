@@ -7,7 +7,12 @@ export default async function handler(req, res) {
     }
 
     try {
-        const { getCandidateById, updateCandidate } = await import('../utils/storage.js');
+        const { getCandidateById, updateCandidate, validateAdminSession } = await import('../utils/storage.js');
+
+        // Seguridad: acción de dashboard — requiere sesión admin.
+        const userId = await validateAdminSession(req);
+        if (!userId) return res.status(401).json({ success: false, error: 'No autorizado' });
+
         const { ids, tag, action } = req.body;
 
         if (!Array.isArray(ids)) {

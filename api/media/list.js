@@ -1,5 +1,5 @@
 
-import { getRedisClient } from '../utils/storage.js';
+import { getRedisClient, validateAdminSession } from '../utils/storage.js';
 
 async function scanKeys(client, pattern, maxKeys = 1000) {
     let cursor = '0';
@@ -22,6 +22,10 @@ export default async function handler(req, res) {
     if (req.method !== 'GET') {
         return res.status(405).json({ error: 'Method not allowed' });
     }
+
+    // Seguridad: la biblioteca de medios es solo para reclutadores autenticados.
+    const userId = await validateAdminSession(req);
+    if (!userId) return res.status(401).json({ error: 'No autorizado' });
 
     try {
         const client = getRedisClient();

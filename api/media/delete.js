@@ -1,5 +1,5 @@
 
-import { getRedisClient } from '../utils/storage.js';
+import { getRedisClient, validateAdminSession } from '../utils/storage.js';
 
 /**
  * API to delete assets from the Media Library.
@@ -10,6 +10,10 @@ export default async function handler(req, res) {
     if (req.method !== 'POST' && req.method !== 'DELETE') {
         return res.status(405).json({ error: 'Method not allowed' });
     }
+
+    // Seguridad: borrado de biblioteca de medios — requiere sesión admin.
+    const userId = await validateAdminSession(req);
+    if (!userId) return res.status(401).json({ error: 'No autorizado' });
 
     try {
         const { id } = req.body || req.query;

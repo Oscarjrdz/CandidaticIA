@@ -1,9 +1,14 @@
-import { getRedisClient } from '../utils/storage.js';
+import { getRedisClient, validateAdminSession } from '../utils/storage.js';
 
 export default async function handler(req, res) {
     if (req.method === 'OPTIONS') {
         return res.status(200).end();
     }
+
+    // Seguridad: solo sesiones admin válidas pueden leer/escribir la config de Brenda.
+    // Sin esto, cualquiera podía reescribir el system prompt o apagar el bot con un POST.
+    const userId = await validateAdminSession(req);
+    if (!userId) return res.status(401).json({ error: 'No autorizado' });
 
     const redis = getRedisClient();
     if (!redis) {

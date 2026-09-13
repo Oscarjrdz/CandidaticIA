@@ -9,6 +9,11 @@ export default async function handler(req, res) {
     if (req.method !== 'POST') return res.status(405).json({ error: 'Método no permitido' });
 
     try {
+        // Seguridad: acción de dashboard — requiere sesión admin.
+        const { validateAdminSession } = await import('../utils/storage.js');
+        const userId = await validateAdminSession(req);
+        if (!userId) return res.status(401).json({ success: false, error: 'No autorizado' });
+
         const { id, block = true } = req.body;
 
         if (!id) {
