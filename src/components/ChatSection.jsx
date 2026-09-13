@@ -1,4 +1,7 @@
 import React, { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback, useDeferredValue } from 'react';
+import { DndContext, closestCenter, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
+import { SortableContext, horizontalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import ConfirmModal from './ui/ConfirmModal';
 import { MapPin, List as ListIcon, ShoppingBag, UserSquare, MousePointerClick, Search, MessageSquare, Plus, Smile, Paperclip, Mic, Square, ArrowLeft, Send, Tag, Pencil, Check, X, Trash2, Briefcase, Kanban, BookOpen, Keyboard, Loader2, Edit2, Reply, Zap, Pin, MessageCirclePlus, Phone, User, Bell, GripVertical, ChevronDown, ChevronUp, Snowflake, LayoutTemplate, Workflow } from 'lucide-react';
 import { getCandidates, getCandidateById, blockCandidate, deleteCandidate } from '../services/candidatesService';
@@ -24,6 +27,28 @@ import DateSeparator from './chat/DateSeparator';
 import ChatRow from './chat/ChatRow';
 import MessageBubble, { ENTRY_REVEALED_EVENT } from './chat/MessageBubble';
 
+
+// Wrapper sortable (@dnd-kit) para cada icono de la barra del header. Da animación de
+// empuje suave y reordena en ambas direcciones. El botón interior es el "drag handle"
+// (recibe handle={attributes+listeners}); los dropdowns viven como hermanos dentro de
+// este div relative, así arrastrar el panel del dropdown NO reordena. baseClass unifica
+// el estilo/cursor (grab) de todos los iconos.
+const TOOLBAR_ICON_BASE = 'p-2 rounded-full transition-all cursor-pointer active:cursor-grabbing';
+function SortableToolbarIcon({ id, order, children }) {
+    const { setNodeRef, transform, transition, attributes, listeners, isDragging } = useSortable({ id });
+    const style = {
+        transform: CSS.Translate.toString(transform),
+        transition,
+        order,
+        zIndex: isDragging ? 60 : undefined,
+        opacity: isDragging ? 0.5 : 1,
+    };
+    return (
+        <div ref={setNodeRef} style={style} className="relative z-50">
+            {children({ ...attributes, ...listeners }, TOOLBAR_ICON_BASE)}
+        </div>
+    );
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -1195,7 +1220,6 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         } catch {}
         return TOOLBAR_ICON_IDS;
     });
-    const [draggedIcon, setDraggedIcon] = useState(null);
 
     // Filter Chips State
     const [activeFilter, setActiveFilter] = useState('unread'); // 'all', 'unread', 'profile'
@@ -1279,34 +1303,22 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
 
     // Toolbar drag handlers — defined once with useCallback so they don't recreate on every render.
     // iconId is passed at call site via partial application to avoid hook-inside-loop violation.
-    const handleToolbarDragStart = useCallback((iconId, e) => {
-        setDraggedIcon(iconId);
-        e.dataTransfer.effectAllowed = 'move';
-        e.dataTransfer.setData('text/plain', iconId);
-    }, []);
-    const handleToolbarDragOver = useCallback((e) => {
-        e.preventDefault();
-        e.dataTransfer.dropEffect = 'move';
-    }, []);
-    const handleToolbarDrop = useCallback((iconId, e) => {
-        e.preventDefault();
-        const draggedId = e.dataTransfer.getData('text/plain');
-        if (!draggedId || draggedId === iconId) return;
-        // Solo se reordena DENTRO del mismo renglón — soltar sobre un icono del otro renglón no hace nada.
-        if (iconRow(draggedId) !== iconRow(iconId)) { setDraggedIcon(null); return; }
+    // @dnd-kit: reordenamiento con animación de empuje suave, en ambas direcciones.
+    // activationConstraint.distance evita que un clic simple inicie un arrastre (los iconos
+    // también son botones de acción). arrayMove resuelve el índice correcto sin bugs de dirección.
+    const toolbarSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
+    const handleToolbarSortEnd = useCallback((event) => {
+        const { active, over } = event;
+        if (!over || active.id === over.id) return;
         setToolbarOrder(prev => {
-            const newOrder = [...prev];
-            const fromIdx = newOrder.indexOf(draggedId);
-            const toIdx = newOrder.indexOf(iconId);
-            if (fromIdx === -1 || toIdx === -1) return prev;
-            newOrder.splice(fromIdx, 1);
-            newOrder.splice(toIdx, 0, draggedId);
-            localStorage.setItem('candidatic:toolbar_order_v3', JSON.stringify(newOrder));
-            return newOrder;
+            const oldIndex = prev.indexOf(active.id);
+            const newIndex = prev.indexOf(over.id);
+            if (oldIndex === -1 || newIndex === -1) return prev;
+            const next = arrayMove(prev, oldIndex, newIndex);
+            try { localStorage.setItem('candidatic:toolbar_order_v3', JSON.stringify(next)); } catch { /* storage bloqueado */ }
+            return next;
         });
-        setDraggedIcon(null);
     }, []);
-    const handleToolbarDragEnd = useCallback(() => setDraggedIcon(null), []);
     const toggleTagFilter = useCallback((tagName) => {
         setSelectedTag(current => {
             const values = getSelectedTagValues(current);
@@ -5698,33 +5710,19 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
 
 
                             {/* Draggable Icon Toolbar */}
-                            {!isMobile && toolbarOrder.map((iconId) => {
-                                const dragProps = {
-                                    draggable: true,
-                                    // Los dropdowns de vacantes/etiquetas viven DENTRO de este contenedor
-                                    // arrastrable. Con el dropdown ABIERTO, agarrar su panel (buscador,
-                                    // colores, área vacía) arrastraba el icono completo y sacaba la ventana
-                                    // de su lugar. Si el dropdown de este icono está abierto, no arrastres
-                                    // el icono. Las filas de etiqueta/vacante hacen stopPropagation en su
-                                    // propio onDragStart, así que su reordenamiento nunca llega hasta aquí.
-                                    onDragStart: (e) => {
-                                        if (showDropdown === iconId) { e.preventDefault(); return; }
-                                        handleToolbarDragStart(iconId, e);
-                                    },
-                                    onDragOver: handleToolbarDragOver,
-                                    onDrop: (e) => handleToolbarDrop(iconId, e),
-                                    onDragEnd: handleToolbarDragEnd,
-                                };
-
-                                const baseClass = `p-2 rounded-full transition-all cursor-grab active:cursor-grabbing ${draggedIcon === iconId ? 'opacity-40 scale-90' : 'opacity-100'}`;
-                                // Renglón: respuestas/CRM/lupa van ARRIBA (order:0); el resto ABAJO (order:2).
+                            {!isMobile && (
+                            <DndContext sensors={toolbarSensors} collisionDetection={closestCenter} onDragEnd={handleToolbarSortEnd}>
+                            <SortableContext items={toolbarOrder} strategy={horizontalListSortingStrategy}>
+                            {toolbarOrder.map((iconId) => {
                                 const iconOrder = iconRow(iconId) === 'top' ? 0 : 2;
-
+                                return (
+                                <SortableToolbarIcon key={iconId} id={iconId} order={iconOrder}>
+                                {(handle, baseClass) => {
                                 if (iconId === 'vacancies') {
                                     return (
-                                        <div key={iconId} className="relative z-50" style={{ order: iconOrder }}>
+                                        <>
                                             <button
-                                                {...dragProps}
+                                                {...handle}
                                                 onClick={(e) => { e.stopPropagation(); setShowDropdown(showDropdown === 'vacancies' ? null : 'vacancies'); }}
                                                 className={`${baseClass} hover:bg-black/5 dark:hover:bg-white/5 ${showDropdown === 'vacancies' ? 'bg-black/5 dark:bg-white/5' : ''}`} title="Inyectar información de Vacante">
                                                 <Briefcase className="w-5 h-5 text-gray-500 hover:text-blue-500 transition-colors" />
@@ -5787,15 +5785,15 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                                                     )}
                                                 </div>
                                             </div>
-                                        </div>
+                                        </>
                                     );
                                 }
 
                                 if (iconId === 'tags') {
                                     return (
-                                        <div key={iconId} className="relative z-50" style={{ order: iconOrder }}>
+                                        <>
                                             <button
-                                                {...dragProps}
+                                                {...handle}
                                                 onClick={(e) => { e.stopPropagation(); if (showDropdown === 'tags') { setShowDropdown(null); setTagSearch(''); } else { setShowDropdown('tags'); } }}
                                                 className={`${baseClass} hover:bg-black/5 dark:hover:bg-white/5 ${showDropdown === 'tags' ? 'bg-black/5 dark:bg-white/5' : ''}`}>
                                                 <Tag className="w-5 h-5" />
@@ -5987,7 +5985,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                                                 </div>
                                                 )}
                                             </div>
-                                        </div>
+                                        </>
                                     );
                                 }
 
@@ -5995,9 +5993,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                                     const active = selectedChat?.asistencia === true;
                                     return (
                                         <button
-                                            key={iconId}
-                                            {...dragProps}
-                                            style={{ order: iconOrder }}
+                                            {...handle}
                                             onClick={() => handleMarkAsistencia()}
                                             title={active ? 'Asistencia marcada (llegó a la cita) — clic para quitar' : 'Marcar asistencia (llegó a la cita)'}
                                             className={`${baseClass} ${active ? 'bg-blue-50 dark:bg-blue-500/20 ring-1 ring-blue-500/40' : 'hover:bg-black/5 dark:hover:bg-white/5'}`}
@@ -6016,9 +6012,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                                 if (iconId === 'crm_manual') {
                                     return (
                                         <button
-                                            key={iconId}
-                                            {...dragProps}
-                                            style={{ order: iconOrder }}
+                                            {...handle}
                                             onClick={() => setShowRightPanel(!showRightPanel)}
                                             className={`${baseClass} ml-1 ${showRightPanel ? 'bg-indigo-50 text-indigo-500 dark:bg-indigo-500/20' : 'hover:bg-black/5 dark:hover:bg-white/5 text-[#54656f] dark:text-[#aebac1]'}`}
                                             title="CRM Manual"
@@ -6031,9 +6025,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                                 if (iconId === 'quick_replies') {
                                     return (
                                         <button
-                                            key={iconId}
-                                            {...dragProps}
-                                            style={{ order: iconOrder }}
+                                            {...handle}
                                             onClick={() => setQuickRepliesPanelOpen(!showQuickRepliesPanel)}
                                             className={`${baseClass} ${showQuickRepliesPanel ? 'bg-green-50 text-green-600 dark:bg-green-500/20 dark:text-green-400' : 'hover:bg-black/5 dark:hover:bg-white/5 text-[#54656f] dark:text-[#aebac1]'}`}
                                             title="Banco de Respuestas"
@@ -6046,9 +6038,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                                 if (iconId === 'search') {
                                     return (
                                         <button
-                                            key={iconId}
-                                            {...dragProps}
-                                            style={{ order: iconOrder }}
+                                            {...handle}
                                             onClick={() => { setShowChatSearch(v => !v); if (!showChatSearch) setTimeout(() => chatSearchInputRef.current?.focus(), 50); }}
                                             className={`${baseClass} ${showChatSearch ? 'bg-black/10 dark:bg-white/10 text-[#111b21] dark:text-white' : 'hover:bg-black/5 dark:hover:bg-white/5 text-[#54656f] dark:text-[#aebac1]'}`}
                                             title="Buscar en conversación"
@@ -6059,7 +6049,13 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                                 }
 
                                 return null;
+                                }}
+                                </SortableToolbarIcon>
+                                );
                             })}
+                            </SortableContext>
+                            </DndContext>
+                            )}
 
                             {/* Search en móvil: en desktop la lupa va dentro del toolbar arrastrable de arriba */}
                             {isMobile && (
