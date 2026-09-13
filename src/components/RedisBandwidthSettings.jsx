@@ -101,7 +101,15 @@ const RedisBandwidthSettings = () => {
                             ))}
                         </div>
                         <div className="border-t border-gray-100 dark:border-gray-700 pt-2 space-y-2">
-                            <div className="h-2.5 w-40 bg-gray-100 dark:bg-gray-700 rounded" />
+                            <div className="flex items-center justify-between">
+                                <div className="h-2.5 w-32 bg-gray-100 dark:bg-gray-700 rounded" />
+                                <div className="h-2.5 w-24 bg-gray-100 dark:bg-gray-700 rounded" />
+                            </div>
+                            <div className="flex gap-1.5">
+                                <div className="h-4 w-20 bg-gray-100 dark:bg-gray-700 rounded" />
+                                <div className="h-4 w-16 bg-gray-100 dark:bg-gray-700 rounded" />
+                            </div>
+                            <div className="h-2 w-40 bg-gray-100 dark:bg-gray-700 rounded" />
                             {[0, 1, 2, 3, 4, 5].map(i => (
                                 <div key={i} className="flex items-center gap-2">
                                     <div className="w-16 h-2.5 bg-gray-100 dark:bg-gray-700 rounded shrink-0" />
