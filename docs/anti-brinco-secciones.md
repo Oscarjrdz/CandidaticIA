@@ -48,6 +48,15 @@ data se refresca por debajo.
 > en `localStorage` — es intencional: solo evita el brinco intra-sesión, no cachea entre
 > recargas completas.
 
+> ⚠️ **PITFALL frecuente (nos mordió en Proyectos, Bot IA y Usuarios):** sembrar el estado
+> NO basta si la función de carga hace `setLoading(true)` (o `setIsInitialLoading(true)`,
+> `setLoadingTemplates(true)`, etc.) al arrancar. Ese `useEffect` corre en cada montaje y
+> **re-enciende el skeleton/spinner encima de lo sembrado**, anulando el caché. SIEMPRE hay
+> que guardar ese seteo: `if (!cache) setLoading(true);`. Cuidado con loaders secundarios
+> (spinner de una sub-lista) y con verificar contra una sonda que sí distinga el estado real
+> (p.ej. `main.innerText` NO incluye el valor de un `<textarea>`, y hay pulsos decorativos
+> permanentes que no son skeletons — pueden dar falsos positivos/negativos).
+
 ## Dónde está aplicado
 
 | Sección | Componente | Qué se cachea |
@@ -60,6 +69,14 @@ data se refresca por debajo.
 | Settings · Ancho de banda | `src/components/RedisBandwidthSettings.jsx` (`bandwidthCache`) | gráfica de ancho de banda |
 | Vacantes | `src/components/VacanciesSection.jsx` (`vacanciesCache`, `categoriesCache`) | vacantes + categorías (+ espejo en mutaciones locales) |
 | Proyectos | `src/components/CRMProjectsSection.jsx` (`projectsCache`, `activeProjectCache`, `projectCandidatesCache`) | lista de proyectos, proyecto activo y candidatos por proyecto |
+| Bot IA | `src/components/BotIASection.jsx` (`botIACache`) | config del bot (settings + gptConfig + templates) |
+| Estadísticas de Ads | `src/components/AdsStatisticsSection.jsx` (`adsStatsCache`, `adsLabelsCache`) | stats de la vista por defecto (sin archivadas, rango `today`) + etiquetas |
+| Usuarios | `src/components/UsersSection.jsx` (`usersSectionCache`) | usuarios, roles, proyectos, tags, números de WA |
+| Bolsa (App) | `src/components/BolsaSection.jsx` (`bolsaJobsCache`, `bolsaEmpresasCache`) | vacantes y empresas (ambos tabs) |
+| Notificaciones | `src/components/NotificacionesSection.jsx` (`notifCache`) | stats + tokens de push |
+| Biblioteca | `src/components/MediaLibrarySection.jsx` (`mediaAssetsCache`) | assets multimedia |
+| Agent IA | `src/components/AgentIASection.jsx` (`agentIACache`) | config del agente (el panel en vivo/cola NO se cachea, es tiempo real) |
+| Envíos Masivos | `src/components/BulksSection.jsx` (`facetCache`, `audienceCache`) | facetas/preview + públicos (los cachés ya existían; se sembraron los flags de loading y se hizo silenciosa la revalidación de montaje) |
 
 ### Refinamientos extra en Candidatos (además del caché)
 
@@ -97,7 +114,19 @@ se ve un skeleton antes. La re-entrada se mide tras haber entrado una vez (cach�
 | Flows | 16 ms | No |
 | Settings | 22 ms | No |
 | Vacantes | 12 ms | No |
-| Proyectos | 19 ms | No |
+| Proyectos | instantáneo | No (tras corregir el pitfall del loader) |
+| Envíos Masivos | instantáneo (ratio 0.96) | No |
+| Estadísticas de Ads | instantáneo (ratio 1.0) | No |
+| Bolsa | instantáneo (ratio 1.0) | No |
+| Notificaciones | instantáneo (ratio 1.0) | No |
+| Usuarios | instantáneo (ratio 1.0) | No |
+| Bot IA | contenido principal instantáneo | No (queda spinner de la lista de plantillas — endpoint de Meta, carga aparte) |
+| Agent IA | config instantánea | El spinner que se ve es el panel EN VIVO / cola, que a propósito no se cachea |
+
+> Nota de método: medir "re-entrada" contando `main.innerText` puede engañar — el valor de
+> los `<textarea>` no cuenta y hay pulsos decorativos. La sonda fiable es contar el elemento
+> real del contenido (fila/tarjeta/textarea) y detectar el spinner/skeleton específico de esa
+> sección.
 
 ### Estabilidad de la lista de Chat Web bajo SSE (regresión clave)
 
@@ -126,10 +155,12 @@ Si en el futuro se agrega una sección que carga datos al montar y "brinca" al r
 1. Declarar el caché **fuera** del componente: `let miCache = null;`
 2. Sembrar los estados: `useState(() => miCache || defecto)` y `useState(() => !miCache)`
    para el `loading`.
-3. Escribir el caché al terminar el fetch: `miCache = data;`
-4. Si hay mutaciones locales, espejar: `useEffect(() => { if (miCache) miCache = data; }, [data]);`
-5. Verificar en producción con la medición frame-por-frame de arriba (recordar el caveat
-   del service worker).
+3. **Guardar TODO seteo de loading en el loader** (ver el pitfall de arriba):
+   `if (!miCache) setLoading(true);` — incluye loaders secundarios (spinners de sub-listas).
+4. Escribir el caché al terminar el fetch: `miCache = data;`
+5. Si hay mutaciones locales, espejar: `useEffect(() => { if (miCache) miCache = data; }, [data]);`
+6. Verificar en producción con una sonda que distinga el estado REAL (no `innerText` a secas)
+   y recordar el caveat del service worker.
 
 ## Commits
 
@@ -138,3 +169,8 @@ Si en el futuro se agrega una sección que carga datos al montar y "brinca" al r
 - `451bfa4e` — Chat Web
 - `c7cd4e59` — Flows + Settings (4 componentes)
 - `900fa232` — Vacantes + Proyectos
+- `029633a3` — doc inicial
+- `5fc7eafe` — Bot IA, Ads, Usuarios, Bolsa, Notificaciones, Biblioteca, Agent IA, Envíos Masivos
+- `0baef7e3` — fix guard loader Bot IA + Usuarios
+- `4c48895a` — fix spinner de plantillas Bot IA
+- `8a68528c` — fix guard loader Proyectos (el que veías brincar)
