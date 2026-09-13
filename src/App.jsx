@@ -46,7 +46,7 @@ const FlowsSection = lazyWithRetry(() => import('./components/FlowsSection'), 'F
 const VacanciesSection = lazyWithRetry(() => import('./components/VacanciesSection'), 'VacanciesSection');
 const BolsaSection = lazyWithRetry(() => import('./components/BolsaSection'), 'BolsaSection');
 const NotificacionesSection = lazyWithRetry(() => import('./components/NotificacionesSection'), 'NotificacionesSection');
-const UsersSection = lazyWithRetry(() => import('./components/UsersSection'), 'UsersSection');
+// UsersSection ya no se enruta aquí: se integró dentro de SettingsSection (Configuración).
 const BotIASection = lazyWithRetry(() => import('./components/BotIASection'), 'BotIASection');
 const MediaLibrarySection = lazyWithRetry(() => import('./components/MediaLibrarySection'), 'MediaLibrarySection');
 const CRMProjectsSection = lazyWithRetry(() => import('./components/CRMProjectsSection'), 'CRMProjectsSection');
@@ -161,7 +161,7 @@ function AppShell() {
     if (isViewer) { setActiveSection('chat'); return; }
     if (!user || user.role === 'SuperAdmin' || !rolePermissions) return;
     if (rolePermissions['candidates'] !== true) {
-      const fallbackKeys = ['chat', 'bot-ia', 'automations', 'vacancies', 'projects', 'users', 'settings'];
+      const fallbackKeys = ['chat', 'bot-ia', 'automations', 'vacancies', 'projects', 'settings'];
       const fallback = fallbackKeys.find(k => rolePermissions[k] === true);
       if (fallback) setActiveSection(fallback);
     }
@@ -285,7 +285,6 @@ function AppShell() {
                       : activeSection === 'vacancies' ? 'Vacantes'
                       : activeSection === 'bolsa' ? 'Bolsa de Empleo (App)'
                       : activeSection === 'history' ? 'Historial'
-                      : activeSection === 'users' ? 'Usuarios'
                       : activeSection === 'media-library' ? 'Biblioteca'
                       : activeSection === 'projects' ? 'Proyectos'
                       : activeSection === 'agent-ia' ? 'Agent IA'
@@ -339,7 +338,6 @@ function AppShell() {
                       : activeSection === 'flows' ? 'Automatiza acciones cuando un candidato completa su perfil'
                       : activeSection === 'vacancies' ? 'Gestión y publicación de vacantes'
                       : activeSection === 'history' ? 'Historial de conversaciones'
-                      : activeSection === 'users' ? 'Gestión de equipo y permisos'
                       : activeSection === 'media-library' ? 'Biblioteca de archivos y recursos del Bot'
                       : activeSection === 'projects' ? 'Kanban de reclutamiento'
                       : activeSection === 'agent-ia' ? 'Tu agente propio: chat, definición (AGENTS.md) y memoria (MEMORY.md)'
@@ -411,8 +409,6 @@ function AppShell() {
             <BolsaSection />
           ) : activeSection === 'notificaciones' ? (
             <NotificacionesSection />
-          ) : activeSection === 'users' ? (
-            <UsersSection />
           ) : activeSection === 'media-library' ? (
             <MediaLibrarySection />
           ) : activeSection === 'projects' ? (

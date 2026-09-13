@@ -3,6 +3,7 @@ import { Settings } from 'lucide-react';
 import GPTSettings from './GPTSettings';
 import WhatsAppSettings from './WhatsAppSettings';
 import RedisBandwidthSettings from './RedisBandwidthSettings';
+import UsersSection from './UsersSection';
 import { useToastContext } from '../contexts/ToastContext';
 
 /**
@@ -37,6 +38,11 @@ const SettingsSection = () => {
                     <RedisBandwidthSettings />
                 </div>
             </div>
+
+            {/* Equipo y accesos — antes vivía en su propia sección "Usuarios" del menú.
+                Se integró aquí abajo para consolidar toda la administración en Configuración.
+                UsersSection es autónoma (trae su propio header y pestañas Usuarios/Roles/Actividad). */}
+            <UsersSection />
         </div>
     );
 };

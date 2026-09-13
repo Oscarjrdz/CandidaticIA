@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuthContext } from '../contexts/AuthContext';
 import { useCandidatesSSE } from '../hooks/useCandidatesSSE';
 import {
-    Users, Settings, Bot, History, Briefcase, Send, User, LogOut, BarChart3,
+    Users, Settings, Bot, History, Briefcase, Send, LogOut, BarChart3,
     MessageSquare, Smartphone, Folder, FolderKanban, GripVertical, Wifi, X, ChevronLeft, ChevronRight, Bell, Sparkles, Workflow, PieChart
 } from 'lucide-react';
 import {
@@ -42,7 +42,7 @@ const DEFAULT_MENU_ITEMS = [
     { id: 'agent-ia', label: 'Agent IA', icon: Sparkles, position: 'top', superAdminOnly: true },
     // { id: 'media-library', label: 'Biblioteca Multimedia', icon: Folder, position: 'top' },
     { id: 'projects', label: 'Proyectos', icon: FolderKanban, position: 'top' },
-{ id: 'users', label: 'Usuarios', icon: User, position: 'top' },
+    // 'users' (Usuarios) se fusionó dentro de Settings (SettingsSection). Ya no es item de menú.
     { id: 'settings', label: 'Settings', icon: Settings, position: 'bottom' }
 ];
 
