@@ -268,14 +268,21 @@ const SortableProjectCard = ({ project, isActive, onSelect, onEdit, onClone, onD
     );
 };
 
+// Caché stale-while-revalidate a nivel de módulo → re-entrar a Proyectos pinta el tablero
+// al instante (lista de proyectos + proyecto activo + sus candidatos) y revalida en silencio.
+// Igual que Candidatos/Chat/Flows/Vacantes.
+let projectsCache = null;
+let activeProjectCache = null;
+const projectCandidatesCache = {}; // { [projectId]: candidates[] }
+
 const CRMProjectsSection = () => {
     const { showToast } = useToastContext();
     const { user } = useAuthContext();
     const { confirmModalJSX, showConfirm } = useConfirmModal();
-    const [projects, setProjects] = useState([]);
-    const [activeProject, setActiveProject] = useState(null);
-    const [candidates, setCandidates] = useState([]);
-    const [loading, setLoading] = useState(true);
+    const [projects, setProjects] = useState(() => projectsCache || []);
+    const [activeProject, setActiveProject] = useState(() => activeProjectCache);
+    const [candidates, setCandidates] = useState(() => (activeProjectCache && projectCandidatesCache[activeProjectCache.id]) || []);
+    const [loading, setLoading] = useState(() => !projectsCache);
     const [_loadingCands, setLoadingCands] = useState(false);
     const [showCreate, setShowCreate] = useState(false);
     const [projName, setProjName] = useState('');
@@ -347,6 +354,11 @@ const CRMProjectsSection = () => {
     useEffect(() => { fetchProjects(); }, []);
     useEffect(() => { if (activeProject) fetchCandidates(activeProject.id); }, [activeProject?.id]);
     useEffect(() => { activeProjectRef.current = activeProject; }, [activeProject]);
+
+    // Espeja al caché para la próxima re-entrada. projects: solo tras carga real (no vacío
+    // prematuro). activeProject: siempre (puede ser null legítimamente).
+    useEffect(() => { if (projectsCache) projectsCache = projects; }, [projects]);
+    useEffect(() => { activeProjectCache = activeProject; }, [activeProject]);
     useEffect(() => {
         fetch('/api/tags').then(r => r.json()).then(d => { if (d.success) setAvailableTags(d.tags || []); }).catch(() => {});
     }, []);
@@ -373,6 +385,7 @@ const CRMProjectsSection = () => {
             const data = await res.json();
             if (data.success) {
                 setProjects(data.data);
+                projectsCache = data.data; // semilla para la próxima re-entrada
                 const visible = filterProjectsForUser(data.data);
                 if (visible.length > 0 && !activeProject) setActiveProject(visible[0]);
             }
@@ -385,7 +398,7 @@ const CRMProjectsSection = () => {
         try {
             const res = await fetch(`/api/manual_projects?id=${id}&view=candidates`);
             const data = await res.json();
-            if (data.success) setCandidates(data.candidates);
+            if (data.success) { setCandidates(data.candidates); projectCandidatesCache[id] = data.candidates; }
         } catch (e) { console.error(e); }
         finally { setLoadingCands(false); }
     };
@@ -395,7 +408,10 @@ const CRMProjectsSection = () => {
         try {
             const res = await fetch(`/api/manual_projects?id=${projectId}&view=candidates`);
             const data = await res.json();
-            if (data.success && activeProjectRef.current?.id === projectId) setCandidates(data.candidates);
+            if (data.success && activeProjectRef.current?.id === projectId) {
+                setCandidates(data.candidates);
+                projectCandidatesCache[projectId] = data.candidates; // mantener el caché fresco
+            }
         } catch (e) { console.error(e); }
     };
 

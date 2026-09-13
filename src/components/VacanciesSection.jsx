@@ -240,10 +240,15 @@ const SortableCategoryPill = ({
 /**
  * Sección de Gestión de Vacantes
  */
+// Caché stale-while-revalidate a nivel de módulo → re-entrar a Vacantes pinta la lista
+// al instante (sin skeleton ni salto) y revalida en silencio. Igual que Candidatos/Chat/Flows.
+let vacanciesCache = null;
+let categoriesCache = null;
+
 const VacanciesSection = () => {
     const { showToast } = useToastContext();
-    const [vacancies, setVacancies] = useState([]);
-    const [loading, setLoading] = useState(true);
+    const [vacancies, setVacancies] = useState(() => vacanciesCache || []);
+    const [loading, setLoading] = useState(() => !vacanciesCache);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [_saving, _setSaving] = useState(false);
     const [editingId, setEditingId] = useState(null);
@@ -254,7 +259,7 @@ const VacanciesSection = () => {
         useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
         useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
     );
-    const [categories, setCategories] = useState([]);
+    const [categories, setCategories] = useState(() => categoriesCache || []);
     const [newCategoryName, setNewCategoryName] = useState('');
     const [addingCategory, setAddingCategory] = useState(false);
     const [editingCategoryId, setEditingCategoryId] = useState(null);
@@ -268,12 +273,18 @@ const VacanciesSection = () => {
         loadCategories();
     }, []);
 
+    // Espeja mutaciones locales (crear/editar/borrar/reordenar) al caché. Solo tras la
+    // primera carga real (cache !== null), para no sembrar listas vacías.
+    useEffect(() => { if (vacanciesCache) vacanciesCache = vacancies; }, [vacancies]);
+    useEffect(() => { if (categoriesCache) categoriesCache = categories; }, [categories]);
+
     const loadCategories = async () => {
         try {
             const res = await fetch('/api/categories');
             const data = await res.json();
             if (data.success) {
                 setCategories(data.data || []);
+                categoriesCache = data.data || []; // semilla para la próxima re-entrada
             }
         } catch (e) {
             console.error('Error loading categories:', e);
@@ -288,6 +299,7 @@ const VacanciesSection = () => {
             const data = await res.json();
             if (data.success) {
                 setVacancies(data.data);
+                vacanciesCache = data.data; // semilla para la próxima re-entrada
             }
         } catch (error) {
             console.error('Error loading vacancies:', error);
