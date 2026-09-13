@@ -2,10 +2,15 @@ import React, { useState, useEffect } from 'react';
 import { Sparkles, Save, Loader2, Key, CheckCircle, XCircle } from 'lucide-react';
 import Card from './ui/Card';
 
+// Caché stale-while-revalidate a nivel de módulo → re-entrar a Settings pinta la config
+// GPT al instante (sin flash de campos vacíos → llenos) y revalida en silencio.
+let gptConfigCache = null;
+let gptStatusCache = 'idle';
+
 const GPTSettings = ({ showToast }) => {
-    const [config, setConfig] = useState({ openaiApiKey: '', openaiModel: 'gpt-4o-mini' });
+    const [config, setConfig] = useState(() => gptConfigCache || { openaiApiKey: '', openaiModel: 'gpt-4o-mini' });
     const [saving, setSaving] = useState(false);
-    const [status, setStatus] = useState('idle');
+    const [status, setStatus] = useState(() => gptStatusCache);
 
     useEffect(() => {
         (async () => {
@@ -14,7 +19,10 @@ const GPTSettings = ({ showToast }) => {
                 const data = await res.json();
                 if (data.success && data.data) {
                     setConfig(data.data);
-                    if (data.data.openaiApiKey) validateKey(data.data.openaiApiKey);
+                    gptConfigCache = data.data; // semilla para la próxima re-entrada
+                    // Revalidar la llave solo si aún no tenemos un veredicto cacheado (evita
+                    // re-pegarle a /api/ai/validate en cada re-entrada).
+                    if (data.data.openaiApiKey && gptStatusCache === 'idle') validateKey(data.data.openaiApiKey);
                 }
             } catch (e) {}
         })();
@@ -30,9 +38,12 @@ const GPTSettings = ({ showToast }) => {
                 body: JSON.stringify({ apiKey: key })
             });
             const data = await res.json();
-            setStatus(data.success ? 'valid' : 'invalid');
+            const verdict = data.success ? 'valid' : 'invalid';
+            setStatus(verdict);
+            gptStatusCache = verdict; // cachea solo el veredicto terminal (no 'loading')
         } catch {
             setStatus('invalid');
+            gptStatusCache = 'invalid';
         }
     };
 
@@ -47,6 +58,7 @@ const GPTSettings = ({ showToast }) => {
             const data = await res.json();
             if (data.success) {
                 showToast('GPT guardado', 'success');
+                gptConfigCache = config; // el caché refleja la config PERSISTIDA
                 validateKey(config.openaiApiKey);
             } else {
                 showToast(data.error || 'Error', 'error');

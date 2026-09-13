@@ -5,19 +5,24 @@ import Card from './ui/Card';
 /**
  * WhatsAppSettings — Meta Cloud API Status + Usage Analytics
  */
+// Caché stale-while-revalidate a nivel de módulo → re-entrar a Settings pinta el estado
+// de WhatsApp al instante (sin skeleton ni salto) y revalida en silencio.
+let whatsappStatusCache = null;
+
 const WhatsAppSettings = ({ showToast }) => {
-    const [status, setStatus] = useState(null);
-    const [loading, setLoading] = useState(true);
+    const [status, setStatus] = useState(() => whatsappStatusCache);
+    const [loading, setLoading] = useState(() => !whatsappStatusCache);
     const [copied, setCopied] = useState(false);
 
     useEffect(() => {
         const checkConnection = async () => {
-            setLoading(true);
+            if (!whatsappStatusCache) setLoading(true); // sin skeleton si ya hay caché
             try {
                 const res = await fetch('/api/whatsapp/meta-status');
                 if (res.ok) {
                     const data = await res.json();
                     setStatus(data);
+                    whatsappStatusCache = data; // semilla para la próxima re-entrada
                 }
             } catch (e) {
                 setStatus({ connected: false, error: e.message });

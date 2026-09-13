@@ -10,24 +10,36 @@ const formatDate = (iso) => {
     return new Date(iso).toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 };
 
+// Caché stale-while-revalidate a nivel de módulo → re-entrar a Flows pinta la galería
+// al instante (sin skeleton ni salto) y revalida en silencio. Igual que en Candidatos/Chat.
+let flowsCache = null;
+
 const FlowsGallery = ({ onOpenFlow }) => {
     const { showToast } = useToastContext();
-    const [flows, setFlows] = useState([]);
-    const [loading, setLoading] = useState(true);
+    const [flows, setFlows] = useState(() => flowsCache || []);
+    const [loading, setLoading] = useState(() => !flowsCache);
     const [creating, setCreating] = useState(false);
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [nameDraft, setNameDraft] = useState('');
     const [rootTypeDraft, setRootTypeDraft] = useState('live');
 
     const load = async () => {
-        setLoading(true);
+        if (!flowsCache) setLoading(true); // sin skeleton si ya hay caché sembrado
         const res = await getFlows();
-        if (res.success) setFlows(res.flows.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt)));
+        if (res.success) {
+            const sorted = res.flows.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+            setFlows(sorted);
+            flowsCache = sorted; // semilla para la próxima re-entrada
+        }
         else showToast('Error cargando flujos', 'error');
         setLoading(false);
     };
 
     useEffect(() => { load(); }, []);
+
+    // Mantener el caché en sync con mutaciones locales (activar/borrar/crear). Solo espeja
+    // una vez que ya hubo carga real (flowsCache !== null), para no sembrar la lista vacía.
+    useEffect(() => { if (flowsCache) flowsCache = flows; }, [flows]);
 
     const openCreateModal = () => {
         setNameDraft('');

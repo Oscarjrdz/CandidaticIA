@@ -40,9 +40,13 @@ function currentMonthDayKeys() {
     });
 }
 
+// Caché stale-while-revalidate a nivel de módulo → re-entrar a Settings pinta la gráfica
+// de ancho de banda al instante (sin skeleton ni salto) y revalida en silencio.
+let bandwidthCache = null;
+
 const RedisBandwidthSettings = () => {
-    const [data, setData] = useState(null);
-    const [loading, setLoading] = useState(true);
+    const [data, setData] = useState(() => bandwidthCache);
+    const [loading, setLoading] = useState(() => !bandwidthCache);
     const [error, setError] = useState(false);
 
     useEffect(() => {
@@ -50,7 +54,7 @@ const RedisBandwidthSettings = () => {
             try {
                 const res = await fetch('/api/system/bandwidth?days=31');
                 const json = await res.json();
-                if (json.success) setData(json);
+                if (json.success) { setData(json); bandwidthCache = json; } // semilla para la próxima re-entrada
                 else setError(true);
             } catch {
                 setError(true);
