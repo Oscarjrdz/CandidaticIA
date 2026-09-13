@@ -379,7 +379,7 @@ const CRMProjectsSection = () => {
     };
 
     const fetchProjects = async () => {
-        setLoading(true);
+        if (!projectsCache) setLoading(true); // sin spinner de la lista si ya hay caché sembrado
         try {
             const res = await fetch('/api/manual_projects');
             const data = await res.json();
