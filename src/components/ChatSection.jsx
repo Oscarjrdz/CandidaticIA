@@ -5722,8 +5722,9 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
 
                                 if (iconId === 'vacancies') {
                                     return (
-                                        <div key={iconId} className="relative z-50" style={{ order: iconOrder }} {...dragProps}>
-                                            <button 
+                                        <div key={iconId} className="relative z-50" style={{ order: iconOrder }}>
+                                            <button
+                                                {...dragProps}
                                                 onClick={(e) => { e.stopPropagation(); setShowDropdown(showDropdown === 'vacancies' ? null : 'vacancies'); }}
                                                 className={`${baseClass} hover:bg-black/5 dark:hover:bg-white/5 ${showDropdown === 'vacancies' ? 'bg-black/5 dark:bg-white/5' : ''}`} title="Inyectar información de Vacante">
                                                 <Briefcase className="w-5 h-5 text-gray-500 hover:text-blue-500 transition-colors" />
@@ -5792,8 +5793,9 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
 
                                 if (iconId === 'tags') {
                                     return (
-                                        <div key={iconId} className="relative z-50" style={{ order: iconOrder }} {...dragProps}>
-                                            <button 
+                                        <div key={iconId} className="relative z-50" style={{ order: iconOrder }}>
+                                            <button
+                                                {...dragProps}
                                                 onClick={(e) => { e.stopPropagation(); if (showDropdown === 'tags') { setShowDropdown(null); setTagSearch(''); } else { setShowDropdown('tags'); } }}
                                                 className={`${baseClass} hover:bg-black/5 dark:hover:bg-white/5 ${showDropdown === 'tags' ? 'bg-black/5 dark:bg-white/5' : ''}`}>
                                                 <Tag className="w-5 h-5" />
@@ -5992,20 +5994,22 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                                 if (iconId === 'asistencia') {
                                     const active = selectedChat?.asistencia === true;
                                     return (
-                                        <div key={iconId} className="relative z-50" style={{ order: iconOrder }} {...dragProps}>
-                                            <button
-                                                onClick={(e) => { e.stopPropagation(); handleMarkAsistencia(); }}
-                                                title={active ? 'Asistencia marcada (llegó a la cita) — clic para quitar' : 'Marcar asistencia (llegó a la cita)'}
-                                                className={`${baseClass} hover:bg-black/5 dark:hover:bg-white/5 ${active ? 'bg-blue-50 dark:bg-blue-900/20 ring-1 ring-blue-500/40' : ''}`}>
-                                                {/* Imán de Candidatic (mismo del favicon). A todo color = asistencia activa; tenue = inactiva. */}
-                                                <img
-                                                    src="/favicon-candidatic-32.png"
-                                                    alt="Asistencia"
-                                                    draggable={false}
-                                                    className={`w-5 h-5 object-contain transition-all ${active ? '' : 'opacity-40 grayscale'}`}
-                                                />
-                                            </button>
-                                        </div>
+                                        <button
+                                            key={iconId}
+                                            {...dragProps}
+                                            style={{ order: iconOrder }}
+                                            onClick={() => handleMarkAsistencia()}
+                                            title={active ? 'Asistencia marcada (llegó a la cita) — clic para quitar' : 'Marcar asistencia (llegó a la cita)'}
+                                            className={`${baseClass} ${active ? 'bg-blue-50 dark:bg-blue-500/20 ring-1 ring-blue-500/40' : 'hover:bg-black/5 dark:hover:bg-white/5'}`}
+                                        >
+                                            {/* Imán de Candidatic (mismo del favicon). A todo color = asistencia activa; tenue = inactiva. */}
+                                            <img
+                                                src="/favicon-candidatic-32.png"
+                                                alt="Asistencia"
+                                                draggable={false}
+                                                className={`w-5 h-5 object-contain transition-all pointer-events-none ${active ? '' : 'opacity-40 grayscale'}`}
+                                            />
+                                        </button>
                                     );
                                 }
 
