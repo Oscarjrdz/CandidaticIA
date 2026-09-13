@@ -733,6 +733,19 @@ const ChatListFooter = ({ context }) => context?.loadingMore
     : null;
 const CHAT_LIST_VIRTUOSO_COMPONENTS = { Footer: ChatListFooter };
 
+// ═══════════════════════════════════════════════════════════════════════════════════
+// ANTI-BRINCO AL RE-ENTRAR A CHAT WEB (mismo patrón que CandidatesSection) —
+// caché stale-while-revalidate a nivel de MÓDULO. La sección se DESMONTA al cambiar de
+// tab (App.jsx la renderiza condicionalmente), así que antes re-arrancaba con
+// loadingChats=true → skeleton del panel izquierdo → llegaba la lista → SALTABA.
+// Ahora la lista de chats de la VISTA POR DEFECTO (filtro 'unread', sin tag/búsqueda/
+// filtros locales) se guarda aquí y sobrevive al remontaje: al re-entrar el panel
+// izquierdo pinta AL INSTANTE y loadCandidates() revalida en silencio por debajo.
+// Se cachea SOLO la vista por defecto para que la lista sembrada siempre cuadre con la
+// UI (que al montar también arranca en 'unread'). Alcance deliberadamente acotado a la
+// LISTA: no toca mensajes ni el chat abierto (la parte con freeze/anclaje/dedup frágil).
+const chatSectionCache = { candidates: null, candidatesTotal: 0, nextOffset: 0, hasMore: false };
+
 export default function ChatSection({ rolePermissions, onlineUsers = [], unreadCountHint = null, onUnreadCountChange, _agentMode = false }) {
     const { showToast } = useToastContext();
     const { user, setUser } = useAuthContext();
@@ -768,7 +781,9 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         try { sessionStorage.setItem('candidatic_global_stats', JSON.stringify(next)); } catch {}
     }, [globalStats]);
 
-    const [candidates, setCandidates] = useState([]);
+    // Sembrado desde el caché de módulo → re-entrar pinta el panel izquierdo al instante,
+    // sin flash de skeleton ni salto (ver chatSectionCache arriba). Revalida al montar.
+    const [candidates, setCandidates] = useState(() => chatSectionCache.candidates || []);
     const [globalUnreadCounts, setGlobalUnreadCounts] = useState(() => readStoredUnreadCounts(unreadCountHint));
     const [globalFilterCounts, setGlobalFilterCounts] = useState(() => {
         try {
@@ -824,7 +839,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
     const [messages, setMessages] = useState([]);
     const messageInputRef = useRef(null);
     const [_sending, setSending] = useState(false);
-    const [loadingChats, setLoadingChats] = useState(true);
+    const [loadingChats, setLoadingChats] = useState(() => !chatSectionCache.candidates); // sin skeleton si hay caché
     const [availableTags, setAvailableTags] = useState([]);
     const [manualProjects, setManualProjects] = useState([]);
     const [newTagInput, setNewTagInput] = useState("");
@@ -1190,9 +1205,9 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
     const selectedTagRef = useRef(null);
     const selectedTagValues = useMemo(() => getSelectedTagValues(selectedTag), [selectedTag]);
     const selectedTagValueSet = useMemo(() => new Set(selectedTagValues), [selectedTagValues]);
-    const [candidatesTotal, setCandidatesTotal] = useState(0);
+    const [candidatesTotal, setCandidatesTotal] = useState(() => chatSectionCache.candidatesTotal || 0);
     const [untaggedTotal, setUntaggedTotal] = useState(0);
-    const [hasMore, setHasMore] = useState(false);
+    const [hasMore, setHasMore] = useState(() => chatSectionCache.hasMore || false);
     const [loadingMore, setLoadingMore] = useState(false);
     const [visibleChatLimit, setVisibleChatLimit] = useState(CHAT_LIST_PAGE_SIZE);
     const loadingMoreRef = useRef(false);
@@ -1209,8 +1224,8 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
     const selectedChatRef = useRef(null);
     const pendingChatIdRef = useRef(null);
     const searchRef = useRef("");
-    const candidatesRef = useRef([]);
-    const nextCandidatesOffsetRef = useRef(0);
+    const candidatesRef = useRef(chatSectionCache.candidates || []);
+    const nextCandidatesOffsetRef = useRef(chatSectionCache.nextOffset || 0);
     const prevSearchRef = useRef(null);
     const sseWasConnectedOnceRef = useRef(false);
     const [chatListSortHold, setChatListSortHold] = useState({ candidateId: null, sortTime: 0, until: 0 });
@@ -2195,9 +2210,21 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                 setVisibleChatLimit(CHAT_LIST_PAGE_SIZE);
                 const isPaginated = !hasLocalFilters && !isFilteredTagMode;
                 const serverHasMore = result.hasMore ?? result.pagination?.hasMore;
-                setHasMore(isPaginated && (serverHasMore ?? fetchedCandidates.length === limit));
+                const nextHasMore = isPaginated && (serverHasMore ?? fetchedCandidates.length === limit);
+                setHasMore(nextHasMore);
                 if (fetchedCandidates.length > 0) {
                     setSelectedChat(current => { if (!current) return fetchedCandidates[0]; return current; });
+                }
+                // Cachear SOLO la vista por defecto (filtro 'unread' sin tag/búsqueda/filtros
+                // locales) → semilla para pintar el panel izquierdo al instante en la próxima
+                // re-entrada. Cualquier vista filtrada NO se cachea (la lista sembrada debe
+                // cuadrar con la UI, que al montar arranca siempre en 'unread').
+                const isDefaultView = af === 'unread' && !fv && !tagParam && !searchParam && !hasLocalFilters;
+                if (isDefaultView) {
+                    chatSectionCache.candidates = fetchedCandidates;
+                    chatSectionCache.candidatesTotal = result.total ?? fetchedCandidates.length;
+                    chatSectionCache.nextOffset = result.pagination?.nextOffset ?? fetchedCandidates.length;
+                    chatSectionCache.hasMore = nextHasMore;
                 }
             }
         } catch (e) {
