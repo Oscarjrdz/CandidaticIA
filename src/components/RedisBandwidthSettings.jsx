@@ -1,6 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Activity, ExternalLink } from 'lucide-react';
 import Card from './ui/Card';
+
+// Altura ya medida del contenido (persistida) → se reserva como min-height desde el
+// primer render (skeleton incluido) para que la tarjeta nazca con su alto real y NO
+// haya salto al entrar en frío ni al salir/re-entrar. Se re-mide y actualiza tras cargar.
+const BW_HEIGHT_KEY = 'bw_card_content_h_v1';
+const BW_HEIGHT_DEFAULT = 470; // aprox medido en prod; se auto-corrige tras el primer render real
+let bandwidthContentH = (() => {
+    try { return Number(localStorage.getItem(BW_HEIGHT_KEY)) || BW_HEIGHT_DEFAULT; } catch { return BW_HEIGHT_DEFAULT; }
+})();
 
 function formatBytes(bytes) {
     const n = Number(bytes) || 0;
@@ -48,6 +57,7 @@ const RedisBandwidthSettings = () => {
     const [data, setData] = useState(() => bandwidthCache);
     const [loading, setLoading] = useState(() => !bandwidthCache);
     const [error, setError] = useState(false);
+    const contentRef = useRef(null);
 
     useEffect(() => {
         (async () => {
@@ -63,6 +73,17 @@ const RedisBandwidthSettings = () => {
             }
         })();
     }, []);
+
+    // Tras pintar el contenido real, mide su alto y lo persiste para reservarlo la
+    // próxima vez (así el min-height se auto-ajusta al alto real de esta cuenta/día).
+    useEffect(() => {
+        if (loading || error || !contentRef.current) return;
+        const h = contentRef.current.offsetHeight;
+        if (h > 0 && Math.abs(h - bandwidthContentH) > 4) {
+            bandwidthContentH = h;
+            try { localStorage.setItem(BW_HEIGHT_KEY, String(h)); } catch { /* storage lleno/bloqueado */ }
+        }
+    }, [loading, error, data]);
 
     const today = data?.today;
     const hasHistory = data?.days?.some(d => d.samples > 0);
@@ -83,7 +104,11 @@ const RedisBandwidthSettings = () => {
 
     return (
         <Card title="Ancho de Banda" icon={Activity}>
-            <div className="space-y-3 pb-1">
+            <div
+                ref={contentRef}
+                className="space-y-3 pb-1"
+                style={bandwidthContentH ? { minHeight: `${bandwidthContentH}px` } : undefined}
+            >
                 {loading ? (
                     /* Skeleton que reserva ~el alto final (3 tiles + barra de plan + gráfica +
                        desglose) para que la columna nazca con su altura y NO salte al cargar

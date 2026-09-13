@@ -1,6 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Smartphone, Wifi, Check, Copy, Shield, Zap, TrendingUp, DollarSign, MessageCircle, BarChart3 } from 'lucide-react';
 import Card from './ui/Card';
+
+// Altura ya medida del contenido (persistida) → se reserva como min-height desde el
+// primer render para que la tarjeta nazca con su alto real y NO salte al entrar en frío
+// ni al salir/re-entrar. Se re-mide y actualiza tras cargar (nº de números + consumo).
+const WA_HEIGHT_KEY = 'wa_card_content_h_v1';
+const WA_HEIGHT_DEFAULT = 720; // aprox medido en prod; se auto-corrige tras el primer render real
+let whatsappContentH = (() => {
+    try { return Number(localStorage.getItem(WA_HEIGHT_KEY)) || WA_HEIGHT_DEFAULT; } catch { return WA_HEIGHT_DEFAULT; }
+})();
 
 /**
  * WhatsAppSettings — Meta Cloud API Status + Usage Analytics
@@ -13,6 +22,7 @@ const WhatsAppSettings = ({ showToast }) => {
     const [status, setStatus] = useState(() => whatsappStatusCache);
     const [loading, setLoading] = useState(() => !whatsappStatusCache);
     const [copied, setCopied] = useState(false);
+    const contentRef = useRef(null);
 
     useEffect(() => {
         const checkConnection = async () => {
@@ -32,6 +42,17 @@ const WhatsAppSettings = ({ showToast }) => {
         };
         checkConnection();
     }, []);
+
+    // Tras pintar el contenido real, mide su alto y lo persiste para reservarlo la
+    // próxima vez → sin salto al entrar en frío ni al re-entrar.
+    useEffect(() => {
+        if (loading || !contentRef.current) return;
+        const h = contentRef.current.offsetHeight;
+        if (h > 0 && Math.abs(h - whatsappContentH) > 4) {
+            whatsappContentH = h;
+            try { localStorage.setItem(WA_HEIGHT_KEY, String(h)); } catch { /* storage lleno/bloqueado */ }
+        }
+    }, [loading, status]);
 
     const handleCopy = () => {
         navigator.clipboard.writeText(`${window.location.origin}/api/whatsapp/webhook`);
@@ -140,7 +161,11 @@ const WhatsAppSettings = ({ showToast }) => {
                 </span>
             }
         >
-            <div className="space-y-4">
+            <div
+                ref={contentRef}
+                className="space-y-4"
+                style={whatsappContentH ? { minHeight: `${whatsappContentH}px` } : undefined}
+            >
                 {/* Connection Status — una tarjeta por número conectado al WABA */}
                 {loading
                     ? numberCard({ loading: true, key: 'loading' })
