@@ -195,6 +195,13 @@ const CandidateRow = React.memo(({ candidate, columnOrder, fieldsMap, magicLoadi
     );
 }, areCandidatePropsEqual);
 
+// 🟢 Caché stale-while-revalidate a nivel de MÓDULO (sobrevive al desmontaje/remontaje
+// de la sección al cambiar de tab). Al re-entrar, la sección pinta AL INSTANTE la última
+// data conocida —sin skeleton, sin reflow, sin "brinco"— y revalida en silencio por debajo.
+// La primera carga de la sesión sí muestra skeleton (una sola vez); todas las re-entradas
+// son instantáneas. Patrón Amazon/Linear.
+const sectionCache = { candidates: null, stats: null, totalItems: 0, fields: null, daily: null };
+
 const CandidatesSection = () => {
     const { showToast } = useToastContext();
     const { user, rolePermissions } = useAuthContext();
@@ -203,15 +210,17 @@ const CandidatesSection = () => {
         !rolePermissions || Object.keys(rolePermissions).length === 0 ||
         rolePermissions.view_incomplete_candidates === true;
     const { confirmModalJSX, showConfirm } = useConfirmModal();
-    const [candidates, setCandidates] = useState([]);
-    const [stats, setStats] = useState(null); // Live dashboard stats
+    // Estados sembrados desde el caché de módulo → re-entrar a la sección pinta al instante
+    // lo último conocido, sin flash de skeleton ni salto de layout (ver sectionCache arriba).
+    const [candidates, setCandidates] = useState(() => sectionCache.candidates || []);
+    const [stats, setStats] = useState(() => sectionCache.stats); // Live dashboard stats
     const [loading, setLoading] = useState(false);
-    const [isInitialLoading, setIsInitialLoading] = useState(true); // NEW: Prevent ghosting
+    const [isInitialLoading, setIsInitialLoading] = useState(() => !sectionCache.candidates); // NEW: Prevent ghosting
     const [candidateToDelete, setCandidateToDelete] = useState(null);
     const [isDeleting, setIsDeleting] = useState(false);
     // Dynamic Fields & Column Order State
-    const [fields, setFields] = useState([]);
-    const [fieldsLoaded, setFieldsLoaded] = useState(false);
+    const [fields, setFields] = useState(() => sectionCache.fields || []);
+    const [fieldsLoaded, setFieldsLoaded] = useState(() => !!sectionCache.fields);
     const fieldsMap = React.useMemo(() => fields.reduce((acc, f) => ({ ...acc, [f.value]: f }), {}), [fields]);
     const [columnOrder, setColumnOrder] = useState(() => {
         try {
@@ -283,7 +292,12 @@ const CandidatesSection = () => {
         d.setUTCDate(d.getUTCDate() - n);
         return d.toLocaleDateString('sv-SE', { timeZone: 'America/Monterrey' });
     };
-    const [dailyStats, setDailyStats] = useState(null);
+    // Semilla desde caché SOLO si el rango cacheado coincide con el rango inicial por defecto
+    // (evita pintar barras de un rango distinto al re-entrar). Refresca en silencio al montar.
+    const [dailyStats, setDailyStats] = useState(() =>
+        (sectionCache.daily?.from === mtyDaysAgo(6) && sectionCache.daily?.to === mtyToday)
+            ? sectionCache.daily.data : null
+    );
     const [dailyFrom, setDailyFrom] = useState(() => mtyDaysAgo(6));
     const [dailyTo, setDailyTo] = useState(mtyToday);
     const [dailyLoading, setDailyLoading] = useState(false);
@@ -306,7 +320,11 @@ const CandidatesSection = () => {
         setDailyLoading(true);
         try {
             const res = await fetch(`/api/candidate-daily-stats?from=${from}&to=${to}`);
-            if (res.ok) setDailyStats(await res.json());
+            if (res.ok) {
+                const data = await res.json();
+                setDailyStats(data);
+                sectionCache.daily = { from, to, data }; // semilla para la próxima re-entrada
+            }
         } catch {}
         finally { setDailyLoading(false); }
     };
@@ -360,7 +378,12 @@ const CandidatesSection = () => {
                     return { ...d, count: d.count + 1 };
                 });
                 if (!matched) return prev;
-                return { ...prev, days, total: (Number(prev.total) || 0) + 1 };
+                const next = { ...prev, days, total: (Number(prev.total) || 0) + 1 };
+                // Mantener el caché en sync con el incremento en vivo (mismo rango visible)
+                if (sectionCache.daily?.from === dailyFrom && sectionCache.daily?.to === dailyTo) {
+                    sectionCache.daily = { from: dailyFrom, to: dailyTo, data: next };
+                }
+                return next;
             });
         };
         window.addEventListener('sse:candidate:new', handler);
@@ -369,7 +392,7 @@ const CandidatesSection = () => {
 
     // Pagination State
     const [currentPage, setCurrentPage] = useState(1);
-    const [totalItems, setTotalItems] = useState(0);
+    const [totalItems, setTotalItems] = useState(() => sectionCache.totalItems || 0);
     const LIMIT = 100; // Increased to 100 to show more candidates at once
 
     // Estado para el chat
@@ -566,10 +589,15 @@ const CandidatesSection = () => {
     // ✅ META AUDIT: Live Stats — sync BOTH stats object AND totalItems from SSE
     useEffect(() => {
         if (globalStats) {
-            setStats(prev => ({ ...prev, ...globalStats }));
+            setStats(prev => {
+                const merged = { ...prev, ...globalStats };
+                sectionCache.stats = merged;
+                return merged;
+            });
             // Keep the big counter in sync with SSE (complete + pending = total)
             if (globalStats.total !== undefined) {
                 setTotalItems(globalStats.total);
+                sectionCache.totalItems = globalStats.total;
             }
         }
     }, [globalStats]);
@@ -590,6 +618,7 @@ const CandidatesSection = () => {
                 if (result.success) {
                     const dynamicFields = result.fields.filter(f => f.value !== 'foto');
                     setFields(dynamicFields);
+                    sectionCache.fields = dynamicFields; // semilla para la próxima re-entrada
 
                     setColumnOrder(prevOrder => {
                         const existingOrderIds = new Set(prevOrder);
@@ -613,11 +642,20 @@ const CandidatesSection = () => {
             if (!aiFilteredCandidatesRef.current) {
                 if (newCandidates !== null) {
                     setCandidates(newCandidates);
-                    setTotalItems(prev => newStats?.total || newStats?.candidates || prev);
+                    setTotalItems(prev => {
+                        const next = newStats?.total || newStats?.candidates || prev;
+                        sectionCache.totalItems = next;
+                        return next;
+                    });
                     setIsInitialLoading(false);
                     setLoading(false);
+                    sectionCache.candidates = newCandidates; // semilla para la próxima re-entrada
                 }
-                if (newStats) setStats(prev => ({ ...prev, ...newStats }));
+                if (newStats) setStats(prev => {
+                    const merged = { ...prev, ...newStats };
+                    sectionCache.stats = merged;
+                    return merged;
+                });
             }
         });
 
@@ -875,12 +913,12 @@ const CandidatesSection = () => {
                                 <div className="flex flex-col relative z-10">
                                     <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-1">Total Candidatos</span>
                                     <div className="flex items-center flex-wrap gap-2">
-                                        <h3 className="text-2xl font-bold text-gray-900 dark:text-white leading-none">{Number((stats?.complete || 0) + (stats?.pending || 0) || totalItems).toLocaleString()}</h3>
+                                        <h3 className="text-2xl font-bold text-gray-900 dark:text-white leading-none tabular-nums">{Number((stats?.complete || 0) + (stats?.pending || 0) || totalItems).toLocaleString()}</h3>
                                         <div className="flex items-center gap-1.5 flex-wrap">
-                                            <span className="text-[10px] text-emerald-500 font-bold flex items-center bg-emerald-50 dark:bg-emerald-900/20 px-2 py-px rounded-full border border-emerald-100 dark:border-emerald-800/50">
+                                            <span className="text-[10px] text-emerald-500 font-bold flex items-center bg-emerald-50 dark:bg-emerald-900/20 px-2 py-px rounded-full border border-emerald-100 dark:border-emerald-800/50 tabular-nums">
                                                 <CheckCircle className="w-3 h-3 mr-1" /> {Number(stats?.complete || 0).toLocaleString()} Completos
                                             </span>
-                                            <span className="text-[10px] text-amber-500 font-bold flex items-center bg-amber-50 dark:bg-amber-900/20 px-2 py-px rounded-full border border-amber-100 dark:border-amber-800/50">
+                                            <span className="text-[10px] text-amber-500 font-bold flex items-center bg-amber-50 dark:bg-amber-900/20 px-2 py-px rounded-full border border-amber-100 dark:border-amber-800/50 tabular-nums">
                                                 <Clock className="w-3 h-3 mr-1" /> {Number(stats?.pending || 0).toLocaleString()} Incompletos
                                             </span>
                                             <span className="text-[10px] text-blue-500 font-bold flex items-center bg-blue-50 dark:bg-blue-900/20 px-2 py-px rounded-full border border-blue-100 dark:border-blue-800/50">
@@ -900,7 +938,7 @@ const CandidatesSection = () => {
                                 <div className="flex flex-col relative z-10">
                                     <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-1">CTR de Completos</span>
                                     <div className="flex items-baseline gap-2 flex-wrap">
-                                        <h3 className={`text-2xl font-bold leading-none ${completionCTR.pct >= 70 ? 'text-emerald-500' : completionCTR.pct >= 40 ? 'text-amber-500' : 'text-red-500'}`}>
+                                        <h3 className={`text-2xl font-bold leading-none tabular-nums ${completionCTR.pct >= 70 ? 'text-emerald-500' : completionCTR.pct >= 40 ? 'text-amber-500' : 'text-red-500'}`}>
                                             {completionCTR.pct}%
                                         </h3>
                                         <span className="text-[10px] text-gray-400 dark:text-gray-500 font-medium">
@@ -926,7 +964,7 @@ const CandidatesSection = () => {
                                 <div className="flex flex-col relative z-10">
                                     <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-1">Mensajes Entrantes</span>
                                     <div className="flex items-baseline space-x-2">
-                                        <h3 className="text-2xl font-bold text-gray-900 dark:text-white">
+                                        <h3 className="text-2xl font-bold text-gray-900 dark:text-white tabular-nums">
                                             {Number(stats?.incoming || 0).toLocaleString()}
                                         </h3>
                                         <div className="flex items-center space-x-1">
@@ -948,7 +986,7 @@ const CandidatesSection = () => {
                                 <div className="flex flex-col relative z-10">
                                     <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-1">Mensajes Enviados</span>
                                     <div className="flex items-baseline space-x-2">
-                                        <h3 className="text-2xl font-bold text-gray-900 dark:text-white">
+                                        <h3 className="text-2xl font-bold text-gray-900 dark:text-white tabular-nums">
                                             {Number(stats?.outgoing || 0).toLocaleString()}
                                         </h3>
                                         <span className="text-[10px] text-purple-500 font-medium flex items-center bg-purple-50 dark:bg-purple-900/20 px-1.5 py-px rounded-full">
@@ -965,7 +1003,7 @@ const CandidatesSection = () => {
                                     <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">Capturas por día</span>
                                     <div className="flex items-center gap-1.5">
                                         {dailyStats && (
-                                            <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 px-1.5 py-px rounded-full whitespace-nowrap">
+                                            <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 px-1.5 py-px rounded-full whitespace-nowrap tabular-nums">
                                                 {dailyStats.total.toLocaleString()} · {dailyStats.days.length === 7 ? 'últ. 7 días' : `${dailyStats.days.length} días`}
                                             </span>
                                         )}
@@ -1047,7 +1085,7 @@ const CandidatesSection = () => {
                                                 </div>
                                                 <div className="w-full flex flex-col justify-end" style={{ height: '100%' }}>
                                                     <div
-                                                        className="w-full rounded-t-sm bg-indigo-400 dark:bg-indigo-500 group-hover/bar:bg-indigo-600 transition-colors"
+                                                        className="w-full rounded-t-sm bg-indigo-400 dark:bg-indigo-500 group-hover/bar:bg-indigo-600 transition-[height,background-color] duration-500 ease-out"
                                                         style={{ height: `${Math.max((day.count / max) * 100, day.count > 0 ? 3 : 0)}%` }}
                                                     />
                                                 </div>
