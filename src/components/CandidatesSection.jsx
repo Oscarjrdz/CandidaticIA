@@ -195,11 +195,29 @@ const CandidateRow = React.memo(({ candidate, columnOrder, fieldsMap, magicLoadi
     );
 }, areCandidatePropsEqual);
 
-// 🟢 Caché stale-while-revalidate a nivel de MÓDULO (sobrevive al desmontaje/remontaje
-// de la sección al cambiar de tab). Al re-entrar, la sección pinta AL INSTANTE la última
-// data conocida —sin skeleton, sin reflow, sin "brinco"— y revalida en silencio por debajo.
-// La primera carga de la sesión sí muestra skeleton (una sola vez); todas las re-entradas
-// son instantáneas. Patrón Amazon/Linear.
+// ═══════════════════════════════════════════════════════════════════════════════════
+// ANTI-BRINCO DE LA SECCIÓN CANDIDATOS (implementado 2026-09-12) — 3 cambios:
+//
+//   1) Re-entrada instantánea (caché stale-while-revalidate, este `sectionCache`).
+//      La sección se DESMONTA por completo al cambiar de tab (App.jsx la renderiza
+//      condicionalmente), así que antes re-arrancaba de cero: skeleton → llega data →
+//      el layout se re-armaba y SALTABA. Ahora la última data conocida (candidatos,
+//      stats, fields, gráfica diaria) vive en este objeto a nivel de módulo, que
+//      sobrevive al remontaje. Los estados se SIEMBRAN de aquí (useState(() => ...)),
+//      así que al re-entrar se pinta AL INSTANTE lo último y se revalida en silencio.
+//      La 1ª carga de la sesión sí muestra skeleton (una vez); las re-entradas no.
+//
+//   2) Refresco de métricas sin tironeo (`tabular-nums`). Los números vivos (Total,
+//      Completos/Incompletos, CTR, Entrantes, Enviados, total diario) usan dígitos de
+//      ancho fijo, así que al actualizarse por SSE cambian EN SU LUGAR sin empujar los
+//      badges de al lado.
+//
+//   3) Barras de "Capturas por día" que animan su altura (transition-[height]) en vez
+//      de saltar de golpe cuando entra un candidato nuevo por SSE; además se cachean
+//      (con su rango) para no hacer loader→barras al re-entrar.
+//
+// Patrón Amazon/Linear: instant paint + silent revalidation.
+// ═══════════════════════════════════════════════════════════════════════════════════
 const sectionCache = { candidates: null, stats: null, totalItems: 0, fields: null, daily: null };
 
 const CandidatesSection = () => {
