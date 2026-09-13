@@ -86,7 +86,7 @@ const BotIASection = () => {
         };
 
         const loadTemplates = async () => {
-            setLoadingTemplates(true);
+            if (!botIACache?.templates) setLoadingTemplates(true); // sin spinner si ya hay plantillas cacheadas
             try {
                 const res = await fetch('/api/whatsapp/templates');
                 if (res.ok) {
