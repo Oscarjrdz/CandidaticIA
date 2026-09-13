@@ -89,15 +89,20 @@ const SortableColumn = ({ id, isLast, children }) => {
     );
 };
 
+// Caché stale-while-revalidate a nivel de módulo → re-entrar pinta la config del agente al
+// instante (sin skeleton ni salto) y revalida en silencio. Ver docs/anti-brinco-secciones.md.
+// (Solo la config; el panel en vivo/cola NO se cachea, es tiempo real.)
+let agentIACache = null; // { agentsMd, memoryMd, pendingMemory, skills, hasApiKey, model }
+
 const AgentIASection = () => {
     const { user, setUser } = useAuthContext();
-    const [loading, setLoading] = useState(true);
-    const [agentsMd, setAgentsMd] = useState('');
-    const [memoryMd, setMemoryMd] = useState('');
-    const [pendingMemory, setPendingMemory] = useState([]);
-    const [skills, setSkills] = useState([]);
-    const [hasApiKey, setHasApiKey] = useState(false);
-    const [model, setModel] = useState('claude-opus-4-8');
+    const [loading, setLoading] = useState(() => !agentIACache);
+    const [agentsMd, setAgentsMd] = useState(() => agentIACache?.agentsMd || '');
+    const [memoryMd, setMemoryMd] = useState(() => agentIACache?.memoryMd || '');
+    const [pendingMemory, setPendingMemory] = useState(() => agentIACache?.pendingMemory || []);
+    const [skills, setSkills] = useState(() => agentIACache?.skills || []);
+    const [hasApiKey, setHasApiKey] = useState(() => agentIACache?.hasApiKey || false);
+    const [model, setModel] = useState(() => agentIACache?.model || 'claude-opus-4-8');
     const [liveReload, setLiveReload] = useState(0); // bump → LiveAgentPanel refetch (el chat prendió/apagó)
     const [selectedLiveCandidate, setSelectedLiveCandidate] = useState(null); // candidato elegido en la cola → 4ª columna
 
@@ -151,12 +156,19 @@ const AgentIASection = () => {
                 agentIAFetch('/api/agent-ia/config'),
                 agentIAFetch('/api/agent-ia/skills').catch(() => ({ skills: [] }))
             ]);
-            setAgentsMd(cfg.agentsMd || '');
-            setMemoryMd(cfg.memoryMd || '');
-            setPendingMemory(Array.isArray(cfg.pendingMemory) ? cfg.pendingMemory : []);
+            const agentsMdVal = cfg.agentsMd || '';
+            const memoryMdVal = cfg.memoryMd || '';
+            const pendingVal = Array.isArray(cfg.pendingMemory) ? cfg.pendingMemory : [];
+            const skillsVal = Array.isArray(skillsData.skills) ? skillsData.skills : [];
+            const modelVal = cfg.model || 'claude-opus-4-8';
+            setAgentsMd(agentsMdVal);
+            setMemoryMd(memoryMdVal);
+            setPendingMemory(pendingVal);
             setHasApiKey(Boolean(cfg.hasApiKey));
-            if (cfg.model) setModel(cfg.model);
-            setSkills(Array.isArray(skillsData.skills) ? skillsData.skills : []);
+            if (cfg.model) setModel(modelVal);
+            setSkills(skillsVal);
+            // Semilla para la próxima re-entrada
+            agentIACache = { agentsMd: agentsMdVal, memoryMd: memoryMdVal, pendingMemory: pendingVal, skills: skillsVal, hasApiKey: Boolean(cfg.hasApiKey), model: modelVal };
         } catch {
             /* la UI muestra estado vacío si falla */
         } finally {

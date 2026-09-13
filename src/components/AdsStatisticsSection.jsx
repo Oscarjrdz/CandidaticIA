@@ -401,15 +401,20 @@ const CommentsModal = ({ ad, onClose, showToast }) => {
 /* ─── Main Component ──────────────────────────────────────────────────── */
 const PRESET_COLORS = ['#a855f7','#3b82f6','#22c55e','#f97316','#ef4444','#eab308','#06b6d4','#ec4899','#64748b','#10b981'];
 
+// Caché stale-while-revalidate a nivel de módulo → re-entrar pinta las estadísticas de Ads
+// al instante (sin skeleton ni salto) y revalida en silencio. Ver docs/anti-brinco-secciones.md.
+let adsStatsCache = null;   // { ads, totalAdsLeads }
+let adsLabelsCache = null;
+
 const AdsStatisticsSection = () => {
     const { showToast } = useToastContext();
-    const [stats, setStats] = useState({ ads: [], totalAdsLeads: 0 });
-    const [loading, setLoading] = useState(true);
+    const [stats, setStats] = useState(() => adsStatsCache || { ads: [], totalAdsLeads: 0 });
+    const [loading, setLoading] = useState(() => !adsStatsCache);
     const [commentsAd, setCommentsAd] = useState(null);
     const { confirmModalJSX, showConfirm } = useConfirmModal();
 
     /* ── Ad Labels state ── */
-    const [adLabels, setAdLabels] = useState([]);
+    const [adLabels, setAdLabels] = useState(() => adsLabelsCache || []);
     const [showLabelForm, setShowLabelForm] = useState(false);
     const [editingLabel, setEditingLabel] = useState(null); // null = crear, object = editar
     const [labelForm, setLabelForm] = useState({ adIds: '', name: '', emoji: '', color: '#a855f7', company: '' });
@@ -428,7 +433,7 @@ const AdsStatisticsSection = () => {
         try {
             const res = await fetch('/api/ad-labels');
             const data = await res.json();
-            if (data.success) setAdLabels(data.labels || []);
+            if (data.success) { setAdLabels(data.labels || []); adsLabelsCache = data.labels || []; }
         } catch { /* silent */ }
     };
 
@@ -579,10 +584,14 @@ const AdsStatisticsSection = () => {
     const dateRangeRef = useRef('today');
 
     const loadStats = async (includeArchived = showArchivedRef.current, opts = {}) => {
-        if (!opts.silent) setLoading(true);
+        if (!opts.silent && !adsStatsCache) setLoading(true); // sin skeleton si ya hay caché
         const data = await getAdsStats(includeArchived, !!opts.refresh, dateRangeRef.current);
         if (data.success) {
-            setStats({ ads: data.ads || [], totalAdsLeads: data.totalAdsLeads || 0 });
+            const next = { ads: data.ads || [], totalAdsLeads: data.totalAdsLeads || 0 };
+            setStats(next);
+            // Cachear SOLO la vista por defecto (sin archivadas, rango 'today') → es con la que
+            // la sección remonta, así lo sembrado siempre cuadra con la UI.
+            if (!includeArchived && dateRangeRef.current === 'today') adsStatsCache = next;
             // Respuesta stale (copia instantanea): refrescar en segundo plano sin
             // bloquear la UI — cuando llegue lo fresco, se actualiza solo.
             if (data.stale && !opts.refresh) {

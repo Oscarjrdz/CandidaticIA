@@ -8,21 +8,26 @@ import Input from './ui/Input';
 import Skeleton from './ui/Skeleton';
 import { useToastContext } from '../contexts/ToastContext';
 
+// Caché stale-while-revalidate a nivel de módulo → re-entrar pinta la config del bot al
+// instante (sin skeleton ni salto) y revalida en silencio. Ver docs/anti-brinco-secciones.md.
+let botIACache = null; // { systemPrompt, promptAvanzado, aiModelAvanzado, isActive, extractionRules, cerebro1Rules, aiModel, gptConfig, templates }
+
 const BotIASection = () => {
     const { showToast } = useToastContext();
+    const c = botIACache; // caché sembrado en la carga previa (ver abajo)
     // Bot Status & Config
-    const [isActive, setIsActive] = useState(false);
+    const [isActive, setIsActive] = useState(() => c?.isActive ?? false);
     const [loading, setLoading] = useState(false);
-    const [isInitialLoading, setIsInitialLoading] = useState(true); // NEW: Prevent ghosting
-    const [templates, setTemplates] = useState([]);
+    const [isInitialLoading, setIsInitialLoading] = useState(() => !botIACache); // sin skeleton si hay caché
+    const [templates, setTemplates] = useState(() => c?.templates || []);
     const [loadingTemplates, setLoadingTemplates] = useState(false);
 
     // AI Settings
-    const [systemPrompt, setSystemPrompt] = useState('');
-    const [promptAvanzado, setPromptAvanzado] = useState('');
-    const [aiModelAvanzado, setAiModelAvanzado] = useState('gpt-4o-mini');
-    const [aiModel, setAiModel] = useState('gpt-4o-mini');
-    const [gptConfig, setGptConfig] = useState({
+    const [systemPrompt, setSystemPrompt] = useState(() => c?.systemPrompt || '');
+    const [promptAvanzado, setPromptAvanzado] = useState(() => c?.promptAvanzado || '');
+    const [aiModelAvanzado, setAiModelAvanzado] = useState(() => c?.aiModelAvanzado || 'gpt-4o-mini');
+    const [aiModel, setAiModel] = useState(() => c?.aiModel || 'gpt-4o-mini');
+    const [gptConfig, setGptConfig] = useState(() => c?.gptConfig || {
         openaiApiKey: '',
         openaiModel: 'gpt-4o-mini',
         gptHostEnabled: false,
@@ -30,8 +35,8 @@ const BotIASection = () => {
     });
 
     // Advanced Internal Protocols
-    const [extractionRules, setExtractionRules] = useState('');
-    const [cerebro1Rules, setCerebro1Rules] = useState('');
+    const [extractionRules, setExtractionRules] = useState(() => c?.extractionRules || '');
+    const [cerebro1Rules, setCerebro1Rules] = useState(() => c?.cerebro1Rules || '');
     const [_showAdvanced, _setShowAdvanced] = useState(false);
 
     useEffect(() => {
@@ -47,6 +52,11 @@ const BotIASection = () => {
                     setExtractionRules(data.extractionRules || '');
                     setCerebro1Rules(data.cerebro1Rules || '');
                     setAiModel(data.aiModel || 'gpt-4o-mini');
+                    botIACache = { ...(botIACache || {}),
+                        systemPrompt: data.systemPrompt || '', promptAvanzado: data.promptAvanzado || '',
+                        aiModelAvanzado: data.aiModelAvanzado || 'gpt-4o-mini', isActive: data.isActive,
+                        extractionRules: data.extractionRules || '', cerebro1Rules: data.cerebro1Rules || '',
+                        aiModel: data.aiModel || 'gpt-4o-mini' };
                 }
             } catch (error) {
                 console.error('Error loading settings:', error);
@@ -60,12 +70,14 @@ const BotIASection = () => {
                 if (res.ok) {
                     const data = await res.json();
                     if (data.success && data.data) {
-                        setGptConfig({
+                        const gc = {
                             openaiApiKey: data.data.openaiApiKey || '',
                             openaiModel: data.data.openaiModel || 'gpt-4o-mini',
                             gptHostEnabled: data.data.gptHostEnabled === true,
                             gptHostPrompt: data.data.gptHostPrompt || ''
-                        });
+                        };
+                        setGptConfig(gc);
+                        botIACache = { ...(botIACache || {}), gptConfig: gc };
                     }
                 }
             } catch (error) {
@@ -81,6 +93,7 @@ const BotIASection = () => {
                     const data = await res.json();
                     if (data.success) {
                         setTemplates(data.data || []);
+                        botIACache = { ...(botIACache || {}), templates: data.data || [] };
                     }
                 }
             } catch (error) {

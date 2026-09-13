@@ -262,7 +262,10 @@ const BulksSection = () => {
     const [selection, setSelection] = useState(EMPTY_SELECTION);
     const [excludeIds, setExcludeIds] = useState(new Set()); // destildados dentro de la vista previa
     const [facetData, setFacetData] = useState(() => facetCache || EMPTY_FACETS);
-    const [facetLoading, setFacetLoading] = useState(true);
+    const [facetLoading, setFacetLoading] = useState(() => !facetCache); // sin skeleton si hay caché
+    // Si había caché al montar, la PRIMERA carga (revalidación) es silenciosa (no muestra
+    // skeleton sobre los datos sembrados). Los cambios de selección del usuario sí lo muestran.
+    const initialFacetSilentRef = useRef(!!facetCache);
     const [searchQuery, setSearchQuery] = useState(""); // localizador dentro de la vista previa
     const [directRecipients, setDirectRecipients] = useState([]); // envío directo a teléfonos puntuales (allowlist, sin público)
     const [phoneLookupLoading, setPhoneLookupLoading] = useState(false);
@@ -271,7 +274,7 @@ const BulksSection = () => {
 
     // Col central: Públicos (audiencias dinámicas guardadas)
     const [audiences, setAudiences] = useState(() => audienceCache || []);
-    const [audiencesLoading, setAudiencesLoading] = useState(true);
+    const [audiencesLoading, setAudiencesLoading] = useState(() => !audienceCache); // sin skeleton si hay caché
     const [selectedAudienceId, setSelectedAudienceId] = useState(null); // público destinatario del envío (null = segmento ad-hoc)
     const [editingAudienceId, setEditingAudienceId] = useState(null);   // público en edición dentro de la Col 1
     const [showCreateAudience, setShowCreateAudience] = useState(false);
@@ -332,7 +335,9 @@ const BulksSection = () => {
         if (facetAbortRef.current) facetAbortRef.current.abort();
         const controller = new AbortController();
         facetAbortRef.current = controller;
-        setFacetLoading(true);
+        // Revalidación de montaje con caché: silenciosa. Cualquier otra carga: muestra loading.
+        if (initialFacetSilentRef.current) initialFacetSilentRef.current = false;
+        else setFacetLoading(true);
         try {
             const res = await fetch('/api/bulks?action=facets', {
                 method: 'POST',

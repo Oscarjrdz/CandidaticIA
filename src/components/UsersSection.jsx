@@ -34,15 +34,19 @@ const AVAILABLE_EXTRA_PERMS = [
     { id: 'view_incomplete_candidates', name: 'Ver candidatos incompletos' }
 ];
 
+// Caché stale-while-revalidate a nivel de módulo → re-entrar pinta usuarios/roles/etc. al
+// instante (sin skeleton ni salto) y revalida en silencio. Ver docs/anti-brinco-secciones.md.
+let usersSectionCache = null; // { users, roles, manualProjects, tags, waNumbers }
+
 const UsersSection = () => {
     const { showToast } = useToastContext();
     const [activeTab, setActiveTab] = useState('users');
     const { confirmModalJSX, showConfirm } = useConfirmModal();
-    const [users, setUsers] = useState([]);
-    const [roles, setRoles] = useState([]);
-    const [allManualProjects, setAllManualProjects] = useState([]);
-    const [allTags, setAllTags] = useState([]);
-    const [loading, setLoading] = useState(true);
+    const [users, setUsers] = useState(() => usersSectionCache?.users || []);
+    const [roles, setRoles] = useState(() => usersSectionCache?.roles || []);
+    const [allManualProjects, setAllManualProjects] = useState(() => usersSectionCache?.manualProjects || []);
+    const [allTags, setAllTags] = useState(() => usersSectionCache?.tags || []);
+    const [loading, setLoading] = useState(() => !usersSectionCache);
     const [search, setSearch] = useState('');
 
     // Activity stats state
@@ -68,7 +72,7 @@ const UsersSection = () => {
     }, [activeTab, activityDate]);
     
     // WA numbers state
-    const [allWaNumbers, setAllWaNumbers] = useState([]);
+    const [allWaNumbers, setAllWaNumbers] = useState(() => usersSectionCache?.waNumbers || []);
 
     // Tag dropdown UI state
     const [tagSearch, setTagSearch] = useState('');
@@ -129,6 +133,14 @@ const UsersSection = () => {
             if (manualData.success && manualData.data) setAllManualProjects(manualData.data);
             if (tagsData.success && tagsData.tags) setAllTags(tagsData.tags);
             if (waData.success && waData.numbers) setAllWaNumbers(waData.numbers);
+            // Semilla para la próxima re-entrada (solo campos que llegaron OK)
+            usersSectionCache = {
+                users: usersData.success ? usersData.users : (usersSectionCache?.users || []),
+                roles: rolesData.success ? rolesData.roles : (usersSectionCache?.roles || []),
+                manualProjects: (manualData.success && manualData.data) ? manualData.data : (usersSectionCache?.manualProjects || []),
+                tags: (tagsData.success && tagsData.tags) ? tagsData.tags : (usersSectionCache?.tags || []),
+                waNumbers: (waData.success && waData.numbers) ? waData.numbers : (usersSectionCache?.waNumbers || []),
+            };
         } catch {
             showToast('Error cargando datos', 'error');
         } finally {

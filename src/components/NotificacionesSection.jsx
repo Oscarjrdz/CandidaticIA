@@ -17,11 +17,15 @@ function fmtPhone(phone) {
   return `${phone.slice(0, 3)} ${phone.slice(3, 6)} ${phone.slice(6)}`;
 }
 
+// Caché stale-while-revalidate a nivel de módulo → re-entrar pinta stats+tokens al
+// instante (sin skeleton ni salto) y revalida en silencio. Ver docs/anti-brinco-secciones.md.
+let notifCache = null; // { stats, tokens }
+
 export default function NotificacionesSection() {
-  const [stats, setStats] = useState({ candidates: 0, recruiters: 0, total: 0 });
-  const [tokens, setTokens] = useState([]);
+  const [stats, setStats] = useState(() => notifCache?.stats || { candidates: 0, recruiters: 0, total: 0 });
+  const [tokens, setTokens] = useState(() => notifCache?.tokens || []);
   const [_history, _setHistory] = useState([]);
-  const [loadingStats, setLoadingStats] = useState(true);
+  const [loadingStats, setLoadingStats] = useState(() => !notifCache);
   const [removingToken, setRemovingToken] = useState(null);
 
   const [title, setTitle] = useState('');
@@ -39,6 +43,7 @@ export default function NotificacionesSection() {
       if (data.success) {
         setStats(data.stats);
         setTokens(data.tokens || []);
+        notifCache = { stats: data.stats, tokens: data.tokens || [] }; // semilla próxima re-entrada
         // Obtener historial desde el endpoint (en el futuro)
       }
     } catch {}

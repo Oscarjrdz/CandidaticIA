@@ -128,10 +128,15 @@ const fmtDate = (d) => {
     return new Date(d).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 };
 
+// Cachés stale-while-revalidate a nivel de módulo → re-entrar a Bolsa pinta las listas al
+// instante (sin skeleton ni salto) y revalida en silencio. Ver docs/anti-brinco-secciones.md.
+let bolsaJobsCache = null;
+let bolsaEmpresasCache = null;
+
 // ── Tab Vacantes ─────────────────────────────────────────────────────────────
 function TabVacantes({ empresas }) {
-    const [jobs, setJobs] = useState([]);
-    const [loading, setLoading] = useState(true);
+    const [jobs, setJobs] = useState(() => bolsaJobsCache || []);
+    const [loading, setLoading] = useState(() => !bolsaJobsCache);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [saving, setSaving] = useState(false);
     const [editingJob, setEditingJob] = useState(null);
@@ -164,10 +169,13 @@ function TabVacantes({ empresas }) {
         try {
             const res = await fetch('/api/bolsa');
             const data = await res.json();
-            if (data.success) { setJobs(data.data || []); setVisibleCount(PAGE_SIZE); }
+            if (data.success) { setJobs(data.data || []); bolsaJobsCache = data.data || []; setVisibleCount(PAGE_SIZE); }
         } catch { showToast('Error al cargar vacantes', 'error'); }
         finally { setLoading(false); }
     };
+
+    // Espeja mutaciones locales (crear/editar/borrar) al caché tras la primera carga real.
+    useEffect(() => { if (bolsaJobsCache) bolsaJobsCache = jobs; }, [jobs]);
 
     const handleOpenCreate = () => { setEditingJob(null); setFormData(defaultForm); setIsModalOpen(true); };
 
@@ -569,8 +577,8 @@ function TabVacantes({ empresas }) {
 
 // ── Tab Empresas ─────────────────────────────────────────────────────────────
 function TabEmpresas({ onEmpresasChange }) {
-    const [empresas, setEmpresas] = useState([]);
-    const [loading, setLoading] = useState(true);
+    const [empresas, setEmpresas] = useState(() => bolsaEmpresasCache || []);
+    const [loading, setLoading] = useState(() => !bolsaEmpresasCache);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [saving, setSaving] = useState(false);
     const [editingEmp, setEditingEmp] = useState(null);
@@ -592,10 +600,13 @@ function TabEmpresas({ onEmpresasChange }) {
         try {
             const res = await fetch('/api/empresas');
             const data = await res.json();
-            if (data.success) { setEmpresas(data.data || []); onEmpresasChange(data.data || []); }
+            if (data.success) { setEmpresas(data.data || []); bolsaEmpresasCache = data.data || []; onEmpresasChange(data.data || []); }
         } catch { showToast('Error al cargar empresas', 'error'); }
         finally { setLoading(false); }
     };
+
+    // Espeja mutaciones locales al caché tras la primera carga real.
+    useEffect(() => { if (bolsaEmpresasCache) bolsaEmpresasCache = empresas; }, [empresas]);
 
     const handleOpen = (emp = null) => {
         setEditingEmp(emp);

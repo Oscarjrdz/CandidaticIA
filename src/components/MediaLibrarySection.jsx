@@ -9,20 +9,25 @@ import { useToastContext } from '../contexts/ToastContext';
  * Biblioteca Multimedia - Zuckerberg Level Robust Implementation
  * Centralized repository for bot-accessible assets.
  */
+// Caché stale-while-revalidate a nivel de módulo → re-entrar pinta la biblioteca al
+// instante (sin skeleton ni salto) y revalida en silencio. Ver docs/anti-brinco-secciones.md.
+let mediaAssetsCache = null;
+
 const MediaLibrarySection = () => {
     const { showToast } = useToastContext();
     const { confirmModalJSX, showConfirm } = useConfirmModal();
-    const [assets, setAssets] = useState([]);
-    const [loading, setLoading] = useState(true);
+    const [assets, setAssets] = useState(() => mediaAssetsCache || []);
+    const [loading, setLoading] = useState(() => !mediaAssetsCache);
     const [search, setSearch] = useState('');
 
     const fetchAssets = async () => {
-        setLoading(true);
+        if (!mediaAssetsCache) setLoading(true); // sin skeleton si ya hay caché
         try {
             const res = await fetch('/api/media/list');
             const data = await res.json();
             if (data.success) {
                 setAssets(data.files || []);
+                mediaAssetsCache = data.files || []; // semilla para la próxima re-entrada
             }
         } catch (error) {
             console.error('Error fetching assets:', error);
@@ -35,6 +40,9 @@ const MediaLibrarySection = () => {
     useEffect(() => {
         fetchAssets();
     }, []);
+
+    // Espeja mutaciones locales (subir/borrar) al caché tras la primera carga real.
+    useEffect(() => { if (mediaAssetsCache) mediaAssetsCache = assets; }, [assets]);
 
     const filteredAssets = assets.filter(asset =>
         asset.name?.toLowerCase().includes(search.toLowerCase()) ||
