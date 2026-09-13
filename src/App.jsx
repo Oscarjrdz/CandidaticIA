@@ -51,6 +51,7 @@ const BotIASection = lazyWithRetry(() => import('./components/BotIASection'), 'B
 const MediaLibrarySection = lazyWithRetry(() => import('./components/MediaLibrarySection'), 'MediaLibrarySection');
 const CRMProjectsSection = lazyWithRetry(() => import('./components/CRMProjectsSection'), 'CRMProjectsSection');
 const AdsStatisticsSection = lazyWithRetry(() => import('./components/AdsStatisticsSection'), 'AdsStatisticsSection');
+const StatsSection = lazyWithRetry(() => import('./components/StatsSection'), 'StatsSection');
 const AgentIASection = lazyWithRetry(() => import('./components/AgentIASection'), 'AgentIASection');
 
 /**
@@ -278,6 +279,7 @@ function AppShell() {
                       : activeSection === 'chat' ? 'Chat Web'
                       : activeSection === 'bulks' ? 'Envíos Masivos'
                       : activeSection === 'ads-stats' ? 'Estadísticas de Ads'
+                      : activeSection === 'stats' ? 'Estadísticas'
                       : activeSection === 'bot-ia' ? 'Bot IA'
                       : activeSection === 'flows' ? 'Flows'
                       : activeSection === 'vacancies' ? 'Vacantes'
@@ -332,6 +334,7 @@ function AppShell() {
                       : activeSection === 'chat' ? 'Chatea nativamente con tus candidatos'
                       : activeSection === 'bulks' ? 'Manda mensajes en secuencia a múltiples candidatos a la vez'
                       : activeSection === 'ads-stats' ? 'Seguimiento y rendimiento de campañas de Meta Ads'
+                      : activeSection === 'stats' ? 'Métricas agregadas de tu base de candidatos'
                       : activeSection === 'bot-ia' ? 'Configuración del comportamiento del Bot'
                       : activeSection === 'flows' ? 'Automatiza acciones cuando un candidato completa su perfil'
                       : activeSection === 'vacancies' ? 'Gestión y publicación de vacantes'
@@ -398,6 +401,8 @@ function AppShell() {
             <BotIASection />
           ) : activeSection === 'ads-stats' ? (
             <AdsStatisticsSection />
+          ) : activeSection === 'stats' ? (
+            <StatsSection />
           ) : activeSection === 'flows' ? (
             <FlowsSection />
           ) : activeSection === 'vacancies' ? (

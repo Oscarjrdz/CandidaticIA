@@ -3,7 +3,7 @@ import { useAuthContext } from '../contexts/AuthContext';
 import { useCandidatesSSE } from '../hooks/useCandidatesSSE';
 import {
     Users, Settings, Bot, History, Briefcase, Send, User, LogOut, BarChart3,
-    MessageSquare, Smartphone, Folder, FolderKanban, GripVertical, Wifi, X, ChevronLeft, ChevronRight, Bell, Sparkles, Workflow
+    MessageSquare, Smartphone, Folder, FolderKanban, GripVertical, Wifi, X, ChevronLeft, ChevronRight, Bell, Sparkles, Workflow, PieChart
 } from 'lucide-react';
 import {
     DndContext,
@@ -33,6 +33,7 @@ const DEFAULT_MENU_ITEMS = [
     { id: 'chat', label: 'Chat Web', icon: MessageSquare, position: 'top' },
     { id: 'bulks', label: 'Envíos Masivos', icon: Send, position: 'top' },
     { id: 'ads-stats', label: 'Estadísticas de Ads', icon: BarChart3, position: 'top' },
+    { id: 'stats', label: 'Estadísticas', icon: PieChart, position: 'top' },
     { id: 'bot-ia', label: 'Bot IA (2.0)', icon: Smartphone, position: 'top' },
     { id: 'flows', label: 'Flows', icon: Workflow, position: 'top' },
     { id: 'vacancies', label: 'Vacantes', icon: Briefcase, position: 'top' },

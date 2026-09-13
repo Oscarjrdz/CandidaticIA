@@ -18,7 +18,8 @@ const AVAILABLE_SECTIONS = [
     { id: 'history', name: 'Historial' },
     { id: 'users', name: 'Usuarios' },
 { id: 'media-library', name: 'Biblioteca' },
-    { id: 'projects', name: 'Proyectos' }
+    { id: 'projects', name: 'Proyectos' },
+    { id: 'stats', name: 'Estadísticas' }
 ];
 
 const AVAILABLE_CHAT_FILTERS = [
