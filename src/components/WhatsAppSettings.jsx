@@ -5,8 +5,8 @@ import Card from './ui/Card';
 // Altura ya medida del contenido (persistida) → se reserva como min-height desde el
 // primer render para que la tarjeta nazca con su alto real y NO salte al entrar en frío
 // ni al salir/re-entrar. Se re-mide y actualiza tras cargar (nº de números + consumo).
-const WA_HEIGHT_KEY = 'wa_card_content_h_v1';
-const WA_HEIGHT_DEFAULT = 720; // aprox medido en prod; se auto-corrige tras el primer render real
+const WA_HEIGHT_KEY = 'wa_card_content_h_v2';
+const WA_HEIGHT_DEFAULT = 740; // aprox medido en prod; se auto-corrige tras el primer render real
 let whatsappContentH = (() => {
     try { return Number(localStorage.getItem(WA_HEIGHT_KEY)) || WA_HEIGHT_DEFAULT; } catch { return WA_HEIGHT_DEFAULT; }
 })();
@@ -18,7 +18,7 @@ let whatsappContentH = (() => {
 // de WhatsApp al instante (sin skeleton ni salto) y revalida en silencio.
 let whatsappStatusCache = null;
 
-const WhatsAppSettings = ({ showToast }) => {
+const WhatsAppSettings = ({ showToast, className = '' }) => {
     const [status, setStatus] = useState(() => whatsappStatusCache);
     const [loading, setLoading] = useState(() => !whatsappStatusCache);
     const [copied, setCopied] = useState(false);
@@ -155,6 +155,7 @@ const WhatsAppSettings = ({ showToast }) => {
         <Card
             title="WhatsApp Business API"
             icon={Smartphone}
+            className={className}
             actions={
                 <span className="text-[10px] font-bold bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 px-2 py-0.5 rounded-full flex items-center gap-1">
                     <Shield className="w-3 h-3" /> API Oficial Meta
@@ -164,7 +165,7 @@ const WhatsAppSettings = ({ showToast }) => {
             <div
                 ref={contentRef}
                 className="space-y-4"
-                style={whatsappContentH ? { minHeight: `${whatsappContentH}px` } : undefined}
+                style={loading && whatsappContentH ? { minHeight: `${whatsappContentH}px` } : undefined}
             >
                 {/* Connection Status — una tarjeta por número conectado al WABA */}
                 {loading

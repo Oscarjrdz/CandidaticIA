@@ -5,8 +5,8 @@ import Card from './ui/Card';
 // Altura ya medida del contenido (persistida) → se reserva como min-height desde el
 // primer render (skeleton incluido) para que la tarjeta nazca con su alto real y NO
 // haya salto al entrar en frío ni al salir/re-entrar. Se re-mide y actualiza tras cargar.
-const BW_HEIGHT_KEY = 'bw_card_content_h_v1';
-const BW_HEIGHT_DEFAULT = 470; // aprox medido en prod; se auto-corrige tras el primer render real
+const BW_HEIGHT_KEY = 'bw_card_content_h_v2';
+const BW_HEIGHT_DEFAULT = 460; // aprox medido en prod; se auto-corrige tras el primer render real
 let bandwidthContentH = (() => {
     try { return Number(localStorage.getItem(BW_HEIGHT_KEY)) || BW_HEIGHT_DEFAULT; } catch { return BW_HEIGHT_DEFAULT; }
 })();
@@ -53,7 +53,7 @@ function currentMonthDayKeys() {
 // de ancho de banda al instante (sin skeleton ni salto) y revalida en silencio.
 let bandwidthCache = null;
 
-const RedisBandwidthSettings = () => {
+const RedisBandwidthSettings = ({ className = '' }) => {
     const [data, setData] = useState(() => bandwidthCache);
     const [loading, setLoading] = useState(() => !bandwidthCache);
     const [error, setError] = useState(false);
@@ -103,11 +103,11 @@ const RedisBandwidthSettings = () => {
             : 'bg-emerald-500';
 
     return (
-        <Card title="Ancho de Banda" icon={Activity}>
+        <Card title="Ancho de Banda" icon={Activity} className={className}>
             <div
                 ref={contentRef}
                 className="space-y-3 pb-1"
-                style={bandwidthContentH ? { minHeight: `${bandwidthContentH}px` } : undefined}
+                style={loading && bandwidthContentH ? { minHeight: `${bandwidthContentH}px` } : undefined}
             >
                 {loading ? (
                     /* Skeleton que reserva ~el alto final (3 tiles + barra de plan + gráfica +

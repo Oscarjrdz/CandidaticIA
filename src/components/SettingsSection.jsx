@@ -29,13 +29,15 @@ const SettingsSection = () => {
                 </div>
             </div>
 
-            {/* items-start evita que el grid estire las tarjetas a la altura de la mas alta —
-                cada columna toma solo el alto que su contenido necesita. */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-                <WhatsAppSettings showToast={showToast} />
-                <div className="flex flex-col gap-6">
+            {/* items-stretch → ambas columnas igualan a la más alta y sus bases COINCIDEN
+                (bloques simétricos). WhatsApp llena su columna (h-full) y en la derecha el
+                Ancho de Banda crece (flex-1) para tocar la base. El alto no salta al cargar
+                porque cada tarjeta reserva su alto medido mientras entran los datos. */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
+                <WhatsAppSettings showToast={showToast} className="h-full" />
+                <div className="flex flex-col gap-6 h-full">
                     <GPTSettings showToast={showToast} />
-                    <RedisBandwidthSettings />
+                    <RedisBandwidthSettings className="flex-1" />
                 </div>
             </div>
 
