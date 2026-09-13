@@ -112,7 +112,7 @@ const UsersSection = () => {
     const TAG_PALETTE = ['#ef4444','#f97316','#eab308','#22c55e','#3b82f6','#8b5cf6','#ec4899','#06b6d4','#14b8a6','#64748b'];
 
     const loadData = async () => {
-        setLoading(true);
+        if (!usersSectionCache) setLoading(true); // sin skeleton si ya hay caché sembrado
         try {
             const [usersRes, rolesRes, manualRes, tagsRes, waRes] = await Promise.all([
                 fetch('/api/users'),

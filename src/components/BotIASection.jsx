@@ -104,7 +104,7 @@ const BotIASection = () => {
         };
 
         const init = async () => {
-            setIsInitialLoading(true);
+            if (!botIACache) setIsInitialLoading(true); // sin skeleton si ya hay caché sembrado
             await Promise.all([loadSettings(), loadGptConfig(), loadTemplates()]);
             setIsInitialLoading(false);
         };
