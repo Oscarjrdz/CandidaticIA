@@ -114,12 +114,13 @@ const CandidateRow = React.memo(({ candidate, columnOrder, fieldsMap, magicLoadi
                     ) : (
                         <div className="w-2.5 h-2.5 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)]"></div>
                     )}
-                    {/* Punto de asistencia: azul y con glow cuando llegó a la cita; apagado (gris) si no. */}
+                    {/* Punto de asistencia: azul (tono del sidebar, blue-700) cuando llegó a la
+                        cita, sin parpadeo; gris muy tenue si no. */}
                     <div
                         title={isAsistencia ? 'Asistencia confirmada (llegó a la cita)' : 'Sin asistencia'}
                         className={`w-2.5 h-2.5 rounded-full ${isAsistencia
-                            ? 'bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.7)] animate-pulse'
-                            : 'bg-gray-200 dark:bg-gray-700'}`}
+                            ? 'bg-blue-700'
+                            : 'bg-gray-200/50 dark:bg-gray-700/40'}`}
                     ></div>
                 </div>
             </td>

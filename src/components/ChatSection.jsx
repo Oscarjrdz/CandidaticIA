@@ -1180,11 +1180,12 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
     // renglones y los iconos son el renglón 2). TOP_ROW_ICON_IDS vacío => iconRow siempre
     // 'bottom', así el guard de drag nunca bloquea y se puede reordenar entre todos los iconos.
     const TOP_ROW_ICON_IDS = [];
-    const TOOLBAR_ICON_IDS = ['quick_replies', 'crm_manual', 'search', 'tags', 'vacancies'];
+    const TOOLBAR_ICON_IDS = ['quick_replies', 'crm_manual', 'search', 'tags', 'asistencia', 'vacancies'];
     const iconRow = (id) => TOP_ROW_ICON_IDS.includes(id) ? 'top' : 'bottom';
     const [toolbarOrder, setToolbarOrder] = useState(() => {
         try {
-            const saved = localStorage.getItem('candidatic:toolbar_order_v2');
+            // v3: se agregó el icono 'asistencia' (imán) junto a 'tags' — bump para colocarlo ahí.
+            const saved = localStorage.getItem('candidatic:toolbar_order_v3');
             if (saved) {
                 const parsed = JSON.parse(saved);
                 // Ensure all IDs are present (handles new icons added later)
@@ -1300,7 +1301,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
             if (fromIdx === -1 || toIdx === -1) return prev;
             newOrder.splice(fromIdx, 1);
             newOrder.splice(toIdx, 0, draggedId);
-            localStorage.setItem('candidatic:toolbar_order_v2', JSON.stringify(newOrder));
+            localStorage.setItem('candidatic:toolbar_order_v3', JSON.stringify(newOrder));
             return newOrder;
         });
         setDraggedIcon(null);
@@ -3707,6 +3708,34 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         };
     }, [selectedChat?.id, user?.name]);
 
+    // Asistencia: marca/desmarca que el candidato llegó a la cita. Guarda una bandera
+    // (asistencia) y su fecha (asistenciaAt) en el candidato — base para construir
+    // seguimientos de asistencias. Reutiliza PUT /api/candidates (ya autenticado).
+    const handleMarkAsistencia = async () => {
+        if (!selectedChat) return;
+        const turnOn = selectedChat.asistencia !== true;
+        const updates = turnOn
+            ? { asistencia: true, asistenciaAt: new Date().toISOString() }
+            : { asistencia: false };
+
+        // Optimistic UI → prende/apaga el punto azul en la sección Candidatos al instante.
+        const updatedChat = { ...selectedChat, ...updates };
+        setSelectedChat(updatedChat);
+        setCandidates(prev => prev.map(c => c.id === updatedChat.id ? updatedChat : c));
+
+        try {
+            await fetch('/api/candidates', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: updatedChat.id, ...updates })
+            });
+            showToast && showToast(turnOn ? 'Marcado como asistencia' : 'Asistencia quitada', 'success');
+        } catch (error) {
+            console.error(error);
+            showToast && showToast('Error al marcar asistencia', 'error');
+        }
+    };
+
     const handleToggleTag = async (tag) => {
         if (!selectedChat) return;
 
@@ -5956,6 +5985,26 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                                                 </div>
                                                 )}
                                             </div>
+                                        </div>
+                                    );
+                                }
+
+                                if (iconId === 'asistencia') {
+                                    const active = selectedChat?.asistencia === true;
+                                    return (
+                                        <div key={iconId} className="relative z-50" style={{ order: iconOrder }} {...dragProps}>
+                                            <button
+                                                onClick={(e) => { e.stopPropagation(); handleMarkAsistencia(); }}
+                                                title={active ? 'Asistencia marcada (llegó a la cita) — clic para quitar' : 'Marcar asistencia (llegó a la cita)'}
+                                                className={`${baseClass} hover:bg-black/5 dark:hover:bg-white/5 ${active ? 'bg-blue-50 dark:bg-blue-900/20 ring-1 ring-blue-500/40' : ''}`}>
+                                                {/* Imán de Candidatic (mismo del favicon). A todo color = asistencia activa; tenue = inactiva. */}
+                                                <img
+                                                    src="/favicon-candidatic-32.png"
+                                                    alt="Asistencia"
+                                                    draggable={false}
+                                                    className={`w-5 h-5 object-contain transition-all ${active ? '' : 'opacity-40 grayscale'}`}
+                                                />
+                                            </button>
                                         </div>
                                     );
                                 }
