@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Activity, Loader2, ExternalLink } from 'lucide-react';
+import { Activity, ExternalLink } from 'lucide-react';
 import Card from './ui/Card';
 
 function formatBytes(bytes) {
@@ -85,8 +85,31 @@ const RedisBandwidthSettings = () => {
         <Card title="Ancho de Banda" icon={Activity}>
             <div className="space-y-3 pb-1">
                 {loading ? (
-                    <div className="flex items-center justify-center py-4">
-                        <Loader2 className="w-5 h-5 animate-spin text-gray-400" />
+                    /* Skeleton que reserva ~el alto final (3 tiles + barra de plan + gráfica +
+                       desglose) para que la columna nazca con su altura y NO salte al cargar
+                       — patrón anti-brinco. Ver docs/anti-brinco-secciones.md. */
+                    <div className="animate-pulse space-y-3" aria-hidden="true">
+                        <div className="grid grid-cols-3 gap-2">
+                            {[0, 1, 2].map(i => (
+                                <div key={i} className="bg-[#f0f2f5] dark:bg-[#202c33] rounded-lg p-2.5 h-[52px]" />
+                            ))}
+                        </div>
+                        <div className="h-2.5 bg-gray-100 dark:bg-gray-700 rounded-full" />
+                        <div className="flex items-end gap-px" style={{ height: '56px' }}>
+                            {Array.from({ length: 31 }).map((_, i) => (
+                                <div key={i} className="flex-1 bg-gray-100 dark:bg-gray-700 rounded-t-sm" style={{ height: `${20 + ((i * 7) % 60)}%` }} />
+                            ))}
+                        </div>
+                        <div className="border-t border-gray-100 dark:border-gray-700 pt-2 space-y-2">
+                            <div className="h-2.5 w-40 bg-gray-100 dark:bg-gray-700 rounded" />
+                            {[0, 1, 2, 3, 4, 5].map(i => (
+                                <div key={i} className="flex items-center gap-2">
+                                    <div className="w-16 h-2.5 bg-gray-100 dark:bg-gray-700 rounded shrink-0" />
+                                    <div className="flex-1 h-2.5 bg-gray-100 dark:bg-gray-700 rounded" />
+                                    <div className="w-10 h-2.5 bg-gray-100 dark:bg-gray-700 rounded shrink-0" />
+                                </div>
+                            ))}
+                        </div>
                     </div>
                 ) : error || !hasHistory ? (
                     <p className="text-xs text-gray-500 dark:text-gray-400">
