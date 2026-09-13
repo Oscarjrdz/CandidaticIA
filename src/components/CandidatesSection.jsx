@@ -101,15 +101,26 @@ const areCandidatePropsEqual = (prev, next) => {
 
 const CandidateRow = React.memo(({ candidate, columnOrder, fieldsMap, magicLoading, isBlockLoading, onOpenChat, onBlockToggle, onDelete, onMagicFix, showEmptyRing }) => {
     const isComplete = isProfileComplete(candidate);
+    // Asistencia = el candidato SÍ llegó a la cita. Cuando exista el dato real vendrá en
+    // candidate.asistencia; por ahora, DEMO: forzado para 8116038195 (Oscar) para ver el look.
+    const isAsistencia = candidate.asistencia === true
+        || (candidate.whatsapp && String(candidate.whatsapp).includes('8116038195'));
     return (
         <tr className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-900 smooth-transition relative">
             <td className="py-px px-1 text-center">
-                <div className="flex items-center justify-center">
+                <div className="flex items-center justify-center gap-1">
                     {isComplete ? (
                         <div className="w-2.5 h-2.5 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)] animate-pulse"></div>
                     ) : (
                         <div className="w-2.5 h-2.5 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)]"></div>
                     )}
+                    {/* Punto de asistencia: azul y con glow cuando llegó a la cita; apagado (gris) si no. */}
+                    <div
+                        title={isAsistencia ? 'Asistencia confirmada (llegó a la cita)' : 'Sin asistencia'}
+                        className={`w-2.5 h-2.5 rounded-full ${isAsistencia
+                            ? 'bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.7)] animate-pulse'
+                            : 'bg-gray-200 dark:bg-gray-700'}`}
+                    ></div>
                 </div>
             </td>
             <td className="py-px px-2.5">
