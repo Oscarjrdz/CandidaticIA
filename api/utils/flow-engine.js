@@ -1094,12 +1094,28 @@ async function runOneFlow(redis, flow, candidateId, candidate, opts = {}) {
                 branchTaken.set(node.id, new Set([opts.resumeWait.handle]));
                 outcome.set(node.id, 'pass');
                 passed.set(node.id, true);
+                // Persiste QUÉ rama se tomó (no solo "pasó"): si el flujo se reanuda MÁS TARDE
+                // por OTRO menú del mismo flujo, este nodo se relee del ledger y hay que
+                // restaurar su rama — si no, sus demás ramas se tratarían como aristas normales
+                // desde un nodo "pass" y se dispararían TODAS (bug del 2º menú).
+                if (useClaim) {
+                    await redis.hset(progressKey, node.id, `H:${opts.resumeWait.handle}`).catch(() => {});
+                }
                 continue;
             }
 
             // Resume: nodo ya hecho en una corrida previa → reusa resultado, no re-ejecuta.
             if (Object.prototype.hasOwnProperty.call(prior, node.id)) {
-                const priorPass = prior[node.id] === '1';
+                // Menú ya resuelto en un resume anterior (valor 'H:<handle>'): restaura SOLO su
+                // rama tomada, para no re-disparar las demás ramas de ese menú.
+                const rawPrior = prior[node.id];
+                if (typeof rawPrior === 'string' && rawPrior.startsWith('H:')) {
+                    branchTaken.set(node.id, new Set([rawPrior.slice(2)]));
+                    outcome.set(node.id, 'pass');
+                    passed.set(node.id, true);
+                    continue;
+                }
+                const priorPass = rawPrior === '1';
                 // Excepción: 'frase_dinamica' no tiene efectos externos (solo fija una variable
                 // en memoria para los WhatsApp siguientes). Al reanudar un flujo pausado hay que
                 // re-aplicar su valor aunque ya cuente como ejecutado, o los mensajes posteriores
