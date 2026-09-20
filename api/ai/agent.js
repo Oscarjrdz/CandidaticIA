@@ -1638,6 +1638,29 @@ SOLO responde al mensaje actual, de forma corta (máximo 2 oraciones). NO mencio
             }
         }
 
+        // ── PASO 2: estado de completitud (definido temprano; se reusa en la Sala de Espera ~1985) ──
+        const _paso2EnProceso = ['esperando_colonia', 'esperando_experiencia', 'esperando_meses_experiencia'].includes(candidateData.paso2Estado);
+        const _paso2Listo = !_paso2EnProceso && (!candidateData.paso2Requerido || candidateData.paso2Estado === 'completo');
+
+        // 🔁 DISPARADOR "CANDIDATO QUE REGRESA — INCOMPLETO" (re-clic de anuncio): si un candidato que
+        // AÚN NO termina su registro (paso 1 o paso 2 sin cerrar) re-clickea un anuncio cuya etiqueta YA
+        // tenía, y hay un flujo activo "al regresar" con filtro de perfil incompleto/todos, ese flujo
+        // TOMA EL CONTROL del turno y Brenda (extracción / paso 2) calla. El COMPLETO se maneja más abajo
+        // (~1985), tras el paso 2. La señal exige RE-CLIC real (marca reclick=true del webhook): así el
+        // PRIMER contacto de un candidato nuevo NO dispara esto y sigue su saludo/extracción normal.
+        // Mismo patrón fire-and-return que el broadcast de arriba: persistimos updates y regresamos null.
+        if (!isSimulatorPhone && !(isProfileComplete && _paso2Listo)) {
+            const _retIncFired = await runReturningFlowsForCandidate(
+                candidateId,
+                { ...candidateData, ...candidateUpdates },
+                { incomingText: aggregatedText }
+            ).catch(() => 0);
+            if (_retIncFired > 0) {
+                await updateCandidate(candidateId, candidateUpdates).catch(() => {});
+                return null; // el flujo de regreso maneja el turno; Brenda muda
+            }
+        }
+
         systemInstruction += `\n[ESTADO DE MISIÓN]:
 - PERFIL COMPLETADO: ${isProfileComplete ? 'SÍ (SKIP EXTRACTION)' : 'NO (DATA REQUIRED)'}
 - ¿Es Primer Contacto?: ${isNewFlag && !botHasSpoken ? 'SÍ (Presentarse)' : 'NO (Ya saludaste)'}
@@ -1960,8 +1983,8 @@ Responde ÚNICAMENTE con el número entero de meses. Si evade o no menciona ning
             }
         }
 
-        const _paso2EnProceso = ['esperando_colonia', 'esperando_experiencia', 'esperando_meses_experiencia'].includes(candidateData.paso2Estado);
-        const _paso2Listo = !_paso2EnProceso && (!candidateData.paso2Requerido || candidateData.paso2Estado === 'completo');
+        // _paso2EnProceso / _paso2Listo se definen arriba (~línea 1642), justo antes del disparador
+        // de regreso de incompletos, para poder gatear ese gancho por completitud real de paso 2.
 
         // 🔁 CANDIDATO QUE REGRESA: si un COMPLETO vuelve (click de anuncio o frase) y hay un
         // flujo con Inicio "al regresar" que aplica, ese flujo le manda la info de su ÚLTIMA

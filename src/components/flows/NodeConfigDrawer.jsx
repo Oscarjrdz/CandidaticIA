@@ -293,7 +293,7 @@ const NodeConfigDrawer = ({ node, flowId, meta, quickReplies, reminderTemplates,
                             <label className="text-xs text-gray-500 dark:text-gray-400 mb-2 block">¿Cuándo entra? (disparador)</label>
                             {[
                                 { value: 'al_completar', label: 'Al completar su registro', hint: 'Justo cuando termina de dar sus datos (disparo clásico).' },
-                                { value: 'al_regresar', label: 'Cuando regresa y pide info', hint: 'Un candidato YA completo que vuelve (click de anuncio o frase).' },
+                                { value: 'al_regresar', label: 'Cuando regresa y pide info', hint: 'Un candidato que vuelve (click de anuncio o frase). Usa el filtro de perfil de arriba para separar completos de incompletos.' },
                                 { value: 'al_responder_broadcast', label: 'Cuando responde a un Broadcast', hint: 'Primera respuesta a un masivo etiquetado. Tiene prioridad sobre Brenda (aunque esté en modo humano).' }
                             ].map(opt => (
                                 <label key={opt.value} className="flex items-start gap-2.5 p-2.5 rounded-xl border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer mb-2">
@@ -308,7 +308,8 @@ const NodeConfigDrawer = ({ node, flowId, meta, quickReplies, reminderTemplates,
                         {showReturn && (
                             <div className="space-y-4 border-l-2 border-indigo-200 dark:border-indigo-800 pl-3">
                                 <p className="text-xs bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-lg p-2.5 text-indigo-800 dark:text-indigo-300">
-                                    Solo para <strong>“cuando regresa”</strong>. El candidato entra al flujo de su <strong>última</strong> vacante — pon un nodo <strong>Filtro: Etiqueta</strong> en modo <strong>“es su etiqueta actual”</strong> después de este Inicio para rutearlo.
+                                    Solo para <strong>“cuando regresa”</strong>. El candidato entra al flujo de su <strong>última</strong> vacante — pon un nodo <strong>Filtro: Etiqueta</strong> en modo <strong>“es su etiqueta actual”</strong> después de este Inicio para rutearlo.<br /><br />
+                                    Con filtro de perfil <strong>incompleto</strong>, solo dispara en un <strong>re-clic real</strong> (el candidato ya traía esa etiqueta): así el primer contacto de alguien nuevo no se interrumpe. Los <strong>completos</strong> disparan con cualquier click.
                                 </p>
                                 <div>
                                     <label className="text-xs text-gray-500 dark:text-gray-400 mb-2 block">¿Qué cuenta como “regresó”?</label>

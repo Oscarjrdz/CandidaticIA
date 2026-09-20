@@ -1043,20 +1043,27 @@ export async function runFlowsForCandidate(candidateId, candidateSnapshot) {
     }
 }
 
-// 🔁 DISPARADOR "CANDIDATO QUE REGRESA" (event-driven, en vivo): lo llama agent.js cuando
-// llega un mensaje de un candidato YA COMPLETO, ANTES de la Sala de Espera. Corre los flujos
-// cuyo Inicio dispara 'al_regresar' y que además cumplen la señal (click de anuncio o frase),
-// la antigüedad y la cadencia configuradas en el nodo. Corre en modo `ephemeral` (re-ejecuta
-// las acciones sin el dedupe permanente de flow:executed) — la cadencia la gobierna el
-// contador flow:return:count, no el "ya completado". Devuelve cuántos flujos disparó (0 = no
-// aplicó): agent.js usa eso para callar a Brenda-extractora (que el flujo hable, no la Sala).
+// 🔁 DISPARADOR "CANDIDATO QUE REGRESA" (event-driven, en vivo): lo llama agent.js cuando llega
+// un mensaje de un candidato que vuelve. Atiende DOS poblaciones, ruteadas por el filtro de perfil
+// del nodo Inicio (data.profileFilter):
+//   • COMPLETO   → re-clic (o frase) de alguien que ya terminó su registro; entra ANTES de la Sala
+//                  de Espera. Dispara con CUALQUIER click de anuncio.
+//   • INCOMPLETO → re-clic de alguien que AÚN NO termina (agent.js lo llama antes de la extracción).
+//                  Exige RE-CLIC REAL (ya traía la etiqueta) para no dispararse en el primer contacto
+//                  de un candidato nuevo. La frase NO cuenta para incompletos (evita secuestrar la
+//                  captura por coincidencia casual).
+// Además cumple la señal, la antigüedad y la cadencia del nodo. Corre en modo `ephemeral` (re-ejecuta
+// las acciones sin el dedupe permanente de flow:executed) — la cadencia la gobierna el contador
+// flow:return:count, no el "ya completado". Devuelve cuántos flujos disparó (0 = no aplicó): agent.js
+// usa eso para callar a Brenda ese turno (que el flujo hable, no la Sala ni la extractora).
 // Espejo estructural de runFlowForIncompleteSilence, pero disparado por evento en vez de cron.
 export async function runReturningFlowsForCandidate(candidateId, candidateSnapshot, { incomingText = '' } = {}) {
     try {
         const redis = getRedisClient();
         if (!redis || !candidateSnapshot?.id || !candidateSnapshot?.whatsapp) return 0;
-        // Solo completos (el caller ya lo garantiza; doble candado barato por si acaso).
-        if (!isProfileComplete(candidateSnapshot)) return 0;
+        // Ruteo por perfil: cada flujo decide (vía profileFilter del Inicio) si aplica a completos,
+        // incompletos o ambos. Los dos callers (agent.js, rama completo y rama incompleto) llaman aquí.
+        const complete = isProfileComplete(candidateSnapshot);
 
         const raw = await getCachedConfig(redis, FLOWS_KEY);
         const flows = raw ? JSON.parse(raw) : [];
@@ -1065,8 +1072,16 @@ export async function runReturningFlowsForCandidate(candidateId, candidateSnapsh
             && getInicioTrigger(f).includes('al_regresar'));
         if (!returnFlows.length) return 0;
 
-        // ¿Este turno vino de un click de anuncio? (marca transitoria puesta por el webhook)
-        const adClicked = !!(await redis.get(`${RETURN_ADCLICK_PREFIX}${candidateId}`).catch(() => null));
+        // ¿Este turno vino de un click de anuncio? La marca la pone el webhook como { tag, reclick }.
+        //   reclick=true  ⇒ el candidato YA traía esa etiqueta (re-clic real del mismo anuncio/campaña).
+        //   reclick=false ⇒ primer click de esa campaña.
+        // (Marcas viejas eran un string simple → JSON.parse lanza → reclick=false, sin romper a completos.)
+        const _adMark = await redis.get(`${RETURN_ADCLICK_PREFIX}${candidateId}`).catch(() => null);
+        let adClicked = false, adReclick = false;
+        if (_adMark) {
+            adClicked = true;
+            try { adReclick = JSON.parse(_adMark)?.reclick === true; } catch { adReclick = false; }
+        }
         const now = Date.now();
         const completedAt = candidateSnapshot.paso2CompletadoAt
             ? new Date(candidateSnapshot.paso2CompletadoAt).getTime() : 0;
@@ -1076,12 +1091,24 @@ export async function runReturningFlowsForCandidate(candidateId, candidateSnapsh
             const inicio = flow.nodes.find(n => n.type === 'inicio');
             const d = inicio?.data || {};
 
+            // 0) FILTRO DE PERFIL del Inicio: 'completo' (default) / 'incompleto' / 'todos'. Así un
+            //    mismo disparador "al regresar" enruta completos e incompletos a flujos distintos, cada
+            //    uno con su mensaje. Los flujos viejos sin profileFilter caen en 'completo' (= como antes).
+            const pf = d.profileFilter || 'completo';
+            if (pf === 'completo' && !complete) continue;
+            if (pf === 'incompleto' && complete) continue;
+
             // 1) SEÑAL — anuncio y/o frase (OR). Default: si no configuran nada, exige anuncio.
             const wantAd = d.returnOnAd !== false;   // default true
             const wantPhrase = !!d.returnOnPhrase;
             let signal = false;
-            if (wantAd && adClicked) signal = true;
-            if (!signal && wantPhrase) {
+            // COMPLETOS: cualquier click de anuncio cuenta (ya pasaron por extracción, todo regreso vale).
+            // INCOMPLETOS: exigimos re-clic REAL (adReclick) — el PRIMER contacto de un candidato nuevo
+            // NO debe secuestrar su extracción/saludo; solo el que ya había clickeado antes y volvió.
+            if (wantAd && adClicked && (complete || adReclick)) signal = true;
+            // Frase: solo para completos. Un incompleto a media captura no debe engancharse por
+            // coincidencia de palabra (un "sí"/"info" casual rompería la extracción).
+            if (!signal && wantPhrase && complete) {
                 const grupos = Array.isArray(d.returnGrupos) ? d.returnGrupos : [];
                 if (grupos.some(g => flowTextMatchesGroup(incomingText, g, d.returnMatchMode))) signal = true;
             }
