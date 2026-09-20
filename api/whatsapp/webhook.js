@@ -346,6 +346,10 @@ export default async function handler(req, res) {
             let mediaId = null;
             let mediaUrl = null;
             let messageType = metaMsgType;
+            // Marca si el entrante fue el clic de un botón/opción interactiva (para pintarlo
+            // distinto en el chat). NO altera `body`: Brenda y el ruteo de flujos siguen
+            // recibiendo el título limpio de la opción como si el candidato lo hubiera escrito.
+            let isInteractiveReply = false;
 
             switch (metaMsgType) {
                 case 'text':
@@ -406,6 +410,7 @@ export default async function handler(req, res) {
                     body = metaMsg.interactive?.button_reply?.title ||
                            metaMsg.interactive?.list_reply?.title || '';
                     messageType = 'text';
+                    isInteractiveReply = true;
                     break;
                 case 'request_welcome':
                     body = 'Que tal! Info sobre la vacante!'; // Fallback para el anuncio
@@ -638,7 +643,8 @@ export default async function handler(req, res) {
             const msgToSave = {
                 id: msgId, from: 'user', content: body,
                 type: messageType, timestamp: new Date().toISOString(),
-                ...(mediaUrl && { mediaUrl })
+                ...(mediaUrl && { mediaUrl }),
+                ...(isInteractiveReply && { interactiveReply: true })
             };
             if (metaMsg.context?.id) {
                 // Igual que en el envío manual (api/chat.js): guardar el TEXTO citado aquí,

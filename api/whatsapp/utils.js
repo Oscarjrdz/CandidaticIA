@@ -183,36 +183,86 @@ export const sendMetaMessage = async (to, body, type = 'chat', extraParams = {})
                 payload.type = 'interactive';
                 const intType = extraParams.interactiveType || 'button'; // default
 
+                // Header opcional (Meta): botón acepta text/image/video/document; lista y cta_url
+                // solo text (image en cta lo arma el caso especial de app-link). Se construye a
+                // partir de extraParams.header = { type, text?, mediaUrl?, mediaId? }. Sin header → se omite.
+                const buildHeader = () => {
+                    const h = extraParams.header;
+                    if (!h || !h.type || h.type === 'none') return null;
+                    if (h.type === 'text') {
+                        if (!h.text?.trim()) return null;
+                        return { type: 'text', text: String(h.text).substring(0, 60) };
+                    }
+                    // media header: por id (subido a Meta) o por link
+                    const mediaRef = h.mediaId ? { id: h.mediaId } : (h.mediaUrl ? { link: h.mediaUrl } : null);
+                    if (!mediaRef) return null;
+                    if (h.type === 'image') return { type: 'image', image: mediaRef };
+                    if (h.type === 'video') return { type: 'video', video: mediaRef };
+                    if (h.type === 'document') return { type: 'document', document: { ...mediaRef, ...(h.filename ? { filename: h.filename } : {}) } };
+                    return null;
+                };
+                const header = buildHeader();
+                const footer = extraParams.footer?.trim() ? { text: String(extraParams.footer).substring(0, 60) } : null;
+
                 if (intType === 'button') {
                     payload.interactive = {
                         type: 'button',
-                        body: { text: body },
+                        ...(header ? { header } : {}),
+                        body: { text: String(body).substring(0, 1024) },
+                        ...(footer ? { footer } : {}),
                         action: {
-                            buttons: (extraParams.buttons || []).slice(0, 3).map((btnText, i) => ({
-                                type: 'reply',
-                                reply: {
-                                    id: `btn_${Date.now()}_${i}`,
-                                    title: btnText.substring(0, 20)
-                                }
-                            }))
+                            buttons: (extraParams.buttons || []).slice(0, 3).map((btn, i) => {
+                                // btn puede ser string (compat viejo) o { id, title }. El id se usa
+                                // como reply.id (estable si viene del nodo) para poder rutear.
+                                const title = (typeof btn === 'string' ? btn : btn?.title) || '';
+                                const rid = (typeof btn === 'object' && btn?.id) ? String(btn.id) : `btn_${Date.now()}_${i}`;
+                                return { type: 'reply', reply: { id: rid.substring(0, 256), title: title.substring(0, 20) } };
+                            })
                         }
                     };
                 } else if (intType === 'list') {
+                    // Secciones: soporta extraParams.sections = [{ title, rows:[{id,title,description}] }]
+                    // (nuevo, multi-sección) o el formato viejo (listItems + listSectionTitle).
+                    const sections = Array.isArray(extraParams.sections) && extraParams.sections.length
+                        ? extraParams.sections.map(sec => ({
+                            title: (sec.title || 'Opciones').substring(0, 24),
+                            rows: (sec.rows || []).map((item, i) => ({
+                                id: (item.id ? String(item.id) : `list_${Date.now()}_${i}`).substring(0, 200),
+                                title: (item.title || 'Opción').substring(0, 24),
+                                ...(item.description?.trim() ? { description: item.description.substring(0, 72) } : {})
+                            }))
+                        }))
+                        : [{
+                            title: extraParams.listSectionTitle?.substring(0, 24) || 'Opciones',
+                            rows: (extraParams.listItems || []).slice(0, 10).map((item, i) => ({
+                                id: `list_${Date.now()}_${i}`,
+                                title: item.title?.substring(0, 24) || 'Opción',
+                                ...(item.description?.trim() ? { description: item.description.substring(0, 72) } : {})
+                            }))
+                        }];
                     payload.interactive = {
                         type: 'list',
-                        body: { text: body },
+                        ...(header ? { header } : {}),
+                        body: { text: String(body).substring(0, 1024) },
+                        ...(footer ? { footer } : {}),
                         action: {
-                            button: extraParams.listButtonText?.substring(0,20) || 'Ver opciones',
-                            sections: [
-                                {
-                                    title: extraParams.listSectionTitle?.substring(0,24) || 'Opciones',
-                                    rows: (extraParams.listItems || []).slice(0, 10).map((item, i) => ({
-                                        id: `list_${Date.now()}_${i}`,
-                                        title: item.title?.substring(0, 24) || 'Opción',
-                                        description: item.description?.substring(0, 72) || ''
-                                    }))
-                                }
-                            ]
+                            button: extraParams.listButtonText?.substring(0, 20) || 'Ver opciones',
+                            sections
+                        }
+                    };
+                } else if (intType === 'cta_url') {
+                    // Botón de URL (call-to-action). No genera respuesta del candidato → sin ruteo.
+                    payload.interactive = {
+                        type: 'cta_url',
+                        ...(header ? { header } : {}),
+                        body: { text: String(body).substring(0, 1024) },
+                        ...(footer ? { footer } : {}),
+                        action: {
+                            name: 'cta_url',
+                            parameters: {
+                                display_text: (extraParams.ctaDisplayText || 'Abrir').substring(0, 20),
+                                url: extraParams.ctaUrl || ''
+                            }
                         }
                     };
                 } else if (intType === 'product') {

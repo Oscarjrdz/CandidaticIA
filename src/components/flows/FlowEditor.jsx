@@ -28,6 +28,19 @@ const DEFAULT_DATA_BY_TYPE = {
     accion_whatsapp: { quickReplyId: '', quickReplyName: '' },
     accion_vacante: { vacancyId: '', vacancyName: '' },
     accion_whatsapp_personalizado: { message: '' },
+    accion_botones: {
+        mode: 'button',                         // 'button' | 'list' | 'cta_url'
+        header: { type: 'none', text: '', mediaUrl: '', filename: '' },
+        body: '',
+        footer: '',
+        buttons: [{ id: '__OPT__', title: '' }], // ids se regeneran al crear el nodo (freshInteractiveData)
+        listButtonText: 'Ver opciones',
+        sections: [{ title: 'Opciones', rows: [{ id: '__OPT__', title: '', description: '' }] }],
+        ctaDisplayText: '',
+        ctaUrl: '',
+        routeByOption: true,
+        timeoutHoras: 48
+    },
     frase_dinamica: { value: '' },
     accion_etiqueta: { tag: '' },
     accion_quitar_etiqueta: { tag: '' },
@@ -45,6 +58,23 @@ const DEFAULT_DATA_BY_TYPE = {
     // Elementos decorativos (el motor los ignora, van a la par de "Agregar nodo"):
     bg: { color: '#6366f1', opacity: 0.14 },              // fondo de sección: color + transparencia
     texto: { text: '', fontSize: 18, color: '#111827' }    // texto libre: contenido + tamaño + color
+};
+
+// Id ESTABLE para una opción de botón/fila (se usa como sourceHandle de su arista de ruteo).
+export const makeOptionId = () => `opt_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
+
+// Clona el default de un tipo SIN aliasar arrays/objetos anidados entre nodos. Para
+// 'accion_botones' reemplaza los ids placeholder de las opciones por ids frescos.
+const freshDefaultData = (type) => {
+    const src = DEFAULT_DATA_BY_TYPE[type] || {};
+    const clone = typeof structuredClone === 'function'
+        ? structuredClone(src)
+        : JSON.parse(JSON.stringify(src));
+    if (type === 'accion_botones') {
+        (clone.buttons || []).forEach(b => { b.id = makeOptionId(); });
+        (clone.sections || []).forEach(s => (s.rows || []).forEach(r => { r.id = makeOptionId(); }));
+    }
+    return clone;
 };
 
 const stripTransientData = (data = {}) => {
@@ -310,7 +340,11 @@ const FlowEditorInner = ({ flowId, onBack }) => {
                 id: `n_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
                 type,
                 position,
-                data: { ...(DEFAULT_DATA_BY_TYPE[type] || {}) }
+                // Deep-clone del default para no aliasar arrays/objetos anidados entre nodos
+                // (dos nodos compartirían el mismo array de botones/secciones si fuera spread
+                // superficial). Para 'accion_botones' además regenera los ids ESTABLES de cada
+                // opción (se usan como sourceHandle de las aristas de ruteo).
+                data: freshDefaultData(type)
             };
             // Tamaño inicial de los elementos decorativos (redimensionables con NodeResizer):
             // el fondo nace amplio (es una "sección"); el texto una caja chica. hydrateNode

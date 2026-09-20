@@ -13,6 +13,40 @@ function hexToRgba(hex, alpha) {
     return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
+// Salidas del nodo "Mandar Botones/Opciones" cuando rutea por opción: una salida por
+// botón/fila (id = el id ESTABLE de la opción, que la arista usa como sourceHandle) repartidas
+// por el borde derecho, más una salida "Timeout" abajo (se toma si el candidato no responde a
+// tiempo). Cada handle lleva su etiqueta con el título de la opción.
+const InteractiveHandles = ({ data }) => {
+    const mode = data.mode || 'button';
+    const options = mode === 'list'
+        ? (data.sections || []).flatMap(s => (s.rows || []).filter(r => r?.title?.trim()))
+        : (data.buttons || []).filter(b => b?.title?.trim());
+    if (!options.length) {
+        // Sin opciones válidas aún: una salida gris genérica para no dejar el nodo sin conexión.
+        return <Handle type="source" position={Position.Right} className="!w-3 !h-3 !bg-gray-400 !border-2 !border-white dark:!border-gray-900" />;
+    }
+    return (
+        <>
+            {options.map((opt, i) => {
+                const top = `${((i + 1) / (options.length + 1)) * 100}%`;
+                return (
+                    <React.Fragment key={opt.id}>
+                        <Handle type="source" id={opt.id} position={Position.Right} style={{ top }}
+                            className="!w-3 !h-3 !bg-emerald-500 !border-2 !border-white dark:!border-gray-900" />
+                        <span style={{ top }} className="absolute -right-1 translate-x-full -translate-y-1/2 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 pointer-events-none whitespace-nowrap max-w-[110px] truncate">
+                            {opt.title}
+                        </span>
+                    </React.Fragment>
+                );
+            })}
+            {/* Timeout: el candidato no tocó ninguna opción dentro de la ventana. */}
+            <Handle type="source" id="timeout" position={Position.Bottom} className="!w-3 !h-3 !bg-red-500 !border-2 !border-white dark:!border-gray-900" />
+            <span className="absolute left-1/2 -translate-x-1/2 -bottom-5 text-[10px] font-bold text-red-500 pointer-events-none whitespace-nowrap">Timeout</span>
+        </>
+    );
+};
+
 const BG_COLORS = ['#6366f1', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#64748b'];
 const TEXT_COLORS = ['#111827', '#ffffff', '#6366f1', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#ec4899'];
 
@@ -368,7 +402,9 @@ const FlowNode = ({ id, type, data, selected }) => {
                 </div>
             )}
 
-            {def.branching ? (
+            {type === 'accion_botones' && data.routeByOption !== false && (data.mode || 'button') !== 'cta_url' ? (
+                <InteractiveHandles data={data} />
+            ) : def.branching ? (
                 <>
                     {/* Salida "Sí cumple": arista normal (sin sourceHandle 'no'). El id 'si'
                         hace que sea el handle por defecto al que se re-mapean las aristas

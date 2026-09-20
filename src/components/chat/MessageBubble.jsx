@@ -373,6 +373,14 @@ const MessageBubble = React.memo(function MessageBubble({
                         </div>
                     )}
 
+                    {/* Respuesta de botón/opción del candidato: chip que la distingue de un
+                        texto escrito a mano (el candidato tocó una opción interactiva). */}
+                    {msg.interactiveReply && !isMe && (
+                        <div className="inline-flex items-center gap-1 mb-1 px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 text-[10px] font-semibold align-middle">
+                            👆 Tocó un botón
+                        </div>
+                    )}
+
                     {msg.content && msg.type !== 'sticker' && (
                         <div className="whitespace-pre-wrap leading-[1.35] inline-block break-words" style={{ paddingBottom: '16px', paddingRight: '80px', paddingTop: msg.mediaUrl ? '2px' : '0' }}>
                             {(() => {

@@ -1,4 +1,4 @@
-import { Play, Tag, CalendarRange, MapPin, Briefcase, GraduationCap, MessageCircle, Hash, UserRound, CircleMinus, BellRing, FolderKanban, FlaskConical, Eraser, Filter, MessageSquareText, ListChecks, CheckCheck, BotOff, Bot, Ear, AlarmClock, StickyNote, Quote, Square, Type, Flag } from 'lucide-react';
+import { Play, Tag, CalendarRange, MapPin, Briefcase, GraduationCap, MessageCircle, Hash, UserRound, CircleMinus, BellRing, FolderKanban, FlaskConical, Eraser, Filter, MessageSquareText, ListChecks, CheckCheck, BotOff, Bot, Ear, AlarmClock, StickyNote, Quote, Square, Type, Flag, MousePointerClick } from 'lucide-react';
 
 export const PROFILE_FILTER_LABELS = {
     active: 'Activos (no bloqueados)',
@@ -167,6 +167,24 @@ export const NODE_DEFS = {
         hasTarget: true,
         hasSource: true,
         summary: (data) => data.message?.trim() ? (data.message.length > 60 ? `${data.message.slice(0, 60)}…` : data.message) : 'Escribe el mensaje'
+    },
+    accion_botones: {
+        label: 'Mandar Botones / Opciones',
+        icon: MousePointerClick,
+        color: 'emerald',
+        hasTarget: true,
+        hasSource: true, // salida única cuando NO rutea por opción (o en modo enlace)
+        // El ruteo por opción (una salida por botón/fila + Timeout) lo dibuja FlowNode a
+        // mano cuando type==='accion_botones' && routeByOption — ver InteractiveHandles.
+        summary: (data) => {
+            const mode = data.mode || 'button';
+            if (mode === 'cta_url') return data.ctaDisplayText?.trim() ? `Enlace: ${data.ctaDisplayText}` : 'Botón de enlace (configura)';
+            const n = mode === 'button'
+                ? (data.buttons || []).filter(b => b?.title?.trim()).length
+                : (data.sections || []).reduce((a, s) => a + (s.rows || []).filter(r => r?.title?.trim()).length, 0);
+            const kind = mode === 'button' ? 'Botones' : 'Lista';
+            return data.body?.trim() ? `${kind} (${n}) — ${data.body.slice(0, 30)}${data.body.length > 30 ? '…' : ''}` : `${kind} — configura el mensaje`;
+        }
     },
     frase_dinamica: {
         label: 'Frase Dinámica',

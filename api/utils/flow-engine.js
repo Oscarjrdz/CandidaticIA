@@ -597,6 +597,119 @@ export async function evaluateOrExecute(node, candidate, flowId, redis, opts = {
             return true;
         }
 
+        // 🔘 MANDAR BOTONES / OPCIONES (mensaje interactivo de Meta, totalmente configurable).
+        // Modos: 'button' (1-3 botones de respuesta), 'list' (menú de hasta 10 filas) o
+        // 'cta_url' (botón de enlace, sin respuesta). Header (texto/imagen/video/documento),
+        // cuerpo y footer opcionales — todo pasa por substituteVariables ({{nombre}}, etc).
+        //
+        // RUTEO POR OPCIÓN (data.routeByOption, solo button/list): tras enviar, REGISTRA una
+        // espera (igual que "esperando_respuesta") y PAUSA el flujo. Cuando el candidato toca
+        // una opción, el webhook convierte el clic en el título de la opción (texto) y
+        // resumeWaitingFlowIfMatch reanuda por el handle de ESA opción (o por 'timeout' al
+        // expirar). Igual que "esperando_respuesta", el ruteo SOLO opera si el candidato está
+        // en silencio (blocked) → poner un nodo "Desactivar Bot" ANTES. Sin routeByOption
+        // (o en cta_url) el nodo solo envía y el flujo continúa por su única salida.
+        case 'accion_botones': {
+            const mode = data.mode || 'button';
+            if (!data.body?.trim()) return true; // sin cuerpo → no rompe la cadena
+
+            const bodyText = substituteVariables(data.body, candidate);
+            const header = (data.header && data.header.type && data.header.type !== 'none')
+                ? { ...data.header, ...(data.header.text ? { text: substituteVariables(data.header.text, candidate) } : {}) }
+                : null;
+            const footer = data.footer?.trim() ? substituteVariables(data.footer, candidate) : '';
+
+            const extra = { interactiveType: mode, header, footer, priority: 1 };
+            if (mode === 'button') {
+                extra.buttons = (Array.isArray(data.buttons) ? data.buttons : [])
+                    .filter(b => b?.title?.trim()).slice(0, 3)
+                    .map(b => ({ id: b.id, title: substituteVariables(b.title, candidate) }));
+            } else if (mode === 'list') {
+                extra.listButtonText = data.listButtonText;
+                extra.sections = (Array.isArray(data.sections) ? data.sections : []).map(sec => ({
+                    title: sec.title,
+                    rows: (Array.isArray(sec.rows) ? sec.rows : []).filter(r => r?.title?.trim())
+                        .map(r => ({ id: r.id, title: substituteVariables(r.title, candidate), description: r.description ? substituteVariables(r.description, candidate) : '' }))
+                }));
+            } else if (mode === 'cta_url') {
+                extra.ctaDisplayText = data.ctaDisplayText;
+                extra.ctaUrl = data.ctaUrl;
+            }
+
+            // Vista previa legible en el historial del chat (como el envío manual de botones).
+            const optTitles = mode === 'button'
+                ? (data.buttons || []).map(b => b?.title).filter(Boolean)
+                : mode === 'list'
+                    ? (data.sections || []).flatMap(s => (s.rows || []).map(r => r?.title)).filter(Boolean)
+                    : [];
+            // Formato EXACTO que entiende MessageBubble.jsx del Chat Web para pintar chips:
+            //   botones → "\n\n[Botones: a | b]"  (split por ' | ')
+            //   lista   → "\n\n[Lista: a, b]"      (split por ', ')
+            const previewText = mode === 'cta_url'
+                ? `${bodyText}\n\n[Botón: ${data.ctaDisplayText || 'Abrir'} → ${data.ctaUrl || ''}]`
+                : !optTitles.length ? bodyText
+                    : mode === 'button'
+                        ? `${bodyText}\n\n[Botones: ${optTitles.join(' | ')}]`
+                        : `${bodyText}\n\n[Lista: ${optTitles.join(', ')}]`;
+
+            let sendOk = false;
+            try {
+                const config = await getUltraMsgConfig(candidate.incomingPhoneNumberId || candidate.instanceId);
+                if (!config?.token || !config?.instanceId) throw new Error('sin credenciales de WhatsApp');
+                const cleanTo = String(candidate.whatsapp).replace(/\D/g, '');
+                const sendResult = await pacedSend(opts, () => sendUltraMsgMessageWithRetry(config.instanceId, config.token, cleanTo, bodyText, 'interactive', extra));
+                if (sendResult?.success) {
+                    sendOk = true;
+                    await saveFlowOutbound(candidate.id, {
+                        from: 'me', content: previewText, timestamp: new Date().toISOString(),
+                        meta: { flow: true, flowId, nodeId: node.id, interactive: true }
+                    }, sendResult);
+                } else {
+                    console.error(`[FLOW-ENGINE] accion_botones ${flowId}/${node.id} candidato ${candidate.id}: envío falló —`, sendResult?.error);
+                }
+            } catch (e) {
+                console.error(`[FLOW-ENGINE] accion_botones ${flowId}/${node.id}:`, e?.message);
+            }
+
+            // ¿Rutea por opción? Solo button/list con routeByOption y si el envío salió.
+            const canRoute = data.routeByOption !== false && (mode === 'button' || mode === 'list');
+            if (!canRoute || !sendOk) return true;
+            // En test/ephemeral no hay ledger que reanudar → envía pero no pausa.
+            if (opts.skipClaim || opts.ephemeral) return true;
+
+            // handle = id ESTABLE de la opción (el mismo que la arista usa como sourceHandle);
+            // match = título tal cual lo recibe Meta de vuelta al hacer clic (truncado a 20/24).
+            const options = [];
+            if (mode === 'button') {
+                for (const b of (data.buttons || [])) {
+                    if (b?.id && b?.title?.trim()) options.push({ handle: b.id, match: substituteVariables(b.title, candidate).substring(0, 20) });
+                }
+            } else {
+                for (const sec of (data.sections || [])) {
+                    for (const r of (sec.rows || [])) {
+                        if (r?.id && r?.title?.trim()) options.push({ handle: r.id, match: substituteVariables(r.title, candidate).substring(0, 24) });
+                    }
+                }
+            }
+            if (!options.length) return true;
+
+            const timeoutHoras = Number(data.timeoutHoras) > 0 ? Number(data.timeoutHoras) : 48;
+            const ttlSec = Math.max(PROGRESS_TTL_SEC, Math.ceil(timeoutHoras * 3600) + 86400);
+            try {
+                const key = `${WAITING_PREFIX}${candidate.id}`;
+                const payload = JSON.stringify({
+                    nodeId: node.id, kind: 'interactive', options,
+                    expiresAt: Date.now() + timeoutHoras * 3600 * 1000
+                });
+                await redis.hset(key, flowId, payload);
+                await redis.expire(key, ttlSec);
+            } catch (e) {
+                console.error(`[FLOW-ENGINE] accion_botones espera ${flowId}/${node.id}:`, e?.message);
+                return true; // si falla el registro, no cuelgues el flujo
+            }
+            return { __pause: true, ttlSec };
+        }
+
         case 'accion_etiqueta': {
             if (!data.tag) return true;
             try {
@@ -1260,11 +1373,29 @@ export async function resumeWaitingFlowIfMatch(candidateId, candidateSnapshot, i
             try { st = JSON.parse(val); } catch { await redis.hdel(key, flowId).catch(() => {}); continue; }
 
             const expired = st.expiresAt && now > Number(st.expiresAt);
+
+            // Dos tipos de espera:
+            //  • kind 'interactive' (nodo "Mandar Botones/Opciones"): cada opción tiene su handle;
+            //    se rutea por la opción cuyo título coincide con el clic (texto que manda Meta).
+            //  • legacy (nodo "Esperando Respuesta"): grupos de frases → handle 'si'/'no'.
             let matched = false;
-            if (!expired) {
-                for (const g of (Array.isArray(st.grupos) ? st.grupos : [])) {
-                    if (flowTextMatchesGroup(incomingText, g, st.matchMode)) { matched = true; break; }
+            let handle = null;
+            if (st.kind === 'interactive') {
+                if (!expired) {
+                    const inTxt = String(incomingText).trim().toLowerCase();
+                    const opt = (Array.isArray(st.options) ? st.options : [])
+                        .find(o => String(o.match || '').trim().toLowerCase() === inTxt);
+                    if (opt) { matched = true; handle = opt.handle; }
+                } else {
+                    handle = 'timeout';
                 }
+            } else {
+                if (!expired) {
+                    for (const g of (Array.isArray(st.grupos) ? st.grupos : [])) {
+                        if (flowTextMatchesGroup(incomingText, g, st.matchMode)) { matched = true; break; }
+                    }
+                }
+                handle = matched ? 'si' : 'no'; // 'si' = coincidió · 'no' = timeout
             }
 
             // Ni coincidió ni expiró → sigue esperando (no consume el registro).
@@ -1276,7 +1407,6 @@ export async function resumeWaitingFlowIfMatch(candidateId, candidateSnapshot, i
             const flow = flows.find(f => f.id === flowId && f.active && Array.isArray(f.nodes) && f.nodes.length);
             if (!flow) continue; // el flujo se borró/desactivó mientras esperaba → se descarta la espera
 
-            const handle = matched ? 'si' : 'no'; // 'si' = coincidió · 'no' = timeout
             await runOneFlow(redis, flow, candidateId, { ...candidateSnapshot }, {
                 resumeWait: { nodeId: st.nodeId, handle }
             });

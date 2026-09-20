@@ -292,6 +292,188 @@ const CheckpointPicker = ({ data, onPatch }) => {
     );
 };
 
+// Id estable local para opciones (evita importar de FlowEditor → dependencia circular).
+const makeOptId = () => `opt_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
+
+const inputCls = 'w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 dark:bg-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500';
+
+// 🔘 Configuración COMPLETA del nodo "Mandar Botones / Opciones" (mensaje interactivo de Meta).
+// Modo Botones (1-3) / Lista (hasta 10 filas en secciones) / Enlace (cta_url). Header
+// (texto o media), cuerpo, footer, y ruteo por opción (una salida por botón/fila + Timeout).
+const BotonesConfig = ({ data, patch }) => {
+    const mode = data.mode || 'button';
+    const buttons = Array.isArray(data.buttons) ? data.buttons : [];
+    const sections = Array.isArray(data.sections) ? data.sections : [];
+    const header = data.header || { type: 'none' };
+    const totalRows = sections.reduce((a, s) => a + (s.rows || []).length, 0);
+
+    // ── Botones ──
+    const setButtons = (b) => patch({ buttons: b });
+    const addButton = () => { if (buttons.length >= 3) return; setButtons([...buttons, { id: makeOptId(), title: '' }]); };
+    const updateButton = (i, title) => setButtons(buttons.map((b, idx) => idx === i ? { ...b, title } : b));
+    const removeButton = (i) => setButtons(buttons.filter((_, idx) => idx !== i));
+
+    // ── Lista (secciones + filas) ──
+    const setSections = (s) => patch({ sections: s });
+    const addSection = () => setSections([...sections, { title: 'Sección', rows: [{ id: makeOptId(), title: '', description: '' }] }]);
+    const removeSection = (si) => setSections(sections.filter((_, idx) => idx !== si));
+    const updateSectionTitle = (si, title) => setSections(sections.map((s, idx) => idx === si ? { ...s, title } : s));
+    const addRow = (si) => { if (totalRows >= 10) return; setSections(sections.map((s, idx) => idx === si ? { ...s, rows: [...(s.rows || []), { id: makeOptId(), title: '', description: '' }] } : s)); };
+    const updateRow = (si, ri, field, val) => setSections(sections.map((s, idx) => idx === si ? { ...s, rows: s.rows.map((r, j) => j === ri ? { ...r, [field]: val } : r) } : s));
+    const removeRow = (si, ri) => setSections(sections.map((s, idx) => idx === si ? { ...s, rows: s.rows.filter((_, j) => j !== ri) } : s));
+
+    // ── Header ──
+    const setHeader = (fields) => patch({ header: { ...header, ...fields } });
+    const HEADER_TYPES = mode === 'list'
+        ? [['none', 'Sin encabezado'], ['text', 'Texto']]                                   // Meta: lista solo acepta header de texto
+        : [['none', 'Sin encabezado'], ['text', 'Texto'], ['image', 'Imagen'], ['video', 'Video'], ['document', 'Documento']];
+
+    return (
+        <div className="space-y-5">
+            {/* Modo */}
+            <div>
+                <label className="text-xs text-gray-500 dark:text-gray-400 mb-2 block">Tipo de mensaje interactivo</label>
+                <div className="grid grid-cols-3 gap-2">
+                    {[['button', 'Botones'], ['list', 'Lista'], ['cta_url', 'Enlace']].map(([val, lbl]) => (
+                        <button key={val} onClick={() => patch({ mode: val })}
+                            className={`px-2 py-2 rounded-xl text-xs font-semibold border transition-colors ${mode === val ? 'bg-emerald-600 text-white border-emerald-600' : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50'}`}>
+                            {lbl}
+                        </button>
+                    ))}
+                </div>
+                <p className="mt-1.5 text-[11px] text-gray-400">
+                    {mode === 'button' && 'Hasta 3 botones de respuesta rápida (título ≤20 caracteres).'}
+                    {mode === 'list' && 'Un botón que abre un menú de hasta 10 opciones en secciones.'}
+                    {mode === 'cta_url' && 'Un botón que abre una URL. No genera respuesta → sin ruteo por opción.'}
+                </p>
+            </div>
+
+            {/* Header */}
+            <div>
+                <label className="text-xs text-gray-500 dark:text-gray-400 mb-2 block">Encabezado (opcional)</label>
+                <div className="flex flex-wrap gap-1.5 mb-2">
+                    {HEADER_TYPES.map(([val, lbl]) => (
+                        <button key={val} onClick={() => setHeader({ type: val })}
+                            className={`px-2.5 py-1 rounded-lg text-xs border ${header.type === val || (!header.type && val === 'none') ? 'bg-gray-800 text-white border-gray-800 dark:bg-gray-600 dark:border-gray-600' : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300'}`}>
+                            {lbl}
+                        </button>
+                    ))}
+                </div>
+                {header.type === 'text' && (
+                    <input type="text" maxLength={60} value={header.text || ''} onChange={(e) => setHeader({ text: e.target.value })} placeholder="Texto del encabezado (≤60)" className={inputCls} />
+                )}
+                {['image', 'video', 'document'].includes(header.type) && (
+                    <div className="space-y-2">
+                        <input type="text" value={header.mediaUrl || ''} onChange={(e) => setHeader({ mediaUrl: e.target.value })} placeholder="URL pública del archivo (o usa un media id)" className={inputCls} />
+                        <input type="text" value={header.mediaId || ''} onChange={(e) => setHeader({ mediaId: e.target.value })} placeholder="Media id de Meta (opcional, tiene prioridad)" className={inputCls} />
+                        {header.type === 'document' && (
+                            <input type="text" value={header.filename || ''} onChange={(e) => setHeader({ filename: e.target.value })} placeholder="Nombre del archivo (opcional)" className={inputCls} />
+                        )}
+                    </div>
+                )}
+            </div>
+
+            {/* Body */}
+            <div>
+                <label className="text-xs text-gray-500 dark:text-gray-400 mb-2 block">Mensaje <span className="text-red-500">*</span></label>
+                <textarea rows={3} maxLength={1024} value={data.body || ''} onChange={(e) => patch({ body: e.target.value })} placeholder="Texto del mensaje. Admite variables: {{nombre}}, {{municipio}}…" className={inputCls} />
+            </div>
+
+            {/* Footer */}
+            <div>
+                <label className="text-xs text-gray-500 dark:text-gray-400 mb-2 block">Pie de mensaje (opcional)</label>
+                <input type="text" maxLength={60} value={data.footer || ''} onChange={(e) => patch({ footer: e.target.value })} placeholder="Texto chico al pie (≤60)" className={inputCls} />
+            </div>
+
+            {/* Opciones según modo */}
+            {mode === 'button' && (
+                <div>
+                    <label className="text-xs text-gray-500 dark:text-gray-400 mb-2 block">Botones ({buttons.length}/3)</label>
+                    <div className="space-y-2">
+                        {buttons.map((b, i) => (
+                            <div key={b.id} className="flex items-center gap-2">
+                                <input type="text" maxLength={20} value={b.title || ''} onChange={(e) => updateButton(i, e.target.value)} placeholder={`Botón ${i + 1} (≤20)`} className={inputCls} />
+                                <button onClick={() => removeButton(i)} className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20" title="Quitar">✕</button>
+                            </div>
+                        ))}
+                    </div>
+                    {buttons.length < 3 && (
+                        <button onClick={addButton} className="mt-2 text-xs text-emerald-600 dark:text-emerald-400 hover:underline">+ Agregar botón</button>
+                    )}
+                </div>
+            )}
+
+            {mode === 'list' && (
+                <div className="space-y-3">
+                    <div>
+                        <label className="text-xs text-gray-500 dark:text-gray-400 mb-2 block">Texto del botón que abre la lista</label>
+                        <input type="text" maxLength={20} value={data.listButtonText || ''} onChange={(e) => patch({ listButtonText: e.target.value })} placeholder="Ver opciones (≤20)" className={inputCls} />
+                    </div>
+                    <div className="flex items-center justify-between">
+                        <label className="text-xs text-gray-500 dark:text-gray-400">Secciones y filas ({totalRows}/10)</label>
+                        <button onClick={addSection} className="text-xs text-emerald-600 dark:text-emerald-400 hover:underline">+ Sección</button>
+                    </div>
+                    {sections.map((s, si) => (
+                        <div key={si} className="rounded-xl border border-gray-200 dark:border-gray-700 p-2.5 space-y-2">
+                            <div className="flex items-center gap-2">
+                                <input type="text" maxLength={24} value={s.title || ''} onChange={(e) => updateSectionTitle(si, e.target.value)} placeholder="Título de la sección (≤24)" className={`${inputCls} font-semibold`} />
+                                {sections.length > 1 && <button onClick={() => removeSection(si)} className="p-1.5 rounded-lg text-gray-400 hover:text-red-500" title="Quitar sección">✕</button>}
+                            </div>
+                            {(s.rows || []).map((r, ri) => (
+                                <div key={r.id} className="pl-2 border-l-2 border-emerald-200 dark:border-emerald-800 space-y-1.5">
+                                    <div className="flex items-center gap-2">
+                                        <input type="text" maxLength={24} value={r.title || ''} onChange={(e) => updateRow(si, ri, 'title', e.target.value)} placeholder={`Opción ${ri + 1} (≤24)`} className={inputCls} />
+                                        <button onClick={() => removeRow(si, ri)} className="p-1.5 rounded-lg text-gray-400 hover:text-red-500" title="Quitar">✕</button>
+                                    </div>
+                                    <input type="text" maxLength={72} value={r.description || ''} onChange={(e) => updateRow(si, ri, 'description', e.target.value)} placeholder="Descripción (opcional, ≤72)" className={`${inputCls} text-xs`} />
+                                </div>
+                            ))}
+                            {totalRows < 10 && <button onClick={() => addRow(si)} className="text-xs text-emerald-600 dark:text-emerald-400 hover:underline">+ Opción</button>}
+                        </div>
+                    ))}
+                </div>
+            )}
+
+            {mode === 'cta_url' && (
+                <div className="space-y-2">
+                    <div>
+                        <label className="text-xs text-gray-500 dark:text-gray-400 mb-2 block">Texto del botón</label>
+                        <input type="text" maxLength={20} value={data.ctaDisplayText || ''} onChange={(e) => patch({ ctaDisplayText: e.target.value })} placeholder="Abrir, Descargar… (≤20)" className={inputCls} />
+                    </div>
+                    <div>
+                        <label className="text-xs text-gray-500 dark:text-gray-400 mb-2 block">URL</label>
+                        <input type="text" value={data.ctaUrl || ''} onChange={(e) => patch({ ctaUrl: e.target.value })} placeholder="https://…" className={inputCls} />
+                    </div>
+                </div>
+            )}
+
+            {/* Ruteo por opción (solo button/list) */}
+            {(mode === 'button' || mode === 'list') && (
+                <div className="pt-3 border-t border-gray-100 dark:border-gray-700 space-y-3">
+                    <label className="flex items-start gap-2.5 cursor-pointer">
+                        <input type="checkbox" checked={data.routeByOption !== false} onChange={(e) => patch({ routeByOption: e.target.checked })} className="w-4 h-4 mt-0.5 rounded text-emerald-600 focus:ring-emerald-500" />
+                        <span>
+                            <span className="text-sm text-gray-700 dark:text-gray-200 block">Rutear por opción</span>
+                            <span className="text-xs text-gray-400">Cada botón/fila crea una salida propia + una salida <strong>Timeout</strong>. El candidato que toca una opción sigue por esa rama.</span>
+                        </span>
+                    </label>
+                    {data.routeByOption !== false && (
+                        <>
+                            <div>
+                                <label className="text-xs text-gray-500 dark:text-gray-400 mb-1 block">Timeout (horas sin responder → rama Timeout)</label>
+                                <input type="number" min="1" value={data.timeoutHoras ?? 48} onChange={(e) => patch({ timeoutHoras: e.target.value === '' ? 48 : Number(e.target.value) })} className={`${inputCls} w-28`} />
+                            </div>
+                            <p className="text-xs bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-2.5 text-amber-700 dark:text-amber-300">
+                                ⚠️ El ruteo por clic solo funciona con Brenda en <strong>silencio</strong>: pon un nodo <strong>“Desactivar Bot”</strong> ANTES de este, si no, Brenda contestará el clic en vez de rutear.
+                            </p>
+                        </>
+                    )}
+                </div>
+            )}
+        </div>
+    );
+};
+
 const NodeConfigDrawer = ({ node, flowId, meta, quickReplies, reminderTemplates, projects, onChange, onClose }) => {
     if (!node) return null;
     const def = NODE_DEFS[node.type] || NODE_DEFS.contador;
@@ -582,6 +764,10 @@ const NodeConfigDrawer = ({ node, flowId, meta, quickReplies, reminderTemplates,
 
                 {node.type === 'condicion_checkpoint' && (
                     <CheckpointPicker data={data} onPatch={patch} />
+                )}
+
+                {node.type === 'accion_botones' && (
+                    <BotonesConfig data={data} patch={patch} />
                 )}
 
                 {node.type === 'accion_whatsapp' && (
