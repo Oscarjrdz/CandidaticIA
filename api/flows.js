@@ -53,6 +53,17 @@ async function saveFlows(redis, flows) {
     invalidateCache(REDIS_KEY);
 }
 
+// Lectura SIN caché para el editor/galería (acción de admin, baja frecuencia). El caché de
+// getCachedConfig es POR INSTANCIA serverless: al guardar, el PUT invalida SOLO la instancia que
+// lo atendió, así que otra instancia con el caché viejo mostraría la versión previa por unos
+// minutos (bug: "cambio a completo, guardo, al re-entrar vuelve a incompleto de forma
+// intermitente"). Leyendo directo de Redis, el editor SIEMPRE ve lo último recién guardado. El
+// camino caliente (el agente leyendo flujos en cada mensaje, vía flow-engine) sigue usando caché.
+async function getFlowsFresh(redis) {
+    const raw = await redis.get(REDIS_KEY);
+    return raw ? JSON.parse(raw) : [];
+}
+
 function defaultFlowNodes() {
     return {
         nodes: [
@@ -216,14 +227,14 @@ export default async function handler(req, res) {
         }
 
         if (method === 'GET' && id) {
-            const flows = await getFlows(redis);
+            const flows = await getFlowsFresh(redis);
             const flow = flows.find(f => f.id === id);
             if (!flow) return res.status(404).json({ success: false, error: 'Flow not found' });
             return res.status(200).json({ success: true, flow });
         }
 
         if (method === 'GET') {
-            const flows = await getFlows(redis);
+            const flows = await getFlowsFresh(redis);
             return res.status(200).json({ success: true, flows });
         }
 
