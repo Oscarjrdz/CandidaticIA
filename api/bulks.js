@@ -107,7 +107,7 @@ const saveState = async (state) => {
 };
 
 const addLog = (state, msg) => {
-    const ts = new Date().toLocaleTimeString();
+    const ts = new Date().toLocaleTimeString('es-MX', { timeZone: 'America/Monterrey' });
     state.logs.unshift(`[${ts}] ${msg}`);
     if (state.logs.length > 80) state.logs.length = 80; // cap
 };
