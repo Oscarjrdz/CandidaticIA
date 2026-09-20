@@ -245,12 +245,41 @@
       "Bash(node /private/tmp/claude-501/-Users-oscar-Candidatic-IA/e1f701cc-e58d-4190-86c9-2ea9bed1442d/scratchpad/bw-audit.mjs)",
       "Bash(node _bw_audit_tmp.mjs)",
       "Bash(node _bw_audit2_tmp.mjs)",
-      "Bash(grep -n \"getCandidateById\\\\|candidate:\\\\${\\\\|getCandidatesByIds\\\\|action === 'process'\\\\|action === 'tick'\\\\|substituteVariables\\\\|for \\(\\\\|while \\(\" api/bulks.js)"
+      "Bash(grep -n \"getCandidateById\\\\|candidate:\\\\${\\\\|getCandidatesByIds\\\\|action === 'process'\\\\|action === 'tick'\\\\|substituteVariables\\\\|for \\(\\\\|while \\(\" api/bulks.js)",
+      "Bash(node -e \"console.log\\('WABA:', !!process.env.META_WABA_ID, 'TOKEN:', !!process.env.META_ACCESS_TOKEN\\)\")",
+      "Bash(node --check api/kemet.js)",
+      "Bash(node -e \"JSON.parse\\(require\\('fs'\\).readFileSync\\('vercel.json','utf8'\\)\\); console.log\\('vercel.json JSON válido'\\)\")",
+      "Bash(node /private/tmp/claude-501/-Users-oscar-Candidatic-IA/66888edf-9279-4489-8bdb-acfdbc5d7b07/scratchpad/diag.mjs)",
+      "Bash(grep -nA6 \"candidateSortScore = \" api/utils/storage.js)",
+      "Bash(node /private/tmp/claude-501/-Users-oscar-Candidatic-IA/66888edf-9279-4489-8bdb-acfdbc5d7b07/scratchpad/diag2.mjs)",
+      "Bash(rm -f /private/tmp/claude-501/-Users-oscar-Candidatic-IA/66888edf-9279-4489-8bdb-acfdbc5d7b07/scratchpad/diag*.mjs; echo done)",
+      "Bash(echo \"eslint exit:$?\")",
+      "Bash(curl -s --max-time 15 https://www.candidatic.com/?_=__TRACKED_VAR__)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" --max-time 15 \"https://www.candidatic.com/\")",
+      "Bash(node scripts/validate_palette.js \"#2a78d6,#008300,#e87ba4,#eda100,#1baf7a,#eb6834,#4a3aa7,#e34948\" --mode light)",
+      "Bash(node scripts/validate_palette.js \"#3987e5,#008300,#d55181,#c98500,#199e70,#d95926,#9085e9,#e66767\" --mode dark)",
+      "Bash(node --check api/system/stats.js)",
+      "Bash(gh repo *)",
+      "Bash(gh --version)",
+      "Bash(echo \"EXIT: $? \\(1 = sin coincidencias, esperado\\)\")",
+      "Bash(grep -n \"selectedChat\\\\b\\\\|selectedCandidate\\\\b\\\\|Etiquetas actualizadas\\\\|fetch\\('/api/candidates\\\\|fetch\\(\\\\`/api/candidates\\\\|method: 'PUT'\\\\|method: 'POST'\\\\|updateCandidate\\\\|saveCandidate\" src/components/ChatSection.jsx)",
+      "Bash(grep -n \"PUT\\\\|req.method\\\\|tags\\\\|allowed\\\\|whitelist\\\\|saveCandidate\\\\|updateCandidate\\\\|Object.assign\\\\|...updates\\\\|const { id\" api/candidates.js)",
+      "Bash(awk 'NR>=5985 && NR<=6016{printf \"%d: %s\\\\n\",NR,$0}' src/components/ChatSection.jsx)",
+      "Bash(grep -E \"\\\\.png$\")",
+      "Bash(node _asis_full.mjs)",
+      "Bash([ -s \"$out\" ])",
+      "Bash(node --check /Users/oscar/Candidatic_IA/api/bulks.js)",
+      "Bash(xcode-select -p)",
+      "Read(//Library/Developer/CommandLineTools/usr/bin/**)",
+      "Bash(awk 'NR>=1936 && NR<=2100 && /syncCandidateSecondaryIndexes|saveCandidate|await set|\\\\.set\\\\\\(id/' api/utils/storage.js)",
+      "Bash(awk 'NR>=2020 && NR<=2090{print NR\": \"$0}' api/utils/storage.js)",
+      "Bash(grep -o \"REDIS_URL=.\\\\{0,25\\\\}\" .env.local)"
     ],
     "additionalDirectories": [
       "/Users/oscar/App Candidatic/Candidatic_App/utils",
       "/Users/oscar/App Candidatic/Candidatic_App/app/(candidate_tabs)",
-      "/Users/oscar/Candidatic_IA"
+      "/Users/oscar/Candidatic_IA",
+      "/private/tmp/claude-501/-Users-oscar-Candidatic-IA/66888edf-9279-4489-8bdb-acfdbc5d7b07/scratchpad"
     ]
   }
 }
