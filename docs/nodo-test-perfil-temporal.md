@@ -14,11 +14,18 @@ Al hacer clic en el nodo Test se abre el drawer con:
 - **Vacante actual**: para **Filtro: Etiqueta** en modo "es su etiqueta actual".
 - **Check points "ya pasados"**: multi-select de todos los checkpoints → las **Condición: Check
   Point** que apunten a esos toman la rama **Sí** (los demás, la **No**).
-- **Opción de menú a simular**: título del botón/fila (o `timeout`). En una prueba el nodo de
-  botones NO pausa (no hay clic real); sin esto se dispararían TODAS las ramas del menú. Con esto
-  la prueba sigue SOLO esa opción; vacío → no sigue ninguna rama del menú (solo se ve que se
-  envió). **Esto es solo del modo prueba**: en producción el menú SÍ pausa y espera el clic real
-  (verificado: 1 solo mensaje, ninguna rama corre hasta el clic → sin spam).
+- **Opción de menú a simular**: título del botón/fila (o `timeout`). Dos modos de prueba de menús:
+  - **CON opción a simular** → la prueba NO pausa: sigue SOLO esa opción y previsualiza toda la
+    ruta en un Run (sin clic físico). Sin esto se dispararían TODAS las ramas del menú.
+  - **SIN opción a simular** → la prueba registra una espera REAL (como producción) para que tu
+    **clic físico** en el WhatsApp enrute de verdad por la maquinaria real (BLOCK SHIELD →
+    resumeWaitingFlowIfMatch), sin re-enviar lo anterior (ledger). La espera se guarda con el id
+    del candidato real, así el clic que llega por webhook coincide. Ojo: la reanudación tras el
+    clic corre con el candidato REAL (no el perfil temporal) y marca execKey — inofensivo en
+    flujos "al regresar" (ephemeral los ignora).
+
+  **Nada de esto afecta producción**: el gate es `opts.skipClaim` (solo modo prueba). Verificado:
+  en producción el menú manda 1 solo mensaje, pausa, ninguna rama corre hasta el clic → sin spam.
 
 El **número** y el botón **Run** siguen en el cuerpo del nodo. Los mensajes de prueba SÍ se
 envían a ese número (y se guardan en su chat), pero el **perfil elegido NO se persiste**: solo

@@ -699,11 +699,16 @@ export async function evaluateOrExecute(node, candidate, flowId, redis, opts = {
             // ¿Rutea por opción? Solo button/list con routeByOption y si el envío salió.
             const canRoute = data.routeByOption !== false && (mode === 'button' || mode === 'list');
             if (!canRoute || !sendOk) return true;
-            // En modo test (skipClaim) no hay clic real que esperar → envía pero no pausa.
-            // En EPHEMERAL (flujos "al regresar") SÍ pausamos: a diferencia de "esperando_respuesta",
-            // este nodo vuelca el ledger completo al pausar (ver runOneFlow), así la reanudación
-            // tras el clic retoma sin re-enviar lo anterior — el ruteo funciona también al regresar.
-            if (opts.skipClaim) return true;
+            // Modo PRUEBA (nodo Test) con una "opción a simular" elegida → NO pausa: runOneFlow
+            // enruta esa opción para previsualizar la ruta en un solo Run (sin clic físico).
+            // Modo PRUEBA SIN opción a simular → cae abajo y registra la espera REAL (igual que
+            // producción), para que el CLIC FÍSICO del candidato enrute de verdad por la
+            // maquinaria real (BLOCK SHIELD → resumeWaitingFlowIfMatch). La espera queda en la
+            // llave del candidato real (el snapshot usa su id), así el clic que llega por webhook
+            // coincide. El ledger que se vuelca al pausar evita re-enviar lo anterior.
+            if (opts.skipClaim && opts.simulatedOption) return true;
+            // EPHEMERAL (flujos "al regresar") SÍ pausa: vuelca el ledger completo (ver runOneFlow),
+            // así la reanudación tras el clic retoma sin re-enviar lo anterior.
             if (!options.length) return true;
 
             const timeoutHoras = Number(data.timeoutHoras) > 0 ? Number(data.timeoutHoras) : 48;
