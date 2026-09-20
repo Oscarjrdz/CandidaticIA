@@ -466,6 +466,30 @@ const BotonesConfig = ({ data, patch }) => {
                             <p className="text-xs bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-2.5 text-amber-700 dark:text-amber-300">
                                 ⚠️ El ruteo por clic solo funciona con Brenda en <strong>silencio</strong>: pon un nodo <strong>“Desactivar Bot”</strong> ANTES de este, si no, Brenda contestará el clic en vez de rutear.
                             </p>
+
+                            {/* Re-mandar los botones si el candidato ESCRIBE en vez de tocar */}
+                            <div className="pt-2 border-t border-gray-100 dark:border-gray-700">
+                                <label className="flex items-start gap-2.5 cursor-pointer">
+                                    <input type="checkbox" checked={!!data.reask} onChange={(e) => patch({ reask: e.target.checked })} className="w-4 h-4 mt-0.5 rounded text-emerald-600 focus:ring-emerald-500" />
+                                    <span>
+                                        <span className="text-sm text-gray-700 dark:text-gray-200 block">Si escribe en vez de tocar, re-mandar los botones</span>
+                                        <span className="text-xs text-gray-400">Cuando el candidato responde con texto que no es una opción, le reenvía el mensaje con las opciones.</span>
+                                    </span>
+                                </label>
+                                {data.reask && (
+                                    <div className="mt-2 space-y-2 pl-6">
+                                        <div>
+                                            <label className="text-xs text-gray-500 dark:text-gray-400 mb-1 block">Máximo de re-envíos (tope anti-spam)</label>
+                                            <input type="number" min="1" max="5" value={data.reaskMax ?? 2} onChange={(e) => patch({ reaskMax: e.target.value === '' ? 2 : Number(e.target.value) })} className={`${inputCls} w-24`} />
+                                        </div>
+                                        <div>
+                                            <label className="text-xs text-gray-500 dark:text-gray-400 mb-1 block">Texto del empujón</label>
+                                            <input type="text" value={data.reaskText ?? ''} onChange={(e) => patch({ reaskText: e.target.value })} placeholder="Por favor elige una de las opciones 👇" className={inputCls} />
+                                        </div>
+                                        <p className="text-[11px] text-gray-400">Al agotar los re-envíos, deja de insistir y sigue esperando un clic válido o el Timeout.</p>
+                                    </div>
+                                )}
+                            </div>
                         </>
                     )}
                 </div>

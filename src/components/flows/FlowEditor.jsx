@@ -39,7 +39,10 @@ const DEFAULT_DATA_BY_TYPE = {
         ctaDisplayText: '',
         ctaUrl: '',
         routeByOption: true,
-        timeoutHoras: 48
+        timeoutHoras: 48,
+        reask: false,                           // si escribe en vez de tocar, re-mandar los botones
+        reaskMax: 2,
+        reaskText: 'Por favor elige una de las opciones 👇'
     },
     frase_dinamica: { value: '' },
     accion_etiqueta: { tag: '' },

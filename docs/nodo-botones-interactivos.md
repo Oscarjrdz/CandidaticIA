@@ -52,6 +52,16 @@ El ruteo por clic **solo funciona si el candidato está `blocked`** (Brenda muda
 **Conéctalo EN LÍNEA** (…→ Desactivar Bot → Botones), no como rama paralela, para
 garantizar que corre antes de que el nodo de botones pause.
 
+### Si el candidato ESCRIBE en vez de tocar (re-mandar)
+WhatsApp NO permite bloquear el teclado (limitación de Meta). Para el que responde con texto
+libre en vez de tocar una opción, el nodo tiene la opción **"re-mandar"** (`data.reask`): le
+reenvía el mensaje con las opciones, anteponiendo un empujón configurable (`reaskText`, ej.
+*"Por favor elige una opción 👇"*), hasta `reaskMax` veces (tope anti-spam, default 2). El
+contador vive en el payload de la espera (`reaskCount`). Al agotar el tope deja de insistir y
+sigue esperando un clic válido o el Timeout. El re-envío reusa `sendInteractiveNode`. Off por
+defecto (no cambia flujos existentes). Verificado: reaskCount 1,2,2 con tope 2 y clic posterior
+rutea normal.
+
 ### Funciona también en flujos "Al regresar" (ephemeral)
 A diferencia de "Esperando Respuesta" (que NO pausa en ephemeral), este nodo SÍ rutea en
 flujos "al regresar". Los flujos "al regresar" corren en modo ephemeral (sin ledger, para

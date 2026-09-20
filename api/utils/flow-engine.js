@@ -316,6 +316,81 @@ async function saveFlowOutbound(candidateId, msg, sendResult) {
     await updateMessageStatus(candidateId, saved.id, 'sent', remoteId ? { ultraMsgId: remoteId } : {}).catch(() => {});
 }
 
+// Construye y ENVÍA el mensaje interactivo de un nodo 'accion_botones' (botón/lista/cta_url)
+// con header/footer/variables, lo guarda en el historial (chips + palomitas) y devuelve
+// { sendOk, options } — options = [{handle, match}] para registrar la espera del ruteo.
+// `prefixText` antepone una línea al cuerpo (se usa al RE-MANDAR: "elige una opción 👇").
+// Reutilizado por el case 'accion_botones' y por el re-envío de resumeWaitingFlowIfMatch.
+async function sendInteractiveNode(redis, node, candidate, flowId, opts = {}, prefixText = '') {
+    const data = node.data || {};
+    const mode = data.mode || 'button';
+    if (!data.body?.trim()) return { sendOk: false, options: [] };
+
+    const bodyText = (prefixText ? `${prefixText}\n\n` : '') + substituteVariables(data.body, candidate);
+    const header = (data.header && data.header.type && data.header.type !== 'none')
+        ? { ...data.header, ...(data.header.text ? { text: substituteVariables(data.header.text, candidate) } : {}) }
+        : null;
+    const footer = data.footer?.trim() ? substituteVariables(data.footer, candidate) : '';
+
+    const extra = { interactiveType: mode, header, footer, priority: 1 };
+    if (mode === 'button') {
+        extra.buttons = (Array.isArray(data.buttons) ? data.buttons : [])
+            .filter(b => b?.title?.trim()).slice(0, 3)
+            .map(b => ({ id: b.id, title: substituteVariables(b.title, candidate) }));
+    } else if (mode === 'list') {
+        extra.listButtonText = data.listButtonText;
+        extra.sections = (Array.isArray(data.sections) ? data.sections : []).map(sec => ({
+            title: sec.title,
+            rows: (Array.isArray(sec.rows) ? sec.rows : []).filter(r => r?.title?.trim())
+                .map(r => ({ id: r.id, title: substituteVariables(r.title, candidate), description: r.description ? substituteVariables(r.description, candidate) : '' }))
+        }));
+    } else if (mode === 'cta_url') {
+        extra.ctaDisplayText = data.ctaDisplayText;
+        extra.ctaUrl = data.ctaUrl;
+    }
+
+    const optTitles = mode === 'button'
+        ? (data.buttons || []).map(b => b?.title).filter(Boolean)
+        : mode === 'list'
+            ? (data.sections || []).flatMap(s => (s.rows || []).map(r => r?.title)).filter(Boolean)
+            : [];
+    // bodyText ya incluye el prefijo (si lo hay); MessageBubble pinta los chips por el sufijo.
+    const previewText = mode === 'cta_url'
+        ? `${bodyText}\n\n[Botón: ${data.ctaDisplayText || 'Abrir'} → ${data.ctaUrl || ''}]`
+        : !optTitles.length ? bodyText
+            : mode === 'button'
+                ? `${bodyText}\n\n[Botones: ${optTitles.join(' | ')}]`
+                : `${bodyText}\n\n[Lista: ${optTitles.join(', ')}]`;
+
+    let sendOk = false;
+    try {
+        const config = await getUltraMsgConfig(candidate.incomingPhoneNumberId || candidate.instanceId);
+        if (!config?.token || !config?.instanceId) throw new Error('sin credenciales de WhatsApp');
+        const cleanTo = String(candidate.whatsapp).replace(/\D/g, '');
+        const sendResult = await pacedSend(opts, () => sendUltraMsgMessageWithRetry(config.instanceId, config.token, cleanTo, bodyText, 'interactive', extra));
+        if (sendResult?.success) {
+            sendOk = true;
+            await saveFlowOutbound(candidate.id, {
+                from: 'me', content: previewText, timestamp: new Date().toISOString(),
+                meta: { flow: true, flowId, nodeId: node.id, interactive: true }
+            }, sendResult);
+        } else {
+            console.error(`[FLOW-ENGINE] sendInteractiveNode ${flowId}/${node.id} candidato ${candidate.id}: envío falló —`, sendResult?.error);
+        }
+    } catch (e) {
+        console.error(`[FLOW-ENGINE] sendInteractiveNode ${flowId}/${node.id}:`, e?.message);
+    }
+
+    // opciones para la espera de ruteo (handle = id estable; match = título que devuelve Meta al clic).
+    const options = [];
+    if (mode === 'button') {
+        for (const b of (data.buttons || [])) if (b?.id && b?.title?.trim()) options.push({ handle: b.id, match: substituteVariables(b.title, candidate).substring(0, 20) });
+    } else if (mode === 'list') {
+        for (const sec of (data.sections || [])) for (const r of (sec.rows || [])) if (r?.id && r?.title?.trim()) options.push({ handle: r.id, match: substituteVariables(r.title, candidate).substring(0, 24) });
+    }
+    return { sendOk, options };
+}
+
 export async function evaluateOrExecute(node, candidate, flowId, redis, opts = {}) {
     const data = node.data || {};
 
@@ -613,63 +688,7 @@ export async function evaluateOrExecute(node, candidate, flowId, redis, opts = {
             const mode = data.mode || 'button';
             if (!data.body?.trim()) return true; // sin cuerpo → no rompe la cadena
 
-            const bodyText = substituteVariables(data.body, candidate);
-            const header = (data.header && data.header.type && data.header.type !== 'none')
-                ? { ...data.header, ...(data.header.text ? { text: substituteVariables(data.header.text, candidate) } : {}) }
-                : null;
-            const footer = data.footer?.trim() ? substituteVariables(data.footer, candidate) : '';
-
-            const extra = { interactiveType: mode, header, footer, priority: 1 };
-            if (mode === 'button') {
-                extra.buttons = (Array.isArray(data.buttons) ? data.buttons : [])
-                    .filter(b => b?.title?.trim()).slice(0, 3)
-                    .map(b => ({ id: b.id, title: substituteVariables(b.title, candidate) }));
-            } else if (mode === 'list') {
-                extra.listButtonText = data.listButtonText;
-                extra.sections = (Array.isArray(data.sections) ? data.sections : []).map(sec => ({
-                    title: sec.title,
-                    rows: (Array.isArray(sec.rows) ? sec.rows : []).filter(r => r?.title?.trim())
-                        .map(r => ({ id: r.id, title: substituteVariables(r.title, candidate), description: r.description ? substituteVariables(r.description, candidate) : '' }))
-                }));
-            } else if (mode === 'cta_url') {
-                extra.ctaDisplayText = data.ctaDisplayText;
-                extra.ctaUrl = data.ctaUrl;
-            }
-
-            // Vista previa legible en el historial del chat (como el envío manual de botones).
-            const optTitles = mode === 'button'
-                ? (data.buttons || []).map(b => b?.title).filter(Boolean)
-                : mode === 'list'
-                    ? (data.sections || []).flatMap(s => (s.rows || []).map(r => r?.title)).filter(Boolean)
-                    : [];
-            // Formato EXACTO que entiende MessageBubble.jsx del Chat Web para pintar chips:
-            //   botones → "\n\n[Botones: a | b]"  (split por ' | ')
-            //   lista   → "\n\n[Lista: a, b]"      (split por ', ')
-            const previewText = mode === 'cta_url'
-                ? `${bodyText}\n\n[Botón: ${data.ctaDisplayText || 'Abrir'} → ${data.ctaUrl || ''}]`
-                : !optTitles.length ? bodyText
-                    : mode === 'button'
-                        ? `${bodyText}\n\n[Botones: ${optTitles.join(' | ')}]`
-                        : `${bodyText}\n\n[Lista: ${optTitles.join(', ')}]`;
-
-            let sendOk = false;
-            try {
-                const config = await getUltraMsgConfig(candidate.incomingPhoneNumberId || candidate.instanceId);
-                if (!config?.token || !config?.instanceId) throw new Error('sin credenciales de WhatsApp');
-                const cleanTo = String(candidate.whatsapp).replace(/\D/g, '');
-                const sendResult = await pacedSend(opts, () => sendUltraMsgMessageWithRetry(config.instanceId, config.token, cleanTo, bodyText, 'interactive', extra));
-                if (sendResult?.success) {
-                    sendOk = true;
-                    await saveFlowOutbound(candidate.id, {
-                        from: 'me', content: previewText, timestamp: new Date().toISOString(),
-                        meta: { flow: true, flowId, nodeId: node.id, interactive: true }
-                    }, sendResult);
-                } else {
-                    console.error(`[FLOW-ENGINE] accion_botones ${flowId}/${node.id} candidato ${candidate.id}: envío falló —`, sendResult?.error);
-                }
-            } catch (e) {
-                console.error(`[FLOW-ENGINE] accion_botones ${flowId}/${node.id}:`, e?.message);
-            }
+            const { sendOk, options } = await sendInteractiveNode(redis, node, candidate, flowId, opts);
 
             // ¿Rutea por opción? Solo button/list con routeByOption y si el envío salió.
             const canRoute = data.routeByOption !== false && (mode === 'button' || mode === 'list');
@@ -679,29 +698,16 @@ export async function evaluateOrExecute(node, candidate, flowId, redis, opts = {
             // este nodo vuelca el ledger completo al pausar (ver runOneFlow), así la reanudación
             // tras el clic retoma sin re-enviar lo anterior — el ruteo funciona también al regresar.
             if (opts.skipClaim) return true;
-
-            // handle = id ESTABLE de la opción (el mismo que la arista usa como sourceHandle);
-            // match = título tal cual lo recibe Meta de vuelta al hacer clic (truncado a 20/24).
-            const options = [];
-            if (mode === 'button') {
-                for (const b of (data.buttons || [])) {
-                    if (b?.id && b?.title?.trim()) options.push({ handle: b.id, match: substituteVariables(b.title, candidate).substring(0, 20) });
-                }
-            } else {
-                for (const sec of (data.sections || [])) {
-                    for (const r of (sec.rows || [])) {
-                        if (r?.id && r?.title?.trim()) options.push({ handle: r.id, match: substituteVariables(r.title, candidate).substring(0, 24) });
-                    }
-                }
-            }
             if (!options.length) return true;
 
             const timeoutHoras = Number(data.timeoutHoras) > 0 ? Number(data.timeoutHoras) : 48;
             const ttlSec = Math.max(PROGRESS_TTL_SEC, Math.ceil(timeoutHoras * 3600) + 86400);
             try {
                 const key = `${WAITING_PREFIX}${candidate.id}`;
+                // reaskCount arranca en 0: cuántas veces se le ha re-mandado los botones al que
+                // escribe en vez de tocar (ver el re-envío en resumeWaitingFlowIfMatch).
                 const payload = JSON.stringify({
-                    nodeId: node.id, kind: 'interactive', options,
+                    nodeId: node.id, kind: 'interactive', options, reaskCount: 0,
                     expiresAt: Date.now() + timeoutHoras * 3600 * 1000
                 });
                 await redis.hset(key, flowId, payload);
@@ -1397,6 +1403,25 @@ export async function resumeWaitingFlowIfMatch(candidateId, candidateSnapshot, i
                     const opt = (Array.isArray(st.options) ? st.options : [])
                         .find(o => String(o.match || '').trim().toLowerCase() === inTxt);
                     if (opt) { matched = true; handle = opt.handle; }
+                    else {
+                        // Escribió algo que NO es una opción y no expiró. Si el nodo tiene activado
+                        // "re-mandar", le reenvía los botones con un empujón ("elige una opción"),
+                        // hasta reaskMax veces (tope anti-spam). Luego sigue esperando (no consume).
+                        const rflow = flows.find(f => f.id === flowId && f.active && Array.isArray(f.nodes) && f.nodes.length);
+                        const rnode = rflow?.nodes?.find(n => n.id === st.nodeId);
+                        const rd = rnode?.data || {};
+                        if (rnode && rd.reask) {
+                            const count = Number(st.reaskCount) || 0;
+                            const max = Number(rd.reaskMax) > 0 ? Number(rd.reaskMax) : 2;
+                            if (count < max) {
+                                const nudge = (typeof rd.reaskText === 'string' && rd.reaskText.trim())
+                                    ? rd.reaskText.trim() : 'Por favor elige una de las opciones 👇';
+                                await sendInteractiveNode(redis, rnode, candidateSnapshot, flowId, {}, nudge).catch(() => {});
+                                st.reaskCount = count + 1;
+                                await redis.hset(key, flowId, JSON.stringify(st)).catch(() => {});
+                            }
+                        }
+                    }
                 } else {
                     handle = 'timeout';
                 }
