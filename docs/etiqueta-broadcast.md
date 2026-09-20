@@ -1,7 +1,7 @@
 # Etiqueta Broadcast — módulo de marcado de campañas masivas
 
 **Fecha:** 2026-09-19
-**Estado:** Parte 1 implementada (marcado). Parte 2 (motor de respuesta determinístico) **pendiente**.
+**Estado:** Parte 1 (marcado) **implementada**. Parte 2 (disparador de flujo determinístico) **implementada** — ver sección al final.
 
 ## Qué es
 
@@ -18,9 +18,9 @@ También en esta fecha: **el Nombre de la Campaña pasó a ser OBLIGATORIO** (an
 El botón "Iniciar Campaña" se deshabilita sin nombre y el backend rechaza `start` sin
 `campaignName` (400).
 
-El objetivo final (Parte 2) es construir un **motor de respuesta determinístico**: cuando
-un candidato marcado con una etiqueta Broadcast responda, Brenda podrá reaccionar de forma
-específica según de qué broadcast venía. La Parte 1 (este documento) solo crea el marcado.
+La Parte 2 (respuesta determinística) **ya está construida** como un **disparador de flujo**:
+cuando un candidato marcado responde (dentro de 72h), un flujo de la sección Flujos toma el
+control del turno con prioridad sobre Brenda. Detalle completo en la sección final.
 
 ## Principio de diseño: espacio TOTALMENTE independiente
 
