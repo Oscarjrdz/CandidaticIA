@@ -674,8 +674,11 @@ export async function evaluateOrExecute(node, candidate, flowId, redis, opts = {
             // ¿Rutea por opción? Solo button/list con routeByOption y si el envío salió.
             const canRoute = data.routeByOption !== false && (mode === 'button' || mode === 'list');
             if (!canRoute || !sendOk) return true;
-            // En test/ephemeral no hay ledger que reanudar → envía pero no pausa.
-            if (opts.skipClaim || opts.ephemeral) return true;
+            // En modo test (skipClaim) no hay clic real que esperar → envía pero no pausa.
+            // En EPHEMERAL (flujos "al regresar") SÍ pausamos: a diferencia de "esperando_respuesta",
+            // este nodo vuelca el ledger completo al pausar (ver runOneFlow), así la reanudación
+            // tras el clic retoma sin re-enviar lo anterior — el ruteo funciona también al regresar.
+            if (opts.skipClaim) return true;
 
             // handle = id ESTABLE de la opción (el mismo que la arista usa como sourceHandle);
             // match = título tal cual lo recibe Meta de vuelta al hacer clic (truncado a 20/24).
@@ -1099,12 +1102,20 @@ async function runOneFlow(redis, flow, candidateId, candidate, opts = {}) {
             // no borra el ledger). El TTL del ledger se alarga a la ventana de espera para que
             // una reanudación tardía no re-empiece el flujo desde cero.
             if (result && typeof result === 'object' && result.__pause) {
-                if (useClaim) {
-                    await redis.pipeline()
-                        .hset(progressKey, node.id, '1')
-                        .expire(progressKey, result.ttlSec || PROGRESS_TTL_SEC)
-                        .exec();
+                const pausePipe = redis.pipeline();
+                // En EPHEMERAL los nodos previos NO se fueron escribiendo al ledger → vuélcalos
+                // ahora (SOLO los realmente ejecutados: 'pass'/'fail', nunca los 'unreached', o
+                // habilitaríamos ramas "No cumple" falsas al reanudar). Así la reanudación (que
+                // corre en modo normal, con ledger) los SALTA sin re-ejecutar/re-enviar. En modo
+                // normal ya están escritos nodo a nodo, no hace falta volver a volcarlos.
+                if (!useClaim) {
+                    for (const [nid, oc] of outcome.entries()) {
+                        if (oc === 'pass' || oc === 'fail') pausePipe.hset(progressKey, nid, oc === 'pass' ? '1' : '0');
+                    }
                 }
+                pausePipe.hset(progressKey, node.id, '1');
+                pausePipe.expire(progressKey, result.ttlSec || PROGRESS_TTL_SEC);
+                await pausePipe.exec().catch(() => {});
                 passed.set(node.id, true);
                 return passed;
             }

@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Handle, Position, NodeToolbar, NodeResizer } from '@xyflow/react';
+import React, { useState, useEffect } from 'react';
+import { Handle, Position, NodeToolbar, NodeResizer, useUpdateNodeInternals } from '@xyflow/react';
 import { X, Play, Loader2, Check, RefreshCw, Minus, Plus, Lock, LockOpen, Copy } from 'lucide-react';
 import { NODE_DEFS, COLOR_CLASSES } from './nodeDefs';
 
@@ -347,6 +347,20 @@ const FlowNode = ({ id, type, data, selected }) => {
     const Icon = def.icon;
     const isTest = type === 'test';
     const isInicioLista = type === 'inicio_lista';
+
+    // El nodo "Mandar Botones" cambia sus salidas DINÁMICAMENTE (una por botón/fila + Timeout,
+    // según lo que configures). React Flow cachea la posición de los handles al montar, así que
+    // si no le avisamos NO registra los handles nuevos → no se pueden conectar aristas. La firma
+    // cubre lo que altera el set de handles: modo, ruteo y los ids de opción válidos.
+    const updateNodeInternals = useUpdateNodeInternals();
+    const handleSig = type === 'accion_botones'
+        ? `${data.mode || 'button'}|${data.routeByOption !== false}|${((data.mode === 'list'
+            ? (data.sections || []).flatMap(s => (s.rows || []).filter(r => r?.title?.trim()).map(r => r.id))
+            : (data.buttons || []).filter(b => b?.title?.trim()).map(b => b.id))).join(',')}`
+        : '';
+    useEffect(() => {
+        if (type === 'accion_botones') updateNodeInternals(id);
+    }, [id, type, handleSig, updateNodeInternals]);
 
     if (type === 'nota') return <NotaNode id={id} data={data} selected={selected} />;
     if (type === 'bg') return <BgNode id={id} data={data} selected={selected} />;

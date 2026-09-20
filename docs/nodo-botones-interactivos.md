@@ -49,6 +49,16 @@ El ruteo por clic **solo funciona si el candidato está `blocked`** (Brenda muda
 `resumeWaitingFlowIfMatch` se llama desde el BLOCK SHIELD de `agent.js`. **Pon un nodo
 "Desactivar Bot" ANTES** de este nodo; si no, Brenda contestará el clic en vez de rutear.
 (El editor muestra este aviso.) Es la misma regla del nodo "Esperando Respuesta".
+**Conéctalo EN LÍNEA** (…→ Desactivar Bot → Botones), no como rama paralela, para
+garantizar que corre antes de que el nodo de botones pause.
+
+### Funciona también en flujos "Al regresar" (ephemeral)
+A diferencia de "Esperando Respuesta" (que NO pausa en ephemeral), este nodo SÍ rutea en
+flujos "al regresar". Los flujos "al regresar" corren en modo ephemeral (sin ledger, para
+re-dispararse en cada regreso), así que al pausar el nodo **vuelca el ledger completo de lo
+ya ejecutado** (`runOneFlow`, rama `__pause`, solo nodos `pass`/`fail`, nunca `unreached`).
+La reanudación tras el clic corre en modo normal, lee ese ledger y **salta lo ya hecho sin
+re-enviar**. Verificado: clic→rama correcta, timeout→rama Timeout, y cero re-envíos.
 
 ---
 
@@ -74,6 +84,8 @@ El ruteo por clic **solo funciona si el candidato está `blocked`** (Brenda muda
 - `api/whatsapp/webhook.js` — marca `interactiveReply: true` en el entrante.
 - `src/components/flows/nodeTypes/nodeDefs.js` — def `accion_botones`.
 - `src/components/flows/nodeTypes/FlowNode.jsx` — `InteractiveHandles` (salidas dinámicas).
+  Llama `useUpdateNodeInternals(id)` cuando cambia el set de handles (modo/ruteo/ids de opción);
+  sin eso React Flow no registra los handles nuevos y **no se pueden conectar aristas** (bug).
 - `src/components/flows/FlowEditor.jsx` — default data + `freshDefaultData` (ids estables sin aliasar).
 - `src/components/flows/NodeConfigDrawer.jsx` — `BotonesConfig` (formulario completo).
 - `src/components/chat/MessageBubble.jsx` — chip "Tocó un botón" en la respuesta entrante.
