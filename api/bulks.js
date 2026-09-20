@@ -289,8 +289,9 @@ const tickEngine = async (state) => {
                                         p.sadd(`broadcast:candidate:${candidateId}`, state.broadcastTag);
                                         // Marca de PRIMERA respuesta pendiente para el disparador de flujos
                                         // "al responder broadcast". El motor la consume (GET+DEL) en la
-                                        // primera respuesta del candidato. TTL 90d (ventana de atribución).
-                                        p.set(`broadcast:reply_pending:${candidateId}`, state.broadcastTag, 'EX', 60 * 60 * 24 * 90);
+                                        // primera respuesta del candidato. Ventana de atribución = 72h:
+                                        // si contesta después, ya no cuenta como "respuesta al broadcast".
+                                        p.set(`broadcast:reply_pending:${candidateId}`, state.broadcastTag, 'EX', 60 * 60 * 72);
                                         p.exec().catch(() => {});
                                     }
                                 }

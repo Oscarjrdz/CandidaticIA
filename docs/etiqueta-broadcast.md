@@ -99,7 +99,7 @@ determinístico, configurable con el constructor visual existente.
 
 ### Señal — marca de primera respuesta
 Al enviar un masivo con etiqueta, además de las side-keys, `bulks.js` fija
-`broadcast:reply_pending:<id>` = etiqueta (TTL 90d). Es la señal de "recibió un broadcast y
+`broadcast:reply_pending:<id>` = etiqueta (ventana de atribución 72h). Es la señal de "recibió un broadcast y
 aún no responde". (Es independiente de `campaign:reply_await:*`, que el webhook consume para
 la estadística de "respondidos" antes de que corra el agente.)
 
