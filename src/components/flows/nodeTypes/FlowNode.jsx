@@ -371,8 +371,8 @@ const FlowNode = ({ id, type, data, selected }) => {
 
     return (
         <div
-            className={`group relative w-60 rounded-2xl border-2 shadow-sm transition-shadow ${colors.bg} ${(isTest || locked) ? 'cursor-default' : 'cursor-pointer'} ${selected ? 'border-gray-900 dark:border-white shadow-md' : colors.border} ${testRing}`}
-            onClick={(isTest || locked) ? undefined : () => data.onConfigure?.(id)}
+            className={`group relative w-60 rounded-2xl border-2 shadow-sm transition-shadow ${colors.bg} ${locked ? 'cursor-default' : 'cursor-pointer'} ${selected ? 'border-gray-900 dark:border-white shadow-md' : colors.border} ${testRing}`}
+            onClick={locked ? undefined : () => data.onConfigure?.(id)}
         >
             <TestResultBadge testPassed={data.testPassed} />
             <LockToggle id={id} locked={locked} onToggleLock={data.onToggleLock} />

@@ -56,7 +56,7 @@ const DEFAULT_DATA_BY_TYPE = {
     esperando_respuesta: { grupos: [{ id: 'g1', label: '', frases: [] }], matchMode: 'contiene', timeoutHoras: 48 },
     contador: { label: '' },
     checkpoint: { name: '' },
-    test: { testPhone: '' },
+    test: { testPhone: '', testPerfil: 'completo', testTags: [], testVacanteActual: '', testCheckpoints: [] },
     nota: { text: '' },
     // Elementos decorativos (el motor los ignora, van a la par de "Agregar nodo"):
     bg: { color: '#6366f1', opacity: 0.14 },              // fondo de sección: color + transparencia
@@ -557,7 +557,16 @@ const FlowEditorInner = ({ flowId, onBack }) => {
             return;
         }
 
-        const res = await testFlow(flowId, phone);
+        // Perfil temporal elegido en la config del nodo Test (drawer): perfil, etiquetas,
+        // vacante actual y check points "ya pasados". Sin persistir nada del candidato real.
+        const tn = rf.getNode(nodeId)?.data || {};
+        const testProfile = {
+            perfil: tn.testPerfil || 'completo',
+            tags: Array.isArray(tn.testTags) ? tn.testTags : [],
+            vacanteActual: tn.testVacanteActual || '',
+            checkpoints: (Array.isArray(tn.testCheckpoints) ? tn.testCheckpoints : []).map(c => ({ flowId: c.flowId, nodeId: c.nodeId }))
+        };
+        const res = await testFlow(flowId, phone, testProfile);
         setNodes(nds => nds.map(n => ({
             ...n,
             data: {
@@ -569,7 +578,7 @@ const FlowEditorInner = ({ flowId, onBack }) => {
                 } : {})
             }
         })));
-    }, [flowId, handleSave]);
+    }, [flowId, handleSave, rf]);
 
     useEffect(() => { handleTestRunRef.current = handleTestRun; }, [handleTestRun]);
 

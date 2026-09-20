@@ -498,6 +498,76 @@ const BotonesConfig = ({ data, patch }) => {
     );
 };
 
+// 🧪 Config del nodo Test: arma un PERFIL TEMPORAL (perfil completo/incompleto, etiquetas,
+// vacante actual y check points "ya pasados") para probar el flujo sin tocar candidatos reales.
+// El número y el botón Run siguen en el cuerpo del nodo; aquí se elige "con qué se entra".
+const TestNodeConfig = ({ data, patch, meta }) => {
+    const [checkpoints, setCheckpoints] = useState([]);
+    const [loaded, setLoaded] = useState(false);
+    useEffect(() => {
+        let alive = true;
+        getAllCheckpoints()
+            .then(r => { if (alive && r.success) setCheckpoints(r.checkpoints); })
+            .finally(() => { if (alive) setLoaded(true); });
+        return () => { alive = false; };
+    }, []);
+
+    const perfil = data.testPerfil || 'completo';
+    const tags = meta?.tags || [];
+    const selCps = Array.isArray(data.testCheckpoints) ? data.testCheckpoints : [];
+    const isCpSel = (c) => selCps.some(s => s.flowId === c.flowId && s.nodeId === c.nodeId);
+    const toggleCp = (c) => patch({
+        testCheckpoints: isCpSel(c)
+            ? selCps.filter(s => !(s.flowId === c.flowId && s.nodeId === c.nodeId))
+            : [...selCps, { flowId: c.flowId, nodeId: c.nodeId, name: c.name }]
+    });
+
+    return (
+        <div className="space-y-5">
+            <p className="text-xs bg-gray-50 dark:bg-gray-700/40 border border-gray-200 dark:border-gray-700 rounded-lg p-2.5 text-gray-600 dark:text-gray-300">
+                Arma un <strong>perfil temporal</strong> para probar el flujo <strong>sin tocar candidatos reales</strong>. Elige con qué entras aquí; el número y el botón <strong>Run</strong> están en el nodo. Los mensajes de prueba SÍ se envían a ese número.
+            </p>
+            <div>
+                <label className="text-xs text-gray-500 dark:text-gray-400 mb-2 block">Perfil del candidato de prueba</label>
+                <RadioGroup
+                    options={[{ value: 'completo', label: 'Completo' }, { value: 'incompleto', label: 'Incompleto' }]}
+                    value={perfil}
+                    onChange={(v) => patch({ testPerfil: v })}
+                />
+            </div>
+            <div>
+                <label className="text-xs text-gray-500 dark:text-gray-400 mb-2 block">Etiqueta(s) del candidato <span className="text-gray-400">(Filtro Etiqueta modo “específica”)</span></label>
+                <MultiSelectChecklist items={tags} selected={data.testTags || []} onChange={(v) => patch({ testTags: v })} searchable />
+            </div>
+            <div>
+                <label className="text-xs text-gray-500 dark:text-gray-400 mb-2 block">Vacante actual <span className="text-gray-400">(Filtro Etiqueta modo “es su etiqueta actual”)</span></label>
+                <FlowSelect
+                    value={data.testVacanteActual || ''}
+                    onChange={(v) => patch({ testVacanteActual: v })}
+                    options={[{ value: '', label: '(ninguna)' }, ...tags.map(t => ({ value: t, label: t }))]}
+                    placeholder="(ninguna)"
+                    ringClass="focus:ring-gray-500"
+                />
+            </div>
+            <div>
+                <label className="text-xs text-gray-500 dark:text-gray-400 mb-2 block">Check points “ya pasados” <span className="text-gray-400">(Condición: Check Point → rama Sí)</span></label>
+                {loaded && checkpoints.length === 0 ? (
+                    <p className="text-xs text-gray-400">No hay check points en tus flujos.</p>
+                ) : (
+                    <div className="max-h-48 overflow-y-auto space-y-1 pr-1">
+                        {checkpoints.map(c => (
+                            <label key={`${c.flowId}:${c.nodeId}`} className="flex items-center gap-2.5 p-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer">
+                                <input type="checkbox" checked={isCpSel(c)} onChange={() => toggleCp(c)} className="w-4 h-4 rounded text-gray-600 focus:ring-gray-500" />
+                                <span className="text-sm text-gray-700 dark:text-gray-200">🏁 {c.name || '(sin nombre)'} <span className="text-xs text-gray-400">— {c.flowName}</span></span>
+                            </label>
+                        ))}
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+};
+
 const NodeConfigDrawer = ({ node, flowId, meta, quickReplies, reminderTemplates, projects, onChange, onClose }) => {
     if (!node) return null;
     const def = NODE_DEFS[node.type] || NODE_DEFS.contador;
@@ -792,6 +862,10 @@ const NodeConfigDrawer = ({ node, flowId, meta, quickReplies, reminderTemplates,
 
                 {node.type === 'accion_botones' && (
                     <BotonesConfig data={data} patch={patch} />
+                )}
+
+                {node.type === 'test' && (
+                    <TestNodeConfig data={data} patch={patch} meta={meta} />
                 )}
 
                 {node.type === 'accion_whatsapp' && (

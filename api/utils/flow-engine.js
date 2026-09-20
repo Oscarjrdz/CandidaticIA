@@ -480,6 +480,12 @@ export async function evaluateOrExecute(node, candidate, flowId, redis, opts = {
             // Sin configurar → no bloquea (pasa por Sí), igual que las demás condiciones.
             const { refFlowId, refNodeId } = data;
             if (!refFlowId || !refNodeId) return true;
+            // 🧪 PERFIL TEMPORAL (nodo Test): en vez de leer Redis, usa los check points que el
+            // usuario marcó como "ya pasados" en la config del nodo Test. Así se prueba la rama
+            // Sí/No del check point sin tener que ensuciar/sembrar marcas reales.
+            if (opts.skipClaim && Array.isArray(opts.simulatedCheckpoints)) {
+                return opts.simulatedCheckpoints.some(cp => cp.flowId === refFlowId && cp.nodeId === refNodeId);
+            }
             try {
                 const key = `${CHECKPOINT_PREFIX}${refFlowId}:${refNodeId}:last`;
                 const has = await redis.hexists(key, candidate.id);
@@ -1461,12 +1467,17 @@ export async function resumeWaitingFlowIfMatch(candidateId, candidateSnapshot, i
 // que haga falta) y sin tocar los contadores reales. Las acciones (WhatsApp, etiquetas,
 // recordatorio, proyecto) SÍ se ejecutan de verdad — es la manera de confirmar que el
 // flujo hace lo que debe antes de activarlo.
-export async function runFlowTest(flow, candidateSnapshot) {
+export async function runFlowTest(flow, candidateSnapshot, testOpts = {}) {
     const redis = getRedisClient();
     if (!redis) throw new Error('Redis no disponible');
     if (!candidateSnapshot?.id || !candidateSnapshot?.whatsapp) throw new Error('Candidato inválido');
 
-    const passed = await runOneFlow(redis, flow, candidateSnapshot.id, { ...candidateSnapshot }, { skipClaim: true, skipCounters: true });
+    // simulatedCheckpoints: [{flowId, nodeId}] que el nodo Test marca como "ya pasados"
+    // para el perfil temporal — los lee el case condicion_checkpoint en modo prueba.
+    const simulatedCheckpoints = Array.isArray(testOpts.simulatedCheckpoints) ? testOpts.simulatedCheckpoints : [];
+    const passed = await runOneFlow(redis, flow, candidateSnapshot.id, { ...candidateSnapshot }, {
+        skipClaim: true, skipCounters: true, simulatedCheckpoints
+    });
     return Object.fromEntries(passed);
 }
 

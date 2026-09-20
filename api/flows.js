@@ -260,7 +260,7 @@ export default async function handler(req, res) {
         }
 
         if (method === 'POST' && id && req.body?.action === 'test') {
-            const { whatsapp } = req.body || {};
+            const { whatsapp, testProfile } = req.body || {};
             if (!whatsapp) return res.status(400).json({ success: false, error: 'whatsapp requerido' });
 
             // Lee directo de Redis (no cacheado) para probar exactamente contra la
@@ -270,14 +270,37 @@ export default async function handler(req, res) {
             const flow = flows.find(f => f.id === id);
             if (!flow) return res.status(404).json({ success: false, error: 'Flow not found' });
 
-            const candidate = await getCandidateByPhone(whatsapp);
-            if (!candidate) return res.status(404).json({ success: false, error: 'No se encontró un candidato con ese número' });
+            // 🧪 PERFIL TEMPORAL: la config del nodo Test deja ELEGIR con qué entrar (perfil
+            // completo/incompleto, etiqueta(s), vacante actual y qué check points ya pasó) SIN
+            // tocar ni persistir el candidato real. Se parte del candidato real (por su número,
+            // para tener whatsapp + phoneNumberId y que los mensajes de prueba lleguen y se vean
+            // en su chat) y se SOBREESCRIBEN esos campos SOLO en el snapshot en memoria.
+            const tp = testProfile || {};
+            const base = await getCandidateByPhone(whatsapp);
+            const digits = String(whatsapp).replace(/\D/g, '');
+            const completo = tp.perfil !== 'incompleto'; // default: completo
+            const profileFields = completo
+                ? { nombreReal: base?.nombreReal && base.nombreReal.trim().split(/\s+/).length >= 2 ? base.nombreReal : 'Perfil Prueba', genero: 'Hombre', fechaNacimiento: '01/01/1995', edad: 30, municipio: 'Monterrey', categoria: 'Producción', escolaridad: 'Preparatoria', paso2Estado: 'completo' }
+                : { nombreReal: '', genero: 'Desconocido', paso2Estado: 'incompleto' };
 
-            const passed = await runFlowTest(flow, candidate);
+            const snapshot = {
+                ...(base || {}),
+                id: base?.id || `testtmp_${digits || Date.now()}`,
+                whatsapp: base?.whatsapp || digits,
+                incomingPhoneNumberId: base?.incomingPhoneNumberId,
+                ...profileFields,
+                tags: Array.isArray(tp.tags) ? tp.tags : [],
+                vacanteActual: tp.vacanteActual || '',
+                blocked: false
+            };
+            // checkpoints "ya pasados" elegidos: [{flowId, nodeId}]
+            const simulatedCheckpoints = Array.isArray(tp.checkpoints) ? tp.checkpoints : [];
+
+            const passed = await runFlowTest(flow, snapshot, { simulatedCheckpoints });
 
             return res.status(200).json({
                 success: true,
-                candidate: { id: candidate.id, nombre: candidate.nombreReal || candidate.nombre || candidate.whatsapp },
+                candidate: { id: snapshot.id, nombre: `perfil ${completo ? 'completo' : 'incompleto'}${snapshot.tags.length ? ' · ' + snapshot.tags.join(', ') : ''}` },
                 passed
             });
         }

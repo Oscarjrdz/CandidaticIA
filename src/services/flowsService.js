@@ -141,13 +141,14 @@ export const deleteFlow = async (id) => {
     }
 };
 
-// Nodo "test": corre el flujo completo contra un candidato real por teléfono.
-export const testFlow = async (flowId, whatsapp) => {
+// Nodo "test": corre el flujo con un PERFIL TEMPORAL configurable (perfil completo/incompleto,
+// etiquetas, vacante actual y check points "ya pasados"), enviando los mensajes al número dado.
+export const testFlow = async (flowId, whatsapp, testProfile) => {
     try {
         const res = await fetch(`/api/flows?id=${flowId}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'test', whatsapp })
+            body: JSON.stringify({ action: 'test', whatsapp, testProfile })
         });
         const data = await res.json();
         if (data.success) return { success: true, candidate: data.candidate, passed: data.passed || {} };
