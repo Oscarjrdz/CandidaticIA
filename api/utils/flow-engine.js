@@ -397,6 +397,26 @@ export async function evaluateOrExecute(node, candidate, flowId, redis, opts = {
             return values.includes(candidate.escolaridad);
         }
 
+        case 'condicion_checkpoint': {
+            // Filtro que ramifica según si el candidato YA pasó por un Check Point (de
+            // ESTE flujo o de cualquier otro). "Tiene la marca" = su id existe en el HASH
+            // `:last` del checkpoint referido (data.refFlowId + data.refNodeId), el mismo
+            // roster que escribe el nodo checkpoint. Rama Sí = tiene la marca.
+            // Sin configurar → no bloquea (pasa por Sí), igual que las demás condiciones.
+            const { refFlowId, refNodeId } = data;
+            if (!refFlowId || !refNodeId) return true;
+            try {
+                const key = `${CHECKPOINT_PREFIX}${refFlowId}:${refNodeId}:last`;
+                const has = await redis.hexists(key, candidate.id);
+                return has === 1;
+            } catch (e) {
+                // Fallo transitorio de Redis: no bloquear el flujo (permisivo, como
+                // "sin configurar"). Es una lectura O(1), los fallos aquí son raros.
+                console.error(`[FLOW-ENGINE] condicion_checkpoint ${flowId}/${node.id}:`, e?.message);
+                return true;
+            }
+        }
+
         // Fija el valor del token {{frase dinamica}} para los nodos "Mandar WhatsApp" /
         // "WhatsApp Personalizado" que vienen DESPUÉS en la misma corrida. Se arrastra en
         // `opts` (mismo carrier mutable que _lastFlowSendAt). Sin efectos externos: solo

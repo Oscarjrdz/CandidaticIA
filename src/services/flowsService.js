@@ -65,6 +65,19 @@ export const getFlowTagMetrics = async ({ rango, desde, hasta } = {}) => {
     }
 };
 
+// Lista global de Check Points de todos los flujos — para el nodo "Condición: Check
+// Point". Devuelve [{flowId, flowName, nodeId, name}].
+export const getAllCheckpoints = async () => {
+    try {
+        const res = await fetch('/api/flows?mode=checkpoints');
+        const data = await res.json();
+        if (data.success) return { success: true, checkpoints: data.checkpoints || [] };
+        return { success: false, error: data.error };
+    } catch (error) {
+        return { success: false, error: error.message };
+    }
+};
+
 export const getFlowsMeta = async () => {
     try {
         const res = await fetch('/api/flows?meta=1');

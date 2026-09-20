@@ -134,6 +134,16 @@ export const NODE_DEFS = {
         branching: true,
         summary: (data) => formatMultiSummary(data.escolaridades)
     },
+    condicion_checkpoint: {
+        label: 'Condición: Check Point',
+        icon: Flag,
+        color: 'blue',
+        hasTarget: true,
+        hasSource: true,
+        branching: true,
+        // refName es una copia para mostrar; el motor rutea por refFlowId+refNodeId.
+        summary: (data) => data.refNodeId ? (data.refName?.trim() ? `¿Pasó por “${data.refName}”?` : '¿Pasó por el Check Point?') : 'Elige un Check Point'
+    },
     accion_whatsapp: {
         label: 'Mandar WhatsApp',
         icon: MessageCircle,

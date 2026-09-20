@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { X } from 'lucide-react';
 import { NODE_DEFS, COLOR_CLASSES, PROFILE_FILTER_LABELS, ETIQUETA_MODE_LABELS, GENEROS } from './nodeTypes';
 import FlowSelect from './FlowSelect';
-import { getFlowCounters, getFlowCounterRange } from '../../services/flowsService';
+import { getFlowCounters, getFlowCounterRange, getAllCheckpoints } from '../../services/flowsService';
 
 const StatCell = ({ label, value }) => (
     <div className="rounded-xl border border-gray-200 dark:border-gray-700 p-3 text-center">
@@ -241,6 +241,53 @@ const BroadcastTagPicker = ({ selected, onChange }) => {
                 </div>
             )}
             <p className="text-[11px] text-gray-400 mt-2">Si no seleccionas ninguna, responde a <strong>cualquier</strong> broadcast.</p>
+        </div>
+    );
+};
+
+// 🏁 Selector del nodo "Condición: Check Point". Trae la lista GLOBAL de Check Points de
+// todos los flujos (/api/flows?mode=checkpoints) y deja elegir a cuál preguntar. El valor
+// guardado es refFlowId + refNodeId (el motor rutea por ahí); refName es solo para mostrar.
+const CheckpointPicker = ({ data, onPatch }) => {
+    const [checkpoints, setCheckpoints] = useState([]);
+    const [loaded, setLoaded] = useState(false);
+    useEffect(() => {
+        let alive = true;
+        getAllCheckpoints()
+            .then(r => { if (alive && r.success) setCheckpoints(r.checkpoints); })
+            .finally(() => { if (alive) setLoaded(true); });
+        return () => { alive = false; };
+    }, []);
+
+    const value = data.refNodeId ? `${data.refFlowId}::${data.refNodeId}` : '';
+    const options = checkpoints.map(c => ({
+        value: `${c.flowId}::${c.nodeId}`,
+        label: `${c.name || '(sin nombre)'} — ${c.flowName}`,
+        name: c.name
+    }));
+
+    return (
+        <div>
+            <label className="text-xs text-gray-500 dark:text-gray-400 mb-2 block">¿Por cuál Check Point preguntar?</label>
+            {loaded && checkpoints.length === 0 ? (
+                <p className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-2.5">
+                    Aún no hay ningún nodo <strong>Check Point</strong> en tus flujos. Agrega uno (y ponle nombre) para poder filtrar por él.
+                </p>
+            ) : (
+                <FlowSelect
+                    value={value}
+                    onChange={(v) => {
+                        const [refFlowId, refNodeId] = v.split('::');
+                        const opt = options.find(o => o.value === v);
+                        onPatch({ refFlowId, refNodeId, refName: opt?.name || '' });
+                    }}
+                    options={options}
+                    placeholder={loaded ? 'Elige un Check Point...' : 'Cargando...'}
+                    ringClass="focus:ring-blue-500"
+                    emptyLabel="No hay Check Points"
+                />
+            )}
+            <p className="mt-2 text-xs text-gray-400">La rama <strong className="text-emerald-600 dark:text-emerald-400">Sí</strong> es para quien <strong>ya pasó</strong> por ese Check Point (aquí o en otro flujo); la <strong className="text-red-500">No</strong> para quien nunca pasó.</p>
         </div>
     );
 };
@@ -531,6 +578,10 @@ const NodeConfigDrawer = ({ node, flowId, meta, quickReplies, reminderTemplates,
                         selected={data.escolaridades || []}
                         onChange={(v) => patch({ escolaridades: v })}
                     />
+                )}
+
+                {node.type === 'condicion_checkpoint' && (
+                    <CheckpointPicker data={data} onPatch={patch} />
                 )}
 
                 {node.type === 'accion_whatsapp' && (

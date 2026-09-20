@@ -137,6 +137,27 @@ export default async function handler(req, res) {
             });
         }
 
+        // Lista GLOBAL de Check Points de TODOS los flujos — la usa el nodo
+        // "Condición: Check Point" para elegir a qué marca preguntar. Payload ligero
+        // (solo flowId/nodeId/nombre), no arrastra nodos/edges completos.
+        if (method === 'GET' && mode === 'checkpoints') {
+            const flows = await getFlows(redis);
+            const checkpoints = [];
+            for (const f of flows) {
+                for (const n of (f.nodes || [])) {
+                    if (n.type === 'checkpoint') {
+                        checkpoints.push({
+                            flowId: f.id,
+                            flowName: f.name || 'Flujo sin nombre',
+                            nodeId: n.id,
+                            name: (n.data?.name || '').trim()
+                        });
+                    }
+                }
+            }
+            return res.status(200).json({ success: true, checkpoints });
+        }
+
         if (method === 'GET' && id && mode === 'counters') {
             const flows = await getFlows(redis);
             const flow = flows.find(f => f.id === id);

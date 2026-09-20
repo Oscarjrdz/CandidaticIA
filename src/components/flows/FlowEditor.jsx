@@ -24,6 +24,7 @@ const DEFAULT_DATA_BY_TYPE = {
     condicion_municipio: { municipios: [] },
     condicion_categoria: { categorias: [] },
     condicion_escolaridad: { escolaridades: [] },
+    condicion_checkpoint: { refFlowId: '', refNodeId: '', refName: '' },
     accion_whatsapp: { quickReplyId: '', quickReplyName: '' },
     accion_vacante: { vacancyId: '', vacancyName: '' },
     accion_whatsapp_personalizado: { message: '' },
