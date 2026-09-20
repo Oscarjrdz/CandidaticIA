@@ -427,21 +427,25 @@ export default async function handler(req, res) {
         const redis = getRedisClient();
         if (!redis) return res.status(500).json({ error: 'Sin conexión a Redis' });
         try {
-            const { name, selection, excludeIds, criteriaSummary } = req.body || {};
+            const { name, selection, excludeIds, criteriaSummary, broadcastTag } = req.body || {};
             if (!name || !String(name).trim()) return res.status(400).json({ error: 'Falta el nombre del público' });
             const audiences = await getAudiences(redis);
+            const cleanBroadcastTag = (typeof broadcastTag === 'string' ? broadcastTag : '').trim().slice(0, 60) || null;
             const audience = {
                 id: `aud_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
                 name: String(name).trim().slice(0, 80),
                 selection: selection || {},
                 excludeIds: Array.isArray(excludeIds) ? excludeIds : [],
                 criteriaSummary: criteriaSummary || '',
+                broadcastTag: cleanBroadcastTag,
                 createdAt: new Date().toISOString(),
                 lastCampaignAt: null,
                 totalEverSent: 0
             };
             audiences.unshift(audience);
             await saveAudiences(redis, audiences);
+            // Registro global de etiquetas Broadcast (para reusarlas). Ver módulo etiqueta-broadcast.
+            if (cleanBroadcastTag) redis.sadd('broadcast:tags:all', cleanBroadcastTag).catch(() => {});
             return res.status(200).json({ success: true, audience });
         } catch (e) {
             console.error('[AUDIENCES] create error:', e?.message);
@@ -454,7 +458,7 @@ export default async function handler(req, res) {
         const redis = getRedisClient();
         if (!redis) return res.status(500).json({ error: 'Sin conexión a Redis' });
         try {
-            const { id, name, selection, excludeIds, criteriaSummary } = req.body || {};
+            const { id, name, selection, excludeIds, criteriaSummary, broadcastTag } = req.body || {};
             if (!id) return res.status(400).json({ error: 'Falta id del público' });
             const audiences = await getAudiences(redis);
             const idx = audiences.findIndex(a => a.id === id);
@@ -463,6 +467,11 @@ export default async function handler(req, res) {
             if (selection !== undefined) audiences[idx].selection = selection || {};
             if (excludeIds !== undefined) audiences[idx].excludeIds = Array.isArray(excludeIds) ? excludeIds : [];
             if (criteriaSummary !== undefined) audiences[idx].criteriaSummary = criteriaSummary || '';
+            if (broadcastTag !== undefined) {
+                const cleanBroadcastTag = (typeof broadcastTag === 'string' ? broadcastTag : '').trim().slice(0, 60) || null;
+                audiences[idx].broadcastTag = cleanBroadcastTag;
+                if (cleanBroadcastTag) redis.sadd('broadcast:tags:all', cleanBroadcastTag).catch(() => {});
+            }
             audiences[idx].updatedAt = new Date().toISOString();
             await saveAudiences(redis, audiences);
             return res.status(200).json({ success: true, audience: audiences[idx] });
@@ -551,9 +560,12 @@ export default async function handler(req, res) {
         if (bulkType === 'template' && !templateData?.name) {
             return res.status(400).json({ error: 'Falta configurar la plantilla a enviar.' });
         }
+        if (!campaignName || !String(campaignName).trim()) {
+            return res.status(400).json({ error: 'Ponle un nombre a la campaña antes de enviar.' });
+        }
 
         const campaignId = `camp_${Date.now()}`;
-        const displayName = campaignName || `Campaña ${new Date().toLocaleDateString('es-MX', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}`;
+        const displayName = String(campaignName).trim().slice(0, 120);
 
         const newState = {
             isRunning: true,
@@ -573,7 +585,8 @@ export default async function handler(req, res) {
             logs: [],
             campaignId,
             campaignName: displayName,
-            broadcastTag,
+            // Etiqueta escrita en el envío gana; si no hay, se hereda la del público seleccionado.
+            broadcastTag: broadcastTag || audience?.broadcastTag || null,
             audienceId: audience?.id || null,
             audienceName: audience?.name || null,
             startedAt: Date.now(),
@@ -603,14 +616,14 @@ export default async function handler(req, res) {
                         totalTargets: candidates.length,
                         totalSent: 0,
                         status: 'running',
-                        broadcastTag,
+                        broadcastTag: newState.broadcastTag,
                         audienceId: audience?.id || null,
                         audienceName: audience?.name || null
                     });
                     await redis.set(REDIS_KEY_HISTORY, JSON.stringify(history));
                     // Registro global de etiquetas Broadcast (para reusarlas al crear campañas).
                     // Independiente del sistema de etiquetas del Chat Web / anuncios. Sin TTL.
-                    if (broadcastTag) redis.sadd('broadcast:tags:all', broadcastTag).catch(() => {});
+                    if (newState.broadcastTag) redis.sadd('broadcast:tags:all', newState.broadcastTag).catch(() => {});
                 }
             } catch (e) { /* non-critical */ }
         }

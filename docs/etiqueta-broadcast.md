@@ -5,9 +5,18 @@
 
 ## Qué es
 
-Al lanzar un envío masivo (Envíos Masivos), además del *Nombre de la Campaña* se puede
-definir una **Etiqueta Broadcast**. Cada candidato al que se le entrega la campaña queda
-**marcado** con esa etiqueta.
+La **Etiqueta Broadcast** se define **a nivel PÚBLICO** (audiencia guardada), no por envío.
+Cada candidato al que se le entrega una campaña que usa ese público queda **marcado** con
+la etiqueta del público.
+
+> **Decisión de diseño (2026-09-19):** la etiqueta NO se escribe por envío. El renglón
+> "Etiqueta Broadcast" del panel de envío se **eliminó**; vive solo en el público. Por lo
+> tanto, envíos **directos** o de **segmento ad-hoc** (sin público guardado) **no** se
+> etiquetan. El backend hereda la etiqueta del público seleccionado en `action=start`.
+
+También en esta fecha: **el Nombre de la Campaña pasó a ser OBLIGATORIO** (antes opcional).
+El botón "Iniciar Campaña" se deshabilita sin nombre y el backend rechaza `start` sin
+`campaignName` (400).
 
 El objetivo final (Parte 2) es construir un **motor de respuesta determinístico**: cuando
 un candidato marcado con una etiqueta Broadcast responda, Brenda podrá reaccionar de forma
@@ -40,10 +49,18 @@ sirve para la estadística de "respondidos").
 
 ## Flujo
 
+### Definición — a nivel público (`audience_create` / `audience_update`)
+- El objeto del público lleva un campo `broadcastTag` (normalizado: `trim()` + máx 60, vacío
+  → `null`). Se edita en el modal de crear público y en el banner de edición.
+- Al guardar, el nombre se registra en `broadcast:tags:all` (`SADD`) para reusarlo.
+- Se muestra como badge 🏷️ en la tarjeta del público.
+- `duplicateAudience` hereda la etiqueta.
+
 ### Creación de campaña — `POST /api/bulks?action=start`
-- Nuevo campo opcional `broadcastTag` en el body. Se normaliza: `trim()` + máx 60 chars,
-  vacío → `null`.
-- Se guarda en el estado de la campaña (`state.broadcastTag`) y en el historial.
+- `campaignName` es **obligatorio** (400 si falta).
+- La etiqueta efectiva = `broadcastTag` del body (hoy el frontend no lo manda) **o** la del
+  público seleccionado (`audience.broadcastTag`). Se guarda en `state.broadcastTag` y en el
+  historial.
 - Se registra el nombre en `broadcast:tags:all` (`SADD`).
 
 ### Envío por candidato — loop de `tickEngine` en `api/bulks.js`
@@ -58,11 +75,13 @@ sirve para la estadística de "respondidos").
 - El frontend lo carga al montar y lo usa como `<datalist>` (autocompletado) en el input.
 
 ## Frontend — `src/components/BulksSection.jsx`
-- Estado `broadcastTag` + `broadcastTagOptions`.
-- Input "Etiqueta Broadcast (Opcional)" debajo de "Nombre de la Campaña", con `datalist`
-  para reusar etiquetas ya creadas.
-- Se envía `broadcastTag` en el `action=start`.
-- Al iniciar con éxito, la etiqueta recién usada se agrega a las opciones locales.
+- Estado `newAudienceBroadcastTag` (modal crear), `editingAudienceBroadcastTag` (banner
+  edición), `broadcastTagOptions` (registro para `datalist` de reuso).
+- Input de etiqueta en el modal de crear público y en el banner de edición del público.
+- Badge 🏷️ en la tarjeta del público cuando tiene etiqueta.
+- Nombre de campaña obligatorio: `handleStartClick` valida, botón deshabilitado sin nombre,
+  label con asterisco rojo.
+- El panel de envío ya **no** tiene input de etiqueta Broadcast.
 
 ## Verificación (2026-09-19)
 Probado contra Redis real con script desechable (candidato/etiqueta de prueba únicos,

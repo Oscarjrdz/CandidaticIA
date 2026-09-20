@@ -279,6 +279,9 @@ const BulksSection = () => {
     const [editingAudienceId, setEditingAudienceId] = useState(null);   // público en edición dentro de la Col 1
     const [showCreateAudience, setShowCreateAudience] = useState(false);
     const [newAudienceName, setNewAudienceName] = useState('');
+    // 🏷️ Etiqueta Broadcast del público (independiente de las etiquetas del chat/anuncios).
+    const [newAudienceBroadcastTag, setNewAudienceBroadcastTag] = useState('');
+    const [editingAudienceBroadcastTag, setEditingAudienceBroadcastTag] = useState('');
     const [glowTemplateCol, setGlowTemplateCol] = useState(false);
 
     // Col 2: Messages & Templates
@@ -297,8 +300,8 @@ const BulksSection = () => {
     const [showHistory, setShowHistory] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [customCampaignName, setCustomCampaignName] = useState('');
-    // 🏷️ Etiqueta Broadcast: espacio propio, independiente de las etiquetas del Chat Web / anuncios.
-    const [broadcastTag, setBroadcastTag] = useState('');
+    // 🏷️ Etiquetas Broadcast existentes (registro para reusar). La etiqueta se define a nivel
+    // PÚBLICO (no por envío). Espacio propio, independiente de las etiquetas del chat / anuncios.
     const [broadcastTagOptions, setBroadcastTagOptions] = useState([]);
     const [historyList, setHistoryList] = useState([]);
 
@@ -668,6 +671,7 @@ const BulksSection = () => {
     // Engine Actions
     const handleStartClick = () => {
         if (sendCount === 0) return showToast && showToast("No hay destinatarios en el segmento", "error");
+        if (!customCampaignName.trim()) return showToast && showToast("Ponle un nombre a la campaña antes de enviar", "error");
 
         let validMsgs = [];
         let tplData = null;
@@ -712,7 +716,6 @@ const BulksSection = () => {
                     templateData: startModalData.tplData,
                     templateParams: Object.keys(templateParams).length > 0 ? templateParams : null,
                     campaignName: customCampaignName.trim() || null,
-                    broadcastTag: broadcastTag.trim() || null,
                     fromNumberId: senderNumberId || null
                 })
             });
@@ -720,9 +723,6 @@ const BulksSection = () => {
             if (data.success) {
                 showToast && showToast("Campaña iniciada", "success");
                 setCustomCampaignName('');
-                // Registrar la etiqueta recién usada en las opciones locales (para reusarla enseguida).
-                const bt = broadcastTag.trim();
-                if (bt && !broadcastTagOptions.includes(bt)) setBroadcastTagOptions(prev => [...prev, bt].sort((a, b) => a.localeCompare(b, 'es')));
                 if (data.state) setEngineState(data.state);
                 setTimeout(fetchEngineStatus, 1000);
                 loadAudiences(); // refresca "última campaña" / total enviado del público
@@ -806,6 +806,7 @@ const BulksSection = () => {
     const openCreateAudience = () => {
         if (isRunning) return; // sin filtros = público de toda la base
         setNewAudienceName('');
+        setNewAudienceBroadcastTag('');
         setShowCreateAudience(true);
     };
 
@@ -820,13 +821,17 @@ const BulksSection = () => {
                     name,
                     selection,
                     excludeIds: Array.from(excludeIds),
-                    criteriaSummary: summarizeSelection(selection).join(' · ')
+                    criteriaSummary: summarizeSelection(selection).join(' · '),
+                    broadcastTag: newAudienceBroadcastTag.trim() || null
                 })
             });
             const data = await res.json();
             if (data.success) {
                 setShowCreateAudience(false);
                 setNewAudienceName('');
+                const bt = newAudienceBroadcastTag.trim();
+                if (bt && !broadcastTagOptions.includes(bt)) setBroadcastTagOptions(prev => [...prev, bt].sort((a, b) => a.localeCompare(b, 'es')));
+                setNewAudienceBroadcastTag('');
                 showToast && showToast(`Público "${name}" creado`, 'success');
                 await loadAudiences();
                 if (data.audience?.id) setSelectedAudienceId(data.audience.id); // queda listo para enviar
@@ -854,13 +859,15 @@ const BulksSection = () => {
         // Carga los filtros del público en la Col 1 en modo edición ("editable aparte").
         setSelection({ ...EMPTY_SELECTION, ...(aud.selection || {}) });
         setExcludeIds(new Set(Array.isArray(aud.excludeIds) ? aud.excludeIds : []));
+        setEditingAudienceBroadcastTag(aud.broadcastTag || '');
         setEditingAudienceId(aud.id);
         setMobileTab('candidates');
-        showToast && showToast(`Editando "${aud.name}". Ajusta filtros y guarda.`, 'info');
+        showToast && showToast(`Editando "${aud.name}". Ajusta filtros/etiqueta y guarda.`, 'info');
     };
 
     const cancelEditAudience = () => {
         setEditingAudienceId(null);
+        setEditingAudienceBroadcastTag('');
         setSelection(EMPTY_SELECTION);
         setExcludeIds(new Set());
     };
@@ -875,13 +882,17 @@ const BulksSection = () => {
                     id: editingAudienceId,
                     selection,
                     excludeIds: Array.from(excludeIds),
-                    criteriaSummary: summarizeSelection(selection).join(' · ')
+                    criteriaSummary: summarizeSelection(selection).join(' · '),
+                    broadcastTag: editingAudienceBroadcastTag.trim() || null
                 })
             });
             const data = await res.json();
             if (data.success) {
                 showToast && showToast('Público actualizado', 'success');
+                const bt = editingAudienceBroadcastTag.trim();
+                if (bt && !broadcastTagOptions.includes(bt)) setBroadcastTagOptions(prev => [...prev, bt].sort((a, b) => a.localeCompare(b, 'es')));
                 setEditingAudienceId(null);
+                setEditingAudienceBroadcastTag('');
                 setSelection(EMPTY_SELECTION);
                 setExcludeIds(new Set());
                 loadAudiences();
@@ -902,7 +913,8 @@ const BulksSection = () => {
                     name: `${aud.name} (copia)`,
                     selection: aud.selection || {},
                     excludeIds: aud.excludeIds || [],
-                    criteriaSummary: aud.criteriaSummary || summarizeSelection(aud.selection).join(' · ')
+                    criteriaSummary: aud.criteriaSummary || summarizeSelection(aud.selection).join(' · '),
+                    broadcastTag: aud.broadcastTag || null
                 })
             });
             const data = await res.json();
@@ -970,18 +982,33 @@ const BulksSection = () => {
             <div className={`${mobileTab === 'candidates' ? 'flex' : 'hidden'} lg:flex w-full lg:w-[35%] flex-col border-r border-[#d1d7db] dark:border-[#222e35] bg-white dark:bg-[#111b21] min-h-0`}>
                 {/* Banner de modo edición de público */}
                 {editingAudienceId && (
-                    <div className="px-3 py-2 bg-amber-50 dark:bg-amber-900/20 border-b border-amber-200 dark:border-amber-800 flex items-center justify-between gap-2">
-                        <span className="text-xs font-bold text-amber-700 dark:text-amber-300 flex items-center gap-1.5 truncate">
-                            <Pencil className="w-3.5 h-3.5 shrink-0" /> Editando: {audiences.find(a => a.id === editingAudienceId)?.name || 'público'}
-                        </span>
-                        <div className="flex gap-1.5 shrink-0">
-                            <button onClick={saveEditAudience} className="px-2.5 py-1 rounded-lg bg-[#25d366] hover:bg-[#1faa53] text-white text-xs font-bold flex items-center gap-1">
-                                <Save className="w-3 h-3" /> Guardar
-                            </button>
-                            <button onClick={cancelEditAudience} className="px-2.5 py-1 rounded-lg bg-gray-200 dark:bg-[#2a3942] text-gray-600 dark:text-gray-300 text-xs font-bold">
-                                Cancelar
-                            </button>
+                    <div className="px-3 py-2 bg-amber-50 dark:bg-amber-900/20 border-b border-amber-200 dark:border-amber-800 flex flex-col gap-2">
+                        <div className="flex items-center justify-between gap-2">
+                            <span className="text-xs font-bold text-amber-700 dark:text-amber-300 flex items-center gap-1.5 truncate">
+                                <Pencil className="w-3.5 h-3.5 shrink-0" /> Editando: {audiences.find(a => a.id === editingAudienceId)?.name || 'público'}
+                            </span>
+                            <div className="flex gap-1.5 shrink-0">
+                                <button onClick={saveEditAudience} className="px-2.5 py-1 rounded-lg bg-[#25d366] hover:bg-[#1faa53] text-white text-xs font-bold flex items-center gap-1">
+                                    <Save className="w-3 h-3" /> Guardar
+                                </button>
+                                <button onClick={cancelEditAudience} className="px-2.5 py-1 rounded-lg bg-gray-200 dark:bg-[#2a3942] text-gray-600 dark:text-gray-300 text-xs font-bold">
+                                    Cancelar
+                                </button>
+                            </div>
                         </div>
+                        {/* 🏷️ Etiqueta Broadcast del público (independiente de tags del chat / anuncios) */}
+                        <input
+                            type="text"
+                            list="broadcast-tags-list"
+                            value={editingAudienceBroadcastTag}
+                            onChange={(e) => setEditingAudienceBroadcastTag(e.target.value)}
+                            placeholder="🏷️ Etiqueta Broadcast (opcional)"
+                            maxLength={60}
+                            className="w-full bg-white dark:bg-[#202c33] border border-amber-200 dark:border-amber-800 focus:border-indigo-500 rounded-lg px-2.5 py-1.5 text-xs text-[#111b21] dark:text-[#e9edef] outline-none transition-colors"
+                        />
+                        <datalist id="broadcast-tags-list">
+                            {broadcastTagOptions.map(t => <option key={t} value={t} />)}
+                        </datalist>
                     </div>
                 )}
                 <div className="p-3 bg-white dark:bg-[#111b21] border-b border-[#f0f2f5] dark:border-[#222e35]">
@@ -1278,6 +1305,11 @@ const BulksSection = () => {
                                         ) : (
                                             <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-300">Toda la base</span>
                                         )}
+                                        {aud.broadcastTag && (
+                                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-violet-100 dark:bg-violet-900/40 text-violet-700 dark:text-violet-300 flex items-center gap-0.5" title="Etiqueta Broadcast">
+                                                🏷️ {aud.broadcastTag}
+                                            </span>
+                                        )}
                                     </div>
 
                                     {(aud.lastCampaignAt || aud.totalEverSent > 0) && (
@@ -1509,7 +1541,7 @@ const BulksSection = () => {
                     {/* Custom Campaign Name Input */}
                     {!isRunning && !isCompleted && (
                         <div className="mb-4">
-                            <label className="block text-[11px] font-bold text-gray-500 uppercase mb-1.5 ml-1">Nombre de la Campaña (Opcional)</label>
+                            <label className="block text-[11px] font-bold text-gray-500 uppercase mb-1.5 ml-1">Nombre de la Campaña <span className="text-red-500">*</span></label>
                             <input
                                 type="text"
                                 value={customCampaignName}
@@ -1517,23 +1549,6 @@ const BulksSection = () => {
                                 placeholder="Ej: Invitación Monterrey"
                                 className="w-full bg-[#f0f2f5] dark:bg-[#202c33] border border-gray-200 dark:border-gray-700 focus:border-blue-500 rounded-lg p-3 text-sm text-[#111b21] dark:text-[#e9edef] outline-none transition-colors"
                             />
-
-                            {/* 🏷️ Etiqueta Broadcast — espacio propio, NO se mezcla con etiquetas del Chat Web ni de anuncios */}
-                            <label className="block text-[11px] font-bold text-gray-500 uppercase mb-1.5 ml-1 mt-4">Etiqueta Broadcast (Opcional)</label>
-                            <input
-                                type="text"
-                                list="broadcast-tags-list"
-                                value={broadcastTag}
-                                onChange={(e) => setBroadcastTag(e.target.value)}
-                                placeholder="Ej: Broadcast Septiembre"
-                                className="w-full bg-[#f0f2f5] dark:bg-[#202c33] border border-gray-200 dark:border-gray-700 focus:border-indigo-500 rounded-lg p-3 text-sm text-[#111b21] dark:text-[#e9edef] outline-none transition-colors"
-                            />
-                            <datalist id="broadcast-tags-list">
-                                {broadcastTagOptions.map(t => <option key={t} value={t} />)}
-                            </datalist>
-                            <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-1 ml-1">
-                                Cada candidato que reciba esta campaña queda marcado con esta etiqueta. Es independiente de las etiquetas del chat y de anuncios.
-                            </p>
                         </div>
                     )}
 
@@ -1557,7 +1572,7 @@ const BulksSection = () => {
                         <button
                             onClick={handleStartClick}
                             className={`w-full ${isSubmitting ? 'bg-blue-400' : 'bg-blue-600 hover:bg-blue-700'} text-white font-black tracking-wide py-4 px-4 rounded-xl shadow-[0_10px_20px_rgba(37,99,235,0.2)] transition-all transform ${isSubmitting ? '' : 'hover:-translate-y-1 active:scale-[0.98]'} flex items-center justify-center gap-3 text-xl disabled:opacity-50 disabled:cursor-not-allowed`}
-                            disabled={sendCount === 0 || isSubmitting}
+                            disabled={sendCount === 0 || isSubmitting || !customCampaignName.trim()}
                         >
                             {isSubmitting ? <span className="animate-spin text-2xl">⏳</span> : <Send size={24} />}
                             {isSubmitting ? 'PREPARANDO ENVÍOS...' : `INICIAR CAMPAÑA (${sendCount.toLocaleString('es-MX')})`}
@@ -1743,10 +1758,27 @@ const BulksSection = () => {
                             value={newAudienceName}
                             onChange={(e) => setNewAudienceName(e.target.value)}
                             onKeyDown={(e) => { if (e.key === 'Enter') confirmCreateAudience(); }}
-                            placeholder="Ej: Mujeres jóvenes Monterrey"
+                            placeholder="Nombre del público. Ej: Mujeres jóvenes Monterrey"
                             maxLength={80}
-                            className="w-full bg-[#f0f2f5] dark:bg-[#202c33] border border-gray-200 dark:border-gray-700 focus:border-indigo-500 rounded-xl p-3 text-sm text-[#111b21] dark:text-[#e9edef] outline-none transition-colors mb-5"
+                            className="w-full bg-[#f0f2f5] dark:bg-[#202c33] border border-gray-200 dark:border-gray-700 focus:border-indigo-500 rounded-xl p-3 text-sm text-[#111b21] dark:text-[#e9edef] outline-none transition-colors mb-3"
                         />
+
+                        {/* 🏷️ Etiqueta Broadcast del público — independiente de tags del chat / anuncios */}
+                        <input
+                            type="text"
+                            list="broadcast-tags-list"
+                            value={newAudienceBroadcastTag}
+                            onChange={(e) => setNewAudienceBroadcastTag(e.target.value)}
+                            placeholder="🏷️ Etiqueta Broadcast (opcional). Ej: Broadcast Septiembre"
+                            maxLength={60}
+                            className="w-full bg-[#f0f2f5] dark:bg-[#202c33] border border-gray-200 dark:border-gray-700 focus:border-indigo-500 rounded-xl p-3 text-sm text-[#111b21] dark:text-[#e9edef] outline-none transition-colors mb-2"
+                        />
+                        <datalist id="broadcast-tags-list">
+                            {broadcastTagOptions.map(t => <option key={t} value={t} />)}
+                        </datalist>
+                        <p className="text-[10px] text-gray-400 dark:text-gray-500 mb-5 leading-snug">
+                            Cada candidato que reciba una campaña con este público queda marcado con esta etiqueta. Independiente de las etiquetas del chat y de anuncios.
+                        </p>
 
                         <div className="flex gap-3">
                             <button
