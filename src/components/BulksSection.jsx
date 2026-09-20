@@ -297,6 +297,9 @@ const BulksSection = () => {
     const [showHistory, setShowHistory] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [customCampaignName, setCustomCampaignName] = useState('');
+    // 🏷️ Etiqueta Broadcast: espacio propio, independiente de las etiquetas del Chat Web / anuncios.
+    const [broadcastTag, setBroadcastTag] = useState('');
+    const [broadcastTagOptions, setBroadcastTagOptions] = useState([]);
     const [historyList, setHistoryList] = useState([]);
 
     // Custom UI States
@@ -452,6 +455,12 @@ const BulksSection = () => {
         fetch('/api/wa-numbers')
             .then(res => res.json())
             .then(data => { if (data.success && Array.isArray(data.numbers)) setWaNumbers(data.numbers); })
+            .catch(() => {});
+
+        // Etiquetas Broadcast existentes (para reusarlas). Espacio propio, independiente.
+        fetch('/api/bulks?action=broadcast_tags')
+            .then(res => res.json())
+            .then(data => { if (data.success && Array.isArray(data.tags)) setBroadcastTagOptions(data.tags); })
             .catch(() => {});
 
         return () => {
@@ -703,6 +712,7 @@ const BulksSection = () => {
                     templateData: startModalData.tplData,
                     templateParams: Object.keys(templateParams).length > 0 ? templateParams : null,
                     campaignName: customCampaignName.trim() || null,
+                    broadcastTag: broadcastTag.trim() || null,
                     fromNumberId: senderNumberId || null
                 })
             });
@@ -710,6 +720,9 @@ const BulksSection = () => {
             if (data.success) {
                 showToast && showToast("Campaña iniciada", "success");
                 setCustomCampaignName('');
+                // Registrar la etiqueta recién usada en las opciones locales (para reusarla enseguida).
+                const bt = broadcastTag.trim();
+                if (bt && !broadcastTagOptions.includes(bt)) setBroadcastTagOptions(prev => [...prev, bt].sort((a, b) => a.localeCompare(b, 'es')));
                 if (data.state) setEngineState(data.state);
                 setTimeout(fetchEngineStatus, 1000);
                 loadAudiences(); // refresca "última campaña" / total enviado del público
@@ -1504,6 +1517,23 @@ const BulksSection = () => {
                                 placeholder="Ej: Invitación Monterrey"
                                 className="w-full bg-[#f0f2f5] dark:bg-[#202c33] border border-gray-200 dark:border-gray-700 focus:border-blue-500 rounded-lg p-3 text-sm text-[#111b21] dark:text-[#e9edef] outline-none transition-colors"
                             />
+
+                            {/* 🏷️ Etiqueta Broadcast — espacio propio, NO se mezcla con etiquetas del Chat Web ni de anuncios */}
+                            <label className="block text-[11px] font-bold text-gray-500 uppercase mb-1.5 ml-1 mt-4">Etiqueta Broadcast (Opcional)</label>
+                            <input
+                                type="text"
+                                list="broadcast-tags-list"
+                                value={broadcastTag}
+                                onChange={(e) => setBroadcastTag(e.target.value)}
+                                placeholder="Ej: Broadcast Septiembre"
+                                className="w-full bg-[#f0f2f5] dark:bg-[#202c33] border border-gray-200 dark:border-gray-700 focus:border-indigo-500 rounded-lg p-3 text-sm text-[#111b21] dark:text-[#e9edef] outline-none transition-colors"
+                            />
+                            <datalist id="broadcast-tags-list">
+                                {broadcastTagOptions.map(t => <option key={t} value={t} />)}
+                            </datalist>
+                            <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-1 ml-1">
+                                Cada candidato que reciba esta campaña queda marcado con esta etiqueta. Es independiente de las etiquetas del chat y de anuncios.
+                            </p>
                         </div>
                     )}
 

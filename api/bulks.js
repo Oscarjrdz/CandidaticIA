@@ -277,6 +277,19 @@ const tickEngine = async (state) => {
                                 if (state.campaignId) {
                                     getRedisClient()?.set(`campaign:reply_await:${candidateId}`, state.campaignId, 'EX', 60 * 60 * 24 * 90).catch(() => {});
                                 }
+                                // 🏷️ Etiqueta Broadcast (INDEPENDIENTE de tags de Chat Web / anuncios):
+                                // side-keys permanentes, sin TTL, sin tocar el blob del candidato.
+                                //   broadcast:tag:<etiqueta>   → set de candidatos que recibieron el broadcast
+                                //   broadcast:candidate:<id>    → set de broadcasts que recibió el candidato
+                                if (state.broadcastTag) {
+                                    const bc = getRedisClient();
+                                    if (bc) {
+                                        const p = bc.pipeline();
+                                        p.sadd(`broadcast:tag:${state.broadcastTag}`, candidateId);
+                                        p.sadd(`broadcast:candidate:${candidateId}`, state.broadcastTag);
+                                        p.exec().catch(() => {});
+                                    }
+                                }
                             } else {
                                 addLog(state, `🔴 Error de API para ${candidate.whatsapp}: ${sendResult?.error || 'respuesta no exitosa'}`);
                                 // Marcar como fallido
@@ -498,7 +511,12 @@ export default async function handler(req, res) {
             return res.status(400).json({ error: 'Ya hay un envío en curso. Aborta primero.' });
         }
 
-        const { candidates: candidatesInput, segment, messages, bulkType, templateData, templateParams, _minDelay, _maxDelay, _pauseEvery, _pauseFor, campaignName, fromNumberId, audienceId } = req.body;
+        const { candidates: candidatesInput, segment, messages, bulkType, templateData, templateParams, _minDelay, _maxDelay, _pauseEvery, _pauseFor, campaignName, fromNumberId, audienceId, broadcastTag: broadcastTagInput } = req.body;
+
+        // 🏷️ Etiqueta Broadcast: espacio INDEPENDIENTE de las etiquetas del Chat Web y de
+        // las de anuncios. No se guarda en el blob del candidato — vive solo en side-keys
+        // (broadcast:tag:*, broadcast:candidate:*) sin TTL. Ver tagBroadcast() en el loop.
+        const broadcastTag = (typeof broadcastTagInput === 'string' ? broadcastTagInput : '').trim().slice(0, 60) || null;
 
         // El segmento (filtros facetados) se resuelve a la lista COMPLETA en el servidor,
         // así el navegador nunca sube miles de IDs. Alternativamente acepta IDs explícitos.
@@ -555,6 +573,7 @@ export default async function handler(req, res) {
             logs: [],
             campaignId,
             campaignName: displayName,
+            broadcastTag,
             audienceId: audience?.id || null,
             audienceName: audience?.name || null,
             startedAt: Date.now(),
@@ -584,10 +603,14 @@ export default async function handler(req, res) {
                         totalTargets: candidates.length,
                         totalSent: 0,
                         status: 'running',
+                        broadcastTag,
                         audienceId: audience?.id || null,
                         audienceName: audience?.name || null
                     });
                     await redis.set(REDIS_KEY_HISTORY, JSON.stringify(history));
+                    // Registro global de etiquetas Broadcast (para reusarlas al crear campañas).
+                    // Independiente del sistema de etiquetas del Chat Web / anuncios. Sin TTL.
+                    if (broadcastTag) redis.sadd('broadcast:tags:all', broadcastTag).catch(() => {});
                 }
             } catch (e) { /* non-critical */ }
         }
@@ -730,6 +753,20 @@ export default async function handler(req, res) {
             return res.status(500).json({ error: 'Failed getting history' });
         }
         return res.status(200).json({ success: true, history: [] });
+    }
+
+    // ─── BROADCAST TAGS (registro para reusar al crear campañas) ───────────────
+    if (req.method === 'GET' && action === 'broadcast_tags') {
+        try {
+            const redis = getRedisClient();
+            if (redis) {
+                const tags = await redis.smembers('broadcast:tags:all');
+                return res.status(200).json({ success: true, tags: (tags || []).sort((a, b) => a.localeCompare(b, 'es')) });
+            }
+        } catch (e) {
+            return res.status(500).json({ error: 'Failed getting broadcast tags' });
+        }
+        return res.status(200).json({ success: true, tags: [] });
     }
 
     // ─── HISTORY STATS ───────────────────────────────────────────────────────
