@@ -1135,6 +1135,27 @@ async function runOneFlow(redis, flow, candidateId, candidate, opts = {}) {
             outcome.set(node.id, result ? 'pass' : 'fail');
             passed.set(node.id, result);
 
+            // 🧪 MENÚ EN MODO PRUEBA: un nodo de botones con ruteo NO pausa en la prueba (no hay
+            // clic real), así que sin esto se dispararían TODAS las ramas del menú a la vez. Aquí
+            // lo tratamos como rama: sigue SOLO la opción que elegiste simular (opts.simulatedOption,
+            // por título; 'timeout' = rama Timeout). Sin opción (o sin match) → ninguna rama del
+            // menú corre (solo se ve que el menú se envió). En producción esto no aplica: pausa.
+            if (opts.skipClaim && node.type === 'accion_botones' && result === true
+                && node.data?.routeByOption !== false && (node.data?.mode || 'button') !== 'cta_url') {
+                const choice = String(opts.simulatedOption || '').trim().toLowerCase();
+                let chosen = null;
+                if (choice === 'timeout') {
+                    chosen = 'timeout';
+                } else if (choice) {
+                    const opciones = (node.data?.mode === 'list')
+                        ? (node.data?.sections || []).flatMap(s => s.rows || [])
+                        : (node.data?.buttons || []);
+                    const m = opciones.find(o => String(o?.title || '').trim().toLowerCase() === choice);
+                    if (m) chosen = m.id;
+                }
+                branchTaken.set(node.id, new Set([chosen])); // [null] si no eligió → no corre ninguna rama del menú
+            }
+
             // Persistir el avance ANTES de seguir: si la instancia muere aquí, el próximo
             // disparo retoma desde el siguiente nodo (no re-envía lo ya enviado).
             // En modo ephemeral no hay ledger: cada disparo del cron corre fresco.
@@ -1474,9 +1495,11 @@ export async function runFlowTest(flow, candidateSnapshot, testOpts = {}) {
 
     // simulatedCheckpoints: [{flowId, nodeId}] que el nodo Test marca como "ya pasados"
     // para el perfil temporal — los lee el case condicion_checkpoint en modo prueba.
+    // simulatedOption: título del botón/opción a simular en los menús (o 'timeout').
     const simulatedCheckpoints = Array.isArray(testOpts.simulatedCheckpoints) ? testOpts.simulatedCheckpoints : [];
+    const simulatedOption = typeof testOpts.simulatedOption === 'string' ? testOpts.simulatedOption : '';
     const passed = await runOneFlow(redis, flow, candidateSnapshot.id, { ...candidateSnapshot }, {
-        skipClaim: true, skipCounters: true, simulatedCheckpoints
+        skipClaim: true, skipCounters: true, simulatedCheckpoints, simulatedOption
     });
     return Object.fromEntries(passed);
 }

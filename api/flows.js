@@ -295,8 +295,11 @@ export default async function handler(req, res) {
             };
             // checkpoints "ya pasados" elegidos: [{flowId, nodeId}]
             const simulatedCheckpoints = Array.isArray(tp.checkpoints) ? tp.checkpoints : [];
+            // opción de menú a simular (título del botón/fila, o 'timeout') — para que la prueba
+            // respete el menú y no dispare todas las ramas.
+            const simulatedOption = typeof tp.simulatedOption === 'string' ? tp.simulatedOption : '';
 
-            const passed = await runFlowTest(flow, snapshot, { simulatedCheckpoints });
+            const passed = await runFlowTest(flow, snapshot, { simulatedCheckpoints, simulatedOption });
 
             return res.status(200).json({
                 success: true,

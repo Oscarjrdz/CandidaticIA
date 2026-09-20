@@ -14,6 +14,11 @@ Al hacer clic en el nodo Test se abre el drawer con:
 - **Vacante actual**: para **Filtro: Etiqueta** en modo "es su etiqueta actual".
 - **Check points "ya pasados"**: multi-select de todos los checkpoints → las **Condición: Check
   Point** que apunten a esos toman la rama **Sí** (los demás, la **No**).
+- **Opción de menú a simular**: título del botón/fila (o `timeout`). En una prueba el nodo de
+  botones NO pausa (no hay clic real); sin esto se dispararían TODAS las ramas del menú. Con esto
+  la prueba sigue SOLO esa opción; vacío → no sigue ninguna rama del menú (solo se ve que se
+  envió). **Esto es solo del modo prueba**: en producción el menú SÍ pausa y espera el clic real
+  (verificado: 1 solo mensaje, ninguna rama corre hasta el clic → sin spam).
 
 El **número** y el botón **Run** siguen en el cuerpo del nodo. Los mensajes de prueba SÍ se
 envían a ese número (y se guardan en su chat), pero el **perfil elegido NO se persiste**: solo

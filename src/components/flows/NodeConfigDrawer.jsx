@@ -550,6 +550,17 @@ const TestNodeConfig = ({ data, patch, meta }) => {
                 />
             </div>
             <div>
+                <label className="text-xs text-gray-500 dark:text-gray-400 mb-2 block">Opción de menú a simular <span className="text-gray-400">(nodo Mandar Botones)</span></label>
+                <input
+                    type="text"
+                    value={data.testSimulatedOption || ''}
+                    onChange={(e) => patch({ testSimulatedOption: e.target.value })}
+                    placeholder="Título del botón (ej. Agendar Entrevista) o “timeout”"
+                    className={inputCls}
+                />
+                <p className="mt-1 text-[11px] text-gray-400">La prueba sigue SOLO esa opción del menú (si lo dejas vacío, no sigue ninguna rama del menú — solo verás que se envió).</p>
+            </div>
+            <div>
                 <label className="text-xs text-gray-500 dark:text-gray-400 mb-2 block">Check points “ya pasados” <span className="text-gray-400">(Condición: Check Point → rama Sí)</span></label>
                 {loaded && checkpoints.length === 0 ? (
                     <p className="text-xs text-gray-400">No hay check points en tus flujos.</p>
