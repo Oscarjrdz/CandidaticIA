@@ -1,8 +1,69 @@
-import React, { useState, useMemo, useEffect } from 'react';
-import { X } from 'lucide-react';
+import React, { useState, useMemo, useEffect, useRef, lazy, Suspense } from 'react';
+import { X, Smile } from 'lucide-react';
 import { NODE_DEFS, COLOR_CLASSES, PROFILE_FILTER_LABELS, ETIQUETA_MODE_LABELS, GENEROS } from './nodeTypes';
 import FlowSelect from './FlowSelect';
 import { getFlowCounters, getFlowCounterRange, getAllCheckpoints } from '../../services/flowsService';
+import { candidaticEmojiPickerProps } from '../../utils/candidaticEmoji';
+
+// Mismo picker de emojis que el chat (emoji-picker-react, lazy para no cargarlo hasta abrirlo).
+const EmojiPicker = lazy(() => import('emoji-picker-react'));
+
+// Botón 😊 reutilizable para los campos de texto del drawer, con el look de Candidatic
+// (helper compartido) y cierre por clic-afuera Y tecla Esc. onPick(emoji) recibe el emoji
+// elegido (el llamador lo agrega al campo). Trae TODOS los emojis (categorías + buscador).
+const EmojiPickerButton = ({ onPick }) => {
+    const [open, setOpen] = useState(false);
+    const [pos, setPos] = useState(null);   // posición FIXED (para escapar el overflow del drawer)
+    const btnRef = useRef(null);
+    const popRef = useRef(null);
+    const W = 300, H = 360;
+
+    const toggle = () => {
+        if (open) { setOpen(false); return; }
+        const r = btnRef.current?.getBoundingClientRect();
+        if (r) {
+            // Alinea el borde derecho del picker con el del botón; lo mantiene dentro de la pantalla.
+            const left = Math.max(8, Math.min(r.right - W, window.innerWidth - W - 8));
+            const top = Math.min(r.bottom + 6, window.innerHeight - H - 8);
+            setPos({ top, left });
+        }
+        setOpen(true);
+    };
+
+    useEffect(() => {
+        if (!open) return;
+        const onDown = (e) => {
+            if (popRef.current?.contains(e.target) || btnRef.current?.contains(e.target)) return;
+            setOpen(false);
+        };
+        const onKey = (e) => { if (e.key === 'Escape') setOpen(false); };
+        document.addEventListener('mousedown', onDown);
+        document.addEventListener('keydown', onKey);
+        return () => { document.removeEventListener('mousedown', onDown); document.removeEventListener('keydown', onKey); };
+    }, [open]);
+
+    return (
+        <>
+            <button
+                ref={btnRef}
+                type="button"
+                onClick={toggle}
+                title="Insertar emoji"
+                className={`p-1.5 rounded-lg transition-colors ${open ? 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-500' : 'text-gray-400 hover:text-emerald-500 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
+            >
+                <Smile className="w-4 h-4" />
+            </button>
+            {open && pos && (
+                <div ref={popRef} style={{ position: 'fixed', top: pos.top, left: pos.left, zIndex: 400 }}
+                    className="rounded-2xl overflow-hidden shadow-xl ring-1 ring-black/5 dark:ring-white/10 bg-white dark:bg-gray-800">
+                    <Suspense fallback={<div style={{ width: W, height: H }} className="flex items-center justify-center text-xs text-gray-400">Cargando emojis…</div>}>
+                        <EmojiPicker onEmojiClick={(d) => { onPick(d.emoji); setOpen(false); }} width={W} height={H} {...candidaticEmojiPickerProps()} />
+                    </Suspense>
+                </div>
+            )}
+        </>
+    );
+};
 
 const StatCell = ({ label, value }) => (
     <div className="rounded-xl border border-gray-200 dark:border-gray-700 p-3 text-center">
@@ -375,13 +436,19 @@ const BotonesConfig = ({ data, patch }) => {
 
             {/* Body */}
             <div>
-                <label className="text-xs text-gray-500 dark:text-gray-400 mb-2 block">Mensaje <span className="text-red-500">*</span></label>
+                <div className="flex items-center justify-between mb-2">
+                    <label className="text-xs text-gray-500 dark:text-gray-400">Mensaje <span className="text-red-500">*</span></label>
+                    <EmojiPickerButton onPick={(emoji) => patch({ body: (data.body || '') + emoji })} />
+                </div>
                 <textarea rows={3} maxLength={1024} value={data.body || ''} onChange={(e) => patch({ body: e.target.value })} placeholder="Texto del mensaje. Admite variables: {{nombre}}, {{municipio}}…" className={inputCls} />
             </div>
 
             {/* Footer */}
             <div>
-                <label className="text-xs text-gray-500 dark:text-gray-400 mb-2 block">Pie de mensaje (opcional)</label>
+                <div className="flex items-center justify-between mb-2">
+                    <label className="text-xs text-gray-500 dark:text-gray-400">Pie de mensaje (opcional)</label>
+                    <EmojiPickerButton onPick={(emoji) => patch({ footer: (data.footer || '') + emoji })} />
+                </div>
                 <input type="text" maxLength={60} value={data.footer || ''} onChange={(e) => patch({ footer: e.target.value })} placeholder="Texto chico al pie (≤60)" className={inputCls} />
             </div>
 
@@ -391,8 +458,9 @@ const BotonesConfig = ({ data, patch }) => {
                     <label className="text-xs text-gray-500 dark:text-gray-400 mb-2 block">Botones ({buttons.length}/3)</label>
                     <div className="space-y-2">
                         {buttons.map((b, i) => (
-                            <div key={b.id} className="flex items-center gap-2">
+                            <div key={b.id} className="flex items-center gap-1">
                                 <input type="text" maxLength={20} value={b.title || ''} onChange={(e) => updateButton(i, e.target.value)} placeholder={`Botón ${i + 1} (≤20)`} className={inputCls} />
+                                <EmojiPickerButton onPick={(emoji) => updateButton(i, (b.title || '') + emoji)} />
                                 <button onClick={() => removeButton(i)} className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20" title="Quitar">✕</button>
                             </div>
                         ))}
@@ -421,8 +489,9 @@ const BotonesConfig = ({ data, patch }) => {
                             </div>
                             {(s.rows || []).map((r, ri) => (
                                 <div key={r.id} className="pl-2 border-l-2 border-emerald-200 dark:border-emerald-800 space-y-1.5">
-                                    <div className="flex items-center gap-2">
+                                    <div className="flex items-center gap-1">
                                         <input type="text" maxLength={24} value={r.title || ''} onChange={(e) => updateRow(si, ri, 'title', e.target.value)} placeholder={`Opción ${ri + 1} (≤24)`} className={inputCls} />
+                                        <EmojiPickerButton onPick={(emoji) => updateRow(si, ri, 'title', (r.title || '') + emoji)} />
                                         <button onClick={() => removeRow(si, ri)} className="p-1.5 rounded-lg text-gray-400 hover:text-red-500" title="Quitar">✕</button>
                                     </div>
                                     <input type="text" maxLength={72} value={r.description || ''} onChange={(e) => updateRow(si, ri, 'description', e.target.value)} placeholder="Descripción (opcional, ≤72)" className={`${inputCls} text-xs`} />
@@ -901,7 +970,10 @@ const NodeConfigDrawer = ({ node, flowId, meta, quickReplies, reminderTemplates,
 
                 {node.type === 'accion_whatsapp_personalizado' && (
                     <div>
-                        <label className="text-xs text-gray-500 dark:text-gray-400 mb-2 block">Mensaje</label>
+                        <div className="flex items-center justify-between mb-2">
+                            <label className="text-xs text-gray-500 dark:text-gray-400">Mensaje</label>
+                            <EmojiPickerButton onPick={(emoji) => patch({ message: (data.message || '') + emoji })} />
+                        </div>
                         <textarea
                             value={data.message || ''}
                             onChange={(e) => patch({ message: e.target.value })}
@@ -923,7 +995,10 @@ const NodeConfigDrawer = ({ node, flowId, meta, quickReplies, reminderTemplates,
                     const linkedPhrase = (linkedQr?.dynamicPhrase || '').trim();
                     return (
                     <div>
-                        <label className="text-xs text-gray-500 dark:text-gray-400 mb-2 block">Frase</label>
+                        <div className="flex items-center justify-between mb-2">
+                            <label className="text-xs text-gray-500 dark:text-gray-400">Frase</label>
+                            {!linked && <EmojiPickerButton onPick={(emoji) => patch({ value: (data.value || '') + emoji, linkedQuickReplyId: '' })} />}
+                        </div>
                         <textarea
                             value={linked ? linkedPhrase : (data.value || '')}
                             onChange={(e) => patch({ value: e.target.value, linkedQuickReplyId: '' })}

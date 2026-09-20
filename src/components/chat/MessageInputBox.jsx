@@ -1,4 +1,5 @@
-import React, { useState, useRef, lazy, Suspense } from 'react';
+import React, { useState, useRef, useEffect, lazy, Suspense } from 'react';
+import { candidaticEmojiPickerProps } from '../../utils/candidaticEmoji';
 const EmojiPicker = lazy(() => import('emoji-picker-react'));
 import { MapPin, List as ListIcon, ShoppingBag, UserSquare, MousePointerClick, Plus, Smile, Mic, Send, X, Zap } from 'lucide-react';
 import { renderMetaTemplatePreviewText } from '../../utils/metaTemplatePreview';
@@ -9,6 +10,22 @@ const MessageInputBox = React.forwardRef(({ onSend, onTyping, fileInputRef, hand
     const [showEmojis, setShowEmojis] = useState(false);
     const [showTemplates, setShowTemplates] = useState(false);
     const textareaRef = useRef(null);
+    const emojiPopRef = useRef(null);
+
+    // Cierra el picker de emojis al presionar Esc o al hacer clic FUERA de él (no se queda abierto).
+    useEffect(() => {
+        if (!showEmojis) return;
+        const onKey = (e) => { if (e.key === 'Escape') setShowEmojis(false); };
+        const onDown = (e) => {
+            // Ignora el clic en el botón 😊 (su onClick ya hace toggle) y dentro del propio picker.
+            if (emojiPopRef.current && emojiPopRef.current.contains(e.target)) return;
+            if (e.target.closest?.('[data-emoji-toggle]')) return;
+            setShowEmojis(false);
+        };
+        document.addEventListener('keydown', onKey);
+        document.addEventListener('mousedown', onDown);
+        return () => { document.removeEventListener('keydown', onKey); document.removeEventListener('mousedown', onDown); };
+    }, [showEmojis]);
     const lastTypingRef = useRef(0);
     const lastTextareaHeightRef = useRef(0);
 
@@ -81,19 +98,19 @@ const MessageInputBox = React.forwardRef(({ onSend, onTyping, fileInputRef, hand
                 )}
                 <form onSubmit={handleSubmit} className="px-4 py-[10px] bg-[#f0f2f5] dark:bg-[#202c33] flex flex-col gap-2 relative">
                     {showEmojis && (
-                        <div className="absolute bottom-full left-2 mb-2 shadow-2xl z-[100] rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700">
-                            <Suspense fallback={<div className="w-[320px] h-[400px] flex items-center justify-center bg-white dark:bg-[#222e35] rounded-xl"><div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 animate-pulse" /></div>}>
+                        <div ref={emojiPopRef} className="absolute bottom-full left-2 mb-2 shadow-2xl z-[100] rounded-2xl overflow-hidden ring-1 ring-black/5 dark:ring-white/10">
+                            <Suspense fallback={<div className="w-[320px] h-[400px] flex items-center justify-center bg-white dark:bg-[#222e35] rounded-2xl"><div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 animate-pulse" /></div>}>
                                 <EmojiPicker
                                     onEmojiClick={(eData) => setLocalMessage(prev => prev + eData.emoji)}
-                                    theme="auto" width={320} height={400}
-                                    searchPlaceholder="Buscar emojis..." lazyLoadEmojis={true} skinTonesDisabled={true}
+                                    width={320} height={400}
+                                    {...candidaticEmojiPickerProps()}
                                 />
                             </Suspense>
                         </div>
                     )}
 
                     <div className="flex items-center gap-4 w-full bg-white/50 dark:bg-black/20 rounded-lg py-2 px-3.5 border border-gray-200/50 dark:border-gray-800/50 overflow-x-auto scrollbar-none shrink-0 text-[#54656f] dark:text-[#8696a0]">
-                        <button type="button" title="Emojis" onClick={() => {setShowEmojis(!showEmojis); setShowTemplates(false);}} className={`hover:text-[#111b21] dark:hover:text-[#d1d7db] transition-colors shrink-0 ${showEmojis ? 'text-blue-500' : ''}`}><Smile className="w-[22px] h-[22px] stroke-[1.5]" /></button>
+                        <button type="button" data-emoji-toggle title="Emojis" onClick={() => {setShowEmojis(!showEmojis); setShowTemplates(false);}} className={`hover:text-[#111b21] dark:hover:text-[#d1d7db] transition-colors shrink-0 ${showEmojis ? 'text-emerald-500' : ''}`}><Smile className="w-[22px] h-[22px] stroke-[1.5]" /></button>
                         <button type="button" title="Adjuntar Documento" onClick={() => fileInputRef.current?.click()} className="hover:text-[#111b21] dark:hover:text-[#d1d7db] transition-colors shrink-0"><Plus className="w-[22px] h-[22px] stroke-[1.5]" /></button>
                         <button type="button" title="Enviar Tarjeta de Contacto (vCard)" onClick={onSendVCard} className="hover:text-[#111b21] dark:hover:text-[#d1d7db] transition-colors shrink-0"><UserSquare className="w-[21px] h-[21px] stroke-[1.5]" /></button>
                         <button type="button" title="Enviar Botones Interactivos" onClick={onSendInteractive} className="hover:text-[#111b21] dark:hover:text-[#d1d7db] transition-colors shrink-0"><MousePointerClick className="w-[21px] h-[21px] stroke-[1.5]" /></button>
@@ -186,12 +203,12 @@ const MessageInputBox = React.forwardRef(({ onSend, onTyping, fileInputRef, hand
             )}
             <form onSubmit={handleSubmit} className="px-3 py-2 bg-[#f0f2f5] dark:bg-[#202c33] flex items-end gap-2 relative">
                 {showEmojis && (
-                    <div className="absolute bottom-full left-2 mb-2 shadow-2xl z-[100] rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700">
-                        <Suspense fallback={<div className="w-[320px] h-[400px] flex items-center justify-center bg-white dark:bg-[#222e35] rounded-xl"><div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 animate-pulse" /></div>}>
+                    <div ref={emojiPopRef} className="absolute bottom-full left-2 mb-2 shadow-2xl z-[100] rounded-2xl overflow-hidden ring-1 ring-black/5 dark:ring-white/10">
+                        <Suspense fallback={<div className="w-[320px] h-[400px] flex items-center justify-center bg-white dark:bg-[#222e35] rounded-2xl"><div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 animate-pulse" /></div>}>
                             <EmojiPicker
                                 onEmojiClick={(eData) => setLocalMessage(prev => prev + eData.emoji)}
-                                theme="auto" width={320} height={400}
-                                searchPlaceholder="Buscar emojis..." lazyLoadEmojis={true} skinTonesDisabled={true}
+                                width={320} height={400}
+                                {...candidaticEmojiPickerProps()}
                             />
                         </Suspense>
                     </div>
@@ -223,7 +240,7 @@ const MessageInputBox = React.forwardRef(({ onSend, onTyping, fileInputRef, hand
                 )}
 
                 <div className="flex items-center text-[#54656f] dark:text-[#8696a0] shrink-0">
-                    <button type="button" title="Emojis" onClick={() => {setShowEmojis(!showEmojis); setShowTemplates(false);}} className={`w-9 h-9 flex items-center justify-center rounded-lg hover:bg-black/5 dark:hover:bg-white/5 transition-colors ${showEmojis ? 'text-blue-500' : ''}`}><Smile className="w-[22px] h-[22px] stroke-[1.5]" /></button>
+                    <button type="button" data-emoji-toggle title="Emojis" onClick={() => {setShowEmojis(!showEmojis); setShowTemplates(false);}} className={`w-9 h-9 flex items-center justify-center rounded-lg hover:bg-black/5 dark:hover:bg-white/5 transition-colors ${showEmojis ? 'text-emerald-500' : ''}`}><Smile className="w-[22px] h-[22px] stroke-[1.5]" /></button>
                     <button type="button" title="Adjuntar Documento" onClick={() => fileInputRef.current?.click()} className="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-black/5 dark:hover:bg-white/5 transition-colors"><Plus className="w-[22px] h-[22px] stroke-[1.5]" /></button>
                     <button type="button" title="Enviar Tarjeta de Contacto (vCard)" onClick={onSendVCard} className="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-black/5 dark:hover:bg-white/5 transition-colors"><UserSquare className="w-[22px] h-[22px] stroke-[1.5]" /></button>
                     <button type="button" title="Enviar Botones Interactivos" onClick={onSendInteractive} className="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-black/5 dark:hover:bg-white/5 transition-colors"><MousePointerClick className="w-[22px] h-[22px] stroke-[1.5]" /></button>
