@@ -95,6 +95,10 @@ const RETURN_FIRE_PREFIX  = 'flow:return:lastfire:v1:';  // hash flowId → { ca
 // que ESTE turno vino de un anuncio, sin confundirlo con un adId viejo ya persistido.
 export const RETURN_ADCLICK_PREFIX = 'return:adclick:v1:';
 
+// 📣 Marca de "primera respuesta pendiente a un broadcast". La fija bulks.js al enviar un
+// masivo con etiqueta; la consume runBroadcastReplyFlowsForCandidate en la primera respuesta.
+const BROADCAST_REPLY_PENDING_PREFIX = 'broadcast:reply_pending:';
+
 // Disparadores configurados en el nodo Inicio (data.trigger, array).
 //   • 'al_completar' → al terminar la extracción (flanco de subida, disparo histórico).
 //   • 'al_regresar'  → cuando un COMPLETO vuelve (click de anuncio o frase).
@@ -1127,6 +1131,61 @@ export async function runReturningFlowsForCandidate(candidateId, candidateSnapsh
         return eligible.length;
     } catch (e) {
         console.error('[FLOW-ENGINE] runReturningFlowsForCandidate:', e?.message);
+        return 0;
+    }
+}
+
+// 📣 DISPARADOR "RESPONDE A BROADCAST" (event-driven, PRIMERA respuesta): lo llama agent.js al
+// llegar un mensaje, ANTES de que Brenda genere respuesta — por eso el flujo tiene PRIORIDAD
+// sobre Brenda (si dispara, Brenda calla ese turno; el caller usa el retorno para el silencio).
+// Corre para candidatos COMPLETOS e INCOMPLETOS (a diferencia de "al_regresar", que exige
+// completo). Señal = la marca broadcast:reply_pending que puso bulks.js al enviar el masivo.
+// FIRE-ONCE por envío: la marca se CONSUME aquí (en la primera respuesta), haya o no flujo
+// elegible, para que la semántica "responder a su primera respuesta" sea exacta. Filtro por
+// etiqueta: el nodo Inicio puede fijar data.broadcastTags (array); vacío = cualquier broadcast.
+// Ephemeral (re-ejecutable): el fire-once lo gobierna el borrado de la marca, no flow:executed.
+export async function runBroadcastReplyFlowsForCandidate(candidateId, candidateSnapshot) {
+    try {
+        const redis = getRedisClient();
+        if (!redis || !candidateSnapshot?.id || !candidateSnapshot?.whatsapp) return 0;
+
+        // Fast path (99% de los mensajes): sin marca pendiente, no hay nada que hacer.
+        const pendingTag = await redis.get(`${BROADCAST_REPLY_PENDING_PREFIX}${candidateId}`).catch(() => null);
+        if (!pendingTag) return 0;
+
+        const raw = await getCachedConfig(redis, FLOWS_KEY);
+        const flows = raw ? JSON.parse(raw) : [];
+        const bcFlows = (Array.isArray(flows) ? flows : []).filter(f =>
+            f.active && Array.isArray(f.nodes) && f.nodes.length
+            && getInicioTrigger(f).includes('al_responder_broadcast'));
+
+        const eligible = [];
+        for (const flow of bcFlows) {
+            const inicio = flow.nodes.find(n => n.type === 'inicio');
+            const tags = (Array.isArray(inicio?.data?.broadcastTags) ? inicio.data.broadcastTags : [])
+                .map(t => String(t || '').trim()).filter(Boolean);
+            // Sin etiquetas configuradas → responde a CUALQUIER broadcast. Con etiquetas → debe coincidir.
+            if (tags.length === 0 || tags.includes(pendingTag)) eligible.push(flow);
+        }
+
+        // Consume la marca SIEMPRE (la primera respuesta ya ocurrió): fire-once por envío. Un
+        // flujo creado después no debe disparar sobre este mismo mensaje ya pasado.
+        await redis.del(`${BROADCAST_REPLY_PENDING_PREFIX}${candidateId}`).catch(() => {});
+
+        if (!eligible.length) return 0;
+
+        // Ejecuta en segundo plano (los envíos con pausa no bloquean el turno). El caller ya
+        // sabe (por el retorno) que debe callar a Brenda este turno.
+        runInBackground((async () => {
+            for (const flow of eligible) {
+                await runOneFlow(redis, flow, candidateId, { ...candidateSnapshot }, { ephemeral: true })
+                    .catch(e => console.error(`[FLOW-BROADCAST] flujo ${flow.id} candidato ${candidateId}:`, e?.message));
+            }
+        })());
+
+        return eligible.length;
+    } catch (e) {
+        console.error('[FLOW-ENGINE] runBroadcastReplyFlowsForCandidate:', e?.message);
         return 0;
     }
 }

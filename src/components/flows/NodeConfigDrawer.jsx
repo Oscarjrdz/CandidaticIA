@@ -207,6 +207,44 @@ const FraseGruposEditor = ({ grupos, onChange }) => {
     );
 };
 
+// 📣 Selector de etiquetas Broadcast (disparador "responde a broadcast"). Trae las etiquetas
+// existentes de /api/bulks?action=broadcast_tags. Vacío = responde a CUALQUIER broadcast.
+const BroadcastTagPicker = ({ selected, onChange }) => {
+    const [options, setOptions] = useState([]);
+    const [loaded, setLoaded] = useState(false);
+    useEffect(() => {
+        let alive = true;
+        fetch('/api/bulks?action=broadcast_tags')
+            .then(r => r.json())
+            .then(d => { if (alive && d.success && Array.isArray(d.tags)) setOptions(d.tags); })
+            .catch(() => {})
+            .finally(() => { if (alive) setLoaded(true); });
+        return () => { alive = false; };
+    }, []);
+    const sel = Array.isArray(selected) ? selected : [];
+    const toggle = (t) => onChange(sel.includes(t) ? sel.filter(x => x !== t) : [...sel, t]);
+    return (
+        <div>
+            <label className="text-xs text-gray-500 dark:text-gray-400 mb-2 block">¿A qué etiqueta(s) Broadcast responde?</label>
+            {loaded && options.length === 0 ? (
+                <p className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-2.5">
+                    Aún no hay etiquetas Broadcast. Créalas en <strong>Envíos Masivos → Públicos</strong> (campo “Etiqueta Broadcast”).
+                </p>
+            ) : (
+                <div className="space-y-1.5">
+                    {options.map(t => (
+                        <label key={t} className="flex items-center gap-2.5 p-2 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer">
+                            <input type="checkbox" checked={sel.includes(t)} onChange={() => toggle(t)} className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500" />
+                            <span className="text-sm text-gray-700 dark:text-gray-200">🏷️ {t}</span>
+                        </label>
+                    ))}
+                </div>
+            )}
+            <p className="text-[11px] text-gray-400 mt-2">Si no seleccionas ninguna, responde a <strong>cualquier</strong> broadcast.</p>
+        </div>
+    );
+};
+
 const NodeConfigDrawer = ({ node, flowId, meta, quickReplies, reminderTemplates, projects, onChange, onClose }) => {
     if (!node) return null;
     const def = NODE_DEFS[node.type] || NODE_DEFS.contador;
@@ -240,6 +278,7 @@ const NodeConfigDrawer = ({ node, flowId, meta, quickReplies, reminderTemplates,
                         patch({ trigger: next });
                     };
                     const showReturn = trigger.includes('al_regresar');
+                    const showBroadcast = trigger.includes('al_responder_broadcast');
                     return (
                     <div className="space-y-5">
                         <div>
@@ -254,7 +293,8 @@ const NodeConfigDrawer = ({ node, flowId, meta, quickReplies, reminderTemplates,
                             <label className="text-xs text-gray-500 dark:text-gray-400 mb-2 block">¿Cuándo entra? (disparador)</label>
                             {[
                                 { value: 'al_completar', label: 'Al completar su registro', hint: 'Justo cuando termina de dar sus datos (disparo clásico).' },
-                                { value: 'al_regresar', label: 'Cuando regresa y pide info', hint: 'Un candidato YA completo que vuelve (click de anuncio o frase).' }
+                                { value: 'al_regresar', label: 'Cuando regresa y pide info', hint: 'Un candidato YA completo que vuelve (click de anuncio o frase).' },
+                                { value: 'al_responder_broadcast', label: 'Cuando responde a un Broadcast', hint: 'Primera respuesta a un masivo etiquetado. Tiene prioridad sobre Brenda (aunque esté en modo humano).' }
                             ].map(opt => (
                                 <label key={opt.value} className="flex items-start gap-2.5 p-2.5 rounded-xl border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer mb-2">
                                     <input type="checkbox" checked={trigger.includes(opt.value)} onChange={() => toggleTrigger(opt.value)} className="w-4 h-4 mt-0.5 rounded text-indigo-600 focus:ring-indigo-500" />
@@ -318,6 +358,17 @@ const NodeConfigDrawer = ({ node, flowId, meta, quickReplies, reminderTemplates,
                                         <p className="text-xs text-gray-400 mt-1.5">Mínimo entre disparos.</p>
                                     </div>
                                 </div>
+                            </div>
+                        )}
+                        {showBroadcast && (
+                            <div className="space-y-4 border-l-2 border-violet-200 dark:border-violet-800 pl-3">
+                                <p className="text-xs bg-violet-50 dark:bg-violet-900/20 border border-violet-200 dark:border-violet-800 rounded-lg p-2.5 text-violet-800 dark:text-violet-300">
+                                    Dispara en la <strong>primera respuesta</strong> de un candidato tras recibir un masivo etiquetado. Tiene <strong>prioridad sobre Brenda</strong> ese turno (aunque la IA esté en modo humano/silencio). Se dispara <strong>una vez por envío</strong>.
+                                </p>
+                                <p className="text-xs bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-2.5 text-amber-800 dark:text-amber-300">
+                                    ⚠️ Para que también dispare con candidatos que <strong>no terminaron</strong> su registro, pon el <strong>filtro de perfil</strong> (arriba) en <strong>“Todos”</strong>.
+                                </p>
+                                <BroadcastTagPicker selected={data.broadcastTags} onChange={(v) => patch({ broadcastTags: v })} />
                             </div>
                         )}
                     </div>

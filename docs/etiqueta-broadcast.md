@@ -92,7 +92,39 @@ limpieza total al final). 15/15 checks OK, incluyendo:
 - **No** aparece en `candidatic:tag_counts` ni crea índice de etiqueta del Chat Web.
 - Normalización (trim, tope 60, vacío → null).
 
-## Parte 2 — pendiente (motor de respuesta determinístico)
-Se apoyará en `broadcast:candidate:<id>` para saber de qué broadcast(s) viene un candidato
-cuando responda, e inyectar una instrucción específica al comportamiento de la respuesta.
-Diseño aún no definido (por campaña / por etiqueta / global — decidir al construirlo).
+## Parte 2 — disparador de FLUJO "responde a broadcast" (implementado 2026-09-19)
+
+En vez de inyectar texto en Brenda, se hizo un **disparador de flujo** en la sección Flujos:
+determinístico, configurable con el constructor visual existente.
+
+### Señal — marca de primera respuesta
+Al enviar un masivo con etiqueta, además de las side-keys, `bulks.js` fija
+`broadcast:reply_pending:<id>` = etiqueta (TTL 90d). Es la señal de "recibió un broadcast y
+aún no responde". (Es independiente de `campaign:reply_await:*`, que el webhook consume para
+la estadística de "respondidos" antes de que corra el agente.)
+
+### Disparo — `runBroadcastReplyFlowsForCandidate` (flow-engine.js)
+- Lo llama `agent.js` (~línea 1630) al llegar un mensaje, **antes** de que Brenda genere
+  respuesta → el flujo tiene **prioridad**. Si dispara, `return null` (Brenda muda ese turno).
+- **Corre para completos e incompletos** (no exige perfil completo, a diferencia de
+  `al_regresar`) y **dispara aunque la IA esté en silencio por modo humano** (los masivos van
+  a base fría; no hay reclutador conversando). Solo se salta a los `blocked` (BLOCK SHIELD) y
+  al simulador.
+- **Fast-path:** sin marca pendiente = un solo `GET` y sigue de largo (99% de mensajes).
+- **Fire-once por envío:** consume (`DEL`) la marca en la primera respuesta, haya o no flujo
+  elegible. Se reenvía otro masivo → nueva marca → puede volver a disparar.
+- **Filtro por etiqueta:** el nodo Inicio guarda `data.broadcastTags` (array). Vacío =
+  cualquier broadcast; con etiquetas = la etiqueta pendiente debe estar en la lista.
+- Corre el flujo en modo `ephemeral` (re-ejecutable) vía `runInBackground`.
+
+### UI — nuevo disparador en el nodo Inicio (NodeConfigDrawer.jsx)
+- Tercera opción "Cuando responde a un Broadcast" en "¿Cuándo entra?".
+- `BroadcastTagPicker`: checkboxes con las etiquetas de `GET /api/bulks?action=broadcast_tags`.
+- Aviso: para que dispare con **incompletos**, poner el filtro de perfil en "Todos" (el nodo
+  Inicio aplica `profileFilter` en el motor; default de display = "completo").
+- Label `al_responder_broadcast: 'Responde a Broadcast'` en `nodeDefs.js` (resumen del nodo).
+
+### No hay doble disparo
+`runFlowsForCandidate` (al_completar) filtra por `includes('al_completar')` y
+`runReturningFlowsForCandidate` por `includes('al_regresar')`, así que un flujo solo-broadcast
+no entra por esos paths. Un flujo con varios triggers dispara por cada uno (intencional).

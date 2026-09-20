@@ -18,7 +18,7 @@ import { getOpenAIResponse } from '../utils/openai.js';
 
 import { inferGender } from '../utils/gender-helper.js';
 import { maybeSendKatconOnComplete } from '../utils/agent-katcon.js';
-import { runFlowsForCandidate, resumeWaitingFlowIfMatch, runReturningFlowsForCandidate } from '../utils/flow-engine.js';
+import { runFlowsForCandidate, resumeWaitingFlowIfMatch, runReturningFlowsForCandidate, runBroadcastReplyFlowsForCandidate } from '../utils/flow-engine.js';
 import { runInBackground } from '../utils/background.js';
 import { maybeEnqueueForLiveAgent } from '../utils/agent-candidatic.js';
 import { attendLiveCandidate } from '../utils/agent-attend.js';
@@ -1618,6 +1618,25 @@ SOLO responde al mensaje actual, de forma corta (máximo 2 oraciones). NO mencio
         const _isLongSilence = minSinceLastBot >= 5;
         const currentIsSilenced = candidateData.silencioActivo === true || candidateData.silencioActivo === 'true';
         const isSimulatorPhone = candidateData.whatsapp.startsWith('sim_') || ['1234567890', '5211234567890'].includes(candidateData.whatsapp);
+
+        // 📣 DISPARADOR "RESPONDE A BROADCAST" (PRIORIDAD sobre Brenda): si el candidato recibió
+        // un masivo con etiqueta y esta es su PRIMERA respuesta, y hay un flujo "al responder
+        // broadcast" cuya etiqueta coincide, ese flujo TOMA EL CONTROL de este turno y Brenda
+        // calla. Corre para completos e incompletos, y DISPARA AUNQUE la IA esté en silencio por
+        // modo humano (decisión explícita: el flujo del broadcast manda por encima de todo).
+        // Fire-once: la marca se consume adentro. El fast-path (sin marca) es un solo GET y sigue
+        // de largo. Persistimos los candidateUpdates acumulados antes de callar (igual que el
+        // cierre normal en ~2907). (El BLOCK SHIELD de más arriba ya cortó a los `blocked`.)
+        if (!isSimulatorPhone) {
+            const _bcFired = await runBroadcastReplyFlowsForCandidate(
+                candidateId,
+                { ...candidateData, ...candidateUpdates }
+            ).catch(() => 0);
+            if (_bcFired > 0) {
+                await updateCandidate(candidateId, candidateUpdates).catch(() => {});
+                return null; // el flujo maneja la respuesta este turno; Brenda muda
+            }
+        }
 
         systemInstruction += `\n[ESTADO DE MISIÓN]:
 - PERFIL COMPLETADO: ${isProfileComplete ? 'SÍ (SKIP EXTRACTION)' : 'NO (DATA REQUIRED)'}

@@ -287,6 +287,10 @@ const tickEngine = async (state) => {
                                         const p = bc.pipeline();
                                         p.sadd(`broadcast:tag:${state.broadcastTag}`, candidateId);
                                         p.sadd(`broadcast:candidate:${candidateId}`, state.broadcastTag);
+                                        // Marca de PRIMERA respuesta pendiente para el disparador de flujos
+                                        // "al responder broadcast". El motor la consume (GET+DEL) en la
+                                        // primera respuesta del candidato. TTL 90d (ventana de atribución).
+                                        p.set(`broadcast:reply_pending:${candidateId}`, state.broadcastTag, 'EX', 60 * 60 * 24 * 90);
                                         p.exec().catch(() => {});
                                     }
                                 }

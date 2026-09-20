@@ -19,7 +19,8 @@ export const ETIQUETA_MODE_LABELS = {
 // Disparadores del nodo Inicio. Ausente = ['al_completar'] (compat con flujos viejos).
 export const TRIGGER_LABELS = {
     al_completar: 'Al completar',
-    al_regresar: 'Al regresar'
+    al_regresar: 'Al regresar',
+    al_responder_broadcast: 'Responde a Broadcast'
 };
 
 function formatMultiSummary(arr, allLabel = 'Todos') {
