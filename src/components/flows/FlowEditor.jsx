@@ -686,6 +686,21 @@ const FlowEditorInner = ({ flowId, onBack }) => {
         };
     }), [nodes, nodeLocks, handleToggleLock]);
 
+    // 🔍 ZOOM/POSICIÓN PERSISTENTE POR FLUJO: React Flow, con `fitView`, reencuadra a todos los
+    // nodos CADA vez que entras (ignora tu zoom). Guardamos el viewport (x/y/zoom) por flujo en
+    // localStorage y lo restauramos como `defaultViewport`; solo hacemos `fitView` la PRIMERA vez
+    // (cuando aún no hay viewport guardado para este flujo). Se lee una vez por flowId (deps).
+    const savedViewport = useMemo(() => {
+        try {
+            const v = JSON.parse(localStorage.getItem(`flow_viewport_${flowId}`) || 'null');
+            return (v && typeof v.zoom === 'number' && typeof v.x === 'number' && typeof v.y === 'number') ? v : null;
+        } catch { return null; }
+    }, [flowId]);
+    const handleMoveEnd = useCallback((_evt, vp) => {
+        if (!vp || typeof vp.zoom !== 'number') return;
+        try { localStorage.setItem(`flow_viewport_${flowId}`, JSON.stringify({ x: vp.x, y: vp.y, zoom: vp.zoom })); } catch { /* localStorage lleno/bloqueado: no crítico */ }
+    }, [flowId]);
+
     if (loading) {
         return <div className="h-full flex items-center justify-center text-gray-400 text-sm">Cargando flujo...</div>;
     }
@@ -715,7 +730,11 @@ const FlowEditorInner = ({ flowId, onBack }) => {
                 onSelectionChange={onSelectionChange}
                 nodeTypes={flowNodeTypes}
                 edgeTypes={flowEdgeTypes}
-                fitView
+                /* Respeta tu zoom/posición: restaura el viewport guardado; solo encuadra
+                   (fitView) la primera vez, cuando aún no hay uno guardado para este flujo. */
+                fitView={!savedViewport}
+                defaultViewport={savedViewport || undefined}
+                onMoveEnd={handleMoveEnd}
                 minZoom={0.2}
                 maxZoom={1.5}
                 /* Sin elevar al seleccionar: mantiene el fondo (bg) SIEMPRE detrás según su
