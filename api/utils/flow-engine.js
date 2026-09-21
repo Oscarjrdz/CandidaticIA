@@ -1060,10 +1060,14 @@ async function runOneFlow(redis, flow, candidateId, candidate, opts = {}) {
         const branchTaken = new Map();
 
         // Elegibilidad de un nodo según sus aristas entrantes:
-        //   • Aristas normales ("Sí"/sin handle) → se unen con Y (AND): TODAS deben venir
-        //     de un origen que cumplió. Preserva el patrón de convergencia original
-        //     (varias condiciones → una acción que solo corre si TODAS pasan) y deja los
-        //     flujos ya guardados EXACTO igual que antes (no tienen aristas "No").
+        //   • Aristas normales ("Sí"/sin handle): dispara si AL MENOS UNA rama ALCANZADA cumplió
+        //     ('pass') y NINGUNA rama alcanzada falló ('fail'). Las ramas 'unreached' (nunca
+        //     evaluadas, porque su camino no se recorrió) se IGNORAN. Esto cubre los dos casos:
+        //       - "varias condiciones → una acción": si una condición alcanzada FALLA, no corre
+        //         (se preserva el AND real entre condiciones que sí se evaluaron).
+        //       - "varias ramas mutuamente exclusivas → un nodo final compartido" (join): corre
+        //         cuando la rama tomada llega, sin exigir que las OTRAS (que nunca se recorren en
+        //         ese viaje) también pasen — antes exigía TODAS y el nodo final nunca se activaba.
         //   • Aristas "No cumple" (handle === 'no') → se unen con O (OR): basta que UNA
         //     traiga un origen que NO cumplió. Así un único nodo "Marcar Leído" puede
         //     recibir la rama roja de muchas condiciones/ramas y dispararse en cuanto el
@@ -1082,7 +1086,10 @@ async function runOneFlow(redis, flow, candidateId, candidate, opts = {}) {
                 || branchDeps.some(d => branchTaken.get(d.source).has(d.handle || null));
             const normal = rest.filter(d => d.handle !== 'no');
             const negativos = rest.filter(d => d.handle === 'no');
-            const normalOk = normal.length === 0 || normal.every(d => outcome.get(d.source) === 'pass');
+            const normalOk = normal.length === 0 || (
+                normal.some(d => outcome.get(d.source) === 'pass')
+                && normal.every(d => outcome.get(d.source) !== 'fail')
+            );
             const negativoOk = negativos.length === 0 || negativos.some(d => outcome.get(d.source) === 'fail');
             return branchOk && normalOk && negativoOk;
         };
