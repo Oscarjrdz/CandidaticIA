@@ -150,7 +150,13 @@ export default async function handler(req, res) {
                             headers,
                             timeout: 15000,
                             params: {
-                                fields: `pricing_analytics.start(${since}).end(${until}).granularity(DAILY)`
+                                // dimensions(["PRICING_TYPE"]) separa el volumen GRATIS
+                                // (FREE_ENTRY_POINT = clic desde anuncio, FREE_CUSTOMER_SERVICE
+                                //  = respuestas dentro de 24h) del volumen REGULAR (facturable).
+                                // Sin este desglose, cada punto DIARIO mezcla gratis+pago y su
+                                // costo total (>0) hacía que TODO el volumen del día se contara
+                                // como "con costo", inflando el número ~30x (69k en vez de ~2.3k).
+                                fields: `pricing_analytics.start(${since}).end(${until}).granularity(DAILY).dimensions(["PRICING_TYPE"])`
                             }
                         }
                     );
@@ -162,6 +168,8 @@ export default async function handler(req, res) {
                             const cost = dp.cost || 0;
                             _paidVolume += vol;
                             totalCost += cost;
+                            // Con el desglose por PRICING_TYPE, los buckets gratis vienen con
+                            // cost=0 y solo el bucket REGULAR trae cost>0 → conteo correcto.
                             if (cost > 0) paidMessages += vol;
                             else freeMessages += vol;
                         }
