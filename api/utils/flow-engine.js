@@ -1030,6 +1030,12 @@ async function runOneFlow(redis, flow, candidateId, candidate, opts = {}) {
     }
     if (useClaim) {
         prior = (await redis.hgetall(progressKey)) || {};
+    } else if (!opts.resumeWait) {
+        // Viaje FRESCO ephemeral/test (no es una reanudación): borra cualquier ledger viejo de
+        // un viaje ANTERIOR incompleto. Si no, un resume de ESTE viaje (el clic del candidato)
+        // heredaría nodos/ramas ya resueltos de la corrida pasada y dispararía mensajes/menús
+        // que no van (bug real: un re-click nuevo mezclaba con el menú del re-click anterior).
+        await redis.del(progressKey).catch(() => {});
     }
 
     try {
