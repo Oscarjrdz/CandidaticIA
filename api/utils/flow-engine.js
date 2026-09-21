@@ -1513,6 +1513,25 @@ export async function resumeWaitingFlowIfMatch(candidateId, candidateSnapshot, i
     }
 }
 
+// Limpia el ESTADO DE FLUJO de un candidato para UN flujo, para que cada Run del nodo Test
+// parta FRESCO (sin arrastrar corridas anteriores): borra el ledger de progreso, la espera de
+// menú, el "ya completado" (execKey), la cadencia de regreso y el lock. NO toca el `blocked` del
+// candidato (eso lo gobierna el Desactivar Bot del flujo, y desilenciar a la fuerza podría cortar
+// una intervención humana en curso) ni las marcas de checkpoint (la prueba usa checkpoints
+// simulados). Solo estado interno del motor para ESE flujo.
+export async function resetFlowCandidateState(flowId, candidateId) {
+    const redis = getRedisClient();
+    if (!redis || !flowId || !candidateId) return;
+    await redis.pipeline()
+        .del(`${PROGRESS_PREFIX}${flowId}:${candidateId}`)
+        .hdel(`${WAITING_PREFIX}${candidateId}`, flowId)
+        .srem(`${EXEC_SET_PREFIX}${flowId}`, candidateId)
+        .hdel(`${RETURN_FIRE_PREFIX}${flowId}`, candidateId)
+        .hdel(`${RETURN_COUNT_PREFIX}${flowId}`, candidateId)
+        .del(`${RUN_LOCK_PREFIX}${flowId}:${candidateId}`)
+        .exec().catch(() => {});
+}
+
 // Nodo "test" del editor: corre el flujo COMPLETO contra un candidato real (por
 // teléfono), saltando el filtro `flow.active` (para poder probar un borrador antes de
 // activarlo) y el claim de dedupe de producción (para poder repetir la prueba las veces

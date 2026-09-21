@@ -31,6 +31,14 @@ El **número** y el botón **Run** siguen en el cuerpo del nodo. Los mensajes de
 envían a ese número (y se guardan en su chat), pero el **perfil elegido NO se persiste**: solo
 vive en el snapshot en memoria de esa corrida.
 
+## Arranque FRESCO en cada Run
+Cada Run del nodo Test llama `resetFlowCandidateState(flowId, candidateId)` ANTES de correr:
+borra el estado de flujo del candidato para ESE flujo — ledger de progreso, espera de menú,
+"ya completado" (execKey), cadencia de regreso y lock. Así la prueba **no arrastra** corridas
+anteriores (era la causa de "cliqueé y me dio otra info" / "no rutéo ningún botón"). NO toca el
+`blocked` del candidato (lo gobierna el Desactivar Bot; desilenciar a la fuerza podría cortar una
+intervención humana) ni las marcas de checkpoint (la prueba usa checkpoints simulados).
+
 ## Cómo funciona (backend)
 - `api/flows.js` (acción `test`): toma el candidato real por su número (para `whatsapp` +
   `phoneNumberId`) y **sobreescribe en memoria** los campos según el perfil temporal

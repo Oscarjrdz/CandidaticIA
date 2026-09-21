@@ -1,6 +1,6 @@
 import { getRedisClient, validateAdminSession, getCandidateByPhone, getCandidateById, getCandidatesForFlowList } from './utils/storage.js';
 import { getCachedConfig, invalidateCache } from './utils/cache.js';
-import { runFlowTest, runFlowForListCandidate } from './utils/flow-engine.js';
+import { runFlowTest, runFlowForListCandidate, resetFlowCandidateState } from './utils/flow-engine.js';
 import { getBotVacancies, buildDateKeys, getCapturesByAllTags, getCapturesTotal } from './utils/agent-ia.js';
 
 const REDIS_KEY = 'flows:v1';
@@ -298,6 +298,11 @@ export default async function handler(req, res) {
             // opción de menú a simular (título del botón/fila, o 'timeout') — para que la prueba
             // respete el menú y no dispare todas las ramas.
             const simulatedOption = typeof tp.simulatedOption === 'string' ? tp.simulatedOption : '';
+
+            // ARRANQUE FRESCO: cada Run del nodo Test limpia el estado de flujo del candidato para
+            // ESTE flujo (ledger, espera, ya-completado, cadencia, lock), así la prueba no arrastra
+            // corridas anteriores (era la causa de "cliqueé y me dio otra info / no rutéo nada").
+            await resetFlowCandidateState(id, snapshot.id);
 
             const passed = await runFlowTest(flow, snapshot, { simulatedCheckpoints, simulatedOption });
 
