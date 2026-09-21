@@ -1020,7 +1020,11 @@ async function runOneFlow(redis, flow, candidateId, candidate, opts = {}) {
     let prior = {};          // ledger de una corrida previa parcial (nodeId → '1'/'0')
     let lockAcquired = false;
 
-    if (useClaim) {
+    // OJO: una REANUDACIÓN (opts.resumeWait, el clic del candidato en un menú) NUNCA se bloquea
+    // por "ya completado" — es la continuación de un viaje EN CURSO, no un arranque. Si no, un
+    // candidato que ya completó el flujo antes (execKey) tocaría un botón y no rutearía nada
+    // (bug real: "no se disparó ningún botón" en flujos "al regresar" tras completarlos una vez).
+    if (useClaim && !opts.resumeWait) {
         if (await redis.sismember(execKey, candidateId)) return passed; // ya completado
     }
     if (!testMode) {
