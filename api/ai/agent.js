@@ -1660,7 +1660,7 @@ SOLO responde al mensaje actual, de forma corta (máximo 2 oraciones). NO mencio
             const _retIncFired = await runReturningFlowsForCandidate(
                 candidateId,
                 { ...candidateData, ...candidateUpdates },
-                { incomingText: aggregatedText }
+                { incomingText: aggregatedText, botHasSpoken, minSinceLastBot }
             ).catch(() => 0);
             if (_retIncFired > 0) {
                 await updateCandidate(candidateId, candidateUpdates).catch(() => {});
@@ -2007,7 +2007,7 @@ Responde ÚNICAMENTE con el número entero de meses. Si evade o no menciona ning
             const _returnFired = await runReturningFlowsForCandidate(
                 candidateId,
                 { ...candidateData, ...candidateUpdates },
-                { incomingText: aggregatedText }
+                { incomingText: aggregatedText, botHasSpoken, minSinceLastBot }
             ).catch(() => 0);
             if (_returnFired > 0) {
                 _returnHandled = true;

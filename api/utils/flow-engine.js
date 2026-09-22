@@ -1272,7 +1272,30 @@ export async function runFlowsForCandidate(candidateId, candidateSnapshot) {
 // flow:return:count, no el "ya completado". Devuelve cuántos flujos disparó (0 = no aplicó): agent.js
 // usa eso para callar a Brenda ese turno (que el flujo hable, no la Sala ni la extractora).
 // Espejo estructural de runFlowForIncompleteSilence, pero disparado por evento en vez de cron.
-export async function runReturningFlowsForCandidate(candidateId, candidateSnapshot, { incomingText = '' } = {}) {
+// Decisión pura de SEÑAL para el disparador "al regresar" (anuncio / frase / regreso orgánico, OR).
+// Extraída para poder testearla sin Redis ni envíos. `d` = data del nodo Inicio.
+//   • ANUNCIO: completos con cualquier click; incompletos solo con re-clic real (adReclick) — el
+//     primer contacto de un nuevo NO debe secuestrar su extracción/saludo.
+//   • FRASE: solo completos. Un incompleto a media captura no debe engancharse por coincidencia
+//     de palabra (un "sí"/"info" casual rompería la extracción).
+//   • ORGÁNICO (solo INCOMPLETOS): vuelve por su cuenta (sin anuncio ni frase) tras estar inactivo
+//     ≥ minReturnHours. El gate de inactividad + "ya platicó antes" (botHasSpoken) separa al que se
+//     fue y volvió del que está contestando a Brenda en el momento. Sin él secuestraría capturas vivas.
+export function returnFlowSignalMatches(d = {}, { complete = false, adClicked = false, adReclick = false, botHasSpoken = false, minSinceLastBot = 0, incomingText = '' } = {}) {
+    const wantAd = d.returnOnAd !== false;   // default true
+    if (wantAd && adClicked && (complete || adReclick)) return true;
+    if (d.returnOnPhrase && complete) {
+        const grupos = Array.isArray(d.returnGrupos) ? d.returnGrupos : [];
+        if (grupos.some(g => flowTextMatchesGroup(incomingText, g, d.returnMatchMode))) return true;
+    }
+    if (d.returnOnOrganic && !complete && botHasSpoken) {
+        const minHours = Number(d.minReturnHours) || 0;
+        if (minHours > 0 && minSinceLastBot >= minHours * 60) return true;
+    }
+    return false;
+}
+
+export async function runReturningFlowsForCandidate(candidateId, candidateSnapshot, { incomingText = '', botHasSpoken = false, minSinceLastBot = 0 } = {}) {
     try {
         const redis = getRedisClient();
         if (!redis || !candidateSnapshot?.id || !candidateSnapshot?.whatsapp) return 0;
@@ -1313,21 +1336,8 @@ export async function runReturningFlowsForCandidate(candidateId, candidateSnapsh
             if (pf === 'completo' && !complete) continue;
             if (pf === 'incompleto' && complete) continue;
 
-            // 1) SEÑAL — anuncio y/o frase (OR). Default: si no configuran nada, exige anuncio.
-            const wantAd = d.returnOnAd !== false;   // default true
-            const wantPhrase = !!d.returnOnPhrase;
-            let signal = false;
-            // COMPLETOS: cualquier click de anuncio cuenta (ya pasaron por extracción, todo regreso vale).
-            // INCOMPLETOS: exigimos re-clic REAL (adReclick) — el PRIMER contacto de un candidato nuevo
-            // NO debe secuestrar su extracción/saludo; solo el que ya había clickeado antes y volvió.
-            if (wantAd && adClicked && (complete || adReclick)) signal = true;
-            // Frase: solo para completos. Un incompleto a media captura no debe engancharse por
-            // coincidencia de palabra (un "sí"/"info" casual rompería la extracción).
-            if (!signal && wantPhrase && complete) {
-                const grupos = Array.isArray(d.returnGrupos) ? d.returnGrupos : [];
-                if (grupos.some(g => flowTextMatchesGroup(incomingText, g, d.returnMatchMode))) signal = true;
-            }
-            if (!signal) continue;
+            // 1) SEÑAL — anuncio, frase y/o regreso orgánico (OR). Default: si no configuran nada, exige anuncio.
+            if (!returnFlowSignalMatches(d, { complete, adClicked, adReclick, botHasSpoken, minSinceLastBot, incomingText })) continue;
 
             // 2) ANTIGÜEDAD — solo si completó hace ≥ N días. Sin paso2CompletadoAt (completos
             // viejos, previos a esta feature) no se puede medir → no bloquea.

@@ -712,7 +712,7 @@ const NodeConfigDrawer = ({ node, flowId, meta, quickReplies, reminderTemplates,
                             <div className="space-y-4 border-l-2 border-indigo-200 dark:border-indigo-800 pl-3">
                                 <p className="text-xs bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-lg p-2.5 text-indigo-800 dark:text-indigo-300">
                                     Solo para <strong>“cuando regresa”</strong>. El candidato entra al flujo de su <strong>última</strong> vacante — pon un nodo <strong>Filtro: Etiqueta</strong> en modo <strong>“es su etiqueta actual”</strong> después de este Inicio para rutearlo.<br /><br />
-                                    Con filtro de perfil <strong>incompleto</strong>, solo dispara en un <strong>re-clic real</strong> (el candidato ya traía esa etiqueta): así el primer contacto de alguien nuevo no se interrumpe. Los <strong>completos</strong> disparan con cualquier click.
+                                    Con filtro de perfil <strong>incompleto</strong>, el clic solo cuenta en un <strong>re-clic real</strong> (ya traía esa etiqueta) — así el primer contacto de alguien nuevo no se interrumpe. Para el incompleto que vuelve <strong>sin anuncio ni etiqueta</strong>, usa <strong>“escribió por su cuenta tras estar inactivo”</strong> (abajo). Los <strong>completos</strong> disparan con cualquier click.
                                 </p>
                                 <div>
                                     <label className="text-xs text-gray-500 dark:text-gray-400 mb-2 block">¿Qué cuenta como “regresó”?</label>
@@ -724,6 +724,15 @@ const NodeConfigDrawer = ({ node, flowId, meta, quickReplies, reminderTemplates,
                                         <input type="checkbox" checked={!!data.returnOnPhrase} onChange={(e) => patch({ returnOnPhrase: e.target.checked })} className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500" />
                                         <span className="text-sm text-gray-700 dark:text-gray-200">Escribió una frase</span>
                                     </label>
+                                    {(data.profileFilter === 'incompleto' || data.profileFilter === 'todos') && (
+                                        <label className="flex items-start gap-2.5 p-2.5 mt-2 rounded-xl border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer">
+                                            <input type="checkbox" checked={!!data.returnOnOrganic} onChange={(e) => patch(e.target.checked ? { returnOnOrganic: true, minReturnHours: data.minReturnHours ?? 24 } : { returnOnOrganic: false })} className="w-4 h-4 mt-0.5 rounded text-indigo-600 focus:ring-indigo-500" />
+                                            <span>
+                                                <span className="text-sm text-gray-700 dark:text-gray-200 block">Escribió por su cuenta tras estar inactivo <span className="text-indigo-500">(solo incompletos)</span></span>
+                                                <span className="text-xs text-gray-400">Un incompleto que se fue y vuelve a escribir lo que sea (sin anuncio ni frase). Requiere el tiempo de inactividad de abajo — no interrumpe a quien está contestando a Brenda en el momento.</span>
+                                            </span>
+                                        </label>
+                                    )}
                                 </div>
                                 {data.returnOnPhrase && (
                                     <div className="space-y-3">
@@ -743,6 +752,13 @@ const NodeConfigDrawer = ({ node, flowId, meta, quickReplies, reminderTemplates,
                                                 onChange={(v) => patch({ returnMatchMode: v })}
                                             />
                                         </div>
+                                    </div>
+                                )}
+                                {data.returnOnOrganic && (data.profileFilter === 'incompleto' || data.profileFilter === 'todos') && (
+                                    <div>
+                                        <label className="text-xs text-gray-500 dark:text-gray-400 mb-2 block">Inactivo por al menos (horas)</label>
+                                        <input type="number" min="1" step="1" value={data.minReturnHours ?? 24} onChange={(e) => patch({ minReturnHours: Math.max(1, parseInt(e.target.value, 10) || 24) })} className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 dark:bg-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                                        <p className="text-xs text-gray-400 mt-1.5">Horas sin que Brenda le escriba antes de que cuente como “regresó”. Ej. <b>24</b> = solo dispara si el último mensaje de Brenda fue hace 24h o más. Evita cortar una captura viva.</p>
                                     </div>
                                 )}
                                 <div>
