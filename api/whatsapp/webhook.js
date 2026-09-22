@@ -694,7 +694,14 @@ export default async function handler(req, res) {
             };
 
             // ─── META AI RETARGETING FIX: Update referral for existing candidates ───
-            if (metaMsg.referral) {
+            // 🛑 SOLO candidatos EXISTENTES que vuelven desde un anuncio. Para un candidato RECIÉN
+            // creado (isNewCandidate) el bloque de creación de arriba YA aplicó etiqueta + vacanteActual
+            // + la marca return:adclick con reclick=false (primer contacto). Si dejábamos correr este
+            // bloque también para el nuevo, releía al candidato ya etiquetado y calculaba reclick=TRUE
+            // (tags.includes(tagNow)), sobreescribiendo la marca → el disparador "al regresar" de
+            // INCOMPLETOS lo trataba como re-clic real y secuestraba su PRIMER contacto: Brenda quedaba
+            // muda y el candidato nuevo no recibía saludo/extracción. (Bug de producción 2026-09-22.)
+            if (metaMsg.referral && !isNewCandidate) {
                 updatedCandidate.origen = 'facebook_ctwa';
                 if (metaMsg.referral.source_id) updatedCandidate.adId = metaMsg.referral.source_id;
                 if (metaMsg.referral.headline) updatedCandidate.adHeadline = metaMsg.referral.headline;
