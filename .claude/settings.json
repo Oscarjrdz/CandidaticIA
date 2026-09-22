@@ -273,7 +273,14 @@
       "Read(//Library/Developer/CommandLineTools/usr/bin/**)",
       "Bash(awk 'NR>=1936 && NR<=2100 && /syncCandidateSecondaryIndexes|saveCandidate|await set|\\\\.set\\\\\\(id/' api/utils/storage.js)",
       "Bash(awk 'NR>=2020 && NR<=2090{print NR\": \"$0}' api/utils/storage.js)",
-      "Bash(grep -o \"REDIS_URL=.\\\\{0,25\\\\}\" .env.local)"
+      "Bash(grep -o \"REDIS_URL=.\\\\{0,25\\\\}\" .env.local)",
+      "Bash(node --env-file=.env.local /private/tmp/claude-501/-Users-oscar-Candidatic-IA/0b3f7f24-054f-4cad-84e7-2bd7190ae4f1/scratchpad/test_return_inc.mjs)",
+      "Bash(git --version)",
+      "Read(//usr/local/bin/**)",
+      "Bash(/opt/homebrew/bin/git --version)",
+      "Bash(node --env-file=.env.local -e ' *)",
+      "Bash(node _tmp_botones.mjs)",
+      "Bash(node _tmp_prodverify.mjs)"
     ],
     "additionalDirectories": [
       "/Users/oscar/App Candidatic/Candidatic_App/utils",
