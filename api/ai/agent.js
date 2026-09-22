@@ -541,7 +541,14 @@ function formatRecruiterMessage(text, candidateData = null, stepContext = {}) {
 
             // — CATEGORÍAS (✅) — solo en repreguntas (sin categoría extraída este turno)
             const _catInText = (text.match(/✅/g) || []).length >= 3;
-            const _catInRecent = (_recentBot.match(/✅/g) || []).length >= 3;
+            // La lista de categorías "ya enviada" solo cuenta si el texto reciente contiene
+            // ≥2 NOMBRES de categoría REALES — NO ✅ genéricos. Mensajes de flujo, checklists
+            // de papelería y confirmaciones de cita usan ✅ como viñeta; contarlos disparaba
+            // un falso "échale un ojito a la lista de arriba 👆" apuntando a una lista que
+            // nunca se envió en la sesión (bug prod: candidato que pasó por flujo y regresó).
+            const _catNames = Array.isArray(stepContext?.categoryNames) ? stepContext.categoryNames : [];
+            const _recentLc = _recentBot.toLowerCase();
+            const _catInRecent = _catNames.filter(n => n && n.length >= 3 && _recentLc.includes(n.toLowerCase())).length >= 2;
             if (_catInText && _catInRecent && !stepContext?.extractedCategoria && !_isCitaConfirmation) {
                 let _segs = text.split('[MSG_SPLIT]').map(s => s
                     .split('\n').filter(l => !l.trim().startsWith('✅') && !/(?:opciones|categor[ií]as)[^\n]*:\s*$/i.test(l.trim())).join('\n')
@@ -1697,13 +1704,16 @@ SOLO responde al mensaje actual, de forma corta (máximo 2 oraciones). NO mencio
             .map(m => m.content.trim());
 
         let categoriesList = "";
+        let categoryNames = [];
         const categoriesData = batchConfig.candidatic_categories || batchConfig.bot_categories || "General";
         try {
             const rawCats = typeof categoriesData === 'string' ? (categoriesData.includes('[') ? JSON.parse(categoriesData) : categoriesData.split(',').map(c => c.trim())) : categoriesData;
             const cats = Array.isArray(rawCats) ? rawCats : [rawCats];
-            categoriesList = cats.map(c => `✅ ${typeof c === 'string' ? c : (c.name || c.value || JSON.stringify(c))}`).join('\n\n');
+            categoryNames = cats.map(c => String(typeof c === 'string' ? c : (c.name || c.value || '')).trim()).filter(Boolean);
+            categoriesList = categoryNames.map(c => `✅ ${c}`).join('\n\n');
         } catch (e) {
-            categoriesList = String(categoriesData).split(',').map(c => `✅ ${c.trim()}`).join('\n\n');
+            categoryNames = String(categoriesData).split(',').map(c => c.trim()).filter(Boolean);
+            categoriesList = categoryNames.map(c => `✅ ${c}`).join('\n\n');
         }
 
         const customExtractionRules = batchConfig.bot_extraction_rules;
@@ -2236,7 +2246,7 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
                                 tokens: gptResult.usage?.total_tokens || 0
                             });
                         }
-                        responseTextVal = formatRecruiterMessage(aiResult.response_text, candidateData, { extractedCategoria: aiResult.extracted_data?.categoria, recentBotTexts: lastBotMessages });
+                        responseTextVal = formatRecruiterMessage(aiResult.response_text, candidateData, { extractedCategoria: aiResult.extracted_data?.categoria, recentBotTexts: lastBotMessages, categoryNames });
 
                         // Nuevo candidato: la primera respuesta debe ser fija y predecible.
                         // Si viene de Ads, la burbuja de empresa se inserta abajo entre estas dos.
