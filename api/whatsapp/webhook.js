@@ -1127,6 +1127,33 @@ export default async function handler(req, res) {
                     }
                 }
 
+                // 🔘 CLIC EN BOTÓN / LISTA INTERACTIVA → lo maneja el motor de flujos, NUNCA Brenda.
+                // Un mensaje interactiveReply SIEMPRE es respuesta a un menú de flujo (Brenda jamás
+                // manda menús interactivos). Antes esto dependía de que el candidato estuviera
+                // `blocked` (Desactivar Bot) para que el BLOCK SHIELD del agente ruteara; si el menú
+                // no traía Desactivar Bot antes, el clic caía en Brenda y ella respondía alucinando
+                // ("estoy revisando las rutas..."). Aquí se resuelve en el webhook, sin depender de
+                // Desactivar Bot:
+                //   • Menú VIVO que matchee la opción → rutea por su rama (misma maquinaria de resume).
+                //   • Lista VIEJA ya usada / expirada (sin menú vivo) → sin acción.
+                // En ambos casos NO se alimenta a la IA. Igual en producción y en el nodo Test (la
+                // espera se registra en la llave del candidato real). Ante error, cae al flujo normal.
+                if (isInteractiveReply) {
+                    try {
+                        const { hasLiveInteractiveMenuFor, resumeWaitingFlowIfMatch } = await import('../utils/flow-engine.js');
+                        if (await hasLiveInteractiveMenuFor(candidateId, body)) {
+                            await resumeWaitingFlowIfMatch(candidateId, freshCandidate, body).catch(() => {});
+                        } else {
+                            await logTelemetry('interactive_stale_click_ignored', {
+                                candidateId, title: (body || '').slice(0, 40)
+                            }).catch(() => {});
+                        }
+                        continue; // clic interactivo resuelto por el motor de flujos, nunca por Brenda
+                    } catch (e) {
+                        console.error('[Webhook] interactive click guard error:', e?.message);
+                    }
+                }
+
                 // ═══ AI PROCESSING (Turbo Mode) ═══
                 const agentInput = body;
                 const aiPromise = (async () => {

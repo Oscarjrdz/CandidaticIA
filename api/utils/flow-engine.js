@@ -1520,6 +1520,39 @@ export async function resumeWaitingFlowIfMatch(candidateId, candidateSnapshot, i
     }
 }
 
+// ¿Existe un menú interactivo VIVO (no expirado) que esté esperando ESTE clic? Espeja EXACTO el
+// match de resumeWaitingFlowIfMatch (título del botón/fila == option.match, tolerante a
+// mayúsculas/espacios). SOLO consulta — no consume ni modifica la espera.
+//
+// Lo usa el webhook para IGNORAR clics en listas/botones VIEJOS ya usados: cuando el candidato
+// scrollea hacia arriba y toca una opción de un menú que ya contestó (o que expiró), su espera ya
+// se consumió (hdel) → aquí devuelve false → el webhook NO alimenta ese clic a Brenda (si no,
+// ella lo toma como texto y responde alucinando). Con un menú realmente vivo devuelve true y el
+// clic sigue su curso normal (ruteo por el BLOCK SHIELD si está blocked). Funciona igual en
+// producción y en el nodo Test (la espera se registra en la misma llave del candidato real).
+export async function hasLiveInteractiveMenuFor(candidateId, clickTitle) {
+    try {
+        if (!candidateId || !clickTitle || typeof clickTitle !== 'string') return false;
+        const redis = getRedisClient();
+        if (!redis) return false;
+        const all = await redis.hgetall(`${WAITING_PREFIX}${candidateId}`);
+        if (!all || !Object.keys(all).length) return false;
+        const now = Date.now();
+        const inTxt = String(clickTitle).trim().toLowerCase();
+        for (const val of Object.values(all)) {
+            let st;
+            try { st = JSON.parse(val); } catch { continue; }
+            if (st.kind !== 'interactive') continue;
+            if (st.expiresAt && now > Number(st.expiresAt)) continue; // expirado → ya no está vivo
+            const options = Array.isArray(st.options) ? st.options : [];
+            if (options.some(o => String(o.match || '').trim().toLowerCase() === inTxt)) return true;
+        }
+        return false;
+    } catch {
+        return false;
+    }
+}
+
 // Limpia el ESTADO DE FLUJO de un candidato para UN flujo, para que cada Run del nodo Test
 // parta FRESCO (sin arrastrar corridas anteriores): borra el ledger de progreso, la espera de
 // menú, el "ya completado" (execKey), la cadencia de regreso y el lock. NO toca el `blocked` del

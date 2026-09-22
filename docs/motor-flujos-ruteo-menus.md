@@ -16,9 +16,32 @@ sep 2026. Complementa `docs/nodo-botones-interactivos.md` y `docs/nodo-test-perf
 - **Espera de menú** (`flow:waiting:v1:<candId>`, hash flowId→JSON): `{nodeId, kind:'interactive',
   options:[{handle,match}], reaskCount, expiresAt}`. La registra el nodo de botones al pausar
   (`__pause`); la consume `resumeWaitingFlowIfMatch` cuando el candidato responde.
-- **`resumeWaitingFlowIfMatch(candId, snapshot, texto)`** — lo llama el BLOCK SHIELD de `agent.js`
-  SOLO si el candidato está `blocked`. Matchea el texto (título del botón) a una opción y reanuda
-  por su handle (o `timeout` si expiró). Requiere un "Desactivar Bot" antes del menú.
+- **`resumeWaitingFlowIfMatch(candId, snapshot, texto)`** — matchea el texto (título del botón) a
+  una opción y reanuda por su handle (o `timeout` si expiró). Lo llaman DOS sitios:
+  - el **webhook de WhatsApp** para CLICS interactivos (`interactiveReply`) — ver "Ruteo de clics"
+    abajo. NO requiere `blocked`.
+  - el **BLOCK SHIELD de `agent.js`** para respuestas ESCRITAS a un nodo "Esperando Respuesta"
+    legacy (grupos de frases), solo si el candidato está `blocked` (Desactivar Bot antes).
+- **`hasLiveInteractiveMenuFor(candId, título)`** — SOLO consulta (no consume): ¿hay un menú
+  interactivo vivo (no expirado) cuyas opciones incluyan ese título? Espeja el match de
+  `resumeWaitingFlowIfMatch`. Lo usa el webhook para distinguir clic vivo (rutea) de clic muerto.
+
+## Ruteo de clics interactivos (webhook) — no depende de "Desactivar Bot"
+
+Un mensaje `interactiveReply` (clic en botón/lista) SIEMPRE es respuesta a un menú de flujo (Brenda
+nunca manda menús). El webhook de WhatsApp lo intercepta ANTES de la IA y lo resuelve él mismo —
+NUNCA se lo pasa a Brenda:
+- **Menú vivo que matchee la opción** (`hasLiveInteractiveMenuFor` = true) → `resumeWaitingFlowIfMatch`
+  rutea por su rama. No requiere que el candidato esté `blocked`.
+- **Lista vieja ya usada / expirada / sin menú vivo** → sin acción (solo telemetría
+  `interactive_stale_click_ignored`). Cubre el bug real de prod: el candidato scrollea, toca una
+  opción de una lista que ya contestó, y Brenda (viva porque el menú no traía Desactivar Bot antes)
+  respondía alucinando. Ahora el clic muerto simplemente no hace nada.
+
+Esto reemplaza el requisito viejo de poner "Desactivar Bot" ANTES de cada menú para que el clic
+ruteara: los clics interactivos ya no dependen de `blocked`. (Desactivar Bot sigue siendo válido si
+además quieres silenciar a Brenda para lo ESCRITO, y sigue siendo necesario para el nodo legacy
+"Esperando Respuesta" por frases.)
 
 ## Elegibilidad de un nodo (isEligible)
 
@@ -56,12 +79,15 @@ Un nodo se ejecuta según sus aristas ENTRANTES:
 
 ## Requisitos para que el ruteo por clic funcione en producción
 
-1. **"Desactivar Bot" ANTES del menú** — silencia a Brenda; si no, ella contesta el clic en vez
-   de rutear. Puede ir en paralelo si queda más cerca de la raíz que el menú (corre antes de la
-   pausa por orden topológico), pero en línea es a prueba de balas.
-2. **Cada opción/fila conectada a su rama** (una salida por botón + Timeout).
-3. Los flujos "al regresar" (ephemeral) re-disparan en cada regreso (gobernado por cadencia
+1. **Cada opción/fila conectada a su rama** (una salida por botón + Timeout).
+2. Los flujos "al regresar" (ephemeral) re-disparan en cada regreso (gobernado por cadencia
    `maxReturns`/cooldown, no por execKey).
+
+> **Ya NO se requiere "Desactivar Bot" antes del menú** para que el clic rutee — el webhook
+> resuelve el clic sin depender de `blocked` (ver "Ruteo de clics interactivos" arriba). Antes, sin
+> Desactivar Bot el candidato quedaba con `blocked=false` y Brenda respondía el clic en vez de
+> rutear (bug de prod confirmado sep 2026 en los flujos "RE-CLICK", cuyos menús no traían Desactivar
+> Bot cableado). Desactivar Bot sigue sirviendo para silenciar a Brenda ante mensajes ESCRITOS.
 
 ## Arranque limpio para pruebas
 
