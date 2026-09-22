@@ -2336,7 +2336,7 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
                         const _uTxt = (aggregatedText || '').toLowerCase();
                         const _MESES = 'enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|setiembre|octubre|noviembre|diciembre|sept|ene|feb|mar|abr|may|jun|jul|ago|sep|oct|nov|dic';
                         const _DIA_PAL = 'primero|uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|once|doce|trece|catorce|quince|diecis[eé]is|diecisiete|dieciocho|diecinueve|veinte|veintiuno|veintid[oó]s|veintitr[eé]s|veinticuatro|veinticinco|veintis[eé]is|veintisiete|veintiocho|veintinueve|treinta|treinta y uno';
-                        const _DIA_NUM = '([1-9]|[12]\\d|3[01])'; // 1–31
+                        const _DIA_NUM = '(0?[1-9]|[12]\\d|3[01])'; // 1–31 (acepta cero adelante: "03", "01", "09")
                         const _SEP = '[\\s/.-]+';                 // espacio / - .
                         const _SEPd = '(?:[\\s/.-]+|\\s+del?\\s+)'; // separador que además admite "de"/"del"
                         // ¿El texto parece una fecha? (mes por nombre/abrev acotado con \b, o un año de 4 dígitos)
