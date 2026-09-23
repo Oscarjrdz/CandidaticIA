@@ -35,16 +35,31 @@ async function drainWaitlist(candidateId, _fromPhone) {
             catch { return { text: m }; }
         });
 
+        // Tipos SIN dato aprovechable: aunque traigan texto (pin de ubicación → "📍 Ubicación:
+        // lat,lng"; emoji suelto), ese texto NO es un dato válido y se EXCLUYE de la extracción.
+        // El tipo viaja aparte (noTextKind) para que el agente re-pregunte el dato reconociendo
+        // qué mandó el candidato. sticker/imagen/audio ya llegan con text vacío.
+        const NO_DATA_KINDS = new Set(['location', 'sticker', 'emoji', 'image', 'audio']);
+
         const aggregatedText = parsed.map(m => {
             const val = m.text?.url || m.text || m;
             // Un mensaje SIN TEXTO (sticker, imagen/video/audio sin caption) llega aquí como
             // objeto {text:'', msgId}. NUNCA lo serialices como JSON: eso inyectaba basura tipo
             // {"text":"","msgid":"wamid..."} en la extracción y llegó a guardarse como "colonia".
             // Se trata como "sin texto" (cadena vacía) y el agente lo maneja re-preguntando.
-            return (typeof val === 'object') ? '' : val;
+            if (typeof val === 'object') return '';
+            if (NO_DATA_KINDS.has(m.kind)) return ''; // ubicación/emoji: texto no aprovechable
+            return val;
         }).filter(s => typeof s === 'string' && s.trim()).join('\n'); // Newline separator for better AI reading
 
         const msgIds = parsed.map(m => m.msgId).filter(id => id);
+
+        // Si el turno quedó SIN texto aprovechable, tomamos el tipo del primer mensaje sin-dato
+        // (sticker/foto/audio/emoji/ubicación) para que el agente arme la re-pregunta específica.
+        // Si hubo texto real, noTextKind = null (extracción normal, se ignora cualquier adjunto).
+        const noTextKind = aggregatedText.trim()
+            ? null
+            : (parsed.map(m => m.kind).find(k => NO_DATA_KINDS.has(k)) || null);
 
         console.log(`[Serverless Engine] Draining burst for ${candidateId}. Count: ${pendingMsgs.length}.`);
 
@@ -59,7 +74,7 @@ async function drainWaitlist(candidateId, _fromPhone) {
                 }
                 
                 await logTelemetry('processing_start', { candidateId, count: pendingMsgs.length, attempt: attempts });
-                await processMessage(candidateId, aggregatedText, msgIds[0] || null);
+                await processMessage(candidateId, aggregatedText, msgIds[0] || null, noTextKind);
                 
                 await logTelemetry('ai_complete', { candidateId });
                 await Promise.all(msgIds.map(id => markMessageAsDone(id).catch(() => { })));

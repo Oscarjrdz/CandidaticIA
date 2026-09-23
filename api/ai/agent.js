@@ -1207,8 +1207,40 @@ const recordPaso2LoopBreak = (candidateId, etapa) => {
     } catch (_e) { /* nunca romper el flujo por telemetría */ }
 };
 
+// 🚫 RE-PREGUNTA CUANDO NO HAY DATO ÚTIL (sticker, foto, audio, emoji suelto o pin de ubicación)
+// El candidato mandó algo sin texto aprovechable en vez de escribir el dato que se le pidió.
+// La respuesta se arma en 2 burbujas: la 1ª RECONOCE QUÉ mandó (por TIPO — fija por tipo) y la
+// 2ª PIDE EL DATO del paso actual (por PASO — la pasa cada rama). Así el mismo mecanismo sirve
+// para CUALQUIER dato (nombre, edad, municipio, escolaridad, categoría, colonia, experiencia…)
+// sin duplicar copy. Para cambiar el tono de un tipo, edita SOLO su línea aquí.
+const NO_TEXT_ACK = {
+    location: '¡Gracias por tu ubicación! 📍 Pero para el registro necesito el dato por escrito 🙈',
+    sticker:  'Jaja me llegó tu sticker 😄',
+    emoji:    'Jeje 😄',
+    image:    'Vi tu imagen 📷 pero ahí no encuentro el dato 🙈',
+    audio:    'Oye, los audios no los puedo escuchar 🙈🎧',
+};
+const NO_TEXT_ACK_DEFAULT = 'Oye, no me llegó texto en tu mensaje 🙈';
 
-export const processMessage = async (candidateId, incomingMessage, msgId = null) => {
+// Une el reconocimiento del TIPO (burbuja 1) con la petición del DATO del paso (burbuja 2).
+function buildNoTextReask(kind, askText) {
+    const ack = NO_TEXT_ACK[kind] || NO_TEXT_ACK_DEFAULT;
+    return `${ack}[MSG_SPLIT]${askText}`;
+}
+
+// Petición del dato del PASO 1 según el primer campo que falta (audit.missingValues[0]).
+const PASO1_ASK = {
+    nombreReal:      '¿Me escribes tu nombre completo porfa? ✍️',
+    fechaNacimiento: '¿Me escribes tu fecha de nacimiento porfa? 🎂 (día/mes/año)',
+    municipio:       '¿Me escribes en qué municipio vives porfa? 📍',
+    categoria:       '¿Me escribes en qué te gustaría trabajar porfa? 🛠️',
+    escolaridad:     '¿Me escribes hasta qué grado estudiaste porfa? 🎓',
+};
+const PASO1_ASK_DEFAULT = '¿Me lo escribes por texto porfa? ✍️';
+
+// noTextKind: tipo del mensaje entrante cuando NO trae texto aprovechable ('location'|'sticker'|
+// 'emoji'|'image'|'audio'); lo calcula el webhook y lo pasa el worker. null = mensaje con texto.
+export const processMessage = async (candidateId, incomingMessage, msgId = null, noTextKind = null) => {
     const startTime = Date.now();
     let candidateData = null;
     try {
@@ -1544,10 +1576,16 @@ SOLO responde al mensaje actual, de forma corta (máximo 2 oraciones). NO mencio
             }
         }
 
-        // 🚫 SIN TEXTO: el candidato mandó únicamente algo sin palabras (sticker, imagen/video/
-        // audio sin caption). No hay nada que extraer; se usa abajo para re-preguntar el dato en
-        // vez de alucinar sobre un mensaje vacío o guardar basura en el perfil.
-        const userSentNoText = !aggregatedText.trim();
+        // 🚫 SIN DATO ÚTIL: el candidato mandó algo sin texto aprovechable en vez de escribir el
+        // dato que se le pidió. Cubre dos casos:
+        //   • Sin texto real (sticker, imagen/video/audio sin caption) → aggregatedText vacío.
+        //   • CON texto pero inservible como dato (pin de ubicación → "📍 Ubicación: lat,lng";
+        //     emoji suelto) → el worker ya lo excluyó de la extracción y nos manda el tipo en
+        //     noTextKind, así que aquí también cuenta como "sin dato".
+        // En ambos casos no hay nada que extraer; abajo se re-pregunta el dato del paso actual
+        // (reconociendo el tipo) en vez de alucinar o guardar basura en el perfil.
+        const NO_DATA_KINDS = new Set(['location', 'sticker', 'emoji', 'image', 'audio']);
+        const userSentNoText = !aggregatedText.trim() || NO_DATA_KINDS.has(noTextKind);
 
         // 📚 ESCOLARIDAD ABBREVIATION NORMALIZER
         // Expands common Mexican Spanish shorthand BEFORE GPT sees it.
@@ -1844,16 +1882,19 @@ ${safeDnaLines}
             if (userSentNoText && (p2Estado === 'esperando_colonia' || p2Estado === 'esperando_experiencia' || p2Estado === 'esperando_meses_experiencia')) {
                 isHostMode = true;
                 candidateUpdates.paso2AskCount = p2AskCount + 1;
-                const _ntName = p2FirstName ? ` ${p2FirstName}` : '';
+                // Petición del dato de la sub-etapa actual (burbuja 2). buildNoTextReask antepone
+                // el reconocimiento del TIPO (sticker/foto/audio/emoji/ubicación) en la burbuja 1.
+                let _p2Ask;
                 if (p2Estado === 'esperando_colonia') {
-                    responseTextVal = `Oye${_ntName}, no me llegó texto en tu mensaje 🙈[MSG_SPLIT]¿Me escribes por favor el nombre de tu colonia? 🏘️ Es para validar que te llegue la ruta de transporte 🚌`;
+                    _p2Ask = `¿Me escribes el nombre de tu colonia porfa? 🏘️ Es para validar que te llegue la ruta de transporte 🚌`;
                 } else if (p2Estado === 'esperando_experiencia') {
                     const _ntCat = (candidateUpdates.categoria || candidateData.categoria || '').trim();
                     const _ntArea = _ntCat ? `de ${_ntCat}` : 'en fábrica';
-                    responseTextVal = `Oye${_ntName}, no me llegó texto en tu mensaje 🙈[MSG_SPLIT]¿Me confirmas por texto si tienes experiencia ${_ntArea}? 🏭 ¿sí o no?`;
+                    _p2Ask = `¿Me confirmas por texto si tienes experiencia ${_ntArea}? 🏭 ¿sí o no?`;
                 } else {
-                    responseTextVal = `Oye${_ntName}, no me llegó texto en tu mensaje 🙈[MSG_SPLIT]¿Me escribes un aproximado de cuánto tiempo llevas de experiencia? 🏭 (ej. "2 años")`;
+                    _p2Ask = `¿Me escribes un aproximado de cuánto tiempo de experiencia llevas porfa? 🏭 (ej. "2 años")`;
                 }
+                responseTextVal = buildNoTextReask(noTextKind, _p2Ask);
             } else if (p2Estado === 'esperando_colonia') {
                 isHostMode = true;
                 // Extract colonia from candidate's message using GPT mini
@@ -2174,14 +2215,16 @@ REGLAS DE SALA DE ESPERA (OBLIGATORIAS - NO NEGOCIABLES):
             isHostMode = true; // Block Capturista Brain — total silence
             console.log('[Sala de Espera] Toggle OFF — silencio post-extracción');
         }
-        // 🚫 SIN TEXTO EN PASO 1: si el perfil aún NO está completo y el candidato mandó solo un
-        // sticker/imagen/audio sin palabras (y ya habíamos saludado — es decir, estamos a media
-        // captura), no hay nada que extraer. Pedimos que escriba su respuesta por texto y saltamos
-        // el cerebro capturista para no alucinar sobre un mensaje vacío ni guardar basura. El saludo
-        // inicial de un candidato nuevo lo sigue manejando su propia rama determinista más abajo.
+        // 🚫 SIN DATO ÚTIL EN PASO 1: si el perfil aún NO está completo y el candidato mandó algo
+        // sin texto aprovechable (sticker/imagen/audio, emoji suelto o un pin de ubicación) —y ya
+        // habíamos saludado, es decir, estamos a media captura— no hay nada que extraer. Pedimos
+        // por escrito EL DATO QUE FALTA (audit.missingValues[0]) reconociendo el TIPO que mandó, y
+        // saltamos el cerebro capturista para no alucinar ni guardar basura. El saludo inicial de
+        // un candidato nuevo lo sigue manejando su propia rama determinista más abajo.
         if (!isRecruiterMode && !isBridgeActive && !isHostMode && !isProfileComplete && userSentNoText && botHasSpoken && !responseTextVal) {
-            const _ntName = displayName ? ` ${displayName}` : '';
-            responseTextVal = `Oye${_ntName}, no me llegó texto en tu mensaje 🙈[MSG_SPLIT]¿Me lo escribes por texto porfa? ✍️`;
+            const _nextField = audit.missingValues?.[0];
+            const _p1Ask = PASO1_ASK[_nextField] || PASO1_ASK_DEFAULT;
+            responseTextVal = buildNoTextReask(noTextKind, _p1Ask);
         }
 
         let handoverTriggered = false;

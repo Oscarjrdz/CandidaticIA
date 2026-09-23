@@ -26,8 +26,10 @@ import {
     saveWebhookTransaction,
     markMessageAsDone,
     updateMessageReaction,
-    getRecentMessages
+    getRecentMessages,
+    auditProfile
 } from '../utils/storage.js';
+import { getCachedConfig } from '../utils/cache.js';
 import { markMessageAsRead, downloadMetaMedia, uploadMediaToMeta } from './utils.js';
 import { FEATURES } from '../utils/feature-flags.js';
 import { sendMessage } from '../utils/messenger.js';
@@ -426,6 +428,21 @@ export default async function handler(req, res) {
                 const headline = metaMsg.referral.headline || 'un anuncio';
                 body = `¡Hola! Vengo de ${headline}. Me gustaría más información.`;
                 messageType = 'text';
+            }
+
+            // ─── Tipo SIN dato aprovechable (para que Brenda re-pregunte reconociendo qué mandó) ───
+            // El candidato mandó algo que NO es un dato escrito: sticker, foto/video sin caption,
+            // un pin de ubicación, o solo emojis. Se marca el tipo; el agente arma la re-pregunta
+            // específica del paso actual. El AUDIO se decide más abajo (tiene su propio disclaimer).
+            let noTextKind = null;
+            if (messageType === 'location') {
+                noTextKind = 'location';
+            } else if (messageType === 'sticker') {
+                noTextKind = 'sticker';
+            } else if ((messageType === 'image' || messageType === 'video') && !body.trim()) {
+                noTextKind = 'image'; // foto/video sin caption (con caption = texto normal)
+            } else if (messageType === 'text' && body.trim() && !/[\p{L}\p{N}]/u.test(body)) {
+                noTextKind = 'emoji'; // texto sin ninguna letra ni número → solo emojis/símbolos
             }
 
             // ─── Download media URL if present ───
@@ -1191,6 +1208,28 @@ export default async function handler(req, res) {
                         // "Esperando Respuesta" armado): Brenda debe seguir muda, el disclaimer la haría
                         // hablar y rompería la intervención humana. El BLOCK SHIELD del agente se encarga.
                         if ((messageType === 'audio' || messageType === 'ptt') && aiCandidate?.blocked !== true) {
+                            // ¿El candidato sigue en CAPTURA de datos? (paso 1 incompleto, o paso 2
+                            // en proceso). Durante la captura, un audio se maneja como cualquier
+                            // mensaje sin dato: el agente re-pregunta el dato del paso actual (corto y
+                            // específico) reconociendo que fue un audio — SIN el disclaimer largo de
+                            // siempre (que además duplicaría el mensaje). Fuera de captura (perfil ya
+                            // completo, charla general) se conserva el disclaimer + retoma de pregunta.
+                            let inDataCapture = false;
+                            try {
+                                const cfRaw = await getCachedConfig(getRedisClient(), 'custom_fields');
+                                const customFields = cfRaw ? JSON.parse(cfRaw) : [];
+                                const a = auditProfile(aiCandidate, customFields);
+                                const paso1Done = a.paso1Status === 'COMPLETO';
+                                const paso2InProgress = ['esperando_colonia', 'esperando_experiencia', 'esperando_meses_experiencia'].includes(aiCandidate?.paso2Estado);
+                                const paso2Done = !aiCandidate?.paso2Requerido || aiCandidate?.paso2Estado === 'completo';
+                                inDataCapture = !paso1Done || paso2InProgress || (paso1Done && !paso2Done);
+                            } catch { inDataCapture = false; }
+
+                            if (inDataCapture) {
+                                // El agente arma la re-pregunta específica del paso reconociendo el audio.
+                                noTextKind = 'audio';
+                                finalAgentInput = '';
+                            } else {
                             const AUDIO_REPLIES = [
                                 '¡Hola! 😊 Por el momento no puedo escuchar audios. ¿Me podrías escribir tu mensaje? 📝 ¡Con mucho gusto te atiendo!',
                                 '¡Qué tal! 👋 Te cuento que no tengo forma de reproducir notas de voz. Escríbeme por favor y te respondo de inmediato ✍️😊',
@@ -1242,10 +1281,11 @@ export default async function handler(req, res) {
                             } else {
                                 finalAgentInput = '[El candidato mandó un audio. Ya le avisaste que no puedes escuchar audios. Continúa la conversación de forma natural retomando donde quedaste.]';
                             }
+                            }
                         }
 
                         // 🏁 1. ADD TO WAITLIST
-                        await addToWaitlist(candidateId, { text: finalAgentInput, msgId });
+                        await addToWaitlist(candidateId, { text: finalAgentInput, msgId, kind: noTextKind });
 
                         // 🏁 2. TRIGGER TURBO ENGINE
                         const { runTurboEngine } = await import('../workers/process-message.js');
