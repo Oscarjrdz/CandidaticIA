@@ -1183,44 +1183,17 @@ const getReengageVacancies = async (candidateData) => {
 // El Paso 2 capturaba cada dato con un único clasificador LLM que, al dar un falso
 // negativo, dejaba al candidato en un BUCLE INFINITO de re-preguntas (caso real:
 // "Prensa nacional" que gpt-4o-mini leía como la frase "prensa nacional" y devolvía
-// null). Estas utilidades: (1) invierten la lógica de la colonia a "aceptar por
-// defecto, rechazar solo si es evasión clara"; (2) ponen un rompe-bucles con
-// telemetría para que NINGUNA sub-pregunta del Paso 2 pueda atorar a un candidato.
+// null). El fix tiene dos partes: (1) el prompt del extractor de colonia se reforzó
+// con ejemplos de colonias que suenan a frase hecha (Prensa Nacional, La Alianza,
+// Independencia...) — validado 8/8 contra OpenAI real, resuelve la clase del bug en
+// el propio LLM sin heurísticas frágiles; (2) este rompe-bucles con telemetría, que
+// garantiza que NINGUNA sub-pregunta del Paso 2 pueda atorar a un candidato aunque el
+// LLM falle: tras PASO2_MAX_REASKS re-preguntas se avanza best-effort SIN fabricar
+// datos. (Se descartó una red determinista "aceptar-por-defecto": el replay sobre 260
+// respuestas reales mostró que capturaba ~6% de basura como colonia —respuestas de
+// experiencia, preguntas, chatter— peor que dejar el dato en blanco.)
 const PASO2_MAX_REASKS = 2; // re-preguntas permitidas antes de forzar avance best-effort
 
-// Muletillas/negaciones de 1 palabra que NO son un nombre de colonia.
-const COLONIA_EVASION_WORDS = new Set([
-    'no', 'nel', 'nop', 'nope', 'si', 'sí', 'ok', 'okay', 'oka', 'va', 'sale',
-    'hola', 'buenas', 'gracias', 'jaja', 'jeje', 'jajaja', 'nose', 'nada',
-    'bien', 'listo', 'lista', 'aja', 'ajá', 'mmm', 'este', 'porque', 'xq', 'pq', 'k', 'q'
-]);
-// Frases completas que son evasión (no colonia).
-const COLONIA_EVASION_PHRASES = new Set([
-    'no se', 'no sé', 'no lo se', 'no lo sé', 'no sabo', 'para que', 'para qué',
-    'por que', 'por qué', 'no quiero', 'ahorita no', 'al rato', 'no gracias',
-    'que tal', 'qué tal', 'quien eres', 'quién eres', 'no entiendo', 'mande', 'como'
-]);
-// ¿La respuesta a "¿cuál es tu colonia?" es una evasión clara (NO una colonia)?
-// Conservador a propósito: ante la duda devuelve false (la aceptamos como colonia),
-// para que una colonia real jamás se pierda por un capricho del modelo.
-const isColoniaEvasion = (text) => {
-    const raw = String(text || '').trim();
-    if (!raw) return true;                       // vacío / no-texto
-    if (/[?¿]/.test(raw)) return true;           // el candidato está preguntando algo
-    const norm = raw.toLowerCase().replace(/[.,;:!¡"'()]/g, '').trim();
-    if (!norm) return true;
-    if (COLONIA_EVASION_PHRASES.has(norm)) return true;
-    const words = norm.split(/\s+/).filter(Boolean);
-    if (words.length === 0) return true;
-    if (words.length > 6) return true;           // divagación larga, no un nombre de colonia
-    if (words.every(w => COLONIA_EVASION_WORDS.has(w))) return true; // puras muletillas
-    return false;                                // ← aceptar el texto como colonia
-};
-// Title Case tolerante a acentos/ñ para normalizar la colonia rescatada sin LLM.
-const toTitleCaseColonia = (text) => String(text || '').trim().replace(/\s+/g, ' ')
-    .split(' ')
-    .map(w => w ? w.charAt(0).toLocaleUpperCase('es') + w.slice(1).toLocaleLowerCase('es') : w)
-    .join(' ');
 // Telemetría del rompe-bucles (fire-and-forget), mismo patrón que guard:premature_closure:
 // contador por día + set de "candidateId:etapa". Zona Monterrey, expira a 90 días.
 const recordPaso2LoopBreak = (candidateId, etapa) => {
@@ -1875,15 +1848,7 @@ REGLAS:
                     );
                     const coloniaRaw = (coloniaGpt?.content || '').trim();
                     if (coloniaRaw && coloniaRaw.toLowerCase() !== 'null') coloniaName = coloniaRaw;
-                } catch (_e) { /* la red de seguridad determinista de abajo decide */ }
-
-                // 🛡️ RED DE SEGURIDAD (aceptar-por-defecto): si el LLM no extrajo nada pero el
-                // texto NO es una evasión clara, aceptamos el propio texto como colonia. Así una
-                // colonia real (ej. "Prensa nacional") nunca se pierde por un falso negativo del
-                // modelo. El LLM sigue siendo la vía primaria (mejor normalización); esto es red.
-                if (!coloniaName && !isColoniaEvasion(aggregatedText)) {
-                    coloniaName = toTitleCaseColonia(aggregatedText);
-                }
+                } catch (_e) { /* si el LLM falla, cae a re-pregunta / rompe-bucles abajo */ }
 
                 if (coloniaName) {
                     // Colonia captured — save and ask experiencia
