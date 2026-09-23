@@ -562,7 +562,10 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
         }
 
         const isMe = msg.from === 'me' || msg.from === 'bot';
-        
+        // ¿La burbuja muestra texto? Sticker (placeholder "[Sticker]") y ubicación (se pinta
+        // como link a Maps) NO deben renderizar su content como texto ni anclar el footer a él.
+        const hasTextBubble = !!msg.content && msg.type !== 'location' && msg.type !== 'sticker';
+
         // Find previous message for tail logic
         const prevMsg = idx > 0 ? displayMessages[idx - 1] : null;
         const isPrevMe = prevMsg ? (prevMsg.from === 'me' || prevMsg.from === 'bot') : null;
@@ -666,7 +669,7 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
                         );
                     })()}
 
-                    {msg.content && msg.type !== 'location' && (
+                    {hasTextBubble && (
                         <div className="relative min-w-[60px] max-w-full text-[14.5px]">
                             <div
                                 className="whitespace-pre-wrap leading-snug break-words"
@@ -675,7 +678,7 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
                         </div>
                     )}
 
-                    <div className={`flex items-center gap-0.5 select-none ${msg.content ? 'absolute bottom-1 right-2' : 'justify-end mt-1'}`}>
+                    <div className={`flex items-center gap-0.5 select-none ${hasTextBubble ? 'absolute bottom-1 right-2' : 'justify-end mt-1'}`}>
                         <p className="text-[10px] text-gray-500/90 dark:text-gray-400/90 font-medium tracking-tight">
                             {safeFormatTime(msg.timestamp)}
                         </p>
