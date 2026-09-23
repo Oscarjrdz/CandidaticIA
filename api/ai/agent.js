@@ -1181,31 +1181,21 @@ const getReengageVacancies = async (candidateData) => {
 
 // ── PASO 2 — ROBUSTEZ (colonia → experiencia → meses) ─────────────────────────
 // El Paso 2 capturaba cada dato con un único clasificador LLM que, al dar un falso
-// negativo, dejaba al candidato en un BUCLE INFINITO de re-preguntas (caso real:
-// "Prensa nacional" que gpt-4o-mini leía como la frase "prensa nacional" y devolvía
-// null). El fix tiene dos partes: (1) el prompt del extractor de colonia se reforzó
-// con ejemplos de colonias que suenan a frase hecha (Prensa Nacional, La Alianza,
-// Independencia...) — validado 8/8 contra OpenAI real, resuelve la clase del bug en
-// el propio LLM sin heurísticas frágiles; (2) este rompe-bucles con telemetría, que
-// garantiza que NINGUNA sub-pregunta del Paso 2 pueda atorar a un candidato aunque el
-// LLM falle: tras PASO2_MAX_REASKS re-preguntas se avanza best-effort SIN fabricar
-// datos. (Se descartó una red determinista "aceptar-por-defecto": el replay sobre 260
-// respuestas reales mostró que capturaba ~6% de basura como colonia —respuestas de
-// experiencia, preguntas, chatter— peor que dejar el dato en blanco.)
-const PASO2_MAX_REASKS = 2; // re-preguntas permitidas antes de forzar avance best-effort
-
-// Telemetría del rompe-bucles (fire-and-forget), mismo patrón que guard:premature_closure:
-// contador por día + set de "candidateId:etapa". Zona Monterrey, expira a 90 días.
-const recordPaso2LoopBreak = (candidateId, etapa) => {
-    try {
-        const r = getRedisClient();
-        const day = new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Monterrey' });
-        const kCount = `guard:paso2_loopbreak:${day}`;
-        const kList = `guard:paso2_loopbreak:list:${day}`;
-        r?.incr(kCount).then(() => r.expire(kCount, 60 * 60 * 24 * 90)).catch(() => {});
-        r?.sadd(kList, `${candidateId}:${etapa}`).then(() => r.expire(kList, 60 * 60 * 24 * 90)).catch(() => {});
-    } catch (_e) { /* nunca romper el flujo por telemetría */ }
-};
+// negativo, dejaba al candidato en un BUCLE de re-preguntas (caso real: "Prensa
+// nacional" que gpt-4o-mini leía como la frase y devolvía null). El extractor de
+// colonia se reforzó con ejemplos de colonias que suenan a frase hecha (Prensa
+// Nacional, La Alianza, Independencia...) — validado 8/8 contra OpenAI real, resuelve
+// la clase del bug en el propio LLM sin heurísticas frágiles.
+//
+// POLÍTICA (decisión de negocio, sep 2026): Brenda NUNCA se rinde ni avanza/completa
+// sin el dato real. Ante evasión SIEMPRE re-pregunta — no hay tope ni cierre
+// best-effort. Cada re-pregunta se formula con PALABRAS DISTINTAS: la genera el LLM
+// con el historial reciente para no repetir el mismo fraseo, como lo haría un humano.
+// Consecuencia aceptada: un candidato que nunca responde queda incompleto para siempre
+// (y por lo tanto nunca dispara el flujo de "nuevos completos"). Por eso se eliminó el
+// viejo rompe-bucles con telemetría (guard:paso2_loopbreak) que cerraba best-effort.
+// (Se mantuvo descartada la red "aceptar-por-defecto": el replay sobre 260 respuestas
+// reales mostró ~6% de basura capturada como dato — peor que dejarlo en blanco.)
 
 // 🚫 RE-PREGUNTA CUANDO NO HAY DATO ÚTIL (sticker, foto, audio, emoji suelto o pin de ubicación)
 // El candidato mandó algo sin texto aprovechable en vez de escribir el dato que se le pidió.
@@ -1871,14 +1861,15 @@ ${safeDnaLines}
             const p2FirstName = (candidateUpdates.nombreReal || candidateData.nombreReal || '').split(' ')[0] || '';
             // Contador de re-preguntas de la sub-etapa ACTUAL del Paso 2. Se reinicia a 0 en
             // cada transición de estado (captura o avance) y sube +1 en cada re-pregunta por
-            // evasión. Al llegar a PASO2_MAX_REASKS, el rompe-bucles fuerza el avance.
+            // evasión. Ya NO fuerza ningún avance (Brenda nunca se rinde); se conserva para
+            // rotar los fallbacks variados y como número de intento.
             const p2AskCount = parseInt(candidateData.paso2AskCount || 0, 10) || 0;
 
             // 🚫 SIN TEXTO EN PASO 2: si el candidato mandó un sticker/imagen/audio sin palabras,
             // no hay nada que extraer. Re-preguntamos el dato de la sub-etapa actual con un mensaje
             // claro (la colonia pide explícitamente el NOMBRE), sin gastar una llamada a la IA ni
-            // arriesgar guardar basura. Cuenta como re-pregunta para que el rompe-bucles avance si
-            // el candidato insiste en mandar puros stickers.
+            // arriesgar guardar basura. Igual que la evasión escrita, re-pregunta indefinidamente:
+            // nunca avanza ni cierra sin el dato.
             if (userSentNoText && (p2Estado === 'esperando_colonia' || p2Estado === 'esperando_experiencia' || p2Estado === 'esperando_meses_experiencia')) {
                 isHostMode = true;
                 candidateUpdates.paso2AskCount = p2AskCount + 1;
@@ -1932,24 +1923,15 @@ REGLAS:
                     const _expCat = (candidateUpdates.categoria || candidateData.categoria || '').trim();
                     const _expArea = _expCat ? `de ${_expCat}` : 'en fábrica';
                     responseTextVal = `A sí 😊, colonia ${coloniaName} la conozco bien 😊[MSG_SPLIT]${_expName} solo me faltaría saber si tienes experiencia ${_expArea} 🏭 ¿sí o no?`;
-                } else if (p2AskCount >= PASO2_MAX_REASKS) {
-                    // 🔓 ROMPE-BUCLES: tras varias evasiones no seguimos insistiendo por la
-                    // colonia (dato para validar transporte, no crítico). Avanzamos a experiencia
-                    // sin fabricar dato y lo marcamos en telemetría para revisión.
-                    candidateUpdates.paso2Estado = 'esperando_experiencia';
-                    candidateUpdates.paso2AskCount = 0;
-                    recordPaso2LoopBreak(candidateId, 'colonia');
-                    const _expCat = (candidateUpdates.categoria || candidateData.categoria || '').trim();
-                    const _expArea = _expCat ? `de ${_expCat}` : 'en fábrica';
-                    const _expName = p2FirstName ? `Oye ${p2FirstName}, ` : '';
-                    responseTextVal = `No te preocupes, luego validamos lo del transporte 😊[MSG_SPLIT]${_expName}mejor dime, ¿tienes experiencia ${_expArea}? 🏭 ¿sí o no?`;
                 } else {
-                    // Evasion — persuade using promptAvanzado + ADN (+ contador de re-preguntas)
+                    // Evasión — Brenda NUNCA se rinde ni avanza sin la colonia: re-pregunta.
+                    // Las DOS burbujas (reconocimiento Y pregunta) se formulan con PALABRAS
+                    // DISTINTAS cada vez; el LLM ve el historial reciente para no repetir fraseo.
                     candidateUpdates.paso2AskCount = p2AskCount + 1;
-                    const evasionSys = `${promptAvanzado ? promptAvanzado + '\n\n' : ''}Eres Brenda Rodríguez, reclutadora de ${brand}. El candidato no dio claramente el nombre de su colonia. Tu misión es pedirle amablemente que comparta su colonia. REGLA CRÍTICA: NUNCA digas que ya tienes la colonia ni confirmes haberla recibido — aún no la tienes. Genera 2 burbujas separadas con [MSG_SPLIT]: la primera reconoce su respuesta con calidez, la segunda pide la colonia con una razón concreta (validar transporte). Máximo 2 líneas cada una. Sin markdown.\n[ADN]: ${JSON.stringify(cleanAdnBase)}`;
+                    const evasionSys = `${promptAvanzado ? promptAvanzado + '\n\n' : ''}Eres Brenda Rodríguez, reclutadora de ${brand}. El candidato no dio claramente el nombre de su colonia. Tu misión es pedirle amablemente que comparta su colonia. REGLA CRÍTICA: NUNCA digas que ya tienes la colonia ni confirmes haberla recibido — aún no la tienes. Genera 2 burbujas separadas con [MSG_SPLIT]: la primera reconoce su respuesta con calidez, la segunda pide la colonia con una razón concreta (validar transporte). Es una RE-pregunta, ya lo intentaste antes: usa PALABRAS DISTINTAS a las que ya usaste en la conversación TANTO en el reconocimiento COMO en la pregunta; varía el fraseo como un humano real y NUNCA repitas frases anteriores. Máximo 2 líneas cada una. Sin markdown.\n[ADN]: ${JSON.stringify(cleanAdnBase)}`;
                     try {
                         const evasionGpt = await getOpenAIResponse(
-                            allMessages.slice(-4),
+                            allMessages.slice(-6),
                             evasionSys,
                             modelAvanzado,
                             activeAiConfig.openaiApiKey
@@ -1988,43 +1970,32 @@ Responde ÚNICAMENTE con el número entero de meses. Si evade o no menciona ning
                     const p2CloseName = p2FirstName ? `, ${p2FirstName}` : '';
                     responseTextVal = `¡Listo${p2CloseName}! 🌟 Ya tengo todo lo que necesitaba.[MSG_SPLIT]Deja termino de subir tu información al sistema y te contacto para darte más info de la vacante 🌸✨[MSG_SPLIT]🙏 porfi no desesperes si tardo un poquito en contactarte, ok cuídate y platicamos pronto 😊`;
                     await MediaEngine.sendCongratsPack(config, candidateData.whatsapp, 'bot_paso2_sticker', candidateId);
-                } else if (p2AskCount >= PASO2_MAX_REASKS) {
-                    // 🔓 ROMPE-BUCLES: no logramos la duración tras varias re-preguntas. Cerramos
-                    // el Paso 2 best-effort — experiencia ya quedó 'Sí' en el turno anterior; los
-                    // meses quedan sin dato (NO fabricamos número). Marca para revisión humana.
-                    candidateUpdates.paso2Estado = 'completo';
-                    candidateUpdates.paso2AskCount = 0;
-                    await redis?.srem('paso2_waiting', candidateId);
-                    recordPaso2LoopBreak(candidateId, 'meses');
-                    const p2CloseName = p2FirstName ? `, ${p2FirstName}` : '';
-                    responseTextVal = `¡Listo${p2CloseName}! 🌟 Ya tengo lo que necesitaba por ahora.[MSG_SPLIT]Deja termino de subir tu información al sistema y te contacto para darte más info de la vacante 🌸✨[MSG_SPLIT]🙏 porfi no desesperes si tardo un poquito en contactarte, ok cuídate y platicamos pronto 😊`;
-                    await MediaEngine.sendCongratsPack(config, candidateData.whatsapp, 'bot_paso2_sticker', candidateId);
                 } else {
-                    // Evasión — GPT reconoce con gracia (sin seguir la corriente); la repregunta
-                    // la agrega el código SIEMPRE para garantizar que se reconduce la plática.
+                    // Evasión — Brenda NUNCA se rinde ni cierra sin el dato: re-pregunta cuánto
+                    // tiempo de experiencia. Las DOS burbujas (reconocimiento Y pregunta) se
+                    // formulan con PALABRAS DISTINTAS cada vez: el LLM ve el historial reciente
+                    // para no repetir el mismo fraseo, como lo haría un humano real.
                     candidateUpdates.paso2AskCount = p2AskCount + 1;
                     const _mName = p2FirstName ? `${p2FirstName}, ` : '';
-                    const fallbackEvasion = `${_mName}no te preocupes, solo dime un aproximado 😊[MSG_SPLIT]¿Cuántos meses o años llevas trabajando en fábrica? 🏭`;
-                    const evasionSys = `${promptAvanzado ? promptAvanzado + '\n\n' : ''}Eres Brenda Rodríguez, reclutadora de ${brand}. Ya le preguntaste al candidato cuánto tiempo de experiencia tiene en fábrica y en vez de responder evadió (broma, coqueteo, pregunta, tema distinto). Genera UNA sola línea MUY corta (máximo 15 palabras) que reconozca con gracia y calidez lo que acaba de decir. REGLAS CRÍTICAS: NUNCA le sigas la corriente (no coquetees, no respondas su juego, no desarrolles su tema) — solo reconócelo con simpatía y deja claro que estás trabajando. PROHIBIDO hacer preguntas o mencionar la pregunta de experiencia — esa la agrega el sistema después de tu línea. NUNCA digas que ya tienes el dato ni inventes información. Sin markdown.\n[ADN]: ${JSON.stringify(cleanAdnBase)}`;
-                    const EVASION_QUESTION_VARIANTS = [
-                        '¿Cuántos meses o años llevas trabajando en fábrica? 🏭 Un aproximado basta 😊',
-                        'Dime, ¿como cuánto tiempo llevas trabajando en fábrica? 🏭 No tiene que ser exacto 😊',
-                        '¿Cuántos meses o años de experiencia tienes en fábrica? 🏭 Un aproximado me sirve 😊'
+                    // Fallbacks variados (solo si el LLM falla): rotan por intento para no repetir.
+                    const MESES_REASK_FALLBACKS = [
+                        `${_mName}no te preocupes 😊[MSG_SPLIT]solo dime un aproximado, ¿cuánto tiempo llevas trabajando en fábrica? 🏭`,
+                        `Va, sin presión 🙂[MSG_SPLIT]nada más para cerrar tu registro, ¿como cuántos años o meses de experiencia juntas? 🏭`,
+                        `Te entiendo 😄[MSG_SPLIT]¿me echas un número aunque sea al aire? ¿cuánto llevas en fábrica, más o menos? ⏱️`,
+                        `Jeje ${_mName}vamos al grano 🙂[MSG_SPLIT]¿tienes idea de cuánto tiempo llevas de experiencia? un estimado me basta 🏭`
                     ];
+                    const fallbackEvasion = MESES_REASK_FALLBACKS[p2AskCount % MESES_REASK_FALLBACKS.length];
+                    const evasionSys = `${promptAvanzado ? promptAvanzado + '\n\n' : ''}Eres Brenda Rodríguez, reclutadora de ${brand}. Le preguntaste al candidato cuánto tiempo de experiencia tiene en fábrica y en vez de responder evadió (broma, coqueteo, pregunta, tema distinto). Genera EXACTAMENTE 2 burbujas separadas por [MSG_SPLIT]: (1) una línea corta que reconozca con gracia y calidez lo que dijo; (2) la re-pregunta de cuánto tiempo de experiencia lleva en fábrica (un aproximado basta). REGLAS CRÍTICAS: es una RE-pregunta, ya lo intentaste antes — usa PALABRAS DISTINTAS a las que ya usaste en la conversación TANTO en el reconocimiento COMO en la pregunta; varía el fraseo como un humano real y NUNCA repitas frases anteriores. NUNCA le sigas la corriente (no coquetees, no respondas su juego). NUNCA digas que ya tienes el dato ni inventes un número. Máximo 15 palabras por burbuja. Sin markdown.\n[ADN]: ${JSON.stringify(cleanAdnBase)}`;
                     try {
                         const evasionGpt = await getOpenAIResponse(
-                            [{ from: 'user', content: aggregatedText }],
+                            allMessages.slice(-6),
                             evasionSys,
                             modelAvanzado,
                             activeAiConfig.openaiApiKey
                         );
-                        let ack = (evasionGpt?.content || '').replace(/\*/g, '').split(/\[MSG_SPLIT\]/)[0].trim();
-                        // Guardas: el ack nunca trae preguntas (la repregunta la ponemos nosotros)
-                        // ni se alarga de más.
-                        if (ack.includes('¿')) ack = ack.split('¿')[0].trim();
-                        if (ack.length > 150) ack = '';
-                        const evasionQ = EVASION_QUESTION_VARIANTS[Math.floor(Math.random() * EVASION_QUESTION_VARIANTS.length)];
-                        responseTextVal = ack ? `${ack}[MSG_SPLIT]${evasionQ}` : fallbackEvasion;
+                        const gen = (evasionGpt?.content || '').replace(/\*/g, '').trim();
+                        // Debe traer la re-pregunta (un '¿'); si no, cae al fallback variado.
+                        responseTextVal = gen.includes('¿') ? gen : fallbackEvasion;
                     } catch (_e) {
                         responseTextVal = fallbackEvasion;
                     }
@@ -2108,25 +2079,15 @@ Responde ÚNICAMENTE con el número entero de meses. Si evade o no menciona ning
                             : `Perfecto 🌟 ¿y cuánto tiempo más o menos tienes de experiencia ${_expArea}? 😮[MSG_SPLIT]Un aproximado, no tiene que ser tan exacto 😅`;
                         responseTextVal = _expQ;
                     }
-                } else if (p2AskCount >= PASO2_MAX_REASKS) {
-                    // 🔓 ROMPE-BUCLES: el candidato no dio un sí/no claro tras varias re-preguntas.
-                    // Cerramos el Paso 2 best-effort SIN fabricar dato (experiencia queda sin
-                    // definir, meses sin dato) y lo marcamos para revisión humana. Mejor cerrar
-                    // que dejarlo atorado repitiendo la misma pregunta para siempre.
-                    candidateUpdates.paso2Estado = 'completo';
-                    candidateUpdates.paso2AskCount = 0;
-                    await redis?.srem('paso2_waiting', candidateId);
-                    recordPaso2LoopBreak(candidateId, 'experiencia');
-                    const p2CloseName = p2FirstName ? `, ${p2FirstName}` : '';
-                    responseTextVal = `¡Listo${p2CloseName}! 🌟 Ya tengo lo que necesitaba por ahora.[MSG_SPLIT]Deja termino de subir tu información al sistema y te contacto para darte más info de la vacante 🌸✨[MSG_SPLIT]🙏 porfi no desesperes si tardo un poquito en contactarte, ok cuídate y platicamos pronto 😊`;
-                    await MediaEngine.sendCongratsPack(config, candidateData.whatsapp, 'bot_paso2_sticker', candidateId);
                 } else {
-                    // Evasion — persuade (+ contador de re-preguntas)
+                    // Evasión — Brenda NUNCA se rinde ni completa sin un sí/no claro: re-pregunta.
+                    // Las DOS burbujas (reconocimiento Y pregunta) se formulan con PALABRAS
+                    // DISTINTAS cada vez; el LLM ve el historial reciente para no repetir fraseo.
                     candidateUpdates.paso2AskCount = p2AskCount + 1;
-                    const evasionSys = `${promptAvanzado ? promptAvanzado + '\n\n' : ''}Eres Brenda Rodríguez, reclutadora de ${brand}. El candidato evadió la pregunta sobre experiencia en fábrica. Tu misión es reconocer lo que dijo con calidez y redirigirlo con mucha persuasión a responder si tiene o no experiencia en fábrica/maquiladora. Genera 2 burbujas con [MSG_SPLIT]. Sin markdown. Sin inventar datos.\n[ADN]: ${JSON.stringify(cleanAdnBase)}`;
+                    const evasionSys = `${promptAvanzado ? promptAvanzado + '\n\n' : ''}Eres Brenda Rodríguez, reclutadora de ${brand}. El candidato evadió la pregunta sobre experiencia en fábrica. Tu misión es reconocer lo que dijo con calidez y redirigirlo con mucha persuasión a responder si tiene o no experiencia en fábrica/maquiladora. Genera 2 burbujas con [MSG_SPLIT]. Es una RE-pregunta, ya lo intentaste antes: usa PALABRAS DISTINTAS a las que ya usaste en la conversación TANTO en el reconocimiento COMO en la pregunta; varía el fraseo como un humano real y NUNCA repitas frases anteriores. Sin markdown. Sin inventar datos.\n[ADN]: ${JSON.stringify(cleanAdnBase)}`;
                     try {
                         const evasionGpt = await getOpenAIResponse(
-                            allMessages.slice(-4),
+                            allMessages.slice(-6),
                             evasionSys,
                             modelAvanzado,
                             activeAiConfig.openaiApiKey
