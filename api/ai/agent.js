@@ -1179,6 +1179,61 @@ const getReengageVacancies = async (candidateData) => {
 };
 
 
+// ── PASO 2 — ROBUSTEZ (colonia → experiencia → meses) ─────────────────────────
+// El Paso 2 capturaba cada dato con un único clasificador LLM que, al dar un falso
+// negativo, dejaba al candidato en un BUCLE INFINITO de re-preguntas (caso real:
+// "Prensa nacional" que gpt-4o-mini leía como la frase "prensa nacional" y devolvía
+// null). Estas utilidades: (1) invierten la lógica de la colonia a "aceptar por
+// defecto, rechazar solo si es evasión clara"; (2) ponen un rompe-bucles con
+// telemetría para que NINGUNA sub-pregunta del Paso 2 pueda atorar a un candidato.
+const PASO2_MAX_REASKS = 2; // re-preguntas permitidas antes de forzar avance best-effort
+
+// Muletillas/negaciones de 1 palabra que NO son un nombre de colonia.
+const COLONIA_EVASION_WORDS = new Set([
+    'no', 'nel', 'nop', 'nope', 'si', 'sí', 'ok', 'okay', 'oka', 'va', 'sale',
+    'hola', 'buenas', 'gracias', 'jaja', 'jeje', 'jajaja', 'nose', 'nada',
+    'bien', 'listo', 'lista', 'aja', 'ajá', 'mmm', 'este', 'porque', 'xq', 'pq', 'k', 'q'
+]);
+// Frases completas que son evasión (no colonia).
+const COLONIA_EVASION_PHRASES = new Set([
+    'no se', 'no sé', 'no lo se', 'no lo sé', 'no sabo', 'para que', 'para qué',
+    'por que', 'por qué', 'no quiero', 'ahorita no', 'al rato', 'no gracias',
+    'que tal', 'qué tal', 'quien eres', 'quién eres', 'no entiendo', 'mande', 'como'
+]);
+// ¿La respuesta a "¿cuál es tu colonia?" es una evasión clara (NO una colonia)?
+// Conservador a propósito: ante la duda devuelve false (la aceptamos como colonia),
+// para que una colonia real jamás se pierda por un capricho del modelo.
+const isColoniaEvasion = (text) => {
+    const raw = String(text || '').trim();
+    if (!raw) return true;                       // vacío / no-texto
+    if (/[?¿]/.test(raw)) return true;           // el candidato está preguntando algo
+    const norm = raw.toLowerCase().replace(/[.,;:!¡"'()]/g, '').trim();
+    if (!norm) return true;
+    if (COLONIA_EVASION_PHRASES.has(norm)) return true;
+    const words = norm.split(/\s+/).filter(Boolean);
+    if (words.length === 0) return true;
+    if (words.length > 6) return true;           // divagación larga, no un nombre de colonia
+    if (words.every(w => COLONIA_EVASION_WORDS.has(w))) return true; // puras muletillas
+    return false;                                // ← aceptar el texto como colonia
+};
+// Title Case tolerante a acentos/ñ para normalizar la colonia rescatada sin LLM.
+const toTitleCaseColonia = (text) => String(text || '').trim().replace(/\s+/g, ' ')
+    .split(' ')
+    .map(w => w ? w.charAt(0).toLocaleUpperCase('es') + w.slice(1).toLocaleLowerCase('es') : w)
+    .join(' ');
+// Telemetría del rompe-bucles (fire-and-forget), mismo patrón que guard:premature_closure:
+// contador por día + set de "candidateId:etapa". Zona Monterrey, expira a 90 días.
+const recordPaso2LoopBreak = (candidateId, etapa) => {
+    try {
+        const r = getRedisClient();
+        const day = new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Monterrey' });
+        const kCount = `guard:paso2_loopbreak:${day}`;
+        const kList = `guard:paso2_loopbreak:list:${day}`;
+        r?.incr(kCount).then(() => r.expire(kCount, 60 * 60 * 24 * 90)).catch(() => {});
+        r?.sadd(kList, `${candidateId}:${etapa}`).then(() => r.expire(kList, 60 * 60 * 24 * 90)).catch(() => {});
+    } catch (_e) { /* nunca romper el flujo por telemetría */ }
+};
+
 
 export const processMessage = async (candidateId, incomingMessage, msgId = null) => {
     const startTime = Date.now();
@@ -1792,6 +1847,10 @@ ${safeDnaLines}
             const promptAvanzado = batchConfig.bot_ia_prompt_avanzado || '';
             const modelAvanzado = batchConfig.bot_ia_model_avanzado || 'gpt-4o-mini';
             const p2FirstName = (candidateUpdates.nombreReal || candidateData.nombreReal || '').split(' ')[0] || '';
+            // Contador de re-preguntas de la sub-etapa ACTUAL del Paso 2. Se reinicia a 0 en
+            // cada transición de estado (captura o avance) y sube +1 en cada re-pregunta por
+            // evasión. Al llegar a PASO2_MAX_REASKS, el rompe-bucles fuerza el avance.
+            const p2AskCount = parseInt(candidateData.paso2AskCount || 0, 10) || 0;
 
             if (p2Estado === 'esperando_colonia') {
                 isHostMode = true;
@@ -1802,9 +1861,11 @@ REGLAS:
 - Los candidatos frecuentemente responden SÓLO con el nombre sin decir la palabra "colonia" (ej: "Las Nubes", "Valle Verde", "Centro", "La Fe", "Mitras", "Cumbres").
 - Si el mensaje contiene 1 a 4 palabras que suenan como nombre de lugar, barrio o fraccionamiento → extráelo aunque no diga "colonia".
 - CRÍTICO: Muchas colonias en México llevan nombres de personas, santos o apellidos. Si el candidato responde con algo que parece nombre propio (ej: "Gloria Mendiola", "Francisco Villa", "Benito Juárez", "Linda Vista", "San Bernabé", "Valle de Lincoln") → trátalo como nombre de colonia y extráelo. En este contexto la respuesta SIEMPRE es una colonia, no el nombre de una persona.
+- CRÍTICO: Muchas colonias coinciden con frases comunes en español (ej: "Prensa Nacional", "La Alianza", "Independencia", "Constitución", "Nueva Reforma", "La Fama", "Buenos Aires", "Nueva Esperanza"). Aunque suenen como un tema o una frase hecha, aquí SON el nombre de una colonia — extráelas normalmente, NO las trates como evasión.
 - Devuelve ÚNICAMENTE el nombre en Title Case (primera letra de cada palabra en mayúscula).
 - Solo devuelve null si el candidato claramente evade, cambia de tema, hace una pregunta, o manda algo que definitivamente no es un nombre de lugar (ej: "jaja", "no sé", "¿por qué?", "ok", stickers, audios sin texto).`;
 
+                let coloniaName = null;
                 try {
                     const coloniaGpt = await getOpenAIResponse(
                         [{ from: 'user', content: aggregatedText }],
@@ -1813,34 +1874,57 @@ REGLAS:
                         activeAiConfig.openaiApiKey
                     );
                     const coloniaRaw = (coloniaGpt?.content || '').trim();
-                    if (coloniaRaw && coloniaRaw.toLowerCase() !== 'null') {
-                        // Colonia captured — save and ask experiencia
-                        candidateUpdates.colonia = coloniaRaw;
-                        candidateUpdates.paso2Estado = 'esperando_experiencia';
-                        const _expName = p2FirstName ? `Oye ${p2FirstName}, ya` : 'Ya';
-                        // Personaliza la pregunta con la categoría que eligió el candidato (ej.
-                        // "experiencia de Soldador"). Fallback a "en fábrica" si por alguna razón
-                        // no hubiera categoría (no debería pasar: paso 1 ya está completo aquí).
-                        const _expCat = (candidateUpdates.categoria || candidateData.categoria || '').trim();
-                        const _expArea = _expCat ? `de ${_expCat}` : 'en fábrica';
-                        responseTextVal = `A sí 😊, colonia ${coloniaRaw} la conozco bien 😊[MSG_SPLIT]${_expName} solo me faltaría saber si tienes experiencia ${_expArea} 🏭 ¿sí o no?`;
-                    } else {
-                        // Evasion — persuade using promptAvanzado + ADN
-                        const evasionSys = `${promptAvanzado ? promptAvanzado + '\n\n' : ''}Eres Brenda Rodríguez, reclutadora de ${brand}. El candidato no dio claramente el nombre de su colonia. Tu misión es pedirle amablemente que comparta su colonia. REGLA CRÍTICA: NUNCA digas que ya tienes la colonia ni confirmes haberla recibido — aún no la tienes. Genera 2 burbujas separadas con [MSG_SPLIT]: la primera reconoce su respuesta con calidez, la segunda pide la colonia con una razón concreta (validar transporte). Máximo 2 líneas cada una. Sin markdown.\n[ADN]: ${JSON.stringify(cleanAdnBase)}`;
+                    if (coloniaRaw && coloniaRaw.toLowerCase() !== 'null') coloniaName = coloniaRaw;
+                } catch (_e) { /* la red de seguridad determinista de abajo decide */ }
+
+                // 🛡️ RED DE SEGURIDAD (aceptar-por-defecto): si el LLM no extrajo nada pero el
+                // texto NO es una evasión clara, aceptamos el propio texto como colonia. Así una
+                // colonia real (ej. "Prensa nacional") nunca se pierde por un falso negativo del
+                // modelo. El LLM sigue siendo la vía primaria (mejor normalización); esto es red.
+                if (!coloniaName && !isColoniaEvasion(aggregatedText)) {
+                    coloniaName = toTitleCaseColonia(aggregatedText);
+                }
+
+                if (coloniaName) {
+                    // Colonia captured — save and ask experiencia
+                    candidateUpdates.colonia = coloniaName;
+                    candidateUpdates.paso2Estado = 'esperando_experiencia';
+                    candidateUpdates.paso2AskCount = 0;
+                    const _expName = p2FirstName ? `Oye ${p2FirstName}, ya` : 'Ya';
+                    // Personaliza la pregunta con la categoría que eligió el candidato (ej.
+                    // "experiencia de Soldador"). Fallback a "en fábrica" si por alguna razón
+                    // no hubiera categoría (no debería pasar: paso 1 ya está completo aquí).
+                    const _expCat = (candidateUpdates.categoria || candidateData.categoria || '').trim();
+                    const _expArea = _expCat ? `de ${_expCat}` : 'en fábrica';
+                    responseTextVal = `A sí 😊, colonia ${coloniaName} la conozco bien 😊[MSG_SPLIT]${_expName} solo me faltaría saber si tienes experiencia ${_expArea} 🏭 ¿sí o no?`;
+                } else if (p2AskCount >= PASO2_MAX_REASKS) {
+                    // 🔓 ROMPE-BUCLES: tras varias evasiones no seguimos insistiendo por la
+                    // colonia (dato para validar transporte, no crítico). Avanzamos a experiencia
+                    // sin fabricar dato y lo marcamos en telemetría para revisión.
+                    candidateUpdates.paso2Estado = 'esperando_experiencia';
+                    candidateUpdates.paso2AskCount = 0;
+                    recordPaso2LoopBreak(candidateId, 'colonia');
+                    const _expCat = (candidateUpdates.categoria || candidateData.categoria || '').trim();
+                    const _expArea = _expCat ? `de ${_expCat}` : 'en fábrica';
+                    const _expName = p2FirstName ? `Oye ${p2FirstName}, ` : '';
+                    responseTextVal = `No te preocupes, luego validamos lo del transporte 😊[MSG_SPLIT]${_expName}mejor dime, ¿tienes experiencia ${_expArea}? 🏭 ¿sí o no?`;
+                } else {
+                    // Evasion — persuade using promptAvanzado + ADN (+ contador de re-preguntas)
+                    candidateUpdates.paso2AskCount = p2AskCount + 1;
+                    const evasionSys = `${promptAvanzado ? promptAvanzado + '\n\n' : ''}Eres Brenda Rodríguez, reclutadora de ${brand}. El candidato no dio claramente el nombre de su colonia. Tu misión es pedirle amablemente que comparta su colonia. REGLA CRÍTICA: NUNCA digas que ya tienes la colonia ni confirmes haberla recibido — aún no la tienes. Genera 2 burbujas separadas con [MSG_SPLIT]: la primera reconoce su respuesta con calidez, la segunda pide la colonia con una razón concreta (validar transporte). Máximo 2 líneas cada una. Sin markdown.\n[ADN]: ${JSON.stringify(cleanAdnBase)}`;
+                    try {
                         const evasionGpt = await getOpenAIResponse(
                             allMessages.slice(-4),
                             evasionSys,
                             modelAvanzado,
                             activeAiConfig.openaiApiKey
                         );
-                        if (evasionGpt?.content) {
-                            responseTextVal = evasionGpt.content.replace(/\*/g, '');
-                        } else {
-                            responseTextVal = `Entiendo 😊[MSG_SPLIT]¿Me puedes decir en qué colonia vives? Es para validar que te llegue la ruta de transporte 🚌🏘️`;
-                        }
+                        responseTextVal = evasionGpt?.content
+                            ? evasionGpt.content.replace(/\*/g, '')
+                            : `Entiendo 😊[MSG_SPLIT]¿Me puedes decir en qué colonia vives? Es para validar que te llegue la ruta de transporte 🚌🏘️`;
+                    } catch (_e) {
+                        responseTextVal = `¿Me puedes decir en qué colonia vives? 🏘️`;
                     }
-                } catch (_e) {
-                    responseTextVal = `¿Me puedes decir en qué colonia vives? 🏘️`;
                 }
 
             } else if (p2Estado === 'esperando_meses_experiencia') {
@@ -1864,13 +1948,26 @@ Responde ÚNICAMENTE con el número entero de meses. Si evade o no menciona ning
                 if (mesesResult !== null) {
                     candidateUpdates.meses = mesesResult;
                     candidateUpdates.paso2Estado = 'completo';
+                    candidateUpdates.paso2AskCount = 0;
                     await redis?.srem('paso2_waiting', candidateId);
                     const p2CloseName = p2FirstName ? `, ${p2FirstName}` : '';
                     responseTextVal = `¡Listo${p2CloseName}! 🌟 Ya tengo todo lo que necesitaba.[MSG_SPLIT]Deja termino de subir tu información al sistema y te contacto para darte más info de la vacante 🌸✨[MSG_SPLIT]🙏 porfi no desesperes si tardo un poquito en contactarte, ok cuídate y platicamos pronto 😊`;
                     await MediaEngine.sendCongratsPack(config, candidateData.whatsapp, 'bot_paso2_sticker', candidateId);
+                } else if (p2AskCount >= PASO2_MAX_REASKS) {
+                    // 🔓 ROMPE-BUCLES: no logramos la duración tras varias re-preguntas. Cerramos
+                    // el Paso 2 best-effort — experiencia ya quedó 'Sí' en el turno anterior; los
+                    // meses quedan sin dato (NO fabricamos número). Marca para revisión humana.
+                    candidateUpdates.paso2Estado = 'completo';
+                    candidateUpdates.paso2AskCount = 0;
+                    await redis?.srem('paso2_waiting', candidateId);
+                    recordPaso2LoopBreak(candidateId, 'meses');
+                    const p2CloseName = p2FirstName ? `, ${p2FirstName}` : '';
+                    responseTextVal = `¡Listo${p2CloseName}! 🌟 Ya tengo lo que necesitaba por ahora.[MSG_SPLIT]Deja termino de subir tu información al sistema y te contacto para darte más info de la vacante 🌸✨[MSG_SPLIT]🙏 porfi no desesperes si tardo un poquito en contactarte, ok cuídate y platicamos pronto 😊`;
+                    await MediaEngine.sendCongratsPack(config, candidateData.whatsapp, 'bot_paso2_sticker', candidateId);
                 } else {
                     // Evasión — GPT reconoce con gracia (sin seguir la corriente); la repregunta
                     // la agrega el código SIEMPRE para garantizar que se reconduce la plática.
+                    candidateUpdates.paso2AskCount = p2AskCount + 1;
                     const _mName = p2FirstName ? `${p2FirstName}, ` : '';
                     const fallbackEvasion = `${_mName}no te preocupes, solo dime un aproximado 😊[MSG_SPLIT]¿Cuántos meses o años llevas trabajando en fábrica? 🏭`;
                     const evasionSys = `${promptAvanzado ? promptAvanzado + '\n\n' : ''}Eres Brenda Rodríguez, reclutadora de ${brand}. Ya le preguntaste al candidato cuánto tiempo de experiencia tiene en fábrica y en vez de responder evadió (broma, coqueteo, pregunta, tema distinto). Genera UNA sola línea MUY corta (máximo 15 palabras) que reconozca con gracia y calidez lo que acaba de decir. REGLAS CRÍTICAS: NUNCA le sigas la corriente (no coquetees, no respondas su juego, no desarrolles su tema) — solo reconócelo con simpatía y deja claro que estás trabajando. PROHIBIDO hacer preguntas o mencionar la pregunta de experiencia — esa la agrega el sistema después de tu línea. NUNCA digas que ya tienes el dato ni inventes información. Sin markdown.\n[ADN]: ${JSON.stringify(cleanAdnBase)}`;
@@ -1930,6 +2027,7 @@ Responde ÚNICAMENTE con el número entero de meses. Si evade o no menciona ning
                     candidateUpdates.experiencia = 'No';
                     candidateUpdates.meses = 0;
                     candidateUpdates.paso2Estado = 'completo';
+                    candidateUpdates.paso2AskCount = 0;
                     await redis?.srem('paso2_waiting', candidateId);
                     const p2CloseName = p2FirstName ? `, ${p2FirstName}` : '';
                     responseTextVal = `¡Listo${p2CloseName}! 🌟 Ya tengo todo lo que necesitaba.[MSG_SPLIT]Deja termino de subir tu información al sistema y te contacto para darte más info de la vacante 🌸✨[MSG_SPLIT]🙏 porfi no desesperes si tardo un poquito en contactarte, ok cuídate y platicamos pronto 😊`;
@@ -1958,6 +2056,7 @@ Responde ÚNICAMENTE con el número entero de meses. Si evade o no menciona ning
                         // Duración capturada en el mismo mensaje — cerrar paso 2 sin preguntar
                         candidateUpdates.meses = mesesInline;
                         candidateUpdates.paso2Estado = 'completo';
+                        candidateUpdates.paso2AskCount = 0;
                         await redis?.srem('paso2_waiting', candidateId);
                         const p2CloseName = p2FirstName ? `, ${p2FirstName}` : '';
                         responseTextVal = `¡Listo${p2CloseName}! 🌟 Ya tengo todo lo que necesitaba.[MSG_SPLIT]Deja termino de subir tu información al sistema y te contacto para darte más info de la vacante 🌸✨[MSG_SPLIT]🙏 porfi no desesperes si tardo un poquito en contactarte, ok cuídate y platicamos pronto 😊`;
@@ -1965,6 +2064,7 @@ Responde ÚNICAMENTE con el número entero de meses. Si evade o no menciona ning
                     } else {
                         // Duración no detectada — preguntar
                         candidateUpdates.paso2Estado = 'esperando_meses_experiencia';
+                        candidateUpdates.paso2AskCount = 0;
                         // Misma personalización por categoría que la pregunta inicial de experiencia.
                         const _expCat = (candidateUpdates.categoria || candidateData.categoria || '').trim();
                         const _expArea = _expCat ? `de ${_expCat}` : 'en fábrica';
@@ -1973,8 +2073,21 @@ Responde ÚNICAMENTE con el número entero de meses. Si evade o no menciona ning
                             : `Perfecto 🌟 ¿y cuánto tiempo más o menos tienes de experiencia ${_expArea}? 😮[MSG_SPLIT]Un aproximado, no tiene que ser tan exacto 😅`;
                         responseTextVal = _expQ;
                     }
+                } else if (p2AskCount >= PASO2_MAX_REASKS) {
+                    // 🔓 ROMPE-BUCLES: el candidato no dio un sí/no claro tras varias re-preguntas.
+                    // Cerramos el Paso 2 best-effort SIN fabricar dato (experiencia queda sin
+                    // definir, meses sin dato) y lo marcamos para revisión humana. Mejor cerrar
+                    // que dejarlo atorado repitiendo la misma pregunta para siempre.
+                    candidateUpdates.paso2Estado = 'completo';
+                    candidateUpdates.paso2AskCount = 0;
+                    await redis?.srem('paso2_waiting', candidateId);
+                    recordPaso2LoopBreak(candidateId, 'experiencia');
+                    const p2CloseName = p2FirstName ? `, ${p2FirstName}` : '';
+                    responseTextVal = `¡Listo${p2CloseName}! 🌟 Ya tengo lo que necesitaba por ahora.[MSG_SPLIT]Deja termino de subir tu información al sistema y te contacto para darte más info de la vacante 🌸✨[MSG_SPLIT]🙏 porfi no desesperes si tardo un poquito en contactarte, ok cuídate y platicamos pronto 😊`;
+                    await MediaEngine.sendCongratsPack(config, candidateData.whatsapp, 'bot_paso2_sticker', candidateId);
                 } else {
-                    // Evasion — persuade
+                    // Evasion — persuade (+ contador de re-preguntas)
+                    candidateUpdates.paso2AskCount = p2AskCount + 1;
                     const evasionSys = `${promptAvanzado ? promptAvanzado + '\n\n' : ''}Eres Brenda Rodríguez, reclutadora de ${brand}. El candidato evadió la pregunta sobre experiencia en fábrica. Tu misión es reconocer lo que dijo con calidez y redirigirlo con mucha persuasión a responder si tiene o no experiencia en fábrica/maquiladora. Genera 2 burbujas con [MSG_SPLIT]. Sin markdown. Sin inventar datos.\n[ADN]: ${JSON.stringify(cleanAdnBase)}`;
                     try {
                         const evasionGpt = await getOpenAIResponse(
