@@ -1527,7 +1527,13 @@ SOLO responde al mensaje actual, de forma corta (máximo 2 oraciones). NO mencio
             } catch (e) { }
 
             // 🛡️ [FEEDBACK LOOP SHIELD v2]: Skip any text that looks like a transcription or internal tag
-            const textVal = (isJson || typeof parsed === 'object') ? (parsed.body || parsed.content || JSON.stringify(parsed)) : String(parsed || '').trim();
+            // Un mensaje sin texto (sticker/imagen/audio/video sin caption) puede llegar como
+            // objeto {text:'', msgId} o como su JSON. NUNCA hagas JSON.stringify del objeto: eso
+            // metía basura tipo {"text":"","msgid":"wamid..."} a la extracción. Si no hay texto
+            // legible (body/content/text), queda cadena vacía y se trata como "sin texto".
+            const textVal = (isJson || typeof parsed === 'object')
+                ? (parsed.body || parsed.content || (typeof parsed.text === 'string' ? parsed.text : ''))
+                : String(parsed || '').trim();
 
             const isInternalJson = isJson && (parsed.extracted_data || parsed.thought_process);
 
@@ -1537,6 +1543,11 @@ SOLO responde al mensaje actual, de forma corta (máximo 2 oraciones). NO mencio
                 aggregatedText += (aggregatedText ? " | " : "") + textVal;
             }
         }
+
+        // 🚫 SIN TEXTO: el candidato mandó únicamente algo sin palabras (sticker, imagen/video/
+        // audio sin caption). No hay nada que extraer; se usa abajo para re-preguntar el dato en
+        // vez de alucinar sobre un mensaje vacío o guardar basura en el perfil.
+        const userSentNoText = !aggregatedText.trim();
 
         // 📚 ESCOLARIDAD ABBREVIATION NORMALIZER
         // Expands common Mexican Spanish shorthand BEFORE GPT sees it.
@@ -1825,7 +1836,25 @@ ${safeDnaLines}
             // evasión. Al llegar a PASO2_MAX_REASKS, el rompe-bucles fuerza el avance.
             const p2AskCount = parseInt(candidateData.paso2AskCount || 0, 10) || 0;
 
-            if (p2Estado === 'esperando_colonia') {
+            // 🚫 SIN TEXTO EN PASO 2: si el candidato mandó un sticker/imagen/audio sin palabras,
+            // no hay nada que extraer. Re-preguntamos el dato de la sub-etapa actual con un mensaje
+            // claro (la colonia pide explícitamente el NOMBRE), sin gastar una llamada a la IA ni
+            // arriesgar guardar basura. Cuenta como re-pregunta para que el rompe-bucles avance si
+            // el candidato insiste en mandar puros stickers.
+            if (userSentNoText && (p2Estado === 'esperando_colonia' || p2Estado === 'esperando_experiencia' || p2Estado === 'esperando_meses_experiencia')) {
+                isHostMode = true;
+                candidateUpdates.paso2AskCount = p2AskCount + 1;
+                const _ntName = p2FirstName ? ` ${p2FirstName}` : '';
+                if (p2Estado === 'esperando_colonia') {
+                    responseTextVal = `Oye${_ntName}, no me llegó texto en tu mensaje 🙈[MSG_SPLIT]¿Me escribes por favor el nombre de tu colonia? 🏘️ Es para validar que te llegue la ruta de transporte 🚌`;
+                } else if (p2Estado === 'esperando_experiencia') {
+                    const _ntCat = (candidateUpdates.categoria || candidateData.categoria || '').trim();
+                    const _ntArea = _ntCat ? `de ${_ntCat}` : 'en fábrica';
+                    responseTextVal = `Oye${_ntName}, no me llegó texto en tu mensaje 🙈[MSG_SPLIT]¿Me confirmas por texto si tienes experiencia ${_ntArea}? 🏭 ¿sí o no?`;
+                } else {
+                    responseTextVal = `Oye${_ntName}, no me llegó texto en tu mensaje 🙈[MSG_SPLIT]¿Me escribes un aproximado de cuánto tiempo llevas de experiencia? 🏭 (ej. "2 años")`;
+                }
+            } else if (p2Estado === 'esperando_colonia') {
                 isHostMode = true;
                 // Extract colonia from candidate's message using GPT mini
                 const coloniaExtractionPrompt = `Eres un extractor de colonias/barrios/fraccionamientos de México. El candidato acaba de responder a la pregunta "¿cómo se llama tu colonia?". Extrae el nombre de su colonia del mensaje.
@@ -2145,9 +2174,19 @@ REGLAS DE SALA DE ESPERA (OBLIGATORIAS - NO NEGOCIABLES):
             isHostMode = true; // Block Capturista Brain — total silence
             console.log('[Sala de Espera] Toggle OFF — silencio post-extracción');
         }
+        // 🚫 SIN TEXTO EN PASO 1: si el perfil aún NO está completo y el candidato mandó solo un
+        // sticker/imagen/audio sin palabras (y ya habíamos saludado — es decir, estamos a media
+        // captura), no hay nada que extraer. Pedimos que escriba su respuesta por texto y saltamos
+        // el cerebro capturista para no alucinar sobre un mensaje vacío ni guardar basura. El saludo
+        // inicial de un candidato nuevo lo sigue manejando su propia rama determinista más abajo.
+        if (!isRecruiterMode && !isBridgeActive && !isHostMode && !isProfileComplete && userSentNoText && botHasSpoken && !responseTextVal) {
+            const _ntName = displayName ? ` ${displayName}` : '';
+            responseTextVal = `Oye${_ntName}, no me llegó texto en tu mensaje 🙈[MSG_SPLIT]¿Me lo escribes por texto porfa? ✍️`;
+        }
+
         let handoverTriggered = false;
         // 3. CAPTURISTA BRAIN (GPT-4o-mini consolidated)
-        if (!isRecruiterMode && !isBridgeActive && !isHostMode) {
+        if (!isRecruiterMode && !isBridgeActive && !isHostMode && !responseTextVal) {
             try {
                 const gptStartTime = Date.now();
 

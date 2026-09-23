@@ -37,8 +37,12 @@ async function drainWaitlist(candidateId, _fromPhone) {
 
         const aggregatedText = parsed.map(m => {
             const val = m.text?.url || m.text || m;
-            return (typeof val === 'object') ? JSON.stringify(val) : val;
-        }).join('\n'); // Newline separator for better AI reading
+            // Un mensaje SIN TEXTO (sticker, imagen/video/audio sin caption) llega aquí como
+            // objeto {text:'', msgId}. NUNCA lo serialices como JSON: eso inyectaba basura tipo
+            // {"text":"","msgid":"wamid..."} en la extracción y llegó a guardarse como "colonia".
+            // Se trata como "sin texto" (cadena vacía) y el agente lo maneja re-preguntando.
+            return (typeof val === 'object') ? '' : val;
+        }).filter(s => typeof s === 'string' && s.trim()).join('\n'); // Newline separator for better AI reading
 
         const msgIds = parsed.map(m => m.msgId).filter(id => id);
 
