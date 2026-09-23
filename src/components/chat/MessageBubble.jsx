@@ -386,6 +386,22 @@ const MessageBubble = React.memo(function MessageBubble({
                             {(() => {
                                 const rawHtml = msg._formattedHtml || msg.content;
 
+                                // 📍 UBICACIÓN: entrante = "📍 Ubicación: lat, lng" (parseable a link),
+                                // saliente = "[Ubicación: nombre]" (sin coords → búsqueda por nombre).
+                                if (msg.type === 'location') {
+                                    const coord = String(msg.content || '').match(/(-?\d{1,3}\.\d+)\s*,\s*(-?\d{1,3}\.\d+)/);
+                                    const named = String(msg.content || '').match(/\[Ubicaci[oó]n:\s*(.*?)\]/i);
+                                    const href = coord
+                                        ? `https://www.google.com/maps?q=${coord[1]},${coord[2]}`
+                                        : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((named && named[1]) || 'ubicación')}`;
+                                    const label = coord ? 'Ver ubicación en el mapa' : ((named && named[1]) || 'Ubicación');
+                                    return (
+                                        <a href={href} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[#027a61] dark:text-[#53bdeb] hover:underline font-medium">
+                                            📍 {label}
+                                        </a>
+                                    );
+                                }
+
                                 const isContact = typeof msg.content === 'string' && msg.content.startsWith('[Tarjeta de Contacto:');
                                 if (isContact) {
                                     const nameMatch = msg.content.match(/\[Tarjeta de Contacto:\s*(.+)\]/i);

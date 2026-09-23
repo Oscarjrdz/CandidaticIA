@@ -615,8 +615,14 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
                             return url;
                         };
                         const safeUrl = getSafeMediaUrl(msg.mediaUrl);
+                        const isSticker = msg.type === 'sticker' || msg.type === 'sticker_received';
                         return (
-                            <div className="mb-1 rounded-lg overflow-hidden border border-black/5 relative min-w-[200px]">
+                            // Sticker: sin marco/borde ni min-width (se ve "flotando" como en WhatsApp).
+                            // El resto de media sí lleva el contenedor con borde y ancho mínimo.
+                            <div className={`mb-1 overflow-hidden relative ${isSticker ? '' : 'rounded-lg border border-black/5 min-w-[200px]'}`}>
+                                {isSticker && (
+                                    <img src={safeUrl} loading="lazy" alt="Sticker" className="w-[120px] h-[120px] object-contain" />
+                                )}
                                 {(msg.type === 'image' || msg.type === 'image_received') && (
                                     <img src={safeUrl} loading="lazy" alt="Media" className="max-w-full h-auto max-h-[300px] object-cover cursor-pointer hover:opacity-90 transition-opacity" onClick={() => window.open(safeUrl, '_blank')} />
                                 )}
@@ -645,7 +651,22 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
                         <p className="text-[11px] italic opacity-50 mb-1">Nota de voz</p>
                     )}
 
-                    {msg.content && (
+                    {/* 📍 UBICACIÓN → link a Google Maps (entrante: coords; saliente: por nombre) */}
+                    {msg.type === 'location' && (() => {
+                        const coord = String(msg.content || '').match(/(-?\d{1,3}\.\d+)\s*,\s*(-?\d{1,3}\.\d+)/);
+                        const named = String(msg.content || '').match(/\[Ubicaci[oó]n:\s*(.*?)\]/i);
+                        const href = coord
+                            ? `https://www.google.com/maps?q=${coord[1]},${coord[2]}`
+                            : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((named && named[1]) || 'ubicación')}`;
+                        const label = coord ? 'Ver ubicación en el mapa' : ((named && named[1]) || 'Ubicación');
+                        return (
+                            <a href={href} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-green-700 dark:text-green-400 hover:underline font-medium text-[14px] mb-1">
+                                📍 {label}
+                            </a>
+                        );
+                    })()}
+
+                    {msg.content && msg.type !== 'location' && (
                         <div className="relative min-w-[60px] max-w-full text-[14.5px]">
                             <div
                                 className="whitespace-pre-wrap leading-snug break-words"
