@@ -5545,7 +5545,22 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                             >
                                 <ArrowLeft className="w-6 h-6" />
                             </button>
-                            <div className="min-w-[32px] w-8 h-8 rounded-full flex items-center justify-center mr-2.5 overflow-hidden shrink-0">
+                            <button
+                                type="button"
+                                onClick={async () => {
+                                    const nombre = toTitleCase(selectedChat.nombreReal || selectedChat.nombre) || selectedChat.whatsapp || '';
+                                    const tel10 = String(selectedChat.whatsapp || '').replace(/\D/g, '').slice(-10);
+                                    const texto = `${nombre} (${tel10})`;
+                                    try {
+                                        await navigator.clipboard.writeText(texto);
+                                        showToast && showToast(`Copiado: ${texto}`, 'success');
+                                    } catch {
+                                        showToast && showToast('No se pudo copiar al portapapeles', 'error');
+                                    }
+                                }}
+                                title="Copiar nombre y teléfono"
+                                className="min-w-[32px] w-8 h-8 rounded-full flex items-center justify-center mr-2.5 overflow-hidden shrink-0 cursor-pointer hover:ring-2 hover:ring-emerald-400/60 transition-shadow"
+                            >
                                 {selectedChat.profilePic && !headerImgError ? (
                                     <img src={selectedChat.profilePic} className="w-full h-full object-cover" alt="profile"
                                         onError={() => setHeaderImgError(true)} />
@@ -5555,7 +5570,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                                         {(selectedChat.nombre || 'C')[0].toUpperCase()}
                                     </span>
                                 )}
-                            </div>
+                            </button>
                             <div className="flex flex-col min-w-0 flex-1">
                                 {/* Header en 4 renglones apilados (cada uno al 100% del ancho, a la
                                     derecha del avatar): 1) nombre + etiquetas  2) toolbar de iconos
