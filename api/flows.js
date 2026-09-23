@@ -231,7 +231,7 @@ export default async function handler(req, res) {
         }
 
         // Métricas del tablero de Flujos: altas por ETIQUETA en un rango de fechas.
-        // Reusa exactamente la misma fuente que el copiloto (contar_altas_etiqueta):
+        // Usa la fuente contar_altas_etiqueta:
         // buildDateKeys(hoy/ayer/semana/mes | desde-hasta) + los contadores agregados
         // stats:daily:captures:tag:* (getCapturesByAllTags). No escanea candidatos ni
         // hidrata nada — un solo pipeline de HMGET, barato para pintar en vivo.

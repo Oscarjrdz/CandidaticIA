@@ -61,9 +61,6 @@ const AgentIASection = lazyWithRetry(() => import('./components/AgentIASection')
 function AppShell() {
   const { user, setUser, isAuthChecking, isAppReady, rolePermissions, login, logout } = useAuthContext();
 
-  // Solo el perfil de Oscar ve el toggle del Agente y la burbuja Brenda Copiloto.
-  // Se gatea por id/WhatsApp específicos (NO por rol: Paty también es SuperAdmin).
-  const isOscar = user?.id === 'user_1768974645880' || String(user?.whatsapp || '') === '5218116038195';
   const { showToast } = useToastContext();
 
   const [theme, setTheme] = useState('light');
