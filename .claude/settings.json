@@ -280,7 +280,12 @@
       "Bash(/opt/homebrew/bin/git --version)",
       "Bash(node --env-file=.env.local -e ' *)",
       "Bash(node _tmp_botones.mjs)",
-      "Bash(node _tmp_prodverify.mjs)"
+      "Bash(node _tmp_prodverify.mjs)",
+      "Bash(node /Users/oscar/Candidatic_IA/_audit_list_tmp.mjs)",
+      "Bash(grep -n \"CANDIDATE_PREFIX\\\\|candidate:\\\\${\\\\|async function getCandidateById\\\\|hydrateCandidateIds\" api/utils/storage.js)",
+      "Bash(node _tmp_repro.mjs)",
+      "Bash(rm -f _tmp_*.mjs _tmp_out.txt _tmp_dbg.txt 2>/dev/null; echo \"temporales borrados\"; echo \"=== DIFF STAT ===\"; git diff --stat api/ai/agent.js; echo; echo \"=== node --check final ===\"; node --check api/ai/agent.js && echo \"✓ OK\")",
+      "Bash(node _tmp_intent.mjs)"
     ],
     "additionalDirectories": [
       "/Users/oscar/App Candidatic/Candidatic_App/utils",
