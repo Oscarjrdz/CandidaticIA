@@ -61,49 +61,17 @@ function humanizeDate(dateStr) {
     return dateStr;
 }
 
-// ─── CITA_PENDING FLAG HELPERS (Redis-backed confirmation state) ───────────────
-// When Brenda sends the scheduling CTA, we set a Redis TTL flag.
-// On the candidate's NEXT message we check the flag to decide if the
-// affirmative is a genuine cita confirmation or just ambient chatter.
-const CITA_PENDING_TTL = 600; // 10 minutes
-async function setCitaPendingFlag(redis, candidateId) {
-    if (!redis || !candidateId) return;
-    try { await redis.set(`cita_pending:${candidateId}`, '1', 'EX', CITA_PENDING_TTL); } catch (_) {}
-}
-// [PENDING-FLAG HELPERS RETIRADOS] getCitaPendingFlag/clearCitaPendingFlag y las familias
-// pivot_pending / day_list_pending (get/set/clear/incr) se removieron junto con el cerebro
-// de reclutador — eran sus únicos usuarios. setCitaPendingFlag se conserva (sigue en uso).
+// ❌ [CITA_PENDING FLAG HELPERS ELIMINADOS — sep 2026] setCitaPendingFlag (y antes
+// getCitaPendingFlag/clearCitaPendingFlag, pivot_pending / day_list_pending) marcaban
+// estado de confirmación de cita en Redis cuando Brenda mandaba el CTA de entrevista.
+// Con el CTA de cita ya borrado y el cerebro de reclutador removido, nadie los llama.
+// Brenda extractora no agenda entrevistas — ni ahora ni nunca.
 // [NO INTERESA GATE ELIMINADO] Los helpers del gate "no interesa" (ni_gate) se removieron
 // junto con el cerebro de reclutador retirado — eran sus únicos llamadores.
-// ─── CTA VARIANT COUNTER (sequential rotation per candidate) ─────────────────
-// Single shared counter across ALL second-bubble categories so the candidate
-// never sees the same closing question twice in a row.
-const _CTA_VARIANTS = [
-    '¿Te gustaría agendar tu entrevista? 😊',
-    '¿Te agendo una cita de entrevista? 🌟',
-    '¿Te aparto una cita para entrevista? ✨',
-    '¿Quieres que programe tu entrevista? 🌸',
-    '¿Te puedo agendar tu entrevista? 😊',
-    '¿Avanzamos con tu cita de entrevista? 🚀',
-    '¿Te confirmo tu cita de entrevista? 💼',
-    '¿Procedo a agendar tu entrevista? 🙌',
-    '¿Te reservo un lugar para la entrevista? ⭐',
-    '¿Aseguro tu cita de entrevista? 🎯',
-    '¿Quieres que te separe la entrevista? 🤩',
-    '¿Te interesa que ya quede apartada tu cita? 🌺',
-];
-const _SINGLE_HOUR_CTAS = [
-    "¿Te gustaría agendar tu entrevista? 😊",
-    "¿Te parece que agendemos ya? ✨",
-    "¿Comenzamos con tu proceso y reservamos? 🗓️",
-    "¿Confirmamos tu cita para esta hora? ✅",
-    "¿Agendamos tu entrevista de una vez? 😊",
-    "¿Te anoto para esta hora? ✍️",
-    "¿Deseas que te aparte este lugar? 🌟",
-    "¿Cerramos tu cita en este horario? 🤝",
-    "¿Te parece bien si agendamos tu entrevista? ⏰",
-    "¿Quieres que confirme tu asistencia a esta hora? ✨"
-];
+// ❌ [CTA DE ENTREVISTA ELIMINADO — sep 2026] Aquí vivían _CTA_VARIANTS y
+// _SINGLE_HOUR_CTAS (frases tipo "¿Te agendo tu entrevista?"). Brenda extractora
+// NUNCA agenda ni ofrece entrevistas — se borraron junto con los bloques que las
+// inyectaban en formatRecruiterMessage.
 
 // ── Marca por número de WhatsApp ────────────────────────────────────────────
 // Cada phone_number_id de Meta mapea a la marca con la que Brenda se presenta.
@@ -114,24 +82,9 @@ const brandForPhoneId = (phoneId) => (String(phoneId || '') === HR_ONE_PHONE_ID 
 const NEW_CANDIDATE_NAME_ASK = '¿Me puedes compartir tu Nombre y Apellidos completos? 🌟';
 const buildNewCandidateWelcome = (brand = 'Candidatic') => `¡Hola! 😇 Soy Brenda Rodríguez, reclutadora de ${brand}.[MSG_SPLIT]${NEW_CANDIDATE_NAME_ASK}`;
 
-const _AMBIGUITY_VARIANTS = [
-    'Solo por confirmar, ¿te gustaría agendar tu entrevista? 😊',
-    'Disculpa, ¿me confirmas si quieres que te agende la entrevista? 🌸',
-    'Antes de avanzar, ¿quieres que agendemos tu cita de entrevista? ✨',
-    'Solo para confirmar, ¿te agendo la cita de entrevista? 🌟',
-    '¿Me confirmas que quieres agendar tu entrevista? 😊'
-];
-const _PIVOT_B2_VARIANTS = [
-    '¿Te gustaría conocerla? 🌸',
-    '¿Te la presento? 😊',
-    '¿Quieres que te cuente de ella? ✨',
-    '¿Te interesa conocer esta opción? 🌟',
-    '¿Te gustaría saber más? 😊'
-];
-async function incrCTAIndex(redis, candidateId) {
-    if (!redis || !candidateId) return;
-    try { await redis.incr(`cta_idx:${candidateId}`); } catch (_) {}
-}
+// ❌ [CTA DE ENTREVISTA ELIMINADO — sep 2026] _AMBIGUITY_VARIANTS, _PIVOT_B2_VARIANTS
+// e incrCTAIndex (contador cta_idx) también se borraron: solo los usaba el cerebro de
+// reclutador removido / los bloques de cita ya eliminados. Brenda extractora no agenda.
 // ─────────────────────────────────────────────────────────────────────────────
 
 function formatRecruiterMessage(text, candidateData = null, stepContext = {}) {
@@ -758,65 +711,16 @@ function formatRecruiterMessage(text, candidateData = null, stepContext = {}) {
             text = faqPart + '[MSG_SPLIT]' + text;
         }
     }
-    // 🎯 INICIO PASO CTA GUARANTEE (Capa 1 — Más amplia que el Safety Net)
-    // In Inicio/Filtro steps, EVERY substantive response must end with the
-    // scheduling CTA in a SEPARATE BUBBLE — regardless of topic.
-    // This is the broadest net: no topic keywords required.
-    if (stepContext.isInicio && !text.includes('[MSG_SPLIT]')) {
-        const _alreadyHasCta  = /¿Te gustar[ií]a agendar|¿te gustar[ií]a que te agende|¿te puedo agendar|¿procedo a agendar|¿avanzamos con|¿autorizas que agende|¿deseas que programe|¿quieres que reserve/i.test(text);
-        const _isDataCapture  = /escolaridad|nivel de estudios|en qu[eé]\s+(?:municipio|ciudad|lugar)|c[oó]mo te llamas|cu[aá]l es tu nombre|cu[aá]ntos a[nñ]os|fecha de nacimiento/i.test(text);
-        const _isVacancyIntro = /ESTAMOS CONTRATANDO|vacante que encontr[eé]|comparto la vacante|te interesa la vacante|una vacante disponible/i.test(text);
-        const _isDateList     = /Tengo entrevistas los d[ií]as|1️⃣.*📅|tengo entrevistas? a las|\d{1,2}:\d{2}\s*(?:AM|PM)/i.test(text);
-        const _isConfirmation = /tu cita queda agendada|estamos de acuerdo|cita agendada/i.test(text);
-        const _isFallback     = /excelente pregunta|déjame consultarlo|darte el dato exacto/i.test(text);
-
-        if (!_alreadyHasCta && !_isDataCapture && !_isVacancyIntro && !_isDateList && !_isConfirmation && text.length > 5) {
-            let _ctaText = _CTA_VARIANTS[(stepContext.ctaVariantIdx || 0) % _CTA_VARIANTS.length];
-            // Inject first name before the closing ? for a personal touch
-            if (candidateData?.nombreReal) {
-                const _fn = candidateData.nombreReal.trim().split(/\s+/)[0];
-                if (_fn && _fn.length > 1) {
-                    _ctaText = _ctaText.replace(/(\?)([\s\p{Emoji}\s]*)$/u, (_, q, trail) => ` ${_fn}${q}${trail || ''}`);
-                }
-            }
-            text = text.trimEnd() + `[MSG_SPLIT]${_ctaText}`;
-        }
-    }
-
-    // 🎯 FAQ CLOSING QUESTION SAFETY NET (Capa 1b — Backup for non-Inicio steps)
-    // Only fires for non-Inicio steps when FAQ topic keywords are detected.
-    if (!stepContext.isInicio && !stepContext.isCitados && !text.includes('[MSG_SPLIT]') && !text.includes('\xbf')) {
-        const hasCompleteProfile = !!(
-            candidateData &&
-            (candidateData.nombreReal || candidateData.nombre) &&
-            candidateData.municipio &&
-            candidateData.escolaridad
-        );
-
-        const isJobFaqAnswer = hasCompleteProfile
-            && text.length > 80
-            && /(?:sueldo|salario|pago semanal|pago quincenal|\$\s*\d|💰|prestaciones|seguro\s+(?:médico|social|imss)|vacaciones|aguinaldo|comedor|transporte|bono|vales|uniforme|fondo de ahorro|caja de ahorro|turno|horario|jornada|hrs\b|horas de trabajo|lunes a viernes|lunes a jueves|ubicaci[oó]n|direcci[oó]n|zona\b|calzada|calle\s+\w|colonia\s+\w|planta\b|plantar|documentos|papeler[ií]a|requisitos|experiencia\s+(?:requerida|necesaria|mínima)|entrevista inmediata)/i.test(text)
-            && !/(?:agendar|te\s+gustar[ií]a|entrevista\s*\?)/i.test(text)
-            && !/(?:📅\s*1️⃣|tengo entrevistas los d[ií]as|\d{1,2}:\d{2}\s*(?:AM|PM))/i.test(text)
-            && !/(?:ESTAMOS CONTRATANDO|vacante que encontré|comparto la vacante|tu cita queda agendada)/i.test(text);
-
-        if (isJobFaqAnswer) {
-            const _faqClosings = [
-                '🙋‍♀️ ¿Te gustaría que te agende una cita para entrevista? 🗓️✨',
-                '😊 ¿Te apunto para una entrevista? ¡Solo toma un momento! 🚀',
-                '🙋‍♀️ ¿Quieres que reserve tu lugar para la entrevista? 🎯💼',
-                '😄 ¿Avanzamos con tu cita de entrevista? ¡Estás muy cerca! 🌟🙌',
-                '🙋‍♀️ ¿Te confirmo tu cita para entrevista? ¡No pierdas tu oportunidad! 💪✅',
-                '😊 ¿Procedo a agendar tu entrevista? Es el siguiente paso 🏆',
-                '🙋‍♀️ ¿Te aparto una cita para que conozcas el equipo? 🤝✨',
-                '😄 ¿Quieres que te programe la entrevista hoy mismo? 📅🔥',
-                '🙋‍♀️ ¿Listo para dar el siguiente paso? Te agendo la entrevista ahora 💥',
-                '😊 ¿Te interesa que asegure tu cita de entrevista? ¡Hay lugares disponibles! 🎉',
-            ];
-            const _closing = _faqClosings[Math.floor(Math.random() * _faqClosings.length)];
-            text = text.trimEnd() + '[MSG_SPLIT]' + _closing;
-        }
-    }
+    // ❌ [CTA DE ENTREVISTA ELIMINADO — sep 2026] Aquí vivían dos bloques que le
+    // PEGABAN una pregunta proactiva de entrevista al final de la respuesta:
+    //   1) "INICIO PASO CTA GUARANTEE" (dependía de stepContext.isInicio → cerebro de
+    //       reclutador, ya removido; nunca se activaba: código muerto).
+    //   2) "FAQ CLOSING QUESTION SAFETY NET" (isJobFaqAnswer → _faqClosings). ESTE SÍ
+    //       corría: si el perfil estaba completo y el texto mencionaba turno/sueldo/etc,
+    //       agregaba "¿Avanzamos con tu cita de entrevista?" — causó que Brenda citara en
+    //       Sala de Espera (chat de Magdalena Zúñiga, 2026-09-24).
+    // Brenda EXTRACTORA nunca agenda ni ofrece entrevistas — ni ahora ni nunca. Recibe,
+    // extrae, guarda y en Sala de Espera solo calma. Todo el CTA de cita se borró.
 
     // 📩 GENERIC LAST-QUESTION SPLIT: If substantial FAQ answer (>60 chars) precedes a closing ¿...? question,
     // split them into separate bubbles — covers all Cita return questions (¿Qué día?, ¿Cuál horario?, etc.)
@@ -2134,7 +2038,8 @@ Responde ÚNICAMENTE con el número entero de meses. Si evade o no menciona ning
 
 ${customSalaPrompt ? `[CONTEXTO ADICIONAL]: ${customSalaPrompt}\n` : ''}
 REGLAS DE SALA DE ESPERA (OBLIGATORIAS - NO NEGOCIABLES):
-1. VACANTES/ENTREVISTAS/EMPLEO: Si preguntan por vacantes, entrevistas, sueldos, horarios o cualquier tema laboral: Responde amable usando su nombre, reconoce su interés, y dile que estás trabajando en encontrarle la mejor vacante. Te agradecería tengas paciencia. ESTRICTAMENTE PROHIBIDO inventar datos de vacantes, sueldos, direcciones o ubicaciones.
+0. ⛔ CRÍTICO — JAMÁS OFRECER NI AGENDAR ENTREVISTAS: TIENES ABSOLUTAMENTE PROHIBIDO ofrecer, proponer, sugerir, preguntar o dar a entender que puedes agendar una entrevista, cita, horario o fecha. NUNCA seas proactiva con entrevistas. NO digas cosas como "¿te gustaría agendar tu entrevista?", "¿te agendo una cita?", "tengo entrevistas disponibles", ni nada parecido. Tú NO agendas entrevistas — eso lo hace un reclutador humano después. Si TÚ sacas el tema de la entrevista, es un error grave. Solo puedes mencionar la entrevista si el candidato pregunta primero, y aun así SOLO para decirle que sigues buscándole la mejor vacante y que pronto lo contactarán (regla 1). Bajo ninguna circunstancia inicies tú el tema de entrevistas/citas/horarios.
+1. VACANTES/ENTREVISTAS/EMPLEO: Si preguntan por vacantes, entrevistas, sueldos, horarios o cualquier tema laboral: Responde amable usando su nombre, reconoce su interés, y dile que estás trabajando en encontrarle la mejor vacante. Te agradecería tengas paciencia. ESTRICTAMENTE PROHIBIDO inventar datos de vacantes, sueldos, direcciones o ubicaciones. NUNCA ofrezcas agendar una entrevista ni des horarios/fechas — eso NO te corresponde.
 2. PLÁTICA SOCIAL/PIROPOS/CUMPLIDOS: Puedes reírte, sonrojarte, agradecer con picardía y carisma — mantén tu personalidad encantadora. Pero SIEMPRE cierra diciendo que estás muy atareada/ocupada buscando la mejor vacante para ellos. NO te enganches en conversación extendida.
 3. DESPEDIDA: Si se despiden, despídete amablemente deseándole éxito y que pronto le contactarás.
 4. BREVEDAD: Máximo 2-3 líneas. Sé breve y encantadora.
@@ -2906,14 +2811,11 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
                     }
                 }
 
-                // 🔑 CAPA 6: If any sent message contains the CTA, set cita_pending in Redis
-                // so the NEXT affirmative from the candidate is treated as a confirmed acceptance.
-                const CTA_PATTERN = /¿te gustar[ií]a agendar|¿te agendo una cita|¿te aparto una cita|¿quieres que programe|¿te puedo agendar|solo por confirmar|me confirmas si quieres|quieres que agendemos|solo para confirmar|¿te interesa conocer esta|te gustaría conocerla|¿te la presento|¿te gustaría saber más|¿avanzamos con|avanzamos con tu cita|¿te parece bien ese horario|este horario te queda bien|¿cuál prefieres\?/i;
-                const _hasCTAinBatch = messagesToSend.some(m => CTA_PATTERN.test(m));
-                if (_hasCTAinBatch && isRecruiterMode) {
-                    setCitaPendingFlag(redis, candidateId).catch(() => {});
-                    incrCTAIndex(redis, candidateId).catch(() => {}); // 🔁 Advance sequential counter
-                }
+                // ❌ [CAPA 6 CITA_PENDING ELIMINADA — sep 2026] Aquí se marcaba cita_pending
+                // cuando un mensaje enviado traía el CTA de entrevista, para que el siguiente
+                // "sí" del candidato contara como aceptación de cita. Solo aplicaba en
+                // isRecruiterMode (cerebro de reclutador, ya removido → siempre false: muerto)
+                // y Brenda extractora no agenda. Se borró junto con el CTA de cita.
 
                 if (mUrl && mUrl !== 'null') {
                     // Ensure absolute URL for UltraMsg
