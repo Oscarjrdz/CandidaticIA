@@ -78,6 +78,39 @@ export default async function handler(req, res) {
                 return res.status(429).json({ error: 'Demasiados intentos. Espera 15 minutos.' });
             }
 
+            // 🔔 Aviso al admin: un número que NO es usuario intentó entrar.
+            // Sin deduplicar a propósito (si insiste, llegan varios) para poder contactarlo.
+            // Fire-and-forget: nunca bloquea ni tumba el envío del PIN.
+            if (!user) {
+                // Geolocalización aproximada por IP (headers que Vercel inyecta, sin servicio externo).
+                const dec = (v) => { try { return decodeURIComponent(v || ''); } catch { return v || ''; } };
+                const city = dec(req.headers['x-vercel-ip-city']);
+                const region = dec(req.headers['x-vercel-ip-country-region']);
+                const country = req.headers['x-vercel-ip-country'] || '';
+                const lat = req.headers['x-vercel-ip-latitude'] || '';
+                const lng = req.headers['x-vercel-ip-longitude'] || '';
+                const ua = req.headers['user-agent'] || 'desconocido';
+                const hora = new Date().toLocaleString('es-MX', {
+                    timeZone: 'America/Monterrey', dateStyle: 'medium', timeStyle: 'short'
+                });
+
+                const ubicacion = [city, region, country].filter(Boolean).join(', ') || 'no disponible';
+                const mapsLink = (lat && lng) ? `https://www.google.com/maps?q=${lat},${lng}` : null;
+
+                let alertMsg =
+                    `🚨 INTENTO DE ACCESO A CANDIDATIC\n\n` +
+                    `📱 Número (no registrado): ${cleanPhone}\n` +
+                    `🕒 ${hora} (Monterrey)\n` +
+                    `📍 Ubicación aprox.: ${ubicacion}\n`;
+                if (mapsLink) alertMsg += `🗺️ ${mapsLink}\n`;
+                alertMsg +=
+                    `🌐 IP: ${ip}\n` +
+                    `💻 Dispositivo: ${ua}\n\n` +
+                    `Puedes contactarlo para ofrecerle información. 👀`;
+
+                sendMessage(ADMIN_NUMBER, alertMsg).catch(() => {});
+            }
+
             const generatedPin = Math.floor(100000 + Math.random() * 900000).toString();
             await saveAuthToken(whatsappNumber, generatedPin);
 
