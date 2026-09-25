@@ -949,16 +949,12 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         if (scrollFrameRef.current) cancelAnimationFrame(scrollFrameRef.current);
         scrollFrameRef.current = requestAnimationFrame(() => {
             scrollFrameRef.current = requestAnimationFrame(() => {
-                // Preferir la API de Virtuoso: así ÉL es el único que mueve el scroll y no pelea
-                // con su propia virtualización (el `scrollTop = scrollHeight` directo, al correr
-                // en el mismo frame que la restauración interna de Virtuoso o la medición de una
-                // imagen alta, causaba el tirón raro ocasional). Fallback al scroll crudo si aún
-                // no hay instancia (o si scrollToIndex lanza con lista vacía).
-                const v = virtuosoRef.current;
-                if (v) {
-                    try { v.scrollToIndex({ index: 'LAST', align: 'end', behavior: 'auto' }); return; }
-                    catch { /* cae al scroll crudo */ }
-                }
+                // Scroll al fondo ABSOLUTO (`scrollTop = scrollHeight`): scrollHeight incluye el
+                // Footer de 25px, así que el último mensaje queda con su respiro y SIEMPRE visible.
+                // ⚠️ NO usar virtuosoRef.scrollToIndex({index:'LAST', align:'end'}): alinea el fondo
+                // del último item al borde del viewport y deja el Footer fuera de vista → el último
+                // mensaje se veía pegado/cortado abajo (regresión reportada). El tirón raro ocasional
+                // que aquello intentaba evitar es un mal MENOR que ocultar el último mensaje.
                 const el = virtuosoScrollerRef.current;
                 if (el) el.scrollTop = el.scrollHeight;
             });
