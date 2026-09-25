@@ -3933,12 +3933,17 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         try {
             const result = await blockCandidate(candidate.id, true);
             if (result.success) {
-                const nextCandidate = result.candidate || { ...candidate, blocked: true };
+                // ⚠️ Parche MÍNIMO: solo `blocked`. Antes se esparcía el candidato COMPLETO del
+                // servidor (`...result.candidate`), que traía otros campos (unreadMsgCount, etc.).
+                // Como displayMessages depende de selectedChat?.unreadMsgCount, eso lo recalculaba
+                // y la lista se sacudía JUSTO mientras el mensaje recién enviado entraba → el
+                // "parpadeo/corto" (el separador de no-leídos aparecía/desaparecía). Cambiando solo
+                // `blocked` (lo único que necesita el toggle), displayMessages no se recalcula.
                 setCandidates(prev => prev.map(c =>
-                    c.id === candidate.id ? { ...c, ...nextCandidate, blocked: true } : c
+                    c.id === candidate.id ? { ...c, blocked: true } : c
                 ));
                 // Only update selectedChat if it's currently selected (though it should be)
-                setSelectedChat(prev => prev?.id === candidate.id ? { ...prev, ...nextCandidate, blocked: true } : prev);
+                setSelectedChat(prev => prev?.id === candidate.id ? { ...prev, blocked: true } : prev);
                 showToast && showToast('IA silenciada automáticamente (intervención humana)', 'success');
             }
         } catch (e) {
