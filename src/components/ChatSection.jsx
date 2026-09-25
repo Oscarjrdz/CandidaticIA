@@ -1001,20 +1001,31 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         if (scrollFrameRef.current) cancelAnimationFrame(scrollFrameRef.current);
         scrollFrameRef.current = requestAnimationFrame(() => {
             scrollFrameRef.current = requestAnimationFrame(() => {
-                // Fondo CONFIABLE con la API de Virtuoso: scrollToIndex('LAST', align:'end') MIDE el
-                // último item antes de posicionar. El `scrollTop = scrollHeight` crudo fallaba en una
-                // lista virtualizada: si los items de abajo (stickers/imágenes) no estaban medidos,
-                // scrollHeight era un ESTIMADO corto → aterrizaba antes del fondo y quedaban 1-3
-                // mensajes escondidos (y al caer corto, isAtBottom=false → grewTall no re-anclaba).
-                // UN SOLO paso (no el esquema de 2 que hacía ráfaga): llamarlo varias veces va siempre
-                // al mismo último item = idempotente, sin brincos. Fallback al scroll crudo si aún no
-                // hay instancia.
+                // Fondo CONFIABLE en DOS pasos coordinados (medido en producción 2026-09-25):
+                //   1) scrollToIndex('LAST', align:'end') RENDERIZA y MIDE los últimos items (que
+                //      pueden estar virtualizados/estimados). Solo con esto NO basta: align:'end'
+                //      alinea el ITEM, y con medidas que llegan tarde aterriza ~148px CORTO. Como
+                //      148 < atBottomThreshold (150), Virtuoso reporta isAtBottom=true por 2px → el
+                //      gate `isAtBottom && grewTall` cree que ya estás al fondo y NUNCA corrige → el
+                //      último mensaje queda tapado (100% bajo el pliegue, confirmado en vivo).
+                //   2) Ya con los últimos items medidos por el paso 1, un `scrollTop = scrollHeight`
+                //      en el frame siguiente cae en el fondo VERDADERO (limpia el aire del Footer y
+                //      el delta de medición). Medido: distancia al fondo 148px → 1px, último mensaje
+                //      visible con aire. El crudo solo falla si los items NO están medidos; por eso
+                //      va DESPUÉS del scrollToIndex, no en su lugar (ese fue el bug original).
+                // Idempotente: llamarlo varias veces siempre termina en el mismo fondo, sin brincos.
+                const el = virtuosoScrollerRef.current;
                 const v = virtuosoRef.current;
                 if (v && typeof v.scrollToIndex === 'function') {
-                    try { v.scrollToIndex({ index: 'LAST', align: 'end', behavior: 'auto' }); return; }
-                    catch { /* cae al scroll crudo */ }
+                    try {
+                        v.scrollToIndex({ index: 'LAST', align: 'end', behavior: 'auto' });
+                        scrollFrameRef.current = requestAnimationFrame(() => {
+                            const s = virtuosoScrollerRef.current;
+                            if (s) s.scrollTop = s.scrollHeight;
+                        });
+                        return;
+                    } catch { /* cae al scroll crudo */ }
                 }
-                const el = virtuosoScrollerRef.current;
                 if (el) el.scrollTop = el.scrollHeight;
             });
         });
@@ -3320,6 +3331,14 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         }
         if (messages.length > prevMessagesLength.current) {
             if (isAtBottomRef.current || isSendingRef.current) {
+                // Ventana "pégate al fondo" también para ENTRANTES (antes solo la tenían los
+                // envíos). Sin esto, un mensaje con imagen/sticker que reporta su alto real
+                // cientos de ms después crece la lista, empuja isAtBottom a false por un
+                // instante y el gate de totalListHeightChanged (`isAtBottom && grewTall`) deja
+                // de re-anclar → el último mensaje queda tapado. Durante esta ventana el gate
+                // usa solo grewTall (ver inSendHold), así que las mediciones tardías siguen
+                // bajando al fondo. Se auto-expira igual que en el envío.
+                sendScrollHoldUntilRef.current = Date.now() + 1500;
                 scrollToBottom();
             } else {
                 // Count only real incoming messages (not our own optimistic ones)
