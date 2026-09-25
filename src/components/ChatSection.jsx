@@ -965,6 +965,23 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
     // Como WhatsApp: el divisor se fija al entrar al chat y no se mueve con cada mensaje nuevo (los
     // nuevos alimentan el botón de scroll/unseenCount, no el divisor). Se re-congela al cambiar de chat.
     const [frozenUnreadCount, setFrozenUnreadCount] = useState(0);
+    // Enmascarado del montaje (estilo WhatsApp Web): al abrir/cambiar de chat, la lista se oculta
+    // (opacity 0) 1-2 frames hasta que Virtuoso mide y hace scroll al fondo, y se revela YA asentada.
+    // Así nunca se ve el reacomodo de montaje (stickers/imágenes que "nacen abajo y suben"). Se pone
+    // false al abrir y true cuando el primer scroll al fondo (bottomAnchorRef) ya se aplicó.
+    const [chatContentReady, setChatContentReady] = useState(true);
+    const chatReadyTimerRef = useRef(null);
+    const revealChatContent = useCallback(() => {
+        if (chatReadyTimerRef.current) { clearTimeout(chatReadyTimerRef.current); chatReadyTimerRef.current = null; }
+        setChatContentReady(true);
+    }, []);
+    const armChatContentMask = useCallback(() => {
+        setChatContentReady(false);
+        if (chatReadyTimerRef.current) clearTimeout(chatReadyTimerRef.current);
+        // Red de seguridad: si por lo que sea no llega el settle (chat vacío, sin cambio de altura),
+        // revelar de todos modos para no dejar la lista invisible.
+        chatReadyTimerRef.current = setTimeout(() => setChatContentReady(true), 350);
+    }, []);
     // Ventana "acabo de enviar" (~2s): durante ella, la lista de mensajes SOLO hace scroll al
     // fondo cuando CRECE (llega una burbuja nueva), no en re-mediciones (palomita de estado,
     // carga de imagen con marco fijo). Sin esto, enviar texto+2 fotos disparaba ~8 "snaps" de
@@ -3674,6 +3691,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
             const target = candidates.find(c => String(c.id) === String(targetId));
             if (target) {
                 bottomAnchorRef.current = true;
+                armChatContentMask();
                 setSelectedChat(target);
                 setMessages(stripEntryAnimations(messagesByChatRef.current.get(target.id) || []));
             }
@@ -4131,6 +4149,8 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
 
     const handleSelectChat = useCallback((chat) => {
         pendingChatIdRef.current = chat.id; // guard SSE race before React commits
+        armChatContentMask(); // oculta la lista hasta que asiente (sin flicker de montaje)
+        bottomAnchorRef.current = true; // dispara el scroll al fondo + reveal en el 1er asentamiento
         // Save draft of current chat before switching
         const currentText = messageInputRef.current?.getText?.();
         const currentId = selectedChatRef.current?.id;
@@ -6288,8 +6308,15 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                         }}
                     ></div>
 
-                    {/* Mensajes — Virtualized (react-virtuoso: solo renderiza items visibles) */}
-                    <div className="flex-1 overflow-hidden z-10 min-h-0" onClick={() => setShowDropdown(null)}>
+                    {/* Mensajes — Virtualized (react-virtuoso: solo renderiza items visibles).
+                        Máscara de montaje: opacity 0 hasta que la lista asienta al fondo, para no ver
+                        el reacomodo inicial (stickers/imágenes que "nacen abajo y suben"). Mientras
+                        tanto se ve el fondo del chat, como WhatsApp Web al abrir. */}
+                    <div
+                        className="flex-1 overflow-hidden z-10 min-h-0"
+                        style={{ opacity: chatContentReady ? 1 : 0, transition: chatContentReady ? 'opacity 90ms ease-out' : 'none' }}
+                        onClick={() => setShowDropdown(null)}
+                    >
                         <Virtuoso
                             // key por chat: REMONTA Virtuoso al cambiar de chat para que cada uno
                             // arranque con medidas LIMPIAS. Virtuoso cachea alturas por índice; al
@@ -6311,11 +6338,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                             // ABAJO (estilo WhatsApp) para que la inyeccion se extienda suave desde el
                             // fondo tanto con pocos como con muchos mensajes.
                             alignToBottom
-                            // Arranca pegado al FONDO: el último item alineado al final del viewport
-                            // (align:'end'). Antes era solo el índice (align:'start' por defecto) → ponía
-                            // el último mensaje en el TOPE del viewport y luego reacomodaba = el brinco de
-                            // "los stickers salen abajo y suben" al re-entrar. Con align:'end' nace bien.
-                            initialTopMostItemIndex={displayMessages.length > 0 ? { index: displayMessages.length - 1, align: 'end' } : 0}
+                            initialTopMostItemIndex={displayMessages.length > 0 ? displayMessages.length - 1 : 0}
                             // followOutput DESACTIVADO a propósito: era una SEGUNDA autoridad de scroll
                             // (nativa de Virtuoso) que competía con el manual de totalListHeightChanged.
                             // Con las dos, al coincidir un entrante y un saliente cada una scrolleaba en
@@ -6351,6 +6374,13 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                                     // el frame que Virtuoso necesita para medir burbujas altas (ver arriba),
                                     // así que un texto largo (vacante/maletita) no necesita mecanismo aparte.
                                     scrollToBottom();
+                                    if (bottomAnchorRef.current) {
+                                        // Primer asentamiento tras abrir el chat: revelar la lista YA
+                                        // posicionada al fondo (fin de la máscara de montaje). Se espera a
+                                        // que el scroll de arriba (2 rAF) se aplique antes de revelar.
+                                        requestAnimationFrame(() => requestAnimationFrame(() =>
+                                            requestAnimationFrame(() => revealChatContent())));
+                                    }
                                     // bottomAnchorRef es una bandera de "una sola vez" (se activa al abrir un
                                     // chat o cargar sus mensajes) — sin este reset se quedaba encendida para
                                     // siempre, forzando scroll al fondo en CADA cambio de altura de la lista
