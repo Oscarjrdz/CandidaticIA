@@ -238,3 +238,33 @@ export const blockCandidate = async (id, block = true) => {
         };
     }
 };
+
+// Bloqueo REAL en WhatsApp vía Meta Block API (distinto de blockCandidate, que solo
+// silencia a la IA). Al bloquear dejamos de recibir mensajes de ese número.
+export const metaBlockCandidate = async (id, block = true) => {
+    try {
+        const response = await fetch(`${API_BASE}/api/candidates/meta-block`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ id, block })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.metaError || data.error || 'Error procesando bloqueo en WhatsApp');
+        }
+
+        return {
+            success: true,
+            ...data
+        };
+    } catch (error) {
+        return {
+            success: false,
+            error: error.message
+        };
+    }
+};

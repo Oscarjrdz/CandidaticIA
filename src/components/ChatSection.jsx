@@ -3,8 +3,8 @@ import { DndContext, closestCenter, PointerSensor, useSensor, useSensors } from 
 import { SortableContext, horizontalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import ConfirmModal from './ui/ConfirmModal';
-import { MapPin, List as ListIcon, ShoppingBag, UserSquare, MousePointerClick, Search, MessageSquare, Plus, Smile, Paperclip, Mic, Square, ArrowLeft, Send, Tag, Pencil, Check, X, Trash2, Briefcase, Kanban, BookOpen, Keyboard, Loader2, Edit2, Reply, Zap, Pin, MessageCirclePlus, Phone, User, Bell, GripVertical, ChevronDown, ChevronUp, Snowflake, LayoutTemplate, Workflow } from 'lucide-react';
-import { getCandidates, getCandidateById, blockCandidate, deleteCandidate } from '../services/candidatesService';
+import { MapPin, List as ListIcon, ShoppingBag, UserSquare, MousePointerClick, Search, MessageSquare, Plus, Smile, Paperclip, Mic, Square, ArrowLeft, Send, Tag, Pencil, Check, X, Trash2, Briefcase, Kanban, BookOpen, Keyboard, Loader2, Edit2, Reply, Zap, Pin, MessageCirclePlus, Phone, User, Bell, GripVertical, ChevronDown, ChevronUp, Snowflake, LayoutTemplate, Workflow, Ban } from 'lucide-react';
+import { getCandidates, getCandidateById, blockCandidate, metaBlockCandidate, deleteCandidate } from '../services/candidatesService';
 import { getFlows, runFlowListItem } from '../services/flowsService';
 import { substituteVariables, substituteDynamicPhrase, hasDynamicPhrase } from '../../api/utils/shortcuts.js';
 import { businessDayOffset, isPastCutoff } from '../../api/utils/reminder-schedule.js';
@@ -1301,12 +1301,14 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
     // renglones y los iconos son el renglón 2). TOP_ROW_ICON_IDS vacío => iconRow siempre
     // 'bottom', así el guard de drag nunca bloquea y se puede reordenar entre todos los iconos.
     const TOP_ROW_ICON_IDS = [];
-    const TOOLBAR_ICON_IDS = ['quick_replies', 'crm_manual', 'search', 'tags', 'asistencia', 'vacancies'];
+    const TOOLBAR_ICON_IDS = ['quick_replies', 'crm_manual', 'search', 'tags', 'asistencia', 'meta_block', 'vacancies'];
     const iconRow = (id) => TOP_ROW_ICON_IDS.includes(id) ? 'top' : 'bottom';
     const [toolbarOrder, setToolbarOrder] = useState(() => {
         try {
-            // v3: se agregó el icono 'asistencia' (imán) junto a 'tags' — bump para colocarlo ahí.
-            const saved = localStorage.getItem('candidatic:toolbar_order_v3');
+            // v4: se agregó 'meta_block' (bloqueo real en WhatsApp) junto a 'asistencia' — bump del
+            // key para que el orden por defecto lo coloque ahí (el merge de versiones viejas lo
+            // pondría al final). v3 había agregado 'asistencia'.
+            const saved = localStorage.getItem('candidatic:toolbar_order_v4');
             if (saved) {
                 const parsed = JSON.parse(saved);
                 // Ensure all IDs are present (handles new icons added later)
@@ -1411,7 +1413,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
             const newIndex = prev.indexOf(over.id);
             if (oldIndex === -1 || newIndex === -1) return prev;
             const next = arrayMove(prev, oldIndex, newIndex);
-            try { localStorage.setItem('candidatic:toolbar_order_v3', JSON.stringify(next)); } catch { /* storage bloqueado */ }
+            try { localStorage.setItem('candidatic:toolbar_order_v4', JSON.stringify(next)); } catch { /* storage bloqueado */ }
             return next;
         });
     }, []);
@@ -3929,6 +3931,42 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         }
     };
 
+    // Bloqueo REAL en WhatsApp vía Meta Block API (distinto de handleBlockToggle, que solo
+    // silencia a la IA). Pide confirmación porque es una acción hacia afuera sobre un candidato
+    // real: al bloquear dejamos de recibir sus mensajes por WhatsApp.
+    const handleMetaBlockToggle = async () => {
+        if (!selectedChat) return;
+        const isBlocked = selectedChat.metaBlocked === true;
+        const name = selectedChat.nombreReal || selectedChat.nombre || selectedChat.whatsapp;
+
+        const confirmed = await new Promise(resolve => setConfirmModal({
+            title: isBlocked ? 'Desbloquear en WhatsApp' : 'Bloquear en WhatsApp',
+            message: isBlocked
+                ? `¿Desbloquear a ${name}? Volverás a recibir sus mensajes.`
+                : `¿Bloquear a ${name} en WhatsApp? Dejarás de recibir sus mensajes. Se puede revertir.`,
+            confirmText: isBlocked ? 'Desbloquear' : 'Bloquear',
+            variant: isBlocked ? 'success' : 'danger',
+            onConfirm: () => resolve(true),
+            onCancel: () => resolve(false)
+        }));
+        if (!confirmed) return;
+
+        const targetId = selectedChat.id;
+        try {
+            const result = await metaBlockCandidate(targetId, !isBlocked);
+            if (result.success) {
+                showToast && showToast(result.message || (isBlocked ? 'Número desbloqueado' : 'Número bloqueado'), 'success');
+                const patch = { metaBlocked: !isBlocked };
+                setSelectedChat(prev => prev?.id === targetId ? { ...prev, ...patch } : prev);
+                setCandidates(prev => prev.map(c => c.id === targetId ? { ...c, ...patch } : c));
+            } else {
+                showToast && showToast(`Error: ${result.error}`, 'error');
+            }
+        } catch (error) {
+            showToast && showToast('Error de red al bloquear en WhatsApp', 'error');
+        }
+    };
+
     const handleToggleTag = async (tag) => {
         if (!selectedChat) return;
 
@@ -6201,6 +6239,20 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                                                 draggable={false}
                                                 className={`w-5 h-5 object-contain transition-all pointer-events-none ${active ? '' : 'opacity-40 grayscale'}`}
                                             />
+                                        </button>
+                                    );
+                                }
+
+                                if (iconId === 'meta_block') {
+                                    const blocked = selectedChat?.metaBlocked === true;
+                                    return (
+                                        <button
+                                            {...handle}
+                                            onClick={() => handleMetaBlockToggle()}
+                                            title={blocked ? 'Bloqueado en WhatsApp — clic para desbloquear' : 'Bloquear número en WhatsApp (Meta)'}
+                                            className={`${baseClass} ${blocked ? 'bg-red-50 text-red-500 dark:bg-red-500/20 dark:text-red-400 ring-1 ring-red-500/40' : 'hover:bg-black/5 dark:hover:bg-white/5 text-[#54656f] dark:text-[#aebac1]'}`}
+                                        >
+                                            <Ban className="w-5 h-5" />
                                         </button>
                                     );
                                 }

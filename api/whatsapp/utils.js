@@ -15,7 +15,7 @@ import axios from 'axios';
  */
 
 const GRAPH_API_VERSION = 'v21.0';
-const GRAPH_BASE_URL = `https://graph.facebook.com/${GRAPH_API_VERSION}`;
+export const GRAPH_BASE_URL = `https://graph.facebook.com/${GRAPH_API_VERSION}`;
 
 /**
  * 🔑 Returns Meta Cloud API config from environment variables.
