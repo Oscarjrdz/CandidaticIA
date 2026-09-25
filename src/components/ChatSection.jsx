@@ -6351,7 +6351,12 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                             // carrera ni brinco.
                             followOutput={false}
                             computeItemKey={(index, msg) => getStableMessageKey(msg, index)}
-                            overscan={400}
+                            // Renderiza/mide items MUCHO antes de que entren en pantalla (1200px arriba
+                            // y abajo). Con alturas variables (sticker 100px, imagen 260px vs texto ~40px),
+                            // Virtuoso los estimaba chicos y al medirlos reales corregía el alto de golpe
+                            // JUSTO al entrar en vista → un "salto" en vez de scroll fluido. Midiéndolos
+                            // fuera de vista, la corrección pasa oculta y el scroll se siente suave.
+                            increaseViewportBy={{ top: 1200, bottom: 1200 }}
                             atBottomThreshold={150}
                             components={MESSAGES_VIRTUOSO_COMPONENTS}
                             totalListHeightChanged={(height) => {
