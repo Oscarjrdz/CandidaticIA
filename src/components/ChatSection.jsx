@@ -948,6 +948,11 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
     const displayMessageCacheRef = useRef(new Map());
     const bottomAnchorRef = useRef(false);
     const prevDisplayLengthRef = useRef(0);
+    // Última altura total reportada por Virtuoso. Si el ÚLTIMO mensaje crece DESPUÉS de montarse
+    // (le cae una reacción = +pb-5, o una imagen que midió su alto real tarde) y estás al fondo,
+    // su parte de abajo quedaba tapada porque totalListHeightChanged solo re-anclaba cuando crecía
+    // la CANTIDAD de mensajes (messagesGrew), no cuando crecía el ALTO. Con esto también re-ancla.
+    const prevListHeightRef = useRef(0);
     // Ventana "acabo de enviar" (~2s): durante ella, la lista de mensajes SOLO hace scroll al
     // fondo cuando CRECE (llega una burbuja nueva), no en re-mediciones (palomita de estado,
     // carga de imagen con marco fijo). Sin esto, enviar texto+2 fotos disparaba ~8 "snaps" de
@@ -6294,7 +6299,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                             overscan={400}
                             atBottomThreshold={150}
                             components={MESSAGES_VIRTUOSO_COMPONENTS}
-                            totalListHeightChanged={() => {
+                            totalListHeightChanged={(height) => {
                                 // Durante la ventana "acabo de enviar" (~2s), SOLO scrollear si la lista
                                 // CRECIÓ (burbuja nueva) — así enviar texto+2 fotos hace UN solo scroll al
                                 // montar el grupo, no ~8 snaps por cada re-medición (palomita de estado,
@@ -6302,12 +6307,19 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                                 // Fuera de esa ventana, el comportamiento normal (anclar al fondo si estás
                                 // abajo) se conserva para el flujo de mensajes entrantes.
                                 const inSendHold = Date.now() < sendScrollHoldUntilRef.current;
-                                // Fuera de sendHold también hace falta messagesGrew: sin este chequeo,
-                                // cualquier remedición idle (palomita sent→delivered→read) disparaba
-                                // scrollToBottom() sin que hubiera llegado nada nuevo, y ese scroll fuerza
-                                // otra remedición (overscan) — bucle de "brinquitos" al estar ya parado
-                                // en el fondo, sin hacer más scroll.
-                                const atBottomTrigger = inSendHold ? messagesGrew : (isAtBottomRef.current && messagesGrew);
+                                // ¿El ALTO total creció de forma significativa (>8px)? Es un mensaje ya
+                                // existente que se hizo más alto: una REACCIÓN que le cayó (+pb-5) o una
+                                // IMAGEN que midió su alto real tarde. Sin re-anclar, su parte de abajo
+                                // (hora/reacción) quedaba tapada. El umbral de 8px evita disparar por las
+                                // palomitas de estado (mismo tamaño de ícono, no cambian el alto) y por
+                                // remediciones sub-pixel — así no se reintroduce el bucle de "brinquitos".
+                                const grewTall = height > prevListHeightRef.current + 8;
+                                prevListHeightRef.current = height;
+                                // Fuera de sendHold también hace falta messagesGrew/grewTall: sin ese
+                                // chequeo, cualquier remedición idle disparaba scrollToBottom() de más.
+                                const atBottomTrigger = inSendHold
+                                    ? messagesGrew
+                                    : (isAtBottomRef.current && (messagesGrew || grewTall));
                                 if (bottomAnchorRef.current || atBottomTrigger) {
                                     // Mismo scrollToBottom() para cualquier tamaño de mensaje — ya espera
                                     // el frame que Virtuoso necesita para medir burbujas altas (ver arriba),
