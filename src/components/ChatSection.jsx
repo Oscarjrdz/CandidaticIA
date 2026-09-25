@@ -6436,8 +6436,15 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                                 }
                             }}
                             atBottomStateChange={(isAtBottom) => {
-                                setShowScrollBtn(!isAtBottom);
                                 isAtBottomRef.current = isAtBottom;
+                                // No mostrar el botón "ir al fondo" (flecha ↓) mientras estamos anclando
+                                // ACTIVAMENTE al fondo: al enviar/recibir (ventana sendScrollHoldUntilRef)
+                                // o al abrir un chat (bottomAnchorRef), isAtBottom parpadea a false por un
+                                // instante mientras el scroll alcanza el fondo → el botón aparecía un frame
+                                // sobre el mensaje recién enviado. En esas ventanas sabemos que vamos al
+                                // fondo, así que lo mantenemos oculto (evita el parpadeo).
+                                const anchoringToBottom = Date.now() < sendScrollHoldUntilRef.current || bottomAnchorRef.current;
+                                setShowScrollBtn(!isAtBottom && !anchoringToBottom);
                                 if (isAtBottom) {
                                     isSendingRef.current = false;
                                     setUnseenCount(0);
