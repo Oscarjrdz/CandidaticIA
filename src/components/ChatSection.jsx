@@ -769,7 +769,7 @@ const CHAT_LIST_VIRTUOSO_COMPONENTS = { Footer: ChatListFooter };
 // Se cachea SOLO la vista por defecto para que la lista sembrada siempre cuadre con la
 // UI (que al montar también arranca en 'unread'). Alcance deliberadamente acotado a la
 // LISTA: no toca mensajes ni el chat abierto (la parte con freeze/anclaje/dedup frágil).
-const chatSectionCache = { candidates: null, candidatesTotal: 0, nextOffset: 0, hasMore: false };
+const chatSectionCache = { candidates: null, candidatesTotal: 0, nextOffset: 0, hasMore: false, messagesByChat: null };
 
 export default function ChatSection({ rolePermissions, onlineUsers = [], unreadCountHint = null, onUnreadCountChange, _agentMode = false }) {
     const { showToast } = useToastContext();
@@ -908,13 +908,26 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
     const isAtBottomRef = useRef(true);
     const virtuosoScrollerRef = useRef(null);
     const scrollFrameRef = useRef(null);
-    const messagesByChatRef = useRef(new Map());
+    // El mapa de mensajes por chat vive a nivel MÓDULO y sobrevive al remontaje de la sección
+    // (se desmonta al cambiar de tab). Antes era un useRef que se perdía al re-entrar → abrir un
+    // chat visitado pintaba VACÍO y luego llegaba loadMessages ("muestra y desaparece"). Ahora
+    // re-pinta al instante con lo último conocido y loadMessages revalida (mergeMessageList).
+    // Solo pre-calienta el caché: NO toca selectedChat, scroll, freeze ni la dedup del chat abierto.
+    const messagesByChatRef = useRef(chatSectionCache.messagesByChat || new Map());
+    if (!chatSectionCache.messagesByChat) chatSectionCache.messagesByChat = messagesByChatRef.current;
     // Coalescing de ráfagas SSE: bufferea los mensajes nuevos que llegan en el mismo frame
     // y los aplica en UN solo setMessages (ver flushPendingSseMessages). Bajo alto tráfico
     // (Brenda + 2 reclutadores + entrantes) esto convierte N renders/sorts/scrolls encimados
     // en 1 por frame — la causa principal de que la lista "se pusiera loca".
     const pendingSseMsgsRef = useRef([]);
     const sseFlushFrameRef = useRef(null);
+    // Status (queued→sent/…) que llegó ANTES que su mensaje. El `messageStatusUpdate` se
+    // aplica síncrono, pero el `newMessage` que lo precede se bufferea (rAF) — si caen en el
+    // mismo frame, el status corre antes de que el mensaje exista en la lista, no encuentra a
+    // quién actualizar y se perdía → relojito pegado hasta re-entrar (lo veían sobre todo los
+    // OTROS reclutadores y los mensajes de un flujo metido desde el chat, que no tienen la
+    // respuesta del POST como red). Aquí lo guardamos por id y se aplica al insertar el mensaje.
+    const pendingStatusByIdRef = useRef(new Map());
     const displayMessageCacheRef = useRef(new Map());
     const bottomAnchorRef = useRef(false);
     const prevDisplayLengthRef = useRef(0);
@@ -936,6 +949,16 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         if (scrollFrameRef.current) cancelAnimationFrame(scrollFrameRef.current);
         scrollFrameRef.current = requestAnimationFrame(() => {
             scrollFrameRef.current = requestAnimationFrame(() => {
+                // Preferir la API de Virtuoso: así ÉL es el único que mueve el scroll y no pelea
+                // con su propia virtualización (el `scrollTop = scrollHeight` directo, al correr
+                // en el mismo frame que la restauración interna de Virtuoso o la medición de una
+                // imagen alta, causaba el tirón raro ocasional). Fallback al scroll crudo si aún
+                // no hay instancia (o si scrollToIndex lanza con lista vacía).
+                const v = virtuosoRef.current;
+                if (v) {
+                    try { v.scrollToIndex({ index: 'LAST', align: 'end', behavior: 'auto' }); return; }
+                    catch { /* cae al scroll crudo */ }
+                }
                 const el = virtuosoScrollerRef.current;
                 if (el) el.scrollTop = el.scrollHeight;
             });
@@ -3249,6 +3272,30 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
     //     por-chat (messagesByChatRef) — misma semántica que el handler mensaje a mensaje.
     //   • El scroll al fondo se hace UNA vez al final, solo si algún mensaje del lote lo
     //     pedía (estabas abajo o enviando) y el chat activo recibió algo.
+
+    // Aplica a una lista cualquier status que llegó ANTES que su mensaje (ver
+    // pendingStatusByIdRef). Consume el pendiente en cuanto lo aplica (o si el mensaje ya
+    // trae un status igual/mayor) para que el Map no crezca. Nunca degrada (mismo criterio
+    // de rango que el handler de messageStatusUpdate).
+    const STATUS_RANK_CLIENT = { failed: -1, queued: 0, pending: 0, sent: 1, delivered: 2, read: 3, seen: 3 };
+    const applyPendingStatusToList = (list) => {
+        const pending = pendingStatusByIdRef.current;
+        if (!pending.size || !Array.isArray(list) || !list.length) return list;
+        let changed = false;
+        const next = list.map(m => {
+            const p = pending.get(String(m.id)) || (m.ultraMsgId ? pending.get(String(m.ultraMsgId)) : null);
+            if (!p) return m;
+            // Consumir el pendiente (ya lo emparejamos con su mensaje)
+            pending.delete(String(m.id));
+            if (m.ultraMsgId) pending.delete(String(m.ultraMsgId));
+            const isNewer = p.status === 'failed' || (STATUS_RANK_CLIENT[p.status] ?? 0) > (STATUS_RANK_CLIENT[m.status] ?? 0);
+            if (!isNewer) return m;
+            changed = true;
+            return { ...m, status: p.status, ...(p.additionalData || {}) };
+        });
+        return changed ? next : list;
+    };
+
     const flushPendingSseMessages = () => {
         const buffered = pendingSseMsgsRef.current;
         if (!buffered.length) return;
@@ -3271,7 +3318,9 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                 setMessages(prev => {
                     let next = Array.isArray(prev) ? prev : [];
                     for (const m of msgs) next = applyIncomingMessageToList(next, m);
-                    return next;
+                    // Un status que se adelantó a su mensaje ya puede aplicarse ahora que el
+                    // mensaje entró (evita el relojito pegado del chat activo).
+                    return applyPendingStatusToList(next);
                 });
                 activeGotMessage = true;
                 if (preserveBottom) activePreserveBottom = true;
@@ -3279,7 +3328,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                 const prev = messagesByChatRef.current.get(chatId) || [];
                 let next = prev;
                 for (const m of msgs) next = applyIncomingMessageToList(next, m);
-                messagesByChatRef.current.set(chatId, next);
+                messagesByChatRef.current.set(chatId, applyPendingStatusToList(next));
             }
         }
 
@@ -3345,6 +3394,15 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                         newArr[idx] = { ...newArr[idx], status, ...additionalData };
                         return newArr;
                     }
+                    // El mensaje aún no está en la lista (su `newMessage` viene bufferizado en
+                    // este mismo frame): guardar el status para aplicarlo al insertarlo, en vez
+                    // de descartarlo (causa del relojito pegado). Se consume en flushPendingSseMessages.
+                    const pending = pendingStatusByIdRef.current;
+                    const existing = pending.get(String(id));
+                    if (!existing || status === 'failed' || (STATUS_RANK[status] ?? 0) > (STATUS_RANK[existing.status] ?? 0)) {
+                        pending.set(String(id), { status, additionalData });
+                    }
+                    if (pending.size > 300) { const k = pending.keys().next().value; pending.delete(k); }
                     return prev;
                 });
             } else if (sseUpdate.updates?.reactionUpdate) {
@@ -3485,7 +3543,11 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                     }
                     if (patch.lastUserMessageAt) {
                         updated.lastUserMessageAt = patch.lastUserMessageAt;
-                        if (patch.unreadMsgCount === undefined) {
+                        // Si el chat está ABIERTO y al fondo, lo estás leyendo → NO subas el
+                        // contador (el auto read-receipt lo baja enseguida y el separador
+                        // "N no leídos" aparecía y desaparecía con reflow = "muestra y desaparece").
+                        // Solo cuenta como no leído si subiste a leer historial.
+                        if (patch.unreadMsgCount === undefined && !isAtBottomRef.current) {
                             updated.unreadMsgCount = (prev.unreadMsgCount || 0) + 1;
                         }
                     }
@@ -3668,9 +3730,17 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
             }
         };
         const isHumanActive = () => !document.hidden && (Date.now() - lastHumanActivityAt) <= CHAT_LOCK_IDLE_MS;
+        // Se dispara en cada mousemove/scroll/etc. (alta frecuencia). La marca de actividad
+        // (para isHumanActive) se actualiza SIEMPRE, pero el intento de re-lock se throttlea a
+        // 1/seg: lockChat ya trae su propia guarda (no re-fetch si está locked/in-flight), pero
+        // así ni siquiera se invoca en cada frame de scroll.
+        let lastLockAttemptAt = 0;
         const markHumanActivity = () => {
             if (document.hidden) return;
-            lastHumanActivityAt = Date.now();
+            const now = Date.now();
+            lastHumanActivityAt = now;
+            if (now - lastLockAttemptAt < 1000) return;
+            lastLockAttemptAt = now;
             lockChat();
         };
         const handleVisibilityChange = () => {
@@ -6254,35 +6324,20 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                             const _isLast = index === displayMessages.length - 1;
 
                             return (
-                                <div>
                                 <MessageBubble
                                     msg={msg}
                                     chatWhatsapp={selectedChat?.whatsapp}
                                     chatNombre={selectedChat?.nombre}
-                                    chatId={selectedChat?.id}
-                                    reactionPopupId={reactionPopupId}
+                                    _chatId={selectedChat?.id}
+                                    isReactionOpen={reactionPopupId === msg.id}
                                     onReaction={setReactionPopupId}
                                     onReply={setReplyingToMsg}
                                     onSendReaction={handleSendReaction}
                                 />
-                                </div>
                             );
                         }}
                         />
                     </div>
-
-                    {/* Typing Indicator — fuera de Virtuoso, siempre visible sobre el input */}
-                    {candidateTyping && (
-                        <div className="flex justify-start px-[5%] py-1 z-10 shrink-0">
-                            <div className="bg-white dark:bg-[#202c33] rounded-[7.5px] rounded-tl-none px-3 py-2.5 shadow-[0_1px_0.5px_rgba(11,20,26,.13)]">
-                                <div className="flex items-center gap-1 h-4">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-[#8696a0] animate-bounce" style={{ animationDelay: '0ms' }} />
-                                    <span className="w-1.5 h-1.5 rounded-full bg-[#8696a0] animate-bounce" style={{ animationDelay: '150ms' }} />
-                                    <span className="w-1.5 h-1.5 rounded-full bg-[#8696a0] animate-bounce" style={{ animationDelay: '300ms' }} />
-                                </div>
-                            </div>
-                        </div>
-                    )}
 
                     {/* Scroll-to-bottom button */}
                     {showScrollBtn && (
@@ -6307,6 +6362,24 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                         arriba y se replica como footer invisible en Virtuoso: así el último mensaje
                         sube con aire real y no queda tapado cuando se inyecta banco con imágenes. */}
                     <div className="relative shrink-0">
+                        {/* Typing "escribiendo…" — OVERLAY absoluto sobre el input (no in-flow):
+                            antes vivía en la columna flex debajo de Virtuoso y montar/desmontar la
+                            burbuja encogía el viewport = micro-brinco. Como overlay flota sobre el
+                            input sin mover la lista. Se nudge hacia arriba si hay preview de imágenes. */}
+                        {candidateTyping && (
+                            <div
+                                className="absolute left-0 z-20 px-[5%] pb-1 pointer-events-none"
+                                style={{ bottom: `calc(100% + ${pendingQrPreviewHeight}px)` }}
+                            >
+                                <div className="bg-white dark:bg-[#202c33] rounded-[7.5px] rounded-tl-none px-3 py-2.5 shadow-[0_1px_0.5px_rgba(11,20,26,.13)] inline-flex">
+                                    <div className="flex items-center gap-1 h-4">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-[#8696a0] animate-bounce" style={{ animationDelay: '0ms' }} />
+                                        <span className="w-1.5 h-1.5 rounded-full bg-[#8696a0] animate-bounce" style={{ animationDelay: '150ms' }} />
+                                        <span className="w-1.5 h-1.5 rounded-full bg-[#8696a0] animate-bounce" style={{ animationDelay: '300ms' }} />
+                                    </div>
+                                </div>
+                            </div>
+                        )}
                         {pendingQrImages.length > 0 && (
                             <div ref={pendingQrPreviewRef} className="absolute bottom-full inset-x-0 z-20 px-3 pt-2 pb-1 bg-[#f0f2f5] dark:bg-[#202c33] border-t border-[#d1d7db] dark:border-[#222e35] shadow-[0_-1px_2px_rgba(11,20,26,.08)] flex items-center gap-2">
                                 {pendingQrImages.map((imgUrl, idx) => (

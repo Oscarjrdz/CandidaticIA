@@ -167,7 +167,7 @@ const MessageBubble = React.memo(function MessageBubble({
     chatWhatsapp,
     chatNombre,
     _chatId,
-    reactionPopupId,
+    isReactionOpen,
     onReaction,
     onReply,
     onSendReaction,
@@ -183,8 +183,13 @@ const MessageBubble = React.memo(function MessageBubble({
         };
     }
     const shouldPlayEntryAnimation = entryAnimationDecisionRef.current.value;
+    // El "reloj de entrada" (mostrar ⏳ 800ms y luego revelar el status) SOLO tiene sentido
+    // para NUESTRO envío optimista (nace 'pending'/'queued'). Un mensaje que llega por SSE ya
+    // 'sent'/'delivered'/'read' (flujo metido desde el chat, u otro reclutador) no debe mostrar
+    // un reloj falso inicial — se revela su palomita real de una vez.
+    const isTransientStatus = !msg.status || msg.status === 'pending' || msg.status === 'queued';
     const [heldStatusAnimationKey, setHeldStatusAnimationKey] = React.useState(() =>
-        isMe && shouldPlayEntryAnimation ? entryAnimationKey : null
+        isMe && shouldPlayEntryAnimation && isTransientStatus ? entryAnimationKey : null
     );
     const displayStatus = heldStatusAnimationKey === entryAnimationKey ? 'pending' : msg.status;
     const mediaFrameClass = msg.type === 'image'
@@ -258,7 +263,9 @@ const MessageBubble = React.memo(function MessageBubble({
         if (!shouldPlayEntryAnimation) return undefined;
         rememberEntryAnimation(entryAnimationKey);
 
-        if (!isMe) return undefined;
+        // isTransientStatus se captura al montar (deps estables → el efecto corre una vez):
+        // si el mensaje ya nació enviado, no se activa el reloj falso.
+        if (!isMe || !isTransientStatus) return undefined;
         setHeldStatusAnimationKey(entryAnimationKey);
         const timer = window.setTimeout(() => {
             setHeldStatusAnimationKey(currentKey => currentKey === entryAnimationKey ? null : currentKey);
@@ -534,7 +541,7 @@ const MessageBubble = React.memo(function MessageBubble({
                     <button onClick={() => onReply(msg)} title="Responder" className="w-8 h-8 flex items-center justify-center bg-white dark:bg-[#202c33] hover:bg-gray-50 dark:hover:bg-gray-800 shadow-sm border border-black/5 dark:border-white/5 rounded-[10px]"><Reply className="w-[18px] h-[18px] text-[#54656f] dark:text-[#8696a0]" /></button>
                 </div>
 
-                {reactionPopupId === msg.id && (
+                {isReactionOpen && (
                     <div className={`absolute -top-[44px] ${isMe ? 'right-0' : 'left-0'} bg-white dark:bg-[#202c33] shadow-lg rounded-full px-3 py-2 flex items-center gap-3 z-50 border border-gray-200 dark:border-gray-800 slide-in-from-bottom-2`}>
                         {['👍', '❤️', '😂', '😮', '😢', '🙏'].map(emoji => (
                             <button key={emoji} onClick={() => onSendReaction(msg, emoji)} className="text-xl leading-none hover:bg-black/5 dark:hover:bg-white/5 rounded-full w-8 h-8 flex items-center justify-center">{emoji}</button>
@@ -578,9 +585,12 @@ const MessageBubble = React.memo(function MessageBubble({
     );
 }, (prev, next) =>
     prev.msg === next.msg &&
-    prev.reactionPopupId === next.reactionPopupId &&
+    // Booleano por-burbuja: solo la burbuja con su popup abierto cambia. Antes se comparaba
+    // el `reactionPopupId` GLOBAL → abrir el picker en una burbuja fallaba el memo de TODAS
+    // las visibles y las re-renderizaba juntas (jank en chats grandes).
+    prev.isReactionOpen === next.isReactionOpen &&
     prev.chatWhatsapp === next.chatWhatsapp &&
-    prev.chatId === next.chatId
+    prev._chatId === next._chatId
 );
 
 export default MessageBubble;
