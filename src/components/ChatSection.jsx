@@ -746,8 +746,25 @@ const MessagesEncryptionHeader = () => (
 // remonta → la altura total de la lista baja/sube 25px → Virtuoso corrige el scroll.
 // Con muchos chats en la lista (muchos re-renders por SSE durante un envío con fotos)
 // eso se veía como un temblor "arriba y abajo" de las burbujas recién inyectadas.
+// El typing "escribiendo…" vive AQUÍ, dentro del scroll de Virtuoso (no como overlay ni como
+// hermano flex): así ocupa espacio REAL al fondo y empuja el último mensaje hacia arriba en vez
+// de taparlo (antes, como overlay absoluto, escondía el último mensaje/uno recién entrado; y como
+// hermano flex encogía el viewport = micro-brinco). Cambiar su alto es un cambio de CONTENIDO que
+// Virtuoso reancla solo si estás al fondo — no un cambio de viewport.
 const MessagesListFooter = ({ context }) => (
-    <div style={{ height: 25 + (context?.bottomOverlaySpacerHeight || 0) }} />
+    <div style={{ paddingBottom: 25 + (context?.bottomOverlaySpacerHeight || 0) }}>
+        {context?.candidateTyping && (
+            <div className="flex justify-start px-[5%] pb-1">
+                <div className="bg-white dark:bg-[#202c33] rounded-[7.5px] rounded-tl-none px-3 py-2.5 shadow-[0_1px_0.5px_rgba(11,20,26,.13)] inline-flex">
+                    <div className="flex items-center gap-1 h-4">
+                        <span className="w-1.5 h-1.5 rounded-full bg-[#8696a0] animate-bounce" style={{ animationDelay: '0ms' }} />
+                        <span className="w-1.5 h-1.5 rounded-full bg-[#8696a0] animate-bounce" style={{ animationDelay: '150ms' }} />
+                        <span className="w-1.5 h-1.5 rounded-full bg-[#8696a0] animate-bounce" style={{ animationDelay: '300ms' }} />
+                    </div>
+                </div>
+            </div>
+        )}
+    </div>
 );
 const MESSAGES_VIRTUOSO_COMPONENTS = { Header: MessagesEncryptionHeader, Footer: MessagesListFooter };
 
@@ -948,18 +965,29 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
     const scrollToBottom = () => {
         if (scrollFrameRef.current) cancelAnimationFrame(scrollFrameRef.current);
         scrollFrameRef.current = requestAnimationFrame(() => {
+            // Paso 1 — forzar a Virtuoso a renderizar/posicionar el ÚLTIMO item. Sin esto, en una
+            // lista virtualizada donde el último item aún no está montado, `scrollHeight` es un
+            // ESTIMADO corto → el scroll crudo aterrizaba ANTES del fondo real y el último mensaje
+            // (entrante o saliente) quedaba escondido abajo. scrollToIndex garantiza que el item
+            // exista y esté medido.
+            const v = virtuosoRef.current;
+            if (v) { try { v.scrollToIndex({ index: 'LAST', align: 'end' }); } catch { /* noop */ } }
+            // Paso 2 — frame siguiente: ya con el último item real medido, fijar el fondo ABSOLUTO.
+            // scrollHeight ahora es exacto e incluye el Footer de 25px → el último mensaje queda
+            // con su respiro y SIEMPRE completo (esto añade el aire que scrollToIndex align:'end' no da).
             scrollFrameRef.current = requestAnimationFrame(() => {
-                // Scroll al fondo ABSOLUTO (`scrollTop = scrollHeight`): scrollHeight incluye el
-                // Footer de 25px, así que el último mensaje queda con su respiro y SIEMPRE visible.
-                // ⚠️ NO usar virtuosoRef.scrollToIndex({index:'LAST', align:'end'}): alinea el fondo
-                // del último item al borde del viewport y deja el Footer fuera de vista → el último
-                // mensaje se veía pegado/cortado abajo (regresión reportada). El tirón raro ocasional
-                // que aquello intentaba evitar es un mal MENOR que ocultar el último mensaje.
                 const el = virtuosoScrollerRef.current;
                 if (el) el.scrollTop = el.scrollHeight;
             });
         });
     };
+    // El typing "escribiendo…" vive en el Footer de Virtuoso (crece el contenido, no el
+    // viewport). Al aparecer, si estás al fondo hay que re-anclar: si no, el footer crece por
+    // debajo del borde y la burbuja de typing quedaría medio escondida. Solo baja si ya estabas
+    // al fondo (leyendo lo último) — si subiste a leer historial, no te mueve.
+    useEffect(() => {
+        if (candidateTyping && isAtBottomRef.current) scrollToBottom();
+    }, [candidateTyping]);
     const fileInputRef = useRef(null);
     const lastPresenceTimeRef = useRef(0);
     const [showScrollBtn, setShowScrollBtn] = useState(false);
@@ -3415,6 +3443,11 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                     // Si el candidato mandó este mensaje mientras tenemos su chat abierto → read receipt inmediato
                     const incomingMsg = sseUpdate.updates.messagePayload;
                     if (incomingMsg.from === 'user' && currentChat?.id) {
+                        // El mensaje llegó → el candidato ya no está "escribiendo". Limpiar el
+                        // indicador de una vez (si no, el footer de typing seguía mostrándose
+                        // hasta el timeout y quedaba debajo del mensaje recién entrado).
+                        setCandidateTyping(false);
+                        clearTimeout(typingTimersRef.current.candidate);
                         const incomingMessageId = incomingMsg.id || incomingMsg.ultraMsgId;
                         fetch('/api/chat', {
                             method: 'PUT',
@@ -6239,7 +6272,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                             scrollerRef={(el) => { virtuosoScrollerRef.current = el; }}
                             style={{ height: '100%' }}
                             data={displayMessages}
-                            context={{ bottomOverlaySpacerHeight: pendingQrPreviewHeight }}
+                            context={{ bottomOverlaySpacerHeight: pendingQrPreviewHeight, candidateTyping }}
                             // Con pocos mensajes (lista mas corta que el viewport) Virtuoso alinea
                             // arriba por defecto: las burbujas quedan pegadas al tope y el hueco vacio
                             // abajo, junto al input. Al inyectar del banco algo con imagenes (~520px),
@@ -6358,24 +6391,6 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                         arriba y se replica como footer invisible en Virtuoso: así el último mensaje
                         sube con aire real y no queda tapado cuando se inyecta banco con imágenes. */}
                     <div className="relative shrink-0">
-                        {/* Typing "escribiendo…" — OVERLAY absoluto sobre el input (no in-flow):
-                            antes vivía en la columna flex debajo de Virtuoso y montar/desmontar la
-                            burbuja encogía el viewport = micro-brinco. Como overlay flota sobre el
-                            input sin mover la lista. Se nudge hacia arriba si hay preview de imágenes. */}
-                        {candidateTyping && (
-                            <div
-                                className="absolute left-0 z-20 px-[5%] pb-1 pointer-events-none"
-                                style={{ bottom: `calc(100% + ${pendingQrPreviewHeight}px)` }}
-                            >
-                                <div className="bg-white dark:bg-[#202c33] rounded-[7.5px] rounded-tl-none px-3 py-2.5 shadow-[0_1px_0.5px_rgba(11,20,26,.13)] inline-flex">
-                                    <div className="flex items-center gap-1 h-4">
-                                        <span className="w-1.5 h-1.5 rounded-full bg-[#8696a0] animate-bounce" style={{ animationDelay: '0ms' }} />
-                                        <span className="w-1.5 h-1.5 rounded-full bg-[#8696a0] animate-bounce" style={{ animationDelay: '150ms' }} />
-                                        <span className="w-1.5 h-1.5 rounded-full bg-[#8696a0] animate-bounce" style={{ animationDelay: '300ms' }} />
-                                    </div>
-                                </div>
-                            </div>
-                        )}
                         {pendingQrImages.length > 0 && (
                             <div ref={pendingQrPreviewRef} className="absolute bottom-full inset-x-0 z-20 px-3 pt-2 pb-1 bg-[#f0f2f5] dark:bg-[#202c33] border-t border-[#d1d7db] dark:border-[#222e35] shadow-[0_-1px_2px_rgba(11,20,26,.08)] flex items-center gap-2">
                                 {pendingQrImages.map((imgUrl, idx) => (
