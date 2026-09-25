@@ -275,26 +275,9 @@ function formatRecruiterMessage(text, candidateData = null, stepContext = {}) {
         }
     }
 
-    // 📅 CALENDAR DAYS LINE GUARD v2: String-based to handle Unicode multi-codepoint emojis reliably.
-    // Iterates over each numbered emoji and ensures it always starts on its own line.
-    {
-        const _numEmojis = ['1️⃣','2️⃣','3️⃣','4️⃣','5️⃣','6️⃣','7️⃣','8️⃣','9️⃣'];
-        for (const _em of _numEmojis) {
-            let _pos = 0;
-            while (true) {
-                const _idx = text.indexOf(_em, _pos);
-                if (_idx === -1) break;
-                // If something non-newline precedes this emoji, force a new line before it
-                const _before = text.substring(0, _idx);
-                if (_before.trim().length > 0 && !/\n\s*$/.test(_before)) {
-                    text = _before.trimEnd() + '\n\n' + text.substring(_idx);
-                    _pos = _before.trimEnd().length + 2 + _em.length;
-                } else {
-                    _pos = _idx + _em.length;
-                }
-            }
-        }
-    }
+    // ❌ [FORMATEO DE FECHAS DE ENTREVISTA ELIMINADO — sep 2026] "CALENDAR DAYS LINE
+    // GUARD" ponía cada emoji numerado (1️⃣2️⃣…) de una lista de días de entrevista en su
+    // propia línea. Brenda extractora no arma listas de días de entrevista. Residuo pasivo.
 
     // 🏢 VACANCY BUBBLE SPLIT GUARD: If GPT responds about vacantes/entrevistas OR a vacancy list (✅ items)
     // without [MSG_SPLIT], force a split before the final question so it arrives as 2 separate bubbles.
@@ -327,32 +310,10 @@ function formatRecruiterMessage(text, candidateData = null, stepContext = {}) {
         text = _parts.join('[MSG_SPLIT]');
     }
 
-    // 📋 COMBINED DAYS+HORARIO: If GPT merged PASO 1 (days list) and PASO 2 (horarios)
-    // into one message, STRIP the horario part — user must pick a day first.
-    {
-        const hasDayList = /(?:📅|1️⃣|2️⃣).{0,30}(?:Lunes|Martes|Mi[eé]rcoles|Jueves|Viernes|S[aá]bado|Domingo)/i.test(text);
-        const hasHorario = /tengo entrevistas? a las|estas opciones de horario/i.test(text);
-        if (hasDayList && hasHorario) {
-            // Find where the horario section starts and cut everything after it
-            const cutIdx = text.search(/(?:\n|.{0,5})(?:Perfecto|Para el)[^\n]*(?:tengo entrevistas? a las|estas opciones de horario)/im);
-            if (cutIdx > 20) {
-                text = text.substring(0, cutIdx).trim();
-            }
-        }
-    }
-
-    // 🛡️ FAQ+DUPLICATE-SLOT GUARD: When GPT correctly answered an FAQ and asked
-    // "¿Te parece bien ese horario?" but then also appended a redundant slot listing
-    // (e.g. "Perfecto, para el Jueves 12... tengo estas opciones de horario: 1️⃣ 12:00 PM...")
-    // → strip everything from the duplicate block onwards.
-    {
-        const hasConfirmQuestion = /Te parece bien ese horario|¿Te parece bien.*horario/i.test(text);
-        const dupSlotIdx = text.search(/(?:\n|^)\s*(?:Perfecto[,.]?\s+)?[Pp]ara el\s+.{5,40}\s+tengo estas opciones de horario/im);
-        if (hasConfirmQuestion && dupSlotIdx > 20) {
-            text = text.substring(0, dupSlotIdx).trim();
-        }
-    }
-
+    // ❌ [FORMATEO DE HORARIOS DE ENTREVISTA ELIMINADO — sep 2026] Aquí vivían dos guards
+    // que recortaban el bloque de horarios de entrevista cuando GPT lo pegaba (COMBINED
+    // DAYS+HORARIO y FAQ+DUPLICATE-SLOT). Brenda extractora no ofrece horarios de entrevista.
+    // Residuo pasivo (solo disparaba si el texto ya traía "tengo entrevistas a las…").
 
     // 🎓 ESCOLARIDAD LIST: Force vertical format OR inject if GPT forgot the list entirely
     const ESC_LIST = '\n🎒 Primaria\n🏫 Secundaria\n🎓 Preparatoria\n📚 Licenciatura\n🛠️ Técnica\n🧠 Posgrado';
@@ -570,147 +531,13 @@ function formatRecruiterMessage(text, candidateData = null, stepContext = {}) {
     }
 
 
-    // 📅 DATE LIST: Remove LEADING 📅 (before number emoji), KEEP/ADD TRAILING 📅 (after date)
-    // Target format: "1️⃣ Miércoles 11 de Marzo 📅"
-    // Step 1: strip any 📅 that appears right before a number emoji
-    text = text.replace(/📅\s*(1️⃣|2️⃣|3️⃣|4️⃣|5️⃣|6️⃣|7️⃣|8️⃣|9️⃣)/g, '$1');
-    // Step 2: for each date line that has a number emoji but no trailing 📅, add one
-    text = text.replace(
-        /^((1️⃣|2️⃣|3️⃣|4️⃣|5️⃣|6️⃣|7️⃣|8️⃣|9️⃣)\s+(?:Lunes|Martes|Mi[eé]rcoles|Jueves|Viernes|S[aá]bado|Domingo)[^\n📅]*?)(?!\s*📅)\s*$/gmu,
-        '$1 📅'
-    );
-    // Strip stray 'o' connector words GPT inserts between date items
-    // e.g. "Martes 10 de Marzo o\n" or a lone "o" line → removed
-    text = text.replace(/[^\S\n]*\bo\b\s*(?=\n|$)/gm, '');   // "o" at end of line
-    text = text.replace(/^\s*o\s*$/gm, '');                    // "o" alone on its own line
-    // Normalize ALL header variants GPT uses → canonical "Tengo entrevistas los días:"
-    // KEY FIX: "los?" and "siguientes?" are OUTSIDE the "para" group so they're consumed
-    // whether or not GPT included "para":
-    //   "disponibles los días:"          → "los días:" ✓
-    //   "disponibles para los días:"     → "los días:" ✓
-    //   "disponibles para los siguientes días:" → "los días:" ✓
-    //   "para el:" / "el:"              → "los días:" ✓
-    text = text.replace(
-        /Tengo entrevistas?\s+(?:disponibles?\s+)?(?:(?:para|de)\s+)?(?:la\s+semana\s+de\s+)?(?:los?\s+)?(?:siguientes?\s+)?(?:d[ií]as?|el)\s*:/gi,
-        'Tengo entrevistas los días:'
-    );
-    // Post-strip: remove any leftover "para los [siguientes] [días]:" after canonical header
-    text = text.replace(/(Tengo entrevistas los d[ií]as:)\s*para\s+(?:los?\s+)?(?:siguientes?\s+)?(?:d[ií]as?|el)?\s*:?/gi, '$1');
-
-    // 🗓️ INLINE DATES → NUMBERED LIST (UNIVERSAL): If dates follow the canonical header as prose
-    // (e.g. "Tengo entrevistas los días: Martes 12 de Marzo, Jueves 14 de Marzo"),
-    // or AI wrote "disponibles para el Martes..." without a header,
-    // convert to 1️⃣ Martes 12 de Marzo 📅 format.
-    {
-        const NUM_UNI = ['1️⃣','2️⃣','3️⃣','4️⃣','5️⃣','6️⃣','7️⃣'];
-        const DAY_RE = /(?:Lunes|Martes|Mi[eé]rcoles|Jueves|Viernes|S[aá]bado|Domingo)/i;
-
-        // Case A: after canonical header on same line or next line
-        text = text.replace(
-            /(Tengo entrevistas los d[ií]as:)\s*\n?((?:(?!1️⃣|2️⃣)[^\n?¿⏬])+)/i,
-            (match, header, datesStr) => {
-                if (/1️⃣|2️⃣/.test(datesStr)) return match; // already a numbered list
-                const dates = datesStr.split(/,\s*|\s+y\s+/)
-                    .map(d => d.trim())
-                    .filter(d => DAY_RE.test(d));
-                if (dates.length === 0) return match;
-                return header + '\n' + dates.map((d, i) => `${NUM_UNI[i] || `${i+1}.`} ${d} 📅`).join('\n');
-            }
-        );
-
-        // Case B: AI wrote "disponibles para el [Day Date]" without the header word
-        // e.g. "Tengo entrevistas disponibles para el Martes 12 de Marzo"
-        text = text.replace(
-            /Tengo entrevistas?\s+(?:disponibles?\s+)?para\s+el\s+((?:Lunes|Martes|Mi[eé]rcoles|Jueves|Viernes|S[aá]bado|Domingo)[^.\n?¿]+)/gi,
-            (match, dateStr) => {
-                // Split in case there are multiple dates comma-separated
-                const dates = dateStr.split(/,\s*|\s+y\s+/)
-                    .map(d => d.trim())
-                    .filter(d => DAY_RE.test(d));
-                if (dates.length === 0) return match;
-                return 'Tengo entrevistas los días:\n' + dates.map((d, i) => `${NUM_UNI[i] || `${i+1}.`} ${d} 📅`).join('\n');
-            }
-        );
-    }
-
-    // ⏰ HOURS MESSAGE: detect when GPT lists time slots (may use 🔹 or number emojis)
-    // Trigger is broader: GPT humanizes dates so outputs no YYYY-MM-DD.
-    const hasTimeSlots = /(?:🔹\s*Opci[oó]n\s*\d+|\btengo entrevistas? a las\b|estas opciones de horario)/i.test(text)
-        || (/\d{1,2}:\d{2}\s*(?:AM|PM)/i.test(text) && /(?:1️⃣|2️⃣|🔹)/i.test(text));
-    if (hasTimeSlots) {
-        let slotIdx = 0;
-        // 🔹 Opción N: → 1️⃣, 2️⃣...
-        text = text.replace(/🔹\s*Opci[oó]n\s*\d+:\s*/gi, () => `${_NUM_EMOJIS[slotIdx++] || `${slotIdx}.`} `);
-        // 🕐🕑🕒... clock variants → ⏰
-        text = text.replace(/🕐|🕑|🕒|🕓|🕔|🕕|🕖|🕗|🕘|🕙|🕚|🕛/g, '⏰');
-        // ⏰ after every time if missing
-        text = text.replace(/(\d{1,2}:\d{2}\s*(?:AM|PM))(?!\s*⏰)/gi, '$1 ⏰');
-        // 🔧 INLINE SLOT SPLITTER: If multiple slots are on the same line (GPT squishes them),
-        // split so each gets its own line: "1️⃣ 03:00 PM ⏰ 2️⃣ ..." → separate lines with spacing
-        text = text.replace(/(⏰)\s+([1-9]️⃣)/g, '⏰\n\n$2');
-        // Single slot → fix header + closing question
-        const timeCount = (text.match(/\d{1,2}:\d{2}\s*(?:AM|PM)/gi) || []).length;
-        if (timeCount === 1) {
-            text = text.replace(
-                /(?:Perfecto,?\s+)?[Pp]ara el\s+(.+?)\s+tengo estas opciones de horario(?:\s+para ti)?:/gi,
-                'Para el $1 tengo entrevista a las:'
-            );
-            text = text.replace(/¿Cu[aá]l prefieres?\??\s*/gi, '¿Te parece bien ese horario?');
-        }
-        // Split closing question as separate bubble
-        const _qIdx = text.lastIndexOf('\xbf');
-        if (_qIdx > 0) {
-            text = text.substring(0, _qIdx).trim() + '[MSG_SPLIT]' + text.substring(_qIdx).trim();
-        }
-    }
-    // 🗓️ CONFIRMATION MESSAGE: "Ok [name], entonces agendamos..."
-    if (/(?:Ok|Bien|Perfecto)[,\s]+\w+[,\s]+entonces agendamos|agendamos tu cita|confirmamos tu cita|apartamos tu cita|reserve tu lugar|entonces agendamos tu entrevista para el/i.test(text)) {
-        // If there's FAQ text BEFORE "Ok [name], entonces agendamos..." → split it off as msg 1
-        let confirmStart = text.search(/(?:Ok|Bien|Perfecto)[,\s]+\w+[,\s]+entonces agendamos/i);
-        if (confirmStart === -1) confirmStart = text.search(/entonces agendamos tu entrevista para el/i);
-        
-        let faqPart = '';
-        if (confirmStart > 0) {
-            faqPart = text.substring(0, confirmStart).trim();
-            text = text.substring(confirmStart).trim();
-        }
-
-        // Apply strict visual formatting required by the candidate
-        // Extracts the dynamic Date and Time to rebuild the string
-        let extractedDate = '';
-        let extractedTime = '';
-        
-        // Match existing date span logic
-        const dateMatch = text.match(/(?:para el\s+|el d[ií]a\s+)([a-záéíóúüñ]+\s+\d{1,2}\s+de\s+[a-záéíóúüñ]+)/i) || text.match(/(?:para el\s+)([\w\s]+?)(?=\s+a las)/i);
-        if (dateMatch && dateMatch[1]) extractedDate = dateMatch[1].trim();
-        
-        const timeMatch = text.match(/(?:a las\s+)(\d{1,2}:\d{2}\s*(?:AM|PM))/i);
-        if (timeMatch && timeMatch[1]) extractedTime = timeMatch[1].trim();
-
-        // Strip out duplicated splits and emojis completely before rebuilding
-        text = text.replace(/\[MSG_SPLIT\]/g, ' ').replace(/🤝✨/g, '');
-        // Wipe duplicate "¿estamos de acuerdo?" if GPT wrote it itself
-        text = text.replace(/¿estamos de acuerdo\??/gi, '').trim();
-
-        // If we successfully extracted the core components, overwrite the bot's raw text 
-        // with the deterministic perfect format requested by the user
-        if (extractedDate && extractedTime) {
-            const firstNameMatch = text.match(/^(?:Ok|Bien|Perfecto)[,\s]+(\w+)[,\s]+/i);
-            const firstName = firstNameMatch ? firstNameMatch[1] : (candidateData ? (candidateData.nombreReal || candidateData.nombre) : '');
-            
-            // Reconstruct the exact format
-            text = `Ok${firstName ? ` ${firstName}` : ''}, entonces agendamos tu entrevista para el:\n✅ ${extractedDate.charAt(0).toUpperCase() + extractedDate.slice(1)}\n✅ a las ⏰ ${extractedTime}.\n\n[MSG_SPLIT]¿estamos de acuerdo? 🤝✨`;
-        } else {
-            // Fallback to basic string modification if regex fails
-            if (text.endsWith(',') || text.endsWith('.')) text = text.substring(0, text.length - 1);
-            text = text + '.\n\n[MSG_SPLIT]¿estamos de acuerdo? 🤝✨';
-        }
-        
-        // Prepend the FAQ text if it existed
-        if (faqPart) {
-            text = faqPart + '[MSG_SPLIT]' + text;
-        }
-    }
+    // ❌ [FORMATEO DE FECHAS/HORARIOS/CONFIRMACIÓN DE ENTREVISTA ELIMINADO — sep 2026]
+    // Aquí vivían los reformateadores que convertían texto de citas en listas numeradas:
+    //   • DATE LIST / INLINE DATES: "Tengo entrevistas los días: 1️⃣ Martes 12 de Marzo 📅"
+    //   • HOURS MESSAGE: slots de horario (⏰), "Para el X tengo entrevista a las:"
+    //   • CONFIRMATION MESSAGE: "Ok [nombre], entonces agendamos tu entrevista para el: ✅ ..."
+    // Brenda extractora NO agenda entrevistas. Eran residuo PASIVO (solo disparaban si GPT
+    // ya había producido texto de cita, cosa que ningún prompt de la extractora hace).
     // ❌ [CTA DE ENTREVISTA ELIMINADO — sep 2026] Aquí vivían dos bloques que le
     // PEGABAN una pregunta proactiva de entrevista al final de la respuesta:
     //   1) "INICIO PASO CTA GUARANTEE" (dependía de stepContext.isInicio → cerebro de
