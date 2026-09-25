@@ -4,7 +4,25 @@
 **Alcance:** cómo se **arma y renderiza** la UI del chat; cómo se **inyectan** los mensajes de **todas** las fuentes (tecleo, banco de respuestas, vacantes, plantillas, adjuntos, "meter a un flujo"); comportamiento con **varios reclutadores** y con **mensajes entrantes**. Foco en los síntomas reportados: brincos/parpadeos y **el relojito ⏳ que no se quita hasta salir y volver a entrar** en mensajes inyectados desde banco y desde flujos.
 **Método:** lectura profunda de código (`ChatSection.jsx`, `MessageBubble.jsx`, `MessageStatusTicks.jsx`, `api/chat.js`, `api/utils/storage.js`, `api/utils/flow-engine.js`). No se corrió el navegador (requiere sesión iniciada). Los hallazgos marcados **[CONFIRMADO]** salen de asimetrías claras en el código; los **[SOSPECHA]** requieren verificación en vivo.
 
-> ⚠️ **Nada de esto está aplicado todavía.** Es un informe para que Oscar decida qué arreglar. No se tocó código.
+> ✅ **APLICADO Y DESPLEGADO — commit `72feed03` (2026-09-24).** Este informe nació como auditoría; abajo, en "Estado de implementación", está qué se aplicó y qué se descartó a propósito. Archivos tocados: `src/components/ChatSection.jsx` y `src/components/chat/MessageBubble.jsx`. Build + ESLint limpios. Pendiente de confirmación VISUAL en prod (scroll y posición del typing).
+
+---
+
+## Estado de implementación (commit `72feed03`)
+
+**Aplicado:**
+- ✅ **Hallazgo 1** — buffer de status pendiente en cliente (`pendingStatusByIdRef` + `applyPendingStatusToList` en `flushPendingSseMessages`; el handler de `messageStatusUpdate` guarda el status si su mensaje aún no está). Relojito pegado (otro reclutador / flujo desde el chat / ráfagas).
+- ✅ **Hallazgo 6** — no se sube `unreadMsgCount` del chat activo si `isAtBottomRef.current` (separador "N no leídos" ya no parpadea).
+- ✅ **Hallazgo 7** — `scrollToBottom` usa `virtuosoRef.scrollToIndex({index:'LAST', align:'end'})` con fallback al scroll crudo.
+- ✅ **Hallazgo 9** — mapa de mensajes por chat a nivel módulo (`chatSectionCache.messagesByChat`); re-entrar no abre vacío.
+- ✅ **Hallazgo 2** — typing "escribiendo…" como overlay absoluto sobre el input (no encoge el viewport).
+- ✅ **Hallazgo 4** — `isReactionOpen` booleano por burbuja (+ `_chatId` corregido, `<div>` wrapper eliminado).
+- ✅ **Hallazgo 8** — re-lock por scroll throttleado a 1/seg.
+- ✅ **Hallazgo 3** — el reloj de entrada de 800 ms se salta si el mensaje llega por SSE ya `sent`.
+
+**Evaluado y NO aplicado (a propósito):**
+- ⏭️ **Hallazgo 5** (reacción entrante cambia el alto de fila): el "fix" exigiría reservar el `pb-5` en TODAS las burbujas → padding de más en cada mensaje = net-negativo. El reflow al llegar una reacción es puntual y esperado.
+- ⏭️ **Limpieza `messagesGrew`**: moverlo fuera del render atrasaría el dato un ciclo y desestabilizaría el sistema de scroll afinado. Cero beneficio visible.
 
 ---
 
