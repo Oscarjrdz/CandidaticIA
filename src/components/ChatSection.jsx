@@ -6437,7 +6437,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                             if (!msg.content && !msg.mediaUrl) return <div style={{ height: 0 }} />;
                             const _isLast = index === displayMessages.length - 1;
 
-                            return (
+                            const bubble = (
                                 <MessageBubble
                                     msg={msg}
                                     chatWhatsapp={selectedChat?.whatsapp}
@@ -6449,6 +6449,11 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                                     onSendReaction={handleSendReaction}
                                 />
                             );
+                            // Respiro del último mensaje contra el input: 12px COMO PARTE del último
+                            // item, para que scrollToIndex('LAST', align:'end') lo respete (el aire del
+                            // Footer no cuenta porque align:'end' alinea el ITEM, no el footer). Así el
+                            // último mensaje no queda pegado al borde inferior.
+                            return _isLast ? <div style={{ paddingBottom: 12 }}>{bubble}</div> : bubble;
                         }}
                         />
                     </div>
