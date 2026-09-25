@@ -195,6 +195,13 @@ const withMessageEntryAnimation = (message = {}, direction = null) => ({
     _animateIn: direction || (isOutgoingAuthor(message) ? 'outgoing' : 'incoming')
 });
 
+// Al ABRIR/re-entrar a un chat, sus mensajes vienen del caché (NO son nuevos) → hay que quitarles
+// la marca de entrada (_animateIn) para que no re-animen. Sin esto, un sticker/imagen re-disparaba
+// su animación de crecimiento de alto (0→real) al re-entrar y se veía "aparecer abajo y subir a su
+// lugar" (el Set anti-replay tiene tope de 800 y en sesiones ocupadas desaloja llaves viejas → replay).
+const stripEntryAnimations = (list = []) =>
+    (list || []).map(m => (m && m._animateIn) ? { ...m, _animateIn: undefined } : m);
+
 // Espera la señal REAL (ENTRY_REVEALED_EVENT desde MessageBubble.jsx) de que la burbuja
 // `key` terminó su fase 1 de entrada — usado para encolar un grupo (texto + fotos del
 // banco de respuestas) en secuencia de verdad, no con un temporizador adivinado. El
@@ -3668,7 +3675,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
             if (target) {
                 bottomAnchorRef.current = true;
                 setSelectedChat(target);
-                setMessages(messagesByChatRef.current.get(target.id) || []);
+                setMessages(stripEntryAnimations(messagesByChatRef.current.get(target.id) || []));
             }
         };
         window.addEventListener('navigate_to_recruiter_chat', handleNavigate);
@@ -4139,7 +4146,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         // Sincroniza el ref de inmediato (el effect lo haria hasta post-commit) para que
         // cualquier callback diferido vea el chat correcto sin ventana de carrera.
         selectedChatRef.current = chat;
-        setMessages(messagesByChatRef.current.get(chat.id) || []);
+        setMessages(stripEntryAnimations(messagesByChatRef.current.get(chat.id) || []));
         setHeaderImgError(false);
         setPendingQrImages([]); // limpiar imágenes pendientes al cambiar de chat
         // Restore draft for the new chat (or clear). Síncrono: con el setTimeout(80)
