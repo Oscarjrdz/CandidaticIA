@@ -953,6 +953,12 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
     // su parte de abajo quedaba tapada porque totalListHeightChanged solo re-anclaba cuando crecía
     // la CANTIDAD de mensajes (messagesGrew), no cuando crecía el ALTO. Con esto también re-ancla.
     const prevListHeightRef = useRef(0);
+    // Separador "N mensajes no leídos": CONGELADO al abrir el chat (snapshot). Antes se derivaba
+    // del `selectedChat?.unreadMsgCount` EN VIVO, así que cada mensaje entrante subía el contador →
+    // recalculaba displayMessages y MOVÍA el separador en un render aparte del mensaje = parpadeo.
+    // Como WhatsApp: el divisor se fija al entrar al chat y no se mueve con cada mensaje nuevo (los
+    // nuevos alimentan el botón de scroll/unseenCount, no el divisor). Se re-congela al cambiar de chat.
+    const [frozenUnreadCount, setFrozenUnreadCount] = useState(0);
     // Ventana "acabo de enviar" (~2s): durante ella, la lista de mensajes SOLO hace scroll al
     // fondo cuando CRECE (llega una burbuja nueva), no en re-mediciones (palomita de estado,
     // carga de imagen con marco fijo). Sin esto, enviar texto+2 fotos disparaba ~8 "snaps" de
@@ -1383,6 +1389,12 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
     useEffect(() => {
         selectedChatRef.current = selectedChat;
     }, [selectedChat]);
+
+    // Congela el contador de "no leídos" del separador al ABRIR/cambiar de chat (snapshot).
+    // Deps solo por id: los cambios EN VIVO de unreadMsgCount (mensajes entrando) no lo mueven.
+    useEffect(() => {
+        setFrozenUnreadCount(Number(selectedChatRef.current?.unreadMsgCount || 0));
+    }, [selectedChat?.id]);
 
     // El silencio de IA expira por reloj, no por un evento (a diferencia de la burbuja de
     // no leidos que reacciona a un mensaje via SSE). Para que el toggle se voltee EN VIVO
@@ -3526,7 +3538,11 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                         if (patch.ultimoMensaje) updated.ultimoMensaje = patch.ultimoMensaje;
                         if (patch.lastUserMessageAt) {
                             updated.lastUserMessageAt = patch.lastUserMessageAt;
-                            if (patch.unreadMsgCount === undefined) {
+                            // No subas la burbuja verde del chat que estás ATENDIENDO y leyendo
+                            // (abierto + al fondo): la marcabas como leída enseguida, así que subía
+                            // 0→1→0 y parpadeaba. Mismo criterio que el separador del cuerpo.
+                            const isActiveAtBottom = c.id === (pendingChatIdRef.current ?? selectedChatRef.current?.id) && isAtBottomRef.current;
+                            if (patch.unreadMsgCount === undefined && !isActiveAtBottom) {
                                 updated.unreadMsgCount = (c.unreadMsgCount || 0) + 1;
                             }
                         }
@@ -4835,7 +4851,9 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
             if (!qm) return undefined;
             return { content: qm.content || '', mediaUrl: qm.mediaUrl || '', type: qm.type || '' };
         };
-        const rawUnreadCount = Number(selectedChat?.unreadMsgCount || 0);
+        // Snapshot congelado al abrir el chat (NO el valor en vivo) → el separador no se mueve ni
+        // reflickea con cada mensaje entrante. Ver frozenUnreadCount.
+        const rawUnreadCount = frozenUnreadCount;
         const incomingCount = orderedMessages.filter(isIncomingAuthor).length;
         const unreadCount = Math.min(rawUnreadCount, incomingCount);
         let unreadSepIdx = -1;
@@ -4957,7 +4975,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
             cache.set(key, { signature, value: item });
             return item;
         });
-    }, [messages, selectedChat?.unreadMsgCount]);
+    }, [messages, frozenUnreadCount]);
 
     // Detecta si la lista CRECIÓ desde el último render — se usa para no forzar
     // scroll-to-bottom en re-renders que solo cambian una palomita de estado
