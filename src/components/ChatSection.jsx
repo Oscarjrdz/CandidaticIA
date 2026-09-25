@@ -947,11 +947,10 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
     const pendingStatusByIdRef = useRef(new Map());
     const displayMessageCacheRef = useRef(new Map());
     const bottomAnchorRef = useRef(false);
-    const prevDisplayLengthRef = useRef(0);
-    // Última altura total reportada por Virtuoso. Si el ÚLTIMO mensaje crece DESPUÉS de montarse
-    // (le cae una reacción = +pb-5, o una imagen que midió su alto real tarde) y estás al fondo,
-    // su parte de abajo quedaba tapada porque totalListHeightChanged solo re-anclaba cuando crecía
-    // la CANTIDAD de mensajes (messagesGrew), no cuando crecía el ALTO. Con esto también re-ancla.
+    // Última altura total reportada por Virtuoso. El scroll manual (totalListHeightChanged, único
+    // mecanismo — followOutput está desactivado) baja al fondo cuando el alto crece >8px estando al
+    // fondo/enviando: mensaje nuevo, o un mensaje que crece tarde (reacción = +pb-5, imagen que mide
+    // su alto real tarde). Usa la altura REAL de Virtuoso, no el render → confiable y no-racy.
     const prevListHeightRef = useRef(0);
     // Separador "N mensajes no leídos": CONGELADO al abrir el chat (snapshot). Antes se derivaba
     // del `selectedChat?.unreadMsgCount` EN VIVO, así que cada mensaje entrante subía el contador →
@@ -3367,11 +3366,11 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
             }
         }
 
-        // NO scroll manual aquí: el `followOutput` nativo de Virtuoso ya mantiene el fondo
-        // pegado cuando entran mensajes (si estás al fondo o enviando). Un scrollToBottom manual
-        // ADEMÁS del nativo era justo la carrera que hacía "brincar" el scroll cuando coincidían
-        // un entrante y un saliente (el nativo reacomoda suave, el manual da un jalón 2 frames
-        // después encima). Dejamos que followOutput sea el único que sigue mensajes nuevos.
+        // NO se hace scroll aquí: el ÚNICO mecanismo de scroll al fondo es totalListHeightChanged
+        // (que dispara cuando el alto de la lista crece al insertarse el mensaje, si estás al fondo).
+        // Antes esto tenía su propio scrollToBottom que, sumado al de totalListHeightChanged y al
+        // followOutput nativo, hacía "brincar" el scroll al coincidir entrante+saliente. Una sola
+        // autoridad de scroll evita esa carrera.
     };
 
     const scheduleSseFlush = () => {
@@ -4977,15 +4976,6 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         });
     }, [messages, frozenUnreadCount]);
 
-    // Detecta si la lista CRECIÓ desde el último render — se usa para no forzar
-    // scroll-to-bottom en re-renders que solo cambian una palomita de estado
-    // (queued→sent→delivered). Antes CUALQUIER cambio de altura medida por Virtuoso
-    // (incluida una remedición de 1px al cambiar el ícono de estado) disparaba
-    // scrollToBottom otra vez — con 3 fotos eso son ~8 "snaps" de scroll en pocos
-    // segundos, y se veía como que las burbujas de imagen "suben y bajan".
-    const messagesGrew = displayMessages.length > prevDisplayLengthRef.current;
-    prevDisplayLengthRef.current = displayMessages.length;
-
     return (
         <div className="flex h-full w-full bg-[#f0f2f5] dark:bg-[#111b21] font-sans overflow-hidden">
             
@@ -6308,41 +6298,33 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                             // fondo tanto con pocos como con muchos mensajes.
                             alignToBottom
                             initialTopMostItemIndex={displayMessages.length > 0 ? displayMessages.length - 1 : 0}
-                            followOutput={(isAtBottom) => {
-                                // Mismo criterio que totalListHeightChanged: Virtuoso llama esto en
-                                // CUALQUIER cambio de `data` (incluida una palomita de estado), no solo
-                                // cuando llega una burbuja nueva — sin messagesGrew se auto-scrolleaba
-                                // de mas durante todo el envio, aunque nada nuevo hubiera aparecido.
-                                if (isSendingRef.current && messagesGrew) return 'auto';
-                                return isAtBottom ? 'auto' : false;
-                            }}
+                            // followOutput DESACTIVADO a propósito: era una SEGUNDA autoridad de scroll
+                            // (nativa de Virtuoso) que competía con el manual de totalListHeightChanged.
+                            // Con las dos, al coincidir un entrante y un saliente cada una scrolleaba en
+                            // frames distintos hacia un fondo que iba cambiando (el entrante se ordena
+                            // arriba del saliente, las imágenes miden tarde) → el scroll "brincaba". Ahora
+                            // el ÚNICO que baja al fondo es totalListHeightChanged (manual, un solo paso,
+                            // coalescido, confiable por altura real). Además followOutput usaba messagesGrew
+                            // (racy) → era la causa del "mensaje enviado cortado". Una sola autoridad = sin
+                            // carrera ni brinco.
+                            followOutput={false}
                             computeItemKey={(index, msg) => getStableMessageKey(msg, index)}
                             overscan={400}
                             atBottomThreshold={150}
                             components={MESSAGES_VIRTUOSO_COMPONENTS}
                             totalListHeightChanged={(height) => {
-                                // Durante la ventana "acabo de enviar" (~2s), SOLO scrollear si la lista
-                                // CRECIÓ (burbuja nueva) — así enviar texto+2 fotos hace UN solo scroll al
-                                // montar el grupo, no ~8 snaps por cada re-medición (palomita de estado,
-                                // marco de imagen). Eso enmascaraba la animación y se veía como brinco.
-                                // Fuera de esa ventana, el comportamiento normal (anclar al fondo si estás
-                                // abajo) se conserva para el flujo de mensajes entrantes.
+                                // ÚNICO mecanismo de scroll al fondo (followOutput está desactivado).
+                                // Baja al fondo cuando el ALTO total de la lista crece >8px, si estás al
+                                // fondo o acabas de enviar (ventana sendHold ~2s). Cubre: mensaje NUEVO
+                                // (entrante/saliente), REACCIÓN que le cae a un mensaje (+pb-5), e IMAGEN
+                                // que mide su alto real tarde — todo lo que empujaría el último mensaje.
+                                // grewTall usa la altura REAL que reporta Virtuoso (no el render) →
+                                // confiable y no-racy (por eso el envío ya no queda "cortado"). El umbral
+                                // de 8px ignora las palomitas de estado (mismo tamaño de ícono, no cambian
+                                // el alto) y remediciones sub-pixel → sin bucle de "brinquitos".
                                 const inSendHold = Date.now() < sendScrollHoldUntilRef.current;
-                                // ¿El ALTO total creció de forma significativa (>8px)? Es un mensaje ya
-                                // existente que se hizo más alto: una REACCIÓN que le cayó (+pb-5) o una
-                                // IMAGEN que midió su alto real tarde. Sin re-anclar, su parte de abajo
-                                // (hora/reacción) quedaba tapada. El umbral de 8px evita disparar por las
-                                // palomitas de estado (mismo tamaño de ícono, no cambian el alto) y por
-                                // remediciones sub-pixel — así no se reintroduce el bucle de "brinquitos".
                                 const grewTall = height > prevListHeightRef.current + 8;
                                 prevListHeightRef.current = height;
-                                // El scroll de MENSAJES NUEVOS lo maneja followOutput (nativo, suave).
-                                // Aquí el manual SOLO se encarga de lo que followOutput NO ve: cuando
-                                // un mensaje YA existente crece de alto (una reacción que le cae, o una
-                                // imagen que mide tarde) → grewTall. Antes esto también disparaba por
-                                // messagesGrew, duplicando el scroll del nativo y haciendo "brincar" el
-                                // scroll al coincidir entrante+saliente. grewTall usa la altura REAL de
-                                // Virtuoso (no el render) → no es racy y no se pisa con followOutput.
                                 const atBottomTrigger = inSendHold
                                     ? grewTall
                                     : (isAtBottomRef.current && grewTall);
