@@ -3337,10 +3337,8 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         }
 
         const activeId = pendingChatIdRef.current ?? selectedChatRef.current?.id;
-        let activeGotMessage = false;
-        let activePreserveBottom = false;
 
-        for (const [chatId, { msgs, preserveBottom }] of byChat) {
+        for (const [chatId, { msgs }] of byChat) {
             if (String(chatId) === String(activeId)) {
                 setMessages(prev => {
                     let next = Array.isArray(prev) ? prev : [];
@@ -3349,8 +3347,6 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                     // mensaje entró (evita el relojito pegado del chat activo).
                     return applyPendingStatusToList(next);
                 });
-                activeGotMessage = true;
-                if (preserveBottom) activePreserveBottom = true;
             } else {
                 const prev = messagesByChatRef.current.get(chatId) || [];
                 let next = prev;
@@ -3359,7 +3355,11 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
             }
         }
 
-        if (activeGotMessage && activePreserveBottom) scrollToBottom();
+        // NO scroll manual aquí: el `followOutput` nativo de Virtuoso ya mantiene el fondo
+        // pegado cuando entran mensajes (si estás al fondo o enviando). Un scrollToBottom manual
+        // ADEMÁS del nativo era justo la carrera que hacía "brincar" el scroll cuando coincidían
+        // un entrante y un saliente (el nativo reacomoda suave, el manual da un jalón 2 frames
+        // después encima). Dejamos que followOutput sea el único que sigue mensajes nuevos.
     };
 
     const scheduleSseFlush = () => {
@@ -6318,15 +6318,16 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                                 // remediciones sub-pixel — así no se reintroduce el bucle de "brinquitos".
                                 const grewTall = height > prevListHeightRef.current + 8;
                                 prevListHeightRef.current = height;
-                                // grewTall se calcula de la altura REAL que reporta Virtuoso, no del
-                                // render → NO es racy. messagesGrew (largo del array calculado en el
-                                // render) sí lo es: al enviar hay varios renders seguidos (insertar +
-                                // limpiar input) y se apagaba a false antes de que este callback lo
-                                // leyera → el mensaje recién enviado no bajaba al fondo y quedaba
-                                // cortado. Por eso durante sendHold también aceptamos grewTall.
+                                // El scroll de MENSAJES NUEVOS lo maneja followOutput (nativo, suave).
+                                // Aquí el manual SOLO se encarga de lo que followOutput NO ve: cuando
+                                // un mensaje YA existente crece de alto (una reacción que le cae, o una
+                                // imagen que mide tarde) → grewTall. Antes esto también disparaba por
+                                // messagesGrew, duplicando el scroll del nativo y haciendo "brincar" el
+                                // scroll al coincidir entrante+saliente. grewTall usa la altura REAL de
+                                // Virtuoso (no el render) → no es racy y no se pisa con followOutput.
                                 const atBottomTrigger = inSendHold
-                                    ? (messagesGrew || grewTall)
-                                    : (isAtBottomRef.current && (messagesGrew || grewTall));
+                                    ? grewTall
+                                    : (isAtBottomRef.current && grewTall);
                                 if (bottomAnchorRef.current || atBottomTrigger) {
                                     // Mismo scrollToBottom() para cualquier tamaño de mensaje — ya espera
                                     // el frame que Virtuoso necesita para medir burbujas altas (ver arriba),
