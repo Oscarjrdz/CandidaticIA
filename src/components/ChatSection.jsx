@@ -6315,10 +6315,14 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                                 // remediciones sub-pixel — así no se reintroduce el bucle de "brinquitos".
                                 const grewTall = height > prevListHeightRef.current + 8;
                                 prevListHeightRef.current = height;
-                                // Fuera de sendHold también hace falta messagesGrew/grewTall: sin ese
-                                // chequeo, cualquier remedición idle disparaba scrollToBottom() de más.
+                                // grewTall se calcula de la altura REAL que reporta Virtuoso, no del
+                                // render → NO es racy. messagesGrew (largo del array calculado en el
+                                // render) sí lo es: al enviar hay varios renders seguidos (insertar +
+                                // limpiar input) y se apagaba a false antes de que este callback lo
+                                // leyera → el mensaje recién enviado no bajaba al fondo y quedaba
+                                // cortado. Por eso durante sendHold también aceptamos grewTall.
                                 const atBottomTrigger = inSendHold
-                                    ? messagesGrew
+                                    ? (messagesGrew || grewTall)
                                     : (isAtBottomRef.current && (messagesGrew || grewTall));
                                 if (bottomAnchorRef.current || atBottomTrigger) {
                                     // Mismo scrollToBottom() para cualquier tamaño de mensaje — ya espera
