@@ -978,9 +978,10 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
     const armChatContentMask = useCallback(() => {
         setChatContentReady(false);
         if (chatReadyTimerRef.current) clearTimeout(chatReadyTimerRef.current);
-        // Red de seguridad: si por lo que sea no llega el settle (chat vacío, sin cambio de altura),
-        // revelar de todos modos para no dejar la lista invisible.
-        chatReadyTimerRef.current = setTimeout(() => setChatContentReady(true), 350);
+        // Red de seguridad: si no llega el settle CON mensajes (chat realmente vacío, o loadMessages
+        // lento/fallido), revelar de todos modos para no dejar la lista invisible. 600ms da margen a
+        // que loadMessages traiga los datos en el 1er open sin que se vea un blanco largo.
+        chatReadyTimerRef.current = setTimeout(() => setChatContentReady(true), 600);
     }, []);
     // Ventana "acabo de enviar" (~2s): durante ella, la lista de mensajes SOLO hace scroll al
     // fondo cuando CRECE (llega una burbuja nueva), no en re-mediciones (palomita de estado,
@@ -6374,19 +6375,25 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                                     // el frame que Virtuoso necesita para medir burbujas altas (ver arriba),
                                     // así que un texto largo (vacante/maletita) no necesita mecanismo aparte.
                                     scrollToBottom();
-                                    if (bottomAnchorRef.current) {
-                                        // Primer asentamiento tras abrir el chat: revelar la lista YA
-                                        // posicionada al fondo (fin de la máscara de montaje). Se espera a
-                                        // que el scroll de arriba (2 rAF) se aplique antes de revelar.
+                                    // Revelar (fin de la máscara) + consumir el ancla SOLO cuando YA hay
+                                    // mensajes. En el PRIMER open (sin caché) la lista arranca vacía y
+                                    // loadMessages trae los datos un poco después; si reveláramos en el
+                                    // asentamiento de la lista vacía, el reacomodo de los mensajes reales
+                                    // ocurriría DESPUÉS, ya visible → el flicker de "primera vez". Manteniendo
+                                    // bottomAnchorRef en true hasta que haya contenido, el reveal cae en el
+                                    // asentamiento CON los mensajes reales, enmascarando también el 1er open.
+                                    // bottomAnchorRef ("una sola vez", se activa al abrir un chat) se consume
+                                    // SOLO cuando ya hay mensajes: ahí revelamos la máscara y lo apagamos. Si
+                                    // la lista aún está vacía (1er open antes de loadMessages), se mantiene en
+                                    // true para que el reveal caiga en el asentamiento CON los mensajes reales.
+                                    // Sin este consumo condicional, quedaba encendido y forzaba scroll al fondo
+                                    // en CADA cambio de altura (mensaje nuevo, imagen, reacción) aunque hubieras
+                                    // subido a leer historial → parpadeo.
+                                    if (bottomAnchorRef.current && displayMessages.length > 0) {
                                         requestAnimationFrame(() => requestAnimationFrame(() =>
                                             requestAnimationFrame(() => revealChatContent())));
+                                        bottomAnchorRef.current = false;
                                     }
-                                    // bottomAnchorRef es una bandera de "una sola vez" (se activa al abrir un
-                                    // chat o cargar sus mensajes) — sin este reset se quedaba encendida para
-                                    // siempre, forzando scroll al fondo en CADA cambio de altura de la lista
-                                    // (cualquier mensaje nuevo, imagen cargando, reaccion) sin importar si el
-                                    // usuario habia subido a leer historial. Eso causaba el parpadeo.
-                                    bottomAnchorRef.current = false;
                                 }
                             }}
                             atBottomStateChange={(isAtBottom) => {
