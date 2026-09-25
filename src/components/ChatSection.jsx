@@ -3538,11 +3538,11 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                         if (patch.ultimoMensaje) updated.ultimoMensaje = patch.ultimoMensaje;
                         if (patch.lastUserMessageAt) {
                             updated.lastUserMessageAt = patch.lastUserMessageAt;
-                            // No subas la burbuja verde del chat que estás ATENDIENDO y leyendo
-                            // (abierto + al fondo): la marcabas como leída enseguida, así que subía
-                            // 0→1→0 y parpadeaba. Mismo criterio que el separador del cuerpo.
-                            const isActiveAtBottom = c.id === (pendingChatIdRef.current ?? selectedChatRef.current?.id) && isAtBottomRef.current;
-                            if (patch.unreadMsgCount === undefined && !isActiveAtBottom) {
+                            // La burbuja verde SÍ debe subir aunque estés viendo el chat: el no-leído
+                            // se limpia cuando RESPONDES, no al solo ver. El parpadeo que causaba este
+                            // incremento ya no ocurre porque el cuerpo usa frozenUnreadCount (congelado),
+                            // así que el contador puede subir sin recalcular displayMessages.
+                            if (patch.unreadMsgCount === undefined) {
                                 updated.unreadMsgCount = (c.unreadMsgCount || 0) + 1;
                             }
                         }
@@ -3591,11 +3591,11 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                     }
                     if (patch.lastUserMessageAt) {
                         updated.lastUserMessageAt = patch.lastUserMessageAt;
-                        // Si el chat está ABIERTO y al fondo, lo estás leyendo → NO subas el
-                        // contador (el auto read-receipt lo baja enseguida y el separador
-                        // "N no leídos" aparecía y desaparecía con reflow = "muestra y desaparece").
-                        // Solo cuenta como no leído si subiste a leer historial.
-                        if (patch.unreadMsgCount === undefined && !isAtBottomRef.current) {
+                        // El no-leído se limpia cuando RESPONDES, no al solo ver → el contador sube
+                        // aunque tengas el chat abierto. El parpadeo del cuerpo que esto causaba ya no
+                        // pasa: el separador usa frozenUnreadCount (congelado al abrir), no este valor
+                        // en vivo, así que displayMessages no se recalcula al subir el contador.
+                        if (patch.unreadMsgCount === undefined) {
                             updated.unreadMsgCount = (prev.unreadMsgCount || 0) + 1;
                         }
                     }
