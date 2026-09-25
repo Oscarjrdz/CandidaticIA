@@ -2119,10 +2119,14 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         });
         setAvailableTags(optimistic);
         try {
+            // El registro curado (POST) NO debe incluir las etiquetas "descubiertas"
+            // (registered:false, las de anuncios/flujos que solo existen en candidatos).
+            // Se muestran en el selector pero no se persisten como etiquetas oficiales.
+            const registryOnly = newGlobalTags.filter(t => typeof t === 'string' || t.registered !== false);
             await fetch('/api/tags', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ tags: newGlobalTags })
+                body: JSON.stringify({ tags: registryOnly })
             });
             // Traer los counts autoritativos del servidor (etiquetas nuevas → número real).
             loadTags();

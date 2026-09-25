@@ -134,7 +134,19 @@ export default async function handler(req, res) {
                 t.count = exact !== undefined ? exact : (normCounts[String(t.name || '').trim().toLowerCase()] || 0);
             });
 
-            const payload = { success: true, tags, untaggedCount };
+            // 🔎 ETIQUETAS DESCUBIERTAS: etiquetas que EXISTEN en candidatos reales
+            // (countsMap) pero que NUNCA se registraron en 'candidatic:chat_tags'
+            // (típicamente etiquetas de anuncios/flujos/importaciones). Antes solo se veían
+            // en Envíos Masivos (índice facetado). Ahora también se devuelven aquí para que
+            // Chat Web las muestre y puedan borrarse DE RAÍZ. Se marcan registered:false para
+            // que el frontend NO las persista en el registro curado al guardar (POST).
+            const registeredNorm = new Set(tags.map(t => String(t.name || '').trim().toLowerCase()));
+            const discovered = Object.entries(countsMap)
+                .filter(([name]) => name && !registeredNorm.has(String(name).trim().toLowerCase()))
+                .map(([name, count]) => ({ name, color: '#9ca3af', count, registered: false }))
+                .sort((a, b) => b.count - a.count);
+
+            const payload = { success: true, tags: [...tags, ...discovered], untaggedCount };
             return res.status(200).json(payload);
         }
 
@@ -171,7 +183,17 @@ export default async function handler(req, res) {
                     }
                 } catch (_) {}
                 // Ya sin candidatos con la etiqueta, la llave queda en 0 → borrarla limpio.
-                finally { await redis.hdel(TAG_COUNTS_KEY, tagName).catch(() => {}); }
+                finally {
+                    await redis.hdel(TAG_COUNTS_KEY, tagName).catch(() => {});
+                    // Invalidar el índice facetado de Envíos Masivos para que la etiqueta
+                    // desaparezca de ahí también (se reconstruye en la próxima apertura), en
+                    // vez de seguir listada hasta que venza su TTL. Se hace DESPUÉS del
+                    // limpiado para que el rebuild ya no encuentre la etiqueta en candidatos.
+                    try {
+                        const { FACET_META_KEY, FACET_COUNTS_CACHE_KEY } = await import('./utils/facet-index.js');
+                        await redis.del(FACET_META_KEY, FACET_COUNTS_CACHE_KEY).catch(() => {});
+                    } catch (_) {}
+                }
             })();
 
             return res.status(200).json({ success: true, message: `Etiqueta '${tagName}' eliminada`, tags: newTags });

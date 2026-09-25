@@ -471,10 +471,12 @@ const CandidatesSection = () => {
     const saveTagsGlobal = async (newGlobalTags) => {
         setAvailableTags(newGlobalTags);
         try {
+            // No persistir las etiquetas "descubiertas" (registered:false) en el registro curado.
+            const registryOnly = newGlobalTags.filter(t => typeof t === 'string' || t.registered !== false);
             await fetch('/api/tags', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ tags: newGlobalTags })
+                body: JSON.stringify({ tags: registryOnly })
             });
         } catch (e) {
             console.error('Error saving global tags', e);
@@ -496,8 +498,11 @@ const CandidatesSection = () => {
                 method: 'DELETE'
             });
             const data = await res.json();
-            if (data.success && data.tags) {
-                setAvailableTags(data.tags);
+            if (data.success) {
+                // La respuesta DELETE trae solo el registro curado (sin las descubiertas).
+                // Quitamos localmente SOLO la etiqueta borrada para no perder de vista las
+                // demás descubiertas que sigan presentes.
+                setAvailableTags(prev => (Array.isArray(prev) ? prev : []).filter(t => (typeof t === 'string' ? t : t.name) !== tagName));
                 showToast && showToast('Etiqueta eliminada de la base global', 'success');
             }
         } catch (e) {
