@@ -1001,14 +1001,19 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         if (scrollFrameRef.current) cancelAnimationFrame(scrollFrameRef.current);
         scrollFrameRef.current = requestAnimationFrame(() => {
             scrollFrameRef.current = requestAnimationFrame(() => {
-                // Scroll al fondo ABSOLUTO en UN SOLO paso (`scrollTop = scrollHeight`, que incluye
-                // el Footer de 25px → el último mensaje queda con su respiro).
-                // ⚠️ NO volver al esquema de dos pasos (scrollToIndex align:'end' + luego scrollTop):
-                // dejaba el mensaje pegado al input un frame y luego brincaba 25px, y como el
-                // re-anclaje por crecimiento (grewTall) puede llamar esto varias veces mientras el
-                // mensaje entra, se veían VARIOS brincos seguidos = el "parpadeo/ráfaga" reportado.
-                // El re-anclaje confiable ya lo garantiza grewTall en totalListHeightChanged (usa la
-                // altura REAL de Virtuoso, no el estimado), así que aquí basta un scroll limpio.
+                // Fondo CONFIABLE con la API de Virtuoso: scrollToIndex('LAST', align:'end') MIDE el
+                // último item antes de posicionar. El `scrollTop = scrollHeight` crudo fallaba en una
+                // lista virtualizada: si los items de abajo (stickers/imágenes) no estaban medidos,
+                // scrollHeight era un ESTIMADO corto → aterrizaba antes del fondo y quedaban 1-3
+                // mensajes escondidos (y al caer corto, isAtBottom=false → grewTall no re-anclaba).
+                // UN SOLO paso (no el esquema de 2 que hacía ráfaga): llamarlo varias veces va siempre
+                // al mismo último item = idempotente, sin brincos. Fallback al scroll crudo si aún no
+                // hay instancia.
+                const v = virtuosoRef.current;
+                if (v && typeof v.scrollToIndex === 'function') {
+                    try { v.scrollToIndex({ index: 'LAST', align: 'end', behavior: 'auto' }); return; }
+                    catch { /* cae al scroll crudo */ }
+                }
                 const el = virtuosoScrollerRef.current;
                 if (el) el.scrollTop = el.scrollHeight;
             });
