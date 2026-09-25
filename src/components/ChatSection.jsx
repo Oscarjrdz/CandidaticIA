@@ -6311,7 +6311,11 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                             // ABAJO (estilo WhatsApp) para que la inyeccion se extienda suave desde el
                             // fondo tanto con pocos como con muchos mensajes.
                             alignToBottom
-                            initialTopMostItemIndex={displayMessages.length > 0 ? displayMessages.length - 1 : 0}
+                            // Arranca pegado al FONDO: el último item alineado al final del viewport
+                            // (align:'end'). Antes era solo el índice (align:'start' por defecto) → ponía
+                            // el último mensaje en el TOPE del viewport y luego reacomodaba = el brinco de
+                            // "los stickers salen abajo y suben" al re-entrar. Con align:'end' nace bien.
+                            initialTopMostItemIndex={displayMessages.length > 0 ? { index: displayMessages.length - 1, align: 'end' } : 0}
                             // followOutput DESACTIVADO a propósito: era una SEGUNDA autoridad de scroll
                             // (nativa de Virtuoso) que competía con el manual de totalListHeightChanged.
                             // Con las dos, al coincidir un entrante y un saliente cada una scrolleaba en
