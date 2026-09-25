@@ -6291,6 +6291,13 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                     {/* Mensajes — Virtualized (react-virtuoso: solo renderiza items visibles) */}
                     <div className="flex-1 overflow-hidden z-10 min-h-0" onClick={() => setShowDropdown(null)}>
                         <Virtuoso
+                            // key por chat: REMONTA Virtuoso al cambiar de chat para que cada uno
+                            // arranque con medidas LIMPIAS. Virtuoso cachea alturas por índice; al
+                            // reusar la instancia entre chats (A→B→A), los items de A heredaban las
+                            // alturas de B → estimaba mal → con alignToBottom el contenido nacía
+                            // comprimido abajo y "subía" al medir los stickers/imágenes reales (por eso
+                            // pasaba al RE-ENTRAR, no en la 1ª vez). Remontar = como abrir por primera vez.
+                            key={selectedChat?.id || 'no-chat'}
                             ref={virtuosoRef}
                             scrollerRef={(el) => { virtuosoScrollerRef.current = el; }}
                             style={{ height: '100%' }}
