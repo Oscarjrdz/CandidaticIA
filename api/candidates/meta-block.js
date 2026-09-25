@@ -34,12 +34,21 @@ export default async function handler(req, res) {
 
         const { getMetaConfig, GRAPH_BASE_URL } = await import('../whatsapp/utils.js');
         const config = getMetaConfig();
-        if (!config.phoneNumberId || !config.accessToken) {
-            return res.status(500).json({ success: false, error: 'Configuración de Meta incompleta (META_PHONE_NUMBER_ID / META_ACCESS_TOKEN)' });
+        if (!config.accessToken) {
+            return res.status(500).json({ success: false, error: 'Configuración de Meta incompleta (META_ACCESS_TOKEN)' });
+        }
+
+        // Candidatic es MULTI-NÚMERO: hay que bloquear en el MISMO número de negocio donde el
+        // candidato conversa (incomingPhoneNumberId, guardado por el webhook), no en el principal.
+        // El Block API es por phone-number-id y además solo deja bloquear a quien te escribió EN ese
+        // número — bloquear en el principal cuando el candidato usa otro número no surtía efecto.
+        const targetPhoneNumberId = candidate.incomingPhoneNumberId || candidate.instanceId || config.phoneNumberId;
+        if (!targetPhoneNumberId) {
+            return res.status(500).json({ success: false, error: 'No se pudo determinar el número de WhatsApp del candidato' });
         }
 
         // Block API: POST para bloquear, DELETE para desbloquear. Mismo endpoint y cuerpo.
-        const url = `${GRAPH_BASE_URL}/${config.phoneNumberId}/block_users`;
+        const url = `${GRAPH_BASE_URL}/${targetPhoneNumberId}/block_users`;
         const payload = { messaging_product: 'whatsapp', block_users: [{ user: phone }] };
         const response = await axios({
             method: block ? 'post' : 'delete',
