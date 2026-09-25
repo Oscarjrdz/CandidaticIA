@@ -970,17 +970,15 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
     const scrollToBottom = () => {
         if (scrollFrameRef.current) cancelAnimationFrame(scrollFrameRef.current);
         scrollFrameRef.current = requestAnimationFrame(() => {
-            // Paso 1 — forzar a Virtuoso a renderizar/posicionar el ÚLTIMO item. Sin esto, en una
-            // lista virtualizada donde el último item aún no está montado, `scrollHeight` es un
-            // ESTIMADO corto → el scroll crudo aterrizaba ANTES del fondo real y el último mensaje
-            // (entrante o saliente) quedaba escondido abajo. scrollToIndex garantiza que el item
-            // exista y esté medido.
-            const v = virtuosoRef.current;
-            if (v) { try { v.scrollToIndex({ index: 'LAST', align: 'end' }); } catch { /* noop */ } }
-            // Paso 2 — frame siguiente: ya con el último item real medido, fijar el fondo ABSOLUTO.
-            // scrollHeight ahora es exacto e incluye el Footer de 25px → el último mensaje queda
-            // con su respiro y SIEMPRE completo (esto añade el aire que scrollToIndex align:'end' no da).
             scrollFrameRef.current = requestAnimationFrame(() => {
+                // Scroll al fondo ABSOLUTO en UN SOLO paso (`scrollTop = scrollHeight`, que incluye
+                // el Footer de 25px → el último mensaje queda con su respiro).
+                // ⚠️ NO volver al esquema de dos pasos (scrollToIndex align:'end' + luego scrollTop):
+                // dejaba el mensaje pegado al input un frame y luego brincaba 25px, y como el
+                // re-anclaje por crecimiento (grewTall) puede llamar esto varias veces mientras el
+                // mensaje entra, se veían VARIOS brincos seguidos = el "parpadeo/ráfaga" reportado.
+                // El re-anclaje confiable ya lo garantiza grewTall en totalListHeightChanged (usa la
+                // altura REAL de Virtuoso, no el estimado), así que aquí basta un scroll limpio.
                 const el = virtuosoScrollerRef.current;
                 if (el) el.scrollTop = el.scrollHeight;
             });
