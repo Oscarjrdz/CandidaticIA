@@ -38,45 +38,65 @@ export default async function handler(req, res) {
             return res.status(500).json({ success: false, error: 'Configuración de Meta incompleta (META_ACCESS_TOKEN)' });
         }
 
-        // Candidatic es MULTI-NÚMERO: hay que bloquear en el MISMO número de negocio donde el
-        // candidato conversa (incomingPhoneNumberId, guardado por el webhook), no en el principal.
-        // El Block API es por phone-number-id y además solo deja bloquear a quien te escribió EN ese
-        // número — bloquear en el principal cuando el candidato usa otro número no surtía efecto.
-        const targetPhoneNumberId = candidate.incomingPhoneNumberId || candidate.instanceId || config.phoneNumberId;
-        if (!targetPhoneNumberId) {
-            return res.status(500).json({ success: false, error: 'No se pudo determinar el número de WhatsApp del candidato' });
+        // Candidatic es MULTI-NÚMERO. Bloqueamos en TODOS los números de negocio del WABA a la vez
+        // ("de todos"): así un candidato que escribió a varios números en distintos momentos queda
+        // bloqueado en todos. El número donde conversa hoy (incomingPhoneNumberId) SIEMPRE va en la
+        // lista para garantizar al menos un bloqueo válido (el Block API es por phone-number-id y solo
+        // permite bloquear a quien te escribió EN ese número → en los demás fallará, y es esperado).
+        const authHeaders = {
+            'Authorization': `Bearer ${config.accessToken}`,
+            'Content-Type': 'application/json'
+        };
+        const activeNumber = candidate.incomingPhoneNumberId || candidate.instanceId || config.phoneNumberId;
+
+        // Lista de todos los números del WABA (fallback al activo/principal si no se puede listar).
+        let phoneNumberIds = [];
+        if (config.wabaId) {
+            try {
+                const listRes = await axios.get(`${GRAPH_BASE_URL}/${config.wabaId}/phone_numbers`, {
+                    headers: authHeaders, timeout: 10000, params: { fields: 'id', limit: 50 }, validateStatus: () => true
+                });
+                phoneNumberIds = (listRes.data?.data || []).map(n => n.id).filter(Boolean);
+            } catch { /* fallback abajo */ }
+        }
+        // Garantiza el número activo y quita duplicados/vacíos.
+        phoneNumberIds = [...new Set([activeNumber, ...phoneNumberIds].filter(Boolean))];
+        if (phoneNumberIds.length === 0) {
+            return res.status(500).json({ success: false, error: 'No se pudo determinar ningún número de WhatsApp para el bloqueo' });
         }
 
-        // Block API: POST para bloquear, DELETE para desbloquear. Mismo endpoint y cuerpo.
-        const url = `${GRAPH_BASE_URL}/${targetPhoneNumberId}/block_users`;
+        // Block API: POST para bloquear, DELETE para desbloquear. Mismo cuerpo en cada número.
         const payload = { messaging_product: 'whatsapp', block_users: [{ user: phone }] };
-        const response = await axios({
-            method: block ? 'post' : 'delete',
-            url,
-            data: payload,
-            headers: {
-                'Authorization': `Bearer ${config.accessToken}`,
-                'Content-Type': 'application/json'
-            },
-            timeout: 30000,
-            validateStatus: () => true
-        });
+        const perNumber = await Promise.all(phoneNumberIds.map(async (pid) => {
+            try {
+                const r = await axios({
+                    method: block ? 'post' : 'delete',
+                    url: `${GRAPH_BASE_URL}/${pid}/block_users`,
+                    data: payload, headers: authHeaders, timeout: 30000, validateStatus: () => true
+                });
+                const d = r.data || {};
+                const numberOk = r.status >= 200 && r.status < 300 &&
+                    !(Array.isArray(d?.block_users?.failed_users) && d.block_users.failed_users.length > 0);
+                return { pid, ok: numberOk, status: r.status, data: d };
+            } catch (e) {
+                return { pid, ok: false, error: e?.response?.data?.error?.message || e.message };
+            }
+        }));
 
-        // Meta responde con resultado POR usuario (block_users.added_users /
-        // failed_users). Consideramos éxito si el número quedó en la lista correcta.
-        const data = response.data || {};
-        const ok = response.status >= 200 && response.status < 300 &&
-            !(Array.isArray(data?.block_users?.failed_users) && data.block_users.failed_users.length > 0);
-
+        // Éxito si al menos UN número se bloqueó/desbloqueó (los otros fallan por no tener
+        // conversación con ese candidato — esperado en multi-número).
+        const ok = perNumber.some(r => r.ok);
         if (!ok) {
-            const metaErr = data?.error?.message
-                || data?.block_users?.failed_users?.[0]?.errors?.[0]?.message
-                || `Meta respondió ${response.status}`;
+            const firstErr = perNumber.find(r => !r.ok);
+            const metaErr = firstErr?.data?.error?.message
+                || firstErr?.data?.block_users?.failed_users?.[0]?.errors?.[0]?.message
+                || firstErr?.error
+                || `Meta respondió ${firstErr?.status}`;
             return res.status(502).json({
                 success: false,
                 error: block ? 'No se pudo bloquear en WhatsApp' : 'No se pudo desbloquear en WhatsApp',
                 metaError: metaErr,
-                meta: data
+                perNumber
             });
         }
 
@@ -89,7 +109,8 @@ export default async function handler(req, res) {
             success: true,
             message: block ? 'Número bloqueado en WhatsApp' : 'Número desbloqueado en WhatsApp',
             candidate: updatedCandidate,
-            meta: data
+            blockedOn: perNumber.filter(r => r.ok).map(r => r.pid),
+            perNumber
         });
 
     } catch (error) {
