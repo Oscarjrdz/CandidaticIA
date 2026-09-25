@@ -2332,6 +2332,16 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                 const nextHasMore = isPaginated && (serverHasMore ?? fetchedCandidates.length === limit);
                 setHasMore(nextHasMore);
                 if (fetchedCandidates.length > 0) {
+                    // Auto-apertura del PRIMER chat al entrar a la sección (sin clic del usuario).
+                    // Debe pasar por la MISMA preparación que handleSelectChat: enmascarar el montaje
+                    // (fade limpio) y armar bottomAnchorRef para anclar al fondo en el 1er asentamiento.
+                    // Sin esto, SOLO el primer chat se veía "armándose" (reacomodo visible), mientras que
+                    // al hacer clic en otros sí entraban con el fade. La posición final ya era correcta;
+                    // lo que faltaba era la máscara de montaje en este camino de auto-selección.
+                    if (!selectedChatRef.current) {
+                        armChatContentMask();
+                        bottomAnchorRef.current = true;
+                    }
                     setSelectedChat(current => { if (!current) return fetchedCandidates[0]; return current; });
                 }
                 // Cachear SOLO la vista por defecto (filtro 'unread' sin tag/búsqueda/filtros
