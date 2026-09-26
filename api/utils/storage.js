@@ -11,6 +11,7 @@
 import Redis from 'ioredis';
 import { sendConversionEvent } from './metaConversions.js';
 import { getCachedConfig } from './cache.js';
+import { resolveAllowedLabels } from './rbac.js';
 import { recordScanEvent } from './redis-bandwidth.js';
 import { acquireProcessingLock, releaseProcessingLock } from './reminder-lock.js';
 
@@ -130,7 +131,11 @@ const INDEX_KEYS = {
     UNTAGGED: 'index:candidates:untagged',
     UNTAGGED_READY: 'index:candidates:untagged:ready',
     UNTAGGED_LOCK: 'index:candidates:untagged:lock',
-    READY: 'index:candidates:secondary:ready',
+    // Índice por número entrante (incomingPhoneNumberId) → SET de candidateIds. Sirve para el
+    // filtrado RBAC por número en la sección Candidatos (ver getVisibleCandidateIds).
+    NUM_PREFIX: 'index:candidates:num:',
+    // v2: al agregar el índice por número se fuerza UN rebuild de los índices secundarios.
+    READY: 'index:candidates:secondary:ready:v2',
     LOCK: 'index:candidates:secondary:lock'
 };
 const UNTAGGED_TAG_FILTER = '__candidatic_untagged__';
@@ -186,6 +191,7 @@ export async function withCrmProjectLinksLock(projectId, mutate) {
 
 const indexPart = (value) => Buffer.from(String(value || '').trim().toLowerCase()).toString('base64url');
 const tagIndexKey = (tag) => `${INDEX_KEYS.TAG_PREFIX}${indexPart(typeof tag === 'string' ? tag : tag?.name)}`;
+const candidateNumberIndexKey = (phoneId) => `${INDEX_KEYS.NUM_PREFIX}${indexPart(phoneId)}`;
 const adIndexKey = (adId) => `${INDEX_KEYS.AD_PREFIX}${indexPart(adId)}`;
 // Zset de leads por anuncio (para conteos/fechas sin leer candidatos)
 const adLeadsZKey = (adId) => `${INDEX_KEYS.AD_LEADS_Z_PREFIX}${indexPart(adId)}`;
@@ -238,12 +244,17 @@ async function syncCandidateSecondaryIndexes(client, oldCandidate = null, newCan
     const newManualProject = newCandidate?.manualProjectId ? String(newCandidate.manualProjectId).trim() : '';
     const oldManualStep = oldCandidate?.manualProjectStepId ? String(oldCandidate.manualProjectStepId).trim() : '';
     const newManualStep = newCandidate?.manualProjectStepId ? String(newCandidate.manualProjectStepId).trim() : '';
+    const oldNum = oldCandidate?.incomingPhoneNumberId ? String(oldCandidate.incomingPhoneNumberId).trim() : '';
+    const newNum = newCandidate?.incomingPhoneNumberId ? String(newCandidate.incomingPhoneNumberId).trim() : '';
     const wasUntagged = oldCandidate && oldTags.size === 0;
     const isUntagged = newCandidate && newTags.size === 0;
 
     const pipe = client.pipeline();
     for (const tag of oldTags) if (!newTags.has(tag)) pipe.srem(tagIndexKey(tag), id);
     for (const tag of newTags) if (!oldTags.has(tag)) pipe.sadd(tagIndexKey(tag), id);
+    // Índice por número entrante (casi nunca cambia; se fija al crear el candidato).
+    if (oldNum && oldNum !== newNum) pipe.srem(candidateNumberIndexKey(oldNum), id);
+    if (newNum && oldNum !== newNum) pipe.sadd(candidateNumberIndexKey(newNum), id);
     if (oldAd && oldAd !== newAd) pipe.srem(adIndexKey(oldAd), id);
     if (newAd && oldAd !== newAd) pipe.sadd(adIndexKey(newAd), id);
     // Índice de Estadísticas Ads (zset por fecha + set maestro). El set adIndexKey de arriba
@@ -403,6 +414,7 @@ export async function ensureCandidateSecondaryIndexes() {
                 const tags = cleanTagValues(c.tags);
                 tags.forEach(tag => writePipe.sadd(tagIndexKey(tag), c.id));
                 if (tags.length === 0) writePipe.zadd(INDEX_KEYS.UNTAGGED, candidateSortScore(c), c.id);
+                if (c.incomingPhoneNumberId) writePipe.sadd(candidateNumberIndexKey(String(c.incomingPhoneNumberId).trim()), c.id);
                 if (c.adId) {
                     writePipe.sadd(adIndexKey(c.adId), c.id);
                     writePipe.zadd(adLeadsZKey(c.adId), adLeadScore(c), c.id);
@@ -886,6 +898,133 @@ export const isProfileComplete = (c, customFields = []) => {
 };
 
 // Native Redis Pagination (Page size 100)
+// Devuelve el arreglo ORDENADO (por recencia desc) de candidateIds que este usuario puede ver,
+// según la regla única: número (Y) + etiqueta. Devuelve `null` cuando el usuario NO tiene
+// restricción real (SuperAdmin, o 'Ver TODAS' sin filtro de número) → el caller usa el camino
+// normal (rápido). Devuelve [] cuando no debe ver a nadie.
+export const getVisibleCandidateIds = async (user) => {
+    const client = getClient();
+    if (!client) return [];
+    if (!user || user.role === 'SuperAdmin') return null;
+
+    const { seeAll, labelSet } = resolveAllowedLabels(user);
+    const allowedWa = Array.isArray(user?.allowed_wa_numbers)
+        ? user.allowed_wa_numbers.map(n => String(n).trim()).filter(Boolean)
+        : [];
+    const hasNum = allowedWa.length > 0;
+
+    if (seeAll && !hasNum) return null;            // sin restricción real
+    if (!seeAll && labelSet.size === 0) return []; // sin etiquetas = no ve a nadie
+
+    // Universo por etiqueta (null = todas las etiquetas).
+    let tagIds = null;
+    if (!seeAll) {
+        const tagKeys = [...labelSet].map(l => `${INDEX_KEYS.TAG_PREFIX}${indexPart(l)}`);
+        tagIds = tagKeys.length ? await client.sunion(...tagKeys) : [];
+    }
+    // Universo por número (null = todos los números).
+    let numIds = null;
+    if (hasNum) {
+        await ensureCandidateSecondaryIndexes(); // el índice por número vive aquí
+        const numKeys = allowedWa.map(n => candidateNumberIndexKey(n));
+        numIds = numKeys.length ? await client.sunion(...numKeys) : [];
+    }
+
+    let ids;
+    if (tagIds !== null && numIds !== null) {
+        const numSet = new Set(numIds);
+        ids = tagIds.filter(id => numSet.has(id));
+    } else if (tagIds !== null) {
+        ids = tagIds;
+    } else {
+        ids = numIds || [];
+    }
+    if (!ids.length) return [];
+
+    // Ordenar por score (recencia) desc; descartar los que no estén en la lista principal.
+    let scoreRows = [];
+    try {
+        scoreRows = await client.zmscore(KEYS.CANDIDATES_LIST, ...ids);
+    } catch {
+        const p = client.pipeline();
+        ids.forEach(id => p.zscore(KEYS.CANDIDATES_LIST, id));
+        scoreRows = (await p.exec()).map(([e, s]) => e ? null : s);
+    }
+    return ids
+        .map((id, i) => ({ id, score: Number(scoreRows?.[i] || 0) }))
+        .filter(x => x.score > 0)
+        .sort((a, b) => b.score - a.score)
+        .map(x => x.id);
+};
+
+// Tope de hidratación para usuarios restringidos. Su universo (por etiqueta/número) es acotado;
+// esto protege contra casos patológicos ('Ver TODAS' + número con muchísimos candidatos).
+const RESTRICTED_HYDRATE_CAP = 4000;
+
+// Lista de candidatos para un usuario CON restricción (no SuperAdmin, no 'Ver TODAS' sin número).
+// Aplica número+etiqueta y encima los sub-filtros de la UI (tag, estado, búsqueda, proyecto),
+// con orden unread-first opcional y paginación en memoria. Devuelve `null` si el usuario no
+// tiene restricción (el caller debe usar getCandidates normal).
+export const getCandidatesForRestrictedUser = async (user, {
+    limit = 100, offset = 0, search = '', tag = '', filter = '', unreadOnly = false,
+    excludeLinked = false, unreadFirst = false, manualProjectId = ''
+} = {}) => {
+    const client = getClient();
+    if (!client) return { candidates: [], total: 0 };
+
+    let visibleIds = await getVisibleCandidateIds(user);
+    if (visibleIds === null) return null;                 // sin restricción → camino normal
+    if (visibleIds.length === 0) return { candidates: [], total: 0 };
+
+    // Intersección con tablero CRM (si aplica).
+    if (manualProjectId) {
+        const projIds = new Set(await getManualProjectCandidateIds(client, manualProjectId));
+        visibleIds = visibleIds.filter(id => projIds.has(id));
+    }
+    // Intersección con etiqueta específica (pestaña de tag).
+    const normalizedTag = String(tag || '').trim().toLowerCase();
+    if (normalizedTag && normalizedTag !== UNTAGGED_TAG_FILTER) {
+        const tagMembers = new Set(await client.smembers(`${INDEX_KEYS.TAG_PREFIX}${indexPart(normalizedTag)}`));
+        visibleIds = visibleIds.filter(id => tagMembers.has(id));
+    }
+    if (!visibleIds.length) return { candidates: [], total: 0 };
+
+    const capped = visibleIds.slice(0, RESTRICTED_HYDRATE_CAP);
+    let candidates = await hydrateCandidateIds(capped, capped.length);
+
+    const needAudit = filter === 'complete' || filter === 'incomplete';
+    const customFields = needAudit ? JSON.parse((await getCachedConfig(client, 'custom_fields')) || '[]') : [];
+    const isUnread = (c) => {
+        const u = c.lastUserMessageAt ? new Date(c.lastUserMessageAt).getTime() : 0;
+        const h = c.lastHumanMessageAt ? new Date(c.lastHumanMessageAt).getTime() : 0;
+        return !!u && u > h;
+    };
+    const lower = search.toLowerCase();
+    const cleanSearch = search.replace(/\D/g, '');
+    candidates = candidates.filter(c => {
+        if (excludeLinked && c.manualProjectId) return false;
+        if (normalizedTag === UNTAGGED_TAG_FILTER && cleanTagValues(c.tags).length > 0) return false;
+        if (filter === 'unread' || unreadOnly) { if (!isUnread(c)) return false; }
+        else if (filter === 'complete') { if (!isProfileComplete(c, customFields)) return false; }
+        else if (filter === 'incomplete') { if (isProfileComplete(c, customFields)) return false; }
+        if (search) {
+            const inFields = Object.values(c).some(v => v != null && v.toString().toLowerCase().includes(lower));
+            const inPhone = cleanSearch && c.whatsapp && c.whatsapp.replace(/\D/g, '').includes(cleanSearch);
+            if (!inFields && !inPhone) return false;
+        }
+        return true;
+    });
+
+    if (unreadFirst) {
+        const unread = [], read = [];
+        for (const c of candidates) (isUnread(c) ? unread : read).push(c);
+        candidates = [...unread, ...read];
+    }
+
+    const total = candidates.length;
+    return { candidates: candidates.slice(offset, offset + limit), total };
+};
+
 export const getCandidates = async (limit = 100, offset = 0, search = '', excludeLinked = false, tagFilter = '', manualProjectId = '', manualStepId = '', statusFilter = '') => {
     const client = getClient();
     if (!client) return { candidates: [], total: 0 };

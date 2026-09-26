@@ -118,7 +118,7 @@ export default async function handler(req, res) {
 
     try {
         // DYNAMIC IMPORTS
-        const { getCandidates, getCandidatesUnreadFirst, getCandidatesUnreadFirstByTag, getCandidatesFiltered, getCandidateById, deleteCandidate, validateAdminSession, getRedisClient } = await import('./utils/storage.js');
+        const { getCandidates, getCandidatesUnreadFirst, getCandidatesUnreadFirstByTag, getCandidatesFiltered, getCandidateById, deleteCandidate, validateAdminSession, getRedisClient, getUsers, getCandidatesForRestrictedUser } = await import('./utils/storage.js');
         const redisForMetrics = getRedisClient();
         const finishCandidatesResponse = async (status, payload) => {
             return res.status(status).json(payload);
@@ -197,6 +197,36 @@ export default async function handler(req, res) {
                 res.setHeader('X-Candidatic-Cache', 'HIT');
                 res.setHeader('Cache-Control', 'private, max-age=10');
                 return finishCandidatesResponse(200, cachedPayload);
+            }
+
+            // ── RBAC: usuario CON restricción (número/etiqueta) → lista filtrada server-side. ──
+            // Un usuario sin restricción real (SuperAdmin, o 'Ver TODAS' sin número) devuelve null
+            // aquí y sigue por los caminos rápidos normales de abajo.
+            const usersList = await getUsers();
+            const currentUser = usersList.find(u => u.id === userId || u.whatsapp === userId);
+            const restricted = await getCandidatesForRestrictedUser(currentUser, {
+                limit: parseInt(limit, 10) || 100,
+                offset: parseInt(offset, 10) || 0,
+                search,
+                tag,
+                filter: ['unread', 'complete', 'incomplete'].includes(filter) ? filter : '',
+                unreadOnly: unreadOnly === 'true',
+                excludeLinked: excludeLinked === 'true',
+                unreadFirst: unreadFirst === 'true',
+                manualProjectId
+            });
+            if (restricted) {
+                const payload = buildCandidatesListPayload({
+                    candidates: restricted.candidates,
+                    total: restricted.total,
+                    limit: parseInt(limit, 10) || 100,
+                    offset: parseInt(offset, 10) || 0,
+                    statsData
+                });
+                setCachedCandidatesList(cacheKey, payload);
+                res.setHeader('X-Candidatic-Cache', 'MISS');
+                res.setHeader('Cache-Control', 'private, max-age=10');
+                return finishCandidatesResponse(200, payload);
             }
 
             // Modo filtro servidor: unread / complete / incomplete (sin tag ni búsqueda)
