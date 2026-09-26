@@ -1,4 +1,5 @@
 import { randomUUID } from 'crypto';
+import { candidatePassesUserFilter } from './utils/rbac.js';
 
 export default async function handler(req, res) {
     if (req.method === 'OPTIONS') {
@@ -6,7 +7,7 @@ export default async function handler(req, res) {
     }
 
     try {
-        const { getRedisClient, updateCandidate, validateAdminSession, withCrmProjectLinksLock } = await import('./utils/storage.js');
+        const { getRedisClient, updateCandidate, validateAdminSession, withCrmProjectLinksLock, getUsers } = await import('./utils/storage.js');
 
         const userId = await validateAdminSession(req);
         if (!userId) return res.status(401).json({ error: 'No autorizado' });
@@ -131,7 +132,17 @@ export default async function handler(req, res) {
                 const projects = await loadProjects();
                 const project = projects.find(p => p.id === id) || null;
                 const candidates = await getLinkedProjectCandidates(id, project);
-                return res.status(200).json({ success: true, candidates });
+                // RBAC: dentro del tablero, a quién ves lo sigue mandando tu etiqueta (y número).
+                // El acceso al proyecto abre el tablero; no salta el filtro por-usuario.
+                const currentUser = (await getUsers()).find(u => u.id === userId || u.whatsapp === userId);
+                const visible = candidates.filter(c => candidatePassesUserFilter({
+                    tagsLower: (Array.isArray(c.tags) ? c.tags : [])
+                        .map(t => (typeof t === 'string' ? t : t?.name))
+                        .filter(Boolean)
+                        .map(s => s.trim().toLowerCase()),
+                    phoneId: c.incomingPhoneNumberId
+                }, currentUser));
+                return res.status(200).json({ success: true, candidates: visible });
             }
 
             // GET all projects
