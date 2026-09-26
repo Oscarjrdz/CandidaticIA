@@ -47,7 +47,6 @@ const UsersSection = () => {
     const [allManualProjects, setAllManualProjects] = useState(() => usersSectionCache?.manualProjects || []);
     const [allTags, setAllTags] = useState(() => usersSectionCache?.tags || []);
     const [loading, setLoading] = useState(() => !usersSectionCache);
-    const [search, setSearch] = useState('');
 
     // Activity stats state
     const [activityStats, setActivityStats] = useState([]);
@@ -437,14 +436,9 @@ const UsersSection = () => {
         });
     };
 
-    const filteredUsers = users.filter(u =>
-        (u.name || '').toLowerCase().includes(search.toLowerCase()) ||
-        (u.whatsapp || '').includes(search)
-    );
-
-    const filteredRoles = roles.filter(r => 
-        (r.name || '').toLowerCase().includes(search.toLowerCase())
-    );
+    // Sin buscador en esta sección: se listan todos los usuarios/roles.
+    const filteredUsers = users;
+    const filteredRoles = roles;
 
     return (
         <div className="space-y-6">
@@ -511,17 +505,7 @@ const UsersSection = () => {
             </div>
 
             <Card>
-                <div className="p-4 border-b border-gray-100 dark:border-gray-700/50 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                    <div className="relative w-full md:w-96">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                        <input
-                            type="search"
-                            placeholder={activeTab === 'users' ? "Buscar por nombre o teléfono..." : "Buscar por nombre de rol..."}
-                            value={search}
-                            onChange={(e) => setSearch(e.target.value)}
-                            className="w-full pl-10 pr-4 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-gray-200 dark:focus:ring-gray-700/50 focus:outline-none dark:text-white text-xs font-medium"
-                        />
-                    </div>
+                <div className="p-4 border-b border-gray-100 dark:border-gray-700/50 flex items-center justify-end">
                     <div className="text-[10px] font-black uppercase tracking-widest text-gray-400">
                         Total: {activeTab === 'users' ? users.length : roles.length}
                     </div>
