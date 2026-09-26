@@ -418,7 +418,8 @@ const UsersSection = () => {
 
     const toggleUserLabel = (labelName) => {
         setFormData(prev => {
-            const current = prev.allowed_labels || [];
+            // Al elegir una etiqueta específica se sale de "Ver TODAS" (__all__) y de "nadie".
+            const current = (prev.allowed_labels || []).filter(n => n !== '__all__' && n !== '__none__');
             const next = current.includes(labelName)
                 ? current.filter(n => n !== labelName)
                 : [...current, labelName];
@@ -783,8 +784,10 @@ const UsersSection = () => {
                     {/* ── Accesos y permisos ── */}
                     {formData.role && formData.role !== 'SuperAdmin' && (() => {
                         const perms = getRolePermissions(formData.role);
-                        const hasNoneLabels = (formData.allowed_labels || []).includes('__none__');
-                        const selectedLabels = (formData.allowed_labels || []).filter(l => l !== '__none__');
+                        // Nuevo modelo: '__all__' = Ver TODAS (incluye sin etiqueta); vacío = nadie;
+                        // etiquetas específicas = solo esas. '__none__' (legado) se trata como vacío.
+                        const seeAllLabels = (formData.allowed_labels || []).includes('__all__');
+                        const selectedLabels = (formData.allowed_labels || []).filter(l => l !== '__none__' && l !== '__all__');
                         const filteredTags = allTags.filter(t => {
                             const name = typeof t === 'string' ? t : t.name;
                             return name.toLowerCase().includes(tagSearch.toLowerCase());
@@ -864,7 +867,7 @@ const UsersSection = () => {
                                         <div className="flex flex-col gap-2">
                                             <div>
                                                 <h4 className="text-sm font-bold text-gray-800 dark:text-white">🏷️ Etiquetas Visibles</h4>
-                                                <p className="text-[10px] text-gray-400 mt-0.5">Sin selección = todas. "Ninguna" = acceso cero.</p>
+                                                <p className="text-[10px] text-gray-400 mt-0.5">Define qué candidatos ve. Sin selección = <b>no ve a nadie</b>.</p>
                                             </div>
                                             <div className="relative" ref={tagPanelRef}>
                                                 {/* Trigger button */}
@@ -874,10 +877,10 @@ const UsersSection = () => {
                                                     className="w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl border border-amber-200 dark:border-amber-700 bg-amber-50/50 dark:bg-amber-900/10 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors text-left"
                                                 >
                                                     <span className="text-xs font-medium text-gray-700 dark:text-gray-300 truncate">
-                                                        {hasNoneLabels
-                                                            ? '🚫 Sin acceso por etiqueta'
+                                                        {seeAllLabels
+                                                            ? '✅ Ver TODAS las etiquetas'
                                                             : selectedLabels.length === 0
-                                                                ? '✅ Todas las etiquetas'
+                                                                ? '🚫 No ve a nadie (sin etiquetas)'
                                                                 : `${selectedLabels.length} etiqueta${selectedLabels.length !== 1 ? 's' : ''} seleccionada${selectedLabels.length !== 1 ? 's' : ''}`
                                                         }
                                                     </span>
@@ -887,8 +890,21 @@ const UsersSection = () => {
                                                 {/* Dropdown panel */}
                                                 {tagPanelOpen && (
                                                     <div className="absolute z-50 top-full left-0 right-0 mt-1 rounded-xl border border-amber-200 dark:border-amber-700 bg-white dark:bg-gray-900 shadow-xl overflow-hidden">
-                                                        {/* Search + select all — FIRST */}
-                                                        <div className={`px-2 py-2 border-b border-gray-100 dark:border-gray-700 flex gap-2 ${hasNoneLabels ? 'opacity-40 pointer-events-none' : ''}`}>
+                                                        {/* Ver TODAS — incluye candidatos sin etiqueta */}
+                                                        <label className="flex items-center gap-2.5 px-3 py-2 bg-amber-50 dark:bg-amber-900/20 border-b border-amber-100 dark:border-amber-800 cursor-pointer hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors">
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={seeAllLabels}
+                                                                onChange={() => {
+                                                                    setFormData(f => ({ ...f, allowed_labels: seeAllLabels ? [] : ['__all__'] }));
+                                                                }}
+                                                                className="w-3.5 h-3.5 text-amber-600 rounded"
+                                                            />
+                                                            <span className="text-xs font-bold text-amber-700 dark:text-amber-300 select-none">✅ Ver TODAS las etiquetas</span>
+                                                        </label>
+
+                                                        {/* Search + select all specific */}
+                                                        <div className={`px-2 py-2 border-b border-gray-100 dark:border-gray-700 flex gap-2 ${seeAllLabels ? 'opacity-40 pointer-events-none' : ''}`}>
                                                             <div className="relative flex-1">
                                                                 <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400" />
                                                                 <input
@@ -902,11 +918,7 @@ const UsersSection = () => {
                                                             <button
                                                                 type="button"
                                                                 onClick={() => {
-                                                                    if (allSelected) {
-                                                                        setFormData(f => ({ ...f, allowed_labels: [] }));
-                                                                    } else {
-                                                                        setFormData(f => ({ ...f, allowed_labels: allTagNames }));
-                                                                    }
+                                                                    setFormData(f => ({ ...f, allowed_labels: allSelected ? [] : allTagNames }));
                                                                 }}
                                                                 className="px-2 py-1 text-[10px] font-bold rounded-lg bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 hover:bg-amber-200 dark:hover:bg-amber-900/50 transition-colors whitespace-nowrap"
                                                             >
@@ -914,21 +926,8 @@ const UsersSection = () => {
                                                             </button>
                                                         </div>
 
-                                                        {/* Ninguna — second */}
-                                                        <label className="flex items-center gap-2.5 px-3 py-2 bg-amber-50 dark:bg-amber-900/20 border-b border-amber-100 dark:border-amber-800 cursor-pointer hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors">
-                                                            <input
-                                                                type="checkbox"
-                                                                checked={hasNoneLabels}
-                                                                onChange={() => {
-                                                                    setFormData(f => ({ ...f, allowed_labels: hasNoneLabels ? [] : ['__none__'] }));
-                                                                }}
-                                                                className="w-3.5 h-3.5 text-amber-600 rounded"
-                                                            />
-                                                            <span className="text-xs font-bold text-amber-700 dark:text-amber-300 select-none">🚫 Ninguna etiqueta</span>
-                                                        </label>
-
                                                         {/* Scrollable list — 6 items visible */}
-                                                        <div className={`overflow-y-auto divide-y divide-gray-50 dark:divide-gray-800 ${hasNoneLabels ? 'opacity-40 pointer-events-none' : ''}`} style={{ maxHeight: '156px' }}>
+                                                        <div className={`overflow-y-auto divide-y divide-gray-50 dark:divide-gray-800 ${seeAllLabels ? 'opacity-40 pointer-events-none' : ''}`} style={{ maxHeight: '156px' }}>
                                                             {filteredTags.length === 0 ? (
                                                                 <p className="px-3 py-3 text-xs text-gray-400 text-center">Sin resultados</p>
                                                             ) : filteredTags.map(tagObj => {

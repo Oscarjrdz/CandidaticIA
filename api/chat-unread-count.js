@@ -4,6 +4,7 @@
  */
 import { Buffer } from 'node:buffer';
 import { getCachedConfig } from './utils/cache.js';
+import { candidatePassesUserFilter, resolveAllowedLabels } from './utils/rbac.js';
 
 const AGGREGATE_CACHE_TTL_SECONDS = 60;
 
@@ -117,36 +118,17 @@ async function readOrBuildUnreadAggregate({ redis, unreadIds, unreadVersion, isP
     };
 }
 
-function filterAggregateCounts({
-    summaries,
-    user,
-    rolePermissions,
-    allowedCrm,
-    allowedWa,
-    allowedLabelSet
-}) {
+function filterAggregateCounts({ summaries, user, rolePermissions }) {
     const canSeeIncomplete =
         user.role === 'SuperAdmin' ||
         !rolePermissions ||
         Object.keys(rolePermissions).length === 0 ||
         rolePermissions.view_incomplete_candidates === true;
-    const hasCrmRestriction = Array.isArray(allowedCrm) && allowedCrm.length > 0;
-    const hasWaRestriction = Array.isArray(allowedWa) && allowedWa.length > 0;
-    const hasLabelRestriction = allowedLabelSet.size > 0;
-    const hasRBACRestriction = user.role !== 'SuperAdmin' && (hasCrmRestriction || hasLabelRestriction);
     const counts = createEmptyCounts();
 
     for (const summary of summaries) {
-        if (user.role !== 'SuperAdmin' && hasWaRestriction) {
-            if (!summary.incomingPhoneNumberId || !allowedWa.includes(summary.incomingPhoneNumberId)) continue;
-        }
-
-        if (hasRBACRestriction) {
-            const inAllowedCrm = hasCrmRestriction && summary.manualProjectId && allowedCrm.includes(summary.manualProjectId);
-            const inAllowedLabel = hasLabelRestriction && summary.tags.some(tag => allowedLabelSet.has(tag));
-            if (!inAllowedCrm && !inAllowedLabel) continue;
-        }
-
+        // Regla única: número (Y) + etiqueta. El proyecto CRM NO agrega candidatos.
+        if (!candidatePassesUserFilter({ tagsLower: summary.tags, phoneId: summary.incomingPhoneNumberId }, user)) continue;
         if (!summary.complete && !canSeeIncomplete) continue;
         incrementCounts(counts, summary);
     }
@@ -207,14 +189,12 @@ export default async function handler(req, res) {
             Object.keys(rolePermissions).length === 0 ||
             rolePermissions.view_incomplete_candidates === true;
 
-        const allowedCrm = user?.allowed_crm_projects;
-        const hasCrmRestriction = Array.isArray(allowedCrm) && allowedCrm.length > 0;
         const allowedWa = user?.allowed_wa_numbers;
         const hasWaRestriction = Array.isArray(allowedWa) && allowedWa.length > 0;
-        const allowedLabels = user?.allowed_labels;
-        const hasLabelRestriction = Array.isArray(allowedLabels) && allowedLabels.length > 0;
-        const appliesUserRestrictions = user.role !== 'SuperAdmin';
-        const hasRBACRestriction = user.role !== 'SuperAdmin' && (hasCrmRestriction || hasLabelRestriction);
+        // "Ve todos" = SuperAdmin o etiquetas en modo 'Ver TODAS'. Solo entonces (y sin filtro de
+        // número, y pudiendo ver incompletos) sirven los conteos globales sin recalcular por-usuario.
+        const { seeAll } = resolveAllowedLabels(user);
+        const seesEverything = user.role === 'SuperAdmin' || seeAll;
         if (!unreadSetSize) {
             const payload = { success: true, unreadCount: 0, counts: createEmptyCounts() };
             await redis.set(cacheKey, JSON.stringify(payload), 'EX', 8).catch(() => {});
@@ -223,11 +203,6 @@ export default async function handler(req, res) {
         }
 
         const unreadIds = await redis.smembers('candidates:unread');
-        const allowedLabelSet = new Set(
-            (allowedLabels || [])
-                .filter(label => typeof label === 'string')
-                .map(label => label.trim().toLowerCase())
-        );
 
         const aggregate = await readOrBuildUnreadAggregate({
             redis,
@@ -235,19 +210,13 @@ export default async function handler(req, res) {
             unreadVersion,
             isProfileComplete
         });
-        const canUseGlobalCounts =
-            !(appliesUserRestrictions && hasWaRestriction) &&
-            !hasRBACRestriction &&
-            canSeeIncomplete;
+        const canUseGlobalCounts = seesEverything && !hasWaRestriction && canSeeIncomplete;
         const counts = canUseGlobalCounts
             ? aggregate.counts
             : filterAggregateCounts({
                 summaries: aggregate.summaries || [],
                 user,
-                rolePermissions,
-                allowedCrm,
-                allowedWa,
-                allowedLabelSet
+                rolePermissions
             });
 
         const payload = { success: true, unreadCount: counts.all, counts };

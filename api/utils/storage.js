@@ -2148,6 +2148,22 @@ export const getUsers = async () => {
             u.id = generateUserId();
             dirty = true;
         }
+        // Migración RBAC v2 de etiquetas: 'vacío = ve todas' cambió a 'vacío = no ve a nadie'.
+        // A los usuarios EXISTENTES con etiquetas vacías les damos 'Ver TODAS' (una sola vez)
+        // para que sigan viendo lo mismo que hoy y no queden ciegos tras el deploy. Los usuarios
+        // con '__none__' (acceso cero explícito) o con etiquetas específicas no se tocan.
+        if (!u._lblV2) {
+            if (u.role !== 'SuperAdmin') {
+                const lbls = Array.isArray(u.allowed_labels) ? u.allowed_labels : [];
+                const hasNone = lbls.includes('__none__');
+                const realLbls = lbls.filter(x => x && x !== '__none__' && x !== '__all__');
+                if (realLbls.length === 0 && !hasNone) {
+                    u.allowed_labels = ['__all__'];
+                }
+            }
+            u._lblV2 = true;
+            dirty = true;
+        }
     }
 
     // FORCE SEED: Ensure Super Admin always exists

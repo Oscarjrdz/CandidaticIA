@@ -2,6 +2,7 @@ import { getMessages, getRecentMessages, saveMessage, getCandidateById, updateCa
 import { substituteVariables } from './utils/shortcuts.js';
 import { sendUltraMsgMessage, getUltraMsgConfig, buildMetaTemplateComponents, renderMetaTemplatePreviewText, resolveTemplateHeaderMedia } from './whatsapp/utils.js';
 import { getCachedConfig } from './utils/cache.js';
+import { candidatePassesUserFilter } from './utils/rbac.js';
 
 // Candidatic legacy URLs removed as per UltraMsg migration.
 
@@ -106,15 +107,6 @@ export default async function handler(req, res) {
                 const user = users.find(u => u.id === userId || u.whatsapp === userId);
                 const role = roles.find(r => r.name === user?.role);
                 const rolePermissions = role?.permissions || {};
-                const allowedWa = Array.isArray(user?.allowed_wa_numbers) ? user.allowed_wa_numbers : [];
-                const allowedLabels = Array.isArray(user?.allowed_labels)
-                    ? user.allowed_labels.map(normalizeTagName).filter(Boolean)
-                    : [];
-                const allowedLabelSet = new Set(allowedLabels);
-                const allowedCrm = Array.isArray(user?.allowed_crm_projects) ? user.allowed_crm_projects : [];
-                const hasLabelRestriction = allowedLabelSet.size > 0;
-                const hasCrmRestriction = allowedCrm.length > 0;
-                const hasRBACRestriction = user?.role !== 'SuperAdmin' && (hasLabelRestriction || hasCrmRestriction);
                 const canSeeIncomplete = user?.role === 'SuperAdmin' || !rolePermissions || Object.keys(rolePermissions).length === 0 || rolePermissions.view_incomplete_candidates === true;
 
                 const matchedIds = [];
@@ -132,21 +124,14 @@ export default async function handler(req, res) {
                         try { candidate = JSON.parse(raw); } catch { continue; }
                         if (!candidate?.id || !isCandidateUnread(candidate)) continue;
 
-                        if (user?.role !== 'SuperAdmin' && allowedWa.length > 0) {
-                            if (!candidate.incomingPhoneNumberId || !allowedWa.includes(candidate.incomingPhoneNumberId)) continue;
-                        }
+                        const tags = candidateTagNames(candidate);
+                        // Regla única de visibilidad: número (Y) + etiqueta. El proyecto NO agrega candidatos.
+                        if (!candidatePassesUserFilter({ tagsLower: tags, phoneId: candidate.incomingPhoneNumberId }, user)) continue;
 
                         const complete = candidate.statusAudit === 'complete' || isProfileComplete(candidate, customFields);
                         if (!canSeeIncomplete && !complete) continue;
                         if (normalizedProfileScope === 'complete' && !complete) continue;
                         if (normalizedProfileScope === 'incomplete' && complete) continue;
-
-                        const tags = candidateTagNames(candidate);
-                        if (hasRBACRestriction) {
-                            const inAllowedCrm = hasCrmRestriction && candidate.manualProjectId && allowedCrm.includes(candidate.manualProjectId);
-                            const inAllowedLabel = hasLabelRestriction && tags.some(tag => allowedLabelSet.has(tag));
-                            if (!inAllowedCrm && !inAllowedLabel) continue;
-                        }
 
                         const matchesScope =
                             scope === 'all' ||
