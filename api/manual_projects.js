@@ -33,6 +33,33 @@ export default async function handler(req, res) {
             return data ? JSON.parse(data) : [];
         };
 
+        // ── Permisos de proyectos por usuario ──────────────────────────────────────────
+        // "Propios creados" (crm_own_mode): el usuario PUEDE crear proyectos y solo ve/edita/
+        // borra los que él creó. Sin ese modo, NO puede crear ni editar (aunque tenga la sección);
+        // solo ve, en lectura, los proyectos que tenga asignados por allowed_crm_projects.
+        // SuperAdmin puede todo. Ver docs del modelo de permisos.
+        const currentUser = (await getUsers()).find(u => u.id === userId || u.whatsapp === userId) || null;
+        const isSuper = currentUser?.role === 'SuperAdmin';
+        const ownMode = !!currentUser?.crm_own_mode;
+        const allowedCrm = Array.isArray(currentUser?.allowed_crm_projects) ? currentUser.allowed_crm_projects : [];
+        // ¿Puede VER el tablero de este proyecto?
+        const canSeeProject = (project) => {
+            if (isSuper) return true;
+            if (!project) return false;
+            if (ownMode) return project.createdBy === currentUser?.id;
+            return allowedCrm.length === 0 || allowedCrm.includes(project.id);
+        };
+        // ¿Puede EDITAR la estructura del proyecto (nombre, pasos) / borrarlo?
+        const canManageProject = (project) => {
+            if (isSuper) return true;
+            if (!ownMode) return false;
+            return project ? project.createdBy === currentUser?.id : true;
+        };
+        // ¿Puede CREAR proyectos?
+        const canCreateProject = () => isSuper || ownMode;
+        // Carga un proyecto por id (para checar permisos en acciones que traen projectId).
+        const findProjectById = async (pid) => (await loadProjects()).find(p => p.id === pid) || null;
+
         const parseLinks = (raw) => {
             if (!raw) return [];
             try {
@@ -131,6 +158,7 @@ export default async function handler(req, res) {
             if (id && view === 'candidates') {
                 const projects = await loadProjects();
                 const project = projects.find(p => p.id === id) || null;
+                if (!canSeeProject(project)) return res.status(200).json({ success: true, candidates: [] });
                 const candidates = await getLinkedProjectCandidates(id, project);
                 // RBAC: dentro del tablero, a quién ves lo sigue mandando tu etiqueta (y número).
                 // El acceso al proyecto abre el tablero; no salta el filtro por-usuario.
@@ -145,10 +173,10 @@ export default async function handler(req, res) {
                 return res.status(200).json({ success: true, candidates: visible });
             }
 
-            // GET all projects
+            // GET all projects (filtrado por lo que el usuario puede ver)
             const data = await redis.get(KEY);
             const projects = data ? JSON.parse(data) : [];
-            return res.status(200).json({ success: true, data: projects });
+            return res.status(200).json({ success: true, data: projects.filter(canSeeProject) });
         }
 
         // POST - Create project OR handle actions
@@ -160,6 +188,7 @@ export default async function handler(req, res) {
             if (action === 'linkCandidate') {
                 const { projectId, candidateId, stepId } = body;
                 if (!projectId || !candidateId) return res.status(400).json({ error: 'Missing projectId or candidateId' });
+                if (!canSeeProject(await findProjectById(projectId))) return res.status(403).json({ error: 'Sin permiso sobre este proyecto' });
 
                 const removedProjectIds = await unlinkCandidateFromOtherProjects(candidateId, projectId);
                 const finalStepId = await withCrmProjectLinksLock(projectId, async (links) => {
@@ -179,6 +208,7 @@ export default async function handler(req, res) {
             if (action === 'batchLink') {
                 const { projectId, candidateIds, stepId } = body;
                 if (!projectId || !candidateIds?.length) return res.status(400).json({ error: 'Missing data' });
+                if (!canSeeProject(await findProjectById(projectId))) return res.status(403).json({ error: 'Sin permiso sobre este proyecto' });
 
                 const finalStepId = stepId || 'step_inicio';
                 const removedProjectIdsByCandidate = {};
@@ -206,6 +236,7 @@ export default async function handler(req, res) {
             if (action === 'unlinkCandidate') {
                 const { projectId, candidateId } = body;
                 if (!projectId || !candidateId) return res.status(400).json({ error: 'Missing data' });
+                if (!canSeeProject(await findProjectById(projectId))) return res.status(403).json({ error: 'Sin permiso sobre este proyecto' });
 
                 await withCrmProjectLinksLock(projectId, async (links) => ({
                     links: links.filter(l => l.candidateId !== candidateId),
@@ -219,6 +250,7 @@ export default async function handler(req, res) {
             if (action === 'batchUnlink') {
                 const { projectId, candidateIds } = body;
                 if (!projectId || !candidateIds?.length) return res.status(400).json({ error: 'Missing data' });
+                if (!canSeeProject(await findProjectById(projectId))) return res.status(403).json({ error: 'Sin permiso sobre este proyecto' });
 
                 await withCrmProjectLinksLock(projectId, async (links) => {
                     const removeSet = new Set(candidateIds);
@@ -234,6 +266,7 @@ export default async function handler(req, res) {
             if (action === 'moveCandidate') {
                 const { projectId, candidateId, stepId } = body;
                 if (!projectId || !candidateId || !stepId) return res.status(400).json({ error: 'Missing data' });
+                if (!canSeeProject(await findProjectById(projectId))) return res.status(403).json({ error: 'Sin permiso sobre este proyecto' });
 
                 await withCrmProjectLinksLock(projectId, async (links) => ({
                     links: links.map(l => l.candidateId === candidateId ? { ...l, stepId } : l),
@@ -247,6 +280,7 @@ export default async function handler(req, res) {
             if (action === 'reorderCandidates') {
                 const { projectId, stepId, candidateIds } = body;
                 if (!projectId || !stepId || !candidateIds?.length) return res.status(400).json({ error: 'Missing data' });
+                if (!canSeeProject(await findProjectById(projectId))) return res.status(403).json({ error: 'Sin permiso sobre este proyecto' });
 
                 await withCrmProjectLinksLock(projectId, async (links) => {
                     // Separate links for this step vs other steps
@@ -277,6 +311,8 @@ export default async function handler(req, res) {
                 const idx = projects.findIndex(p => p.id === projectId);
                 if (idx === -1) return res.status(404).json({ error: 'Project not found' });
 
+                if (!canManageProject(projects[idx])) return res.status(403).json({ error: 'Sin permiso para editar este proyecto' });
+
                 const oldSteps = projects[idx].steps || [];
                 await unlinkCandidatesFromRemovedSteps(projectId, oldSteps, steps);
                 projects[idx].steps = steps;
@@ -290,6 +326,11 @@ export default async function handler(req, res) {
                 const { projectIds } = body;
                 if (!projectIds) return res.status(400).json({ error: 'Missing projectIds' });
 
+                // Reordena la lista GLOBAL. Solo quien ve TODOS los proyectos puede hacerlo; con una
+                // vista parcial, guardar el orden borraría del blob los proyectos que no ve.
+                const seesAllProjects = isSuper || (!ownMode && allowedCrm.length === 0);
+                if (!seesAllProjects) return res.status(403).json({ error: 'Sin permiso para reordenar proyectos' });
+
                 const data = await redis.get(KEY);
                 let projects = data ? JSON.parse(data) : [];
                 const reordered = projectIds.map(id => projects.find(p => p.id === id)).filter(Boolean);
@@ -300,6 +341,7 @@ export default async function handler(req, res) {
             }
 
             if (action === 'clone') {
+                if (!canCreateProject()) return res.status(403).json({ error: 'Sin permiso para crear proyectos' });
                 const { projectId } = body;
                 if (!projectId) return res.status(400).json({ error: 'Missing projectId' });
 
@@ -307,11 +349,13 @@ export default async function handler(req, res) {
                 let projects = data ? JSON.parse(data) : [];
                 const original = projects.find(p => p.id === projectId);
                 if (!original) return res.status(404).json({ error: 'Project not found' });
+                if (!canSeeProject(original)) return res.status(403).json({ error: 'Sin permiso sobre este proyecto' });
 
                 const cloned = {
                     ...JSON.parse(JSON.stringify(original)),
                     id: randomUUID(),
                     name: `${original.name} (copia)`,
+                    createdBy: currentUser?.id,   // el clon pertenece a quien lo crea
                     createdAt: new Date().toISOString(),
                     steps: original.steps.map(s => ({ ...s, id: `step_${Date.now()}_${Math.random().toString(36).slice(2, 6)}` }))
                 };
@@ -324,6 +368,7 @@ export default async function handler(req, res) {
             }
 
             // === DEFAULT: Create new project ===
+            if (!canCreateProject()) return res.status(403).json({ error: 'Sin permiso para crear proyectos' });
             const { name, description, color } = body;
             if (!name) return res.status(400).json({ error: 'Missing required field: name' });
 
@@ -333,6 +378,7 @@ export default async function handler(req, res) {
                 description: description || '',
                 color: color || '#3b82f6',
                 steps: [{ id: 'step_inicio', name: 'Inicio' }],
+                createdBy: currentUser?.id,   // dueño = quien lo crea (para modo "Propios creados")
                 createdAt: new Date().toISOString()
             };
 
@@ -357,10 +403,13 @@ export default async function handler(req, res) {
 
             const index = projects.findIndex(p => p.id === id);
             if (index === -1) return res.status(404).json({ error: 'Project not found' });
+            if (!canManageProject(projects[index])) return res.status(403).json({ error: 'Sin permiso para editar este proyecto' });
 
             if (updates.steps && !Array.isArray(updates.steps)) {
                 return res.status(400).json({ error: 'steps must be an array' });
             }
+            // La propiedad no se puede reasignar desde el cliente.
+            delete updates.createdBy;
 
             if (updates.steps) {
                 await unlinkCandidatesFromRemovedSteps(id, projects[index].steps || [], updates.steps);
@@ -379,6 +428,9 @@ export default async function handler(req, res) {
 
             const data = await redis.get(KEY);
             let projects = data ? JSON.parse(data) : [];
+            const target = projects.find(p => p.id === id);
+            if (!target) return res.status(404).json({ error: 'Project not found' });
+            if (!canManageProject(target)) return res.status(403).json({ error: 'Sin permiso para eliminar este proyecto' });
             const newProjects = projects.filter(p => p.id !== id);
             await redis.set(KEY, JSON.stringify(newProjects));
 

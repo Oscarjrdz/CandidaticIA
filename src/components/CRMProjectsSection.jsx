@@ -180,7 +180,7 @@ const SortableCandCard = ({ candidate, onRemove, onChat, onCalendar, availableTa
     );
 };
 
-const SortableStepColumn = ({ step, stepCands, onRename, onDelete, canDelete, controls, children }) => {
+const SortableStepColumn = ({ step, stepCands, onRename, onDelete, canDelete, controls, children, canManage = true }) => {
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
         id: step.id,
         data: { type: 'step' }
@@ -213,10 +213,12 @@ const SortableStepColumn = ({ step, stepCands, onRename, onDelete, canDelete, co
                     <span className="text-[10px] bg-white/25 text-white px-1.5 py-0.5 rounded-full font-bold shrink-0">{stepCands.length}</span>
                 </div>
                 <div className="flex gap-0.5 shrink-0">
-                    <button onClick={() => onRename(step.id)} className="p-1 rounded hover:bg-white/20 text-white/70 hover:text-white transition-colors">
-                        <Pencil className="w-3 h-3" />
-                    </button>
-                    {canDelete && (
+                    {canManage && (
+                        <button onClick={() => onRename(step.id)} className="p-1 rounded hover:bg-white/20 text-white/70 hover:text-white transition-colors">
+                            <Pencil className="w-3 h-3" />
+                        </button>
+                    )}
+                    {canManage && canDelete && (
                         <button onClick={() => onDelete(step.id)} className="p-1 rounded hover:bg-white/20 text-white/70 hover:text-white transition-colors">
                             <Trash2 className="w-3 h-3" />
                         </button>
@@ -229,7 +231,7 @@ const SortableStepColumn = ({ step, stepCands, onRename, onDelete, canDelete, co
     );
 };
 
-const SortableProjectCard = ({ project, isActive, onSelect, onEdit, onClone, onDelete }) => {
+const SortableProjectCard = ({ project, isActive, onSelect, onEdit, onClone, onDelete, canManage = true, canCreate = true }) => {
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
         id: `proj_${project.id}`, data: { type: 'project', project }
     });
@@ -254,9 +256,9 @@ const SortableProjectCard = ({ project, isActive, onSelect, onEdit, onClone, onD
                     <p className={`text-xs mt-1 truncate ${isActive ? 'text-white/70' : 'text-slate-400'}`}>{project.description || 'Sin descripción'}</p>
                 </div>
                 <div className="flex gap-1 ml-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button onClick={onEdit} className="p-1 rounded hover:bg-white/20"><Pencil className="w-3.5 h-3.5" /></button>
-                    <button onClick={onClone} className="p-1 rounded hover:bg-white/20"><Copy className="w-3.5 h-3.5" /></button>
-                    <button onClick={onDelete} className="p-1 rounded hover:bg-red-500/20 text-red-300"><Trash2 className="w-3.5 h-3.5" /></button>
+                    {canManage && <button onClick={onEdit} className="p-1 rounded hover:bg-white/20"><Pencil className="w-3.5 h-3.5" /></button>}
+                    {canCreate && <button onClick={onClone} className="p-1 rounded hover:bg-white/20"><Copy className="w-3.5 h-3.5" /></button>}
+                    {canManage && <button onClick={onDelete} className="p-1 rounded hover:bg-red-500/20 text-red-300"><Trash2 className="w-3.5 h-3.5" /></button>}
                 </div>
             </div>
             <div className="flex items-center gap-2 mt-2">
@@ -363,20 +365,22 @@ const CRMProjectsSection = () => {
         fetch('/api/tags').then(r => r.json()).then(d => { if (d.success) setAvailableTags(d.tags || []); }).catch(() => {});
     }, []);
 
-    // RBAC: solo SuperAdmin ve todo sin restricción; Admin y demás se filtran por allowed_crm_projects
-    const filteredProjects = useMemo(() => {
-        if (!user || user.role === 'SuperAdmin') return projects;
-        const allowed = user?.allowed_crm_projects;
-        if (!Array.isArray(allowed) || allowed.length === 0) return projects;
-        return projects.filter(p => allowed.includes(p.id));
-    }, [projects, user]);
-
+    // RBAC de proyectos (espejo del backend en api/manual_projects.js):
+    // - SuperAdmin: ve todo.
+    // - "Propios creados" (crm_own_mode): solo ve/gestiona los que él creó.
+    // - Sin ese modo: ve (solo lectura) los asignados por allowed_crm_projects (vacío = todos).
+    const isSuper = user?.role === 'SuperAdmin';
+    const ownMode = !!user?.crm_own_mode;
+    const canCreateProjects = isSuper || ownMode;
+    const canManageProject = (p) => isSuper || (ownMode && p?.createdBy === user?.id);
     const filterProjectsForUser = (all) => {
-        if (!user || user.role === 'SuperAdmin') return all;
+        if (!user || isSuper) return all;
+        if (ownMode) return all.filter(p => p.createdBy === user.id);
         const allowed = user?.allowed_crm_projects;
         if (!Array.isArray(allowed) || allowed.length === 0) return all;
         return all.filter(p => allowed.includes(p.id));
     };
+    const filteredProjects = useMemo(() => filterProjectsForUser(projects), [projects, user]);
 
     const fetchProjects = async () => {
         if (!projectsCache) setLoading(true); // sin spinner de la lista si ya hay caché sembrado
@@ -531,6 +535,8 @@ const CRMProjectsSection = () => {
                     showToast('Proyecto creado', 'success');
                 }
                 setShowCreate(false); setProjName(''); setProjDesc(''); setProjColor('#3b82f6'); setEditingProject(null);
+            } else {
+                showToast(data.error || 'No se pudo guardar el proyecto', 'error');
             }
         } catch (e) { showToast('Error', 'error'); }
     };
@@ -540,7 +546,12 @@ const CRMProjectsSection = () => {
         const ok = await showConfirm({ title: 'Eliminar proyecto', message: '¿Seguro? Se perderán todos los pasos y vínculos de candidatos.', confirmText: 'Eliminar', variant: 'danger' });
         if (!ok) return;
         try {
-            await fetch(`/api/manual_projects?id=${id}`, { method: 'DELETE' });
+            const res = await fetch(`/api/manual_projects?id=${id}`, { method: 'DELETE' });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || data.success === false) {
+                showToast(data.error || 'No se pudo eliminar el proyecto', 'error');
+                return;
+            }
             setProjects(prev => prev.filter(p => p.id !== id));
             if (activeProject?.id === id) { setActiveProject(null); setCandidates([]); }
             showToast('Proyecto eliminado', 'info');
@@ -557,6 +568,8 @@ const CRMProjectsSection = () => {
                     ? prev.map(p => p.id === data.data.id ? data.data : p)
                     : [data.data, ...prev]);
                 showToast('Proyecto clonado', 'success');
+            } else {
+                showToast(data.error || 'No se pudo clonar el proyecto', 'error');
             }
         } catch (e) { showToast('Error', 'error'); }
     };
@@ -830,10 +843,12 @@ const CRMProjectsSection = () => {
             <div className="flex gap-6 h-full min-h-0">
                 {/* LEFT SIDEBAR — Project List */}
                 <div className="w-72 shrink-0 flex flex-col gap-3">
-                    <Button onClick={() => { setEditingProject(null); setProjName(''); setProjDesc(''); setProjColor('#3b82f6'); setShowCreate(true); }}
-                        className="w-full bg-blue-600 hover:bg-blue-700 text-white rounded-xl py-3 font-bold shadow-lg shadow-blue-500/20">
-                        <FolderPlus className="w-4 h-4 mr-2" /> Nuevo Proyecto
-                    </Button>
+                    {canCreateProjects && (
+                        <Button onClick={() => { setEditingProject(null); setProjName(''); setProjDesc(''); setProjColor('#3b82f6'); setShowCreate(true); }}
+                            className="w-full bg-blue-600 hover:bg-blue-700 text-white rounded-xl py-3 font-bold shadow-lg shadow-blue-500/20">
+                            <FolderPlus className="w-4 h-4 mr-2" /> Nuevo Proyecto
+                        </Button>
+                    )}
 
                     <div className="flex-1 overflow-y-auto space-y-2 px-2 pb-4 pt-1 custom-scrollbar -mx-2">
                         {loading ? (
@@ -848,6 +863,8 @@ const CRMProjectsSection = () => {
                                         project={p}
                                         isActive={activeProject?.id === p.id}
                                         onSelect={setActiveProject}
+                                        canManage={canManageProject(p)}
+                                        canCreate={canCreateProjects}
                                         onEdit={(e) => { e.stopPropagation(); setEditingProject(p); setProjName(p.name); setProjDesc(p.description || ''); setProjColor(p.color || '#3b82f6'); setShowCreate(true); }}
                                         onClone={(e) => handleClone(p.id, e)}
                                         onDelete={(e) => handleDelete(p.id, e)}
@@ -881,10 +898,12 @@ const CRMProjectsSection = () => {
                                         <Calendar className="w-4 h-4" />
                                     </button>
                                 </div>
-                                <Button onClick={handleAddStep}
-                                    className="bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 rounded-xl text-xs font-bold px-3 py-2">
-                                    <Plus className="w-3.5 h-3.5 mr-1" /> Paso
-                                </Button>
+                                {canManageProject(activeProject) && (
+                                    <Button onClick={handleAddStep}
+                                        className="bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 rounded-xl text-xs font-bold px-3 py-2">
+                                        <Plus className="w-3.5 h-3.5 mr-1" /> Paso
+                                    </Button>
+                                )}
                             </div>
 
                             {/* Kanban Columns */}
@@ -911,6 +930,7 @@ const CRMProjectsSection = () => {
                                                 stepCands={stepCands}
                                                 onRename={handleRenameStep}
                                                 onDelete={handleDeleteStep}
+                                                canManage={canManageProject(activeProject)}
                                                 canDelete={steps.length > 1}
                                                 controls={
                                                     <div className="px-3 py-2 border-b border-slate-100 dark:border-slate-700 space-y-1.5" style={{ backgroundColor: `${step.color || '#64748b'}08` }}>
