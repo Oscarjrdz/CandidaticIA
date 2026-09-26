@@ -43,6 +43,13 @@ export default async function handler(req, res) {
                 return res.status(400).json({ success: false, error: 'Name and WhatsApp are required' });
             }
             userData.whatsapp = normalizePhone(userData.whatsapp);
+            // Crear ≠ editar: si ya existe un usuario con ese WhatsApp, no lo pises silenciosamente.
+            const existing = await getUsers();
+            if (existing.some(u => u.whatsapp === userData.whatsapp)) {
+                return res.status(409).json({ success: false, error: 'Ya existe un usuario con ese WhatsApp' });
+            }
+            // Un POST nunca debe traer id de otro registro: fuerza identidad nueva.
+            delete userData.id;
             const user = await saveUser(userData);
             return res.status(200).json({ success: true, user });
         }

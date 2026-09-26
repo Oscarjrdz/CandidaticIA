@@ -2120,6 +2120,11 @@ export const getCandidatesStats = async () => {
  * USERS (Blob)
  * ==========================================
  */
+// Genera un id estable y único para un usuario. Los usuarios creados por el panel
+// (POST /api/users) llegaban SIN id, lo que rompía el match en saveUser/deleteUser
+// (undefined === undefined) y provocaba duplicados al editar y borrados imposibles.
+const generateUserId = () => `user_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
 export const getUsers = async () => {
     const client = getClient();
     if (!client) return [];
@@ -2131,6 +2136,17 @@ export const getUsers = async () => {
         } catch (e) {
             console.error('❌ Corrupt Users Data Found (resetting):', e);
             users = [];
+        }
+    }
+
+    // AUTO-REPARACIÓN: todo usuario DEBE tener un id estable. Los creados por el panel
+    // antes de este fix quedaron sin id (fuente de los duplicados / borrados imposibles).
+    // Aquí se les asigna uno la primera vez que se leen y se persiste una sola vez.
+    let dirty = false;
+    for (const u of users) {
+        if (!u.id) {
+            u.id = generateUserId();
+            dirty = true;
         }
     }
 
@@ -2148,7 +2164,7 @@ export const getUsers = async () => {
             createdAt: new Date().toISOString()
         };
         users.push(defaultAdmin);
-        await client.set(KEYS.USERS, JSON.stringify(users));
+        dirty = true;
     } else {
         // Force Active status/Role if exists
         const current = users[adminIndex];
@@ -2158,8 +2174,13 @@ export const getUsers = async () => {
                 role: 'SuperAdmin',
                 status: 'Active'
             };
-            await client.set(KEYS.USERS, JSON.stringify(users));
+            dirty = true;
         }
+    }
+
+    // Persistir una sola vez si hubo backfill de ids y/o ajuste del super admin.
+    if (dirty) {
+        await client.set(KEYS.USERS, JSON.stringify(users));
     }
 
     return users;
@@ -2170,10 +2191,25 @@ export const saveUser = async (user) => {
     const client = getClient();
     if (!client) return;
     const users = await getUsers();
-    const index = users.findIndex(u => u.id === user.id || u.whatsapp === user.whatsapp);
+
+    // Identidad estable: todo usuario DEBE tener id. Los creados por el panel llegaban sin él,
+    // lo que rompía el match al editar (undefined === undefined) y generaba duplicados.
+    if (!user.id) {
+        user.id = generateUserId();
+    }
+
+    // Match robusto: SOLO empatar cuando el identificador realmente existe en ambos lados.
+    // Nunca empatar por `undefined === undefined` (eso pisaba/duplicaba usuarios sin id).
+    // Prioriza id (identidad canónica); el whatsapp puede cambiar en una edición.
+    let index = users.findIndex(u => u.id && user.id && u.id === user.id);
+    if (index < 0) {
+        index = users.findIndex(u => u.whatsapp && user.whatsapp && u.whatsapp === user.whatsapp);
+    }
+
     if (index >= 0) {
         const existing = users[index];
-        const merged = { ...existing, ...user };
+        // Conserva el id original del registro: una edición no debe cambiar la identidad.
+        const merged = { ...existing, ...user, id: existing.id || user.id };
         // `preferences` se mergea UN NIVEL en profundidad (no shallow-replace del top-level):
         // cada feature (banco de respuestas, orden de columnas, candados de nodo, tablero de
         // métricas…) manda SOLO su propia sub-llave. Sin este merge, un PUT parcial borraría
@@ -2183,28 +2219,96 @@ export const saveUser = async (user) => {
             merged.preferences = { ...(existing.preferences || {}), ...user.preferences };
         }
         users[index] = merged;
-    } else {
-        users.push(user);
+        await client.set(KEYS.USERS, JSON.stringify(users));
+        return merged;
     }
+
+    users.push(user);
     await client.set(KEYS.USERS, JSON.stringify(users));
     return user;
 };
 
+// Escanea llaves por patrón sin bloquear Redis (SCAN vía stream, no KEYS).
+// Acotado a las coincidencias del MATCH; se usa solo en el borrado de usuario (acción de
+// admin muy infrecuente), así que el costo del recorrido del keyspace es aceptable.
+const scanKeys = (client, pattern) => new Promise((resolve, reject) => {
+    const found = [];
+    const stream = client.scanStream({ match: pattern, count: 500 });
+    stream.on('data', (keys) => { for (const k of keys) found.push(k); });
+    stream.on('end', () => resolve(found));
+    stream.on('error', reject);
+});
+
 export const deleteUser = async (id) => {
     const client = getClient();
-    if (!client) return;
+    if (!client) return false;
     const users = await getUsers();
 
-    // Check if trying to delete Super Admin
-    const userToDelete = users.find(u => u.id === id || u.whatsapp === (id.whatsapp || id));
-    // Hardcoded protection for main admin
-    if (userToDelete && (userToDelete.whatsapp === '5218116038195' || userToDelete.role === 'SuperAdmin')) {
+    // Localiza al usuario objetivo. Prioriza el match por id (identidad canónica) sobre el de
+    // whatsapp: en datos legacy un id podía coincidir con el whatsapp de OTRO usuario, así que
+    // empatar primero por id evita borrar al equivocado.
+    const userToDelete = users.find(u => u.id === id) || users.find(u => u.whatsapp === id);
+    if (!userToDelete) return false;
+
+    // Protección del super admin principal / cualquier SuperAdmin.
+    if (userToDelete.whatsapp === '5218116038195' || userToDelete.role === 'SuperAdmin') {
         console.warn('⛔️ Intento de eliminar Super Admin bloqueado.');
         return false;
     }
 
-    const newUsers = users.filter(u => u.id !== id && u.whatsapp !== id);
+    const uid = userToDelete.id;
+    const wa = userToDelete.whatsapp;
+
+    // 1) Quitar del arreglo de usuarios (fuente de verdad). Se filtra por REFERENCIA exacta
+    //    para eliminar únicamente este registro, aunque datos corruptos previos compartieran
+    //    id/whatsapp con otro.
+    const newUsers = users.filter(u => u !== userToDelete);
     await client.set(KEYS.USERS, JSON.stringify(newUsers));
+
+    // 2) BORRADO PROFUNDO de datos laterales: sesión (acceso), presencia (indicador en línea) y
+    //    estadísticas de actividad. Si esto falla, el usuario YA fue removido; solo se registra.
+    try {
+        const pipe = client.pipeline();
+        // Presencia: la llave estable es whatsapp cuando existe, si no el id (ver api/presence.js).
+        if (wa) { pipe.hdel('presence:hash', wa); pipe.zrem('presence:expiry', wa); }
+        if (uid) { pipe.hdel('presence:hash', uid); pipe.zrem('presence:expiry', uid); }
+        await pipe.exec();
+
+        // Sesiones admin activas del usuario → revocar acceso de inmediato (no esperar al TTL de 8h).
+        if (uid) {
+            const sessionKeys = await scanKeys(client, 'session:admin:*');
+            if (sessionKeys.length > 0) {
+                const raws = await client.mget(...sessionKeys);
+                const toKill = sessionKeys.filter((k, i) => {
+                    try { return raws[i] && JSON.parse(raws[i]).userId === uid; } catch { return false; }
+                });
+                if (toKill.length > 0) await client.del(...toKill);
+            }
+        }
+
+        // Actividad diaria: un solo escaneo de `recruiter:*` y limpieza dirigida.
+        //   recruiter:ids:<día>            → SET de userIds → SREM del uid
+        //   recruiter:meta:<uid>           → del
+        //   recruiter:time:<uid>:<día>     → del
+        //   recruiter:visited:<uid>:<día>  → del
+        if (uid) {
+            const recruiterKeys = await scanKeys(client, 'recruiter:*');
+            const cleanPipe = client.pipeline();
+            const toDelete = [];
+            for (const k of recruiterKeys) {
+                if (k.startsWith('recruiter:ids:')) {
+                    cleanPipe.srem(k, uid);
+                } else if (k.includes(`:${uid}:`) || k.endsWith(`:${uid}`)) {
+                    toDelete.push(k);
+                }
+            }
+            if (toDelete.length > 0) cleanPipe.del(...toDelete);
+            await cleanPipe.exec();
+        }
+    } catch (e) {
+        console.error('⚠️ Deep-delete de usuario: limpieza lateral falló (usuario ya removido):', e?.message);
+    }
+
     return true;
 };
 

@@ -312,11 +312,13 @@ const UsersSection = () => {
         });
         if (!ok) return;
         try {
-            const res = await fetch(`/api/users?id=${id}`, { method: 'DELETE' });
+            const res = await fetch(`/api/users?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
             const data = await res.json();
             if (data.success) {
                 showToast('Usuario eliminado', 'success');
                 loadData();
+            } else {
+                showToast(data.error || 'No se pudo eliminar el usuario', 'error');
             }
         } catch {
             showToast('Error al eliminar', 'error');
