@@ -189,17 +189,19 @@ const FlowEditorInner = ({ flowId, onBack }) => {
 
     // Candado POR USUARIO POR NODO: no es parte del flujo (compartido) sino de las
     // preferencias del reclutador (user.preferences.flowNodeLocks[flowId][nodeId] = true).
-    // Mismo patrón de persistencia que el banco de respuestas / orden de columnas: se
-    // manda el objeto `preferences` COMPLETO porque saveUser mergea shallow al top-level.
+    // Se manda SOLO la sub-llave `flowNodeLocks` (delta): saveUser mergea preferences un
+    // nivel en profundidad, así este guardado (frecuentísimo al abrir/editar flujos) ya NO
+    // pisa otras preferencias como el tamaño/posición del tablero de métricas. flowNodeLocks
+    // se manda COMPLETO porque el merge reemplaza esa llave entera.
     // NO usa setDirty: el candado se guarda solo, aparte del guardado del flujo.
     const handleToggleLock = useCallback((nodeId) => {
         if (!user?.id) return;
         const nextPreferences = toggleNodeLock(user.preferences, flowId, nodeId);
-        setUser(prev => prev ? { ...prev, preferences: nextPreferences } : prev);
+        setUser(prev => prev ? { ...prev, preferences: { ...(prev.preferences || {}), flowNodeLocks: nextPreferences.flowNodeLocks } } : prev);
         fetch('/api/users', {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id: user.id, preferences: nextPreferences })
+            body: JSON.stringify({ id: user.id, preferences: { flowNodeLocks: nextPreferences.flowNodeLocks } })
         }).catch(() => {});
     }, [user, setUser, flowId]);
 
@@ -252,11 +254,12 @@ const FlowEditorInner = ({ flowId, onBack }) => {
             if (u?.id) {
                 const { preferences: nextPreferences, changed } = initFlowLocksIfNeeded(u.preferences, flowId, loadedNodes.map(n => n.id));
                 if (changed) {
-                    setUser(prev => prev ? { ...prev, preferences: nextPreferences } : prev);
+                    // Solo la sub-llave `flowNodeLocks` (delta) — ver nota en handleToggleLock.
+                    setUser(prev => prev ? { ...prev, preferences: { ...(prev.preferences || {}), flowNodeLocks: nextPreferences.flowNodeLocks } } : prev);
                     fetch('/api/users', {
                         method: 'PUT',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ id: u.id, preferences: nextPreferences })
+                        body: JSON.stringify({ id: u.id, preferences: { flowNodeLocks: nextPreferences.flowNodeLocks } })
                     }).catch(() => {});
                 }
             }

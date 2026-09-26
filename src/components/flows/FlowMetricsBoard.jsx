@@ -121,18 +121,25 @@ const FlowMetricsBoard = () => {
         if (typeof cfg.collapsed === 'boolean') setCollapsed(cfg.collapsed);
     }, [user?.preferences?.metricsBoard]);
 
-    // Guarda un parche de config en el perfil del usuario (Redis) + estado local.
+    // Guarda la config del tablero en el perfil del usuario (Redis) + estado local.
+    // Se manda SOLO la sub-llave `metricsBoard` (delta a nivel preferences), no el objeto
+    // `preferences` completo: saveUser mergea preferences un nivel en profundidad, así que
+    // enviar el snapshot entero desde un closure viejo pisaba lo que otras features (sobre
+    // todo los candados de nodo de los flujos, que Oscar toca a cada rato) acababan de
+    // guardar — por eso el tamaño del tablero "regresaba a lo grande" tras refrescar.
+    // El tablero se manda SIEMPRE COMPLETO (pos+width+scale+collapsed) porque el merge de
+    // preferences reemplaza la llave `metricsBoard` entera; el estado local de este
+    // componente es la fuente de verdad de esos valores, y `patch` trae el que cambió.
     const persistCfg = useCallback((patch) => {
         if (!user?.id) return;
-        const nextBoard = { ...(user.preferences?.metricsBoard || {}), ...patch };
-        const nextPreferences = { ...(user.preferences || {}), metricsBoard: nextBoard };
-        setUser(prev => prev ? { ...prev, preferences: nextPreferences } : prev);
+        const board = { pos, width, scale, collapsed, ...patch };
+        setUser(prev => prev ? { ...prev, preferences: { ...(prev.preferences || {}), metricsBoard: board } } : prev);
         fetch('/api/users', {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id: user.id, preferences: nextPreferences })
+            body: JSON.stringify({ id: user.id, preferences: { metricsBoard: board } })
         }).catch(() => {});
-    }, [user?.id, user?.preferences, setUser]);
+    }, [user?.id, setUser, pos, width, scale, collapsed]);
 
     const fetchMetrics = useCallback(async () => {
         setLoading(true);

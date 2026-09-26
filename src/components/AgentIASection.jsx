@@ -117,14 +117,16 @@ const AgentIASection = () => {
     const saveOrder = useCallback((nextOrder) => {
         setOrder(nextOrder);
         if (!user?.id) return;
-        const nextPreferences = { ...(user.preferences || {}), agentColumnsOrder: nextOrder };
-        setUser((prev) => (prev ? { ...prev, preferences: nextPreferences } : prev));
+        // Solo se manda la sub-llave que cambió (delta): saveUser mergea preferences un nivel
+        // en profundidad, así no pisamos otras preferencias (banco de respuestas, tablero de
+        // métricas, candados de nodo…). El estado local se mergea sobre `prev` (el más reciente).
+        setUser((prev) => (prev ? { ...prev, preferences: { ...(prev.preferences || {}), agentColumnsOrder: nextOrder } } : prev));
         fetch('/api/users', {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id: user.id, preferences: nextPreferences })
+            body: JSON.stringify({ id: user.id, preferences: { agentColumnsOrder: nextOrder } })
         }).catch(() => {});
-    }, [user?.id, user?.preferences, setUser]);
+    }, [user?.id, setUser]);
 
     // Orientación del drag: horizontal en escritorio (columnas lado a lado),
     // vertical cuando se apilan en pantallas angostas.

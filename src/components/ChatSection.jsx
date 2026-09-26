@@ -1109,14 +1109,15 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
     const setQuickRepliesPanelOpen = useCallback((open) => {
         setShowQuickRepliesPanel(open);
         if (!user?.id) return;
-        const nextPreferences = { ...(user.preferences || {}), quickRepliesOpen: open };
-        setUser(prev => prev ? { ...prev, preferences: nextPreferences } : prev);
+        // Solo la sub-llave que cambió (delta): saveUser mergea preferences un nivel en
+        // profundidad, así este guardado no pisa otras preferencias (orden, tablero, candados…).
+        setUser(prev => prev ? { ...prev, preferences: { ...(prev.preferences || {}), quickRepliesOpen: open } } : prev);
         fetch('/api/users', {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id: user.id, preferences: nextPreferences })
+            body: JSON.stringify({ id: user.id, preferences: { quickRepliesOpen: open } })
         }).catch(() => {});
-    }, [user?.id, user?.preferences, setUser]);
+    }, [user?.id, setUser]);
     // ── Banco de respuestas: orden por reclutador (drag & drop), form contraible y buscador ──
     // El orden y el colapso del form se guardan en el perfil del usuario en Redis
     // (mismo patron que quickRepliesOpen — merge superficial via PUT /api/users).
@@ -1128,14 +1129,16 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
 
     const saveQrPreference = useCallback((patch) => {
         if (!user?.id) return;
-        const nextPreferences = { ...(user.preferences || {}), ...patch };
-        setUser(prev => prev ? { ...prev, preferences: nextPreferences } : prev);
+        // `patch` ya es el delta (solo las sub-llaves que cambiaron). saveUser mergea
+        // preferences un nivel en profundidad → no pisamos otras preferencias. El estado
+        // local se mergea sobre `prev` (siempre el más reciente) para no pisar en localStorage.
+        setUser(prev => prev ? { ...prev, preferences: { ...(prev.preferences || {}), ...patch } } : prev);
         fetch('/api/users', {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id: user.id, preferences: nextPreferences })
+            body: JSON.stringify({ id: user.id, preferences: patch })
         }).catch(() => {});
-    }, [user?.id, user?.preferences, setUser]);
+    }, [user?.id, setUser]);
 
     const toggleQrFormCollapsed = useCallback(() => {
         setQrFormCollapsed(prev => {

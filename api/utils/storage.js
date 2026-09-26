@@ -2171,8 +2171,21 @@ export const saveUser = async (user) => {
     if (!client) return;
     const users = await getUsers();
     const index = users.findIndex(u => u.id === user.id || u.whatsapp === user.whatsapp);
-    if (index >= 0) users[index] = { ...users[index], ...user };
-    else users.push(user);
+    if (index >= 0) {
+        const existing = users[index];
+        const merged = { ...existing, ...user };
+        // `preferences` se mergea UN NIVEL en profundidad (no shallow-replace del top-level):
+        // cada feature (banco de respuestas, orden de columnas, candados de nodo, tablero de
+        // métricas…) manda SOLO su propia sub-llave. Sin este merge, un PUT parcial borraría
+        // las demás preferencias; con el shallow-replace viejo, un writer con snapshot viejo
+        // pisaba los cambios recientes de otro (ej. el tamaño del tablero volvía a lo anterior).
+        if (user.preferences && typeof user.preferences === 'object') {
+            merged.preferences = { ...(existing.preferences || {}), ...user.preferences };
+        }
+        users[index] = merged;
+    } else {
+        users.push(user);
+    }
     await client.set(KEYS.USERS, JSON.stringify(users));
     return user;
 };
