@@ -21,6 +21,7 @@ import {
     useSortable,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { MENU_SECTIONS } from '../constants/menuSections';
 
 const WhatsAppIcon = () => (
     <svg viewBox="0 0 24 24" className="w-4 h-4 fill-current">
@@ -28,23 +29,29 @@ const WhatsAppIcon = () => (
     </svg>
 );
 
-const DEFAULT_MENU_ITEMS = [
-    { id: 'candidates', label: 'Candidatos', icon: Users, position: 'top' },
-    { id: 'chat', label: 'Chat Web', icon: MessageSquare, position: 'top' },
-    { id: 'bulks', label: 'Envíos Masivos', icon: Send, position: 'top' },
-    { id: 'ads-stats', label: 'Estadísticas de Ads', icon: BarChart3, position: 'top' },
-    { id: 'stats', label: 'Estadísticas', icon: PieChart, position: 'top' },
-    { id: 'bot-ia', label: 'Bot IA (2.0)', icon: Smartphone, position: 'top' },
-    { id: 'flows', label: 'Flows', icon: Workflow, position: 'top' },
-    { id: 'vacancies', label: 'Vacantes', icon: Briefcase, position: 'top' },
-    { id: 'bolsa', label: 'Bolsa (App)', icon: Smartphone, position: 'top' },
-    { id: 'notificaciones', label: 'Notificaciones', icon: Bell, position: 'top' },
-    { id: 'agent-ia', label: 'Agent IA', icon: Sparkles, position: 'top', superAdminOnly: true },
-    // { id: 'media-library', label: 'Biblioteca Multimedia', icon: Folder, position: 'top' },
-    { id: 'projects', label: 'Proyectos', icon: FolderKanban, position: 'top' },
-    // 'users' (Usuarios) se fusionó dentro de Settings (SettingsSection). Ya no es item de menú.
-    { id: 'settings', label: 'Settings', icon: Settings, position: 'bottom' }
-];
+// Íconos por sección. Los ids/labels/orden viven en la fuente única (constants/menuSections.js);
+// aquí solo se les cuelga su ícono. 'users'/'media-library' quedaron fuera del menú (Usuarios se
+// fusionó en Settings) y por eso no están en la fuente única.
+const SECTION_ICONS = {
+    candidates: Users,
+    chat: MessageSquare,
+    bulks: Send,
+    'ads-stats': BarChart3,
+    stats: PieChart,
+    'bot-ia': Smartphone,
+    flows: Workflow,
+    vacancies: Briefcase,
+    bolsa: Smartphone,
+    notificaciones: Bell,
+    'agent-ia': Sparkles,
+    projects: FolderKanban,
+    settings: Settings,
+};
+
+const DEFAULT_MENU_ITEMS = MENU_SECTIONS.map(section => ({
+    ...section,
+    icon: SECTION_ICONS[section.id],
+}));
 
 const SortableMenuItem = ({ item, activeSection, onSectionChange, badge, isCollapsed }) => {
     const {
