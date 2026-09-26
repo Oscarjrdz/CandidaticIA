@@ -285,7 +285,19 @@
       "Bash(grep -n \"CANDIDATE_PREFIX\\\\|candidate:\\\\${\\\\|async function getCandidateById\\\\|hydrateCandidateIds\" api/utils/storage.js)",
       "Bash(node _tmp_repro.mjs)",
       "Bash(rm -f _tmp_*.mjs _tmp_out.txt _tmp_dbg.txt 2>/dev/null; echo \"temporales borrados\"; echo \"=== DIFF STAT ===\"; git diff --stat api/ai/agent.js; echo; echo \"=== node --check final ===\"; node --check api/ai/agent.js && echo \"✓ OK\")",
-      "Bash(node _tmp_intent.mjs)"
+      "Bash(node _tmp_intent.mjs)",
+      "Bash(node dump-one.js)",
+      "Bash(awk 'NR>=1860 && NR<=3140 && /paso2Estado = .completo.|return |return\\\\{|^        return|bypassGpt|early/' api/ai/agent.js)",
+      "Bash(grep -n \"^        return\\\\|^            return {\\\\|return {$\\\\|return { text\\\\|return {text\\\\|^        return;\" api/ai/agent.js)",
+      "Bash(awk -F: '$1>=1980 && $1<=3135')",
+      "Bash(REDIS_URL='redis://localhost:6379' node tmp-test-format.mjs)",
+      "Bash(perl -0pi -e 's/\\\\n\\\\/\\\\/ \\\\[TEMP TEST EXPORT — QUITAR\\\\]\\\\nexport \\\\{ formatRecruiterMessage as __test_formatRecruiterMessage \\\\};\\\\n//' api/ai/agent.js)",
+      "Bash(grep -n \"loadTags\\\\|setAvailableTags\\\\|fetch\\(\\\\`?/api/tags\\\\|/api/tags\" src/components/ChatSection.jsx)",
+      "Bash(echo \"--- check exit: $? ---\")",
+      "Bash(node --check api/chat-unread-count.js)",
+      "Bash(node --check api/utils/rbac.js)",
+      "Bash(node --check api/tags.js)",
+      "Bash(node /private/tmp/claude-501/-Users-oscar-Candidatic-IA/dd3825ec-65b3-4707-8f01-af2dc7cd2dfe/scratchpad/test-tags.mjs)"
     ],
     "additionalDirectories": [
       "/Users/oscar/App Candidatic/Candidatic_App/utils",
