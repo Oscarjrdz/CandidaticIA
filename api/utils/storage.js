@@ -11,7 +11,7 @@
 import Redis from 'ioredis';
 import { sendConversionEvent } from './metaConversions.js';
 import { getCachedConfig } from './cache.js';
-import { resolveAllowedLabels } from './rbac.js';
+import { resolveAllowedLabels, ownedLabelSetFromRegistry } from './rbac.js';
 import { recordScanEvent } from './redis-bandwidth.js';
 import { acquireProcessingLock, releaseProcessingLock } from './reminder-lock.js';
 
@@ -897,6 +897,21 @@ export const isProfileComplete = (c, customFields = []) => {
     return c.paso2Estado === 'completo';
 };
 
+// Set (minúscula) de las etiquetas propias del usuario (createdBy === user.id), leído del
+// registro `candidatic:chat_tags`. Devuelve null si no está en modo "solo sus propias etiquetas"
+// (o es SuperAdmin). Es el insumo para la visibilidad de chats "propios" en tags_own_mode.
+export const getOwnedLabelSet = async (user) => {
+    if (!user?.tags_own_mode || user.role === 'SuperAdmin') return null;
+    const client = getClient();
+    if (!client) return new Set();
+    let registry = [];
+    try {
+        const raw = await client.get('candidatic:chat_tags');
+        registry = raw ? JSON.parse(raw) : [];
+    } catch { registry = []; }
+    return ownedLabelSetFromRegistry(user, registry) || new Set();
+};
+
 // Native Redis Pagination (Page size 100)
 // Devuelve el arreglo ORDENADO (por recencia desc) de candidateIds que este usuario puede ver,
 // según la regla única: número (Y) + etiqueta. Devuelve `null` cuando el usuario NO tiene
@@ -907,7 +922,8 @@ export const getVisibleCandidateIds = async (user) => {
     if (!client) return [];
     if (!user || user.role === 'SuperAdmin') return null;
 
-    const { seeAll, labelSet } = resolveAllowedLabels(user);
+    const ownedLabelSet = await getOwnedLabelSet(user);
+    const { seeAll, labelSet } = resolveAllowedLabels(user, ownedLabelSet);
     const allowedWa = Array.isArray(user?.allowed_wa_numbers)
         ? user.allowed_wa_numbers.map(n => String(n).trim()).filter(Boolean)
         : [];

@@ -1,4 +1,4 @@
-import { getMessages, getRecentMessages, saveMessage, getCandidateById, updateCandidate, updateMessageStatus, getRedisClient, validateAdminSession, getUsers, getRoles, isProfileComplete } from './utils/storage.js';
+import { getMessages, getRecentMessages, saveMessage, getCandidateById, updateCandidate, updateMessageStatus, getRedisClient, validateAdminSession, getUsers, getRoles, isProfileComplete, getOwnedLabelSet } from './utils/storage.js';
 import { substituteVariables } from './utils/shortcuts.js';
 import { sendUltraMsgMessage, getUltraMsgConfig, buildMetaTemplateComponents, renderMetaTemplatePreviewText, resolveTemplateHeaderMedia } from './whatsapp/utils.js';
 import { getCachedConfig } from './utils/cache.js';
@@ -105,6 +105,7 @@ export default async function handler(req, res) {
                 ]);
                 const customFields = customFieldsRaw ? JSON.parse(customFieldsRaw) : [];
                 const user = users.find(u => u.id === userId || u.whatsapp === userId);
+                const ownedLabelSet = await getOwnedLabelSet(user);
                 const role = roles.find(r => r.name === user?.role);
                 const rolePermissions = role?.permissions || {};
                 const canSeeIncomplete = user?.role === 'SuperAdmin' || !rolePermissions || Object.keys(rolePermissions).length === 0 || rolePermissions.view_incomplete_candidates === true;
@@ -126,7 +127,7 @@ export default async function handler(req, res) {
 
                         const tags = candidateTagNames(candidate);
                         // Regla única de visibilidad: número (Y) + etiqueta. El proyecto NO agrega candidatos.
-                        if (!candidatePassesUserFilter({ tagsLower: tags, phoneId: candidate.incomingPhoneNumberId }, user)) continue;
+                        if (!candidatePassesUserFilter({ tagsLower: tags, phoneId: candidate.incomingPhoneNumberId }, user, ownedLabelSet)) continue;
 
                         const complete = candidate.statusAudit === 'complete' || isProfileComplete(candidate, customFields);
                         if (!canSeeIncomplete && !complete) continue;

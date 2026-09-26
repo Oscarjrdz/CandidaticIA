@@ -13,12 +13,16 @@ export const ALL_LABELS = '__all__';
 //   entrado por uno de ellos.
 // - Etiqueta: decide QUÉ candidatos ve. El proyecto CRM NO agrega candidatos (solo abre el
 //   tablero; adentro sigue mandando la etiqueta).
+//     · tags_own_mode ON → ve candidatos con AL MENOS una etiqueta creada por él (los chats
+//       "propios" siguen a sus etiquetas). En own-mode `/api/tags` ya devuelve solo sus etiquetas,
+//       así que ownedTagNames = nombres de esas etiquetas. Sin etiquetas propias = nadie.
 //     · allowed_labels con '__all__'  → ve todos (incluidos los SIN etiqueta).
 //     · allowed_labels sin etiquetas reales → no ve a NADIE (deny por defecto).
 //     · allowed_labels con etiquetas   → ve candidatos con AL MENOS una de esas etiquetas
 //       (permisivo); los candidatos sin etiqueta NO se ven.
 // Solo SuperAdmin queda exento de todo.
-export const passesChatRBACFilter = (candidate, user) => {
+// ownedTagNames: array/Set de nombres de sus etiquetas propias (solo se usa en tags_own_mode).
+export const passesChatRBACFilter = (candidate, user, ownedTagNames = null) => {
     if (!user || user.role === 'SuperAdmin') return true;
 
     // ── Número: filtro duro (Y). ──
@@ -28,15 +32,26 @@ export const passesChatRBACFilter = (candidate, user) => {
         if (!phoneId || !allowedWa.includes(phoneId)) return false;
     }
 
+    const tags = Array.isArray(candidate?.tags)
+        ? candidate.tags.map(t => (typeof t === 'string' ? t : t?.name)).filter(Boolean).map(s => s.trim().toLowerCase())
+        : [];
+
+    // ── Modo "solo sus propias etiquetas": la visibilidad sigue a sus etiquetas. ──
+    if (user?.tags_own_mode) {
+        const ownedSet = ownedTagNames instanceof Set
+            ? ownedTagNames
+            : new Set((Array.isArray(ownedTagNames) ? ownedTagNames : []).map(s => String(s).trim().toLowerCase()));
+        if (ownedSet.size === 0) return false; // sin etiquetas propias = nadie
+        if (tags.length === 0) return false;   // candidato sin etiqueta no es "suyo"
+        return tags.some(t => ownedSet.has(t));
+    }
+
     // ── Etiqueta: candado de visibilidad de candidatos. ──
     const allowedLabels = Array.isArray(user?.allowed_labels) ? user.allowed_labels : [];
     if (allowedLabels.includes(ALL_LABELS)) return true; // Ver TODAS
     const realLabels = allowedLabels.filter(l => typeof l === 'string' && l && l !== ALL_LABELS && l !== '__none__');
     if (realLabels.length === 0) return false; // sin etiquetas asignadas = nadie
 
-    const tags = Array.isArray(candidate?.tags)
-        ? candidate.tags.map(t => (typeof t === 'string' ? t : t?.name)).filter(Boolean).map(s => s.trim().toLowerCase())
-        : [];
     if (tags.length === 0) return false; // candidato sin etiqueta: solo SuperAdmin / 'Ver TODAS'
     const allowedSet = new Set(realLabels.map(l => l.trim().toLowerCase()));
     return tags.some(t => allowedSet.has(t));

@@ -118,7 +118,7 @@ async function readOrBuildUnreadAggregate({ redis, unreadIds, unreadVersion, isP
     };
 }
 
-function filterAggregateCounts({ summaries, user, rolePermissions }) {
+function filterAggregateCounts({ summaries, user, rolePermissions, ownedLabelSet = null }) {
     const canSeeIncomplete =
         user.role === 'SuperAdmin' ||
         !rolePermissions ||
@@ -128,7 +128,7 @@ function filterAggregateCounts({ summaries, user, rolePermissions }) {
 
     for (const summary of summaries) {
         // Regla única: número (Y) + etiqueta. El proyecto CRM NO agrega candidatos.
-        if (!candidatePassesUserFilter({ tagsLower: summary.tags, phoneId: summary.incomingPhoneNumberId }, user)) continue;
+        if (!candidatePassesUserFilter({ tagsLower: summary.tags, phoneId: summary.incomingPhoneNumberId }, user, ownedLabelSet)) continue;
         if (!summary.complete && !canSeeIncomplete) continue;
         incrementCounts(counts, summary);
     }
@@ -146,7 +146,8 @@ export default async function handler(req, res) {
             getUsers,
             getRoles,
             validateAdminSession,
-            isProfileComplete
+            isProfileComplete,
+            getOwnedLabelSet
         } = await import('./utils/storage.js');
 
         const userId = await validateAdminSession(req);
@@ -163,6 +164,9 @@ export default async function handler(req, res) {
         const role = roles.find(r => r.name === user.role);
         const rolePermissions = role?.permissions || {};
 
+        // Modo "solo sus propias etiquetas": los chats visibles siguen a las etiquetas que él creó.
+        const ownedLabelSet = await getOwnedLabelSet(user);
+
         const [unreadSetSize, unreadVersionRaw] = await Promise.all([
             redis.scard('candidates:unread'),
             redis.get('stats:unread:version')
@@ -173,6 +177,10 @@ export default async function handler(req, res) {
             wa: Array.isArray(user.allowed_wa_numbers) ? [...user.allowed_wa_numbers].sort() : [],
             crm: Array.isArray(user.allowed_crm_projects) ? [...user.allowed_crm_projects].sort() : [],
             labels: Array.isArray(user.allowed_labels) ? [...user.allowed_labels].sort() : [],
+            // En tags_own_mode la visibilidad depende de sus etiquetas propias, no de allowed_labels:
+            // la firma debe cambiar si ese conjunto cambia (crea/borra una etiqueta suya).
+            ownMode: !!user.tags_own_mode,
+            ownLabels: ownedLabelSet ? [...ownedLabelSet].sort() : null,
             viewIncomplete: rolePermissions.view_incomplete_candidates === true
         });
         const cacheKey = `cache:chat_unread_count:${userId}:${Buffer.from(restrictionSig).toString('base64url')}:${unreadSetSize}:${unreadVersion}`;
@@ -193,7 +201,7 @@ export default async function handler(req, res) {
         const hasWaRestriction = Array.isArray(allowedWa) && allowedWa.length > 0;
         // "Ve todos" = SuperAdmin o etiquetas en modo 'Ver TODAS'. Solo entonces (y sin filtro de
         // número, y pudiendo ver incompletos) sirven los conteos globales sin recalcular por-usuario.
-        const { seeAll } = resolveAllowedLabels(user);
+        const { seeAll } = resolveAllowedLabels(user, ownedLabelSet);
         const seesEverything = user.role === 'SuperAdmin' || seeAll;
         if (!unreadSetSize) {
             const payload = { success: true, unreadCount: 0, counts: createEmptyCounts() };
@@ -216,7 +224,8 @@ export default async function handler(req, res) {
             : filterAggregateCounts({
                 summaries: aggregate.summaries || [],
                 user,
-                rolePermissions
+                rolePermissions,
+                ownedLabelSet
             });
 
         const payload = { success: true, unreadCount: counts.all, counts };

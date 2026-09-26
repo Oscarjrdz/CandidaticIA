@@ -7,7 +7,7 @@ export default async function handler(req, res) {
     }
 
     try {
-        const { getRedisClient, updateCandidate, validateAdminSession, withCrmProjectLinksLock, getUsers } = await import('./utils/storage.js');
+        const { getRedisClient, updateCandidate, validateAdminSession, withCrmProjectLinksLock, getUsers, getOwnedLabelSet } = await import('./utils/storage.js');
 
         const userId = await validateAdminSession(req);
         if (!userId) return res.status(401).json({ error: 'No autorizado' });
@@ -163,13 +163,14 @@ export default async function handler(req, res) {
                 // RBAC: dentro del tablero, a quién ves lo sigue mandando tu etiqueta (y número).
                 // El acceso al proyecto abre el tablero; no salta el filtro por-usuario.
                 const currentUser = (await getUsers()).find(u => u.id === userId || u.whatsapp === userId);
+                const ownedLabelSet = await getOwnedLabelSet(currentUser);
                 const visible = candidates.filter(c => candidatePassesUserFilter({
                     tagsLower: (Array.isArray(c.tags) ? c.tags : [])
                         .map(t => (typeof t === 'string' ? t : t?.name))
                         .filter(Boolean)
                         .map(s => s.trim().toLowerCase()),
                     phoneId: c.incomingPhoneNumberId
-                }, currentUser));
+                }, currentUser, ownedLabelSet));
                 return res.status(200).json({ success: true, candidates: visible });
             }
 

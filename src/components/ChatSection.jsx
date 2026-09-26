@@ -1553,8 +1553,19 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         return manualProjects.filter(p => allowed.includes(p.id));
     }, [manualProjects, user]);
 
+    // Modo "solo sus propias etiquetas": /api/tags ya devuelve solo las suyas, así que
+    // availableTags = sus etiquetas → la visibilidad de chats sigue a ese conjunto
+    // (espejo de getOwnedLabelSet en el backend). null cuando el modo está apagado.
+    const ownedTagNames = useMemo(() => {
+        if (!user?.tags_own_mode) return null;
+        const list = Array.isArray(availableTags) ? availableTags : [];
+        return new Set(
+            list.map(t => (typeof t === 'string' ? t : t?.name)).filter(Boolean).map(s => s.trim().toLowerCase())
+        );
+    }, [user?.tags_own_mode, availableTags]);
+
     const getUnreadContribution = useCallback((candidate) => {
-        if (!candidate || !passesChatRBACFilter(candidate, user)) return null;
+        if (!candidate || !passesChatRBACFilter(candidate, user, ownedTagNames)) return null;
         const complete = isProfileComplete(candidate);
         if (!complete && !canSeeIncompleteChats(user, rolePermissions)) return null;
         if (!checkIfUnread(candidate)) return null;
@@ -1568,7 +1579,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
             : [];
 
         return { complete, tagKeys, untagged: tagKeys.length === 0, projectId: candidate.manualProjectId || null };
-    }, [user, rolePermissions]);
+    }, [user, rolePermissions, ownedTagNames]);
 
     const updateCountMap = (map = {}, key, delta) => {
         if (!key) return map;
@@ -2424,7 +2435,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         const result = (candidates || []).filter(c => {
 
             // --- RBAC Base Filter: Only show candidates from allowed projects or tags ---
-            if (!passesChatRBACFilter(c, user)) return false;
+            if (!passesChatRBACFilter(c, user, ownedTagNames)) return false;
 
             // --- Permiso: ocultar candidatos incompletos si el rol no lo permite ---
             if (user?.role !== 'SuperAdmin' &&
@@ -2501,7 +2512,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
             return String(b.id || '').localeCompare(String(a.id || ''));
         });
     }, [
-        candidates, user,
+        candidates, user, ownedTagNames,
         activeFilter, filterValue, profileUnreadOnly,
         selectedTag,
         manualPipelineFilter, manualStepFilter,
@@ -2918,8 +2929,8 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
     }, [filteredCandidates.length, loadMore, visibleChatLimit]);
 
     // ── Badge counts (MEMOIZED — only recalculated when candidates change) ──
-    const baseCandidates = useMemo(() => (candidates || []).filter(c => passesChatRBACFilter(c, user)
-    ), [candidates, user]);
+    const baseCandidates = useMemo(() => (candidates || []).filter(c => passesChatRBACFilter(c, user, ownedTagNames)
+    ), [candidates, user, ownedTagNames]);
 
     const badgeCounts = useMemo(() => {
         let all = 0, complete = 0, incomplete = 0;
@@ -2965,7 +2976,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
             map.set(value, (map.get(value) || 0) + 1);
         };
         const matchesFilters = (c, omit = null) => {
-            if (!passesChatRBACFilter(c, user)) return false;
+            if (!passesChatRBACFilter(c, user, ownedTagNames)) return false;
 
             if (user?.role !== 'SuperAdmin' &&
                 rolePermissions && Object.keys(rolePermissions).length > 0 &&
@@ -3033,7 +3044,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         };
     }, [
         globalFilterCounts,
-        baseCandidates, user, rolePermissions,
+        baseCandidates, user, rolePermissions, ownedTagNames,
         activeFilter, filterValue, profileUnreadOnly,
         selectedTagValues,
         selectedAges, selectedGenders, selectedMunicipalities,
@@ -3053,7 +3064,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         const projectCounts = {};
         const stepCounts = {};
         const matchesNonManualFilters = (c) => {
-            if (!passesChatRBACFilter(c, user)) return false;
+            if (!passesChatRBACFilter(c, user, ownedTagNames)) return false;
 
             if (user?.role !== 'SuperAdmin' &&
                 rolePermissions && Object.keys(rolePermissions).length > 0 &&
@@ -3109,7 +3120,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         return { projectCounts, stepCounts };
     }, [
         globalFilterCounts,
-        baseCandidates, user, rolePermissions,
+        baseCandidates, user, rolePermissions, ownedTagNames,
         activeFilter, filterValue, profileUnreadOnly,
         selectedTagValues,
         selectedAges, selectedGenders, selectedMunicipalities,
