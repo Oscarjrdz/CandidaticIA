@@ -133,11 +133,11 @@ function filterAggregateCounts({
     const hasCrmRestriction = Array.isArray(allowedCrm) && allowedCrm.length > 0;
     const hasWaRestriction = Array.isArray(allowedWa) && allowedWa.length > 0;
     const hasLabelRestriction = allowedLabelSet.size > 0;
-    const hasRBACRestriction = user.role !== 'SuperAdmin' && user.role !== 'Admin' && (hasCrmRestriction || hasLabelRestriction);
+    const hasRBACRestriction = user.role !== 'SuperAdmin' && (hasCrmRestriction || hasLabelRestriction);
     const counts = createEmptyCounts();
 
     for (const summary of summaries) {
-        if (user.role !== 'SuperAdmin' && user.role !== 'Admin' && hasWaRestriction) {
+        if (user.role !== 'SuperAdmin' && hasWaRestriction) {
             if (!summary.incomingPhoneNumberId || !allowedWa.includes(summary.incomingPhoneNumberId)) continue;
         }
 
@@ -213,8 +213,8 @@ export default async function handler(req, res) {
         const hasWaRestriction = Array.isArray(allowedWa) && allowedWa.length > 0;
         const allowedLabels = user?.allowed_labels;
         const hasLabelRestriction = Array.isArray(allowedLabels) && allowedLabels.length > 0;
-        const appliesUserRestrictions = user.role !== 'SuperAdmin' && user.role !== 'Admin';
-        const hasRBACRestriction = user.role !== 'SuperAdmin' && user.role !== 'Admin' && (hasCrmRestriction || hasLabelRestriction);
+        const appliesUserRestrictions = user.role !== 'SuperAdmin';
+        const hasRBACRestriction = user.role !== 'SuperAdmin' && (hasCrmRestriction || hasLabelRestriction);
         if (!unreadSetSize) {
             const payload = { success: true, unreadCount: 0, counts: createEmptyCounts() };
             await redis.set(cacheKey, JSON.stringify(payload), 'EX', 8).catch(() => {});

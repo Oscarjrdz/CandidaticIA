@@ -1546,7 +1546,8 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
     // No AI projects
 
     const filteredManualProjects = useMemo(() => {
-        if (!user || user.role === 'SuperAdmin' || user.role === 'Admin') return manualProjects;
+        // Solo SuperAdmin ve todos los proyectos sin filtro por-usuario. Admin ya se filtra.
+        if (!user || user.role === 'SuperAdmin') return manualProjects;
         const allowed = user?.allowed_crm_projects;
         if (!Array.isArray(allowed) || allowed.length === 0) return manualProjects;
         return manualProjects.filter(p => allowed.includes(p.id));
@@ -5407,8 +5408,8 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                                             {(Array.isArray(availableTags) ? availableTags : []).filter(tagObj => {
                                                 const tSearchName = typeof tagObj === 'string' ? tagObj : tagObj.name;
                                                 if (tagSearch && !`${tSearchName} ${formatTagLabel(tSearchName)}`.toLowerCase().includes(tagSearch.toLowerCase())) return false;
-                                                // User-level label filtering
-                                                if (!user || user.role === 'SuperAdmin' || user.role === 'Admin') return true;
+                                                // User-level label filtering (solo SuperAdmin exento; Admin se filtra)
+                                                if (!user || user.role === 'SuperAdmin') return true;
                                                 const userLabels = user?.allowed_labels;
                                                 if (!Array.isArray(userLabels) || userLabels.length === 0) return true;
                                                 return userLabels.some(l => typeof l === 'string' && l.trim().toLowerCase() === tSearchName.trim().toLowerCase());

@@ -114,7 +114,7 @@ export default async function handler(req, res) {
                 const allowedCrm = Array.isArray(user?.allowed_crm_projects) ? user.allowed_crm_projects : [];
                 const hasLabelRestriction = allowedLabelSet.size > 0;
                 const hasCrmRestriction = allowedCrm.length > 0;
-                const hasRBACRestriction = user?.role !== 'SuperAdmin' && user?.role !== 'Admin' && (hasLabelRestriction || hasCrmRestriction);
+                const hasRBACRestriction = user?.role !== 'SuperAdmin' && (hasLabelRestriction || hasCrmRestriction);
                 const canSeeIncomplete = user?.role === 'SuperAdmin' || !rolePermissions || Object.keys(rolePermissions).length === 0 || rolePermissions.view_incomplete_candidates === true;
 
                 const matchedIds = [];
@@ -132,7 +132,7 @@ export default async function handler(req, res) {
                         try { candidate = JSON.parse(raw); } catch { continue; }
                         if (!candidate?.id || !isCandidateUnread(candidate)) continue;
 
-                        if (user?.role !== 'SuperAdmin' && user?.role !== 'Admin' && allowedWa.length > 0) {
+                        if (user?.role !== 'SuperAdmin' && allowedWa.length > 0) {
                             if (!candidate.incomingPhoneNumberId || !allowedWa.includes(candidate.incomingPhoneNumberId)) continue;
                         }
 

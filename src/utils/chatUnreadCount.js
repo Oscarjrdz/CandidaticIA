@@ -2,7 +2,9 @@ import { isProfileComplete } from './profileUtils';
 import { checkIfUnread } from '../components/chat/chatUtils';
 
 export const passesChatRBACFilter = (candidate, user) => {
-    if (!user || user.role === 'SuperAdmin' || user.role === 'Admin') return true;
+    // Solo SuperAdmin queda exento de los filtros por-usuario (número/etiqueta/CRM).
+    // Admin ya NO es especial: obedece lo que tenga configurado en su usuario.
+    if (!user || user.role === 'SuperAdmin') return true;
 
     // ── WA number filter (AND — must pass before CRM/label check) ──
     const allowedWa = user?.allowed_wa_numbers;
