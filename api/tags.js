@@ -98,12 +98,22 @@ async function getCountsSummary(redis, { force = false } = {}) {
 
 export default async function handler(req, res) {
     try {
-        const { getRedisClient, validateAdminSession } = await import('./utils/storage.js');
+        const { getRedisClient, validateAdminSession, getUsers } = await import('./utils/storage.js');
         const redis = getRedisClient();
         if (!redis) return res.status(500).json({ error: 'Redis no disponible' });
 
         const userId = await validateAdminSession(req);
         if (!userId) return res.status(401).json({ error: 'No autorizado' });
+
+        // ── Modo "etiquetas propias" (tags_own_mode) ─────────────────────────────
+        // Configurado por el admin en Editar Usuario. Es TRANSPARENTE para el reclutador:
+        // sus pantallas simplemente muestran solo las etiquetas que él creó (sin ninguna
+        // leyenda de "propias"). SuperAdmin ve/gestiona todas. Las etiquetas legacy (sin
+        // dueño) solo las ve el SuperAdmin. El dueño se sella en `createdBy` al crearlas.
+        const currentUser = (await getUsers()).find(u => u.id === userId || u.whatsapp === userId) || null;
+        const isSuper = currentUser?.role === 'SuperAdmin';
+        const tagsOwnMode = !isSuper && !!currentUser?.tags_own_mode;
+        const ownsTag = (t) => (typeof t === 'object' && t) ? t.createdBy === currentUser?.id : false;
 
         // ── GET — list tags with live counts ──────────────────────────────────
         if (req.method === 'GET') {
@@ -146,15 +156,62 @@ export default async function handler(req, res) {
                 .map(([name, count]) => ({ name, color: '#9ca3af', count, registered: false }))
                 .sort((a, b) => b.count - a.count);
 
-            const payload = { success: true, tags: [...tags, ...discovered], untaggedCount };
+            // En modo "propias" el reclutador solo ve las etiquetas que él creó (las
+            // descubiertas y las legacy no tienen dueño → quedan fuera). Transparente.
+            let visibleTags = [...tags, ...discovered];
+            if (tagsOwnMode) visibleTags = visibleTags.filter(ownsTag);
+
+            const payload = { success: true, tags: visibleTags, untaggedCount };
             return res.status(200).json(payload);
         }
 
-        // ── POST — save tag list ───────────────────────────────────────────────
+        // ── POST — save tag list (merge que preserva la propiedad) ──────────────
         if (req.method === 'POST') {
-            const { tags } = req.body;
-            await redis.set('candidatic:chat_tags', JSON.stringify(tags));
-            return res.status(200).json({ success: true, tags });
+            const { tags: incoming } = req.body;
+            if (!Array.isArray(incoming)) return res.status(400).json({ error: 'tags debe ser un arreglo' });
+
+            const rawExisting = await redis.get('candidatic:chat_tags');
+            const existing = rawExisting ? JSON.parse(rawExisting) : [];
+            const existingByName = new Map(
+                existing.map(t => {
+                    const obj = typeof t === 'string' ? { name: t } : t;
+                    return [String(obj.name || '').trim().toLowerCase(), obj];
+                })
+            );
+
+            // Normaliza el entrante a objetos y SELLA la propiedad: conserva el createdBy
+            // que ya tuviera la etiqueta; si es nueva, el dueño es quien la crea.
+            const stamped = incoming.map(t => {
+                const obj = typeof t === 'string' ? { name: t, color: '#3b82f6' } : { ...t };
+                const prev = existingByName.get(String(obj.name || '').trim().toLowerCase());
+                if (prev) {
+                    // Ya existía: conserva su dueño tal cual (una legacy sin dueño SIGUE sin dueño;
+                    // guardar la lista no debe "reclamar" etiquetas ajenas ni legacy).
+                    if (prev.createdBy !== undefined) obj.createdBy = prev.createdBy;
+                    else delete obj.createdBy;
+                } else {
+                    obj.createdBy = userId; // etiqueta nueva → su creador
+                }
+                delete obj.count;        // el conteo nunca se persiste
+                delete obj.registered;   // flag de UI, no se persiste
+                return obj;
+            });
+
+            let newList;
+            if (!tagsOwnMode) {
+                // Ve/gestiona todas: el entrante ES la lista completa (con dueños preservados).
+                newList = stamped;
+            } else {
+                // Modo propias: el entrante solo trae SUS etiquetas. Conserva intactas las de
+                // los demás (y las legacy/descubiertas) para NO borrarlas. Sus propias quedan
+                // exactamente como las mandó (permite renombrar/quitar las suyas).
+                const keep = existing.filter(t => !ownsTag(typeof t === 'string' ? { name: t } : t));
+                const mine = stamped.filter(t => t.createdBy === currentUser?.id);
+                newList = [...keep, ...mine];
+            }
+
+            await redis.set('candidatic:chat_tags', JSON.stringify(newList));
+            return res.status(200).json({ success: true, tags: newList });
         }
 
         // ── DELETE — remove tag from system ───────────────────────────────────
@@ -164,6 +221,13 @@ export default async function handler(req, res) {
 
             const raw = await redis.get('candidatic:chat_tags');
             let savedTags = raw ? JSON.parse(raw) : [];
+            // Modo propias: solo puede borrar etiquetas que él creó.
+            if (tagsOwnMode) {
+                const target = savedTags.find(t => (typeof t === 'string' ? t : t.name) === tagName);
+                if (!target || !ownsTag(typeof target === 'string' ? { name: target } : target)) {
+                    return res.status(403).json({ error: 'Sin permiso para eliminar esta etiqueta' });
+                }
+            }
             const newTags = savedTags.filter(t => (typeof t === 'string' ? t : t.name) !== tagName);
             // Ojo: NO borrar aquí la llave del hash de conteos. El cleanup en background
             // llama updateCandidate por cada candidato, y cada uno hace HDECRBY sobre esa

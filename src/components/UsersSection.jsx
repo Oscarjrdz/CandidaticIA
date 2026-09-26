@@ -255,7 +255,8 @@ const UsersSection = () => {
                 allowed_labels: user.allowed_labels || [],
                 allowed_wa_numbers: user.allowed_wa_numbers || [],
                 can_manage_tags: user.can_manage_tags || false,
-                crm_own_mode: user.crm_own_mode || false
+                crm_own_mode: user.crm_own_mode || false,
+                tags_own_mode: user.tags_own_mode || false
             });
         } else {
             setEditingUser(null);
@@ -269,7 +270,8 @@ const UsersSection = () => {
                 allowed_labels: [],
                 allowed_wa_numbers: [],
                 can_manage_tags: false,
-                crm_own_mode: false
+                crm_own_mode: false,
+                tags_own_mode: false
             });
         }
         setIsModalOpen(true);
@@ -990,6 +992,27 @@ const UsersSection = () => {
                                                     <select
                                                         value={formData.can_manage_tags ? 'yes' : 'no'}
                                                         onChange={(e) => setFormData(f => ({ ...f, can_manage_tags: e.target.value === 'yes' }))}
+                                                        className="appearance-none pl-3 pr-7 py-1.5 text-xs font-bold bg-white dark:bg-gray-800 border border-amber-300 dark:border-amber-700 rounded-lg focus:ring-2 focus:ring-amber-400 focus:outline-none cursor-pointer text-gray-800 dark:text-gray-200"
+                                                    >
+                                                        <option value="no">🚫 No</option>
+                                                        <option value="yes">✅ Sí</option>
+                                                    </select>
+                                                    <div className="pointer-events-none absolute inset-y-0 right-1.5 flex items-center">
+                                                        <svg className="w-3 h-3 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* Solo sus propias etiquetas (transparente para el reclutador) */}
+                                            <div className="flex items-center justify-between px-3 py-2.5 rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50/40 dark:bg-amber-900/10">
+                                                <div className="pr-2">
+                                                    <p className="text-xs font-semibold text-gray-800 dark:text-white">🧩 Solo sus propias etiquetas</p>
+                                                    <p className="text-[10px] text-gray-400 mt-0.5">Solo ve/crea/edita/borra las etiquetas que él mismo cree.</p>
+                                                </div>
+                                                <div className="relative shrink-0">
+                                                    <select
+                                                        value={formData.tags_own_mode ? 'yes' : 'no'}
+                                                        onChange={(e) => setFormData(f => ({ ...f, tags_own_mode: e.target.value === 'yes' }))}
                                                         className="appearance-none pl-3 pr-7 py-1.5 text-xs font-bold bg-white dark:bg-gray-800 border border-amber-300 dark:border-amber-700 rounded-lg focus:ring-2 focus:ring-amber-400 focus:outline-none cursor-pointer text-gray-800 dark:text-gray-200"
                                                     >
                                                         <option value="no">🚫 No</option>
