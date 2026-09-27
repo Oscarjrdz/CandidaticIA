@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 
 /**
  * 🎨 Candidatic ConfirmModal — Universal Confirmation Dialog
@@ -104,7 +105,11 @@ const ConfirmModal = ({ config, onClose }) => {
         onClose();
     };
 
-    return (
+    // Portal a document.body: sin esto, cuando el modal se renderiza DENTRO de una columna
+    // con position + z-index (p.ej. el panel del Expediente, z-30), su overlay queda
+    // atrapado en ese stacking context y NO tapa el sidebar ni las columnas hermanas
+    // (aunque sea z-[9999]). El portal lo saca al body y el overlay cubre todo.
+    return createPortal(
         <>
             <div
                 className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
@@ -169,7 +174,8 @@ const ConfirmModal = ({ config, onClose }) => {
                     to { opacity: 1; transform: scale(1) translateY(0); }
                 }
             `}</style>
-        </>
+        </>,
+        document.body
     );
 };
 
