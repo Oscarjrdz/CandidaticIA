@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, X, GripVertical, Check, Trash2, Edit2, Box, ArrowRight, Loader2, ListTodo, ChevronDown } from 'lucide-react';
+import { Plus, X, GripVertical, Check, Trash2, Edit2, Kanban, ArrowRight, Loader2, ListTodo, ChevronDown } from 'lucide-react';
 import { useConfirmModal } from './ui/ConfirmModal';
 import { updateCandidate } from '../services/candidatesService';
 
@@ -370,7 +370,7 @@ export default function ManualProjectsSidepanel({ selectedChat, onClose, showToa
             {/* Header */}
             <div className="h-[59px] px-4 py-2 flex items-center justify-between border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-[#202c33] shrink-0">
                 <div className="flex items-center gap-2">
-                    <Box className="w-5 h-5 text-indigo-500" />
+                    <Kanban className="w-5 h-5 text-indigo-500" />
                     <h2 className="text-[16px] font-semibold text-[#111b21] dark:text-[#e9edef]">CRM de Proyectos</h2>
                 </div>
                 <button onClick={onClose} className="p-1 rounded-full hover:bg-gray-100 dark:hover:bg-white/5 transition-colors">

@@ -104,6 +104,34 @@ de endpoints que mutan datos; el interceptor global de `main.jsx` ya manda el Be
   descarga vía `fetch → blob → download` (respeta el `filename`), quitar con
   `ConfirmModal`, y zona de subida drag & drop que reusa `/api/media/upload`.
 
+## Estado abierto/cerrado recordado por reclutador
+
+Las columnas del Chat Web recuerdan si las dejaste abiertas, **por usuario**, en su perfil
+de Redis (`PUT /api/users` con `preferences`, merge superficial — mismo patrón que
+`quickRepliesOpen` del Banco):
+
+- `crmManualOpen`  → CRM de Proyectos (default: abierto salvo que lo cierres).
+- `expedienteOpen` → Expediente Digital (default: cerrado).
+- `quickRepliesOpen` → Banco de Respuestas (ya existía).
+
+Al reabrir el Chat Web (remonta la sección), cada columna se **siembra** desde esa
+preferencia con el inicializador perezoso de `useState`, así que quedan como las dejaste.
+Setters genéricos en `ChatSection.jsx`: `savePanelPreference` + `setRightPanelOpen` /
+`setExpedientePanelOpen`.
+
+## Consistencia de iconos y nombres (toolbar ↔ columna)
+
+Cada columna usa **el mismo icono** que su botón del toolbar, y el `title` (alt) del botón
+usa **el mismo nombre** que el encabezado de la columna:
+
+| Columna              | Icono         | Nombre               |
+|----------------------|---------------|----------------------|
+| Banco de Respuestas  | `BookOpen`    | Banco de Respuestas  |
+| CRM de Proyectos     | `Kanban`      | CRM de Proyectos     |
+| Expediente Digital   | `FolderArchive` | Expediente Digital |
+
+(El CRM usaba antes `Box` + alt "CRM Manual"; se alineó a `Kanban` + "CRM de Proyectos".)
+
 ## Verificación
 
 - **Storage contra Redis real** (script desechable, candidato de prueba, limpieza al

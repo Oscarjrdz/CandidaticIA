@@ -885,8 +885,11 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
     const [searchQuery, setSearchQuery] = useState("");
     const deferredSearch = useDeferredValue(searchQuery);
     const [candidateTyping, setCandidateTyping] = useState(false);
-    const [showRightPanel, setShowRightPanel] = useState(true);
-    const [showExpedientePanel, setShowExpedientePanel] = useState(false);
+    // Estado abierto/cerrado de las columnas del chat — se recuerda por reclutador en su
+    // perfil de Redis (mismo patrón que quickRepliesOpen). CRM abre por defecto (salvo que
+    // el usuario lo haya cerrado a propósito); Expediente cerrado por defecto.
+    const [showRightPanel, setShowRightPanel] = useState(() => user?.preferences?.crmManualOpen !== false);
+    const [showExpedientePanel, setShowExpedientePanel] = useState(() => !!user?.preferences?.expedienteOpen);
     // Se incrementa al guardar un archivo desde el chat → el panel del Expediente refetchea.
     const [expedienteRefreshToken, setExpedienteRefreshToken] = useState(0);
     const [messages, setMessages] = useState([]);
@@ -1122,6 +1125,28 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
             body: JSON.stringify({ id: user.id, preferences: { quickRepliesOpen: open } })
         }).catch(() => {});
     }, [user?.id, setUser]);
+
+    // Persistencia genérica del estado abierto/cerrado de una columna (delta de una sola
+    // sub-llave; saveUser mergea preferences un nivel → no pisa otras preferencias).
+    const savePanelPreference = useCallback((patch) => {
+        if (!user?.id) return;
+        setUser(prev => prev ? { ...prev, preferences: { ...(prev.preferences || {}), ...patch } } : prev);
+        fetch('/api/users', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: user.id, preferences: patch })
+        }).catch(() => {});
+    }, [user?.id, setUser]);
+
+    const setRightPanelOpen = useCallback((open) => {
+        setShowRightPanel(open);
+        savePanelPreference({ crmManualOpen: open });
+    }, [savePanelPreference]);
+
+    const setExpedientePanelOpen = useCallback((open) => {
+        setShowExpedientePanel(open);
+        savePanelPreference({ expedienteOpen: open });
+    }, [savePanelPreference]);
     // ── Banco de respuestas: orden por reclutador (drag & drop), form contraible y buscador ──
     // El orden y el colapso del form se guardan en el perfil del usuario en Redis
     // (mismo patron que quickRepliesOpen — merge superficial via PUT /api/users).
@@ -3981,7 +4006,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
             const data = await res.json();
             if (data.success) {
                 showToast && showToast('Guardado en el expediente 📁', 'success');
-                setShowExpedientePanel(true);
+                setExpedientePanelOpen(true);
                 setExpedienteRefreshToken(t => t + 1);
             } else {
                 showToast && showToast(data.error || 'No se pudo guardar en el expediente', 'error');
@@ -3989,7 +4014,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         } catch {
             showToast && showToast('No se pudo guardar en el expediente', 'error');
         }
-    }, [selectedChat, showToast]);
+    }, [selectedChat, showToast, setExpedientePanelOpen]);
 
     const handleMetaBlockToggle = async () => {
         if (!selectedChat) return;
@@ -6318,9 +6343,9 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                                     return (
                                         <button
                                             {...handle}
-                                            onClick={() => setShowRightPanel(!showRightPanel)}
+                                            onClick={() => setRightPanelOpen(!showRightPanel)}
                                             className={`${baseClass} ml-1 ${showRightPanel ? 'bg-indigo-50 text-indigo-500 dark:bg-indigo-500/20' : 'hover:bg-black/5 dark:hover:bg-white/5 text-[#54656f] dark:text-[#aebac1]'}`}
-                                            title="CRM Manual"
+                                            title="CRM de Proyectos"
                                         >
                                             <Kanban className="w-5 h-5" />
                                         </button>
@@ -6344,7 +6369,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                                     return (
                                         <button
                                             {...handle}
-                                            onClick={() => setShowExpedientePanel(v => !v)}
+                                            onClick={() => setExpedientePanelOpen(!showExpedientePanel)}
                                             className={`${baseClass} ${showExpedientePanel ? 'bg-amber-50 text-amber-600 dark:bg-amber-500/20 dark:text-amber-400' : 'hover:bg-black/5 dark:hover:bg-white/5 text-[#54656f] dark:text-[#aebac1]'}`}
                                             title="Expediente Digital"
                                         >
@@ -6704,7 +6729,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
             {showRightPanel && (
                 <ManualProjectsSidepanel
                     selectedChat={selectedChat}
-                    onClose={() => setShowRightPanel(false)}
+                    onClose={() => setRightPanelOpen(false)}
                     showToast={showToast}
                     candidates={candidates}
                     onCandidateUpdated={(updatedCandidate) => {
@@ -6718,7 +6743,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
             {showExpedientePanel && (
                 <ExpedienteSidepanel
                     selectedChat={selectedChat}
-                    onClose={() => setShowExpedientePanel(false)}
+                    onClose={() => setExpedientePanelOpen(false)}
                     showToast={showToast}
                     refreshToken={expedienteRefreshToken}
                 />
