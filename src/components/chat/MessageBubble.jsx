@@ -1,5 +1,5 @@
 import React from 'react';
-import { MapPin, List as ListIcon, ShoppingBag, UserSquare, Paperclip, Smile, Reply, X } from 'lucide-react';
+import { MapPin, List as ListIcon, ShoppingBag, UserSquare, Paperclip, Smile, Reply, X, FolderArchive } from 'lucide-react';
 import { safeFormatTime } from './chatUtils';
 import AudioPlayer from './AudioPlayer';
 import MessageStatusTicks from './MessageStatusTicks';
@@ -171,6 +171,7 @@ const MessageBubble = React.memo(function MessageBubble({
     onReaction,
     onReply,
     onSendReaction,
+    onSaveToExpediente,
 }) {
     const isMe = msg.from === 'me' || msg.from === 'bot';
     const isFirstInSeries = msg._isFirstInSeries;
@@ -359,7 +360,18 @@ const MessageBubble = React.memo(function MessageBubble({
                     )}
 
                     {msg.mediaUrl && (
-                        <div className={`${mediaFrameClass} mb-0.5 rounded overflow-hidden mt-1 cursor-pointer`}>
+                        <div className={`${mediaFrameClass} mb-0.5 rounded overflow-hidden mt-1 cursor-pointer relative group/media`}>
+                            {/* Guardar en el Expediente Digital (aparece al pasar el cursor sobre el archivo) */}
+                            {onSaveToExpediente && (msg.type === 'image' || msg.type === 'sticker' || msg.type === 'video' || msg.type === 'audio' || msg.type === 'ptt' || msg.type === 'voice' || msg.type === 'document') && (
+                                <button
+                                    type="button"
+                                    onClick={(e) => { e.stopPropagation(); onSaveToExpediente(msg); }}
+                                    title="Guardar en el expediente"
+                                    className="absolute top-1.5 right-1.5 z-10 w-8 h-8 rounded-full bg-white/95 dark:bg-black/70 backdrop-blur shadow-md flex items-center justify-center text-[#54656f] dark:text-[#e9edef] opacity-0 group-hover/media:opacity-100 transition-opacity hover:text-amber-600 dark:hover:text-amber-400"
+                                >
+                                    <FolderArchive className="w-4 h-4" />
+                                </button>
+                            )}
                             {msg.type === 'image' && (
                                 <SmoothMediaImage src={msg.mediaUrl} previewSrc={msg._displayMediaUrl || msg._localMediaUrl} alt="media" loading={isMe ? 'eager' : 'lazy'} fetchPriority={isMe ? 'high' : 'auto'} width="260" height="260" className="h-full w-full object-cover rounded shadow-sm bg-gray-100 dark:bg-gray-800" />
                             )}

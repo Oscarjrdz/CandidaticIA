@@ -3772,3 +3772,57 @@ export const getAdsStatistics = async (range = 'all') => {
     try { await client.set(ADS_CACHE_KEY, JSON.stringify(result), 'EX', ADS_CACHE_TTL); } catch { /* ignore */ }
     return result;
 };
+
+// ==========================================
+// EXPEDIENTE DIGITAL (archivos guardados por candidato)
+// ==========================================
+// Un array JSON pequeño por candidato en `candidate:expediente:<id>` (SIN TTL).
+// Volumen bajo (pocos documentos por candidato: INE, CV, comprobantes) → un solo
+// GET pinta toda la columna. Cada entrada apunta a una copia PERMANENTE del archivo
+// (Blob propio del expediente vía /api/image), independiente del mensaje original.
+const EXPEDIENTE_KEY = (id) => `candidate:expediente:${id}`;
+
+export const getExpediente = async (candidateId) => {
+    if (!candidateId) return [];
+    const client = getRedisClient();
+    if (!client) return [];
+    try {
+        const raw = await client.get(EXPEDIENTE_KEY(candidateId));
+        const arr = raw ? JSON.parse(raw) : [];
+        return Array.isArray(arr) ? arr : [];
+    } catch { return []; }
+};
+
+export const addExpedienteEntry = async (candidateId, entry) => {
+    if (!candidateId || !entry) return null;
+    const client = getRedisClient();
+    if (!client) return null;
+    const entries = await getExpediente(candidateId);
+    const full = {
+        id: entry.id || `exp_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        type: entry.type || 'document',
+        url: entry.url || '',
+        filename: entry.filename || 'archivo',
+        mime: entry.mime || '',
+        note: entry.note || '',
+        sizeBytes: entry.sizeBytes || 0,
+        sourceMsgId: entry.sourceMsgId || null,
+        savedAt: new Date().toISOString(),
+        savedBy: entry.savedBy || null,
+    };
+    const next = [full, ...entries]; // más reciente primero
+    await client.set(EXPEDIENTE_KEY(candidateId), JSON.stringify(next)); // sin TTL
+    return full;
+};
+
+export const removeExpedienteEntry = async (candidateId, entryId) => {
+    if (!candidateId || !entryId) return false;
+    const client = getRedisClient();
+    if (!client) return false;
+    const entries = await getExpediente(candidateId);
+    const next = entries.filter(e => e && e.id !== entryId);
+    if (next.length === entries.length) return false;
+    if (next.length === 0) await client.del(EXPEDIENTE_KEY(candidateId));
+    else await client.set(EXPEDIENTE_KEY(candidateId), JSON.stringify(next));
+    return true;
+};

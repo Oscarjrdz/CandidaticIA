@@ -3,12 +3,13 @@ import { DndContext, closestCenter, PointerSensor, useSensor, useSensors } from 
 import { SortableContext, horizontalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import ConfirmModal from './ui/ConfirmModal';
-import { MapPin, List as ListIcon, ShoppingBag, UserSquare, MousePointerClick, Search, MessageSquare, Plus, Smile, Paperclip, Mic, Square, ArrowLeft, Send, Tag, Pencil, Check, X, Trash2, Briefcase, Kanban, BookOpen, Keyboard, Loader2, Edit2, Reply, Zap, Pin, MessageCirclePlus, Phone, User, Bell, GripVertical, ChevronDown, ChevronUp, Snowflake, LayoutTemplate, Workflow, Ban } from 'lucide-react';
+import { MapPin, List as ListIcon, ShoppingBag, UserSquare, MousePointerClick, Search, MessageSquare, Plus, Smile, Paperclip, Mic, Square, ArrowLeft, Send, Tag, Pencil, Check, X, Trash2, Briefcase, Kanban, BookOpen, Keyboard, Loader2, Edit2, Reply, Zap, Pin, MessageCirclePlus, Phone, User, Bell, GripVertical, ChevronDown, ChevronUp, Snowflake, LayoutTemplate, Workflow, Ban, FolderArchive } from 'lucide-react';
 import { getCandidates, getCandidateById, blockCandidate, metaBlockCandidate, deleteCandidate } from '../services/candidatesService';
 import { getFlows, runFlowListItem } from '../services/flowsService';
 import { substituteVariables, substituteDynamicPhrase, hasDynamicPhrase } from '../../api/utils/shortcuts.js';
 import { businessDayOffset, isPastCutoff } from '../../api/utils/reminder-schedule.js';
 import ManualProjectsSidepanel from './ManualProjectsSidepanel';
+import ExpedienteSidepanel from './chat/ExpedienteSidepanel';
 import { formatRelativeDate } from '../utils/formatters';
 import { useCandidatesSSE, useSSECandidateUpdate } from '../hooks/useCandidatesSSE';
 import { Virtuoso } from 'react-virtuoso';
@@ -885,6 +886,9 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
     const deferredSearch = useDeferredValue(searchQuery);
     const [candidateTyping, setCandidateTyping] = useState(false);
     const [showRightPanel, setShowRightPanel] = useState(true);
+    const [showExpedientePanel, setShowExpedientePanel] = useState(false);
+    // Se incrementa al guardar un archivo desde el chat → el panel del Expediente refetchea.
+    const [expedienteRefreshToken, setExpedienteRefreshToken] = useState(0);
     const [messages, setMessages] = useState([]);
     const messageInputRef = useRef(null);
     const [_sending, setSending] = useState(false);
@@ -1304,14 +1308,14 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
     // renglones y los iconos son el renglón 2). TOP_ROW_ICON_IDS vacío => iconRow siempre
     // 'bottom', así el guard de drag nunca bloquea y se puede reordenar entre todos los iconos.
     const TOP_ROW_ICON_IDS = [];
-    const TOOLBAR_ICON_IDS = ['quick_replies', 'crm_manual', 'search', 'tags', 'asistencia', 'meta_block', 'vacancies'];
+    const TOOLBAR_ICON_IDS = ['quick_replies', 'expediente', 'crm_manual', 'search', 'tags', 'asistencia', 'meta_block', 'vacancies'];
     const iconRow = (id) => TOP_ROW_ICON_IDS.includes(id) ? 'top' : 'bottom';
     const [toolbarOrder, setToolbarOrder] = useState(() => {
         try {
-            // v4: se agregó 'meta_block' (bloqueo real en WhatsApp) junto a 'asistencia' — bump del
-            // key para que el orden por defecto lo coloque ahí (el merge de versiones viejas lo
-            // pondría al final). v3 había agregado 'asistencia'.
-            const saved = localStorage.getItem('candidatic:toolbar_order_v4');
+            // v5: se agregó 'expediente' (Expediente Digital) junto al banco de respuestas — bump del
+            // key para que el orden por defecto lo coloque ahí. v4 agregó 'meta_block' (bloqueo real
+            // en WhatsApp) junto a 'asistencia'; v3 había agregado 'asistencia'.
+            const saved = localStorage.getItem('candidatic:toolbar_order_v5');
             if (saved) {
                 const parsed = JSON.parse(saved);
                 // Ensure all IDs are present (handles new icons added later)
@@ -1416,7 +1420,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
             const newIndex = prev.indexOf(over.id);
             if (oldIndex === -1 || newIndex === -1) return prev;
             const next = arrayMove(prev, oldIndex, newIndex);
-            try { localStorage.setItem('candidatic:toolbar_order_v4', JSON.stringify(next)); } catch { /* storage bloqueado */ }
+            try { localStorage.setItem('candidatic:toolbar_order_v5', JSON.stringify(next)); } catch { /* storage bloqueado */ }
             return next;
         });
     }, []);
@@ -3949,6 +3953,44 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
     // Bloqueo REAL en WhatsApp vía Meta Block API (distinto de handleBlockToggle, que solo
     // silencia a la IA). Pide confirmación porque es una acción hacia afuera sobre un candidato
     // real: al bloquear dejamos de recibir sus mensajes por WhatsApp.
+    // Guardar un archivo del chat (foto/PDF/audio/video del candidato) en su Expediente
+    // Digital. El backend hace una copia PERMANENTE propia del expediente (no depende del
+    // mensaje original). Abre el panel y lo refresca al terminar.
+    const handleSaveToExpediente = useCallback(async (msg) => {
+        if (!selectedChat?.id || !msg?.mediaUrl) return;
+        const type = (msg.type === 'image' || msg.type === 'sticker') ? 'image'
+            : (msg.type === 'video') ? 'video'
+            : (msg.type === 'audio' || msg.type === 'ptt' || msg.type === 'voice') ? 'audio'
+            : 'document';
+        const fallbackName = { image: 'foto.jpg', video: 'video.mp4', audio: 'audio.ogg', document: 'documento.pdf' }[type];
+        try {
+            showToast && showToast('Guardando en el expediente…');
+            const res = await fetch('/api/candidates/expediente', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    candidateId: selectedChat.id,
+                    sourceMsgId: msg.id,
+                    type,
+                    mediaUrl: msg.mediaUrl,
+                    filename: msg.filename || fallbackName,
+                    mime: msg.mime || '',
+                    source: 'chat',
+                }),
+            });
+            const data = await res.json();
+            if (data.success) {
+                showToast && showToast('Guardado en el expediente 📁', 'success');
+                setShowExpedientePanel(true);
+                setExpedienteRefreshToken(t => t + 1);
+            } else {
+                showToast && showToast(data.error || 'No se pudo guardar en el expediente', 'error');
+            }
+        } catch {
+            showToast && showToast('No se pudo guardar en el expediente', 'error');
+        }
+    }, [selectedChat, showToast]);
+
     const handleMetaBlockToggle = async () => {
         if (!selectedChat) return;
         const isBlocked = selectedChat.metaBlocked === true;
@@ -6298,6 +6340,19 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                                     );
                                 }
 
+                                if (iconId === 'expediente') {
+                                    return (
+                                        <button
+                                            {...handle}
+                                            onClick={() => setShowExpedientePanel(v => !v)}
+                                            className={`${baseClass} ${showExpedientePanel ? 'bg-amber-50 text-amber-600 dark:bg-amber-500/20 dark:text-amber-400' : 'hover:bg-black/5 dark:hover:bg-white/5 text-[#54656f] dark:text-[#aebac1]'}`}
+                                            title="Expediente Digital"
+                                        >
+                                            <FolderArchive className="w-5 h-5" />
+                                        </button>
+                                    );
+                                }
+
                                 if (iconId === 'search') {
                                     return (
                                         <button
@@ -6550,6 +6605,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                                     onReaction={setReactionPopupId}
                                     onReply={setReplyingToMsg}
                                     onSendReaction={handleSendReaction}
+                                    onSaveToExpediente={handleSaveToExpediente}
                                 />
                             );
                             // Respiro del último mensaje contra el input: 12px COMO PARTE del último
@@ -6655,6 +6711,16 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                         setCandidates(prev => prev.map(c => c.id === updatedCandidate.id ? updatedCandidate : c));
                         if(selectedChat?.id === updatedCandidate.id) setSelectedChat(updatedCandidate);
                     }}
+                />
+            )}
+
+            {/* EXPEDIENTE DIGITAL PANEL */}
+            {showExpedientePanel && (
+                <ExpedienteSidepanel
+                    selectedChat={selectedChat}
+                    onClose={() => setShowExpedientePanel(false)}
+                    showToast={showToast}
+                    refreshToken={expedienteRefreshToken}
                 />
             )}
 
