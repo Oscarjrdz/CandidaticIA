@@ -6753,7 +6753,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
             {showQuickRepliesPanel && (
                 <div className="absolute md:relative inset-y-0 right-0 z-30 w-full md:w-[340px] border-l border-[#d1d7db] dark:border-[#222e35] bg-white dark:bg-[#111b21] flex flex-col h-full shadow-2xl md:shadow-none">
                     {/* Header */}
-                    <div className="px-4 py-3 bg-[#f0f2f5] dark:bg-[#202c33] border-b border-[#d1d7db] dark:border-[#222e35] flex items-center justify-between">
+                    <div className="h-[59px] px-4 bg-[#f0f2f5] dark:bg-[#202c33] border-b border-[#d1d7db] dark:border-[#222e35] flex items-center justify-between shrink-0">
                         <div className="flex items-center gap-2">
                             <BookOpen className="w-5 h-5 text-green-600 dark:text-green-400" />
                             <h3 className="font-bold text-sm text-[#111b21] dark:text-[#e9edef]">Banco de Respuestas</h3>

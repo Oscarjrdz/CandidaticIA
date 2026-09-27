@@ -368,7 +368,7 @@ export default function ManualProjectsSidepanel({ selectedChat, onClose, showToa
     return (
         <div className="absolute md:relative inset-y-0 right-0 z-30 w-full md:w-[350px] border-l border-gray-100 dark:border-gray-800 bg-[#f8f9fa] dark:bg-[#0b141a] flex flex-col h-full shadow-2xl md:shadow-none">
             {/* Header */}
-            <div className="h-[59px] px-4 py-2 flex items-center justify-between border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-[#202c33] shrink-0">
+            <div className="h-[59px] px-4 flex items-center justify-between border-b border-[#d1d7db] dark:border-[#222e35] bg-[#f0f2f5] dark:bg-[#202c33] shrink-0">
                 <div className="flex items-center gap-2">
                     <Kanban className="w-5 h-5 text-indigo-500" />
                     <h2 className="text-[16px] font-semibold text-[#111b21] dark:text-[#e9edef]">CRM de Proyectos</h2>
