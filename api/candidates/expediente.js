@@ -95,6 +95,21 @@ async function persistPermanentCopy({ buffer, mime, filename }) {
     return { url: `/api/image?id=${newId}`, size };
 }
 
+// Borrado PROFUNDO del archivo físico: registro en Redis (meta + base64) y el objeto en
+// Blob. Solo se llama para copias PROPIAS del expediente (exp_* copiado desde chat, med_*
+// subido desde desktop) — NUNCA para in_* (media original del mensaje del chat, que es
+// compartida y se debe conservar aunque se quite del expediente).
+async function deletePermanentMedia(rawId) {
+    const client = getRedisClient();
+    try { await client.del(`meta:image:${rawId}`, `image:${rawId}`); } catch { /* ya no existía */ }
+    if (process.env.BLOB_READ_WRITE_TOKEN) {
+        try {
+            const { del } = await import('@vercel/blob');
+            await del(`media/${rawId}`); // el store privado acepta el pathname
+        } catch { /* ya no existía en Blob */ }
+    }
+}
+
 export default async function handler(req, res) {
     if (req.method === 'OPTIONS') return res.status(200).end();
 
@@ -169,6 +184,23 @@ export default async function handler(req, res) {
             const entryId = req.query.entryId || req.body?.entryId;
             if (!candidateId || !entryId) {
                 return res.status(400).json({ success: false, error: 'candidateId y entryId requeridos' });
+            }
+            // Borrado PROFUNDO: además de quitar la referencia, se borra el archivo físico
+            // (Blob + meta) cuando es una copia propia del expediente. Se busca la entrada
+            // antes de removerla para conocer su URL/id.
+            const entries = await getExpediente(candidateId);
+            const entry = entries.find(e => e && e.id === entryId);
+            if (entry) {
+                const idMatch = String(entry.url || '').match(/[?&]id=([^&#]+)/);
+                if (idMatch) {
+                    const mid = decodeURIComponent(idMatch[1]).split('.')[0];
+                    // exp_* (copiado desde chat) y med_* (subido desde desktop) son copias
+                    // PROPIAS del expediente → se borran de verdad. in_* (media original del
+                    // chat, en el raro fallback de referencia) se conserva.
+                    if (/^(exp_|med_)/.test(mid)) {
+                        await deletePermanentMedia(mid);
+                    }
+                }
             }
             const ok = await removeExpedienteEntry(candidateId, entryId);
             return res.status(200).json({ success: ok });

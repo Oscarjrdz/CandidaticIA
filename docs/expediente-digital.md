@@ -42,6 +42,19 @@ solo se **referencia** su URL: no se recopia.
 > Es la única copia que el expediente necesita: no depende de que el mensaje siga
 > existiendo ni de que el respaldo original haya cuajado.
 
+### Permanencia y borrado profundo
+
+- **Se guarda perpetuamente:** la copia (`media/exp_*`) y su `meta:image:*` no tienen
+  TTL. Un archivo guardado vive para siempre hasta que se quite a propósito.
+- **Quitar borra de verdad (profundo):** el `DELETE` no solo quita la referencia del
+  array; borra el **archivo físico** — el objeto en Blob (`del('media/<id>')`) y su
+  registro en Redis (`meta:image:*` + `image:*`). No quedan huérfanos.
+- **Excepción de seguridad:** solo se borra el archivo físico cuando es una copia PROPIA
+  del expediente (`exp_*` copiado desde chat, `med_*` subido desde desktop). En el raro
+  caso de que una entrada apunte a la media ORIGINAL del mensaje del chat (`in_*`, cuando
+  no se pudieron leer los bytes para copiar), se conserva ese archivo — quitarlo del
+  expediente no borra el media del chat.
+
 ## Modelo de datos (Redis)
 
 Un array JSON pequeño por candidato, **sin TTL** (volumen bajo: pocos documentos por
@@ -82,7 +95,7 @@ de endpoints que mutan datos; el interceptor global de `main.jsx` ya manda el Be
 |----------|------------------------------------------------------------------------------|-----------------------------------------|
 | `GET`    | `?candidateId=<id>`                                                           | `{ success, entries[] }`                |
 | `POST`   | `{ candidateId, mediaUrl, type, filename, mime, note, sourceMsgId, source }` | Guarda un archivo (ver `source` abajo)  |
-| `DELETE` | `?candidateId=<id>&entryId=<id>`                                              | Quita del expediente                    |
+| `DELETE` | `?candidateId=<id>&entryId=<id>`                                              | Quita del expediente + borra el archivo |
 
 - `source: 'chat'`   → copia los bytes a un Blob permanente propio (ver arriba).
 - `source: 'upload'` → el archivo ya está persistido por `/api/media/upload`: solo referencia.
