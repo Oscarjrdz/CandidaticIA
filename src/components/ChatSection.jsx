@@ -811,7 +811,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
     }, []);
 
     const canManageTags = user?.role === 'SuperAdmin' || user?.can_manage_tags === true;
-    const { newCandidate: sseNewCandidate, updatedCandidate: sseUpdatedCandidate, deletedCandidate: sseDeletedCandidate, connected: sseConnected, globalStats } = useCandidatesSSE();
+    const { newCandidate: sseNewCandidate, deletedCandidate: sseDeletedCandidate, connected: sseConnected, globalStats } = useCandidatesSSE();
 
     const [stableStats, setStableStats] = useState(() => {
         try {
@@ -3238,17 +3238,17 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
 
         return () => { cancelled = true; clearTimeout(timer); };
     }, [
+        // Los cambios de no-leído EN VIVO (mensaje entrante, mark-read propio o de otro
+        // reclutador vía SSE broadcast) los aplica el delta exacto en el handler SSE
+        // (reconcileUnreadBadges). Este refetch quedó SOLO para re-sincronizar en cambios
+        // estructurales (montaje/entrada a la sección, alta/baja de candidato, permisos): así
+        // no compite con el delta ni lo pisa con una lectura stale de la carrera del servidor
+        // (era la causa de "sube a 50 y baja a 49 hasta re-entrar").
         user,
         rolePermissions,
         sseNewCandidate?.id,
-        sseUpdatedCandidate?.candidateId,
-        sseUpdatedCandidate?.timestamp,
-        sseUpdatedCandidate?.updates?.lastUserMessageAt,
-        sseUpdatedCandidate?.updates?.lastHumanMessageAt,
-        sseUpdatedCandidate?.updates?.unreadMsgCount,
         sseDeletedCandidate?.candidateId,
         sseDeletedCandidate?.id,
-        globalStats?.unread,
         refreshGlobalUnreadCounts,
     ]);
 

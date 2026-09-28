@@ -89,6 +89,11 @@ function AppShell() {
   const unreadRefreshSeq = useRef(0);
   useEffect(() => {
     if (!user) return;
+    // Mientras Chat Web está montado (activeSection === 'chat'), ÉL es la fuente en vivo del
+    // badge del menú vía onUnreadCountChange (delta exacto por mensaje). Este refetch competía
+    // y lo sobrescribía con una lectura de la carrera del servidor (subía a 50 y bajaba a 49,
+    // quedándose ahí hasta re-entrar a la sección). Solo corre cuando Chat Web NO está montado.
+    if (activeSection === 'chat') return;
     let cancelled = false;
     const seq = ++unreadRefreshSeq.current;
 
@@ -122,7 +127,8 @@ function AppShell() {
     updatedCandidate?.updates?.lastHumanMessageAt,
     deletedCandidate?.candidateId,
     deletedCandidate?.id,
-    globalStats?.unread
+    globalStats?.unread,
+    activeSection
   ]);
 
   // Resize listener for mobile viewport detection
