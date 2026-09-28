@@ -3634,6 +3634,29 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
             const candidatePatch = extractPersistentCandidatePatch(patch);
             const isInList = candidatesRef.current.some(c => c.id === sseUpdate.candidateId);
 
+            // 🟢 Badge del MENÚ (globalUnreadCounts) en vivo: este camino SSE actualiza la
+            // TARJETA (setCandidates, más abajo) pero antes no aplicaba el delta al menú, que
+            // dependía de un refetch condicionado a deps de SSE + caché de 8s → tras un
+            // "marcar leído" el menú se quedaba pegado hasta re-entrar a la sección. Aquí
+            // aplicamos el mismo delta local que ya usan marcar-leído/responder/marcar-no-leído
+            // (reconcileUnreadBadges), calculado sobre el estado ANTES/DESPUÉS de este patch.
+            // Solo lastUserMessageAt/lastHumanMessageAt afectan checkIfUnread, así que basta con
+            // esos dos campos. No hay doble conteo: el estado optimista de las acciones locales
+            // ya dejó candidatesRef actualizado, así que el eco SSE ve before === after (delta 0);
+            // y un mensaje a un chat ya no-leído también da delta 0 (el menú cuenta chats, no
+            // mensajes). El refetch de respaldo sigue existiendo y solo re-afirma el mismo total.
+            if (patch.lastUserMessageAt !== undefined || patch.lastHumanMessageAt !== undefined) {
+                const beforeUnread =
+                    candidatesRef.current.find(c => c.id === sseUpdate.candidateId) ||
+                    (selectedChatRef.current?.id === sseUpdate.candidateId ? selectedChatRef.current : null);
+                if (beforeUnread) {
+                    const afterUnread = { ...beforeUnread };
+                    if (patch.lastUserMessageAt !== undefined) afterUnread.lastUserMessageAt = patch.lastUserMessageAt;
+                    if (patch.lastHumanMessageAt !== undefined) afterUnread.lastHumanMessageAt = patch.lastHumanMessageAt;
+                    reconcileUnreadBadges(beforeUnread, afterUnread);
+                }
+            }
+
             if (isInList) {
                 setCandidates(prev => {
                     const mapped = prev.map(c => {
