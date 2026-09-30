@@ -603,7 +603,7 @@ export async function evaluateOrExecute(node, candidate, flowId, redis, opts = {
                 }
 
                 if (qrType === 'document' && qr.documentUrl) {
-                    const caption = qr.message ? substituteDynamicPhrase(substituteVariables(qr.message, candidate), opts._dynamicPhrase) : '';
+                    const caption = qr.message ? substituteDynamicPhrase(substituteVariables(qr.message, candidate), substituteVariables(opts._dynamicPhrase || '', candidate)) : '';
                     const docRes = await pacedSend(opts, () => sendUltraMsgMessageWithRetry(config.instanceId, config.token, cleanTo, toAbsoluteMediaUrl(qr.documentUrl), 'document', {
                         filename: qr.documentName || 'documento.pdf', caption
                     }));
@@ -624,7 +624,7 @@ export async function evaluateOrExecute(node, candidate, flowId, redis, opts = {
                 // confirmado en producción, ago 2026: bajo mucha carga se perdían mensajes
                 // en silencio, sin reintento ni log con contexto de flujo/nodo/candidato).
                 if (qr.message) {
-                    const text = substituteDynamicPhrase(substituteVariables(qr.message, candidate), opts._dynamicPhrase);
+                    const text = substituteDynamicPhrase(substituteVariables(qr.message, candidate), substituteVariables(opts._dynamicPhrase || '', candidate));
                     for (const bubbleText of splitBubbles(text)) {
                         const textRes = await pacedSend(opts, () => sendUltraMsgMessageWithRetry(config.instanceId, config.token, cleanTo, bubbleText, 'chat', { priority: 1 }));
                         if (textRes?.success) {
@@ -691,7 +691,7 @@ export async function evaluateOrExecute(node, candidate, flowId, redis, opts = {
                 if (!config?.token || !config?.instanceId) throw new Error('sin credenciales de WhatsApp');
                 const cleanTo = String(candidate.whatsapp).replace(/\D/g, '');
 
-                const text = substituteDynamicPhrase(substituteVariables(data.message, candidate), opts._dynamicPhrase);
+                const text = substituteDynamicPhrase(substituteVariables(data.message, candidate), substituteVariables(opts._dynamicPhrase || '', candidate));
                 for (const bubbleText of splitBubbles(text)) {
                     const sendResult = await pacedSend(opts, () => sendUltraMsgMessageWithRetry(config.instanceId, config.token, cleanTo, bubbleText, 'chat', { priority: 1 }));
                     if (sendResult?.success) {

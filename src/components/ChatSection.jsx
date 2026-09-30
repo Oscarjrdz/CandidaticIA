@@ -2119,7 +2119,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
             markReplyHandledOptimistically(currentCandidateId);
             const optimisticId = 'temp-doc-' + Date.now();
             const candidatoFresh = candidates.find(c => c.id === selectedChat?.id) || selectedChat;
-            const caption = qr.message ? substituteDynamicPhrase(substituteVariables(qr.message, candidatoFresh || {}), qr.dynamicPhrase).replace(/[^\S\n]{2,}/g, ' ').trim() : '';
+            const caption = qr.message ? substituteDynamicPhrase(substituteVariables(qr.message, candidatoFresh || {}), substituteVariables(qr.dynamicPhrase || '', candidatoFresh || {})).replace(/[^\S\n]{2,}/g, ' ').trim() : '';
             updateChatMessages(currentCandidateId, prev => [...(prev || []), withMessageEntryAnimation({
                 id: optimisticId, content: caption, type: 'document', mediaUrl: qr.documentUrl, filename: qr.documentName || 'documento.pdf',
                 from: 'me', enviado_por_agente: 1, status: 'pending', fecha: new Date().toISOString(), _clientAnchoredTime: true,
@@ -2153,9 +2153,11 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
             // sin resolver aqui aunque el envio final si lo hubiera resuelto bien.
             // Primero las variables del candidato ({{nombre}}, etc.), luego el token
             // {{frase dinamica}} con el valor guardado en esta respuesta (vacío = se quita).
+            // El valor del campo frase dinámica TAMBIÉN pasa por substituteVariables, así puede
+            // contener tokens como {{texto ultimo boton}} y se resuelven antes de insertarse.
             const resolved = substituteDynamicPhrase(
                     substituteVariables(qr.message, candidatoFresh || {}),
-                    qr.dynamicPhrase
+                    substituteVariables(qr.dynamicPhrase || '', candidatoFresh || {})
                 )
                 .replace(/[^\S\n]{2,}/g, ' ')
                 .trim();
@@ -4934,9 +4936,11 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         const candidatoFresh = candidates.find(c => c.id === selectedChat?.id) || selectedChat;
         // Igual que la vía de inyección: variables del candidato y luego {{frase dinamica}}
         // con el valor guardado en esta respuesta (vacío = se quita, nunca sale literal).
+        // El valor del campo frase dinámica también pasa por substituteVariables para que pueda
+        // contener tokens como {{texto ultimo boton}}.
         const resolved = substituteDynamicPhrase(
             substituteVariables(qr.message || '', candidatoFresh || {}),
-            qr.dynamicPhrase
+            substituteVariables(qr.dynamicPhrase || '', candidatoFresh || {})
         ).replace(/[^\S\n]{2,}/g, ' ').trim();
         const imgs = qr.imageUrls?.length ? qr.imageUrls : (qr.imageUrl ? [qr.imageUrl] : []);
         if (!resolved && !imgs.length) return;
