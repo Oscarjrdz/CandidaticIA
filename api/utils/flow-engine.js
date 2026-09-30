@@ -1268,6 +1268,28 @@ export async function runFlowsForCandidate(candidateId, candidateSnapshot) {
 
         const raw = await getCachedConfig(redis, FLOWS_KEY);
         const flows = raw ? JSON.parse(raw) : [];
+
+        // 🧹 CANCELAR FLUJOS DE INCOMPLETOS OBSOLETOS. En el INSTANTE en que el perfil se
+        // completa, cualquier flujo de INCOMPLETOS EN SILENCIO que quedó a medias para este
+        // candidato deja de tener sentido: fue diseñado para alguien que AÚN no termina. Pero
+        // si dejó un menú interactivo "vivo" registrado en flow:waiting, ese menú seguiría
+        // secuestrando CADA texto entrante vía resumeWaitingFlowIfMatch (el webhook lo ve como
+        // menú vivo con hasLiveInteractiveMenuFor), contestándole con la vacante equivocada —
+        // p.ej. un completo que ya recorrió el flujo A recibía la info del flujo de incompletos
+        // B en cada "hola". Se cancela aquí, UNA SOLA VEZ, en el flanco de completado (este
+        // path solo corre cuando paso2Estado pasa a 'completo'): se borra su espera de menú y
+        // su ledger de progreso. NO toca los flujos de completos (que están por correr abajo y
+        // registran su propia espera después de esto) ni el `blocked` del candidato.
+        const staleIncompleteFlowIds = flows
+            .filter(f => Array.isArray(f.nodes) && f.nodes.some(n => n.type === 'inicio_incompleto_silencio'))
+            .map(f => f.id);
+        if (staleIncompleteFlowIds.length) {
+            const pipe = redis.pipeline();
+            pipe.hdel(`${WAITING_PREFIX}${candidateId}`, ...staleIncompleteFlowIds);
+            for (const fid of staleIncompleteFlowIds) pipe.del(`${PROGRESS_PREFIX}${fid}:${candidateId}`);
+            await pipe.exec().catch(() => {});
+        }
+
         // Los flujos de INCOMPLETOS EN SILENCIO se disparan por cron (por AUSENCIA de
         // respuesta), no en este path en vivo (que corre al COMPLETAR el perfil). Se
         // excluyen aquí para que el evento de completado nunca los dispare.
