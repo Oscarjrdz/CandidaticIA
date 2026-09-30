@@ -297,7 +297,10 @@
       "Bash(node --check api/chat-unread-count.js)",
       "Bash(node --check api/utils/rbac.js)",
       "Bash(node --check api/tags.js)",
-      "Bash(node /private/tmp/claude-501/-Users-oscar-Candidatic-IA/dd3825ec-65b3-4707-8f01-af2dc7cd2dfe/scratchpad/test-tags.mjs)"
+      "Bash(node /private/tmp/claude-501/-Users-oscar-Candidatic-IA/dd3825ec-65b3-4707-8f01-af2dc7cd2dfe/scratchpad/test-tags.mjs)",
+      "Bash(node -e \"const u=process.env.REDIS_URL||process.env.KV_URL||process.env.REDIS_CONNECTION_STRING; console.log\\('env redis:', u? 'presente':'ausente'\\)\")",
+      "Bash(grep -rn \"del\\(\\\\|blob.*del\\\\|{ del }\\\\|, del \" api/)",
+      "Bash(node scratch-trace.mjs)"
     ],
     "additionalDirectories": [
       "/Users/oscar/App Candidatic/Candidatic_App/utils",
