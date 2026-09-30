@@ -316,6 +316,20 @@ async function saveFlowOutbound(candidateId, msg, sendResult) {
     await updateMessageStatus(candidateId, saved.id, 'sent', remoteId ? { ultraMsgId: remoteId } : {}).catch(() => {});
 }
 
+// Vigencia por opción (botón/fila): un botón con `expiresAt` en el pasado ya NO se manda ni
+// rutea. `expiresAt` viene del <input type="datetime-local"> del editor como reloj de pared sin
+// zona ("YYYY-MM-DDTHH:MM"), y se interpreta en hora de Monterrey. Comparamos strings de reloj
+// de pared contra "ahora" en Monterrey (formato sv-SE), lo que evita cualquier cálculo de offset
+// y es correcto sin importar la zona del proceso Node (UTC en Vercel). Vacío = sin vigencia.
+function isOptionExpired(expiresAt) {
+    if (!expiresAt) return false;
+    let exp = String(expiresAt).trim();
+    if (!exp) return false;
+    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(exp)) exp += ':00'; // normaliza a segundos
+    const nowMty = new Date().toLocaleString('sv-SE', { timeZone: 'America/Monterrey' }); // "YYYY-MM-DD HH:MM:SS"
+    return exp <= nowMty.replace(' ', 'T'); // a la hora exacta ya vence ("a partir de ahí ya no se manda")
+}
+
 // Construye y ENVÍA el mensaje interactivo de un nodo 'accion_botones' (botón/lista/cta_url)
 // con header/footer/variables, lo guarda en el historial (chips + palomitas) y devuelve
 // { sendOk, options } — options = [{handle, match}] para registrar la espera del ruteo.
@@ -332,17 +346,33 @@ async function sendInteractiveNode(redis, node, candidate, flowId, opts = {}, pr
         : null;
     const footer = data.footer?.trim() ? substituteVariables(data.footer, candidate) : '';
 
+    // Opciones VIGENTES (descarta las vencidas por `expiresAt`). Se calculan una sola vez y se
+    // reusan para el envío, los chips del Chat Web y la espera de ruteo, para que todo sea
+    // consistente: un botón vencido no se pinta, no se manda y nadie queda esperándolo.
+    const liveButtons = (Array.isArray(data.buttons) ? data.buttons : [])
+        .filter(b => b?.title?.trim() && !isOptionExpired(b.expiresAt));
+    const liveSections = (Array.isArray(data.sections) ? data.sections : [])
+        .map(sec => ({ ...sec, rows: (Array.isArray(sec.rows) ? sec.rows : []).filter(r => r?.title?.trim() && !isOptionExpired(r.expiresAt)) }))
+        .filter(sec => sec.rows.length);
+
+    // ¿El menú tenía opciones configuradas pero TODAS vencieron? → detener el flujo (no manda nada).
+    // (Un menú sin opciones configuradas es otra cosa: se maneja como hoy, más abajo.)
+    const hadButtons = (data.buttons || []).some(b => b?.title?.trim());
+    const hadRows = (data.sections || []).some(s => (s.rows || []).some(r => r?.title?.trim()));
+    if ((mode === 'button' && hadButtons && liveButtons.length === 0) ||
+        (mode === 'list' && hadRows && liveSections.length === 0)) {
+        return { sendOk: false, options: [], allExpired: true };
+    }
+
     const extra = { interactiveType: mode, header, footer, priority: 1 };
     if (mode === 'button') {
-        extra.buttons = (Array.isArray(data.buttons) ? data.buttons : [])
-            .filter(b => b?.title?.trim()).slice(0, 3)
+        extra.buttons = liveButtons.slice(0, 3)
             .map(b => ({ id: b.id, title: substituteVariables(b.title, candidate) }));
     } else if (mode === 'list') {
         extra.listButtonText = data.listButtonText;
-        extra.sections = (Array.isArray(data.sections) ? data.sections : []).map(sec => ({
+        extra.sections = liveSections.map(sec => ({
             title: sec.title,
-            rows: (Array.isArray(sec.rows) ? sec.rows : []).filter(r => r?.title?.trim())
-                .map(r => ({ id: r.id, title: substituteVariables(r.title, candidate), description: r.description ? substituteVariables(r.description, candidate) : '' }))
+            rows: sec.rows.map(r => ({ id: r.id, title: substituteVariables(r.title, candidate), description: r.description ? substituteVariables(r.description, candidate) : '' }))
         }));
     } else if (mode === 'cta_url') {
         extra.ctaDisplayText = data.ctaDisplayText;
@@ -350,9 +380,9 @@ async function sendInteractiveNode(redis, node, candidate, flowId, opts = {}, pr
     }
 
     const optTitles = mode === 'button'
-        ? (data.buttons || []).map(b => b?.title).filter(Boolean)
+        ? liveButtons.map(b => b?.title).filter(Boolean)
         : mode === 'list'
-            ? (data.sections || []).flatMap(s => (s.rows || []).map(r => r?.title)).filter(Boolean)
+            ? liveSections.flatMap(s => (s.rows || []).map(r => r?.title)).filter(Boolean)
             : [];
     // bodyText ya incluye el prefijo (si lo hay); MessageBubble pinta los chips por el sufijo.
     const previewText = mode === 'cta_url'
@@ -382,11 +412,12 @@ async function sendInteractiveNode(redis, node, candidate, flowId, opts = {}, pr
     }
 
     // opciones para la espera de ruteo (handle = id estable; match = título que devuelve Meta al clic).
+    // Solo las VIGENTES: nadie debe quedar esperando un botón que no se mandó.
     const options = [];
     if (mode === 'button') {
-        for (const b of (data.buttons || [])) if (b?.id && b?.title?.trim()) options.push({ handle: b.id, match: substituteVariables(b.title, candidate).substring(0, 20) });
+        for (const b of liveButtons) if (b?.id) options.push({ handle: b.id, match: substituteVariables(b.title, candidate).substring(0, 20) });
     } else if (mode === 'list') {
-        for (const sec of (data.sections || [])) for (const r of (sec.rows || [])) if (r?.id && r?.title?.trim()) options.push({ handle: r.id, match: substituteVariables(r.title, candidate).substring(0, 24) });
+        for (const sec of liveSections) for (const r of sec.rows) if (r?.id) options.push({ handle: r.id, match: substituteVariables(r.title, candidate).substring(0, 24) });
     }
     return { sendOk, options };
 }
@@ -694,7 +725,11 @@ export async function evaluateOrExecute(node, candidate, flowId, redis, opts = {
             const mode = data.mode || 'button';
             if (!data.body?.trim()) return true; // sin cuerpo → no rompe la cadena
 
-            const { sendOk, options } = await sendInteractiveNode(redis, node, candidate, flowId, opts);
+            const { sendOk, options, allExpired } = await sendInteractiveNode(redis, node, candidate, flowId, opts);
+
+            // Todos los botones/filas vencidos (vigencia por opción) → DETIENE el flujo: no manda
+            // nada y no toma ninguna salida (return false ⇒ ni ramas de opción ni Timeout corren).
+            if (allExpired) return false;
 
             // ¿Rutea por opción? Solo button/list con routeByOption y si el envío salió.
             const canRoute = data.routeByOption !== false && (mode === 'button' || mode === 'list');

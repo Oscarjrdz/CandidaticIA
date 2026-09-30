@@ -356,6 +356,35 @@ const CheckpointPicker = ({ data, onPatch }) => {
 // Id estable local para opciones (evita importar de FlowEditor → dependencia circular).
 const makeOptId = () => `opt_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
 
+// Pista visual de vencimiento (hora local del reclutador = Monterrey). El corte REAL de si se
+// manda o no lo decide el backend en hora de Monterrey; esto es solo el aviso "vencido" del editor.
+const isVigenciaPast = (dt) => !!dt && new Date(dt).getTime() <= Date.now();
+
+// Campo de vigencia por opción: fecha+hora tras la cual ese botón/fila ya NO se manda.
+// Vacío = sin límite (se manda siempre). Guarda el valor tal cual del <input datetime-local>.
+const OptionExpiry = ({ value, onChange }) => {
+    const past = isVigenciaPast(value);
+    return (
+        <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-[11px] text-gray-400 dark:text-gray-500 whitespace-nowrap">🕒 Vigencia:</span>
+            <input
+                type="datetime-local"
+                value={value || ''}
+                onChange={(e) => onChange(e.target.value)}
+                className={`px-2 py-1 rounded-lg border text-xs dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 ${past ? 'border-red-300 text-red-600 dark:border-red-700 dark:text-red-400' : 'border-gray-200 dark:border-gray-700'}`}
+            />
+            {value ? (
+                <>
+                    <button onClick={() => onChange('')} className="text-[11px] text-gray-400 hover:text-red-500 hover:underline">quitar</button>
+                    {past && <span className="text-[11px] text-red-500 font-medium">vencido — ya no se manda</span>}
+                </>
+            ) : (
+                <span className="text-[11px] text-gray-300 dark:text-gray-600">(sin límite)</span>
+            )}
+        </div>
+    );
+};
+
 const inputCls = 'w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 dark:bg-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500';
 
 // 🔘 Configuración COMPLETA del nodo "Mandar Botones / Opciones" (mensaje interactivo de Meta).
@@ -372,6 +401,7 @@ const BotonesConfig = ({ data, patch }) => {
     const setButtons = (b) => patch({ buttons: b });
     const addButton = () => { if (buttons.length >= 3) return; setButtons([...buttons, { id: makeOptId(), title: '' }]); };
     const updateButton = (i, title) => setButtons(buttons.map((b, idx) => idx === i ? { ...b, title } : b));
+    const updateButtonField = (i, fields) => setButtons(buttons.map((b, idx) => idx === i ? { ...b, ...fields } : b));
     const removeButton = (i) => setButtons(buttons.filter((_, idx) => idx !== i));
 
     // ── Lista (secciones + filas) ──
@@ -458,10 +488,13 @@ const BotonesConfig = ({ data, patch }) => {
                     <label className="text-xs text-gray-500 dark:text-gray-400 mb-2 block">Botones ({buttons.length}/3)</label>
                     <div className="space-y-2">
                         {buttons.map((b, i) => (
-                            <div key={b.id} className="flex items-center gap-1">
-                                <input type="text" maxLength={20} value={b.title || ''} onChange={(e) => updateButton(i, e.target.value)} placeholder={`Botón ${i + 1} (≤20)`} className={inputCls} />
-                                <EmojiPickerButton onPick={(emoji) => updateButton(i, (b.title || '') + emoji)} />
-                                <button onClick={() => removeButton(i)} className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20" title="Quitar">✕</button>
+                            <div key={b.id} className="space-y-1.5 rounded-xl border border-gray-100 dark:border-gray-700/60 p-2">
+                                <div className="flex items-center gap-1">
+                                    <input type="text" maxLength={20} value={b.title || ''} onChange={(e) => updateButton(i, e.target.value)} placeholder={`Botón ${i + 1} (≤20)`} className={inputCls} />
+                                    <EmojiPickerButton onPick={(emoji) => updateButton(i, (b.title || '') + emoji)} />
+                                    <button onClick={() => removeButton(i)} className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20" title="Quitar">✕</button>
+                                </div>
+                                <OptionExpiry value={b.expiresAt} onChange={(v) => updateButtonField(i, { expiresAt: v })} />
                             </div>
                         ))}
                     </div>
@@ -495,6 +528,7 @@ const BotonesConfig = ({ data, patch }) => {
                                         <button onClick={() => removeRow(si, ri)} className="p-1.5 rounded-lg text-gray-400 hover:text-red-500" title="Quitar">✕</button>
                                     </div>
                                     <input type="text" maxLength={72} value={r.description || ''} onChange={(e) => updateRow(si, ri, 'description', e.target.value)} placeholder="Descripción (opcional, ≤72)" className={`${inputCls} text-xs`} />
+                                    <OptionExpiry value={r.expiresAt} onChange={(v) => updateRow(si, ri, 'expiresAt', v)} />
                                 </div>
                             ))}
                             {totalRows < 10 && <button onClick={() => addRow(si)} className="text-xs text-emerald-600 dark:text-emerald-400 hover:underline">+ Opción</button>}
@@ -514,6 +548,13 @@ const BotonesConfig = ({ data, patch }) => {
                         <input type="text" value={data.ctaUrl || ''} onChange={(e) => patch({ ctaUrl: e.target.value })} placeholder="https://…" className={inputCls} />
                     </div>
                 </div>
+            )}
+
+            {/* Vigencia: nota de comportamiento */}
+            {(mode === 'button' || mode === 'list') && (
+                <p className="text-[11px] text-gray-400 dark:text-gray-500 leading-snug">
+                    🕒 <strong>Vigencia:</strong> una opción con fecha/hora en el pasado (hora de Monterrey) deja de mandarse. Si <strong>todas</strong> las opciones de este menú ya vencieron, el nodo <strong>detiene el flujo</strong>: no manda nada y no toma ninguna salida.
+                </p>
             )}
 
             {/* Ruteo por opción (solo button/list) */}
