@@ -6980,6 +6980,9 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                                     rows={5}
                                     className="w-full text-xs px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#202c33] text-[#111b21] dark:text-[#e9edef] outline-none focus:border-green-500 transition-colors resize-y"
                                 />
+                                <p className="text-[10px] text-gray-400 dark:text-gray-500 leading-relaxed">
+                                    Escribe <code className="px-1 rounded bg-gray-100 dark:bg-gray-700">{'{{texto ultimo boton}}'}</code> para insertar el texto del último botón/opción que clicó el candidato (ej. su horario de cita elegido).
+                                </p>
                                 {/* Image slots */}
                                 <div className="grid grid-cols-2 gap-2">
                                     {[{ key: 'imageUrl', label: 'Imagen 1' }, { key: 'imageUrl2', label: 'Imagen 2 (opcional)' }, { key: 'imageUrl3', label: 'Imagen 3 (opcional)' }, { key: 'imageUrl4', label: 'Imagen 4 (opcional)' }].map(({ key, label }) => (

@@ -710,6 +710,16 @@ export default async function handler(req, res) {
                 incomingPhoneNumberId: metadata?.phone_number_id || process.env.META_PHONE_NUMBER_ID
             };
 
+            // 🎯 {{texto ultimo boton}}: si este mensaje fue un CLIC en un botón/opción de lista
+            // interactiva, guarda su título literal (ej. "MIÉRCOLES 30 de Septiembre a las 9:00")
+            // en el candidato. Luego substituteVariables() lo inyecta donde sea que aparezca el
+            // token {{texto ultimo boton}} — banco de respuestas, envíos masivos, flujos,
+            // recordatorios. Solo se sobreescribe con un clic real; el texto escrito a mano nunca
+            // lo pisa. Es un string corto → no afecta el peso de la lista de candidatos.
+            if (isInteractiveReply && body) {
+                updatedCandidate.ultimoBotonTexto = body;
+            }
+
             // ─── META AI RETARGETING FIX: Update referral for existing candidates ───
             // 🛑 SOLO candidatos EXISTENTES que vuelven desde un anuncio. Para un candidato RECIÉN
             // creado (isNewCandidate) el bloque de creación de arriba YA aplicó etiqueta + vacanteActual

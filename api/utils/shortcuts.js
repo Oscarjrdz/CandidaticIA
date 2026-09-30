@@ -15,6 +15,19 @@ export const substituteVariables = (text, candidate) => {
         const trimmedKey = key.trim();
         const lowerKey = trimmedKey.toLowerCase();
 
+        // {{texto ultimo boton}} — título literal del último botón/opción interactiva que el
+        // candidato clicó (lo guarda el webhook en candidate.ultimoBotonTexto). Tolerante a
+        // mayúsculas, espacios, guion bajo y acentos: {{texto ultimo boton}}, {{Texto_Último_Botón}},
+        // {{TEXTO ULTIMO BOTON}} — todos valen. Si no hay ningún clic previo, se sustituye por
+        // cadena vacía (nunca deja el token literal en el mensaje enviado).
+        const normKey = lowerKey
+            .replace(/[áàä]/g, 'a').replace(/[éèë]/g, 'e').replace(/[íìï]/g, 'i')
+            .replace(/[óòö]/g, 'o').replace(/[úùü]/g, 'u')
+            .replace(/[_\s]+/g, ' ').trim();
+        if (normKey === 'texto ultimo boton') {
+            return String(candidate.ultimoBotonTexto || '');
+        }
+
         // Solo el nombre REAL (registrado), nunca el "from" informal de WhatsApp — ese
         // suele traer apodos/emojis. Si no hay nombre real guardado, no se inyecta nada
         // (string vacio) en vez de caer al nombre informal o a un generico "Candidato".
