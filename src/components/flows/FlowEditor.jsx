@@ -162,8 +162,15 @@ const FlowEditorInner = ({ flowId, onBack }) => {
     // La arista de la rama "No cumple" (sourceHandle === 'no') se pinta roja para que se
     // distinga de un vistazo de la rama normal (indigo). El resto conserva el indigo de
     // defaultEdgeOptions.
+    //
+    // zIndex 5: por ENCIMA del nodo de fondo (bg = zIndex 0) y por DEBAJO de las tarjetas
+    // de nodo (zIndex 10) y del texto (zIndex 20). Sin esto, un "Fondo de sección" (bg)
+    // queda al mismo nivel que los conectores y, al ganar el nodo el empate, tapa la línea:
+    // el hover no llega y la × para borrar nunca aparece. Con zIndex 5 el conector queda
+    // sobre el fondo verde (se puede borrar) pero sigue pasando por detrás de los nodos.
     const hydrateEdge = useCallback((e) => ({
         ...e,
+        zIndex: 5,
         style: e.sourceHandle === 'no'
             ? { stroke: '#f87171', strokeWidth: 2 }
             : { stroke: '#a5b4fc', strokeWidth: 2 },
