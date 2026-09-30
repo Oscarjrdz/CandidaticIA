@@ -82,6 +82,12 @@ const brandForPhoneId = (phoneId) => (String(phoneId || '') === HR_ONE_PHONE_ID 
 const NEW_CANDIDATE_NAME_ASK = '¿Me puedes compartir tu Nombre y Apellidos completos? 🌟';
 const buildNewCandidateWelcome = (brand = 'Candidatic') => `¡Hola! 😇 Soy Brenda Rodríguez, reclutadora de ${brand}.[MSG_SPLIT]${NEW_CANDIDATE_NAME_ASK}`;
 
+// Paso 2 · meses de experiencia: respuestas CUALITATIVAS que afirman experiencia larga
+// sin dar un número ("varios años", "muchos años", "bastante tiempo", "ya tengo años",
+// "toda la vida", "un buen rato"...). Son respuestas VÁLIDAS al "un aproximado, no tiene
+// que ser exacto" de Brenda — se aceptan con default de 12 meses, NO se tratan como evasión.
+const QUALITATIVE_DURATION_RE = /\b(varios|muchos|bastantes?|hartos?|un\s+buen|un\s+chorro|un\s+mont[oó]n|much[ií]simos?)\s+(?:de\s+)?(a[ñn]os|meses|tiempo|rato)\b|\bya\s+(tengo\s+)?(varios\s+|muchos\s+)?a[ñn]os\b|\btoda\s+la\s+vida\b|\bmucho\s+tiempo\b|\bbastante\s+tiempo\b|\bdesde\s+hace\s+(muchos?|varios)?\s*a[ñn]os\b/i;
+
 // ❌ [CTA DE ENTREVISTA ELIMINADO — sep 2026] _AMBIGUITY_VARIANTS, _PIVOT_B2_VARIANTS
 // e incrCTAIndex (contador cta_idx) también se borraron: solo los usaba el cerebro de
 // reclutador removido / los bloques de cita ya eliminados. Brenda extractora no agenda.
@@ -1692,6 +1698,16 @@ Responde ÚNICAMENTE con el número entero de meses. Si evade o no menciona ning
                     const parsed = parseInt(mesesRaw, 10);
                     if (!isNaN(parsed) && parsed > 0) mesesResult = parsed;
                 } catch (_e) { /* fall through to evasion */ }
+
+                // Duración CUALITATIVA que afirma experiencia larga sin dar un número
+                // ("varios años", "muchos años", "bastante tiempo", "ya tengo años",
+                // "toda la vida"...): NO es evasión — es una respuesta válida al "un
+                // aproximado, no tiene que ser exacto" que Brenda misma prometió. La
+                // aceptamos con un default de 12 meses y cerramos paso 2 en vez de dar
+                // vueltas re-preguntando (bug 2026-09-30, chat 8119784702).
+                if (mesesResult === null && QUALITATIVE_DURATION_RE.test(aggregatedText)) {
+                    mesesResult = 12;
+                }
 
                 if (mesesResult !== null) {
                     candidateUpdates.meses = mesesResult;
