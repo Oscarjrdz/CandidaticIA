@@ -1176,7 +1176,11 @@ export default async function handler(req, res) {
                     try {
                         const { hasLiveInteractiveMenuFor, resumeWaitingFlowIfMatch } = await import('../utils/flow-engine.js');
                         if (await hasLiveInteractiveMenuFor(candidateId, body)) {
-                            await resumeWaitingFlowIfMatch(candidateId, freshCandidate, body).catch(() => {});
+                            // OJO: usar `updatedCandidate`, no `freshCandidate`. freshCandidate se leyó
+                            // ANTES de guardar el clic actual, así que su `ultimoBotonTexto` es el del
+                            // botón ANTERIOR. El motor usa el candidato que recibe para resolver
+                            // {{texto ultimo boton}} — con freshCandidate inyectaría el clic pasado.
+                            await resumeWaitingFlowIfMatch(candidateId, updatedCandidate, body).catch(() => {});
                         } else {
                             await logTelemetry('interactive_stale_click_ignored', {
                                 candidateId, title: (body || '').slice(0, 40)
