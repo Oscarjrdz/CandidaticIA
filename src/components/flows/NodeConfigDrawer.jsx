@@ -765,6 +765,15 @@ const NodeConfigDrawer = ({ node, flowId, meta, quickReplies, reminderTemplates,
                                         <input type="checkbox" checked={!!data.returnOnPhrase} onChange={(e) => patch({ returnOnPhrase: e.target.checked })} className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500" />
                                         <span className="text-sm text-gray-700 dark:text-gray-200">Escribió una frase</span>
                                     </label>
+                                    {(data.profileFilter !== 'incompleto') && (
+                                        <label className="flex items-start gap-2.5 p-2.5 mt-2 rounded-xl border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer">
+                                            <input type="checkbox" checked={!!data.returnOnAnyText} onChange={(e) => patch({ returnOnAnyText: e.target.checked })} className="w-4 h-4 mt-0.5 rounded text-indigo-600 focus:ring-indigo-500" />
+                                            <span>
+                                                <span className="text-sm text-gray-700 dark:text-gray-200 block">Escribe cualquier cosa <span className="text-indigo-500">(solo completos)</span></span>
+                                                <span className="text-xs text-gray-400">Un completo dispara el flujo con cualquier mensaje que escriba. Se valida primero: si no cae en este flujo, entra a Sala de Espera. Tip: pon un <b>cooldown</b> abajo para no reenviarle la info en cada mensaje.</span>
+                                            </span>
+                                        </label>
+                                    )}
                                     {(data.profileFilter === 'incompleto' || data.profileFilter === 'todos') && (
                                         <label className="flex items-start gap-2.5 p-2.5 mt-2 rounded-xl border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer">
                                             <input type="checkbox" checked={!!data.returnOnOrganic} onChange={(e) => patch(e.target.checked ? { returnOnOrganic: true, minReturnHours: data.minReturnHours ?? 24 } : { returnOnOrganic: false })} className="w-4 h-4 mt-0.5 rounded text-indigo-600 focus:ring-indigo-500" />

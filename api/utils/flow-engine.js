@@ -1316,6 +1316,8 @@ export async function runFlowsForCandidate(candidateId, candidateSnapshot) {
 //   • ORGÁNICO (solo INCOMPLETOS): vuelve por su cuenta (sin anuncio ni frase) tras estar inactivo
 //     ≥ minReturnHours. El gate de inactividad + "ya platicó antes" (botHasSpoken) separa al que se
 //     fue y volvió del que está contestando a Brenda en el momento. Sin él secuestraría capturas vivas.
+//   • CUALQUIER TEXTO (solo COMPLETOS): un completo dispara con cualquier mensaje. No lleva reja de
+//     inactividad (un completo ya no está en captura); la cadencia (cooldown/máx./min. días) lo acota.
 export function returnFlowSignalMatches(d = {}, { complete = false, adClicked = false, adReclick = false, botHasSpoken = false, minSinceLastBot = 0, incomingText = '' } = {}) {
     const wantAd = d.returnOnAd !== false;   // default true
     if (wantAd && adClicked && (complete || adReclick)) return true;
@@ -1323,6 +1325,11 @@ export function returnFlowSignalMatches(d = {}, { complete = false, adClicked = 
         const grupos = Array.isArray(d.returnGrupos) ? d.returnGrupos : [];
         if (grupos.some(g => flowTextMatchesGroup(incomingText, g, d.returnMatchMode))) return true;
     }
+    // CUALQUIER TEXTO (solo COMPLETOS): un completo dispara el flujo con cualquier mensaje que
+    // escriba. Como el flujo "al regresar" corre ANTES de la Sala de Espera (agent.js), esto
+    // equivale a "valida primero si entra a un flujo; si no, entra a Sala de Espera". La cadencia
+    // (cooldown / máx. veces / min. días) evita reenviarle la info en cada mensaje.
+    if (d.returnOnAnyText && complete && String(incomingText || '').trim()) return true;
     if (d.returnOnOrganic && !complete && botHasSpoken) {
         const minHours = Number(d.minReturnHours) || 0;
         if (minHours > 0 && minSinceLastBot >= minHours * 60) return true;
