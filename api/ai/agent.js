@@ -1665,7 +1665,7 @@ REGLAS:
                     // Las DOS burbujas (reconocimiento Y pregunta) se formulan con PALABRAS
                     // DISTINTAS cada vez; el LLM ve el historial reciente para no repetir fraseo.
                     candidateUpdates.paso2AskCount = p2AskCount + 1;
-                    const evasionSys = `${promptAvanzado ? promptAvanzado + '\n\n' : ''}Eres Brenda Rodríguez, reclutadora de ${brand}. El candidato no dio claramente el nombre de su colonia. Tu misión es pedirle amablemente que comparta su colonia. REGLA CRÍTICA: NUNCA digas que ya tienes la colonia ni confirmes haberla recibido — aún no la tienes. Genera 2 burbujas separadas con [MSG_SPLIT]: la primera reconoce su respuesta con calidez, la segunda pide la colonia con una razón concreta (validar transporte). Es una RE-pregunta, ya lo intentaste antes: usa PALABRAS DISTINTAS a las que ya usaste en la conversación TANTO en el reconocimiento COMO en la pregunta; varía el fraseo como un humano real y NUNCA repitas frases anteriores. Máximo 2 líneas cada una. Sin markdown.\n[ADN]: ${JSON.stringify(cleanAdnBase)}`;
+                    const evasionSys = `${promptAvanzado ? promptAvanzado + '\n\n' : ''}Eres Brenda Rodríguez, reclutadora de ${brand}. El candidato no dio claramente el nombre de su colonia. Tu misión es pedirle amablemente que comparta su colonia. REGLA CRÍTICA: NUNCA digas que ya tienes la colonia ni confirmes haberla recibido — aún no la tienes. Genera 2 burbujas separadas con [MSG_SPLIT]: la primera reconoce su respuesta con calidez, la segunda pide la colonia con una razón concreta (validar transporte). Si pregunta qué hacen o detalles del puesto, PROHIBIDO explicar funciones, dar tu opinión o inventar nada del trabajo: reconoce su curiosidad con calidez y regrésalo a la pregunta de la colonia. Es una RE-pregunta, ya lo intentaste antes: usa PALABRAS DISTINTAS a las que ya usaste en la conversación TANTO en el reconocimiento COMO en la pregunta; varía el fraseo como un humano real y NUNCA repitas frases anteriores. Máximo 2 líneas cada una. Sin markdown.\n[ADN]: ${JSON.stringify(cleanAdnBase)}`;
                     try {
                         const evasionGpt = await getOpenAIResponse(
                             allMessages.slice(-6),
@@ -1732,7 +1732,7 @@ Responde ÚNICAMENTE con el número entero de meses. Si evade o no menciona ning
                         `Jeje ${_mName}vamos al grano 🙂[MSG_SPLIT]¿tienes idea de cuánto tiempo llevas de experiencia? un estimado me basta 🏭`
                     ];
                     const fallbackEvasion = MESES_REASK_FALLBACKS[p2AskCount % MESES_REASK_FALLBACKS.length];
-                    const evasionSys = `${promptAvanzado ? promptAvanzado + '\n\n' : ''}Eres Brenda Rodríguez, reclutadora de ${brand}. Le preguntaste al candidato cuánto tiempo de experiencia tiene en fábrica y en vez de responder evadió (broma, coqueteo, pregunta, tema distinto). Genera EXACTAMENTE 2 burbujas separadas por [MSG_SPLIT]: (1) una línea corta que reconozca con gracia y calidez lo que dijo; (2) la re-pregunta de cuánto tiempo de experiencia lleva en fábrica (un aproximado basta). REGLAS CRÍTICAS: es una RE-pregunta, ya lo intentaste antes — usa PALABRAS DISTINTAS a las que ya usaste en la conversación TANTO en el reconocimiento COMO en la pregunta; varía el fraseo como un humano real y NUNCA repitas frases anteriores. NUNCA le sigas la corriente (no coquetees, no respondas su juego). NUNCA digas que ya tienes el dato ni inventes un número. Máximo 15 palabras por burbuja. Sin markdown.\n[ADN]: ${JSON.stringify(cleanAdnBase)}`;
+                    const evasionSys = `${promptAvanzado ? promptAvanzado + '\n\n' : ''}Eres Brenda Rodríguez, reclutadora de ${brand}. Le preguntaste al candidato cuánto tiempo de experiencia tiene en fábrica y en vez de responder evadió (broma, coqueteo, pregunta, tema distinto). Genera EXACTAMENTE 2 burbujas separadas por [MSG_SPLIT]: (1) una línea corta que reconozca con gracia y calidez lo que dijo; (2) la re-pregunta de cuánto tiempo de experiencia lleva en fábrica (un aproximado basta). REGLAS CRÍTICAS: es una RE-pregunta, ya lo intentaste antes — usa PALABRAS DISTINTAS a las que ya usaste en la conversación TANTO en el reconocimiento COMO en la pregunta; varía el fraseo como un humano real y NUNCA repitas frases anteriores. NUNCA le sigas la corriente (no coquetees, no respondas su juego). NUNCA digas que ya tienes el dato ni inventes un número. Si pregunta qué hacen o detalles del puesto, PROHIBIDO explicar funciones, dar tu opinión o inventar nada del trabajo: reconoce su curiosidad con calidez y regrésalo a la pregunta. Máximo 15 palabras por burbuja. Sin markdown.\n[ADN]: ${JSON.stringify(cleanAdnBase)}`;
                     try {
                         const evasionGpt = await getOpenAIResponse(
                             allMessages.slice(-6),
@@ -1830,8 +1830,15 @@ Responde ÚNICAMENTE con el número entero de meses. Si evade o no menciona ning
                     // Evasión — Brenda NUNCA se rinde ni completa sin un sí/no claro: re-pregunta.
                     // Las DOS burbujas (reconocimiento Y pregunta) se formulan con PALABRAS
                     // DISTINTAS cada vez; el LLM ve el historial reciente para no repetir fraseo.
+                    // La RE-pregunta se personaliza con la categoría que eligió el candidato
+                    // (ej. "experiencia de Operador General"), igual que la pregunta inicial — no
+                    // debe degradarse al genérico "en fábrica" y perder la vacante.
+                    // Caso típico de evasión: "¿qué es lo que hacen?" / pregunta por el puesto.
+                    // Brenda NO explica ni inventa funciones — reconoce la curiosidad y redirige.
                     candidateUpdates.paso2AskCount = p2AskCount + 1;
-                    const evasionSys = `${promptAvanzado ? promptAvanzado + '\n\n' : ''}Eres Brenda Rodríguez, reclutadora de ${brand}. El candidato evadió la pregunta sobre experiencia en fábrica. Tu misión es reconocer lo que dijo con calidez y redirigirlo con mucha persuasión a responder si tiene o no experiencia en fábrica/maquiladora. Genera 2 burbujas con [MSG_SPLIT]. Es una RE-pregunta, ya lo intentaste antes: usa PALABRAS DISTINTAS a las que ya usaste en la conversación TANTO en el reconocimiento COMO en la pregunta; varía el fraseo como un humano real y NUNCA repitas frases anteriores. Sin markdown. Sin inventar datos.\n[ADN]: ${JSON.stringify(cleanAdnBase)}`;
+                    const _expCat = (candidateUpdates.categoria || candidateData.categoria || '').trim();
+                    const _expArea = _expCat ? `de ${_expCat}` : 'en fábrica o maquiladora';
+                    const evasionSys = `${promptAvanzado ? promptAvanzado + '\n\n' : ''}Eres Brenda Rodríguez, reclutadora de ${brand}. Le preguntaste al candidato si tiene experiencia ${_expArea} y NO respondió sí/no: evadió, bromeó, o preguntó algo sobre el puesto (p. ej. "¿qué es lo que hacen?", en qué consiste el trabajo, el sueldo, etc.). Genera EXACTAMENTE 2 burbujas separadas por [MSG_SPLIT]: (1) una línea breve y cálida que reconozca su curiosidad SIN responderla; (2) la re-pregunta de si tiene experiencia ${_expArea} (sí o no). REGLAS CRÍTICAS: está PROHIBIDO explicar en qué consiste el puesto, describir funciones, dar tu opinión o INVENTAR cualquier detalle del trabajo o de la vacante — aún no tienes esa información. Si pregunta qué hacen o pide detalles, NO los des: dile con calidez algo como "entiendo tu curiosidad, pero primero terminemos de capturar tu información para ofrecerte la mejor vacante" y regrésalo a la pregunta de experiencia. Es una RE-pregunta, ya lo intentaste antes: usa PALABRAS DISTINTAS a las que ya usaste en la conversación TANTO en el reconocimiento COMO en la pregunta; varía el fraseo como un humano real y NUNCA repitas frases anteriores. Máximo 2 líneas cada burbuja. Sin markdown. Sin inventar datos.\n[ADN]: ${JSON.stringify(cleanAdnBase)}`;
                     try {
                         const evasionGpt = await getOpenAIResponse(
                             allMessages.slice(-6),
@@ -1841,9 +1848,9 @@ Responde ÚNICAMENTE con el número entero de meses. Si evade o no menciona ning
                         );
                         responseTextVal = evasionGpt?.content
                             ? evasionGpt.content.replace(/\*/g, '')
-                            : `Entiendo 😊[MSG_SPLIT]¿Tienes o has tenido experiencia trabajando en fábrica o maquiladora? Solo dime sí o no 🏭`;
+                            : `Entiendo tu curiosidad 😊 terminando tu registro te paso todos los detalles[MSG_SPLIT]¿Tienes o has tenido experiencia ${_expArea}? Solo dime sí o no 🏭`;
                     } catch (_e) {
-                        responseTextVal = `¿Tienes experiencia en fábrica o maquiladora? 🏭 Solo dime sí o no 😊`;
+                        responseTextVal = `Entiendo tu curiosidad 😊[MSG_SPLIT]¿Tienes experiencia ${_expArea}? Solo dime sí o no 😊`;
                     }
                 }
             }
