@@ -788,6 +788,46 @@ function normalizeBirthDate(input) {
 }
 
 /**
+ * 📅 Extrae la fecha de nacimiento del TEXTO LITERAL del candidato de forma
+ * determinista, SIN pasar por GPT. gpt-4o-mini transpone los dígitos de las
+ * fechas con frecuencia (bug 2026-09-30, chat 8140761135: el candidato escribió
+ * "09 de agosto de 2002" y GPT lo guardó como "02/08/2009" → 17 años en vez de
+ * 24, rompiendo el filtro de edad de la vacante). El texto que escribió el
+ * candidato es la verdad: cuando trae una fecha parseable, mandamos esa.
+ * Prioriza formas INEQUÍVOCAS (día + mes por nombre) sobre las ambiguas
+ * (bloques numéricos). Devuelve DD/MM/YYYY válida o null.
+ */
+function extractBirthDateFromText(text) {
+    if (!text || typeof text !== 'string') return null;
+    const t = text.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const MESES = {
+        enero: '01', febrero: '02', marzo: '03', abril: '04', mayo: '05', junio: '06',
+        julio: '07', agosto: '08', septiembre: '09', setiembre: '09', octubre: '10', noviembre: '11', diciembre: '12',
+        ene: '01', feb: '02', mar: '03', abr: '04', may: '05', jun: '06', jul: '07', ago: '08', sep: '09', sept: '09', oct: '10', nov: '11', dic: '12'
+    };
+    // Alternancia ordenada de más larga a más corta para que "septiembre" gane a "sep".
+    const mesAlt = Object.keys(MESES).sort((a, b) => b.length - a.length).join('|');
+    const tryNorm = (d, m, y) => {
+        const r = normalizeBirthDate(`${d}/${m}/${y}`);
+        return r.isValid ? r.date : null;
+    };
+    let m;
+    // 1. Día + mes por nombre + año → "09 de agosto de 2002", "9 ago 02"
+    m = t.match(new RegExp(`\\b(\\d{1,2})\\s*(?:de\\s+)?(${mesAlt})\\b\\s*(?:del?\\s+)?(\\d{2,4})\\b`, 'i'));
+    if (m) { const r = tryNorm(m[1], MESES[m[2]], m[3]); if (r) return r; }
+    // 2. Mes por nombre + día + año → "agosto 09 de 2002"
+    m = t.match(new RegExp(`\\b(${mesAlt})\\s+(\\d{1,2})\\b[\\s,]*(?:del?\\s+)?(\\d{2,4})\\b`, 'i'));
+    if (m) { const r = tryNorm(m[2], MESES[m[1]], m[3]); if (r) return r; }
+    // 3. Numérico con separadores → "09/08/2002", "9-8-02"
+    m = t.match(/\b(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{2,4})\b/);
+    if (m) { const r = tryNorm(m[1], m[2], m[3]); if (r) return r; }
+    // 4. Bloque sólido (ambiguo, última prioridad) → "09082002" / "090802"
+    m = t.match(/\b(\d{2})(\d{2})(\d{4})\b/) || t.match(/\b(\d{2})(\d{2})(\d{2})\b/);
+    if (m) { const r = tryNorm(m[1], m[2], m[3]); if (r) return r; }
+    return null;
+}
+
+/**
  * 🧬 COALESCENCE HELPERS (Zuckerberg Standard)
  * Merges partial data fragments into a complete state.
  */
@@ -2232,7 +2272,13 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
                             responseTextVal = 'Me falta el día para completar tu fecha 😊 ¿me confirmas el día, mes y año en que naciste? (ejemplo 19 de mayo de 1988)';
                             if (aiResult) aiResult.response_text = responseTextVal;
                         } else {
-                            ext.fechaNacimiento = coalesceDate(candidateData.fechaNacimiento, ext.fechaNacimiento);
+                            // 🛡️ FECHA DETERMINISTA: si el candidato escribió una fecha parseable en
+                            // ESTE turno, su texto LITERAL manda sobre lo que extrajo GPT (que transpone
+                            // los dígitos — bug 2026-09-30, chat 8140761135: "09 de agosto de 2002"
+                            // quedó "02/08/2009", 17 años en vez de 24). GPT solo se usa de respaldo
+                            // cuando el texto no trae una fecha parseable (ej. "191274" ya deducido).
+                            const _rawDate = extractBirthDateFromText(aggregatedText);
+                            ext.fechaNacimiento = _rawDate || coalesceDate(candidateData.fechaNacimiento, ext.fechaNacimiento);
                             // 🎂 AUTO-EDAD: Calculate age from valid birth date
                             const _dateParts = (ext.fechaNacimiento || '').split('/');
                             if (_dateParts.length === 3) {
