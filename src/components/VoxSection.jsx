@@ -168,14 +168,21 @@ export default function VoxSection() {
     function startVisualizer() {
         const micBuf = new Uint8Array(1024);
         const outBuf = new Uint8Array(1024);
+        let lastOutAt = 0; // última vez (ms) que Brenda produjo sonido — sostiene "hablando" entre palabras
         const loop = () => {
+            const now = performance.now();
             const inLvl = rmsLevel(micAnalyserRef.current, micBuf);
             const outLvl = rmsLevel(outAnalyserRef.current, outBuf);
             const lvl = Math.max(inLvl, outLvl);
-            let nextMode = 'listening';
-            if (outLvl > 0.06 && outLvl >= inLvl) nextMode = 'speaking';
-            else if (inLvl > 0.06) nextMode = 'listening';
-            else nextMode = modeRef.current === 'speaking' && outLvl > 0.03 ? 'speaking' : 'listening';
+
+            if (outLvl > 0.04) lastOutAt = now;
+            // Sostiene "hablando" 700ms tras el último sonido de Brenda, para no parpadear a
+            // "escuchando" en las pausas naturales entre palabras/frases.
+            const speakingHold = now - lastOutAt < 700;
+            let nextMode;
+            if (inLvl > 0.09 && inLvl > outLvl * 1.3) nextMode = 'listening'; // el candidato habla por encima
+            else if (speakingHold) nextMode = 'speaking';
+            else nextMode = 'listening';
 
             if (orbRef.current) {
                 orbRef.current.style.setProperty('--vox-scale', (1 + lvl * 0.4).toFixed(3));
