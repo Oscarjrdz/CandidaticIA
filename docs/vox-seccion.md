@@ -4,6 +4,19 @@ Sección nueva del dashboard (`id: vox`, `superAdminOnly`) para dar a Brenda **v
 con la Realtime API de OpenAI. Objetivo del proyecto: que Brenda pueda **hablar por teléfono**
 con candidatos, con un tope de costo de **1 peso por minuto**.
 
+## Objetivo de Brenda Vox (NO es extractora)
+
+La extracción de datos la hace Brenda por **WhatsApp**. Brenda **Vox** tiene otro trabajo:
+**solo llama a candidatos COMPLETOS** para (1) presentarles una **vacante** y (2) **citarlos a
+entrevista** (confirmar interés + disponibilidad; la cita se confirma por WhatsApp). Por eso:
+
+- Se elige una **vacante** de un dropdown conectado a la sección Vacantes (`/api/vacancies`). Es
+  **obligatoria**: Brenda habla de la vacante usando SOLO esa info (no inventa sueldo/horario).
+- Se elige un **candidato completo** (busca por nombre/teléfono). `session.js` valida con
+  `isProfileComplete(cand)`; si no está completo responde **403** y la llamada no arranca.
+- **Modo prueba** (`testMode`): ensaya la llamada sin candidato real (candidato ficticio completo),
+  pero igual requiere una vacante.
+
 ## Etapas
 
 1. **Etapa 1 (implementada):** hablar con Brenda desde la compu (micrófono + bocina del navegador)
@@ -74,20 +87,21 @@ Se edita en **dos espacios** (Personalidad y tono / Objetivo y guion). El servid
 `buildInstructions()` siguiendo la estructura recomendada por OpenAI para agentes de voz:
 
 ```
-# Rol y objetivo        ← objective
-# Personalidad y tono   ← personality
+# Rol y objetivo         ← objective (presentar vacante + citar a entrevista)
+# Personalidad y tono    ← personality
 # Idioma y pronunciación
-# Contexto del candidato ← inyectado desde Redis si se eligió un candidato; si no, "llamada en frío"
+# Información de la vacante ← inyectada desde la vacante elegida (name/company/category/description)
+# Contexto del candidato ← datos del completo elegido (en modo prueba: candidato ficticio)
 # Reglas de conversación (turnos breves, interrumpible, varía frases)
-# Seguridad y límites    (no inventa vacante/sueldo, no agenda citas)
+# Seguridad y límites    (habla SOLO con la info de la vacante dada; no inventa sueldo/horario)
 ```
 
-## Contexto del candidato (para pruebas realistas)
+## Contexto del candidato
 
-En la UI eliges **"probar como"**: candidato en frío (sin datos) o uno del listado (busca por
-nombre/teléfono vía `/api/candidates?search=`). Si eliges uno, `session.js` carga su perfil con
-`getCandidateById` y arma el bloque "Contexto del candidato": marca lo que YA sabemos (para que
-Brenda no lo re-pregunte) y lo que FALTA.
+En la UI eliges a quién llamar: un **candidato completo** del listado (busca por nombre/teléfono
+vía `/api/candidates?search=`) o **modo prueba**. `session.js` carga el perfil con
+`getCandidateById`, valida `isProfileComplete` (403 si no) y arma el bloque "Contexto del candidato"
+con los datos que YA tenemos (Brenda no los re-pregunta; su trabajo es ofrecer la vacante y citar).
 
 ## Calculador de costo (desde v1)
 

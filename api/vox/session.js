@@ -37,17 +37,24 @@ function buildCandidateContext(c) {
     push('Experiencia', c.experiencia, 'experiencia');
 
     const lines = [];
-    lines.push('Estás llamando a un candidato que YA está en nuestra base. Trátalo como alguien conocido.');
-    if (c.vacanteActual) lines.push(`La vacante por la que escribió es: ${c.vacanteActual}.`);
+    lines.push('Llamas a este candidato, que YA completó su registro por WhatsApp. Trátalo como alguien conocido; NO le vuelvas a pedir sus datos.');
+    if (c.vacanteActual) lines.push(`La vacante por la que escribió originalmente es: ${c.vacanteActual}.`);
     if (known.length) {
-        lines.push('Datos que YA tenemos (NO los vuelvas a pedir; confírmalos de pasada si hace falta):');
+        lines.push('Datos que YA tenemos:');
         lines.push(...known);
     }
-    if (missing.length) {
-        lines.push(`Datos que AÚN FALTAN y debes obtener de forma conversacional: ${missing.join(', ')}.`);
-    } else {
-        lines.push('Su perfil está completo: confirma brevemente sus datos y agradece; no hace falta pedir nada nuevo.');
-    }
+    return lines.join('\n');
+}
+
+// Bloque "Información de la vacante" a partir de una vacante de Redis.
+function buildVacancyContext(v) {
+    if (!v) return '';
+    const lines = [];
+    if (v.name) lines.push(`Puesto: ${v.name}`);
+    if (v.company) lines.push(`Empresa: ${v.company}`);
+    if (v.category) lines.push(`Categoría: ${v.category}`);
+    const desc = (v.messageDescription || v.description || '').trim();
+    if (desc) lines.push(`Descripción / detalles:\n${desc}`);
     return lines.join('\n');
 }
 
@@ -68,7 +75,7 @@ export default async function handler(req, res) {
     if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
     try {
-        const { getRedisClient, validateAdminSession, getCandidateById } = await import('../utils/storage.js');
+        const { getRedisClient, validateAdminSession, getCandidateById, getVacancyById, isProfileComplete } = await import('../utils/storage.js');
         const { VOX_CONFIG_KEY, mergeWithDefaults, buildInstructions } = await import('./config.js');
 
         const userId = await validateAdminSession(req);
@@ -86,25 +93,42 @@ export default async function handler(req, res) {
         try { stored = raw ? JSON.parse(raw) : null; } catch { stored = null; }
         const cfg = mergeWithDefaults(stored);
 
-        // Contexto del candidato (opcional): si mandan candidateId, Brenda ya "lo conoce".
         const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
+
+        // --- Candidato: Brenda Vox SOLO llama a completos ---
         let candidateContext = '';
         let candidateName = null;
         if (body.candidateId) {
-            try {
-                const cand = await getCandidateById(String(body.candidateId));
-                if (cand) {
-                    candidateContext = buildCandidateContext(cand);
-                    candidateName = cand.nombreReal || cand.nombre || null;
-                }
-            } catch (e) { console.warn('[vox/session] candidate load failed:', e.message); }
+            let cand = null;
+            try { cand = await getCandidateById(String(body.candidateId)); }
+            catch (e) { console.warn('[vox/session] candidate load failed:', e.message); }
+            if (!cand) return res.status(404).json({ error: 'Candidato no encontrado.' });
+            if (!isProfileComplete(cand)) {
+                return res.status(403).json({ error: 'Ese candidato no tiene el perfil COMPLETO. Brenda Vox solo llama a completos.' });
+            }
+            candidateContext = buildCandidateContext(cand);
+            candidateName = cand.nombreReal || cand.nombre || null;
+        } else if (!body.testMode) {
+            // Sin candidato y sin modo prueba explícito → no se permite.
+            return res.status(400).json({ error: 'Elige un candidato completo (o activa el modo prueba).' });
         }
+
+        // --- Vacante: requerida (es de lo que va a hablar) ---
+        let vacancyInfo = '';
+        let vacancyName = null;
+        if (body.vacancyId) {
+            try {
+                const vac = await getVacancyById(String(body.vacancyId));
+                if (vac) { vacancyInfo = buildVacancyContext(vac); vacancyName = vac.name || null; }
+            } catch (e) { console.warn('[vox/session] vacancy load failed:', e.message); }
+        }
+        if (!vacancyInfo) return res.status(400).json({ error: 'Elige una vacante para la llamada.' });
 
         // Arma la config de sesión Realtime (shape GA 2026).
         const sessionConfig = {
             type: 'realtime',
             model: cfg.model,
-            instructions: buildInstructions(cfg, candidateContext),
+            instructions: buildInstructions(cfg, candidateContext, vacancyInfo),
             audio: {
                 input: {
                     transcription: { model: cfg.transcriptionModel },
@@ -149,6 +173,7 @@ export default async function handler(req, res) {
             model: cfg.model,
             voice: cfg.voice,
             candidateName,
+            vacancyName,
             // el navegador usa esto para el intercambio SDP
             callsUrl: 'https://api.openai.com/v1/realtime/calls',
         });

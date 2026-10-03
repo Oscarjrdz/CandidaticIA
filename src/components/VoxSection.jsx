@@ -74,7 +74,10 @@ export default function VoxSection() {
     const [showBrain, setShowBrain] = useState(false);
     const [showTranscript, setShowTranscript] = useState(true);
     const [savingCfg, setSavingCfg] = useState(false);
-    const [target, setTarget] = useState(null); // {id, name, phone} | null (= en frío)
+    const [target, setTarget] = useState(null); // {id, name, phone} | null
+    const [vacancies, setVacancies] = useState([]);
+    const [vacancyId, setVacancyId] = useState('');
+    const [testMode, setTestMode] = useState(false); // probar sin candidato real
 
     const pcRef = useRef(null);
     const dcRef = useRef(null);
@@ -99,6 +102,10 @@ export default function VoxSection() {
             .then(r => r.json())
             .then(d => { if (alive && d?.config) setConfig(d.config); })
             .catch(() => { if (alive) setError('No se pudo cargar la config de Vox.'); });
+        fetch('/api/vacancies')
+            .then(r => r.json())
+            .then(d => { if (alive && Array.isArray(d?.data)) setVacancies(d.data); })
+            .catch(() => { /* sin vacantes, el usuario verá el aviso */ });
         return () => { alive = false; };
     }, []);
 
@@ -187,7 +194,7 @@ export default function VoxSection() {
             const sResp = await fetch('/api/vox/session', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ candidateId: target?.id || null }),
+                body: JSON.stringify({ candidateId: target?.id || null, vacancyId: vacancyId || null, testMode }),
             });
             const sData = await sResp.json();
             if (!sResp.ok || !sData.token) throw new Error(sData.error || 'No se pudo iniciar sesión Vox');
@@ -306,7 +313,9 @@ export default function VoxSection() {
         : isLive && mode === 'speaking' ? 'Brenda está hablando…'
         : isLive ? 'Escuchando…'
         : status === 'error' ? 'Error de conexión'
-        : target ? `Listo para llamar a ${target.name}` : 'Listo para hablar con Brenda';
+        : target ? `Listo para llamar a ${target.name}`
+        : testMode ? 'Modo prueba — listo para ensayar'
+        : 'Elige vacante y candidato';
 
     return (
         <div className="max-w-6xl mx-auto w-full">
@@ -322,9 +331,27 @@ export default function VoxSection() {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
                 {/* Escenario: orbe reactivo + controles */}
                 <div className="lg:col-span-2 bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-6 flex flex-col items-center justify-between min-h-[440px]">
-                    {/* Objetivo de la llamada (a quién llamamos) */}
-                    <div className="w-full">
-                        <TargetPicker target={target} onPick={setTarget} disabled={isLive || isConnecting} />
+                    {/* Configuración de la llamada: vacante + candidato completo */}
+                    <div className="w-full space-y-2.5">
+                        <div className="flex items-center justify-between gap-2">
+                            <span className="text-xs text-gray-500 dark:text-gray-400 shrink-0">Vacante a ofrecer:</span>
+                            <select
+                                value={vacancyId}
+                                onChange={e => setVacancyId(e.target.value)}
+                                disabled={isLive || isConnecting}
+                                className="flex-1 max-w-[65%] text-sm rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-100 px-2.5 py-1.5 disabled:opacity-60"
+                            >
+                                <option value="">{vacancies.length ? '— Elige una vacante —' : 'No hay vacantes creadas'}</option>
+                                {vacancies.map(v => <option key={v.id} value={v.id}>{v.name}{v.company ? ` · ${v.company}` : ''}</option>)}
+                            </select>
+                        </div>
+                        <TargetPicker
+                            target={target}
+                            testMode={testMode}
+                            disabled={isLive || isConnecting}
+                            onPick={(c) => { setTarget(c); if (c) setTestMode(false); }}
+                            onToggleTest={() => setTestMode(v => { const n = !v; if (n) setTarget(null); return n; })}
+                        />
                     </div>
 
                     {/* Orbe */}
@@ -355,7 +382,8 @@ export default function VoxSection() {
                         {!isLive ? (
                             <button
                                 onClick={connect}
-                                disabled={isConnecting || !config}
+                                disabled={isConnecting || !config || !vacancyId || (!target && !testMode)}
+                                title={!vacancyId ? 'Elige una vacante' : (!target && !testMode) ? 'Elige un candidato completo o activa el modo prueba' : ''}
                                 className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-green-600 hover:bg-green-700 text-white font-medium disabled:opacity-50 transition-colors shadow-sm"
                             >
                                 {isConnecting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Phone className="w-5 h-5" />}
@@ -453,8 +481,12 @@ function Row({ label, value, small }) {
     );
 }
 
-/** Selector de a quién llamamos: "en frío" o un candidato del listado (busca por nombre/teléfono). */
-function TargetPicker({ target, onPick, disabled }) {
+/**
+ * Selector de a quién llamamos. Brenda Vox SOLO llama a completos: busca por nombre/teléfono
+ * (el servidor bloquea con 403 si el elegido no está completo). "Modo prueba" ensaya sin
+ * candidato real (candidato ficticio completo).
+ */
+function TargetPicker({ target, testMode, onPick, onToggleTest, disabled }) {
     const [open, setOpen] = useState(false);
     const [q, setQ] = useState('');
     const [results, setResults] = useState([]);
@@ -482,20 +514,27 @@ function TargetPicker({ target, onPick, disabled }) {
     return (
         <div className="relative">
             <div className="flex items-center justify-between gap-2">
-                <span className="text-xs text-gray-500 dark:text-gray-400">Probar como:</span>
+                <span className="text-xs text-gray-500 dark:text-gray-400 shrink-0">Llamar a:</span>
                 <div className="flex items-center gap-2">
                     {target ? (
                         <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 text-xs font-medium">
                             <User className="w-3 h-3" /> {target.name}{target.phone ? ` · ${target.phone}` : ''}
                             {!disabled && <button onClick={() => pick(null)} className="ml-0.5 hover:text-orange-900"><X className="w-3 h-3" /></button>}
                         </span>
+                    ) : testMode ? (
+                        <span className="px-2.5 py-1 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 text-xs font-medium">Candidato de prueba</span>
                     ) : (
-                        <span className="px-2.5 py-1 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 text-xs font-medium">Candidato en frío (sin datos)</span>
+                        <span className="px-2.5 py-1 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 text-xs font-medium">Sin elegir</span>
                     )}
                     {!disabled && (
-                        <button onClick={() => setOpen(v => !v)} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full border border-gray-200 dark:border-gray-600 text-xs text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700">
-                            <Search className="w-3 h-3" /> Elegir del listado
-                        </button>
+                        <>
+                            <button onClick={() => setOpen(v => !v)} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full border border-gray-200 dark:border-gray-600 text-xs text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700">
+                                <Search className="w-3 h-3" /> Elegir completo
+                            </button>
+                            <button onClick={onToggleTest} className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full border text-xs ${testMode ? 'bg-amber-500 border-amber-500 text-white' : 'border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'}`}>
+                                Prueba
+                            </button>
+                        </>
                     )}
                 </div>
             </div>
@@ -510,6 +549,7 @@ function TargetPicker({ target, onPick, disabled }) {
                             className="flex-1 bg-transparent text-sm text-gray-800 dark:text-gray-100 outline-none"
                         />
                     </div>
+                    <p className="text-[10px] text-gray-400 px-2 pb-1.5">Solo candidatos completos. Si eliges uno incompleto, la llamada se bloquea.</p>
                     <div className="max-h-56 overflow-y-auto">
                         {loading ? (
                             <div className="flex items-center justify-center py-4 text-gray-400"><Loader2 className="w-4 h-4 animate-spin" /></div>
