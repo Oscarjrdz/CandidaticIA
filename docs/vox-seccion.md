@@ -76,6 +76,7 @@ No. Es prácticamente aislado:
 | `api/vox/config.js` | GET/PUT del cerebro en Redis `vox:config`. Exporta `buildInstructions()` (compone el prompt final con estructura OpenAI) y los defaults. |
 | `api/vox/session.js` | Acuña el token efímero. Lee `vox:config`, inyecta contexto del candidato (si se manda `candidateId`), arma la sesión Realtime. |
 | `api/vox/usage.js` | Persiste tokens/costo por día (`vox:cost:YYYY-MM-DD`, zona Monterrey) y por sesión (`vox:session:<id>`, TTL 7d). Recalcula el costo con las tarifas server-side (autoritativo). |
+| `api/vox/transcript.js` | Guarda el transcript por llamada (`vox:transcript:<id>` lista + `:meta` hash, TTL 30d) para revisar la calidad. El cliente reporta cada utterance fire-and-forget. |
 | `src/components/VoxSection.jsx` | Cliente delgado: orbe reactivo (Web Audio), transcript, calculador de costo en vivo, selector de candidato, editor del cerebro. |
 
 Registro de la sección: `src/constants/menuSections.js` (id `vox`, `superAdminOnly`),

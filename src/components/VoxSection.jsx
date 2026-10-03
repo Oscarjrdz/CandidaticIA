@@ -159,16 +159,25 @@ export default function VoxSection() {
         rafRef.current = requestAnimationFrame(loop);
     }
 
+    const logTranscript = useCallback((role, text) => {
+        if (!sessionIdRef.current || !text) return;
+        fetch('/api/vox/transcript', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sessionId: sessionIdRef.current, role, text }),
+        }).catch(() => { /* fire-and-forget */ });
+    }, []);
+
     const handleEvent = useCallback((evt) => {
         const type = evt?.type || '';
         if (type === 'conversation.item.input_audio_transcription.completed') {
             const text = (evt.transcript || '').trim();
-            if (text) setTranscript(prev => [...prev, { role: 'user', text }]);
+            if (text) { setTranscript(prev => [...prev, { role: 'user', text }]); logTranscript('user', text); }
             return;
         }
         if (type === 'response.output_audio_transcript.done' || type === 'response.audio_transcript.done') {
             const text = (evt.transcript || '').trim();
-            if (text) setTranscript(prev => [...prev, { role: 'assistant', text }]);
+            if (text) { setTranscript(prev => [...prev, { role: 'assistant', text }]); logTranscript('assistant', text); }
             return;
         }
         if (type === 'response.done') {
@@ -185,7 +194,7 @@ export default function VoxSection() {
                 reportUsage(parsed, false);
             }
         }
-    }, [reportUsage]);
+    }, [reportUsage, logTranscript]);
 
     async function connect() {
         setError(''); setTranscript([]); setTokens(ZERO_TOK); setElapsed(0); setMuted(false);
@@ -256,6 +265,21 @@ export default function VoxSection() {
             timerRef.current = setInterval(() => setElapsed(Math.round((Date.now() - startedAtRef.current) / 1000)), 1000);
             startVisualizer();
             setStatus('live');
+
+            // Meta del transcript (una vez), para revisar la llamada después.
+            fetch('/api/vox/transcript', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    sessionId: sessionIdRef.current,
+                    meta: {
+                        candidateName: sData.candidateName || (target?.name || ''),
+                        vacancyName: sData.vacancyName || '',
+                        model: sData.model || '', voice: sData.voice || '',
+                        startedAt: new Date().toISOString(),
+                    },
+                }),
+            }).catch(() => { /* fire-and-forget */ });
         } catch (e) {
             console.error('[Vox] connect error:', e);
             setError(e.message || 'Error al conectar');
