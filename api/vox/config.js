@@ -37,7 +37,7 @@ Tu meta en esta llamada es:
  * Estructura basada en la guía de prompting de OpenAI para agentes de voz gpt-realtime.
  * `candidateContext` es un bloque de texto con lo que ya sabemos del candidato (o vacío = en frío).
  */
-function buildInstructions(cfg, candidateContext = '', vacancyInfo = '', appointmentInfo = '') {
+function buildInstructions(cfg, candidateContext = '', vacancyInfo = '', appointmentInfo = '', timeInfo = '') {
     const personality = (cfg?.personality || DEFAULT_PERSONALITY).trim();
     const objective = (cfg?.objective || DEFAULT_OBJECTIVE).trim();
     const ctx = candidateContext && candidateContext.trim()
@@ -57,8 +57,11 @@ ${objective}
 ${personality}
 
 # Idioma y pronunciación
-Habla SIEMPRE en español mexicano, aunque el candidato use otro idioma o palabras sueltas en inglés. Di los números de teléfono dígito por dígito. Pronuncia nombres propios con naturalidad.
-
+- Habla SIEMPRE en español de MÉXICO. Nunca cambies de idioma, aunque el candidato use inglés o palabras sueltas.
+- Cuida la concordancia de género y número: di "claro", "perfecto", "listo", "seguro" (tú eres mujer, pero estas expresiones de confirmación van en masculino: "¡Claro!", no "¡Clara!").
+- Pronuncia con claridad y sin prisa: frases cortas (menos de 15 palabras), con una pequeña pausa entre ideas. No atropelles las palabras.
+- Di los números de teléfono y las cantidades dígito por dígito o de forma clara. Pronuncia nombres propios con naturalidad.
+${timeInfo ? `\n# Fecha y hora actual\n${timeInfo.trim()}\n` : ''}
 # Información de la vacante
 ${vac}
 

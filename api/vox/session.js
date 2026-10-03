@@ -145,11 +145,21 @@ export default async function handler(req, res) {
             } catch (e) { console.warn('[vox/session] cita reply load failed:', e.message); }
         }
 
+        // --- Fecha y hora reales (Monterrey) para que salude bien (buenos días/tardes/noches) ---
+        const TZ = 'America/Monterrey';
+        const fechaLegible = new Date().toLocaleString('es-MX', {
+            timeZone: TZ, weekday: 'long', day: 'numeric', month: 'long', hour: 'numeric', minute: '2-digit', hour12: true,
+        });
+        const hourMty = parseInt(new Date().toLocaleString('en-US', { timeZone: TZ, hour: '2-digit', hour12: false }), 10);
+        // Rangos naturales en México: 5–11 días, 12–18 tardes, 19–4 (incluida la madrugada) noches.
+        const saludo = (hourMty >= 19 || hourMty < 5) ? 'buenas noches' : hourMty < 12 ? 'buenos días' : 'buenas tardes';
+        const timeInfo = `Ahora mismo en Monterrey es ${fechaLegible}. Por la hora, el saludo correcto es "${saludo}"; úsalo al inicio de la llamada. No inventes otra hora ni otro saludo.`;
+
         // Arma la config de sesión Realtime (shape GA 2026).
         const sessionConfig = {
             type: 'realtime',
             model: cfg.model,
-            instructions: buildInstructions(cfg, candidateContext, vacancyInfo, appointmentInfo),
+            instructions: buildInstructions(cfg, candidateContext, vacancyInfo, appointmentInfo, timeInfo),
             audio: {
                 input: {
                     transcription: { model: cfg.transcriptionModel },
