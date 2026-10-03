@@ -77,6 +77,17 @@ No. Es prácticamente aislado:
 | `api/vox/session.js` | Acuña el token efímero. Lee `vox:config`, inyecta contexto del candidato (si se manda `candidateId`), arma la sesión Realtime. |
 | `api/vox/usage.js` | Persiste tokens/costo por día (`vox:cost:YYYY-MM-DD`, zona Monterrey) y por sesión (`vox:session:<id>`, TTL 7d). Recalcula el costo con las tarifas server-side (autoritativo). |
 | `api/vox/transcript.js` | Guarda el transcript por llamada (`vox:transcript:<id>` lista + `:meta` hash, TTL 30d) para revisar la calidad. El cliente reporta cada utterance fire-and-forget. |
+| `api/vox/calls.js` | `GET` historial consolidado: por llamada, config (modelo/voz/VAD/vacante/candidato/cita) + costo (MXN, peso/min), con `spike:true` si el peso/min supera el límite. Lee `vox:calls` (sorted set) + `vox:session:<id>`. |
+
+## Record interno de llamadas (auditar picos)
+
+Cada llamada deja un **record consolidado** en el hash `vox:session:<id>`: la **config** la escribe
+`session.js` al iniciar (modelo, voz, VAD, vacante, candidato/prueba, mensaje de cita, fxRate,
+límite) y el **costo** lo acumula `usage.js` (tokens, costUsd, segundos). Se indexa por tiempo en el
+sorted set `vox:calls` (últimas 500, TTL 30d). `GET /api/vox/calls` lo expone y marca `spike` cuando
+el peso/min pasa el límite. En la UI: panel **"Historial de llamadas"** con tabla y resaltado rojo de
+picos. El cliente genera el `sessionId` ANTES de pedir el token para que config y costo caigan en el
+mismo record.
 | `src/components/VoxSection.jsx` | Cliente delgado: orbe reactivo (Web Audio), transcript, calculador de costo en vivo, selector de candidato, editor del cerebro. |
 
 Registro de la sección: `src/constants/menuSections.js` (id `vox`, `superAdminOnly`),

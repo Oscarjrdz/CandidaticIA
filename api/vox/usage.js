@@ -10,8 +10,8 @@
  */
 
 const DAILY_PREFIX = 'vox:cost:';        // hash por día (zona Monterrey)
-const SESSION_PREFIX = 'vox:session:';   // snapshot por sesión (TTL 7 días)
-const SESSION_TTL = 7 * 24 * 60 * 60;
+const SESSION_PREFIX = 'vox:session:';   // record consolidado por sesión (config + costo)
+const SESSION_TTL = 30 * 24 * 60 * 60;   // 30 días de historial para auditar picos
 
 function montyDate() {
     return new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Monterrey' });

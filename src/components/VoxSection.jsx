@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
     Mic, MicOff, Phone, PhoneOff, Loader2, Save, Brain, DollarSign,
-    AlertCircle, ChevronDown, ChevronRight, Search, User, X, MessageSquare,
+    AlertCircle, ChevronDown, ChevronRight, Search, User, X, MessageSquare, History, AlertTriangle,
 } from 'lucide-react';
 
 /**
@@ -53,6 +53,16 @@ function costUsdFrom(tok, pricing) {
     );
 }
 
+function fmtDate(iso) {
+    if (!iso) return '—';
+    try { return new Date(iso).toLocaleString('es-MX', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }); }
+    catch { return '—'; }
+}
+function fmtDur(s) {
+    s = Number(s) || 0;
+    return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
+}
+
 // RMS (0..1) de un AnalyserNode (dominio de tiempo).
 function rmsLevel(analyser, buf) {
     if (!analyser) return 0;
@@ -73,6 +83,8 @@ export default function VoxSection() {
     const [muted, setMuted] = useState(false);
     const [showBrain, setShowBrain] = useState(false);
     const [showTranscript, setShowTranscript] = useState(true);
+    const [showHistory, setShowHistory] = useState(false);
+    const [calls, setCalls] = useState([]);
     const [savingCfg, setSavingCfg] = useState(false);
     const [target, setTarget] = useState(null); // {id, name, phone} | null
     const [vacancies, setVacancies] = useState([]);
@@ -116,6 +128,15 @@ export default function VoxSection() {
     }, []);
 
     useEffect(() => () => { teardown(); }, []);
+
+    const loadCalls = useCallback(() => {
+        fetch('/api/vox/calls?limit=30')
+            .then(r => r.json())
+            .then(d => { if (Array.isArray(d?.calls)) setCalls(d.calls); })
+            .catch(() => { /* historial opcional */ });
+    }, []);
+
+    useEffect(() => { loadCalls(); }, [loadCalls]);
 
     const reportUsage = useCallback((deltaTok, isFinal) => {
         const durationSec = Math.max(0, Math.round((Date.now() - startedAtRef.current) / 1000));
@@ -206,15 +227,16 @@ export default function VoxSection() {
         setError(''); setTranscript([]); setTokens(ZERO_TOK); setElapsed(0); setMuted(false);
         setStatus('connecting'); setMode('idle');
         try {
+            // El sessionId se genera ANTES para que el servidor lo use en el record consolidado.
+            sessionIdRef.current = `vox_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
             const sResp = await fetch('/api/vox/session', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ candidateId: target?.id || null, vacancyId: vacancyId || null, citaReplyId: citaReplyId || null, testMode }),
+                body: JSON.stringify({ sessionId: sessionIdRef.current, candidateId: target?.id || null, vacancyId: vacancyId || null, citaReplyId: citaReplyId || null, testMode }),
             });
             const sData = await sResp.json();
             if (!sResp.ok || !sData.token) throw new Error(sData.error || 'No se pudo iniciar sesión Vox');
-
-            sessionIdRef.current = `vox_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
             const pc = new RTCPeerConnection();
             pcRef.current = pc;
@@ -303,6 +325,7 @@ export default function VoxSection() {
         reportUsage(ZERO_TOK, true);
         teardown();
         setStatus('idle'); setMode('idle');
+        setTimeout(loadCalls, 1500); // deja aterrizar el costo final antes de refrescar el historial
     }
 
     function toggleMute() {
@@ -389,7 +412,7 @@ export default function VoxSection() {
                                 className="flex-1 max-w-[65%] text-sm rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-100 px-2.5 py-1.5 disabled:opacity-60"
                             >
                                 <option value="">{replies.length ? '— Sin mensaje de cita —' : 'Banco de respuestas vacío'}</option>
-                                {replies.map(r => <option key={r.id} value={r.id}>{r.shortcut || (r.message || '').slice(0, 40)}</option>)}
+                                {replies.map(r => <option key={r.id} value={r.id}>{r.name || r.shortcut || (r.message || '').slice(0, 40)}</option>)}
                             </select>
                         </div>
                         <TargetPicker
@@ -501,6 +524,54 @@ export default function VoxSection() {
                                 </div>
                             </div>
                         ))}
+                    </div>
+                )}
+            </div>
+
+            {/* Historial de llamadas (record interno: config + costo, para cazar picos) */}
+            <div className="mt-5 bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700">
+                <button onClick={() => { setShowHistory(v => !v); if (!showHistory) loadCalls(); }} className="w-full flex items-center justify-between px-4 py-3 text-sm font-medium text-gray-700 dark:text-gray-300">
+                    <span className="flex items-center gap-2">
+                        <History className="w-4 h-4" /> Historial de llamadas {calls.length > 0 && <span className="text-xs text-gray-400">({calls.length})</span>}
+                        {calls.some(c => c.spike) && <span className="inline-flex items-center gap-1 text-[11px] text-red-500"><AlertTriangle className="w-3 h-3" /> picos</span>}
+                    </span>
+                    {showHistory ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                </button>
+                {showHistory && (
+                    <div className="px-4 pb-4 border-t border-gray-100 dark:border-gray-700 pt-3 overflow-x-auto">
+                        {calls.length === 0 ? (
+                            <p className="text-sm text-gray-400 text-center py-6">Aún no hay llamadas registradas.</p>
+                        ) : (
+                            <table className="w-full text-xs">
+                                <thead>
+                                    <tr className="text-gray-400 text-left border-b border-gray-100 dark:border-gray-700">
+                                        <th className="py-1.5 pr-2 font-medium">Fecha</th>
+                                        <th className="py-1.5 pr-2 font-medium">Candidato</th>
+                                        <th className="py-1.5 pr-2 font-medium">Vacante</th>
+                                        <th className="py-1.5 pr-2 font-medium">Modelo / voz</th>
+                                        <th className="py-1.5 pr-2 font-medium text-right">Dur.</th>
+                                        <th className="py-1.5 pr-2 font-medium text-right">MXN</th>
+                                        <th className="py-1.5 pr-2 font-medium text-right">peso/min</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {calls.map(c => (
+                                        <tr key={c.sessionId} className={`border-b border-gray-50 dark:border-gray-700/50 ${c.spike ? 'bg-red-50 dark:bg-red-900/10' : ''}`}>
+                                            <td className="py-1.5 pr-2 text-gray-500 dark:text-gray-400 whitespace-nowrap">{fmtDate(c.startedAt)}</td>
+                                            <td className="py-1.5 pr-2 text-gray-700 dark:text-gray-200 truncate max-w-[110px]">{c.isTest ? '🧪 Prueba' : (c.candidateName || '—')}</td>
+                                            <td className="py-1.5 pr-2 text-gray-500 dark:text-gray-400 truncate max-w-[110px]">{c.vacancyName || '—'}</td>
+                                            <td className="py-1.5 pr-2 text-gray-500 dark:text-gray-400 whitespace-nowrap">{(c.model || '').replace('gpt-realtime', 'rt')}{c.voice ? ` · ${c.voice}` : ''}</td>
+                                            <td className="py-1.5 pr-2 text-right text-gray-600 dark:text-gray-300 tabular-nums">{fmtDur(c.seconds)}</td>
+                                            <td className="py-1.5 pr-2 text-right text-gray-700 dark:text-gray-200 tabular-nums">${c.costMxn.toFixed(2)}</td>
+                                            <td className={`py-1.5 pr-2 text-right tabular-nums font-medium ${c.spike ? 'text-red-600' : 'text-green-600'}`}>
+                                                {c.mxnPerMin.toFixed(2)}{c.spike && ' ⚠️'}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        )}
+                        <p className="mt-2 text-[11px] text-gray-400">Pico = peso/min por encima del límite. Se guarda modelo, voz, VAD, vacante y mensaje de cita de cada llamada (30 días).</p>
                     </div>
                 )}
             </div>

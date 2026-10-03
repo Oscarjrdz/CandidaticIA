@@ -128,15 +128,19 @@ export default async function handler(req, res) {
 
         // --- Info de la cita: un mensaje del banco de respuestas (el que se envía por WhatsApp) ---
         let appointmentInfo = '';
+        let citaShortcut = '';
         if (body.citaReplyId) {
             try {
                 const raw2 = await redis.get('candidatic:quick_replies');
                 const replies = raw2 ? JSON.parse(raw2) : [];
                 const reply = Array.isArray(replies) ? replies.find(r => r.id === body.citaReplyId) : null;
                 if (reply?.message) {
-                    const { substituteVariables } = await import('../utils/shortcuts.js');
-                    // Resuelve {{nombre}}, {{municipio}}, etc. con los datos reales del candidato (si hay).
-                    appointmentInfo = candObj ? substituteVariables(reply.message, candObj) : reply.message;
+                    citaShortcut = reply.name || reply.shortcut || '';
+                    const { substituteVariables, substituteDynamicPhrase } = await import('../utils/shortcuts.js');
+                    // 1) Resuelve {{frase dinamica}} con la fecha/hora de la cita (campo dynamicPhrase).
+                    let msg = substituteDynamicPhrase(reply.message, reply.dynamicPhrase || '');
+                    // 2) Resuelve {{nombre}}, {{municipio}}, etc. con los datos reales del candidato (si hay).
+                    appointmentInfo = candObj ? substituteVariables(msg, candObj) : msg;
                 }
             } catch (e) { console.warn('[vox/session] cita reply load failed:', e.message); }
         }
@@ -180,6 +184,36 @@ export default async function handler(req, res) {
         const expiresAt = resp.data?.expires_at || resp.data?.client_secret?.expires_at || null;
         if (!token) {
             return res.status(502).json({ error: 'OpenAI no devolvió token efímero' });
+        }
+
+        // --- Record consolidado de la llamada (config snapshot) para auditar costos/picos ---
+        // El cliente genera el sessionId y lo manda; aquí guardamos la CONFIG, y usage.js le
+        // suma el COSTO al mismo hash → un solo record = config + costo por llamada.
+        if (body.sessionId) {
+            const sid = String(body.sessionId).slice(0, 64);
+            const td = cfg.turnDetection || {};
+            const RECORD_TTL = 30 * 24 * 60 * 60;
+            redis.pipeline()
+                .hset(`vox:session:${sid}`,
+                    'model', String(cfg.model || ''),
+                    'voice', String(cfg.voice || ''),
+                    'vacancyName', String(vacancyName || ''),
+                    'candidateName', String(candidateName || (body.testMode ? 'Prueba' : '')),
+                    'isTest', body.candidateId ? '0' : '1',
+                    'citaShortcut', String(citaShortcut || ''),
+                    'vadThreshold', String(td.threshold ?? ''),
+                    'vadSilenceMs', String(td.silence_duration_ms ?? ''),
+                    'fxRate', String(cfg.fxRate ?? ''),
+                    'budgetMxnPerMin', String(cfg.budgetMxnPerMin ?? ''),
+                    'startedAt', new Date().toISOString(),
+                    'userId', String(userId),
+                )
+                .zadd('vox:calls', Date.now(), sid)
+                .zremrangebyrank('vox:calls', 0, -501) // conserva las últimas 500
+                .expire(`vox:session:${sid}`, RECORD_TTL)
+                .expire('vox:calls', RECORD_TTL)
+                .exec()
+                .catch(() => { /* fire-and-forget: el record es auxiliar, no bloquea la llamada */ });
         }
 
         // Devuelve SOLO el token + eco NO secreto de la config (para mostrar en la UI).
