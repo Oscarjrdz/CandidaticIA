@@ -100,6 +100,7 @@ export default function VoxSection() {
     const timerRef = useRef(null);
     const sessionIdRef = useRef(null);
     const startedAtRef = useRef(0);
+    const disconnectTimerRef = useRef(null); // periodo de gracia ante 'disconnected' transitorio
 
     // Web Audio (visualización del orbe)
     const audioCtxRef = useRef(null);
@@ -156,6 +157,7 @@ export default function VoxSection() {
         modeRef.current = 'idle';
         if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
         if (rafRef.current) { cancelAnimationFrame(rafRef.current); rafRef.current = null; }
+        if (disconnectTimerRef.current) { clearTimeout(disconnectTimerRef.current); disconnectTimerRef.current = null; }
         try { dc?.close(); } catch { /* noop */ }
         try { stream?.getTracks().forEach(t => t.stop()); } catch { /* noop */ }
         try { pc?.close(); } catch { /* noop */ }
@@ -224,6 +226,7 @@ export default function VoxSection() {
     }, [reportUsage, logTranscript]);
 
     async function connect() {
+        if (pcRef.current) return; // ya hay una conexión viva/en curso — evita dobles
         setError(''); setTranscript([]); setTokens(ZERO_TOK); setElapsed(0); setMuted(false);
         setStatus('connecting'); setMode('idle');
         try {
@@ -241,13 +244,18 @@ export default function VoxSection() {
             const pc = new RTCPeerConnection();
             pcRef.current = pc;
 
-            // AudioContext para visualizar.
+            // AudioContext para visualizar. resume() porque algunos navegadores lo crean suspendido.
             const AC = window.AudioContext || window.webkitAudioContext;
             const audioCtx = new AC();
             audioCtxRef.current = audioCtx;
+            audioCtx.resume?.().catch(() => { /* el <audio> reproduce aparte; solo afecta el orbe */ });
 
             pc.ontrack = (e) => {
-                if (audioRef.current) audioRef.current.srcObject = e.streams[0];
+                if (audioRef.current) {
+                    audioRef.current.srcObject = e.streams[0];
+                    audioRef.current.playsInline = true;
+                    audioRef.current.play?.().catch(() => { /* algunos navegadores difieren el play */ });
+                }
                 try {
                     const outSrc = audioCtx.createMediaStreamSource(e.streams[0]);
                     const outAn = audioCtx.createAnalyser();
@@ -277,19 +285,41 @@ export default function VoxSection() {
             dc.onmessage = (e) => { try { handleEvent(JSON.parse(e.data)); } catch { /* no-JSON */ } };
 
             pc.onconnectionstatechange = () => {
+                if (!pcRef.current) return; // ya en teardown
                 const st = pc.connectionState;
-                if ((st === 'failed' || st === 'disconnected' || st === 'closed') && pcRef.current) {
-                    hangup();
+                if (st === 'connected') {
+                    // Recuperó: cancela cualquier gracia pendiente.
+                    if (disconnectTimerRef.current) { clearTimeout(disconnectTimerRef.current); disconnectTimerRef.current = null; }
+                } else if (st === 'failed') {
+                    hangup(); // fallo duro → cuelga
+                } else if (st === 'disconnected') {
+                    // 'disconnected' suele ser un bache de red transitorio: damos 6s a que reconecte
+                    // antes de colgar, en vez de matar la llamada al instante.
+                    if (!disconnectTimerRef.current) {
+                        disconnectTimerRef.current = setTimeout(() => {
+                            disconnectTimerRef.current = null;
+                            if (pcRef.current && pc.connectionState !== 'connected') hangup();
+                        }, 6000);
+                    }
                 }
             };
 
             const offer = await pc.createOffer();
             await pc.setLocalDescription(offer);
-            const sdpResp = await fetch(sData.callsUrl, {
-                method: 'POST',
-                body: offer.sdp,
-                headers: { Authorization: `Bearer ${sData.token}`, 'Content-Type': 'application/sdp' },
-            });
+            // Timeout duro al intercambio SDP: si OpenAI no responde, no te deja colgado en "Conectando…".
+            const sdpCtrl = new AbortController();
+            const sdpTimeout = setTimeout(() => sdpCtrl.abort(), 20000);
+            let sdpResp;
+            try {
+                sdpResp = await fetch(sData.callsUrl, {
+                    method: 'POST',
+                    body: offer.sdp,
+                    headers: { Authorization: `Bearer ${sData.token}`, 'Content-Type': 'application/sdp' },
+                    signal: sdpCtrl.signal,
+                });
+            } finally {
+                clearTimeout(sdpTimeout);
+            }
             if (!sdpResp.ok) throw new Error('Falló el intercambio SDP con OpenAI');
             await pc.setRemoteDescription({ type: 'answer', sdp: await sdpResp.text() });
 
@@ -314,7 +344,11 @@ export default function VoxSection() {
             }).catch(() => { /* fire-and-forget */ });
         } catch (e) {
             console.error('[Vox] connect error:', e);
-            setError(e.message || 'Error al conectar');
+            let msg = e.message || 'Error al conectar';
+            if (e.name === 'NotAllowedError' || e.name === 'SecurityError') msg = 'Permiso de micrófono denegado. Habilítalo en el navegador y reintenta.';
+            else if (e.name === 'NotFoundError') msg = 'No se detectó micrófono. Conecta uno y reintenta.';
+            else if (e.name === 'AbortError') msg = 'OpenAI no respondió a tiempo. Reintenta.';
+            setError(msg);
             teardown();
             setStatus('error');
         }

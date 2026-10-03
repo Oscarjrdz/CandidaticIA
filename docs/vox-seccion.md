@@ -135,6 +135,22 @@ al audio real vía Web Audio `AnalyserNode`: naranja cuando habla el candidato, 
 Brenda; la escala la maneja un `requestAnimationFrame` por ref (sin re-render por frame — respeta la
 regla de alto tráfico del dashboard). Respeta `prefers-reduced-motion`.
 
+## Estabilidad y calidad de voz (revisión de código)
+
+- **Reducción de ruido de OpenAI** (`audio.input.noise_reduction: near_field`) — mejora la
+  transcripción y el VAD (menos falsos disparos). Configurable en `vox:config.noiseReduction`.
+- **Periodo de gracia ante 'disconnected'**: un bache de red transitorio ya NO cuelga la llamada
+  al instante; se dan 6s a reconectar. Solo 'failed' cuelga de inmediato.
+- **Timeout del intercambio SDP** (20s con AbortController): no te deja colgado en "Conectando…".
+- **Guard anti doble-conexión**, `AudioContext.resume()`, reproducción defensiva del audio remoto
+  (`playsInline` + `play()`), y mensajes de error claros (micrófono denegado / sin micrófono / timeout).
+- **Interrupciones**: con WebRTC el corte de audio al interrumpir lo maneja la propia conexión
+  (no requiere truncado manual como en WebSocket). El "se corta y repite" era ECO (resuelto con
+  echoCancellation + VAD menos sensible).
+- **Opción recomendada:** `turn_detection` de tipo `semantic_vad` (detector por significado, espera
+  a que la persona termine su idea en vez de solo medir silencio) reduce cortes incómodos. Se activa
+  en `vox:config.turnDetection` cambiando a `{ type: 'semantic_vad', eagerness: 'medium' }`.
+
 ## Pendientes / Etapa 2
 
 - Puente servidor ↔ gateway WCH/SIP (RTP ↔ Realtime) reusando `vox:config` y `buildInstructions`.

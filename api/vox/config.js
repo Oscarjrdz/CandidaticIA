@@ -105,6 +105,9 @@ const DEFAULTS = {
         create_response: true,
     },
     transcriptionModel: 'gpt-4o-mini-transcribe', // para ver en texto lo que dice el candidato
+    // Reducción de ruido del micrófono del lado de OpenAI: 'near_field' (micrófono cercano,
+    // lo normal) mejora la transcripción y el VAD; null la desactiva.
+    noiseReduction: 'near_field',
     pricing: DEFAULT_PRICING,
     fxRate: 18.5,            // MXN por USD (editable)
     budgetMxnPerMin: 1,      // límite objetivo: 1 peso / minuto

@@ -154,6 +154,8 @@ export default async function handler(req, res) {
                 input: {
                     transcription: { model: cfg.transcriptionModel },
                     turn_detection: cfg.turnDetection,
+                    // Reducción de ruido: mejora transcripción y VAD (menos falsos disparos).
+                    noise_reduction: cfg.noiseReduction ? { type: cfg.noiseReduction } : null,
                 },
                 output: { voice: cfg.voice },
             },
