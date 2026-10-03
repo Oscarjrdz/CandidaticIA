@@ -77,6 +77,8 @@ export default function VoxSection() {
     const [target, setTarget] = useState(null); // {id, name, phone} | null
     const [vacancies, setVacancies] = useState([]);
     const [vacancyId, setVacancyId] = useState('');
+    const [replies, setReplies] = useState([]);     // banco de respuestas (mensajes de WhatsApp)
+    const [citaReplyId, setCitaReplyId] = useState('');
     const [testMode, setTestMode] = useState(false); // probar sin candidato real
 
     const pcRef = useRef(null);
@@ -106,6 +108,10 @@ export default function VoxSection() {
             .then(r => r.json())
             .then(d => { if (alive && Array.isArray(d?.data)) setVacancies(d.data); })
             .catch(() => { /* sin vacantes, el usuario verá el aviso */ });
+        fetch('/api/quick_replies')
+            .then(r => r.json())
+            .then(d => { if (alive && Array.isArray(d?.replies)) setReplies(d.replies); })
+            .catch(() => { /* sin banco, el dropdown queda vacío */ });
         return () => { alive = false; };
     }, []);
 
@@ -203,7 +209,7 @@ export default function VoxSection() {
             const sResp = await fetch('/api/vox/session', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ candidateId: target?.id || null, vacancyId: vacancyId || null, testMode }),
+                body: JSON.stringify({ candidateId: target?.id || null, vacancyId: vacancyId || null, citaReplyId: citaReplyId || null, testMode }),
             });
             const sData = await sResp.json();
             if (!sResp.ok || !sData.token) throw new Error(sData.error || 'No se pudo iniciar sesión Vox');
@@ -229,7 +235,11 @@ export default function VoxSection() {
                 } catch { /* noop */ }
             };
 
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            // echoCancellation evita que la voz de Brenda (por las bocinas) entre al micrófono
+            // y la haga auto-interrumpirse ("se corta y repite"). Con audífonos es aún mejor.
+            const stream = await navigator.mediaDevices.getUserMedia({
+                audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+            });
             streamRef.current = stream;
             stream.getTracks().forEach(t => pc.addTrack(t, stream));
             try {
@@ -367,6 +377,19 @@ export default function VoxSection() {
                             >
                                 <option value="">{vacancies.length ? '— Elige una vacante —' : 'No hay vacantes creadas'}</option>
                                 {vacancies.map(v => <option key={v.id} value={v.id}>{v.name}{v.company ? ` · ${v.company}` : ''}</option>)}
+                            </select>
+                        </div>
+                        <div className="flex items-center justify-between gap-2">
+                            <span className="text-xs text-gray-500 dark:text-gray-400 shrink-0">Info de cita (WhatsApp):</span>
+                            <select
+                                value={citaReplyId}
+                                onChange={e => setCitaReplyId(e.target.value)}
+                                disabled={isLive || isConnecting}
+                                title="Mensaje del banco de respuestas que se enviará por WhatsApp y del que Brenda saca los datos de la cita"
+                                className="flex-1 max-w-[65%] text-sm rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-100 px-2.5 py-1.5 disabled:opacity-60"
+                            >
+                                <option value="">{replies.length ? '— Sin mensaje de cita —' : 'Banco de respuestas vacío'}</option>
+                                {replies.map(r => <option key={r.id} value={r.id}>{r.shortcut || (r.message || '').slice(0, 40)}</option>)}
                             </select>
                         </div>
                         <TargetPicker

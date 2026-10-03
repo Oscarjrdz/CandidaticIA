@@ -37,7 +37,7 @@ Tu meta en esta llamada es:
  * Estructura basada en la guía de prompting de OpenAI para agentes de voz gpt-realtime.
  * `candidateContext` es un bloque de texto con lo que ya sabemos del candidato (o vacío = en frío).
  */
-function buildInstructions(cfg, candidateContext = '', vacancyInfo = '') {
+function buildInstructions(cfg, candidateContext = '', vacancyInfo = '', appointmentInfo = '') {
     const personality = (cfg?.personality || DEFAULT_PERSONALITY).trim();
     const objective = (cfg?.objective || DEFAULT_OBJECTIVE).trim();
     const ctx = candidateContext && candidateContext.trim()
@@ -46,6 +46,9 @@ function buildInstructions(cfg, candidateContext = '', vacancyInfo = '') {
     const vac = vacancyInfo && vacancyInfo.trim()
         ? vacancyInfo.trim()
         : 'No se especificó una vacante. Discúlpate con naturalidad y di que un reclutador le llamará con los detalles del puesto.';
+    const appt = appointmentInfo && appointmentInfo.trim()
+        ? `Este es el mensaje que se le enviará por WhatsApp cuando acepte la entrevista. Ofrécele la cita con ESTOS datos (día, hora y lugar si los incluye); NO inventes otros horarios ni lugares:\n"""\n${appointmentInfo.trim()}\n"""`
+        : 'Aún no se definió el mensaje de cita. Propón la entrevista y di que le confirmaremos el día y la hora por WhatsApp.';
 
     return `# Rol y objetivo
 ${objective}
@@ -58,6 +61,9 @@ Habla SIEMPRE en español mexicano, aunque el candidato use otro idioma o palabr
 
 # Información de la vacante
 ${vac}
+
+# Información de la cita
+${appt}
 
 # Contexto del candidato
 ${ctx}
@@ -92,9 +98,9 @@ const DEFAULTS = {
     // Detección de turnos del lado del servidor de OpenAI (server VAD) — permite interrumpir.
     turnDetection: {
         type: 'server_vad',
-        threshold: 0.5,
+        threshold: 0.6,            // más alto = menos falsos disparos por eco/ruido (evita que se auto-interrumpa)
         prefix_padding_ms: 300,
-        silence_duration_ms: 600,
+        silence_duration_ms: 700,  // espera un poco más de silencio antes de dar por terminado el turno
         interrupt_response: true,
         create_response: true,
     },

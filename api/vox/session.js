@@ -98,6 +98,7 @@ export default async function handler(req, res) {
         // --- Candidato: Brenda Vox SOLO llama a completos ---
         let candidateContext = '';
         let candidateName = null;
+        let candObj = null;
         if (body.candidateId) {
             let cand = null;
             try { cand = await getCandidateById(String(body.candidateId)); }
@@ -106,6 +107,7 @@ export default async function handler(req, res) {
             if (!isProfileComplete(cand)) {
                 return res.status(403).json({ error: 'Ese candidato no tiene el perfil COMPLETO. Brenda Vox solo llama a completos.' });
             }
+            candObj = cand;
             candidateContext = buildCandidateContext(cand);
             candidateName = cand.nombreReal || cand.nombre || null;
         } else if (!body.testMode) {
@@ -124,11 +126,26 @@ export default async function handler(req, res) {
         }
         if (!vacancyInfo) return res.status(400).json({ error: 'Elige una vacante para la llamada.' });
 
+        // --- Info de la cita: un mensaje del banco de respuestas (el que se envía por WhatsApp) ---
+        let appointmentInfo = '';
+        if (body.citaReplyId) {
+            try {
+                const raw2 = await redis.get('candidatic:quick_replies');
+                const replies = raw2 ? JSON.parse(raw2) : [];
+                const reply = Array.isArray(replies) ? replies.find(r => r.id === body.citaReplyId) : null;
+                if (reply?.message) {
+                    const { substituteVariables } = await import('../utils/shortcuts.js');
+                    // Resuelve {{nombre}}, {{municipio}}, etc. con los datos reales del candidato (si hay).
+                    appointmentInfo = candObj ? substituteVariables(reply.message, candObj) : reply.message;
+                }
+            } catch (e) { console.warn('[vox/session] cita reply load failed:', e.message); }
+        }
+
         // Arma la config de sesión Realtime (shape GA 2026).
         const sessionConfig = {
             type: 'realtime',
             model: cfg.model,
-            instructions: buildInstructions(cfg, candidateContext, vacancyInfo),
+            instructions: buildInstructions(cfg, candidateContext, vacancyInfo, appointmentInfo),
             audio: {
                 input: {
                     transcription: { model: cfg.transcriptionModel },
