@@ -60,7 +60,7 @@ const LockToggle = ({ id, locked, onToggleLock }) => {
     return (
         <button
             onClick={(e) => { e.stopPropagation(); onToggleLock(id); }}
-            className={`nodrag absolute -top-2 -left-2 w-5 h-5 rounded-full flex items-center justify-center shadow z-20 opacity-0 group-hover:opacity-100 transition-opacity ${
+            className={`nodrag pointer-events-auto absolute -top-2 -left-2 w-5 h-5 rounded-full flex items-center justify-center shadow z-20 opacity-0 group-hover:opacity-100 transition-opacity ${
                 locked ? 'bg-gray-800 text-white' : 'bg-white text-gray-500 border border-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600'
             }`}
             title={locked ? 'Bloqueado — clic para desbloquear (podrás moverlo y editarlo)' : 'Bloquear: no se moverá ni se editará'}
@@ -129,7 +129,7 @@ const TextoNode = ({ id, data, selected }) => {
     return (
         <>
             <NodeResizer isVisible={selected && !locked} minWidth={60} minHeight={28}
-                lineClassName="!border-gray-400" handleClassName="!bg-white !border-2 !border-gray-400 !w-2.5 !h-2.5 !rounded-sm" />
+                lineClassName="!border-gray-400 !pointer-events-auto" handleClassName="!bg-white !border-2 !border-gray-400 !w-2.5 !h-2.5 !rounded-sm !pointer-events-auto" />
             <NodeToolbar isVisible={selected && !locked} position={Position.Top}
                 className="flex items-center gap-2 bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 px-2 py-1.5">
                 <div className="flex items-center gap-1">
@@ -159,7 +159,11 @@ const TextoNode = ({ id, data, selected }) => {
                     <X className="w-4 h-4" />
                 </button>
             </NodeToolbar>
-            <div className="group relative w-full h-full">
+            {/* pointer-events-none: la caja del nodo Texto (zIndex 20, encima de las tarjetas)
+                deja PASAR el clic en su zona vacía para no tapar los controles (candado, ×) de
+                un nodo vecino que quede debajo. Solo el texto real, el candado y las manijas de
+                resize re-activan eventos (pointer-events-auto). */}
+            <div className="group relative w-full h-full pointer-events-none">
                 <LockToggle id={id} locked={locked} onToggleLock={data.onToggleLock} />
                 {editing && !locked ? (
                     <textarea
@@ -169,13 +173,13 @@ const TextoNode = ({ id, data, selected }) => {
                         onBlur={() => setEditing(false)}
                         onClick={(e) => e.stopPropagation()}
                         placeholder="Escribe aquí…"
-                        className="nodrag nowheel w-full h-full resize-none bg-transparent focus:outline-none leading-snug font-semibold"
+                        className="nodrag nowheel pointer-events-auto w-full h-full resize-none bg-transparent focus:outline-none leading-snug font-semibold"
                         style={{ fontSize, color }}
                     />
                 ) : (
                     <div
                         onDoubleClick={locked ? undefined : () => setEditing(true)}
-                        className={`w-full h-full whitespace-pre-wrap break-words leading-snug font-semibold ${locked ? 'cursor-default' : 'cursor-move'}`}
+                        className={`pointer-events-auto inline-block max-w-full whitespace-pre-wrap break-words leading-snug font-semibold ${locked ? 'cursor-default' : 'cursor-move'}`}
                         style={{ fontSize, color }}
                         title={locked ? 'Bloqueado' : 'Doble-click para editar'}
                     >

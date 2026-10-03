@@ -693,6 +693,11 @@ const FlowEditorInner = ({ flowId, onBack }) => {
             ...n,
             draggable: !locked,
             deletable: ENTRY_TYPES.has(n.type) ? false : !locked,
+            // El nodo "texto" (zIndex 20, encima de las tarjetas) tapaba con su caja transparente
+            // los controles (candado, ×) de un nodo vecino debajo: el wrapper .react-flow__node
+            // trae pointer-events:all. Lo apagamos en el wrapper del texto para que su zona vacía
+            // deje pasar el clic; FlowNode re-activa eventos solo en el texto/candado/manijas.
+            style: n.type === 'texto' ? { ...n.style, pointerEvents: 'none' } : n.style,
             data: { ...n.data, locked, onToggleLock: handleToggleLock }
         };
     }), [nodes, nodeLocks, handleToggleLock]);
