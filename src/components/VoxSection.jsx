@@ -101,6 +101,8 @@ export default function VoxSection() {
     const sessionIdRef = useRef(null);
     const startedAtRef = useRef(0);
     const disconnectTimerRef = useRef(null); // periodo de gracia ante 'disconnected' transitorio
+    const autoHangupRef = useRef(null);      // Brenda pidió colgar (tool end_call)
+    const hangupRef = useRef(null);          // referencia estable a hangup() para timeouts
 
     // Web Audio (visualización del orbe)
     const audioCtxRef = useRef(null);
@@ -158,6 +160,7 @@ export default function VoxSection() {
         if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
         if (rafRef.current) { cancelAnimationFrame(rafRef.current); rafRef.current = null; }
         if (disconnectTimerRef.current) { clearTimeout(disconnectTimerRef.current); disconnectTimerRef.current = null; }
+        if (autoHangupRef.current) { clearTimeout(autoHangupRef.current); autoHangupRef.current = null; }
         try { dc?.close(); } catch { /* noop */ }
         try { stream?.getTracks().forEach(t => t.stop()); } catch { /* noop */ }
         try { pc?.close(); } catch { /* noop */ }
@@ -206,6 +209,16 @@ export default function VoxSection() {
 
     const handleEvent = useCallback((evt) => {
         const type = evt?.type || '';
+        // Brenda decidió colgar (tool end_call): cuelga tras ~3.5s para que se oiga su despedida.
+        const isEndCall =
+            (type === 'response.function_call_arguments.done' && evt.name === 'end_call') ||
+            (type === 'response.output_item.done' && evt.item?.type === 'function_call' && evt.item?.name === 'end_call');
+        if (isEndCall) {
+            if (!autoHangupRef.current) {
+                autoHangupRef.current = setTimeout(() => { autoHangupRef.current = null; hangupRef.current?.(); }, 3500);
+            }
+            return;
+        }
         if (type === 'conversation.item.input_audio_transcription.completed') {
             const text = (evt.transcript || '').trim();
             if (text) { setTranscript(prev => [...prev, { role: 'user', text }]); logTranscript('user', text); }
@@ -368,6 +381,7 @@ export default function VoxSection() {
         setStatus('idle'); setMode('idle');
         setTimeout(loadCalls, 1500); // deja aterrizar el costo final antes de refrescar el historial
     }
+    hangupRef.current = hangup; // referencia siempre fresca para los timeouts (end_call)
 
     function toggleMute() {
         const s = streamRef.current;

@@ -169,6 +169,15 @@ export default async function handler(req, res) {
                 },
                 output: { voice: cfg.voice },
             },
+            // Herramienta para que Brenda CUELGUE ella misma cuando la despedida ya ocurrió,
+            // en vez de quedarse respondiendo a cada "gracias/adiós". El cliente la escucha.
+            tools: [{
+                type: 'function',
+                name: 'end_call',
+                description: 'Finaliza y cuelga la llamada. Úsala SOLO cuando la conversación realmente terminó: ya se despidieron ambos o no hay nada más que tratar. Despídete ANTES de llamarla.',
+                parameters: { type: 'object', properties: { reason: { type: 'string', description: 'motivo breve (cita agendada, no interesado, etc.)' } }, required: [] },
+            }],
+            tool_choice: 'auto',
         };
 
         let resp;
