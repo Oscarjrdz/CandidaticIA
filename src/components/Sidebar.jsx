@@ -3,7 +3,7 @@ import { useAuthContext } from '../contexts/AuthContext';
 import { useCandidatesSSE } from '../hooks/useCandidatesSSE';
 import {
     Users, Settings, Bot, History, Briefcase, Send, LogOut, BarChart3,
-    MessageSquare, Smartphone, Folder, FolderKanban, GripVertical, Wifi, X, ChevronLeft, ChevronRight, Bell, Sparkles, Workflow, PieChart
+    MessageSquare, Smartphone, Folder, FolderKanban, GripVertical, Wifi, X, ChevronLeft, ChevronRight, Bell, Sparkles, Workflow, PieChart, Mic
 } from 'lucide-react';
 import {
     DndContext,
@@ -44,6 +44,7 @@ const SECTION_ICONS = {
     bolsa: Smartphone,
     notificaciones: Bell,
     'agent-ia': Sparkles,
+    vox: Mic,
     projects: FolderKanban,
     settings: Settings,
 };

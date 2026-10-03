@@ -30,6 +30,7 @@ export const MENU_SECTIONS = [
     { id: 'bolsa', label: 'Bolsa (App)', position: 'top' },
     { id: 'notificaciones', label: 'Notificaciones', position: 'top' },
     { id: 'agent-ia', label: 'Agent IA', position: 'top', superAdminOnly: true },
+    { id: 'vox', label: 'Vox', position: 'top', superAdminOnly: true },
     { id: 'projects', label: 'Proyectos', position: 'top' },
     { id: 'settings', label: 'Settings', position: 'bottom' },
 ];

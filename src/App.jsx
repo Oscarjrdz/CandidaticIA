@@ -53,6 +53,7 @@ const CRMProjectsSection = lazyWithRetry(() => import('./components/CRMProjectsS
 const AdsStatisticsSection = lazyWithRetry(() => import('./components/AdsStatisticsSection'), 'AdsStatisticsSection');
 const StatsSection = lazyWithRetry(() => import('./components/StatsSection'), 'StatsSection');
 const AgentIASection = lazyWithRetry(() => import('./components/AgentIASection'), 'AgentIASection');
+const VoxSection = lazyWithRetry(() => import('./components/VoxSection'), 'VoxSection');
 
 /**
  * Inner app shell — consumes both contexts.
@@ -291,6 +292,7 @@ function AppShell() {
                       : activeSection === 'media-library' ? 'Biblioteca'
                       : activeSection === 'projects' ? 'Proyectos'
                       : activeSection === 'agent-ia' ? 'Agent IA'
+                      : activeSection === 'vox' ? 'Vox'
                       : 'Configuración'}
                   </h1>
 
@@ -344,6 +346,7 @@ function AppShell() {
                       : activeSection === 'media-library' ? 'Biblioteca de archivos y recursos del Bot'
                       : activeSection === 'projects' ? 'Kanban de reclutamiento'
                       : activeSection === 'agent-ia' ? 'Tu agente propio: chat, definición (AGENTS.md) y memoria (MEMORY.md)'
+                      : activeSection === 'vox' ? 'Cerebro de voz de Brenda: habla por micrófono y mide el costo por minuto en vivo'
                       : 'Credenciales y configuración del sistema'}
                   </p>
                 </div>
@@ -418,6 +421,8 @@ function AppShell() {
             <CRMProjectsSection />
           ) : activeSection === 'agent-ia' && user?.role === 'SuperAdmin' ? (
             <AgentIASection />
+          ) : activeSection === 'vox' && user?.role === 'SuperAdmin' ? (
+            <VoxSection />
           ) : (
             <SettingsSection />
           )}
