@@ -120,7 +120,11 @@ function mergeWithDefaults(stored) {
     return {
         ...DEFAULTS,
         ...stored,
-        turnDetection: { ...DEFAULTS.turnDetection, ...(stored.turnDetection || {}) },
+        // turnDetection se usa TAL CUAL si está guardado (reemplazo, no merge): server_vad y
+        // semantic_vad tienen campos distintos; mezclarlos inyectaría parámetros inválidos.
+        turnDetection: stored.turnDetection && typeof stored.turnDetection === 'object'
+            ? stored.turnDetection
+            : DEFAULTS.turnDetection,
         pricing: { ...DEFAULTS.pricing, ...(stored.pricing || {}) },
     };
 }
