@@ -116,11 +116,13 @@ const MobileLandingPage = ({ onLoginSuccess }) => {
         if (!form.nombre || !form.wapp) return;
         setFormStatus('loading');
         try {
-            await fetch('/api/public/info-request', {
+            const res = await fetch('/api/public/info-request', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(form),
             });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || !data.success) throw new Error(data.error || 'Error');
             setFormStatus('success');
         } catch { setFormStatus('error'); }
     };

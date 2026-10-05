@@ -15,9 +15,14 @@ export default async function handler(req, res) {
             return res.status(400).json({ error: 'Faltan campos requeridos' });
         }
 
+        if (!process.env.RESEND_API_KEY) {
+            console.error('❌ [Info Request] Falta RESEND_API_KEY en el entorno');
+            return res.status(500).json({ success: false, error: 'Servicio de correo no configurado' });
+        }
+
         const resend = new Resend(process.env.RESEND_API_KEY);
 
-        await resend.emails.send({
+        const { data, error } = await resend.emails.send({
             from: 'Candidatic IA <onboarding@resend.dev>',
             to: 'oscarjrdz@gmail.com',
             subject: '📋 Nueva solicitud de información — Candidatic IA',
@@ -36,7 +41,15 @@ export default async function handler(req, res) {
             `,
         });
 
-        return res.status(200).json({ success: true });
+        // El SDK de Resend NO lanza excepción en errores de API: devuelve { data, error }.
+        // Sin este chequeo, un fallo (key inválida, destinatario restringido, etc.) se tragaba
+        // en silencio y el endpoint respondía success:true sin haber enviado nada.
+        if (error) {
+            console.error('❌ [Info Request] Resend error:', error.name, '-', error.message);
+            return res.status(502).json({ success: false, error: 'No se pudo enviar el correo' });
+        }
+
+        return res.status(200).json({ success: true, id: data?.id });
     } catch (error) {
         console.error('❌ [Info Request] Error:', error.message);
         return res.status(500).json({ success: false, error: 'Error al enviar' });

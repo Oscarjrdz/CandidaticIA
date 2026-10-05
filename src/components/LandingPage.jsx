@@ -206,11 +206,13 @@ const LandingPage = ({ onLoginSuccess }) => {
         if (!infoForm.nombre || !infoForm.wapp) return;
         setInfoFormStatus('loading');
         try {
-            await fetch('/api/public/info-request', {
+            const res = await fetch('/api/public/info-request', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(infoForm),
             });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || !data.success) throw new Error(data.error || 'Error');
             setInfoFormStatus('success');
             setInfoForm({ nombre: '', wapp: '', correo: '' });
         } catch {
@@ -223,11 +225,13 @@ const LandingPage = ({ onLoginSuccess }) => {
         if (!ctaForm.nombre || !ctaForm.wapp) return;
         setCtaFormStatus('loading');
         try {
-            await fetch('/api/public/info-request', {
+            const res = await fetch('/api/public/info-request', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(ctaForm),
             });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || !data.success) throw new Error(data.error || 'Error');
             setCtaFormStatus('success');
             setCtaForm({ nombre: '', empresa: '', wapp: '', correo: '' });
         } catch {
