@@ -283,7 +283,14 @@ const FlowEditorInner = ({ flowId, onBack }) => {
             if (metaRes.success) {
                 setMeta({
                     municipios: metaRes.municipios || [],
-                    categorias: metaRes.categorias || [],
+                    // candidatic_categories puede venir como strings (legado) o como
+                    // objetos { id, name, createdAt }. El selector del nodo y el motor
+                    // (values.includes(candidate.categoria)) trabajan con NOMBRES, así que
+                    // normalizamos a string aquí — de lo contrario el checklist intenta
+                    // renderizar el objeto y revienta con React #31.
+                    categorias: (metaRes.categorias || [])
+                        .map(c => (typeof c === 'string' ? c : c?.name))
+                        .filter(Boolean),
                     escolaridades: metaRes.escolaridades || [],
                     tags: metaRes.tags || [],
                     vacantes: metaRes.vacantes || []
