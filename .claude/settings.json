@@ -301,7 +301,8 @@
       "Bash(node -e \"const u=process.env.REDIS_URL||process.env.KV_URL||process.env.REDIS_CONNECTION_STRING; console.log\\('env redis:', u? 'presente':'ausente'\\)\")",
       "Bash(grep -rn \"del\\(\\\\|blob.*del\\\\|{ del }\\\\|, del \" api/)",
       "Bash(node scratch-trace.mjs)",
-      "Bash(node ./_cleanup.mjs)"
+      "Bash(node ./_cleanup.mjs)",
+      "Bash(node --check src/components/flows/FlowEditor.jsx)"
     ],
     "additionalDirectories": [
       "/Users/oscar/App Candidatic/Candidatic_App/utils",

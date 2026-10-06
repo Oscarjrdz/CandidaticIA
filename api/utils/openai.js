@@ -2,9 +2,62 @@ import axios from 'axios';
 import { getRedisClient } from './storage.js';
 
 /**
+ * 🏁 HEDGED REQUEST
+ * Una llamada lenta a gpt-4o-mini casi siempre es un stall momentáneo del lado de
+ * OpenAI (medimos 2.9s vs 15.8s para EXACTAMENTE el mismo prompt). En vez de comernos
+ * el stall completo, si el primer intento no regresó en `hedgeAfterMs`, disparamos un
+ * segundo intento idéntico y nos quedamos con el que conteste primero. Los turnos
+ * rápidos (~95%) nunca disparan el segundo, así que ahí el costo NO cambia. Si el
+ * primer intento FALLA rápido, reintentamos de inmediato (sin esperar el hedge).
+ * Las peticiones son idempotentes (OpenAI chat completions no tiene efectos
+ * secundarios), así que la perdedora solo se descarta.
+ */
+function hedgedPost(doPost, hedgeAfterMs) {
+    return new Promise((resolve, reject) => {
+        let settled = false;
+        let launched = 0;
+        let hedgeTimer = null;
+        const errors = [];
+
+        const finishOk = (res) => {
+            if (settled) return;
+            settled = true;
+            if (hedgeTimer) { clearTimeout(hedgeTimer); hedgeTimer = null; }
+            resolve(res);
+        };
+        const finishErr = (err) => {
+            errors.push(err);
+            if (settled) return;
+            // Solo decidimos cuando TODOS los intentos lanzados han fallado.
+            if (errors.length < launched) return;
+            if (launched >= 2 || hedgeTimer === null) {
+                settled = true;
+                if (hedgeTimer) { clearTimeout(hedgeTimer); hedgeTimer = null; }
+                reject(errors[0]);
+            } else {
+                // El primer intento falló temprano y el hedge seguía pendiente:
+                // reintenta ya en vez de esperar los segundos del hedge.
+                clearTimeout(hedgeTimer); hedgeTimer = null;
+                launch();
+            }
+        };
+        const launch = () => {
+            launched++;
+            doPost().then(finishOk, finishErr);
+        };
+
+        launch();
+        hedgeTimer = setTimeout(() => {
+            hedgeTimer = null;
+            if (!settled && launched < 2) launch();
+        }, hedgeAfterMs);
+    });
+}
+
+/**
  * OpenAI Adapter - The "Host" Brain
  */
-export async function getOpenAIResponse(messages, systemPrompt = '', model = 'gpt-4o', explicitApiKey = null, responseFormat = null, multimodalSystemContent = null, maxTokens = 800) {
+export async function getOpenAIResponse(messages, systemPrompt = '', model = 'gpt-4o', explicitApiKey = null, responseFormat = null, multimodalSystemContent = null, maxTokens = 800, options = {}) {
     try {
         const redis = getRedisClient();
         let apiKey = explicitApiKey ? explicitApiKey.trim() : process.env.OPENAI_API_KEY;
@@ -68,13 +121,22 @@ export async function getOpenAIResponse(messages, systemPrompt = '', model = 'gp
             payload.response_format = responseFormat;
         }
 
-        const response = await axios.post('https://api.openai.com/v1/chat/completions', payload, {
+        const doPost = () => axios.post('https://api.openai.com/v1/chat/completions', payload, {
             headers: {
                 'Authorization': `Bearer ${apiKey.trim()}`,
                 'Content-Type': 'application/json'
             },
             timeout: 25000 // ⏱️ 25s failsafe for search calls
         });
+
+        // Hedge activado por defecto. Se apaga con multimodal (no duplicar imágenes
+        // pesadas) o si quien llama pasa options.hedge === false.
+        const enableHedge = options.hedge !== false && !multimodalSystemContent;
+        const hedgeAfterMs = options.hedgeAfterMs ?? 6000;
+
+        const response = enableHedge
+            ? await hedgedPost(doPost, hedgeAfterMs)
+            : await doPost();
 
         const choice = response.data.choices[0];
         return {
