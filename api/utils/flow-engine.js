@@ -50,6 +50,38 @@ function toAbsoluteMediaUrl(u) {
     if (u && u.startsWith('/')) return `${MEDIA_HOST}${u}`;
     return u;
 }
+
+// 📦 Envío de media del banco REUTILIZANDO el media_id ya cacheado en Meta (lo subió
+// media/upload.js al guardar el asset, y lo guarda en meta:image:<id>.metaMediaId).
+// Antes el flujo mandaba el LINK (/api/media/<id>.jpg), así que Meta descargaba el
+// archivo de NUESTRO servidor en cada envío — y cada descarga en frío jalaba el base64
+// de Redis o el binario del Blob. Mandar por id evita esa descarga por completo (menos
+// lecturas de Redis/Blob, menos carga, entrega más confiable). Mismo patrón ya probado
+// en chat.js para los envíos manuales y en bulks.js para los masivos (header de plantilla).
+// Si NO hay media_id cacheado, o el envío por id falla (Meta expira el media a ~30 días),
+// cae al envío por link de siempre → cero regresión.
+async function resolveCachedMetaMediaId(rawUrl) {
+    try {
+        const m = /[?&]id=([^&.]+)/.exec(rawUrl || '');
+        const redisMediaId = m?.[1];
+        if (!redisMediaId) return null;
+        const client = getRedisClient();
+        const raw = await client?.get(`meta:image:${redisMediaId}`);
+        return raw ? (JSON.parse(raw)?.metaMediaId || null) : null;
+    } catch { return null; } // best-effort: ante cualquier fallo se usa el link
+}
+
+async function sendFlowMediaById(config, to, rawUrl, type, extraParams = {}) {
+    const absUrl = toAbsoluteMediaUrl(rawUrl);
+    const mediaId = await resolveCachedMetaMediaId(rawUrl);
+
+    if (mediaId) {
+        const byId = await sendUltraMsgMessageWithRetry(config.instanceId, config.token, to, absUrl, type, { ...extraParams, mediaId });
+        if (byId?.success) return byId;
+        // media_id inválido/expirado → reintenta por link (Meta lo re-descarga una vez; el CDN lo cachea 1 año)
+    }
+    return await sendUltraMsgMessageWithRetry(config.instanceId, config.token, to, absUrl, type, extraParams);
+}
 export const EXEC_SET_PREFIX = 'flow:executed:v1:';   // set: candidatos que COMPLETARON el flujo
 export const COUNTER_PREFIX = 'flow:counter:v1:';
 // ZSET paralelo al contador: member = candidatoId, score = ms de su PRIMER paso por el
@@ -344,6 +376,12 @@ async function sendInteractiveNode(redis, node, candidate, flowId, opts = {}, pr
     const header = (data.header && data.header.type && data.header.type !== 'none')
         ? { ...data.header, ...(data.header.text ? { text: substituteVariables(data.header.text, candidate) } : {}) }
         : null;
+    // Header multimedia (imagen/video/documento): reutiliza el media_id cacheado en Meta
+    // para no mandar el link y evitar que Meta descargue el archivo de nuestro servidor.
+    if (header && ['image', 'video', 'document'].includes(header.type) && !header.mediaId && header.mediaUrl) {
+        const cachedId = await resolveCachedMetaMediaId(header.mediaUrl);
+        if (cachedId) header.mediaId = cachedId;
+    }
     const footer = data.footer?.trim() ? substituteVariables(data.footer, candidate) : '';
 
     // Opciones VIGENTES (descarta las vencidas por `expiresAt`). Se calculan una sola vez y se
@@ -590,7 +628,7 @@ export async function evaluateOrExecute(node, candidate, flowId, redis, opts = {
                 }
 
                 if (qrType === 'audio' && qr.audioUrl) {
-                    const audioRes = await pacedSend(opts, () => sendUltraMsgMessageWithRetry(config.instanceId, config.token, cleanTo, toAbsoluteMediaUrl(qr.audioUrl), 'audio', { voice: !!qr.voice }));
+                    const audioRes = await pacedSend(opts, () => sendFlowMediaById(config, cleanTo, qr.audioUrl, 'audio', { voice: !!qr.voice }));
                     if (audioRes?.success) {
                         await saveFlowOutbound(candidate.id, {
                             from: 'me', content: qr.voice ? '🎤 Nota de voz' : '🎵 Audio', type: 'audio', mediaUrl: qr.audioUrl,
@@ -604,7 +642,7 @@ export async function evaluateOrExecute(node, candidate, flowId, redis, opts = {
 
                 if (qrType === 'document' && qr.documentUrl) {
                     const caption = qr.message ? substituteDynamicPhrase(substituteVariables(qr.message, candidate), substituteVariables(opts._dynamicPhrase || '', candidate)) : '';
-                    const docRes = await pacedSend(opts, () => sendUltraMsgMessageWithRetry(config.instanceId, config.token, cleanTo, toAbsoluteMediaUrl(qr.documentUrl), 'document', {
+                    const docRes = await pacedSend(opts, () => sendFlowMediaById(config, cleanTo, qr.documentUrl, 'document', {
                         filename: qr.documentName || 'documento.pdf', caption
                     }));
                     if (docRes?.success) {
@@ -639,7 +677,7 @@ export async function evaluateOrExecute(node, candidate, flowId, redis, opts = {
                 }
                 const bankImages = Array.isArray(qr.imageUrls) && qr.imageUrls.length ? qr.imageUrls : [qr.imageUrl].filter(Boolean);
                 for (const imgUrl of bankImages) {
-                    const imgRes = await pacedSend(opts, () => sendUltraMsgMessageWithRetry(config.instanceId, config.token, cleanTo, toAbsoluteMediaUrl(imgUrl), 'image', { priority: 1 }));
+                    const imgRes = await pacedSend(opts, () => sendFlowMediaById(config, cleanTo, imgUrl, 'image', { priority: 1 }));
                     if (imgRes?.success) {
                         await saveFlowOutbound(candidate.id, {
                             from: 'me', content: '', type: 'image', mediaUrl: imgUrl,
