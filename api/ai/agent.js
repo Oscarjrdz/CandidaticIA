@@ -1958,6 +1958,25 @@ Responde ÚNICAMENTE con el número entero de meses. Si evade o no menciona ning
         // _paso2EnProceso / _paso2Listo se definen arriba (~línea 1642), justo antes del disparador
         // de regreso de incompletos, para poder gatear ese gancho por completitud real de paso 2.
 
+        // 🧩 CANDIDATO LEGADO SIN PASO 2: paso 1 completo y YA felicitado en su día, pero el paso 2
+        // (colonia/experiencia) nunca arrancó — típico de contactos creados antes de que existiera
+        // el paso 2 (paso2Estado y paso2Requerido en undefined, colonia vacía). Sin esto caían a
+        // Sala de Espera como si estuvieran completos. Mandamos un PUENTE determinista y arrancamos
+        // el paso 2; de ahí en adelante la maquinaria normal (bloque ~1693) extrae colonia→
+        // experiencia con sus reglas de evasión. Solo la primera vez: al setear paso2Estado, los
+        // turnos siguientes caen directo en el extractor del paso 2.
+        if (!isRecruiterMode && !isBridgeActive && isProfileComplete && candidateData.congratulated === true
+            && !candidateData.paso2Estado && !candidateData.colonia && !responseTextVal) {
+            const _lgName = (candidateData.nombreReal || '').split(' ')[0] || '';
+            const _lgHi = _lgName ? `Hola ${_lgName}` : 'Hola';
+            const _lgB1 = `${_lgHi}, antes de cualquier cosa 😊 veo en mi sistema que me falta un poco de información tuya para poder avanzar.`;
+            const _lgB2 = `Compárteme porfi 🙏 el nombre de tu colonia. Es para validar si te queda una ruta de transporte 🚌🏘️`;
+            responseTextVal = `${_lgB1}[MSG_SPLIT]${_lgB2}`;
+            candidateUpdates.paso2Estado = 'esperando_colonia';
+            candidateUpdates.paso2Requerido = true;
+            if (redis) redis.sadd('paso2_waiting', candidateId).catch(() => {});
+        }
+
         // 🔁 CANDIDATO QUE REGRESA: si un COMPLETO vuelve (click de anuncio o frase) y hay un
         // flujo con Inicio "al regresar" que aplica, ese flujo le manda la info de su ÚLTIMA
         // vacante (el ruteo lo hace el nodo Etiqueta modo "actual" contra vacanteActual). Corre
