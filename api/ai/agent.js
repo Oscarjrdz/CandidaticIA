@@ -1032,6 +1032,24 @@ const SALA_ESPERA_BUSY = [
     'Permíteme un ratito más porfa, enseguida me libero 😊',
 ];
 
+// Cierres cálidos y breves para cuando el candidato AGRADECE en Sala de Espera.
+// Rotan (salaEsperaCierreIdx) para no repetir. NO piden paciencia ni hablan de vacante:
+// solo cierran con cariño. "{name}" se reemplaza por ", Nombre" o "" si no hay nombre.
+const SALA_ESPERA_CIERRE = [
+    '¡Con gusto{name}! 😊',
+    '¡Para servirte{name}! 🌸',
+    '¡Un placer{name}! ✨',
+    '¡A ti{name}, que te vaya súper! 🌟',
+    '¡Claro que sí{name}, aquí andamos! 😊',
+    '¡Con muchísimo gusto{name}! 🌸',
+    '¡Encantada de ayudarte{name}! ✨',
+    '¡Órale{name}, con gusto! 😊',
+];
+
+// Minutos sin actividad del bot para considerar que el candidato REGRESA (y por tanto
+// toca re-saludarlo). Por debajo de esto es continuación de la misma charla → no saludar.
+const SALA_ESPERA_RETURN_MIN = 120;
+
 // Saludo según la hora de Monterrey: "buenos días" / "buenas tardes" / "buenas noches".
 function salaEsperaGreeting(firstName) {
     const mtyHour = parseInt(
@@ -1961,47 +1979,67 @@ Responde ÚNICAMENTE con el número entero de meses. Si evade o no menciona ning
         if (!isRecruiterMode && !isBridgeActive && isProfileComplete && _paso2Listo && !_returnHandled && activeAiConfig.gptHostEnabled && !responseTextVal) {
             isHostMode = true;
             // SALA DE ESPERA 100% DETERMINISTA (sin OpenAI): la misión de extracción TERMINÓ.
-            // Antes se llamaba al LLM y "seguía la corriente", lo que hacía creer al candidato
-            // que Brenda estaba disponible para platicar y seguía preguntando. Ahora respondemos
-            // siempre lo mismo en espíritu: un saludo (1 vez por día natural) + una frase de
-            // "estoy ocupada, dame unos minutos" que ROTA para no repetirse al mismo candidato.
-            // Nunca ofrece vacante/cita/sueldo ni pide datos nuevos.
+            // Antes se llamaba al LLM y "seguía la corriente"; ahora respondemos según el TIPO
+            // de mensaje del candidato, sin IA y sin engancharnos:
+            //   • Agradecimiento ("gracias") → reacción 👍 + un cierre cálido corto (rotado).
+            //   • Acuse corto ("ok", "va", "sale", un emoji) → reacción 👍 y SILENCIO — corta el loop.
+            //   • Pregunta / insistencia / plática → frase de "ocupada" rotada (dame unos minutitos).
+            // El saludo (buenos días/tardes/noches) SOLO se antepone si el candidato REGRESA tras
+            // un rato (no a media charla) y máximo una vez por día natural (zona Monterrey).
             try {
-                const candFirstName = (candidateData.nombreReal || '').split(' ')[0] || 'amig@';
+                const candFirstName = (candidateData.nombreReal || '').split(' ')[0] || '';
+                const _nameSuffix = candFirstName ? `, ${candFirstName}` : '';
+                const _msg = (aggregatedText || '').trim();
+                const _norm = _msg.toLowerCase().replace(/[\p{Emoji_Presentation}\p{Extended_Pictographic}️]/gu, ' ').replace(/[!¡.,…]+/g, ' ').replace(/\s+/g, ' ').trim();
 
-                // Rotación de la frase de "ocupada" — índice persistido por candidato.
-                const _busyIdx = parseInt(candidateData.salaEsperaPhraseIdx || 0, 10) || 0;
-                const busyPhrase = SALA_ESPERA_BUSY[_busyIdx % SALA_ESPERA_BUSY.length];
-                candidateUpdates.salaEsperaPhraseIdx = _busyIdx + 1;
+                // Clasificación del entrante (el orden importa: gracias → acuse → resto).
+                // Agradecimiento: tolerante a faltas (gracias/grasias/garcias/grax/agradezco/thanks…).
+                const _esGracias = /\b(gr[aá]+[csz]+i+[ae]*s+|grax(ia*s*)?|gr[xs]|gcs|gar[csz]i+a*s*|agradec\w*|agradezc\w*|thanks?|thx)\b/i.test(_msg);
+                // Acuse corto: el mensaje ES solo un "ok/va/sale/…" o solo emojis (sin pregunta).
+                const _esAcuse = /^(ok+|okey|okay|oka|okis|va|vale|sale( pues)?|bien|esta bien|de acuerdo|listo|dale|perfecto|perfe|entendido|enterado|bueno|orale|órale|simon|simón|sip|si|sí|aja|ajá)$/i.test(_norm)
+                    || /^[\p{Emoji_Presentation}\p{Extended_Pictographic}️\s]+$/u.test(_msg);
 
-                // Saludo una sola vez por día natural (Monterrey), sin depender de ningún cron:
-                // guardamos la última fecha saludada y la comparamos con la de hoy.
-                const _todayMty = new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Monterrey' });
-                let textContent;
-                if (candidateData.salaEsperaGreetDate !== _todayMty) {
-                    candidateUpdates.salaEsperaGreetDate = _todayMty;
-                    textContent = `${salaEsperaGreeting(candFirstName)}[MSG_SPLIT]${busyPhrase}`;
+                let textContent = '';
+                let reaction = null;
+
+                if (_esGracias) {
+                    // Cierre cálido rotado + like.
+                    reaction = '👍';
+                    const _cIdx = parseInt(candidateData.salaEsperaCierreIdx || 0, 10) || 0;
+                    textContent = SALA_ESPERA_CIERRE[_cIdx % SALA_ESPERA_CIERRE.length].replace('{name}', _nameSuffix);
+                    candidateUpdates.salaEsperaCierreIdx = _cIdx + 1;
+                } else if (_esAcuse) {
+                    // Solo like, sin texto: no engancha ni repite excusas.
+                    reaction = '👍';
+                    textContent = '';
                 } else {
-                    textContent = busyPhrase;
+                    // Pregunta / insistencia / plática → frase de "ocupada" rotada (sin repetir).
+                    const _busyIdx = parseInt(candidateData.salaEsperaPhraseIdx || 0, 10) || 0;
+                    textContent = SALA_ESPERA_BUSY[_busyIdx % SALA_ESPERA_BUSY.length];
+                    candidateUpdates.salaEsperaPhraseIdx = _busyIdx + 1;
                 }
 
-                // 👍 Si el candidato agradece, Brenda reacciona con un like a su mensaje
-                // (igual que antes de la versión determinista). El detector es tolerante a faltas
-                // de ortografía comunes: gracias/grasias/grazias/grascias/garcias, repetición de
-                // letras (graciasss), abreviaturas (grax/grx/grs/gcs) y agradecimientos (agradezco).
-                const _agradece = /\b(gr[aá]+[csz]+i+[ae]*s+|grax(ia*s*)?|gr[xs]|gcs|gar[csz]i+a*s*|agradec\w*|agradezc\w*|thanks?|thx)\b/i.test(aggregatedText);
+                // Saludo SOLO si el candidato regresa tras un rato (no a media charla) y 1 vez al día.
+                if (textContent) {
+                    const _todayMty = new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Monterrey' });
+                    const _esRegreso = minSinceLastBot >= SALA_ESPERA_RETURN_MIN;
+                    if (_esRegreso && candidateData.salaEsperaGreetDate !== _todayMty) {
+                        candidateUpdates.salaEsperaGreetDate = _todayMty;
+                        textContent = `${salaEsperaGreeting(candFirstName)}[MSG_SPLIT]${textContent}`;
+                    }
+                }
 
                 aiResult = {
                     response_text: textContent,
                     thought_process: "Sala de Espera (determinista)",
-                    reaction: _agradece ? '👍' : null,
+                    reaction,
                     gratitude_reached: false,
                     close_conversation: false
                 };
-                responseTextVal = textContent;
+                responseTextVal = textContent; // '' = sin burbuja (solo reacción si aplica)
             } catch (e) {
                 console.error('[Sala de Espera] error:', e);
-                isHostMode = false; // Fallback to Capturista si algo truena
+                isHostMode = false; // Fallback a Capturista si algo truena
             }
         }
 
@@ -2557,7 +2595,9 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
         // --- REACTION LOGIC ---
         let reactionPromise = Promise.resolve();
         if (msgId && config && aiResult?.reaction) {
-            reactionPromise = sendUltraMsgReaction(config.instanceId, config.token, msgId, aiResult.reaction);
+            // El teléfono del candidato es OBLIGATORIO: Meta rechaza la reacción si `to` va vacío.
+            // Antes se omitía (quedaba 'N/A') y la reacción nunca se entregaba aunque se guardara.
+            reactionPromise = sendUltraMsgReaction(config.instanceId, config.token, msgId, aiResult.reaction, candidateData.whatsapp);
         }
 
         let deliveryPromise = Promise.resolve();
