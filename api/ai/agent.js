@@ -1982,6 +1982,7 @@ Responde ÚNICAMENTE con el número entero de meses. Si evade o no menciona ning
             // Antes se llamaba al LLM y "seguía la corriente"; ahora respondemos según el TIPO
             // de mensaje del candidato, sin IA y sin engancharnos:
             //   • Agradecimiento ("gracias") → reacción 👍 + un cierre cálido corto (rotado).
+            //   • Despedida ("adiós", "bye", "nos vemos", "cuídate") → reacción 👋 y SILENCIO.
             //   • Acuse corto ("ok", "va", "sale", un emoji) → reacción 👍 y SILENCIO — corta el loop.
             //   • Pregunta / insistencia / plática → frase de "ocupada" rotada (dame unos minutitos).
             // El saludo (buenos días/tardes/noches) SOLO se antepone si el candidato REGRESA tras
@@ -1992,9 +1993,11 @@ Responde ÚNICAMENTE con el número entero de meses. Si evade o no menciona ning
                 const _msg = (aggregatedText || '').trim();
                 const _norm = _msg.toLowerCase().replace(/[\p{Emoji_Presentation}\p{Extended_Pictographic}️]/gu, ' ').replace(/[!¡.,…]+/g, ' ').replace(/\s+/g, ' ').trim();
 
-                // Clasificación del entrante (el orden importa: gracias → acuse → resto).
+                // Clasificación del entrante (el orden importa: gracias → despedida → acuse → resto).
                 // Agradecimiento: tolerante a faltas (gracias/grasias/garcias/grax/agradezco/thanks…).
                 const _esGracias = /\b(gr[aá]+[csz]+i+[ae]*s+|grax(ia*s*)?|gr[xs]|gcs|gar[csz]i+a*s*|agradec\w*|agradezc\w*|thanks?|thx)\b/i.test(_msg);
+                // Despedida: adiós/bye/nos vemos/cuídate/bendiciones/hasta luego/buenas noches…
+                const _esDespedida = /(?:^| )(adi[oó]s+|adios|by+e+|bai|hasta (?:luego|pronto|ma[ñn]ana|la (?:proxima|próxima)|el lunes|otro d[ií]a|despu[eé]s)|nos vemos|nos estamos viendo|nos hablamos|me despido|me retiro|me voy|cu[ií]da(?:te|se|nse)|se cuida|bendiciones|buen d[ií]a|buenas (?:noches|tardes)|buenos d[ií]as|feliz (?:d[ií]a|noche|tarde|fin)|que (?:est[eé]s bien|te vaya bien|descanses)|excelente (?:d[ií]a|noche))(?: |$)/i.test(_norm);
                 // Acuse corto: el mensaje ES solo un "ok/va/sale/…" o solo emojis (sin pregunta).
                 const _esAcuse = /^(ok+|okey|okay|oka|okis|va|vale|sale( pues)?|bien|esta bien|de acuerdo|listo|dale|perfecto|perfe|entendido|enterado|bueno|orale|órale|simon|simón|sip|si|sí|aja|ajá)$/i.test(_norm)
                     || /^[\p{Emoji_Presentation}\p{Extended_Pictographic}️\s]+$/u.test(_msg);
@@ -2008,6 +2011,10 @@ Responde ÚNICAMENTE con el número entero de meses. Si evade o no menciona ning
                     const _cIdx = parseInt(candidateData.salaEsperaCierreIdx || 0, 10) || 0;
                     textContent = SALA_ESPERA_CIERRE[_cIdx % SALA_ESPERA_CIERRE.length].replace('{name}', _nameSuffix);
                     candidateUpdates.salaEsperaCierreIdx = _cIdx + 1;
+                } else if (_esDespedida) {
+                    // Despedida → solo reacciona 👋 y guarda silencio (no re-engancha).
+                    reaction = '👋';
+                    textContent = '';
                 } else if (_esAcuse) {
                     // Solo like, sin texto: no engancha ni repite excusas.
                     reaction = '👍';
