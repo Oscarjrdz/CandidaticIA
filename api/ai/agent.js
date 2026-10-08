@@ -9,7 +9,8 @@ import {
     getVacancyById,
     recordAITelemetry,
     getActiveBypassRules,
-    getProjects
+    getProjects,
+    HUMAN_INTERVENTION_SILENCE_MS
 } from '../utils/storage.js';
 import { sendUltraMsgMessage, getUltraMsgConfig, sendUltraMsgReaction, sendUltraMsgPresence } from '../whatsapp/utils.js';
 // schema-registry import removed — getSchemaByField was unused
@@ -2035,6 +2036,17 @@ Responde ÚNICAMENTE con el número entero de meses. Si evade o no menciona ning
                         textContent = `${salaEsperaGreeting(candFirstName)}[MSG_SPLIT]${textContent}`;
                     }
                 }
+
+                // + DESACTIVAR BOT: tras responder en Sala de Espera, Brenda se apaga 24h (mismo
+                // patch que el nodo "Desactivar Bot" / intervención humana) para que un reclutador
+                // siga la plática. Durante esas 24h el BLOCK SHIELD calla a Brenda ante cualquier
+                // mensaje; se reactiva sola al vencer (lazy en getCandidateById) o con "Reactivar Bot".
+                // Esta respuesta (y su reacción) SÍ sale: el flag solo afecta lecturas futuras.
+                const _nowSilence = new Date();
+                candidateUpdates.blocked = true;
+                candidateUpdates.blockedAt = _nowSilence.toISOString();
+                candidateUpdates.blockedExpiresAt = new Date(_nowSilence.getTime() + HUMAN_INTERVENTION_SILENCE_MS).toISOString();
+                candidateUpdates.blockedReason = 'sala_espera';
 
                 aiResult = {
                     response_text: textContent,
