@@ -2713,7 +2713,10 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
         // 🛡️ PIVOT EXCLUSION: When the pivot guard already sent the vacancy directly (isHandlingPivot=true),
         // aiResult and responseTextVal are both null by design — the message was already delivered.
         // Without this guard, isTechnicalOrEmpty=true triggers a "Ayúdame a entenderte mejor" fallback.
-        if ((isTechnicalOrEmpty && !hasMoveIntent && !recruiterTriggeredMove && !aiResult?.close_conversation && !handoverTriggered && !hasMedia && !isHandlingPivot && !isNowComplete) || recruiterClosedSilently) {
+        // 🔇 HOST EXCLUSION: la Sala de Espera (isHostMode) decide a propósito quedarse CALLADA en
+        // despedidas, acuses cortos y toggle OFF (responseTextVal=''). Sin este guard, el safeguard
+        // pisaba ese silencio con "¡Ay! Me distraje…". No forzar fallback cuando isHostMode.
+        if ((isTechnicalOrEmpty && !isHostMode && !hasMoveIntent && !recruiterTriggeredMove && !aiResult?.close_conversation && !handoverTriggered && !hasMedia && !isHandlingPivot && !isNowComplete) || recruiterClosedSilently) {
             if (isRecruiterMode) {
                 // If the AI sent an FAQ Media URL but hallucinated the text away, safely append a generic CTA
                 if (hasMedia) {
