@@ -558,7 +558,12 @@ export const sendMetaReaction = async (toPhone, messageId, emoji) => {
 
 // Legacy alias
 export const sendUltraMsgReaction = async (_instanceId, _token, messageId, emoji, toPhone = 'N/A') => {
-    return sendMetaMessage(toPhone, emoji, 'reaction', { messageId });
+    // El número de origen DEBE ser el mismo por el que entró el mensaje (multi-número): si no, Meta
+    // acepta la reacción pero cae en la conversación del número equivocado y el candidato no la ve.
+    // Mismo patrón que sendUltraMsgMessage: pasar phoneNumberId cuando _instanceId es un ID de Meta.
+    const isMetaPhoneId = _instanceId && /^\d{10,}$/.test(String(_instanceId));
+    const extra = isMetaPhoneId ? { messageId, phoneNumberId: _instanceId } : { messageId };
+    return sendMetaMessage(toPhone, emoji, 'reaction', extra);
 };
 
 /**

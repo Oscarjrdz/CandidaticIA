@@ -201,7 +201,7 @@ export class Orchestrator {
 
         // 🎉 Reaction: fire non-blocking in background (does not affect message order)
         if (msgId) {
-            sendUltraMsgReaction(config.instanceId, config.token, msgId, '🎉').catch(() => {});
+            sendUltraMsgReaction(config.instanceId, config.token, msgId, '🎉', phone).catch(() => {});
         }
 
         // ✅ SEQUENTIAL SEND — guarantees WhatsApp delivery order: OMG → Seleccionado → Sticker
