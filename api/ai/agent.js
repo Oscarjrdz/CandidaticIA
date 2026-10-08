@@ -1005,6 +1005,46 @@ const PASO1_ASK = {
 };
 const PASO1_ASK_DEFAULT = '¿Me lo escribes por texto porfa? ✍️';
 
+// ── SALA DE ESPERA (determinista, sin OpenAI) ───────────────────────────────
+// Frases de "estoy ocupada / dame unos minutos" que Brenda rota para NO repetir
+// la misma al mismo candidato. Deliberadamente NO prometen vacante/sueldo/cita
+// ni dan a entender que está disponible para platicar — solo pide paciencia.
+const SALA_ESPERA_BUSY = [
+    'Dame unos minutitos, estoy revisando algo por aquí 🌸',
+    'Ando ocupadita atendiendo varias cosas, dame chance tantito porfa 😊',
+    'Permíteme un momentito, estoy checando unos detallitos ✨',
+    'Estoy en medio de algo ahorita, en un ratito me desocupo 🌟',
+    'Dame un ratito porfa, ando a las vueltas con otros pendientes 😊',
+    'Déjame terminar algo que traigo entre manos y te busco al ratito 🌸',
+    'Ando atareadita ahorita, permíteme unos minutitos porfa ✨',
+    'En cuanto me desocupe te escribo, ahorita ando llenita de pendientes 😊',
+    'Dame chancita porfa, estoy acomodando unas cositas por aquí 🌼',
+    'Ahorita ando a mil, regálame un momentito y te busco 😊',
+    'Permíteme tantito porfa, estoy resolviendo un asuntito ✨',
+    'Déjame checar algo rapidito y en un ratito te escribo 🌸',
+    'Ando ocupadita en este momento, dame un respirito porfa 😊',
+    'Espérame un poquito porfa, traigo varias cositas al mismo tiempo 🌟',
+    'Dame unos minutitos más, ya mero me desocupo 😊',
+    'Ahorita ando resolviendo unos pendientitos, permíteme tantito 🌸',
+    'Regálame un momentito porfa, estoy en algo importantito ✨',
+    'Déjame terminar por aquí y al ratito te doy razón 😊',
+    'Ando con las manos llenas ahorita jaja, dame chance porfita 🌼',
+    'Permíteme un ratito más porfa, enseguida me libero 😊',
+];
+
+// Saludo según la hora de Monterrey: "buenos días" / "buenas tardes" / "buenas noches".
+function salaEsperaGreeting(firstName) {
+    const mtyHour = parseInt(
+        new Intl.DateTimeFormat('en-US', { timeZone: 'America/Monterrey', hour: '2-digit', hour12: false }).format(new Date()),
+        10
+    ) % 24;
+    const franja = (mtyHour >= 5 && mtyHour < 12) ? 'buenos días'
+        : (mtyHour >= 12 && mtyHour < 19) ? 'buenas tardes'
+        : 'buenas noches';
+    const name = firstName && firstName !== 'amig@' ? ` ${firstName}` : '';
+    return `Hola${name}, ${franja} 😊`;
+}
+
 // noTextKind: tipo del mensaje entrante cuando NO trae texto aprovechable ('location'|'sticker'|
 // 'emoji'|'image'|'audio'); lo calcula el webhook y lo pasa el worker. null = mensaje con texto.
 export const processMessage = async (candidateId, incomingMessage, msgId = null, noTextKind = null) => {
@@ -1920,48 +1960,48 @@ Responde ÚNICAMENTE con el número entero de meses. Si evade o no menciona ning
 
         if (!isRecruiterMode && !isBridgeActive && isProfileComplete && _paso2Listo && !_returnHandled && activeAiConfig.gptHostEnabled && !responseTextVal) {
             isHostMode = true;
+            // SALA DE ESPERA 100% DETERMINISTA (sin OpenAI): la misión de extracción TERMINÓ.
+            // Antes se llamaba al LLM y "seguía la corriente", lo que hacía creer al candidato
+            // que Brenda estaba disponible para platicar y seguía preguntando. Ahora respondemos
+            // siempre lo mismo en espíritu: un saludo (1 vez por día natural) + una frase de
+            // "estoy ocupada, dame unos minutos" que ROTA para no repetirse al mismo candidato.
+            // Nunca ofrece vacante/cita/sueldo ni pide datos nuevos.
             try {
                 const candFirstName = (candidateData.nombreReal || '').split(' ')[0] || 'amig@';
-                const customSalaPrompt = activeAiConfig.gptHostPrompt || '';
 
-                const salaDeEsperaPrompt = `Eres Brenda Rodríguez, reclutadora profesional de ${brand}. El candidato se llama ${candFirstName} y ya completó su registro exitosamente. Tu misión de extracción de datos TERMINÓ.
+                // Rotación de la frase de "ocupada" — índice persistido por candidato.
+                const _busyIdx = parseInt(candidateData.salaEsperaPhraseIdx || 0, 10) || 0;
+                const busyPhrase = SALA_ESPERA_BUSY[_busyIdx % SALA_ESPERA_BUSY.length];
+                candidateUpdates.salaEsperaPhraseIdx = _busyIdx + 1;
 
-${customSalaPrompt ? `[CONTEXTO ADICIONAL]: ${customSalaPrompt}\n` : ''}
-REGLAS DE SALA DE ESPERA (OBLIGATORIAS - NO NEGOCIABLES):
-0. ⛔ CRÍTICO — JAMÁS OFRECER NI AGENDAR ENTREVISTAS: TIENES ABSOLUTAMENTE PROHIBIDO ofrecer, proponer, sugerir, preguntar o dar a entender que puedes agendar una entrevista, cita, horario o fecha. NUNCA seas proactiva con entrevistas. NO digas cosas como "¿te gustaría agendar tu entrevista?", "¿te agendo una cita?", "tengo entrevistas disponibles", ni nada parecido. Tú NO agendas entrevistas — eso lo hace un reclutador humano después. Si TÚ sacas el tema de la entrevista, es un error grave. Solo puedes mencionar la entrevista si el candidato pregunta primero, y aun así SOLO para decirle que sigues buscándole la mejor vacante y que pronto lo contactarán (regla 1). Bajo ninguna circunstancia inicies tú el tema de entrevistas/citas/horarios.
-1. VACANTES/ENTREVISTAS/EMPLEO: Si preguntan por vacantes, entrevistas, sueldos, horarios o cualquier tema laboral: Responde amable usando su nombre, reconoce su interés, y dile que estás trabajando en encontrarle la mejor vacante. Te agradecería tengas paciencia. ESTRICTAMENTE PROHIBIDO inventar datos de vacantes, sueldos, direcciones o ubicaciones. NUNCA ofrezcas agendar una entrevista ni des horarios/fechas — eso NO te corresponde.
-2. PLÁTICA SOCIAL/PIROPOS/CUMPLIDOS: Puedes reírte, sonrojarte, agradecer con picardía y carisma — mantén tu personalidad encantadora. Pero SIEMPRE cierra diciendo que estás muy atareada/ocupada buscando la mejor vacante para ellos. NO te enganches en conversación extendida.
-3. DESPEDIDA: Si se despiden, despídete amablemente deseándole éxito y que pronto le contactarás.
-4. BREVEDAD: Máximo 2-3 líneas. Sé breve y encantadora.
-5. SIEMPRE redirige mencionando que estás buscando/trabajando en encontrarle la mejor opción laboral.
-6. PROHIBIDO pedir datos nuevos — ya los tienes todos.
-7. Usa emojis con moderación (1-2 por mensaje), estilo Brenda: 😊 🌸 ✨ 🌟
-8. Usa el nombre "${candFirstName}" naturalmente en tu respuesta.
-9. NO uses asteriscos ni markdown. Texto plano solamente.
-10. Responde SOLO en español.`;
-
-                const salaHistory = allMessages.slice(-6); // Solo últimos mensajes para eficiencia
-                const gptResponse = await getOpenAIResponse(
-                    salaHistory,
-                    salaDeEsperaPrompt,
-                    activeAiConfig.openaiModel || 'gpt-4o-mini',
-                    activeAiConfig.openaiApiKey
-                );
-
-                if (gptResponse?.content) {
-                    const textContent = gptResponse.content.replace(/\*/g, '');
-                    aiResult = {
-                        response_text: textContent,
-                        thought_process: "Sala de Espera Response",
-                        reaction: (/\b(gracias|ti)\b/i.test(aggregatedText)) ? '👍' : null,
-                        gratitude_reached: false,
-                        close_conversation: false
-                    };
-                    responseTextVal = textContent;
+                // Saludo una sola vez por día natural (Monterrey), sin depender de ningún cron:
+                // guardamos la última fecha saludada y la comparamos con la de hoy.
+                const _todayMty = new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Monterrey' });
+                let textContent;
+                if (candidateData.salaEsperaGreetDate !== _todayMty) {
+                    candidateUpdates.salaEsperaGreetDate = _todayMty;
+                    textContent = `${salaEsperaGreeting(candFirstName)}[MSG_SPLIT]${busyPhrase}`;
+                } else {
+                    textContent = busyPhrase;
                 }
+
+                // 👍 Si el candidato agradece, Brenda reacciona con un like a su mensaje
+                // (igual que antes de la versión determinista). El detector es tolerante a faltas
+                // de ortografía comunes: gracias/grasias/grazias/grascias/garcias, repetición de
+                // letras (graciasss), abreviaturas (grax/grx/grs/gcs) y agradecimientos (agradezco).
+                const _agradece = /\b(gr[aá]+[csz]+i+[ae]*s+|grax(ia*s*)?|gr[xs]|gcs|gar[csz]i+a*s*|agradec\w*|agradezc\w*|thanks?|thx)\b/i.test(aggregatedText);
+
+                aiResult = {
+                    response_text: textContent,
+                    thought_process: "Sala de Espera (determinista)",
+                    reaction: _agradece ? '👍' : null,
+                    gratitude_reached: false,
+                    close_conversation: false
+                };
+                responseTextVal = textContent;
             } catch (e) {
                 console.error('[Sala de Espera] error:', e);
-                isHostMode = false; // Fallback to Capturista if OpenAI fails
+                isHostMode = false; // Fallback to Capturista si algo truena
             }
         }
 

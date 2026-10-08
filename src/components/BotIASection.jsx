@@ -407,36 +407,30 @@ const BotIASection = () => {
                         </button>
                     }
                 >
-                    <div className="space-y-4">
-                        <div className="space-y-1.5">
-                            <div className="flex items-center justify-between mb-1.5">
-                                <label className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest px-1">
-                                    PROMPT SALA DE ESPERA ✨
-                                </label>
-                                <span className="text-[8px] font-bold text-gray-400 uppercase">OpenAI Powered</span>
-                            </div>
-                            {isInitialLoading ? (
-                                <Skeleton className="w-full h-72 rounded-2xl" />
-                            ) : (
-                                <textarea
-                                    className="w-full h-72 p-4 rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50/30 dark:bg-gray-900/40 text-gray-800 dark:text-gray-200 focus:ring-2 focus:ring-blue-500 text-xs resize-none leading-relaxed font-medium transition-all"
-                                    value={gptConfig.gptHostPrompt}
-                                    onChange={(e) => setGptConfig({ ...gptConfig, gptHostPrompt: e.target.value })}
-                                    placeholder="Define la actitud social del Host..."
-                                />
-                            )}
-                        </div>
+                    <div className="space-y-3">
+                        <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
+                            Cuando un candidato ya completó su registro, Brenda entra en <b className="text-gray-700 dark:text-gray-200">Sala de Espera</b>. Con el switch encendido, responde de forma <b className="text-gray-700 dark:text-gray-200">automática y determinista</b> (sin IA): un saludo según la hora y una frase amable de que está ocupada, para que el candidato tenga paciencia sin creer que hay una conversación en vivo.
+                        </p>
 
-                        <div className="pt-1">
-                            <select
-                                value={gptConfig.openaiModel}
-                                onChange={(e) => setGptConfig({ ...gptConfig, openaiModel: e.target.value })}
-                                className="w-full p-2.5 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-xs font-bold shadow-sm"
-                            >
-                                <option value="gpt-4o-mini">🚀 GPT-4o Mini (Recomendado)</option>
-                                <option value="gpt-4o">⚡ GPT-4o (Premium)</option>
-                                <option value="gpt-4-turbo">🧠 GPT-4 Turbo</option>
-                            </select>
+                        <div className="rounded-2xl border border-gray-100 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/40 p-4 space-y-2.5">
+                            <div className="flex items-start gap-2.5">
+                                <span className="text-base leading-none">🌅</span>
+                                <p className="text-[11px] text-gray-600 dark:text-gray-300 leading-relaxed">
+                                    <b className="text-gray-800 dark:text-gray-100">Saluda 1 vez al día</b> reconociendo si es mañana, tarde o noche (ej. <i>“Hola Oscar, buenas tardes 😊”</i>).
+                                </p>
+                            </div>
+                            <div className="flex items-start gap-2.5">
+                                <span className="text-base leading-none">🔄</span>
+                                <p className="text-[11px] text-gray-600 dark:text-gray-300 leading-relaxed">
+                                    <b className="text-gray-800 dark:text-gray-100">20 frases rotadas</b> de “dame unos minutitos”, una tras otra sin repetirse hasta agotarlas.
+                                </p>
+                            </div>
+                            <div className="flex items-start gap-2.5">
+                                <span className="text-base leading-none">🤐</span>
+                                <p className="text-[11px] text-gray-600 dark:text-gray-300 leading-relaxed">
+                                    Nunca ofrece vacantes, citas ni sueldos, ni pide datos nuevos. Con el switch apagado, guarda <b className="text-gray-800 dark:text-gray-100">silencio total</b>.
+                                </p>
+                            </div>
                         </div>
                     </div>
                 </Card>
