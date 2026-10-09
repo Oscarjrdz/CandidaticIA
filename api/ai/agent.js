@@ -10,6 +10,7 @@ import {
     recordAITelemetry,
     getActiveBypassRules,
     getProjects,
+    updateMessageReaction,
     HUMAN_INTERVENTION_SILENCE_MS
 } from '../utils/storage.js';
 import { sendUltraMsgMessage, getUltraMsgConfig, sendUltraMsgReaction, sendUltraMsgPresence } from '../whatsapp/utils.js';
@@ -2636,6 +2637,11 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
             // El teléfono del candidato es OBLIGATORIO: Meta rechaza la reacción si `to` va vacío.
             // Antes se omitía (quedaba 'N/A') y la reacción nunca se entregaba aunque se guardara.
             reactionPromise = sendUltraMsgReaction(config.instanceId, config.token, msgId, aiResult.reaction, candidateData.whatsapp);
+            // 👁️ Que se VEA en el Chat Web: adjunta la reacción como overlay sobre el mensaje
+            // entrante del candidato (mismo visual y mismo broadcast SSE `reactionUpdate` que cuando
+            // un reclutador reacciona desde la UI). El mensaje suelto `[REACCIÓN:…]` que se guarda más
+            // abajo lo oculta el render — esto es lo único que de verdad se pinta en pantalla.
+            updateMessageReaction(candidateId, msgId, aiResult.reaction).catch(() => {});
         }
 
         let deliveryPromise = Promise.resolve();
