@@ -486,9 +486,9 @@ function formatRecruiterMessage(text, candidateData = null, stepContext = {}) {
                 // Quitar preguntas de cierre viejas (referencian "estas opciones" que ya no están)
                 _segs = _segs.filter(s => !(/^[¡¿]/.test(s.trim()) && /(?:opciones|eliges?|elegir|escoges?|te interesa|te animas)/i.test(s) && s.length < 120));
                 _segs.push(_pickDd([
-                    '¿Cuál te late de las opciones que te mandé aquí arriba? 👆😊',
-                    'Échale un ojito a la lista de arriba 👆 y dime cuál va más contigo 😊',
-                    `De las opciones que te pasé arriba 👆 ¿cuál te llama la atención${_fnDd ? `, ${_fnDd}` : ''}?`
+                    '¿Cuál te late de la lista de categorías de vacantes que te mandé aquí arriba? 👆😊',
+                    'Échale un ojito a la lista de categorías de vacantes de arriba 👆 y dime cuál va más contigo 😊',
+                    `De las categorías de vacantes que te pasé arriba 👆 ¿cuál te llama la atención${_fnDd ? `, ${_fnDd}` : ''}?`
                 ]));
                 text = _segs.join('[MSG_SPLIT]');
             }
@@ -513,9 +513,9 @@ function formatRecruiterMessage(text, candidateData = null, stepContext = {}) {
                 // Quitar la confirmación de categoría (evento viejo) y preguntas de cierre viejas
                 _segs = _segs.filter(s => !/elegiste/i.test(s) && !(/^[¡¿]/.test(s.trim()) && /(?:escolaridad|nivel de estudios|nivel escolar|la tuya)/i.test(s) && s.length < 120));
                 _segs.push(_pickDd([
-                    '¿Cuál es tu escolaridad? Ahí arriba te dejé las opciones 👆😊',
-                    'Checa la lista que te mandé arriba 👆 ¿cuál es la tuya?',
-                    `De las opciones de arriba 👆 dime cuál es tu nivel de estudios${_fnDd ? `, ${_fnDd}` : ''} 😊`
+                    '¿Cuál es tu escolaridad? Ahí arriba te dejé las opciones de escolaridad 👆😊',
+                    'Checa la lista de escolaridad que te mandé arriba 👆 ¿cuál es la tuya?',
+                    `De las opciones de escolaridad de arriba 👆 dime cuál es tu nivel de estudios${_fnDd ? `, ${_fnDd}` : ''} 😊`
                 ]));
                 text = _segs.join('[MSG_SPLIT]');
             }
