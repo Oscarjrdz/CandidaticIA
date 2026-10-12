@@ -1038,14 +1038,14 @@ const SALA_ESPERA_BUSY = [
 // Rotan (salaEsperaCierreIdx) para no repetir. NO piden paciencia ni hablan de vacante:
 // solo cierran con cariño. "{name}" se reemplaza por ", Nombre" o "" si no hay nombre.
 const SALA_ESPERA_CIERRE = [
-    '¡Con gusto{name}! 😊',
+    '¡Por nada{name}! 😊',
     '¡Para servirte{name}! 🌸',
     '¡Un placer{name}! ✨',
     '¡A ti{name}, que te vaya súper! 🌟',
-    '¡Claro que sí{name}, aquí andamos! 😊',
-    '¡Con muchísimo gusto{name}! 🌸',
+    '¡De nada{name}, aquí andamos! 😊',
+    '¡Fue un gusto{name}! 🌸',
     '¡Encantada de ayudarte{name}! ✨',
-    '¡Órale{name}, con gusto! 😊',
+    '¡Cuando gustes{name}! 😊',
 ];
 
 // Minutos sin actividad del bot para considerar que el candidato REGRESA (y por tanto
