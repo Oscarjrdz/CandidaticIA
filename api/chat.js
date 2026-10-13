@@ -6,6 +6,25 @@ import { candidatePassesUserFilter } from './utils/rbac.js';
 
 // Candidatic legacy URLs removed as per UltraMsg migration.
 
+// Obtiene los BYTES de una imagen interna (med_X): primero el base64 de Redis, y si ya
+// expiró, desde Vercel Blob (almacenamiento PERMANENTE de los assets del banco). Sin esto,
+// una imagen del banco cuyo base64 ya no está y cuyo media_id cacheado caducó (Meta borra
+// los media_id viejos) no se puede re-subir → fallo "image.id is not a valid...".
+const getInternalMediaBuffer = async (redis, mediaId) => {
+    try {
+        const b64 = await redis.get(`image:${mediaId}`);
+        if (b64) return Buffer.from(b64, 'base64');
+    } catch { /* sigue al Blob */ }
+    if (process.env.BLOB_READ_WRITE_TOKEN) {
+        try {
+            const { get } = await import('@vercel/blob');
+            const result = await get(`media/${mediaId}`, { access: 'private' });
+            if (result?.stream) return Buffer.from(await new Response(result.stream).arrayBuffer());
+        } catch { /* no está en Blob */ }
+    }
+    return null;
+};
+
 const UNTAGGED_TAG_FILTER = '__candidatic_untagged__';
 
 const normalizeTagName = (value = '') => String(value).trim().toLowerCase();
@@ -514,27 +533,23 @@ export default async function handler(req, res) {
                                 const metaRaw = await redis.get(`meta:image:${redisMediaId}`);
                                 const meta = metaRaw ? JSON.parse(metaRaw) : {};
                                 const filename = meta.filename || (type === 'document' ? 'documento.pdf' : 'imagen.jpg');
-                                // Caché de media_id POR número emisor. (El viejo meta.metaMediaId
-                                // era único y servía ids de otro número → causa del bug.)
-                                let cachedMediaId = meta.metaMediaIds?.[mediaCacheKey];
-                                // Migración segura: el viejo metaMediaId único SIEMPRE fue del número
-                                // default (así subía la versión anterior), así que es válido solo ahí.
-                                if (!cachedMediaId && meta.metaMediaId
-                                    && (senderNumberId === process.env.META_PHONE_NUMBER_ID || senderNumberId === null)) {
-                                    cachedMediaId = meta.metaMediaId;
-                                }
+                                // Caché de media_id POR número emisor. NO se usa el viejo
+                                // meta.metaMediaId único: era de un solo número y además los
+                                // ids viejos (meses) ya los borró Meta → re-subimos y cacheamos
+                                // por número, que es confiable.
+                                const cachedMediaId = meta.metaMediaIds?.[mediaCacheKey];
 
-                                // Strategy 1: Use pre-cached Meta media_id (from upload step — most reliable)
+                                // Strategy 1: Use pre-cached Meta media_id (por número — most reliable)
                                 if (cachedMediaId) {
                                     extraParams.mediaId = cachedMediaId;
                                     extraParams.filename = filename;
                                     deliveryContent = '';
                                     console.log(`✅ [Media] Using pre-cached Meta media_id=${cachedMediaId} (num=${mediaCacheKey})`);
                                 } else {
-                                    // Strategy 2: Re-upload base64 from Redis to Meta (al número emisor)
-                                    const base64Str = await redis.get(`image:${redisMediaId}`);
-                                    if (base64Str) {
-                                        const buffer = Buffer.from(base64Str, 'base64');
+                                    // Strategy 2: Re-upload a Meta (al número emisor). Bytes desde
+                                    // Redis base64 O Vercel Blob (permanente) si el base64 ya expiró.
+                                    const buffer = await getInternalMediaBuffer(redis, redisMediaId);
+                                    if (buffer) {
                                         const mimeType = meta.mime || (type === 'document' ? 'application/pdf' : 'image/jpeg');
 
                                         console.log(`📤 [Media] Re-uploading ${filename} (${mimeType}, ${Math.round(buffer.length/1024)}KB) to Meta (num=${mediaCacheKey})...`);
@@ -554,7 +569,7 @@ export default async function handler(req, res) {
                                             deliveryContent = makeAbsoluteUrl(mediaUrl, redisMediaId, type);
                                         }
                                     } else {
-                                        console.log(`⚠️ [Media] No base64 data in Redis for ${redisMediaId}, falling back to URL`);
+                                        console.log(`⚠️ [Media] Sin bytes en Redis ni Blob para ${redisMediaId}, cae a URL (link)`);
                                         deliveryContent = makeAbsoluteUrl(mediaUrl, redisMediaId, type);
                                     }
                                 }
@@ -586,12 +601,11 @@ export default async function handler(req, res) {
                         console.log(`⚠️ [Media] media_id=${extraParams.mediaId} falló (${sendResult?.error}), re-subiendo al número emisor (num=${mediaCacheKey}) y reintentando una vez...`);
                         try {
                             const redis = getRedisClient();
-                            const base64Str = await redis.get(`image:${redisMediaIdForRetry}`);
-                            if (base64Str) {
+                            const buffer = await getInternalMediaBuffer(redis, redisMediaIdForRetry);
+                            if (buffer) {
                                 const metaRaw = await redis.get(`meta:image:${redisMediaIdForRetry}`);
                                 const meta = metaRaw ? JSON.parse(metaRaw) : {};
                                 const filename = meta.filename || (type === 'document' ? 'documento.pdf' : 'imagen.jpg');
-                                const buffer = Buffer.from(base64Str, 'base64');
                                 const mimeType = meta.mime || (type === 'document' ? 'application/pdf' : 'image/jpeg');
 
                                 const { uploadMediaToMeta } = await import('./whatsapp/utils.js');

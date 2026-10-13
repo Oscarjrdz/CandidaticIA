@@ -143,6 +143,7 @@ const tickEngine = async (state) => {
         state.finishedAt = state.finishedAt || Date.now();
         addLog(state, '🛑 Envío masivo ABORTADO por el usuario.');
         await saveState(state);
+        await finalizeAudienceStats(state);
         return state;
     }
 
@@ -152,6 +153,7 @@ const tickEngine = async (state) => {
         state.finishedAt = state.finishedAt || Date.now();
         addLog(state, '✅ Envío masivo completado. Todos los contactos procesados.');
         await saveState(state);
+        await finalizeAudienceStats(state);
         return state;
     }
 
@@ -362,6 +364,8 @@ const tickEngine = async (state) => {
         }
 
         await saveState(state);
+        // Si la campaña terminó (completada o abortada), suma lo realmente enviado al público.
+        if (!state.isRunning) await finalizeAudienceStats(state);
 
     } finally {
         processingLock = false;
@@ -371,6 +375,25 @@ const tickEngine = async (state) => {
 };
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+// Suma lo REALMENTE enviado al histórico del público, UNA sola vez por campaña
+// (marcador NX cross-instancia). Antes se sumaba el total de destinatarios al iniciar,
+// lo que inflaba "enviados" si la campaña se abortaba a medias.
+const finalizeAudienceStats = async (state) => {
+    if (!state?.audienceId || !state?.campaignId) return;
+    const redis = getRedisClient();
+    if (!redis) return;
+    try {
+        const once = await redis.set(`bulks:stats_final:${state.campaignId}`, '1', 'EX', 60 * 60 * 24 * 7, 'NX');
+        if (!once) return; // ya se contabilizó esta campaña
+        const auds = await getAudiences(redis);
+        const idx = auds.findIndex(a => a.id === state.audienceId);
+        if (idx !== -1) {
+            auds[idx].totalEverSent = (auds[idx].totalEverSent || 0) + (state.totalSent || 0);
+            await saveAudiences(redis, auds);
+        }
+    } catch (e) { /* non-critical */ }
+};
 
 // Ejecuta UN tick de forma segura entre instancias: toma bulk_lock y RELEE el estado
 // FRESCO dentro del lock antes de procesar. Esto evita duplicados cuando hay dos
@@ -781,7 +804,10 @@ export default async function handler(req, res) {
                     const idx = audiences.findIndex(a => a.id === audience.id);
                     if (idx !== -1) {
                         audiences[idx].lastCampaignAt = new Date().toISOString();
-                        audiences[idx].totalEverSent = (audiences[idx].totalEverSent || 0) + candidates.length;
+                        // OJO: totalEverSent NO se incrementa aquí. Antes sumaba candidates.length
+                        // (los destinatarios al iniciar), inflando el conteo si la campaña se
+                        // abortaba a medias. Ahora se suma lo REALMENTE enviado al finalizar
+                        // (finalizeAudienceStats, en las ramas de completado/abort de tickEngine).
                         await saveAudiences(redis, audiences);
                     }
                 }
@@ -823,6 +849,9 @@ export default async function handler(req, res) {
         state.finishedAt = state.finishedAt || Date.now();
         addLog(state, '🛑 Envío masivo ABORTADO por el usuario.');
         await saveState(state);
+        // Respaldo: si se abortó estando inactivo (sin tick en vuelo que finalice),
+        // contabiliza aquí lo enviado. El marcador NX evita doble conteo con el tick.
+        await finalizeAudienceStats(state);
 
         return res.status(200).json({ success: true, message: 'Bulk aborted' });
     }
