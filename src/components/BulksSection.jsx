@@ -768,7 +768,9 @@ const BulksSection = () => {
             setPickedIds(new Set());
             setDirectRecipients([]);
             setCustomCampaignName('');
-            setTemplateParams({});
+            // No vaciar las variables: deja los últimos valores (recordados por plantilla)
+            // disponibles en la UI hasta que el usuario los cambie.
+            setTemplateParams(selectedTemplateId && templateParamsByTemplate[selectedTemplateId] ? { ...templateParamsByTemplate[selectedTemplateId] } : {});
             loadAudiences(); // refresca stats del público (última campaña / total enviado)
         } catch(e) {}
     };
