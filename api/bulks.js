@@ -5,6 +5,7 @@ import axios from 'axios';
 import { getRedisClient, validateAdminSession } from './utils/storage.js';
 import { getCachedConfig } from './utils/cache.js';
 import { ensureFacetIndex, computeFacets, resolveSegmentIds, hydratePreview, countSegment } from './utils/facet-index.js';
+import { runInBackground } from './utils/background.js';
 import { NL_MUNICIPIOS } from './flows.js';
 
 const PREVIEW_LIMIT = 100;
@@ -51,6 +52,8 @@ const REDIS_KEY_STATE = 'bulks:engine_state';
 // (que tiene su propia copia de `state` en memoria) NO pueda revivir isRunning al
 // guardar: el abort se escribe aquí y se lee FRESCO desde Redis. Ver tickEngine/abort.
 const REDIS_KEY_ABORT = 'bulks:engine_aborted';
+const BULK_LOCK = 'bulk_lock';               // serializa UN tick a la vez (cross-instancia)
+const BULK_DRIVER_LOCK = 'bulk_driver_lock'; // garantiza UN solo driver server-side a la vez
 const REDIS_KEY_DRAFT = 'bulks:draft';
 const REDIS_KEY_HISTORY = 'bulks:history';
 const REDIS_KEY_AUDIENCES = 'bulks:audiences'; // públicos guardados (audiencias dinámicas)
@@ -137,6 +140,7 @@ const tickEngine = async (state) => {
         state.isRunning = false;
         state.isAborted = true;
         state.nextSendAt = null;
+        state.finishedAt = state.finishedAt || Date.now();
         addLog(state, '🛑 Envío masivo ABORTADO por el usuario.');
         await saveState(state);
         return state;
@@ -145,6 +149,7 @@ const tickEngine = async (state) => {
     // Gate 3: ya terminó todos los candidatos
     if (state.currentCandidateIndex >= state.candidates.length) {
         state.isRunning = false;
+        state.finishedAt = state.finishedAt || Date.now();
         addLog(state, '✅ Envío masivo completado. Todos los contactos procesados.');
         await saveState(state);
         return state;
@@ -343,11 +348,13 @@ const tickEngine = async (state) => {
             state.isRunning = false;
             state.isAborted = true;
             state.nextSendAt = null;
+            state.finishedAt = Date.now();
             addLog(state, '🛑 Envío masivo ABORTADO por el usuario.');
         } else if (state.currentCandidateIndex >= state.candidates.length) {
             // ¿Ya terminó todo el lote/campaña?
             state.isRunning = false;
             state.nextSendAt = null;
+            state.finishedAt = Date.now();
             addLog(state, '✅ Envío masivo completado. Todos los contactos procesados.');
         } else {
             // Continúa instantáneamente en el siguiente tick
@@ -363,6 +370,67 @@ const tickEngine = async (state) => {
     return state;
 };
 
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+// Ejecuta UN tick de forma segura entre instancias: toma bulk_lock y RELEE el estado
+// FRESCO dentro del lock antes de procesar. Esto evita duplicados cuando hay dos
+// empujadores a la vez (driver del servidor + poll del frontend): sin el relee, un
+// tick podría correr con un índice rancio y reenviar candidatos ya enviados.
+// Devuelve el estado tras el tick, o null si otro tick tenía el lock.
+const tickOnceLocked = async () => {
+    const redis = getRedisClient();
+    if (!redis) { // sin redis no hay lock posible; degradar (entorno no-prod)
+        const s = await getState();
+        return s ? await tickEngine(s) : null;
+    }
+    const lock = await redis.set(BULK_LOCK, '1', 'EX', 30, 'NX');
+    if (!lock) return null; // otro tick en curso
+    try {
+        const fresh = await getState();
+        if (!fresh) return null;
+        return await tickEngine(fresh);
+    } finally {
+        await redis.del(BULK_LOCK).catch(() => {});
+    }
+};
+
+// Driver server-side: empuja el motor sin depender del navegador. Drena lotes hasta
+// ~50s (bajo maxDuration 60s); si la campaña sigue viva, ENCADENA otra invocación vía
+// auto-fetch autenticado con CRON_SECRET. Un solo driver a la vez (BULK_DRIVER_LOCK).
+const driveLoop = async (driveUrl) => {
+    const redis = getRedisClient();
+    const t0 = Date.now();
+    try {
+        while (Date.now() - t0 < 50_000) {
+            const state = await getState();
+            if (!state || !state.isRunning || state.isAborted) break;
+            if (await isAbortSignaled()) break;
+            if (state.currentCandidateIndex >= (state.candidates?.length || 0)) break;
+            const ticked = await tickOnceLocked();
+            if (ticked === null) await sleep(400); // otro tick tenía el lock; reintenta
+            if (redis) await redis.pexpire(BULK_DRIVER_LOCK, 65_000).catch(() => {});
+        }
+    } catch (e) {
+        console.error('[BULK DRIVER] loop error:', e?.message);
+    }
+    // ¿Sigue viva? Encadena la siguiente invocación. Si terminó/abortó, suelta el lock.
+    const fin = await getState();
+    const alive = fin && fin.isRunning && !fin.isAborted
+        && fin.currentCandidateIndex < (fin.candidates?.length || 0)
+        && !(await isAbortSignaled());
+    if (redis) await redis.del(BULK_DRIVER_LOCK).catch(() => {});
+    if (alive && driveUrl && process.env.CRON_SECRET) {
+        await fetch(driveUrl, { method: 'POST', headers: { Authorization: `Bearer ${process.env.CRON_SECRET}` } }).catch(() => {});
+    }
+};
+
+// URL absoluta a este mismo endpoint (para auto-invocación). Patrón de api/config.js.
+const buildDriveUrl = (req) => {
+    const proto = req.headers['x-forwarded-proto'] || 'https';
+    const host = req.headers['x-forwarded-host'] || req.headers.host;
+    return host ? `${proto}://${host}/api/bulks?action=drive` : null;
+};
+
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // HTTP HANDLER
@@ -371,11 +439,30 @@ const tickEngine = async (state) => {
 export default async function handler(req, res) {
     if (req.method === 'OPTIONS') return res.status(200).end();
 
-    // Seguridad: exige sesión admin válida (el dashboard ya adjunta el Bearer)
-    const userId = await validateAdminSession(req);
-    if (!userId) return res.status(401).json({ error: 'No autorizado' });
-
     const { action } = req.query;
+
+    // Auto-invocación interna del driver server-side: autenticada con CRON_SECRET,
+    // SOLO para la acción 'drive' (empuja el motor sin navegador). Ver driveLoop().
+    const isInternalDrive = action === 'drive'
+        && !!process.env.CRON_SECRET
+        && req.headers.authorization === `Bearer ${process.env.CRON_SECRET}`;
+
+    // Seguridad: exige sesión admin válida (el dashboard ya adjunta el Bearer)
+    if (!isInternalDrive) {
+        const userId = await validateAdminSession(req);
+        if (!userId) return res.status(401).json({ error: 'No autorizado' });
+    }
+
+    // ─── DRIVE (interno): arranca/continúa el driver server-side ────────────────
+    if (action === 'drive') {
+        const redis = getRedisClient();
+        if (!redis) return res.status(200).json({ success: true, driving: false });
+        // Un solo driver a la vez. Si ya hay uno vivo, no arrancar otro.
+        const got = await redis.set(BULK_DRIVER_LOCK, '1', 'EX', 65, 'NX');
+        if (!got) return res.status(200).json({ success: true, driving: true, note: 'ya hay un driver activo' });
+        runInBackground(driveLoop(buildDriveUrl(req)));
+        return res.status(200).json({ success: true, driving: true });
+    }
 
     // ─── FACETS (motor de filtrado facetado) ───────────────────────────────────
     // Devuelve conteos drill-down por dimensión + total del segmento + vista previa.
@@ -702,6 +789,17 @@ export default async function handler(req, res) {
         }
 
         await saveState(newState);
+
+        // 🚀 Arranca el driver server-side: empuja el motor aunque el usuario salga de la
+        // sección o cierre el navegador. Si no hay driver vivo, el 'drive' arranca uno;
+        // si ya hay (caso raro), no-op. Fire-and-forget con waitUntil para no congelarse.
+        const driveUrl = buildDriveUrl(req);
+        if (driveUrl && process.env.CRON_SECRET) {
+            runInBackground(
+                fetch(driveUrl, { method: 'POST', headers: { Authorization: `Bearer ${process.env.CRON_SECRET}` } }).catch(() => {})
+            );
+        }
+
         const payload = { success: true, message: 'Bulk started', state: newState };
         return res.status(200).json(payload);
     }
@@ -722,6 +820,7 @@ export default async function handler(req, res) {
         state.isRunning = false;
         state.isAborted = true;
         state.nextSendAt = null;
+        state.finishedAt = state.finishedAt || Date.now();
         addLog(state, '🛑 Envío masivo ABORTADO por el usuario.');
         await saveState(state);
 
@@ -734,6 +833,7 @@ export default async function handler(req, res) {
         if (redis) {
             await redis.del(REDIS_KEY_STATE);
             await redis.del(REDIS_KEY_ABORT).catch(() => {}); // limpiar señal para la próxima campaña
+            await redis.del(BULK_DRIVER_LOCK).catch(() => {}); // soltar driver para la próxima campaña
         }
         return res.status(200).json({ success: true, message: 'Bulk state cleared' });
     }
@@ -764,32 +864,22 @@ export default async function handler(req, res) {
             state.isRunning = false;
             state.isAborted = true;
             state.nextSendAt = null;
+            state.finishedAt = state.finishedAt || Date.now();
             await saveState(state);
         }
 
-        // 🔥 TICK: Si está corriendo, intentar avanzar la cola
+        // 🔥 TICK (respaldo): el motor lo empuja el driver server-side, pero el poll del
+        // frontend también avanza — con RELEE fresco dentro del lock (tickOnceLocked) para
+        // no duplicar. Si no hay driver vivo, lo re-lanza (robustez si se cayó el encadenado).
         if (state.isRunning && !state.isAborted) {
             const redis = getRedisClient();
-            let lockAcquired = false;
-            
+            // Re-lanzar driver si corre y no hay uno activo (p. ej. se cayó el chain sin navegador).
             if (redis) {
-                // TTL 30s: debe superar la duración de un tick (media = 3 envíos × 3s ≈ 9s) para
-                // que el lock NO expire a media y arranque un tick paralelo (=> duplicados). Se
-                // libera en el finally al terminar; el TTL solo es red de seguridad si el proceso muere.
-                const lock = await redis.set('bulk_lock', '1', 'EX', 30, 'NX');
-                if (lock) lockAcquired = true;
-            } else {
-                // Si no hay redis, pasamos (aunque para este serverless es vital tenerlo)
-                lockAcquired = true;
+                const got = await redis.set(BULK_DRIVER_LOCK, '1', 'EX', 65, 'NX').catch(() => null);
+                if (got) runInBackground(driveLoop(buildDriveUrl(req)));
             }
-
-            if (lockAcquired) {
-                try {
-                    state = await tickEngine(state);
-                } finally {
-                    if (redis) await redis.del('bulk_lock');
-                }
-            }
+            const ticked = await tickOnceLocked();
+            if (ticked) state = ticked;
         }
 
         const payload = { success: true, state };

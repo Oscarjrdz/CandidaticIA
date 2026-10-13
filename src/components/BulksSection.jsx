@@ -83,6 +83,14 @@ const pct = (num, den) => {
     return `${Math.round((n / d) * 100)}%`;
 };
 
+// Duración legible de una campaña (ms → "MM:SS" o "HH:MM:SS").
+const formatDuration = (ms) => {
+    const s = Math.max(0, Math.floor((Number(ms) || 0) / 1000));
+    const hh = Math.floor(s / 3600), mm = Math.floor((s % 3600) / 60), ss = s % 60;
+    const p = (n) => String(n).padStart(2, '0');
+    return hh > 0 ? `${hh}:${p(mm)}:${p(ss)}` : `${p(mm)}:${p(ss)}`;
+};
+
 const CampaignHistoryItem = ({ h, reuseCampaign, deleteCampaign }) => {
     const [stats, setStats] = useState(null);
     const [loading, setLoading] = useState(false);
@@ -310,6 +318,7 @@ const BulksSection = () => {
 
     // Custom UI States
     const [showCompletionModal, setShowCompletionModal] = useState(false);
+    const [nowTs, setNowTs] = useState(Date.now()); // reloj de duración de campaña (tick 1s)
     const [showStartModal, setShowStartModal] = useState(false);
     const [startModalData, setStartModalData] = useState(null);
 
@@ -507,6 +516,15 @@ const BulksSection = () => {
         }
     }, [engineState?.isRunning]);
 
+    // ⏱️ Reloj de duración: mientras corre, refresca el "ahora" cada segundo para
+    // mostrar el tiempo transcurrido. Al terminar, se congela con finishedAt.
+    useEffect(() => {
+        if (!engineState?.isRunning) return;
+        setNowTs(Date.now());
+        const t = setInterval(() => setNowTs(Date.now()), 1000);
+        return () => clearInterval(t);
+    }, [engineState?.isRunning]);
+
     // Auto-alert on campaign complete
     const prevEngineStateRef = useRef(null);
     useEffect(() => {
@@ -591,6 +609,11 @@ const BulksSection = () => {
     };
 
     const isRunning = engineState?.isRunning;
+
+    // ⏱️ Duración de la campaña: desde startedAt hasta finishedAt (o "ahora" si corre).
+    const campaignElapsedMs = engineState?.startedAt
+        ? ((engineState.finishedAt || (isRunning ? nowTs : engineState.startedAt)) - engineState.startedAt)
+        : 0;
 
     // ─── Handlers de selección (limpian exclusiones al cambiar el segmento) ──────
     const toggleFacetValue = (dim, value) => {
@@ -1688,88 +1711,88 @@ const BulksSection = () => {
                 </div>
             )}
 
-            {/* AAA SENDING OVERLAY */}
-            {(isRunning || (isCompleted && showCompletionModal)) && (
+            {/* PROGRESO INLINE (NO INVASIVO): tarjeta flotante mientras corre la campaña.
+                El motor lo empuja el SERVIDOR, así que puedes salir de la sección, usar el
+                sistema o cerrar el navegador — la campaña sigue y al volver verás el avance.
+                No tapa la sección (solo esta tarjeta recibe clics). */}
+            {isRunning && (
+                <div className="absolute bottom-4 right-4 z-[55] w-[20rem] max-w-[calc(100%-2rem)] bg-white dark:bg-[#111b21] rounded-2xl shadow-2xl border border-indigo-200 dark:border-indigo-900/60 overflow-hidden" style={{ animation: 'popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)' }}>
+                    <div className="h-1 bg-gradient-to-r from-blue-400 via-indigo-500 to-purple-600"></div>
+                    <div className="p-4">
+                        <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center gap-2 min-w-0">
+                                <span className="w-7 h-7 rounded-full border-2 border-indigo-600 border-t-transparent animate-spin shrink-0"></span>
+                                <div className="min-w-0">
+                                    <div className="text-sm font-black text-gray-800 dark:text-white truncate">Enviando campaña</div>
+                                    <div className="text-[11px] text-gray-500 dark:text-gray-400 truncate">{engineState?.campaignName || 'En curso'}</div>
+                                </div>
+                            </div>
+                            {/* ⏱️ Reloj de duración */}
+                            <span className="text-sm font-mono font-bold text-indigo-600 dark:text-indigo-400 tabular-nums shrink-0" title="Tiempo transcurrido">
+                                ⏱ {formatDuration(campaignElapsedMs)}
+                            </span>
+                        </div>
+
+                        <div className="flex justify-between text-[11px] font-bold text-gray-600 dark:text-gray-300 uppercase mb-1.5">
+                            <span>Progreso</span>
+                            <span>{Math.min(engineState?.currentCandidateIndex || 0, engineState?.candidates?.length || 0)} / {engineState?.candidates?.length || 0}</span>
+                        </div>
+                        <div className="w-full bg-gray-100 dark:bg-gray-800 rounded-full h-2.5 shadow-inner relative overflow-hidden mb-3">
+                            <div className="absolute top-0 left-0 bottom-0 bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 rounded-full transition-all duration-300 ease-out" style={{width: `${((engineState?.currentCandidateIndex || 0) / (engineState?.candidates?.length || 1)) * 100}%`}}></div>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-mono text-gray-400 dark:text-gray-500 truncate flex-1" title={engineState?.logs?.[0] || ''}>
+                                {engineState?.logs?.[0] || 'Procesando en el servidor…'}
+                            </span>
+                            <button
+                                onClick={abortBulk}
+                                className="px-3 py-1.5 bg-red-50 dark:bg-red-900/20 text-red-600 hover:bg-red-100 dark:hover:bg-red-900/40 rounded-lg font-bold transition-colors text-xs flex items-center gap-1 shrink-0"
+                            >
+                                <XCircle className="w-3.5 h-3.5" /> Detener
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* MODAL DE COMPLETADO (evento puntual, no bloquea 25 min) */}
+            {isCompleted && showCompletionModal && (
                 <div className="absolute inset-0 z-[60] bg-white/95 dark:bg-[#0b141a]/95 backdrop-blur-xl flex flex-col items-center justify-center p-6" style={{ animation: 'fadeIn 0.4s ease-out' }}>
                     <div className="max-w-xl w-full bg-white dark:bg-[#111b21] rounded-3xl shadow-2xl border border-gray-100 dark:border-gray-800 p-8 md:p-12 flex flex-col items-center text-center relative overflow-hidden">
-                        {/* Glowing Background pulse */}
                         <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-400 via-indigo-500 to-purple-600"></div>
-                        <div className="absolute -top-24 -left-24 w-48 h-48 bg-blue-500/10 rounded-full blur-3xl animate-pulse"></div>
-                        <div className="absolute -bottom-24 -right-24 w-48 h-48 bg-purple-500/10 rounded-full blur-3xl animate-pulse"></div>
-
-                        {isCompleted ? (
-                            <div className="flex flex-col items-center" style={{ animation: 'popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275)' }}>
-                                <div className="w-24 h-24 bg-[#d9fdd3] dark:bg-[#0a332c] rounded-full flex items-center justify-center mb-6 shadow-[0_0_30px_rgba(37,211,102,0.3)]">
-                                    <CheckCircle2 className="w-12 h-12 text-[#10a37f] dark:text-[#25d366]" />
-                                </div>
-                                <h2 className="text-3xl font-black text-gray-800 dark:text-white mb-3">¡Campaña Finalizada!</h2>
-                                <p className="text-gray-500 dark:text-gray-400 mb-8 font-medium text-lg">Los mensajes masivos han sido procesados exitosamente.</p>
-                                
-                                <div className="flex justify-center gap-6 w-full mb-10">
-                                    <div className="text-center">
-                                        <div className="text-3xl font-black text-indigo-600 dark:text-indigo-400">{engineState?.totalSent || 0}</div>
-                                        <div className="text-xs uppercase font-bold text-gray-400 mt-1">Enviados</div>
-                                    </div>
-                                    <div className="text-center border-l border-gray-200 dark:border-gray-800 pl-6">
-                                        <div className="text-3xl font-black text-gray-700 dark:text-gray-300">{engineState?.candidates?.length || 0}</div>
-                                        <div className="text-xs uppercase font-bold text-gray-400 mt-1">Destinatarios</div>
-                                    </div>
-                                </div>
-
-                                <button
-                                    onClick={() => {
-                                        setShowCompletionModal(false);
-                                        clearBulk();
-                                    }}
-                                    className="w-full bg-[#10a37f] hover:bg-[#0e906f] dark:bg-[#25d366] dark:hover:bg-[#1faa53] dark:text-[#111b21] text-white font-bold py-4 rounded-xl shadow-[0_8px_20px_rgba(16,163,127,0.3)] dark:shadow-[0_8px_20px_rgba(37,211,102,0.2)] transition-all transform hover:-translate-y-1 active:scale-[0.98] text-lg tracking-wide"
-                                >
-                                    CERRAR Y VOLVER
-                                </button>
+                        <div className="flex flex-col items-center" style={{ animation: 'popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275)' }}>
+                            <div className="w-24 h-24 bg-[#d9fdd3] dark:bg-[#0a332c] rounded-full flex items-center justify-center mb-6 shadow-[0_0_30px_rgba(37,211,102,0.3)]">
+                                <CheckCircle2 className="w-12 h-12 text-[#10a37f] dark:text-[#25d366]" />
                             </div>
-                        ) : (
-                            <div className="w-full flex flex-col items-center z-10 relative">
-                                <div className="w-20 h-20 relative mb-6">
-                                    <div className="absolute inset-0 border-4 border-gray-100 dark:border-gray-800 rounded-full"></div>
-                                    <div className="absolute inset-0 border-4 border-indigo-600 rounded-full border-t-transparent animate-spin"></div>
-                                    <div className="absolute inset-0 flex items-center justify-center">
-                                        <Send className="w-8 h-8 text-indigo-600 animate-pulse" />
-                                    </div>
-                                </div>
-                                <h2 className="text-2xl font-black text-gray-800 dark:text-white mb-2 tracking-tight">Enviando Campaña</h2>
-                                <p className="text-indigo-600 dark:text-indigo-400 font-bold mb-8 flex items-center gap-2">
-                                    <span className="w-2 h-2 rounded-full bg-indigo-600 animate-ping"></span>
-                                    Procesando en segundo plano...
-                                </p>
+                            <h2 className="text-3xl font-black text-gray-800 dark:text-white mb-3">{engineState?.isAborted ? 'Campaña detenida' : '¡Campaña Finalizada!'}</h2>
+                            <p className="text-gray-500 dark:text-gray-400 mb-8 font-medium text-lg">{engineState?.isAborted ? 'Se detuvieron los envíos restantes.' : 'Los mensajes masivos han sido procesados exitosamente.'}</p>
 
-                                <div className="w-full mb-8 relative">
-                                    <div className="flex justify-between text-sm font-bold text-gray-700 dark:text-gray-300 uppercase mb-3">
-                                        <span>Progreso</span>
-                                        <span>{Math.min(engineState?.currentCandidateIndex || 0, engineState?.candidates?.length || 0)} / {engineState?.candidates?.length || 0}</span>
-                                    </div>
-                                    <div className="w-full bg-gray-100 dark:bg-gray-800 rounded-full h-4 shadow-inner relative overflow-hidden">
-                                        <div className="absolute top-0 left-0 bottom-0 bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 rounded-full transition-all duration-300 ease-out flex items-center justify-end pr-2" style={{width: `${((engineState?.currentCandidateIndex || 0) / (engineState?.candidates?.length || 1)) * 100}%`}}>
-                                            <div className="w-1.5 h-1.5 bg-white rounded-full opacity-50 animate-ping"></div>
-                                        </div>
-                                    </div>
+                            <div className="flex justify-center gap-6 w-full mb-10">
+                                <div className="text-center">
+                                    <div className="text-3xl font-black text-indigo-600 dark:text-indigo-400">{engineState?.totalSent || 0}</div>
+                                    <div className="text-xs uppercase font-bold text-gray-400 mt-1">Enviados</div>
                                 </div>
-
-                                <div className="w-full h-12 bg-gray-50 dark:bg-[#1a2329] border border-gray-100 dark:border-gray-800 rounded-lg flex items-center justify-center px-4 overflow-hidden mb-8 relative">
-                                    <div className="absolute left-0 w-8 h-full bg-gradient-to-r from-gray-50 dark:from-[#1a2329] to-transparent z-10"></div>
-                                    <div className="absolute right-0 w-8 h-full bg-gradient-to-l from-gray-50 dark:from-[#1a2329] to-transparent z-10"></div>
-                                    <span className="text-xs font-mono text-gray-500 dark:text-gray-400 truncate">
-                                        {engineState?.logs?.[0] || 'Iniciando motores...'}
-                                    </span>
+                                <div className="text-center border-l border-gray-200 dark:border-gray-800 pl-6">
+                                    <div className="text-3xl font-black text-gray-700 dark:text-gray-300">{engineState?.candidates?.length || 0}</div>
+                                    <div className="text-xs uppercase font-bold text-gray-400 mt-1">Destinatarios</div>
                                 </div>
-
-                                <button
-                                    onClick={abortBulk}
-                                    className="px-8 py-3 bg-red-50 dark:bg-red-900/20 text-red-600 hover:bg-red-100 dark:hover:bg-red-900/40 rounded-xl font-bold transition-all text-sm flex items-center gap-2 group"
-                                >
-                                    <XCircle className="w-4 h-4 group-hover:scale-110 transition-transform" />
-                                    DETENER ENVÍOS
-                                </button>
+                                <div className="text-center border-l border-gray-200 dark:border-gray-800 pl-6">
+                                    <div className="text-3xl font-black text-gray-700 dark:text-gray-300 font-mono tabular-nums">{formatDuration(campaignElapsedMs)}</div>
+                                    <div className="text-xs uppercase font-bold text-gray-400 mt-1">Duración</div>
+                                </div>
                             </div>
-                        )}
+
+                            <button
+                                onClick={() => {
+                                    setShowCompletionModal(false);
+                                    clearBulk();
+                                }}
+                                className="w-full bg-[#10a37f] hover:bg-[#0e906f] dark:bg-[#25d366] dark:hover:bg-[#1faa53] dark:text-[#111b21] text-white font-bold py-4 rounded-xl shadow-[0_8px_20px_rgba(16,163,127,0.3)] dark:shadow-[0_8px_20px_rgba(37,211,102,0.2)] transition-all transform hover:-translate-y-1 active:scale-[0.98] text-lg tracking-wide"
+                            >
+                                CERRAR Y VOLVER
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}
