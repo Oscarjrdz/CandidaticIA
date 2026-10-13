@@ -47,6 +47,10 @@ const loadProjectData = async (redis) => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const REDIS_KEY_STATE = 'bulks:engine_state';
+// Señal DURABLE de abort. Vive fuera del blob de estado para que un tick en vuelo
+// (que tiene su propia copia de `state` en memoria) NO pueda revivir isRunning al
+// guardar: el abort se escribe aquí y se lee FRESCO desde Redis. Ver tickEngine/abort.
+const REDIS_KEY_ABORT = 'bulks:engine_aborted';
 const REDIS_KEY_DRAFT = 'bulks:draft';
 const REDIS_KEY_HISTORY = 'bulks:history';
 const REDIS_KEY_AUDIENCES = 'bulks:audiences'; // públicos guardados (audiencias dinámicas)
@@ -116,13 +120,23 @@ const addLog = (state, msg) => {
 
 // ─── Core Tick Engine ────────────────────────────────────────────────────────
 
+const isAbortSignaled = async () => {
+    try {
+        const redis = getRedisClient();
+        if (!redis) return false;
+        return !!(await redis.get(REDIS_KEY_ABORT));
+    } catch { return false; }
+};
+
 const tickEngine = async (state) => {
     // Gate 1: no está corriendo
     if (!state || !state.isRunning) return state;
 
-    // Gate 2: fue abortado
-    if (state.isAborted) {
+    // Gate 2: fue abortado (flag en el blob O señal durable fresca en Redis)
+    if (state.isAborted || await isAbortSignaled()) {
         state.isRunning = false;
+        state.isAborted = true;
+        state.nextSendAt = null;
         addLog(state, '🛑 Envío masivo ABORTADO por el usuario.');
         await saveState(state);
         return state;
@@ -153,6 +167,12 @@ const tickEngine = async (state) => {
         const perMsgDelay = isMediaCampaign ? 3000 : 50;
 
         while (sentInTick < BATCH_SIZE && state.currentCandidateIndex < state.candidates.length && state.isRunning && !state.isAborted) {
+            // Abort a media ráfaga: relee la señal durable fresca antes de cada envío.
+            if (await isAbortSignaled()) {
+                state.isAborted = true;
+                state.isRunning = false;
+                break;
+            }
             // ─── ENVIAR MENSAJE ──────────────────────────────────────────────────
             const candidateId = state.candidates[state.currentCandidateIndex];
 
@@ -316,8 +336,16 @@ const tickEngine = async (state) => {
             await new Promise(r => setTimeout(r, perMsgDelay));
         }
 
-        // ¿Ya terminó todo el lote/campaña?
-        if (state.currentCandidateIndex >= state.candidates.length) {
+        // Red de seguridad: si se abortó (señal durable) mientras corría el lote, NO revivir
+        // isRunning al guardar. Esta es la causa del bug "aborté y siguió enviando": el tick
+        // en vuelo pisaba el abort con su copia en memoria.
+        if (state.isAborted || await isAbortSignaled()) {
+            state.isRunning = false;
+            state.isAborted = true;
+            state.nextSendAt = null;
+            addLog(state, '🛑 Envío masivo ABORTADO por el usuario.');
+        } else if (state.currentCandidateIndex >= state.candidates.length) {
+            // ¿Ya terminó todo el lote/campaña?
             state.isRunning = false;
             state.nextSendAt = null;
             addLog(state, '✅ Envío masivo completado. Todos los contactos procesados.');
@@ -593,6 +621,9 @@ export default async function handler(req, res) {
         const campaignId = `camp_${Date.now()}`;
         const displayName = String(campaignName).trim().slice(0, 120);
 
+        // Limpiar cualquier señal de abort previa para que la nueva campaña no nazca abortada.
+        { const redis = getRedisClient(); if (redis) await redis.del(REDIS_KEY_ABORT).catch(() => {}); }
+
         const newState = {
             isRunning: true,
             isAborted: false,
@@ -677,6 +708,12 @@ export default async function handler(req, res) {
 
     // ─── ABORT ───────────────────────────────────────────────────────────────
     if (req.method === 'POST' && action === 'abort') {
+        // Señal DURABLE primero: aunque un tick esté en vuelo con su copia en memoria,
+        // la leerá fresca y no podrá revivir isRunning al guardar. (Antes: el tick pisaba
+        // el abort y la campaña seguía enviando tras recargar.)
+        const redis = getRedisClient();
+        if (redis) await redis.set(REDIS_KEY_ABORT, '1', 'EX', 60 * 60).catch(() => {});
+
         const state = await getState();
         if (!state) {
             return res.status(200).json({ success: true, message: 'No hay campaña activa.' });
@@ -696,6 +733,7 @@ export default async function handler(req, res) {
         const redis = getRedisClient();
         if (redis) {
             await redis.del(REDIS_KEY_STATE);
+            await redis.del(REDIS_KEY_ABORT).catch(() => {}); // limpiar señal para la próxima campaña
         }
         return res.status(200).json({ success: true, message: 'Bulk state cleared' });
     }
@@ -718,6 +756,15 @@ export default async function handler(req, res) {
                     logs: []
                 }
             });
+        }
+
+        // Señal durable de abort: si está puesta, NO avanzar y forzar isRunning=false
+        // (aunque un tick previo haya revivido isRunning al guardar).
+        if (state.isRunning && await isAbortSignaled()) {
+            state.isRunning = false;
+            state.isAborted = true;
+            state.nextSendAt = null;
+            await saveState(state);
         }
 
         // 🔥 TICK: Si está corriendo, intentar avanzar la cola
