@@ -635,9 +635,12 @@ export const unblockUltraMsgContact = async () => ({ success: false, error: 'Not
  * @param {string} [filename] - Optional filename for display
  * @returns {{ mediaId: string } | null}
  */
-export const uploadMediaToMeta = async (buffer, mimeType, filename = 'file') => {
+export const uploadMediaToMeta = async (buffer, mimeType, filename = 'file', phoneNumberId = null) => {
     const config = getMetaConfig();
-    if (!config.phoneNumberId || !config.accessToken) {
+    // Los media_id de Meta son POR NÚMERO: hay que subir al MISMO número que enviará el
+    // mensaje, o Meta rechaza con "image.id is not a valid ... media attachment ID".
+    const targetPhoneId = phoneNumberId || config.phoneNumberId;
+    if (!targetPhoneId || !config.accessToken) {
         console.error('❌ [uploadMediaToMeta] Missing Meta config');
         return null;
     }
@@ -655,7 +658,7 @@ export const uploadMediaToMeta = async (buffer, mimeType, filename = 'file') => 
         form.append('file', buffer, { filename, contentType: mimeType });
         form.append('type', basicType);
 
-        const url = `${GRAPH_BASE_URL}/${config.phoneNumberId}/media`;
+        const url = `${GRAPH_BASE_URL}/${targetPhoneId}/media`;
         const response = await axios.post(url, form, {
             headers: {
                 'Authorization': `Bearer ${config.accessToken}`,

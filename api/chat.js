@@ -496,42 +496,58 @@ export default async function handler(req, res) {
                         return `${protocol}://${host}${relUrl}`;
                     };
 
+                    // Número emisor REAL de este candidato (multi-número). Los media_id de Meta
+                    // son por número: hay que subir y cachear el id ATADO a este número, o
+                    // Meta rechaza "image.id is not a valid ... media attachment ID".
+                    const senderNumberId = (ultraConfig.instanceId && /^\d{10,}$/.test(String(ultraConfig.instanceId)))
+                        ? String(ultraConfig.instanceId) : null;
+                    const mediaCacheKey = senderNumberId || 'default';
+
                     if (isInternalMedia) {
                         try {
                             const urlObj = new URL(mediaUrl, 'https://candidatic.com');
                             const redisMediaId = urlObj.searchParams.get('id');
-                            
+
                             if (redisMediaId) {
                                 redisMediaIdForRetry = redisMediaId;
                                 const redis = getRedisClient();
                                 const metaRaw = await redis.get(`meta:image:${redisMediaId}`);
                                 const meta = metaRaw ? JSON.parse(metaRaw) : {};
                                 const filename = meta.filename || (type === 'document' ? 'documento.pdf' : 'imagen.jpg');
+                                // Caché de media_id POR número emisor. (El viejo meta.metaMediaId
+                                // era único y servía ids de otro número → causa del bug.)
+                                let cachedMediaId = meta.metaMediaIds?.[mediaCacheKey];
+                                // Migración segura: el viejo metaMediaId único SIEMPRE fue del número
+                                // default (así subía la versión anterior), así que es válido solo ahí.
+                                if (!cachedMediaId && meta.metaMediaId
+                                    && (senderNumberId === process.env.META_PHONE_NUMBER_ID || senderNumberId === null)) {
+                                    cachedMediaId = meta.metaMediaId;
+                                }
 
                                 // Strategy 1: Use pre-cached Meta media_id (from upload step — most reliable)
-                                if (meta.metaMediaId) {
-                                    extraParams.mediaId = meta.metaMediaId;
+                                if (cachedMediaId) {
+                                    extraParams.mediaId = cachedMediaId;
                                     extraParams.filename = filename;
                                     deliveryContent = '';
-                                    console.log(`✅ [Media] Using pre-cached Meta media_id=${meta.metaMediaId}`);
+                                    console.log(`✅ [Media] Using pre-cached Meta media_id=${cachedMediaId} (num=${mediaCacheKey})`);
                                 } else {
-                                    // Strategy 2: Re-upload base64 from Redis to Meta
+                                    // Strategy 2: Re-upload base64 from Redis to Meta (al número emisor)
                                     const base64Str = await redis.get(`image:${redisMediaId}`);
                                     if (base64Str) {
                                         const buffer = Buffer.from(base64Str, 'base64');
                                         const mimeType = meta.mime || (type === 'document' ? 'application/pdf' : 'image/jpeg');
 
-                                        console.log(`📤 [Media] Re-uploading ${filename} (${mimeType}, ${Math.round(buffer.length/1024)}KB) to Meta...`);
+                                        console.log(`📤 [Media] Re-uploading ${filename} (${mimeType}, ${Math.round(buffer.length/1024)}KB) to Meta (num=${mediaCacheKey})...`);
                                         const { uploadMediaToMeta } = await import('./whatsapp/utils.js');
-                                        const uploadResult = await uploadMediaToMeta(buffer, mimeType, filename);
+                                        const uploadResult = await uploadMediaToMeta(buffer, mimeType, filename, senderNumberId);
 
                                         if (uploadResult?.mediaId) {
                                             extraParams.mediaId = uploadResult.mediaId;
                                             extraParams.filename = filename;
                                             deliveryContent = '';
-                                            console.log(`✅ [Media] Re-uploaded to Meta → media_id=${uploadResult.mediaId}`);
-                                            // Cache for next time
-                                            meta.metaMediaId = uploadResult.mediaId;
+                                            console.log(`✅ [Media] Re-uploaded to Meta → media_id=${uploadResult.mediaId} (num=${mediaCacheKey})`);
+                                            // Cache for next time (por número)
+                                            meta.metaMediaIds = { ...(meta.metaMediaIds || {}), [mediaCacheKey]: uploadResult.mediaId };
                                             redis.set(`meta:image:${redisMediaId}`, JSON.stringify(meta)).catch(() => {});
                                         } else {
                                             console.log(`⚠️ [Media] Meta upload returned no ID, falling back to URL`);
@@ -567,7 +583,7 @@ export default async function handler(req, res) {
                     // id fails, re-upload the file from Redis/Blob and retry once before
                     // giving up, instead of surfacing a raw #131000 to the recruiter.
                     if (!sendResult?.success && extraParams.mediaId && redisMediaIdForRetry) {
-                        console.log(`⚠️ [Media] Cached metaMediaId=${extraParams.mediaId} failed (${sendResult?.error}), re-uploading and retrying once...`);
+                        console.log(`⚠️ [Media] media_id=${extraParams.mediaId} falló (${sendResult?.error}), re-subiendo al número emisor (num=${mediaCacheKey}) y reintentando una vez...`);
                         try {
                             const redis = getRedisClient();
                             const base64Str = await redis.get(`image:${redisMediaIdForRetry}`);
@@ -579,13 +595,13 @@ export default async function handler(req, res) {
                                 const mimeType = meta.mime || (type === 'document' ? 'application/pdf' : 'image/jpeg');
 
                                 const { uploadMediaToMeta } = await import('./whatsapp/utils.js');
-                                const uploadResult = await uploadMediaToMeta(buffer, mimeType, filename);
+                                const uploadResult = await uploadMediaToMeta(buffer, mimeType, filename, senderNumberId);
 
                                 if (uploadResult?.mediaId) {
                                     extraParams.mediaId = uploadResult.mediaId;
-                                    meta.metaMediaId = uploadResult.mediaId;
+                                    meta.metaMediaIds = { ...(meta.metaMediaIds || {}), [mediaCacheKey]: uploadResult.mediaId };
                                     redis.set(`meta:image:${redisMediaIdForRetry}`, JSON.stringify(meta)).catch(() => {});
-                                    console.log(`✅ [Media] Re-uploaded to Meta → media_id=${uploadResult.mediaId}, retrying send...`);
+                                    console.log(`✅ [Media] Re-subido a Meta → media_id=${uploadResult.mediaId} (num=${mediaCacheKey}), reintentando envío...`);
                                     sendResult = await sendUltraMsgMessage(ultraConfig.instanceId, ultraConfig.token, cleanTo, '', type, extraParams);
                                 }
                             }
