@@ -73,6 +73,34 @@ function AppShell() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
 
+  // 📨 Avance de campaña masiva para la píldora del header (visible desde cualquier sección).
+  // Poll ligero (status_light: resumen chico, sin los arrays pesados) cada 5s. La campaña la
+  // empuja el servidor; esto solo la MUESTRA. 'nowTs' refresca el reloj en vivo cada segundo.
+  const [bulkProgress, setBulkProgress] = useState(null);
+  const [bulkNowTs, setBulkNowTs] = useState(Date.now());
+  useEffect(() => {
+    if (!user) return;
+    let alive = true;
+    const poll = async () => {
+      try {
+        const res = await fetch('/api/bulks?action=status_light');
+        const data = await res.json();
+        if (alive) setBulkProgress(data?.success && data.running ? data : null);
+      } catch { /* silencioso */ }
+    };
+    poll();
+    const id = setInterval(poll, 5000);
+    return () => { alive = false; clearInterval(id); };
+  }, [user]);
+  useEffect(() => {
+    if (!bulkProgress?.running) return;
+    const t = setInterval(() => setBulkNowTs(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [bulkProgress?.running]);
+  const abortBulkFromHeader = async () => {
+    try { await fetch('/api/bulks?action=abort', { method: 'POST' }); setBulkProgress(null); } catch { /* noop */ }
+  };
+
   // Conteo de no-leídos — mismo cálculo que usa Chat Web, persistido solo como cache visual inicial.
   const [chatUnreadCount, setChatUnreadCount] = useState(() => {
     const saved = localStorage.getItem('chat_unread_rbac_v2');
@@ -349,6 +377,34 @@ function AppShell() {
                       : activeSection === 'vox' ? 'Cerebro de voz de Brenda: habla por micrófono y mide el costo por minuto en vivo'
                       : 'Credenciales y configuración del sistema'}
                   </p>
+
+                  {/* 📨 Píldora de campaña masiva en curso — visible desde cualquier sección */}
+                  {bulkProgress?.running && (() => {
+                    const total = bulkProgress.total || 0;
+                    const idx = Math.min(bulkProgress.index || 0, total);
+                    const pctW = total > 0 ? Math.round((idx / total) * 100) : 0;
+                    const elapsedS = Math.max(0, Math.floor(((bulkProgress.finishedAt || bulkNowTs) - (bulkProgress.startedAt || bulkNowTs)) / 1000));
+                    const hh = Math.floor(elapsedS / 3600), mm = Math.floor((elapsedS % 3600) / 60), ss = elapsedS % 60;
+                    const pad = (n) => String(n).padStart(2, '0');
+                    const clock = hh > 0 ? `${hh}:${pad(mm)}:${pad(ss)}` : `${pad(mm)}:${pad(ss)}`;
+                    return (
+                      <div className="hidden md:flex items-center gap-2.5 shrink-0 bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-900/60 rounded-full pl-2.5 pr-1.5 py-1" title={`Campaña: ${bulkProgress.campaignName || ''}`}>
+                        <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse shrink-0"></span>
+                        <span className="text-xs font-bold text-indigo-700 dark:text-indigo-300 whitespace-nowrap">Enviando {idx.toLocaleString('es-MX')}/{total.toLocaleString('es-MX')}</span>
+                        <div className="w-16 h-1.5 bg-indigo-100 dark:bg-indigo-900/60 rounded-full overflow-hidden shrink-0">
+                          <div className="h-full bg-indigo-500 rounded-full transition-all duration-500" style={{ width: `${pctW}%` }}></div>
+                        </div>
+                        <span className="text-xs font-mono font-bold text-indigo-600 dark:text-indigo-400 tabular-nums shrink-0" title="Tiempo transcurrido">⏱ {clock}</span>
+                        <button
+                          onClick={abortBulkFromHeader}
+                          className="text-[11px] font-bold text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/40 rounded-full px-2 py-0.5 transition-colors shrink-0"
+                          title="Detener la campaña"
+                        >
+                          Detener
+                        </button>
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
 

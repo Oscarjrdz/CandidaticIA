@@ -856,6 +856,25 @@ export default async function handler(req, res) {
         return res.status(200).json({ success: true, message: 'Bulk aborted' });
     }
 
+    // ─── STATUS LIGHT (resumen chico para el header global) ────────────────────
+    // Solo-lectura: NO hace tick ni devuelve los arrays pesados (candidates/messages/logs).
+    // Pensado para que el header del dashboard muestre el avance sin costar ancho de banda.
+    if (req.method === 'GET' && action === 'status_light') {
+        const state = await getState();
+        if (!state) return res.status(200).json({ success: true, running: false });
+        return res.status(200).json({
+            success: true,
+            running: !!state.isRunning,
+            aborted: !!state.isAborted,
+            campaignName: state.campaignName || null,
+            index: Math.min(state.currentCandidateIndex || 0, state.candidates?.length || 0),
+            total: state.candidates?.length || 0,
+            totalSent: state.totalSent || 0,
+            startedAt: state.startedAt || null,
+            finishedAt: state.finishedAt || null
+        });
+    }
+
     // ─── CLEAR ───────────────────────────────────────────────────────────────
     if (req.method === 'POST' && action === 'clear') {
         const redis = getRedisClient();

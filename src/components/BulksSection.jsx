@@ -1711,50 +1711,9 @@ const BulksSection = () => {
                 </div>
             )}
 
-            {/* PROGRESO INLINE (NO INVASIVO): tarjeta flotante mientras corre la campaña.
-                El motor lo empuja el SERVIDOR, así que puedes salir de la sección, usar el
-                sistema o cerrar el navegador — la campaña sigue y al volver verás el avance.
-                No tapa la sección (solo esta tarjeta recibe clics). */}
-            {isRunning && (
-                <div className="absolute bottom-4 right-4 z-[55] w-[20rem] max-w-[calc(100%-2rem)] bg-white dark:bg-[#111b21] rounded-2xl shadow-2xl border border-indigo-200 dark:border-indigo-900/60 overflow-hidden" style={{ animation: 'popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)' }}>
-                    <div className="h-1 bg-gradient-to-r from-blue-400 via-indigo-500 to-purple-600"></div>
-                    <div className="p-4">
-                        <div className="flex items-center justify-between mb-3">
-                            <div className="flex items-center gap-2 min-w-0">
-                                <span className="w-7 h-7 rounded-full border-2 border-indigo-600 border-t-transparent animate-spin shrink-0"></span>
-                                <div className="min-w-0">
-                                    <div className="text-sm font-black text-gray-800 dark:text-white truncate">Enviando campaña</div>
-                                    <div className="text-[11px] text-gray-500 dark:text-gray-400 truncate">{engineState?.campaignName || 'En curso'}</div>
-                                </div>
-                            </div>
-                            {/* ⏱️ Reloj de duración */}
-                            <span className="text-sm font-mono font-bold text-indigo-600 dark:text-indigo-400 tabular-nums shrink-0" title="Tiempo transcurrido">
-                                ⏱ {formatDuration(campaignElapsedMs)}
-                            </span>
-                        </div>
-
-                        <div className="flex justify-between text-[11px] font-bold text-gray-600 dark:text-gray-300 uppercase mb-1.5">
-                            <span>Progreso</span>
-                            <span>{Math.min(engineState?.currentCandidateIndex || 0, engineState?.candidates?.length || 0)} / {engineState?.candidates?.length || 0}</span>
-                        </div>
-                        <div className="w-full bg-gray-100 dark:bg-gray-800 rounded-full h-2.5 shadow-inner relative overflow-hidden mb-3">
-                            <div className="absolute top-0 left-0 bottom-0 bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 rounded-full transition-all duration-300 ease-out" style={{width: `${((engineState?.currentCandidateIndex || 0) / (engineState?.candidates?.length || 1)) * 100}%`}}></div>
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                            <span className="text-[10px] font-mono text-gray-400 dark:text-gray-500 truncate flex-1" title={engineState?.logs?.[0] || ''}>
-                                {engineState?.logs?.[0] || 'Procesando en el servidor…'}
-                            </span>
-                            <button
-                                onClick={abortBulk}
-                                className="px-3 py-1.5 bg-red-50 dark:bg-red-900/20 text-red-600 hover:bg-red-100 dark:hover:bg-red-900/40 rounded-lg font-bold transition-colors text-xs flex items-center gap-1 shrink-0"
-                            >
-                                <XCircle className="w-3.5 h-3.5" /> Detener
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
+            {/* La "ventanita" flotante se eliminó: el avance de la campaña ahora se muestra
+                en la PÍLDORA DEL HEADER global (App.jsx), visible desde cualquier sección.
+                Aquí dentro quedan el estado "Enviando a" y el botón ABORTAR de la Col 3. */}
 
             {/* MODAL DE COMPLETADO (evento puntual, no bloquea 25 min) */}
             {isCompleted && showCompletionModal && (
