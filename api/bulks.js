@@ -414,7 +414,12 @@ export default async function handler(req, res) {
         try {
             const audiences = await getAudiences(redis);
             // Conteo en vivo por público (dinámico). Es barato: solo enteros por SINTERCARD.
+            // Público ESTÁTICO (includeIds): lista fija de personas → el conteo es su tamaño,
+            // no se recalcula con filtros.
             const withCounts = await Promise.all(audiences.map(async (a) => {
+                if (Array.isArray(a.includeIds) && a.includeIds.length) {
+                    return { ...a, count: a.includeIds.length };
+                }
                 let count = 0;
                 try { count = await countSegment(redis, a.selection || {}); } catch { count = 0; }
                 const exCount = Array.isArray(a.excludeIds) ? a.excludeIds.length : 0;
@@ -432,15 +437,18 @@ export default async function handler(req, res) {
         const redis = getRedisClient();
         if (!redis) return res.status(500).json({ error: 'Sin conexión a Redis' });
         try {
-            const { name, selection, excludeIds, criteriaSummary, broadcastTag } = req.body || {};
+            const { name, selection, excludeIds, includeIds, criteriaSummary, broadcastTag } = req.body || {};
             if (!name || !String(name).trim()) return res.status(400).json({ error: 'Falta el nombre del público' });
             const audiences = await getAudiences(redis);
             const cleanBroadcastTag = (typeof broadcastTag === 'string' ? broadcastTag : '').trim().slice(0, 60) || null;
+            // Público ESTÁTICO: lista fija de IDs elegidos a mano (no cambia con filtros).
+            const cleanIncludeIds = Array.isArray(includeIds) ? includeIds.slice(0, 20000) : [];
             const audience = {
                 id: `aud_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
                 name: String(name).trim().slice(0, 80),
-                selection: selection || {},
-                excludeIds: Array.isArray(excludeIds) ? excludeIds : [],
+                selection: cleanIncludeIds.length ? {} : (selection || {}),
+                excludeIds: cleanIncludeIds.length ? [] : (Array.isArray(excludeIds) ? excludeIds : []),
+                includeIds: cleanIncludeIds,
                 criteriaSummary: criteriaSummary || '',
                 broadcastTag: cleanBroadcastTag,
                 createdAt: new Date().toISOString(),
@@ -463,14 +471,21 @@ export default async function handler(req, res) {
         const redis = getRedisClient();
         if (!redis) return res.status(500).json({ error: 'Sin conexión a Redis' });
         try {
-            const { id, name, selection, excludeIds, criteriaSummary, broadcastTag } = req.body || {};
+            const { id, name, selection, excludeIds, includeIds, criteriaSummary, broadcastTag } = req.body || {};
             if (!id) return res.status(400).json({ error: 'Falta id del público' });
             const audiences = await getAudiences(redis);
             const idx = audiences.findIndex(a => a.id === id);
             if (idx === -1) return res.status(404).json({ error: 'Público no encontrado' });
             if (name != null) audiences[idx].name = String(name).trim().slice(0, 80);
-            if (selection !== undefined) audiences[idx].selection = selection || {};
-            if (excludeIds !== undefined) audiences[idx].excludeIds = Array.isArray(excludeIds) ? excludeIds : [];
+            // Lista estática (includeIds) y filtros dinámicos (selection/excludeIds) son excluyentes.
+            if (includeIds !== undefined) {
+                const cleanIncludeIds = Array.isArray(includeIds) ? includeIds.slice(0, 20000) : [];
+                audiences[idx].includeIds = cleanIncludeIds;
+                if (cleanIncludeIds.length) { audiences[idx].selection = {}; audiences[idx].excludeIds = []; }
+            }
+            const isStatic = Array.isArray(audiences[idx].includeIds) && audiences[idx].includeIds.length;
+            if (selection !== undefined && !isStatic) audiences[idx].selection = selection || {};
+            if (excludeIds !== undefined && !isStatic) audiences[idx].excludeIds = Array.isArray(excludeIds) ? excludeIds : [];
             if (criteriaSummary !== undefined) audiences[idx].criteriaSummary = criteriaSummary || '';
             if (broadcastTag !== undefined) {
                 const cleanBroadcastTag = (typeof broadcastTag === 'string' ? broadcastTag : '').trim().slice(0, 60) || null;
@@ -546,8 +561,14 @@ export default async function handler(req, res) {
                 audience = audiences.find(a => a.id === audienceId) || null;
             }
             if (!audience) return res.status(404).json({ error: 'Público no encontrado.' });
-            effectiveSegment = { selection: audience.selection || {}, excludeIds: audience.excludeIds || [] };
-            candidates = null; // forzar resolución fresca desde los filtros del público
+            if (Array.isArray(audience.includeIds) && audience.includeIds.length) {
+                // Público ESTÁTICO: lista fija de personas elegidas a mano.
+                candidates = audience.includeIds;
+                effectiveSegment = null;
+            } else {
+                effectiveSegment = { selection: audience.selection || {}, excludeIds: audience.excludeIds || [] };
+                candidates = null; // forzar resolución fresca desde los filtros del público
+            }
         }
         if ((!candidates || !candidates.length) && effectiveSegment && effectiveSegment.selection) {
             const redis = getRedisClient();

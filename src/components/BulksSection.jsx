@@ -260,7 +260,8 @@ const BulksSection = () => {
 
     // Col 1: Filtrado facetado (segmento)
     const [selection, setSelection] = useState(EMPTY_SELECTION);
-    const [excludeIds, setExcludeIds] = useState(new Set()); // destildados dentro de la vista previa
+    const [excludeIds, setExcludeIds] = useState(new Set()); // (legado) exclusiones de públicos dinámicos guardados
+    const [pickedIds, setPickedIds] = useState(new Set());   // selección positiva: palomea a quién quieres → público/lista FIJA de solo esos
     const [facetData, setFacetData] = useState(() => facetCache || EMPTY_FACETS);
     const [facetLoading, setFacetLoading] = useState(() => !facetCache); // sin skeleton si hay caché
     // Si había caché al montar, la PRIMERA carga (revalidación) es silenciosa (no muestra
@@ -291,6 +292,8 @@ const BulksSection = () => {
     const [senderNumberId, setSenderNumberId] = useState(''); // '' = Automático (número original de cada candidato)
     const [selectedTemplateId, setSelectedTemplateId] = useState('');
     const [templateParams, setTemplateParams] = useState({});
+    // Recuerda los últimos valores de variables usados POR plantilla (persistido en el draft).
+    const [templateParamsByTemplate, setTemplateParamsByTemplate] = useState({});
     const [messageText, setMessageText] = useState('');
 
     // Engine State
@@ -443,6 +446,7 @@ const BulksSection = () => {
                     if (parsed.messageText) setMessageText(parsed.messageText);
                     if (parsed.selection) setSelection({ ...EMPTY_SELECTION, ...parsed.selection });
                     if (Array.isArray(parsed.excludeIds)) setExcludeIds(new Set(parsed.excludeIds));
+                    if (parsed.templateParamsByTemplate && typeof parsed.templateParamsByTemplate === 'object') setTemplateParamsByTemplate(parsed.templateParamsByTemplate);
                     if (parsed.senderNumberId) setSenderNumberId(parsed.senderNumberId);
                 }
             })
@@ -480,6 +484,7 @@ const BulksSection = () => {
             messageText,
             selection,
             excludeIds: Array.from(excludeIds),
+            templateParamsByTemplate,
             senderNumberId
         };
         const timer = setTimeout(() => {
@@ -491,7 +496,7 @@ const BulksSection = () => {
         }, 1200);
 
         return () => clearTimeout(timer);
-    }, [messageText, selection, excludeIds, senderNumberId]);
+    }, [messageText, selection, excludeIds, templateParamsByTemplate, senderNumberId]);
 
     // 🏎️ BANDWIDTH SAVER: Toggle fast Worker polling based on campaign state
     useEffect(() => {
@@ -630,9 +635,11 @@ const BulksSection = () => {
         setSelection(EMPTY_SELECTION);
     };
 
-    const toggleExclude = (id) => {
+    // Selección positiva: palomea a quién quieres. 0 elegidos = toda la base / filtros (como hoy).
+    const togglePicked = (id) => {
         if (isRunning) return;
-        setExcludeIds(prev => {
+        setSelectedAudienceId(null); // elegir a mano manda sobre un público guardado
+        setPickedIds(prev => {
             const next = new Set(prev);
             if (next.has(id)) next.delete(id);
             else next.add(id);
@@ -644,11 +651,12 @@ const BulksSection = () => {
         setMessageText(prev => prev + emoji);
     };
 
-    // Total del segmento y cuántos se enviarán (segmento menos exclusiones dentro de la vista previa)
+    // Total del segmento y cuántos se enviarán.
     const segmentTotal = facetData.total || 0;
-    const adHocCount = Math.max(0, segmentTotal - excludeIds.size);
+    const hasPicks = pickedIds.size > 0; // el usuario eligió a mano → lista FIJA de solo esos
+    const adHocCount = hasPicks ? pickedIds.size : segmentTotal;
     // Destinatario del envío. Prioridad: envío directo (allowlist a teléfonos puntuales)
-    // > público seleccionado (conteo en vivo) > segmento ad-hoc (filtros).
+    // > público guardado (conteo en vivo) > selección a mano (lista fija) > segmento por filtros.
     const directMode = directRecipients.length > 0;
     const selectedAudience = selectedAudienceId ? (audiences.find(a => a.id === selectedAudienceId) || null) : null;
     const sendCount = directMode ? directRecipients.length : (selectedAudience ? (selectedAudience.count || 0) : adHocCount);
@@ -705,12 +713,13 @@ const BulksSection = () => {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    // Envío directo: lista explícita de IDs (allowlist), ignora filtros y público.
-                    // Si no, y hay público seleccionado, el server resuelve sus filtros FRESCOS
-                    // (dinámico). Si no, resuelve el segmento ad-hoc de la Col 1.
-                    candidates: directMode ? directRecipients.map(r => r.id) : undefined,
+                    // Prioridad de destinatarios: envío directo (allowlist) > público guardado
+                    // (filtros FRESCOS en server) > selección a mano (lista fija de IDs) > segmento ad-hoc.
+                    candidates: directMode
+                        ? directRecipients.map(r => r.id)
+                        : (!selectedAudience && hasPicks ? Array.from(pickedIds) : undefined),
                     audienceId: directMode ? null : (selectedAudience?.id || null),
-                    segment: directMode ? null : { selection, excludeIds: Array.from(excludeIds) },
+                    segment: (directMode || selectedAudience || hasPicks) ? null : { selection, excludeIds: Array.from(excludeIds) },
                     bulkType,
                     messages: startModalData.validMsgs,
                     templateData: startModalData.tplData,
@@ -756,6 +765,7 @@ const BulksSection = () => {
             await fetch('/api/bulks?action=clear', { method: 'POST' });
             setEngineState(null);
             setExcludeIds(new Set());
+            setPickedIds(new Set());
             setDirectRecipients([]);
             setCustomCampaignName('');
             setTemplateParams({});
@@ -817,7 +827,13 @@ const BulksSection = () => {
             const res = await fetch('/api/bulks?action=audience_create', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
+                body: JSON.stringify(hasPicks ? {
+                    // Lista FIJA: solo las personas palomeadas a mano.
+                    name,
+                    includeIds: Array.from(pickedIds),
+                    criteriaSummary: `${pickedIds.size} elegidos a mano`,
+                    broadcastTag: newAudienceBroadcastTag.trim() || null
+                } : {
                     name,
                     selection,
                     excludeIds: Array.from(excludeIds),
@@ -829,6 +845,7 @@ const BulksSection = () => {
             if (data.success) {
                 setShowCreateAudience(false);
                 setNewAudienceName('');
+                setPickedIds(new Set());
                 const bt = newAudienceBroadcastTag.trim();
                 if (bt && !broadcastTagOptions.includes(bt)) setBroadcastTagOptions(prev => [...prev, bt].sort((a, b) => a.localeCompare(b, 'es')));
                 setNewAudienceBroadcastTag('');
@@ -846,6 +863,7 @@ const BulksSection = () => {
     const selectAudience = (aud) => {
         if (isRunning) return;
         setDirectRecipients([]); // público y envío directo son excluyentes
+        setPickedIds(new Set());  // y también excluyente con la selección a mano
         setSelectedAudienceId(prev => (prev === aud.id ? null : aud.id));
         if (window.innerWidth < 1024) setMobileTab('messages');
         setGlowTemplateCol(true);
@@ -856,13 +874,22 @@ const BulksSection = () => {
 
     const editAudience = (aud) => {
         if (isRunning) return;
-        // Carga los filtros del público en la Col 1 en modo edición ("editable aparte").
-        setSelection({ ...EMPTY_SELECTION, ...(aud.selection || {}) });
-        setExcludeIds(new Set(Array.isArray(aud.excludeIds) ? aud.excludeIds : []));
+        const isStatic = Array.isArray(aud.includeIds) && aud.includeIds.length;
+        if (isStatic) {
+            // Público de lista FIJA: carga sus personas elegidas a mano.
+            setPickedIds(new Set(aud.includeIds));
+            setSelection(EMPTY_SELECTION);
+            setExcludeIds(new Set());
+        } else {
+            // Público dinámico: carga sus filtros en la Col 1 ("editable aparte").
+            setPickedIds(new Set());
+            setSelection({ ...EMPTY_SELECTION, ...(aud.selection || {}) });
+            setExcludeIds(new Set(Array.isArray(aud.excludeIds) ? aud.excludeIds : []));
+        }
         setEditingAudienceBroadcastTag(aud.broadcastTag || '');
         setEditingAudienceId(aud.id);
         setMobileTab('candidates');
-        showToast && showToast(`Editando "${aud.name}". Ajusta filtros/etiqueta y guarda.`, 'info');
+        showToast && showToast(isStatic ? `Editando "${aud.name}". Ajusta a quién eliges y guarda.` : `Editando "${aud.name}". Ajusta filtros/etiqueta y guarda.`, 'info');
     };
 
     const cancelEditAudience = () => {
@@ -870,6 +897,7 @@ const BulksSection = () => {
         setEditingAudienceBroadcastTag('');
         setSelection(EMPTY_SELECTION);
         setExcludeIds(new Set());
+        setPickedIds(new Set());
     };
 
     const saveEditAudience = async () => {
@@ -878,10 +906,16 @@ const BulksSection = () => {
             const res = await fetch('/api/bulks?action=audience_update', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
+                body: JSON.stringify(hasPicks ? {
+                    id: editingAudienceId,
+                    includeIds: Array.from(pickedIds),
+                    criteriaSummary: `${pickedIds.size} elegidos a mano`,
+                    broadcastTag: editingAudienceBroadcastTag.trim() || null
+                } : {
                     id: editingAudienceId,
                     selection,
                     excludeIds: Array.from(excludeIds),
+                    includeIds: [],
                     criteriaSummary: summarizeSelection(selection).join(' · '),
                     broadcastTag: editingAudienceBroadcastTag.trim() || null
                 })
@@ -895,6 +929,7 @@ const BulksSection = () => {
                 setEditingAudienceBroadcastTag('');
                 setSelection(EMPTY_SELECTION);
                 setExcludeIds(new Set());
+                setPickedIds(new Set());
                 loadAudiences();
             } else {
                 showToast && showToast(data.error || 'No se pudo actualizar', 'error');
@@ -913,6 +948,7 @@ const BulksSection = () => {
                     name: `${aud.name} (copia)`,
                     selection: aud.selection || {},
                     excludeIds: aud.excludeIds || [],
+                    includeIds: aud.includeIds || [],
                     criteriaSummary: aud.criteriaSummary || summarizeSelection(aud.selection).join(' · '),
                     broadcastTag: aud.broadcastTag || null
                 })
@@ -1043,7 +1079,7 @@ const BulksSection = () => {
                                 {activeFilterCount === 0
                                     ? (segmentTotal === 1 ? 'candidato en base' : 'candidatos en base')
                                     : (segmentTotal === 1 ? 'candidato coincide' : 'candidatos coinciden')}
-                                {excludeIds.size > 0 && ` · enviarás a ${sendCount.toLocaleString('es-MX')}`}
+                                {hasPicks && ` · ✓ ${pickedIds.size.toLocaleString('es-MX')} elegidos (solo esos)`}
                             </div>
                         </div>
                     </div>
@@ -1134,35 +1170,27 @@ const BulksSection = () => {
                     <div className="flex justify-between items-center text-[11px] text-[#54656f] dark:text-[#8696a0] mt-1.5 px-1">
                         <span>Vista previa ({previewList.length} de {segmentTotal.toLocaleString('es-MX')})</span>
                         <div className="flex items-center gap-2">
-                            {/* Select All / Deselect All — afecta la vista previa cargada */}
+                            {/* Seleccionar / limpiar los visibles de la vista previa */}
                             {previewList.length > 0 && !isRunning && (
                                 <button
                                     onClick={() => {
-                                        const allExcluded = previewList.every(c => excludeIds.has(c.id));
-                                        if (allExcluded) {
-                                            // Deselect all → remove all preview IDs from excludeIds
-                                            setExcludeIds(prev => {
-                                                const next = new Set(prev);
-                                                previewList.forEach(c => next.delete(c.id));
-                                                return next;
-                                            });
-                                        } else {
-                                            // Select all → exclude everyone in preview
-                                            setExcludeIds(prev => {
-                                                const next = new Set(prev);
-                                                previewList.forEach(c => next.add(c.id));
-                                                return next;
-                                            });
-                                        }
+                                        setSelectedAudienceId(null);
+                                        const allPicked = previewList.every(c => pickedIds.has(c.id));
+                                        setPickedIds(prev => {
+                                            const next = new Set(prev);
+                                            if (allPicked) previewList.forEach(c => next.delete(c.id));
+                                            else previewList.forEach(c => next.add(c.id));
+                                            return next;
+                                        });
                                     }}
                                     className="text-[10px] font-bold text-indigo-500 hover:text-indigo-700 dark:hover:text-indigo-300 transition-colors"
                                 >
-                                    {previewList.every(c => excludeIds.has(c.id)) ? '✓ Incluir todos' : '✗ Excluir todos'}
+                                    {previewList.every(c => pickedIds.has(c.id)) ? '✗ Quitar visibles' : '✓ Seleccionar visibles'}
                                 </button>
                             )}
-                            {excludeIds.size > 0 && (
-                                <button onClick={() => setExcludeIds(new Set())} className="text-blue-500 hover:text-blue-600 font-medium flex items-center gap-1">
-                                    <RotateCcw className="w-3 h-3" /> Incluir {excludeIds.size} excluidos
+                            {pickedIds.size > 0 && (
+                                <button onClick={() => setPickedIds(new Set())} className="text-blue-500 hover:text-blue-600 font-medium flex items-center gap-1">
+                                    <RotateCcw className="w-3 h-3" /> Limpiar {pickedIds.size} elegidos
                                 </button>
                             )}
                         </div>
@@ -1195,16 +1223,16 @@ const BulksSection = () => {
                         </div>
                     ) : (
                         previewList.map(c => {
-                            const excluded = excludeIds.has(c.id);
+                            const picked = pickedIds.has(c.id);
                             return (
                                 <div
                                     key={c.id}
-                                    onClick={() => toggleExclude(c.id)}
-                                    className={`flex items-center gap-3 p-3 border-b border-[#f0f2f5] dark:border-[#202c33] cursor-pointer hover:bg-[#f5f6f6] dark:hover:bg-[#202c33] transition-colors ${excluded ? 'opacity-45' : ''} ${isRunning ? 'cursor-not-allowed' : ''}`}
+                                    onClick={() => togglePicked(c.id)}
+                                    className={`flex items-center gap-3 p-3 border-b border-[#f0f2f5] dark:border-[#202c33] cursor-pointer hover:bg-[#f5f6f6] dark:hover:bg-[#202c33] transition-colors ${picked ? 'bg-[#d9fdd3]/40 dark:bg-[#0a332c]/40' : ''} ${isRunning ? 'cursor-not-allowed' : ''}`}
                                 >
                                     <input
                                         type="checkbox"
-                                        checked={!excluded}
+                                        checked={picked}
                                         readOnly
                                         className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                                     />
@@ -1245,10 +1273,10 @@ const BulksSection = () => {
                         <button
                             onClick={openCreateAudience}
                             disabled={isRunning}
-                            title={activeFilterCount === 0 ? 'Guarda TODA la base como un público reutilizable' : 'Guarda estos filtros como un público reutilizable'}
-                            className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold py-3 px-4 rounded-xl shadow-sm transition-colors flex items-center justify-center gap-2 text-sm"
+                            title={hasPicks ? 'Guarda SOLO las personas que palomeaste como un público de lista fija' : (activeFilterCount === 0 ? 'Guarda TODA la base como un público reutilizable' : 'Guarda estos filtros como un público reutilizable')}
+                            className={`w-full ${hasPicks ? 'bg-[#25d366] hover:bg-[#1fb855]' : 'bg-indigo-600 hover:bg-indigo-700'} disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold py-3 px-4 rounded-xl shadow-sm transition-colors flex items-center justify-center gap-2 text-sm`}
                         >
-                            <Plus className="w-5 h-5" /> {activeFilterCount === 0 ? 'Crear público con toda la base' : 'Crear público con esta configuración'}
+                            <Plus className="w-5 h-5" /> {hasPicks ? `Crear público con los ${pickedIds.size} seleccionados` : (activeFilterCount === 0 ? 'Crear público con toda la base' : 'Crear público con esta configuración')}
                         </button>
                     </div>
                 )}
@@ -1276,6 +1304,7 @@ const BulksSection = () => {
                         audiences.map(aud => {
                             const isSel = selectedAudienceId === aud.id;
                             const isEditing = editingAudienceId === aud.id;
+                            const isStaticAud = Array.isArray(aud.includeIds) && aud.includeIds.length > 0;
                             const chips = summarizeSelection(aud.selection);
                             return (
                                 <div
@@ -1298,7 +1327,9 @@ const BulksSection = () => {
                                     </div>
 
                                     <div className="flex flex-wrap gap-1 mt-2">
-                                        {chips.length > 0 ? (
+                                        {isStaticAud ? (
+                                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-[#d9fdd3] dark:bg-[#0a332c] text-[#0a5c4a] dark:text-[#25d366]">✓ Lista fija · {aud.includeIds.length} elegidos</span>
+                                        ) : chips.length > 0 ? (
                                             chips.map((c, i) => (
                                                 <span key={i} className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-gray-100 dark:bg-[#202c33] text-gray-600 dark:text-gray-300">{c}</span>
                                             ))
@@ -1383,8 +1414,10 @@ const BulksSection = () => {
                                 <select
                                     value={selectedTemplateId}
                                     onChange={(e) => {
-                                        setSelectedTemplateId(e.target.value);
-                                        setTemplateParams({});
+                                        const id = e.target.value;
+                                        setSelectedTemplateId(id);
+                                        // Recuerda los últimos valores que usaste para esta plantilla.
+                                        setTemplateParams(id && templateParamsByTemplate[id] ? { ...templateParamsByTemplate[id] } : {});
                                     }}
                                     disabled={isRunning}
                                     className="w-full bg-[#f0f2f5] dark:bg-[#202c33] border-none rounded-lg p-3 text-[15px] text-[#111b21] dark:text-[#e9edef] outline-none font-bold shadow-sm"
@@ -1420,7 +1453,15 @@ const BulksSection = () => {
                                                                 <input
                                                                     type="text"
                                                                     value={templateParams[varNum] || ''}
-                                                                    onChange={(e) => setTemplateParams(prev => ({ ...prev, [varNum]: e.target.value }))}
+                                                                    onChange={(e) => {
+                                                                        const val = e.target.value;
+                                                                        setTemplateParams(prev => {
+                                                                            const next = { ...prev, [varNum]: val };
+                                                                            // Recuerda este juego de valores para la plantilla actual.
+                                                                            if (selectedTemplateId) setTemplateParamsByTemplate(m => ({ ...m, [selectedTemplateId]: next }));
+                                                                            return next;
+                                                                        });
+                                                                    }}
                                                                     placeholder="Nombre del candidato (auto)"
                                                                     className="flex-1 bg-white dark:bg-[#111b21] border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm text-[#111b21] dark:text-[#e9edef] outline-none focus:border-blue-400 transition-colors"
                                                                     disabled={isRunning}
@@ -1430,7 +1471,7 @@ const BulksSection = () => {
                                                     })}
                                                     <div className="flex justify-between items-center mt-1">
                                                         <p className="text-[10px] text-gray-400 dark:text-gray-500">Deja vacío para usar el nombre del candidato.</p>
-                                                        <p className="text-[10px] text-green-500 font-bold flex items-center gap-1"><span className="text-[14px]">✓</span> Se guarda al escribir</p>
+                                                        <p className="text-[10px] text-green-500 font-bold flex items-center gap-1" title="Estos valores se recuerdan y se vuelven a cargar la próxima vez que elijas esta plantilla"><span className="text-[14px]">✓</span> Se recuerda para esta plantilla</p>
                                                     </div>
                                                 </div>
                                             );
@@ -1470,7 +1511,7 @@ const BulksSection = () => {
                         <div className={`mb-4 rounded-xl px-3 py-2.5 border ${
                             directMode
                                 ? 'bg-[#25d366]/10 dark:bg-[#0a332c]/60 border-[#25d366]/60'
-                                : selectedAudience
+                                : (selectedAudience || hasPicks)
                                     ? 'bg-[#d9fdd3]/40 dark:bg-[#0a332c]/50 border-[#25d366]/50'
                                     : 'bg-[#f0f2f5] dark:bg-[#202c33] border-transparent'
                         }`}>
@@ -1482,17 +1523,20 @@ const BulksSection = () => {
                                             <>📲 Envío directo</>
                                         ) : selectedAudience ? (
                                             <><UserCheck className="w-4 h-4 text-[#25d366] shrink-0" /> {selectedAudience.name}</>
+                                        ) : hasPicks ? (
+                                            <><UserCheck className="w-4 h-4 text-[#25d366] shrink-0" /> Elegidos a mano</>
                                         ) : (
                                             <><SlidersHorizontal className="w-4 h-4 text-[#54656f] shrink-0" /> Segmento actual (filtros)</>
                                         )}
                                         <span className="text-indigo-600 dark:text-indigo-400">· {sendCount.toLocaleString('es-MX')}</span>
-                                        {!directMode && excludeIds.size > 0 && !selectedAudience && (
-                                            <span className="text-[10px] text-red-400 font-normal">({excludeIds.size} excluidos)</span>
-                                        )}
                                     </div>
                                 </div>
                                 {directMode ? (
                                     <button onClick={() => setDirectRecipients([])} title="Volver al segmento por filtros" className="text-xs text-gray-500 hover:text-red-500 font-medium flex items-center gap-1 shrink-0">
+                                        <X className="w-3.5 h-3.5" /> Quitar
+                                    </button>
+                                ) : hasPicks ? (
+                                    <button onClick={() => setPickedIds(new Set())} title="Volver al segmento por filtros" className="text-xs text-gray-500 hover:text-red-500 font-medium flex items-center gap-1 shrink-0">
                                         <X className="w-3.5 h-3.5" /> Quitar
                                     </button>
                                 ) : selectedAudience && (
@@ -1737,13 +1781,17 @@ const BulksSection = () => {
                         </div>
                         <h2 className="text-xl font-black text-gray-800 dark:text-white mb-1 text-center">Nuevo Público</h2>
                         <p className="text-sm text-gray-500 dark:text-gray-400 mb-5 text-center">
-                            {activeFilterCount === 0
-                                ? <>Se guarda <span className="font-bold">toda la base</span> ({adHocCount.toLocaleString('es-MX')} candidatos hoy). Es dinámico: crece solo cuando entra gente nueva.</>
-                                : <>Se guarda con los filtros actuales ({adHocCount.toLocaleString('es-MX')} candidatos hoy). Es dinámico: se recalcula solo cuando lo uses.</>}
+                            {hasPicks
+                                ? <>Se guarda una <span className="font-bold">lista fija</span> de {pickedIds.size.toLocaleString('es-MX')} personas que elegiste a mano. No cambia sola.</>
+                                : activeFilterCount === 0
+                                    ? <>Se guarda <span className="font-bold">toda la base</span> ({adHocCount.toLocaleString('es-MX')} candidatos hoy). Es dinámico: crece solo cuando entra gente nueva.</>
+                                    : <>Se guarda con los filtros actuales ({adHocCount.toLocaleString('es-MX')} candidatos hoy). Es dinámico: se recalcula solo cuando lo uses.</>}
                         </p>
 
                         <div className="flex flex-wrap gap-1 justify-center mb-5">
-                            {activeFilterCount === 0 ? (
+                            {hasPicks ? (
+                                <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-[#d9fdd3] dark:bg-[#0a332c] text-[#0a5c4a] dark:text-[#25d366]">✓ {pickedIds.size.toLocaleString('es-MX')} elegidos a mano</span>
+                            ) : activeFilterCount === 0 ? (
                                 <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-300">Toda la base</span>
                             ) : (
                                 summarizeSelection(selection).map((c, i) => (
