@@ -53,7 +53,9 @@ export class MediaEngine {
                 try {
                     const { uploadMediaToMeta } = await import('../whatsapp/utils.js');
                     const buffer = Buffer.from(base64, 'base64');
-                    const upload = await uploadMediaToMeta(buffer, 'image/webp', 'sticker.webp');
+                    // Subir al MISMO número que envía (multi-número): los media_id de Meta son
+                    // por número. Si no, el id no sirve para _config.phoneNumberId.
+                    const upload = await uploadMediaToMeta(buffer, 'image/webp', 'sticker.webp', _config?.phoneNumberId || null);
                     if (upload?.mediaId) {
                         // Update stored mediaId for future sends
                         await client?.set(customStickerKey, JSON.stringify({ url: stickerUrl, mediaId: upload.mediaId }));
