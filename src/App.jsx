@@ -52,7 +52,6 @@ const MediaLibrarySection = lazyWithRetry(() => import('./components/MediaLibrar
 const CRMProjectsSection = lazyWithRetry(() => import('./components/CRMProjectsSection'), 'CRMProjectsSection');
 const AdsStatisticsSection = lazyWithRetry(() => import('./components/AdsStatisticsSection'), 'AdsStatisticsSection');
 const StatsSection = lazyWithRetry(() => import('./components/StatsSection'), 'StatsSection');
-const AgentIASection = lazyWithRetry(() => import('./components/AgentIASection'), 'AgentIASection');
 const VoxSection = lazyWithRetry(() => import('./components/VoxSection'), 'VoxSection');
 
 /**
@@ -66,10 +65,6 @@ function AppShell() {
 
   const [theme, setTheme] = useState('light');
   const [activeSection, setActiveSection] = useState('candidates');
-  // Agente Claude (Chat Web) DESCONECTADO: el toggle de UI se retiró del header y el
-  // agente queda apagado de forma dura — ya no se lee el valor persistido
-  // (user.preferences.agentMode). ChatSection recibe siempre false.
-  const agentMode = false;
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
 
@@ -270,7 +265,7 @@ function AppShell() {
         <main className="flex-1 h-full w-full p-0 overflow-hidden">
           <ErrorBoundary>
             <Suspense fallback={<SectionSkeleton />}>
-              <ChatSection rolePermissions={rolePermissions} onlineUsers={onlineUsers} unreadCountHint={chatUnreadCount} onUnreadCountChange={handleUnreadCountChange} agentMode={agentMode} />
+              <ChatSection rolePermissions={rolePermissions} onlineUsers={onlineUsers} unreadCountHint={chatUnreadCount} onUnreadCountChange={handleUnreadCountChange} />
             </Suspense>
           </ErrorBoundary>
         </main>
@@ -319,7 +314,6 @@ function AppShell() {
                       : activeSection === 'history' ? 'Historial'
                       : activeSection === 'media-library' ? 'Biblioteca'
                       : activeSection === 'projects' ? 'Proyectos'
-                      : activeSection === 'agent-ia' ? 'Agent IA'
                       : activeSection === 'vox' ? 'Vox'
                       : 'Configuración'}
                   </h1>
@@ -373,7 +367,6 @@ function AppShell() {
                       : activeSection === 'history' ? 'Historial de conversaciones'
                       : activeSection === 'media-library' ? 'Biblioteca de archivos y recursos del Bot'
                       : activeSection === 'projects' ? 'Kanban de reclutamiento'
-                      : activeSection === 'agent-ia' ? 'Tu agente propio: chat, definición (AGENTS.md) y memoria (MEMORY.md)'
                       : activeSection === 'vox' ? 'Cerebro de voz de Brenda: habla por micrófono y mide el costo por minuto en vivo'
                       : 'Credenciales y configuración del sistema'}
                   </p>
@@ -448,13 +441,13 @@ function AppShell() {
             el contenido no se ensanche/encoja (brinco horizontal) cuando aparece/desaparece
             la barra al cambiar la altura del contenido (p.ej. contraer/expandir tarjetas).
             Solo en secciones normales; chat/bulks tienen su propio scroll interno. */}
-        <main className={`flex-1 overflow-y-auto overflow-x-hidden flex flex-col min-h-0 ${activeSection === 'chat' || activeSection === 'bulks' || activeSection === 'agent-ia' || activeSection === 'flows' ? 'p-0' : 'px-3 sm:px-8 py-4 sm:py-8 [scrollbar-gutter:stable]'}`}>
+        <main className={`flex-1 overflow-y-auto overflow-x-hidden flex flex-col min-h-0 ${activeSection === 'chat' || activeSection === 'bulks' || activeSection === 'flows' ? 'p-0' : 'px-3 sm:px-8 py-4 sm:py-8 [scrollbar-gutter:stable]'}`}>
           <ErrorBoundary>
           <Suspense fallback={<SectionSkeleton />}>
           {activeSection === 'candidates' ? (
             <CandidatesSection />
           ) : activeSection === 'chat' ? (
-            <ChatSection rolePermissions={rolePermissions} onlineUsers={onlineUsers} unreadCountHint={chatUnreadCount} onUnreadCountChange={handleUnreadCountChange} agentMode={agentMode} />
+            <ChatSection rolePermissions={rolePermissions} onlineUsers={onlineUsers} unreadCountHint={chatUnreadCount} onUnreadCountChange={handleUnreadCountChange} />
           ) : activeSection === 'bulks' ? (
             <BulksSection />
           ) : activeSection === 'bot-ia' ? (
@@ -475,8 +468,6 @@ function AppShell() {
             <MediaLibrarySection />
           ) : activeSection === 'projects' ? (
             <CRMProjectsSection />
-          ) : activeSection === 'agent-ia' && user?.role === 'SuperAdmin' ? (
-            <AgentIASection />
           ) : activeSection === 'vox' && user?.role === 'SuperAdmin' ? (
             <VoxSection />
           ) : (

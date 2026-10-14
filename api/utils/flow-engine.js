@@ -2,7 +2,7 @@ import { getRedisClient, isProfileComplete, updateCandidate, saveMessage, update
 import { getCachedConfig } from './cache.js';
 import { getUltraMsgConfig, sendUltraMsgMessage, sendUltraMsgMessageWithRetry } from '../whatsapp/utils.js';
 import { substituteVariables, splitBubbles, substituteDynamicPhrase } from './shortcuts.js';
-import { getBotVacancies, vacancyMessageText } from './agent-ia.js';
+import { getBotVacancies, vacancyMessageText } from './flows-data.js';
 import { runInBackground } from './background.js';
 import { businessDayOffset, isPastCutoff } from './reminder-schedule.js';
 
@@ -10,8 +10,8 @@ import { businessDayOffset, isPastCutoff } from './reminder-schedule.js';
 // MOTOR DE FLOWS — ejecución determinística de automatizaciones post-extracción.
 //
 // Se dispara UNA VEZ por candidato, en el instante exacto en que Brenda termina
-// de extraer sus datos (paso2Estado → 'completo'), desde api/ai/agent.js — mismo
-// patrón fire-and-forget que api/utils/agent-katcon.js. NO hay cron de barrido
+// de extraer sus datos (paso2Estado → 'completo'), desde api/ai/agent.js — con el
+// patrón fire-and-forget habitual. NO hay cron de barrido
 // (decisión explícita: solo evento) y NADA aquí llama a un LLM — es comparación
 // pura de campos ya extraídos contra criterios configurados en el lienzo.
 //
@@ -39,7 +39,7 @@ const DIRECT_REMINDERS_ZSET = 'direct_reminders';
 const PROJECTS_KEY = 'candidatic_manual_projects';
 const MEDIA_HOST = 'https://www.candidatic.com';
 
-// Mismo helper que api/utils/agent-katcon.js → toAbsoluteImageUrl: el banco de
+// Convierte media interna a URL pública: el banco de
 // respuestas guarda media interna como `/api/image?id=med_X`, que Meta no puede
 // jalar directo (no es pública) — se convierte a la ruta pública /api/media/X.jpg.
 // La extensión es decorativa: api/image.js hace `id.split('.')[0]` y sirve el mime

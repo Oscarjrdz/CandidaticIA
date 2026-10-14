@@ -143,15 +143,6 @@
         "api/cron/reengagement.js": {
             "maxDuration": 60
         },
-        "api/agent-ia/chat.js": {
-            "maxDuration": 120
-        },
-        "api/cron/agent-katcon.js": {
-            "maxDuration": 60
-        },
-        "api/cron/agent-candidatic.js": {
-            "maxDuration": 60
-        },
         "api/cron/flow-incompletos.js": {
             "maxDuration": 60
         }
@@ -163,14 +154,6 @@
         },
         {
             "path": "/api/cron/reengagement",
-            "schedule": "*/15 * * * *"
-        },
-        {
-            "path": "/api/cron/agent-katcon",
-            "schedule": "*/15 * * * *"
-        },
-        {
-            "path": "/api/cron/agent-candidatic",
             "schedule": "*/15 * * * *"
         },
         {

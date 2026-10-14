@@ -19,11 +19,8 @@ import { getCachedConfigBatch } from '../utils/cache.js';
 import { getOpenAIResponse } from '../utils/openai.js';
 
 import { inferGender } from '../utils/gender-helper.js';
-import { maybeSendKatconOnComplete } from '../utils/agent-katcon.js';
 import { runFlowsForCandidate, resumeWaitingFlowIfMatch, runReturningFlowsForCandidate, runBroadcastReplyFlowsForCandidate } from '../utils/flow-engine.js';
 import { runInBackground } from '../utils/background.js';
-import { maybeEnqueueForLiveAgent } from '../utils/agent-candidatic.js';
-import { attendLiveCandidate } from '../utils/agent-attend.js';
 import { FEATURES } from '../utils/feature-flags.js';
 import { AIGuard } from '../utils/ai-guard.js';
 import { Orchestrator } from '../utils/orchestrator.js';
@@ -3013,11 +3010,10 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
         }
         await Promise.allSettled(_persistPromises);
 
-        // ── AGENTE KATCON (event-driven): si Brenda ACABA de terminar la extracción
-        // (paso2Estado → 'completo' EN ESTE TURNO) disparamos el PUNTO KATCON al instante.
-        // El tag "KATCON ANUNCIO" ya viene desde el anuncio; "completo" se marca aquí → este
-        // es el momento exacto. Fire-and-forget (no await): jamás bloquea ni rompe el extractor.
-        // Todos los candados (toggle de Oscar, corte no-retroactivo, una-sola-vez) van dentro.
+        // ── GANCHO DE COMPLETADO (event-driven): si Brenda ACABA de terminar la extracción
+        // (paso2Estado → 'completo' EN ESTE TURNO) disparamos los flujos post-extracción al
+        // instante. "completo" se marca aquí → este es el momento exacto. Fire-and-forget (no
+        // await): jamás bloquea ni rompe el extractor. Los candados van dentro de cada gancho.
         const _wasP2Complete = candidateData.paso2Estado === 'completo';
         const _isP2Complete = (candidateUpdates.paso2Estado || candidateData.paso2Estado) === 'completo';
         if (!_wasP2Complete && _isP2Complete) {
@@ -3031,22 +3027,10 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
             // Se corren en secuencia (mismo candidato → orden de mensajes predecible) y cada uno
             // aísla su propio error para no cortar a los siguientes.
             runInBackground((async () => {
-                // KATCON: manda el mensaje de banco "PUNTO KATCON" (la cita). Determinístico, sin IA.
-                await maybeSendKatconOnComplete(candidateId, { ...candidateData, ...candidateUpdates })
-                    .catch(e => console.error('[COMPLETION] katcon:', e?.message));
-
                 // FLOWS (constructor visual de automatizaciones): evalúa los flujos activos y
                 // ejecuta las acciones que apliquen. Sin cron ni IA — ver api/utils/flow-engine.js.
                 await runFlowsForCandidate(candidateId, { ...candidateData, ...candidateUpdates })
                     .catch(e => console.error('[COMPLETION] flows:', e?.message));
-
-                // AGENT CANDIDATIC (agente en vivo, generalizado por etiqueta): encola al candidato
-                // y dispara el motor de atención (agent-attend.js), que SÍ llama a Claude para
-                // decidir qué mandar. Se encola SOLO si aplica (candados ya validados adentro).
-                const entry = await maybeEnqueueForLiveAgent(candidateId, { ...candidateData, ...candidateUpdates })
-                    .catch(() => null);
-                if (entry) await attendLiveCandidate(candidateId, entry.tag)
-                    .catch(e => console.error('[COMPLETION] live-agent:', e?.message));
             })());
         }
 

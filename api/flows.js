@@ -1,7 +1,7 @@
 import { getRedisClient, validateAdminSession, getCandidateByPhone, getCandidateById, getCandidatesForFlowList } from './utils/storage.js';
 import { getCachedConfig, invalidateCache } from './utils/cache.js';
 import { runFlowTest, runFlowForListCandidate, resetFlowCandidateState } from './utils/flow-engine.js';
-import { getBotVacancies, buildDateKeys, getCapturesByAllTags, getCapturesTotal } from './utils/agent-ia.js';
+import { getBotVacancies, buildDateKeys, getCapturesByAllTags, getCapturesTotal } from './utils/flows-data.js';
 
 const REDIS_KEY = 'flows:v1';
 const EXEC_SET_PREFIX = 'flow:executed:v1:';

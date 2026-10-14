@@ -796,7 +796,7 @@ const CHAT_LIST_VIRTUOSO_COMPONENTS = { Footer: ChatListFooter };
 // LISTA: no toca mensajes ni el chat abierto (la parte con freeze/anclaje/dedup frágil).
 const chatSectionCache = { candidates: null, candidatesTotal: 0, nextOffset: 0, hasMore: false, messagesByChat: null };
 
-export default function ChatSection({ rolePermissions, onlineUsers = [], unreadCountHint = null, onUnreadCountChange, _agentMode = false }) {
+export default function ChatSection({ rolePermissions, onlineUsers = [], unreadCountHint = null, onUnreadCountChange }) {
     const { showToast } = useToastContext();
     const { user, setUser } = useAuthContext();
 
@@ -4962,16 +4962,6 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         handleSend(`*${vac.name}*\n\n${vac.messageDescription}`, []);
         if (!vacancyPinned) setShowDropdown(null); // fijado → se queda abierto
     };
-
-    // ═══ AGENTE KATCON — ahora es SERVER-SIDE (event-driven) ════════════════════
-    // El auto-envío del Paso 1 (PUNTO KATCON) ya NO vive en el navegador: se disparaba
-    // al ABRIR el chat (requería el dashboard abierto). Ahora se dispara en el backend,
-    // en el INSTANTE en que Brenda termina la extracción (paso2Estado → 'completo'):
-    //   api/ai/agent.js → maybeSendKatconOnComplete()  (helper: api/utils/agent-katcon.js)
-    // Así funciona con el dashboard CERRADO ("prendo el toggle, me voy a comer, y a los
-    // que van entrando y completan les manda la cita"). El toggle (agentMode) sigue
-    // gateando todo desde el super header; su estado persiste en Redis. El cron
-    // api/cron/agent-katcon.js queda solo como red de seguridad.
 
     const handleSendTemplate = (templateObj) => {
         if (!selectedChat) return;
