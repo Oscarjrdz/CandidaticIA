@@ -61,6 +61,70 @@ const WhatsAppSettings = ({ showToast, className = '' }) => {
         setTimeout(() => setCopied(false), 2000);
     };
 
+    // ── MCP (Grok) — kill switch + token. Reusa el espacio del viejo recuadro de Meta. ──
+    const [mcp, setMcp] = useState(null);
+    const [mcpBusy, setMcpBusy] = useState(false);
+    const [copiedMcp, setCopiedMcp] = useState('');
+    const mcpUrl = typeof window !== 'undefined' ? `${window.location.origin}/api/mcp` : '/api/mcp';
+
+    useEffect(() => {
+        (async () => {
+            try {
+                const res = await fetch('/api/mcp/config');
+                if (res.ok) setMcp(await res.json());
+            } catch { /* la tarjeta queda en su estado por defecto */ }
+        })();
+    }, []);
+
+    const toggleMcp = async () => {
+        if (!mcp || mcpBusy) return;
+        const next = !mcp.enabled;
+        setMcpBusy(true);
+        setMcp(prev => ({ ...prev, enabled: next })); // optimista
+        try {
+            const res = await fetch('/api/mcp/config', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ enabled: next })
+            });
+            if (!res.ok) throw new Error();
+            showToast?.(next ? 'MCP encendido' : 'MCP apagado', 'success');
+        } catch {
+            setMcp(prev => ({ ...prev, enabled: !next })); // revertir
+            showToast?.('No se pudo cambiar el MCP', 'error');
+        } finally {
+            setMcpBusy(false);
+        }
+    };
+
+    const rotateToken = async () => {
+        if (mcpBusy) return;
+        if (!window.confirm('¿Rotar el token? Grok dejará de conectarse hasta que pegues el nuevo token.')) return;
+        setMcpBusy(true);
+        try {
+            const res = await fetch('/api/mcp/config', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'rotate' })
+            });
+            if (!res.ok) throw new Error();
+            const data = await res.json();
+            setMcp(prev => ({ ...prev, token: data.token }));
+            showToast?.('Token rotado', 'success');
+        } catch {
+            showToast?.('No se pudo rotar el token', 'error');
+        } finally {
+            setMcpBusy(false);
+        }
+    };
+
+    const copyMcp = (what, value) => {
+        navigator.clipboard.writeText(value);
+        setCopiedMcp(what);
+        showToast?.(what === 'url' ? 'URL del MCP copiada' : 'Token copiado', 'success');
+        setTimeout(() => setCopiedMcp(''), 2000);
+    };
+
     const analytics = status?.analytics;
 
     const qualityLabel = (q) =>
@@ -277,15 +341,55 @@ const WhatsAppSettings = ({ showToast, className = '' }) => {
                     </code>
                 </div>
 
-                {/* Info footer */}
-                <div className="flex items-start gap-2 p-3 bg-blue-50/50 dark:bg-blue-950/20 rounded-lg border border-blue-100 dark:border-blue-900/30">
-                    <Shield className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" />
+                {/* MCP (Grok) — kill switch + URL + token. Reemplaza el viejo recuadro de Meta. */}
+                <div className="p-3 bg-blue-50/50 dark:bg-blue-950/20 rounded-lg border border-blue-100 dark:border-blue-900/30 space-y-2.5">
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                            <Shield className="w-4 h-4 text-blue-500 shrink-0" />
+                            <div>
+                                <p className="text-[11px] text-blue-800 dark:text-blue-300 font-medium">MCP · Conexión con Grok</p>
+                                <p className="text-[10px] text-blue-600 dark:text-blue-400 leading-relaxed">
+                                    {mcp?.enabled ? 'Encendido · Grok puede operar el Chat Web' : 'Apagado · Grok no puede conectarse'}
+                                </p>
+                            </div>
+                        </div>
+                        {/* Switch ON/OFF (kill switch) */}
+                        <button
+                            type="button"
+                            onClick={toggleMcp}
+                            disabled={!mcp || mcpBusy}
+                            aria-pressed={!!mcp?.enabled}
+                            className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:opacity-50 ${mcp?.enabled ? 'bg-emerald-500' : 'bg-gray-300 dark:bg-gray-600'}`}
+                        >
+                            <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${mcp?.enabled ? 'translate-x-6' : 'translate-x-1'}`} />
+                        </button>
+                    </div>
+
+                    {/* URL del MCP */}
                     <div>
-                        <p className="text-[11px] text-blue-800 dark:text-blue-300 font-medium">API Oficial de Meta WhatsApp Cloud</p>
-                        <p className="text-[10px] text-blue-600 dark:text-blue-400 mt-0.5 leading-relaxed">
-                            Conexión directa sin intermediarios. Sin riesgo de baneo, sin proxies, sin reconexión manual.
-                            Administra tu número desde <a href="https://business.facebook.com" target="_blank" rel="noreferrer" className="underline">Meta Business Suite</a>.
-                        </p>
+                        <div className="flex items-center justify-between mb-1">
+                            <span className="text-[10px] font-medium text-gray-500 dark:text-gray-400">URL del MCP (pégala en grok.com/connectors):</span>
+                            <button onClick={() => copyMcp('url', mcpUrl)} className="text-[10px] text-blue-600 hover:text-blue-700 font-bold flex items-center gap-1">
+                                {copiedMcp === 'url' ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                                <span>{copiedMcp === 'url' ? 'Copiado' : 'Copiar'}</span>
+                            </button>
+                        </div>
+                        <code className="block w-full p-2 bg-gray-100 dark:bg-gray-900 rounded border border-gray-200 dark:border-gray-700 text-[11px] font-mono break-all text-gray-700 dark:text-gray-300">{mcpUrl}</code>
+                    </div>
+
+                    {/* Token */}
+                    <div>
+                        <div className="flex items-center justify-between mb-1">
+                            <span className="text-[10px] font-medium text-gray-500 dark:text-gray-400">Token (Authorization: Bearer):</span>
+                            <div className="flex items-center gap-2">
+                                <button onClick={() => mcp?.token && copyMcp('token', mcp.token)} disabled={!mcp?.token} className="text-[10px] text-blue-600 hover:text-blue-700 font-bold flex items-center gap-1 disabled:opacity-50">
+                                    {copiedMcp === 'token' ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                                    <span>{copiedMcp === 'token' ? 'Copiado' : 'Copiar'}</span>
+                                </button>
+                                <button onClick={rotateToken} disabled={mcpBusy} className="text-[10px] text-amber-600 hover:text-amber-700 font-bold disabled:opacity-50">Rotar</button>
+                            </div>
+                        </div>
+                        <code className="block w-full p-2 bg-gray-100 dark:bg-gray-900 rounded border border-gray-200 dark:border-gray-700 text-[11px] font-mono break-all text-gray-700 dark:text-gray-300">{mcp?.token || '••••••••'}</code>
                     </div>
                 </div>
             </div>
