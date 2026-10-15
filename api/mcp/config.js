@@ -38,12 +38,18 @@ export default async function handler(req, res) {
         if (!redis) return res.status(503).json({ error: 'Redis no disponible' });
 
         if (req.method === 'GET') {
-            const [enabledRaw, token] = await Promise.all([redis.get(ENABLED_KEY), ensureToken(redis)]);
+            const [enabledRaw, token, logRaw] = await Promise.all([
+                redis.get(ENABLED_KEY),
+                ensureToken(redis),
+                redis.lrange('mcp:log', 0, 24)
+            ]);
+            const recentLog = (logRaw || []).map(s => { try { return JSON.parse(s); } catch { return null; } }).filter(Boolean);
             return res.status(200).json({
                 success: true,
                 enabled: enabledRaw === '1' || enabledRaw === 'true',
                 token,
-                path: '/api/mcp'
+                path: '/api/mcp',
+                recentLog
             });
         }
 

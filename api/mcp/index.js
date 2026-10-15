@@ -56,6 +56,23 @@ async function isEnabled(redis) {
     return v === '1' || v === 'true';
 }
 
+// Log de diagnóstico (fire-and-forget): lista Redis capada a 50, TTL 24h.
+// Sirve para saber si las peticiones de Grok LLEGAN a la función (si el log
+// queda vacío cuando Grok da 403 → el 403 es de la plataforma/firewall, no nuestro).
+function logMcp(redis, req, info) {
+    try {
+        const ua = String(req.headers?.['user-agent'] || '').slice(0, 120);
+        const ip = String(req.headers?.['x-forwarded-for'] || req.headers?.['x-real-ip'] || '').split(',')[0].trim();
+        const entry = JSON.stringify({ t: new Date().toISOString(), ip, ua, ...info });
+        redis.pipeline()
+            .lpush('mcp:log', entry)
+            .ltrim('mcp:log', 0, 49)
+            .expire('mcp:log', 86400)
+            .exec()
+            .catch(() => {});
+    } catch { /* nunca romper la request por el log */ }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Utilidades de forma de datos (resumen compacto, sin volcar blobs enormes)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -461,11 +478,13 @@ export default async function handler(req, res) {
     const presented = extractBearer(req);
     const expected = await redis.get('mcp:token');
     if (!expected || !presented || !safeEqual(presented, expected)) {
+        logMcp(redis, req, { status: 401, reason: 'auth_fail', hasAuth: !!presented, hasTokenConfigured: !!expected });
         return res.status(401).json({ error: 'No autorizado' });
     }
 
     // ── Kill switch ──
     if (!(await isEnabled(redis))) {
+        logMcp(redis, req, { status: 403, reason: 'disabled' });
         return res.status(403).json({ error: 'El MCP está apagado en Candidatic.' });
     }
 
@@ -477,6 +496,12 @@ export default async function handler(req, res) {
 
     const ctx = { redis };
 
+    // Resumen del/los método(s) para el log de diagnóstico.
+    const methods = Array.isArray(body)
+        ? body.map(m => m?.method).filter(Boolean).join(',')
+        : (body?.method || '?');
+    const toolName = !Array.isArray(body) && body?.method === 'tools/call' ? body?.params?.name : undefined;
+
     try {
         // Soporta un mensaje suelto o un arreglo (batch de clientes viejos).
         if (Array.isArray(body)) {
@@ -485,14 +510,17 @@ export default async function handler(req, res) {
                 const r = await handleRpc(msg, ctx);
                 if (r) out.push(r);
             }
+            logMcp(redis, req, { status: out.length ? 200 : 202, reason: 'ok', method: methods });
             if (!out.length) return res.status(202).end();
             return res.status(200).json(out);
         }
 
         const result = await handleRpc(body, ctx);
+        logMcp(redis, req, { status: result ? 200 : 202, reason: 'ok', method: methods, tool: toolName });
         if (!result) return res.status(202).end(); // fue una notificación
         return res.status(200).json(result);
     } catch (e) {
+        logMcp(redis, req, { status: 500, reason: 'error', method: methods, error: e.message });
         return res.status(200).json(rpcError(body?.id ?? null, -32603, `Error interno: ${e.message}`));
     }
 }

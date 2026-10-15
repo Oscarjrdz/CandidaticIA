@@ -125,6 +125,14 @@ const WhatsAppSettings = ({ showToast, className = '' }) => {
         setTimeout(() => setCopiedMcp(''), 2000);
     };
 
+    const [showMcpLog, setShowMcpLog] = useState(false);
+    const refreshMcp = async () => {
+        try {
+            const res = await fetch('/api/mcp/config');
+            if (res.ok) setMcp(await res.json());
+        } catch { /* ignore */ }
+    };
+
     const analytics = status?.analytics;
 
     const qualityLabel = (q) =>
@@ -390,6 +398,33 @@ const WhatsAppSettings = ({ showToast, className = '' }) => {
                             </div>
                         </div>
                         <code className="block w-full p-2 bg-gray-100 dark:bg-gray-900 rounded border border-gray-200 dark:border-gray-700 text-[11px] font-mono break-all text-gray-700 dark:text-gray-300">{mcp?.token || '••••••••'}</code>
+                    </div>
+
+                    {/* Diagnóstico: últimas peticiones que LLEGARON a /api/mcp. Si Grok da 403
+                        y aquí no aparece nada, el bloqueo es de la plataforma (firewall), no del código. */}
+                    <div>
+                        <div className="flex items-center justify-between">
+                            <button onClick={() => { setShowMcpLog(v => !v); if (!showMcpLog) refreshMcp(); }} className="text-[10px] font-medium text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200">
+                                {showMcpLog ? '▾' : '▸'} Diagnóstico (últimas peticiones)
+                            </button>
+                            {showMcpLog && (
+                                <button onClick={refreshMcp} className="text-[10px] text-blue-600 hover:text-blue-700 font-bold">Refrescar</button>
+                            )}
+                        </div>
+                        {showMcpLog && (
+                            <div className="mt-1 max-h-40 overflow-y-auto rounded border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 p-2 space-y-1">
+                                {(!mcp?.recentLog || mcp.recentLog.length === 0) ? (
+                                    <p className="text-[10px] text-gray-400">Sin peticiones registradas. Si Grok marca 403 y esto sigue vacío, el bloqueo es del firewall/plataforma (las llamadas no llegan al código).</p>
+                                ) : mcp.recentLog.map((e, i) => (
+                                    <div key={i} className="text-[10px] font-mono text-gray-600 dark:text-gray-300 flex items-center gap-2">
+                                        <span className={e.status === 200 || e.status === 202 ? 'text-emerald-600' : 'text-red-500'}>{e.status}</span>
+                                        <span className="text-gray-400">{(e.t || '').slice(11, 19)}</span>
+                                        <span>{e.reason}{e.method ? ` · ${e.method}` : ''}{e.tool ? ` (${e.tool})` : ''}</span>
+                                        {e.ip && <span className="text-gray-400 truncate">{e.ip}</span>}
+                                    </div>
+                                ))}
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>
