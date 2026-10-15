@@ -20,6 +20,7 @@
  * Plan completo: docs/mcp-grok-plan.md
  */
 
+import { randomBytes } from 'crypto';
 import {
     getRedisClient,
     getCandidates,
@@ -28,6 +29,7 @@ import {
     getVacancies,
     getExpediente
 } from '../utils/storage.js';
+import { substituteVariables, substituteDynamicPhrase } from '../utils/shortcuts.js';
 
 const SERVER_INFO = { name: 'candidatic-chatweb', version: '1.0.0' };
 const SUPPORTED_PROTOCOL_VERSIONS = ['2025-06-18', '2025-03-26', '2024-11-05'];
@@ -71,6 +73,35 @@ function logMcp(redis, req, info) {
             .exec()
             .catch(() => {});
     } catch { /* nunca romper la request por el log */ }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Escritura: las tools de escritura NO reimplementan la lógica del Chat Web.
+// Llaman internamente a los endpoints ya probados (/api/chat, /api/candidates/*)
+// usando una sesión de reclutador de SISTEMA, efímera (token aleatorio, TTL 120s),
+// que es lo que esos endpoints esperan (validateAdminSession).
+// ─────────────────────────────────────────────────────────────────────────────
+async function callInternal(req, redis, path, method, body) {
+    const token = `mcpsys_${randomBytes(24).toString('hex')}`;
+    const sessionKey = `session:admin:${token}`;
+    const expiresAt = new Date(Date.now() + 120000).toISOString();
+    await redis.set(sessionKey, JSON.stringify({ userId: 'mcp-grok', userName: 'Grok (IA)', expiresAt }), 'EX', 120);
+
+    try {
+        const proto = (req.headers['x-forwarded-proto'] || 'https').split(',')[0].trim();
+        const host = req.headers.host;
+        const url = `${proto}://${host}${path}`;
+        const resp = await fetch(url, {
+            method,
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify(body)
+        });
+        let data = null;
+        try { data = await resp.json(); } catch { /* respuesta sin cuerpo JSON */ }
+        return { ok: resp.ok, status: resp.status, data };
+    } finally {
+        redis.del(sessionKey).catch(() => {}); // limpieza (el TTL es el respaldo)
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -382,6 +413,160 @@ const TOOLS = {
                 return { atendiendo: false };
             }
         }
+    },
+
+    // ───────────────────────── ESCRITURA (Fase 2) ─────────────────────────
+
+    marcar_leido: {
+        description: 'Marca un chat como leído/atendido (baja la burbuja de no leídos) o como no leído. leido=true lo marca atendido; leido=false lo regresa a no leído.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                candidateId: { type: 'string', description: 'ID del candidato.' },
+                leido: { type: 'boolean', description: 'true = marcar atendido/leído (default). false = marcar no leído.' }
+            },
+            required: ['candidateId']
+        },
+        handler: async (args, { redis, req }) => {
+            const id = String(args?.candidateId || '').trim();
+            if (!id) throw new Error('Falta candidateId');
+            const leido = args?.leido !== false;
+            const action = leido ? 'mark_handled' : 'mark_unread';
+            const r = await callInternal(req, redis, '/api/chat', 'PUT', { action, candidateId: id });
+            if (!r.ok) throw new Error(r.data?.error || `Fallo al marcar (${r.status})`);
+            return { candidateId: id, leido };
+        }
+    },
+
+    enviar_mensaje: {
+        description: 'Envía un mensaje de texto al candidato por WhatsApp, como lo haría un reclutador. El mensaje admite variables de plantilla ({{nombre}}, etc.), que se resuelven en el servidor.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                candidateId: { type: 'string', description: 'ID del candidato.' },
+                texto: { type: 'string', description: 'Texto a enviar.' }
+            },
+            required: ['candidateId', 'texto']
+        },
+        handler: async (args, { redis, req }) => {
+            const id = String(args?.candidateId || '').trim();
+            const texto = String(args?.texto || '').trim();
+            if (!id) throw new Error('Falta candidateId');
+            if (!texto) throw new Error('Falta el texto del mensaje');
+            const r = await callInternal(req, redis, '/api/chat', 'POST', {
+                candidateId: id, message: texto, type: 'text', senderId: 'mcp-grok', senderName: 'Grok (IA)'
+            });
+            if (!r.ok || r.data?.success === false) throw new Error(r.data?.error || `Fallo al enviar (${r.status})`);
+            const estado = r.data?.message?.status || 'enviado';
+            if (estado === 'failed') throw new Error(r.data?.message?.error || 'El envío falló en Meta');
+            return { candidateId: id, enviado: true, estado };
+        }
+    },
+
+    enviar_banco_respuesta: {
+        description: 'Envía una respuesta del banco de respuestas a un candidato. Elige la respuesta por su id o atajo; el servidor resuelve variables, frase dinámica y media, y la manda. Usa listar_banco_respuestas para ver las disponibles.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                candidateId: { type: 'string', description: 'ID del candidato.' },
+                quickReplyId: { type: 'string', description: 'ID de la respuesta del banco (preferido).' },
+                atajo: { type: 'string', description: 'Atajo (shortcut) de la respuesta, si no tienes el id.' }
+            },
+            required: ['candidateId']
+        },
+        handler: async (args, { redis, req }) => {
+            const id = String(args?.candidateId || '').trim();
+            if (!id) throw new Error('Falta candidateId');
+            const qrId = String(args?.quickReplyId || '').trim();
+            const atajo = String(args?.atajo || '').trim();
+            if (!qrId && !atajo) throw new Error('Indica quickReplyId o atajo');
+
+            const raw = await redis.get('candidatic:quick_replies');
+            const replies = raw ? JSON.parse(raw) : [];
+            const qr = (Array.isArray(replies) ? replies : []).find(r =>
+                (qrId && r.id === qrId) || (atajo && String(r.shortcut || '').toLowerCase() === atajo.toLowerCase()));
+            if (!qr) throw new Error('Respuesta del banco no encontrada');
+
+            const candidate = await getCandidateById(id);
+            if (!candidate) throw new Error('Candidato no encontrado');
+
+            // Resolver texto igual que el Chat Web: variables + frase dinámica (ambas pasan por substituteVariables).
+            const caption = qr.message
+                ? substituteDynamicPhrase(
+                    substituteVariables(qr.message, candidate),
+                    substituteVariables(qr.dynamicPhrase || '', candidate)
+                  ).replace(/[^\S\n]{2,}/g, ' ').trim()
+                : '';
+
+            const images = [qr.imageUrl, qr.imageUrl2, qr.imageUrl3, qr.imageUrl4].filter(Boolean);
+            const enviados = [];
+            const send = async (body) => {
+                const r = await callInternal(req, redis, '/api/chat', 'POST', { candidateId: id, senderId: 'mcp-grok', senderName: 'Grok (IA)', ...body });
+                if (!r.ok || r.data?.success === false || r.data?.message?.status === 'failed') {
+                    throw new Error(r.data?.message?.error || r.data?.error || `Fallo al enviar (${r.status})`);
+                }
+                enviados.push(body.type);
+            };
+
+            if (images.length) {
+                await send({ type: 'image', mediaUrl: images[0], message: caption });
+                for (const extra of images.slice(1)) await send({ type: 'image', mediaUrl: extra, message: '' });
+            } else if (qr.documentUrl) {
+                await send({ type: 'document', mediaUrl: qr.documentUrl, message: caption });
+            } else if (qr.audioUrl) {
+                await send({ type: 'audio', mediaUrl: qr.audioUrl, message: '', extraParams: { voice: !!qr.audioVoice } });
+                if (caption) await send({ type: 'text', message: caption });
+            } else {
+                if (!caption) throw new Error('La respuesta no tiene texto ni media para enviar');
+                await send({ type: 'text', message: caption });
+            }
+
+            return { candidateId: id, respuesta: qr.name || qr.shortcut || qr.id, enviado: true, partes: enviados };
+        }
+    },
+
+    toggle_bot: {
+        description: 'Activa o silencia al bot (Brenda, la IA) en el chat de un candidato. activar=false silencia la IA 24h (como cuando un humano toma el control); activar=true la reactiva.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                candidateId: { type: 'string', description: 'ID del candidato.' },
+                activar: { type: 'boolean', description: 'true = reactivar el bot. false = silenciarlo 24h.' }
+            },
+            required: ['candidateId', 'activar']
+        },
+        handler: async (args, { redis, req }) => {
+            const id = String(args?.candidateId || '').trim();
+            if (!id) throw new Error('Falta candidateId');
+            if (typeof args?.activar !== 'boolean') throw new Error('activar debe ser true o false');
+            const block = !args.activar; // activar el bot = quitar el bloqueo/silencio
+            const r = await callInternal(req, redis, '/api/candidates/block', 'POST', { id, block });
+            if (!r.ok) throw new Error(r.data?.error || `Fallo al cambiar el bot (${r.status})`);
+            return { candidateId: id, botActivo: args.activar };
+        }
+    },
+
+    etiquetar: {
+        description: 'Pone o quita una etiqueta a un candidato. accion="add" la pone, accion="remove" la quita.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                candidateId: { type: 'string', description: 'ID del candidato.' },
+                etiqueta: { type: 'string', description: 'Nombre exacto de la etiqueta.' },
+                accion: { type: 'string', enum: ['add', 'remove'], description: 'add (default) o remove.' }
+            },
+            required: ['candidateId', 'etiqueta']
+        },
+        handler: async (args, { redis, req }) => {
+            const id = String(args?.candidateId || '').trim();
+            const etiqueta = String(args?.etiqueta || '').trim();
+            if (!id) throw new Error('Falta candidateId');
+            if (!etiqueta) throw new Error('Falta la etiqueta');
+            const accion = args?.accion === 'remove' ? 'remove' : 'add';
+            const r = await callInternal(req, redis, '/api/candidates/bulk-tag', 'POST', { ids: [id], tag: etiqueta, action: accion });
+            if (!r.ok || r.data?.success === false) throw new Error(r.data?.error || `Fallo al etiquetar (${r.status})`);
+            return { candidateId: id, etiqueta, accion };
+        }
     }
 };
 
@@ -494,7 +679,7 @@ export default async function handler(req, res) {
         try { body = JSON.parse(body); } catch { return res.status(400).json(rpcError(null, -32700, 'JSON inválido')); }
     }
 
-    const ctx = { redis };
+    const ctx = { redis, req };
 
     // Resumen del/los método(s) para el log de diagnóstico.
     const methods = Array.isArray(body)
