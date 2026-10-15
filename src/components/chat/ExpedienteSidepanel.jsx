@@ -30,10 +30,16 @@ const fmtDate = (iso) => {
     } catch { return ''; }
 };
 
+// Anti-brinco (stale-while-revalidate a nivel de módulo), por candidato: el expediente es
+// per-candidato, así que cacheamos la última lista conocida de cada uno. Re-abrir el panel o
+// volver a un candidato ya visto pinta al instante sin spinner y revalida en silencio. Solo
+// intra-sesión (no persiste entre recargas completas). Ver docs/anti-brinco-secciones.md.
+const expedienteCache = new Map();
+
 export default function ExpedienteSidepanel({ selectedChat, onClose, showToast, refreshToken }) {
     const candidateId = selectedChat?.id;
-    const [entries, setEntries] = useState([]);
-    const [loading, setLoading] = useState(true);
+    const [entries, setEntries] = useState(() => (candidateId && expedienteCache.get(candidateId)) || []);
+    const [loading, setLoading] = useState(() => !(candidateId && expedienteCache.has(candidateId)));
     const [uploading, setUploading] = useState(false);
     const [dragging, setDragging] = useState(false);
     const [view, setView] = useState(() => {
@@ -48,11 +54,16 @@ export default function ExpedienteSidepanel({ selectedChat, onClose, showToast, 
 
     const load = useCallback(async () => {
         if (!candidateId) { setEntries([]); setLoading(false); return; }
-        setLoading(true);
+        // Si ya hay caché de este candidato, lo pintamos de una y revalidamos sin spinner.
+        const cached = expedienteCache.get(candidateId);
+        if (cached) { setEntries(cached); setLoading(false); }
+        else { setEntries([]); setLoading(true); }
         try {
             const res = await fetch(`/api/candidates/expediente?candidateId=${encodeURIComponent(candidateId)}`);
             const data = await res.json();
-            setEntries(Array.isArray(data.entries) ? data.entries : []);
+            const list = Array.isArray(data.entries) ? data.entries : [];
+            setEntries(list);
+            expedienteCache.set(candidateId, list);
         } catch {
             showToast && showToast('No se pudo cargar el expediente', 'error');
         } finally {
@@ -62,6 +73,12 @@ export default function ExpedienteSidepanel({ selectedChat, onClose, showToast, 
 
     // Recarga al cambiar de candidato o cuando el chat guarda un archivo (refreshToken).
     useEffect(() => { load(); }, [load, refreshToken]);
+
+    // Espeja mutaciones locales (borrado optimista) al caché anti-brinco del candidato actual.
+    // El guard evita sembrar antes de la primera carga real de ese candidato.
+    useEffect(() => {
+        if (candidateId && expedienteCache.has(candidateId)) expedienteCache.set(candidateId, entries);
+    }, [candidateId, entries]);
 
     useEffect(() => {
         const onKey = (e) => { if (e.key === 'Escape' && onClose) onClose(); };

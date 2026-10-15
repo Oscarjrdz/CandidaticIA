@@ -18,6 +18,12 @@ const extractPersistentCandidatePatch = (patch = {}) => {
     );
 };
 
+// Anti-brinco (stale-while-revalidate a nivel de módulo): la última lista de proyectos
+// conocida sobrevive al desmontar/remontar del panel, así re-abrirlo pinta al instante sin
+// spinner y revalida en silencio. Solo intra-sesión (no persiste entre recargas completas).
+// Ver docs/anti-brinco-secciones.md.
+let projectsCache = null;
+
 const CustomProjectDropdown = ({ activeProjectId, projects, onChange, _candidates = [] }) => {
     const [isOpen, setIsOpen] = useState(false);
     
@@ -67,8 +73,8 @@ const CustomProjectDropdown = ({ activeProjectId, projects, onChange, _candidate
 
 export default function ManualProjectsSidepanel({ selectedChat, onClose, showToast, onCandidateUpdated, candidates = [] }) {
     const { confirmModalJSX, showConfirm } = useConfirmModal();
-    const [projects, setProjects] = useState([]);
-    const [loading, setLoading] = useState(true);
+    const [projects, setProjects] = useState(() => projectsCache || []);
+    const [loading, setLoading] = useState(() => !projectsCache);
 
     // Vistas: 'pipeline' (para asignar al candidato) o 'settings' (para configurar proyectos)
     const [view, setView] = useState('pipeline'); 
@@ -103,6 +109,10 @@ export default function ManualProjectsSidepanel({ selectedChat, onClose, showToa
         loadProjects();
     }, []);
 
+    // Espeja mutaciones locales (crear/borrar/editar/reordenar) al caché anti-brinco.
+    // El guard evita sembrar un [] vacío antes de la primera carga real.
+    useEffect(() => { if (projectsCache) projectsCache = projects; }, [projects]);
+
     // Si cambian de chat y estábamos en 'settings', igual lo podemos mantener o regresar a 'pipeline'
     useEffect(() => {
         if (selectedChat) {
@@ -113,12 +123,14 @@ export default function ManualProjectsSidepanel({ selectedChat, onClose, showToa
     }, [selectedChat?.id]);
 
     const loadProjects = async (silent = false) => {
-        if (!silent) setLoading(true);
+        // Sin caché aún → mostramos spinner; si ya hay caché sembrado, revalidamos en silencio.
+        if (!silent && !projectsCache) setLoading(true);
         try {
             const res = await fetch('/api/manual_projects');
             const data = await res.json();
             if (data.success) {
                 setProjects(data.data);
+                projectsCache = data.data;
             }
         } catch (e) {
             console.error(e);
@@ -357,7 +369,7 @@ export default function ManualProjectsSidepanel({ selectedChat, onClose, showToa
 
 
     if (loading) {
-        return <div className="absolute md:relative inset-y-0 right-0 z-30 w-full md:w-[340px] border-l border-gray-100 dark:border-gray-800 bg-white dark:bg-[#111b21] flex h-full items-center justify-center shadow-2xl md:shadow-none"><Loader2 className="w-8 h-8 animate-spin text-gray-300" /></div>;
+        return <div className="absolute md:relative inset-y-0 right-0 z-30 w-full md:w-[350px] border-l border-[#d1d7db] dark:border-[#222e35] bg-white dark:bg-[#111b21] flex h-full items-center justify-center shadow-2xl md:shadow-none"><Loader2 className="w-8 h-8 animate-spin text-gray-300" /></div>;
     }
 
     // Pipeline Activo (Si hay candidato seleccionado)
@@ -366,7 +378,7 @@ export default function ManualProjectsSidepanel({ selectedChat, onClose, showToa
     const activeProject = projects.find(p => p.id === activeProjectId);
 
     return (
-        <div className="absolute md:relative inset-y-0 right-0 z-30 w-full md:w-[350px] border-l border-gray-100 dark:border-gray-800 bg-[#f8f9fa] dark:bg-[#0b141a] flex flex-col h-full shadow-2xl md:shadow-none">
+        <div className="absolute md:relative inset-y-0 right-0 z-30 w-full md:w-[350px] border-l border-[#d1d7db] dark:border-[#222e35] bg-[#f8f9fa] dark:bg-[#0b141a] flex flex-col h-full shadow-2xl md:shadow-none">
             {/* Header */}
             <div className="h-[59px] px-4 flex items-center justify-between border-b border-[#d1d7db] dark:border-[#222e35] bg-[#f0f2f5] dark:bg-[#202c33] shrink-0">
                 <div className="flex items-center gap-2">
