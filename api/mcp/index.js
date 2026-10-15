@@ -363,16 +363,16 @@ const TOOLS = {
     },
 
     listar_plantillas: {
-        description: 'Lista las plantillas de mensaje configuradas (las que se usan para recordatorios y envíos oficiales).',
+        description: 'Lista las plantillas oficiales de Meta aprobadas (nombre e idioma). Úsalas con enviar_plantilla para escribirle a candidatos fuera de la ventana de 24h.',
         inputSchema: { type: 'object', properties: {} },
-        handler: async (_args, { redis }) => {
-            const raw = await redis.get('candidatic:reminder_templates');
-            const templates = raw ? JSON.parse(raw) : [];
+        handler: async (_args, { redis, req }) => {
+            const r = await callInternal(req, redis, '/api/whatsapp/templates', 'GET');
+            const templates = Array.isArray(r.data?.data) ? r.data.data : [];
             return {
-                plantillas: (Array.isArray(templates) ? templates : []).map(t => ({
-                    id: t.id || t.name || null,
-                    nombre: t.name || t.displayName || null,
-                    idioma: t.language || t.lang || null
+                plantillas: templates.map(t => ({
+                    nombre: t.name || null,
+                    idioma: t.language || null,
+                    estado: t.status || null
                 }))
             };
         }
@@ -566,6 +566,92 @@ const TOOLS = {
             const r = await callInternal(req, redis, '/api/candidates/bulk-tag', 'POST', { ids: [id], tag: etiqueta, action: accion });
             if (!r.ok || r.data?.success === false) throw new Error(r.data?.error || `Fallo al etiquetar (${r.status})`);
             return { candidateId: id, etiqueta, accion };
+        }
+    },
+
+    enviar_plantilla: {
+        description: 'Envía una plantilla oficial de Meta a un candidato. Sirve para contactar a quien está FUERA de la ventana de 24h (donde enviar_mensaje de texto libre falla con error 131047). El nombre del candidato se rellena solo. Usa listar_plantillas para ver los nombres disponibles.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                candidateId: { type: 'string', description: 'ID del candidato.' },
+                plantilla: { type: 'string', description: 'Nombre exacto de la plantilla (de listar_plantillas).' }
+            },
+            required: ['candidateId', 'plantilla']
+        },
+        handler: async (args, { redis, req }) => {
+            const id = String(args?.candidateId || '').trim();
+            const nombre = String(args?.plantilla || '').trim();
+            if (!id) throw new Error('Falta candidateId');
+            if (!nombre) throw new Error('Falta el nombre de la plantilla');
+
+            const tr = await callInternal(req, redis, '/api/whatsapp/templates', 'GET');
+            const templates = Array.isArray(tr.data?.data) ? tr.data.data : [];
+            const tpl = templates.find(t => String(t.name || '').toLowerCase() === nombre.toLowerCase());
+            if (!tpl) throw new Error(`Plantilla "${nombre}" no encontrada. Usa listar_plantillas.`);
+
+            const r = await callInternal(req, redis, '/api/chat', 'POST', {
+                candidateId: id, type: 'template', templateData: tpl, senderId: 'mcp-grok', senderName: 'Grok (IA)'
+            });
+            if (!r.ok || r.data?.success === false || r.data?.message?.status === 'failed') {
+                throw new Error(r.data?.message?.error || r.data?.error || `Fallo al enviar plantilla (${r.status})`);
+            }
+            return { candidateId: id, plantilla: tpl.name, enviado: true };
+        }
+    },
+
+    crear_recordatorio: {
+        description: 'Programa un recordatorio (campanita) para un candidato: a la fecha/hora indicada se le enviará el mensaje. cuando debe ser una fecha-hora futura en ISO 8601 (ej. 2026-10-16T09:30:00-06:00).',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                candidateId: { type: 'string', description: 'ID del candidato.' },
+                mensaje: { type: 'string', description: 'Texto del recordatorio a enviar.' },
+                cuando: { type: 'string', description: 'Fecha-hora futura en ISO 8601 (incluye zona, ej. -06:00 para Monterrey).' }
+            },
+            required: ['candidateId', 'mensaje', 'cuando']
+        },
+        handler: async (args, { redis, req }) => {
+            const id = String(args?.candidateId || '').trim();
+            const mensaje = String(args?.mensaje || '').trim();
+            const cuando = String(args?.cuando || '').trim();
+            if (!id) throw new Error('Falta candidateId');
+            if (!mensaje) throw new Error('Falta el mensaje');
+            if (!cuando || isNaN(new Date(cuando).getTime())) throw new Error('cuando debe ser una fecha ISO válida');
+            if (new Date(cuando).getTime() <= Date.now()) throw new Error('cuando debe ser una fecha futura');
+
+            const candidate = await getCandidateById(id);
+            if (!candidate) throw new Error('Candidato no encontrado');
+
+            const r = await callInternal(req, redis, '/api/candidate-reminders', 'POST', {
+                candidateId: id,
+                whatsapp: candidate.whatsapp,
+                nombre: candidate.nombreReal || candidate.nombre || candidate.whatsapp,
+                message: mensaje,
+                scheduledAt: cuando
+            });
+            if (!r.ok || r.data?.success === false) throw new Error(r.data?.error || `Fallo al crear recordatorio (${r.status})`);
+            return { candidateId: id, para: cuando, recordatorioId: r.data?.reminder?.id || null };
+        }
+    },
+
+    bloquear: {
+        description: 'BLOQUEA DE VERDAD al candidato en Meta/WhatsApp (no podrá volver a escribir). Es irreversible salvo que lo desbloquees. Distinto de toggle_bot (que solo silencia a la IA). bloquear=false lo desbloquea.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                candidateId: { type: 'string', description: 'ID del candidato.' },
+                bloquear: { type: 'boolean', description: 'true = bloquear en Meta (default). false = desbloquear.' }
+            },
+            required: ['candidateId']
+        },
+        handler: async (args, { redis, req }) => {
+            const id = String(args?.candidateId || '').trim();
+            if (!id) throw new Error('Falta candidateId');
+            const block = args?.bloquear !== false;
+            const r = await callInternal(req, redis, '/api/candidates/meta-block', 'POST', { id, block });
+            if (!r.ok || r.data?.success === false) throw new Error(r.data?.error || `Fallo al bloquear (${r.status})`);
+            return { candidateId: id, bloqueadoEnMeta: block };
         }
     }
 };
