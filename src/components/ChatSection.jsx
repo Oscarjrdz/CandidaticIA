@@ -800,6 +800,12 @@ const CHAT_LIST_VIRTUOSO_COMPONENTS = { Footer: ChatListFooter };
 // (eso era el "brinco" del header al re-entrar). loadMessages revalida por debajo (merge).
 const chatSectionCache = { candidates: null, candidatesTotal: 0, nextOffset: 0, hasMore: false, messagesByChat: null, selectedChat: null };
 
+// Plantillas de recordatorio (config global, no por candidato): su icono en el header solo
+// aparece si hay ≥1. Sin caché, al re-entrar la sección el estado arranca en [] y el icono
+// DESAPARECE hasta que termina el fetch → "icono que aparece/desaparece". El caché de módulo
+// lo siembra al instante y el fetch revalida en silencio. Ver docs/anti-brinco-secciones.md.
+let reminderTemplatesCache = null;
+
 export default function ChatSection({ rolePermissions, onlineUsers = [], unreadCountHint = null, onUnreadCountChange }) {
     const { showToast } = useToastContext();
     const { user, setUser } = useAuthContext();
@@ -923,7 +929,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
     const [profileModalCandidate, setProfileModalCandidate] = useState(null);
     const [reminderModalCandidate, setReminderModalCandidate] = useState(null);
     // Plantillas de recordatorio (creadas desde CandidateReminderModal) para envío de 1 clic
-    const [reminderTemplates, setReminderTemplates] = useState([]);
+    const [reminderTemplates, setReminderTemplates] = useState(() => reminderTemplatesCache || []);
     const reminderTemplatesLoadedRef = useRef(false);
     const [reminderTemplateMenuOpen, setReminderTemplateMenuOpen] = useState(false);
     const [applyingReminderTemplateId, setApplyingReminderTemplateId] = useState(null);
@@ -1829,7 +1835,11 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         try {
             const res = await fetch('/api/reminder-templates');
             const data = await res.json();
-            if (data.success) setReminderTemplates(data.templates || []);
+            if (data.success) {
+                const tpls = data.templates || [];
+                setReminderTemplates(tpls);
+                reminderTemplatesCache = tpls;
+            }
         } catch (e) {
             reminderTemplatesLoadedRef.current = false;
             console.error('Error loading reminder templates', e);
