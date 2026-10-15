@@ -794,7 +794,11 @@ const CHAT_LIST_VIRTUOSO_COMPONENTS = { Footer: ChatListFooter };
 // Se cachea SOLO la vista por defecto para que la lista sembrada siempre cuadre con la
 // UI (que al montar también arranca en 'unread'). Alcance deliberadamente acotado a la
 // LISTA: no toca mensajes ni el chat abierto (la parte con freeze/anclaje/dedup frágil).
-const chatSectionCache = { candidates: null, candidatesTotal: 0, nextOffset: 0, hasMore: false, messagesByChat: null };
+// selectedChat/selectedMessages: el chat abierto + sus mensajes sobreviven al salir/entrar
+// de la sección, para que el HEADER (nombre, toolbar, etiquetas) y el cuerpo pinten al instante
+// con el mismo chat en vez de que la revalidación auto-abra el primer chat con máscara de montaje
+// (eso era el "brinco" del header al re-entrar). loadMessages revalida por debajo (merge).
+const chatSectionCache = { candidates: null, candidatesTotal: 0, nextOffset: 0, hasMore: false, messagesByChat: null, selectedChat: null };
 
 export default function ChatSection({ rolePermissions, onlineUsers = [], unreadCountHint = null, onUnreadCountChange }) {
     const { showToast } = useToastContext();
@@ -841,7 +845,9 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
             return saved ? JSON.parse(saved) : null;
         } catch { return null; }
     });
-    const [selectedChat, setSelectedChat] = useState(null);
+    // Sembrado desde el caché de módulo → al re-entrar a la sección el header del chat que tenías
+    // abierto pinta al instante (sin brinco ni auto-apertura del primer chat). Ver chatSectionCache.
+    const [selectedChat, setSelectedChat] = useState(() => chatSectionCache.selectedChat || null);
     const [headerImgError, setHeaderImgError] = useState(false);
     const [showVCardModal, setShowVCardModal] = useState(false);
     const [showInteractiveModal, setShowInteractiveModal] = useState(false);
@@ -892,7 +898,13 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
     const [showExpedientePanel, setShowExpedientePanel] = useState(() => !!user?.preferences?.expedienteOpen);
     // Se incrementa al guardar un archivo desde el chat → el panel del Expediente refetchea.
     const [expedienteRefreshToken, setExpedienteRefreshToken] = useState(0);
-    const [messages, setMessages] = useState([]);
+    // Siembra los mensajes del chat sembrado desde el caché pre-calentado → el cuerpo no parpadea
+    // vacío al re-entrar; loadMessages revalida (merge) por debajo.
+    const [messages, setMessages] = useState(() => {
+        const seedId = chatSectionCache.selectedChat?.id;
+        const seeded = seedId && chatSectionCache.messagesByChat?.get(seedId);
+        return seeded ? stripEntryAnimations(seeded) : [];
+    });
     const messageInputRef = useRef(null);
     const [_sending, setSending] = useState(false);
     const [loadingChats, setLoadingChats] = useState(() => !chatSectionCache.candidates); // sin skeleton si hay caché
@@ -1376,7 +1388,9 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
     const activeFilterRef = useRef('unread');
     const _hasSetInitialFilter = useRef(false);
     const filterValueRef = useRef(null);
-    const selectedChatRef = useRef(null);
+    // Sembrado desde el caché para que el auto-open del primer chat (que checa !selectedChatRef.current)
+    // NO dispare al re-entrar cuando ya había un chat abierto.
+    const selectedChatRef = useRef(chatSectionCache.selectedChat || null);
     const pendingChatIdRef = useRef(null);
     const searchRef = useRef("");
     const candidatesRef = useRef(chatSectionCache.candidates || []);
@@ -1462,6 +1476,9 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
 
     useEffect(() => {
         selectedChatRef.current = selectedChat;
+        // Persiste el chat abierto en el caché de módulo → al re-entrar a la sección se re-siembra
+        // y el header no brinca (anti-brinco). Ver chatSectionCache.
+        chatSectionCache.selectedChat = selectedChat;
     }, [selectedChat]);
 
     // Congela el contador de "no leídos" del separador al ABRIR/cambiar de chat (snapshot).
