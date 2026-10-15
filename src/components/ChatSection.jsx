@@ -806,6 +806,12 @@ const chatSectionCache = { candidates: null, candidatesTotal: 0, nextOffset: 0, 
 // lo siembra al instante y el fetch revalida en silencio. Ver docs/anti-brinco-secciones.md.
 let reminderTemplatesCache = null;
 
+// Registro global de etiquetas (nombre → color). Sin caché, al re-entrar la sección arranca
+// en [] → las etiquetas del chat abierto y de la lista se pintan con el fallback azul (#3b82f6)
+// y, al resolver el fetch, saltan a su color real (ej. naranja). El caché de módulo las siembra
+// al instante con su color correcto. Guarda también untaggedTotal (se setea en el mismo loader).
+let tagsCache = null; // { tags: [...], untaggedTotal: number }
+
 export default function ChatSection({ rolePermissions, onlineUsers = [], unreadCountHint = null, onUnreadCountChange }) {
     const { showToast } = useToastContext();
     const { user, setUser } = useAuthContext();
@@ -914,7 +920,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
     const messageInputRef = useRef(null);
     const [_sending, setSending] = useState(false);
     const [loadingChats, setLoadingChats] = useState(() => !chatSectionCache.candidates); // sin skeleton si hay caché
-    const [availableTags, setAvailableTags] = useState([]);
+    const [availableTags, setAvailableTags] = useState(() => tagsCache?.tags || []);
     const [manualProjects, setManualProjects] = useState([]);
     const [newTagInput, setNewTagInput] = useState("");
     const [editingTag, setEditingTag] = useState(null);
@@ -1379,7 +1385,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
     const selectedTagValues = useMemo(() => getSelectedTagValues(selectedTag), [selectedTag]);
     const selectedTagValueSet = useMemo(() => new Set(selectedTagValues), [selectedTagValues]);
     const [candidatesTotal, setCandidatesTotal] = useState(() => chatSectionCache.candidatesTotal || 0);
-    const [untaggedTotal, setUntaggedTotal] = useState(0);
+    const [untaggedTotal, setUntaggedTotal] = useState(() => tagsCache?.untaggedTotal || 0);
     const [hasMore, setHasMore] = useState(() => chatSectionCache.hasMore || false);
     const [loadingMore, setLoadingMore] = useState(false);
     const [visibleChatLimit, setVisibleChatLimit] = useState(CHAT_LIST_PAGE_SIZE);
@@ -1795,6 +1801,11 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
 
         return cancelIdleLoads;
     }, []);
+
+    // Espeja ediciones locales de etiquetas (renombrar/color/borrar, que hacen setAvailableTags
+    // optimista) al caché anti-brinco → si re-entras justo después de editar, pinta el color
+    // nuevo, no el viejo. El guard evita sembrar antes de la primera carga real.
+    useEffect(() => { if (tagsCache) tagsCache = { ...tagsCache, tags: availableTags }; }, [availableTags]);
 
     // RBAC effect removed (handled inline)
 
@@ -2273,8 +2284,10 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                     }
                     return t;
                 });
+                const untagged = Number(data.untaggedCount) || 0;
                 setAvailableTags(migrated);
-                setUntaggedTotal(Number(data.untaggedCount) || 0);
+                setUntaggedTotal(untagged);
+                tagsCache = { tags: migrated, untaggedTotal: untagged };
             }
         } catch (e) { console.error('Error fetching tags', e); }
     };
