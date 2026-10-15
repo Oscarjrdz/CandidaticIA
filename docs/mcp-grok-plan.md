@@ -1,6 +1,10 @@
 # MCP de Candidatic para Grok — Plan y Especificación
 
-> **Estado:** **Fase 1 implementada** (solo lectura) el 2026-10-14 — falta desplegar y conectar Grok. Fases 2–3 pendientes.
+> **Estado:** **Fase 1 (lectura) EN PRODUCCIÓN y verificada con Grok real.** **Fase 2 (escritura) desplegada 2026-10-15** — 5 tools: marcar_leido, enviar_mensaje, enviar_banco_respuesta, toggle_bot, etiquetar. Fase 3 pendiente.
+>
+> **Fase 3 + plantillas desplegadas (2026-10-15):** `enviar_plantilla` (plantilla oficial Meta — resuelve la ventana de 24h), `crear_recordatorio` (campanita), `bloquear` (Meta block real). **Total: 22 tools (14 lectura + 8 escritura).** `enviar_mensaje` verificado en vivo con Grok.
+>
+> **Cómo funciona la escritura (Fase 2):** las tools NO reimplementan la lógica del Chat Web. Llaman internamente (fetch a la misma URL pública) a los endpoints ya probados (`/api/chat`, `/api/candidates/block`, `/api/candidates/bulk-tag`) usando una **sesión de reclutador de SISTEMA efímera** (`session:admin:mcpsys_<rand>`, userId `mcp-grok`, TTL 120s) que valida `validateAdminSession`. Así reusa el pipeline completo (media multi-número, reintentos, stats, SSE, silencio de la IA). Lección del 403: era el kill switch en OFF, NO firewall.
 > **Fecha:** 2026-10-14.
 >
 > **Archivos creados en Fase 1:**
