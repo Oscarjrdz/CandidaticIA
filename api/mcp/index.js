@@ -27,7 +27,8 @@ import {
     getCandidateById,
     getMessages,
     getVacancies,
-    getExpediente
+    getExpediente,
+    getUsers
 } from '../utils/storage.js';
 import { substituteVariables, substituteDynamicPhrase } from '../utils/shortcuts.js';
 
@@ -81,11 +82,25 @@ function logMcp(redis, req, info) {
 // usando una sesión de reclutador de SISTEMA, efímera (token aleatorio, TTL 120s),
 // que es lo que esos endpoints esperan (validateAdminSession).
 // ─────────────────────────────────────────────────────────────────────────────
+// La sesión de sistema se identifica como un SuperAdmin real para heredar permisos
+// completos (crear/eliminar proyectos y pasos lo exige el RBAC). Se cachea en memoria.
+let _sysUserIdCache = null;
+async function getSystemUserId() {
+    if (_sysUserIdCache) return _sysUserIdCache;
+    try {
+        const users = await getUsers();
+        const su = (users || []).find(u => u.role === 'SuperAdmin');
+        _sysUserIdCache = su?.id || su?.whatsapp || 'mcp-grok';
+    } catch { _sysUserIdCache = 'mcp-grok'; }
+    return _sysUserIdCache;
+}
+
 async function callInternal(req, redis, path, method, body) {
     const token = `mcpsys_${randomBytes(24).toString('hex')}`;
     const sessionKey = `session:admin:${token}`;
     const expiresAt = new Date(Date.now() + 120000).toISOString();
-    await redis.set(sessionKey, JSON.stringify({ userId: 'mcp-grok', userName: 'Grok (IA)', expiresAt }), 'EX', 120);
+    const sysUserId = await getSystemUserId();
+    await redis.set(sessionKey, JSON.stringify({ userId: sysUserId, userName: 'Grok (IA)', expiresAt }), 'EX', 120);
 
     try {
         const proto = (req.headers['x-forwarded-proto'] || 'https').split(',')[0].trim();
@@ -652,6 +667,192 @@ const TOOLS = {
             const r = await callInternal(req, redis, '/api/candidates/meta-block', 'POST', { id, block });
             if (!r.ok || r.data?.success === false) throw new Error(r.data?.error || `Fallo al bloquear (${r.status})`);
             return { candidateId: id, bloqueadoEnMeta: block };
+        }
+    },
+
+    // ───────────────────── PROYECTOS (CRM Manual) ─────────────────────
+
+    listar_proyectos: {
+        description: 'Lista los proyectos del CRM Manual con sus pasos (columnas del tablero). Úsalo para ver qué proyectos existen y sus etapas.',
+        inputSchema: { type: 'object', properties: {} },
+        handler: async (_args, { redis, req }) => {
+            const r = await callInternal(req, redis, '/api/manual_projects', 'GET');
+            const projects = Array.isArray(r.data?.data) ? r.data.data : [];
+            return {
+                proyectos: projects.map(p => ({
+                    id: p.id,
+                    nombre: p.name,
+                    descripcion: p.description || '',
+                    color: p.color || null,
+                    pasos: (p.steps || []).map(s => ({ stepId: s.id, nombre: s.name })),
+                    creado: p.createdAt || null
+                }))
+            };
+        }
+    },
+
+    ver_candidatos_proyecto: {
+        description: 'Muestra el tablero de un proyecto: sus pasos y qué candidatos hay en cada paso. Es la vista de "todo lo que pasa" en ese proyecto.',
+        inputSchema: {
+            type: 'object',
+            properties: { projectId: { type: 'string', description: 'ID del proyecto (de listar_proyectos).' } },
+            required: ['projectId']
+        },
+        handler: async (args, { redis, req }) => {
+            const pid = String(args?.projectId || '').trim();
+            if (!pid) throw new Error('Falta projectId');
+
+            const listR = await callInternal(req, redis, '/api/manual_projects', 'GET');
+            const project = (Array.isArray(listR.data?.data) ? listR.data.data : []).find(p => p.id === pid);
+            if (!project) throw new Error('Proyecto no encontrado');
+
+            const candR = await callInternal(req, redis, `/api/manual_projects?id=${encodeURIComponent(pid)}&view=candidates`, 'GET');
+            const candidates = Array.isArray(candR.data?.candidates) ? candR.data.candidates : [];
+
+            const steps = (project.steps || []).map(s => ({ stepId: s.id, nombre: s.name, candidatos: [] }));
+            const byStep = new Map(steps.map(s => [s.stepId, s]));
+            for (const c of candidates) {
+                const bucket = byStep.get(c.manualProjectStepId);
+                const row = {
+                    candidateId: c.id,
+                    nombre: (c.nombreReal && c.nombreReal.trim()) || c.nombre || 'Sin nombre',
+                    telefono: c.whatsapp || null
+                };
+                if (bucket) bucket.candidatos.push(row);
+            }
+            return { proyecto: project.name, projectId: pid, total: candidates.length, pasos: steps };
+        }
+    },
+
+    meter_en_proyecto: {
+        description: 'Mete (vincula) un candidato a un proyecto, en un paso. Si no das stepId, entra al primer paso. Un candidato solo puede estar en un proyecto a la vez (se saca de otros automáticamente).',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                projectId: { type: 'string', description: 'ID del proyecto.' },
+                candidateId: { type: 'string', description: 'ID del candidato.' },
+                stepId: { type: 'string', description: 'ID del paso (opcional; default = primer paso).' }
+            },
+            required: ['projectId', 'candidateId']
+        },
+        handler: async (args, { redis, req }) => {
+            const projectId = String(args?.projectId || '').trim();
+            const candidateId = String(args?.candidateId || '').trim();
+            if (!projectId || !candidateId) throw new Error('Faltan projectId o candidateId');
+            const body = { action: 'linkCandidate', projectId, candidateId };
+            if (args?.stepId) body.stepId = String(args.stepId).trim();
+            const r = await callInternal(req, redis, '/api/manual_projects', 'POST', body);
+            if (!r.ok || r.data?.success === false) throw new Error(r.data?.error || `Fallo al meter en proyecto (${r.status})`);
+            return { projectId, candidateId, metido: true };
+        }
+    },
+
+    sacar_de_proyecto: {
+        description: 'Saca (desvincula) un candidato de un proyecto.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                projectId: { type: 'string', description: 'ID del proyecto.' },
+                candidateId: { type: 'string', description: 'ID del candidato.' }
+            },
+            required: ['projectId', 'candidateId']
+        },
+        handler: async (args, { redis, req }) => {
+            const projectId = String(args?.projectId || '').trim();
+            const candidateId = String(args?.candidateId || '').trim();
+            if (!projectId || !candidateId) throw new Error('Faltan projectId o candidateId');
+            const r = await callInternal(req, redis, '/api/manual_projects', 'POST', { action: 'unlinkCandidate', projectId, candidateId });
+            if (!r.ok || r.data?.success === false) throw new Error(r.data?.error || `Fallo al sacar del proyecto (${r.status})`);
+            return { projectId, candidateId, sacado: true };
+        }
+    },
+
+    mover_en_proyecto: {
+        description: 'Mueve un candidato a otro paso dentro del mismo proyecto. Usa ver_candidatos_proyecto o listar_proyectos para ver los stepId.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                projectId: { type: 'string', description: 'ID del proyecto.' },
+                candidateId: { type: 'string', description: 'ID del candidato.' },
+                stepId: { type: 'string', description: 'ID del paso destino.' }
+            },
+            required: ['projectId', 'candidateId', 'stepId']
+        },
+        handler: async (args, { redis, req }) => {
+            const projectId = String(args?.projectId || '').trim();
+            const candidateId = String(args?.candidateId || '').trim();
+            const stepId = String(args?.stepId || '').trim();
+            if (!projectId || !candidateId || !stepId) throw new Error('Faltan projectId, candidateId o stepId');
+            const r = await callInternal(req, redis, '/api/manual_projects', 'POST', { action: 'moveCandidate', projectId, candidateId, stepId });
+            if (!r.ok || r.data?.success === false) throw new Error(r.data?.error || `Fallo al mover (${r.status})`);
+            return { projectId, candidateId, stepId, movido: true };
+        }
+    },
+
+    crear_proyecto: {
+        description: 'Crea un proyecto nuevo en el CRM Manual. Nace con un paso "Inicio". Luego puedes agregar más pasos con agregar_paso.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                nombre: { type: 'string', description: 'Nombre del proyecto.' },
+                descripcion: { type: 'string', description: 'Descripción (opcional).' },
+                color: { type: 'string', description: 'Color hex (opcional, ej. #3b82f6).' }
+            },
+            required: ['nombre']
+        },
+        handler: async (args, { redis, req }) => {
+            const nombre = String(args?.nombre || '').trim();
+            if (!nombre) throw new Error('Falta el nombre del proyecto');
+            const body = { name: nombre };
+            if (args?.descripcion) body.description = String(args.descripcion);
+            if (args?.color) body.color = String(args.color);
+            const r = await callInternal(req, redis, '/api/manual_projects', 'POST', body);
+            if (!r.ok || r.data?.success === false) throw new Error(r.data?.error || `Fallo al crear proyecto (${r.status})`);
+            const p = r.data?.data;
+            return { creado: true, projectId: p?.id, nombre: p?.name, pasos: (p?.steps || []).map(s => ({ stepId: s.id, nombre: s.name })) };
+        }
+    },
+
+    agregar_paso: {
+        description: 'Agrega un paso (columna) nuevo al final de un proyecto.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                projectId: { type: 'string', description: 'ID del proyecto.' },
+                nombre: { type: 'string', description: 'Nombre del nuevo paso.' }
+            },
+            required: ['projectId', 'nombre']
+        },
+        handler: async (args, { redis, req }) => {
+            const projectId = String(args?.projectId || '').trim();
+            const nombre = String(args?.nombre || '').trim();
+            if (!projectId || !nombre) throw new Error('Faltan projectId o nombre del paso');
+
+            const listR = await callInternal(req, redis, '/api/manual_projects', 'GET');
+            const project = (Array.isArray(listR.data?.data) ? listR.data.data : []).find(p => p.id === projectId);
+            if (!project) throw new Error('Proyecto no encontrado');
+
+            const newStep = { id: `step_${Date.now()}_${randomBytes(3).toString('hex')}`, name: nombre };
+            const steps = [...(project.steps || []), newStep];
+            const r = await callInternal(req, redis, '/api/manual_projects', 'POST', { action: 'updateSteps', projectId, steps });
+            if (!r.ok || r.data?.success === false) throw new Error(r.data?.error || `Fallo al agregar paso (${r.status})`);
+            return { projectId, paso: { stepId: newStep.id, nombre }, agregado: true };
+        }
+    },
+
+    eliminar_proyecto: {
+        description: 'ELIMINA un proyecto completo del CRM Manual (y desvincula a todos sus candidatos). Es destructivo e irreversible. Pide confirmación al usuario antes de usarlo.',
+        inputSchema: {
+            type: 'object',
+            properties: { projectId: { type: 'string', description: 'ID del proyecto a eliminar.' } },
+            required: ['projectId']
+        },
+        handler: async (args, { redis, req }) => {
+            const projectId = String(args?.projectId || '').trim();
+            if (!projectId) throw new Error('Falta projectId');
+            const r = await callInternal(req, redis, `/api/manual_projects?id=${encodeURIComponent(projectId)}`, 'DELETE');
+            if (!r.ok || r.data?.success === false) throw new Error(r.data?.error || `Fallo al eliminar proyecto (${r.status})`);
+            return { projectId, eliminado: true };
         }
     }
 };
