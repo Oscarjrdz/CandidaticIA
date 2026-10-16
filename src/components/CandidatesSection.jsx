@@ -230,7 +230,31 @@ const CandidateRow = React.memo(({ candidate, columnOrder, fieldsMap, magicLoadi
 //
 // Patrón Amazon/Linear: instant paint + silent revalidation.
 // ═══════════════════════════════════════════════════════════════════════════════════
-const sectionCache = { candidates: null, stats: null, totalItems: 0, fields: null, daily: null };
+const sectionCache = { candidates: null, stats: null, totalItems: 0, fields: null, daily: null, tags: null };
+
+// Reconciliación por id al revalidar (poll de montaje): fusiona la lista entrante con la que ya
+// se está mostrando PRESERVANDO la referencia de cada candidato que no cambió. Como
+// areCandidatePropsEqual compara `candidate` por REFERENCIA, esto evita que el poll re-renderice
+// las ~100 filas de golpe (objetos nuevos) y solo toca las que de verdad cambiaron. Si todo
+// coincide (mismos ids, mismo orden, mismo contenido) devuelve el array previo TAL CUAL, así ni
+// displayedCandidates se recalcula → cero trabajo, cero brinco. Las filas nuevas/borradas entran
+// o salen; las demás quedan idénticas. Ver notas de anti-brinco arriba.
+const reconcileCandidates = (prev, incoming) => {
+    if (!Array.isArray(incoming)) return prev;
+    if (!prev || prev.length === 0) return incoming;
+    const prevById = new Map(prev.map(c => [c.id, c]));
+    let identical = incoming.length === prev.length;
+    const merged = incoming.map((inc, i) => {
+        const old = prevById.get(inc.id);
+        if (old && JSON.stringify(old) === JSON.stringify(inc)) {
+            if (prev[i]?.id !== inc.id) identical = false; // mismo contenido pero cambió de posición
+            return old; // preserva la referencia → la fila no re-renderiza
+        }
+        identical = false;
+        return inc;
+    });
+    return identical ? prev : merged;
+};
 
 const CandidatesSection = () => {
     const { showToast } = useToastContext();
@@ -438,7 +462,7 @@ const CandidatesSection = () => {
 
     // === TAGS STATE & LOGIC ===
     const TAG_COLORS = ["#ef4444", "#f97316", "#eab308", "#22c55e", "#3b82f6", "#a855f7", "#ec4899", "#8b5cf6", "#64748b"];
-    const [availableTags, setAvailableTags] = useState([]);
+    const [availableTags, setAvailableTags] = useState(() => sectionCache.tags || []);
     const [tagDropdownOpen, setTagDropdownOpen] = useState(false);
     const [bulkTagLoading, setBulkTagLoading] = useState(false);
     const [newTagInput, setNewTagInput] = useState("");
@@ -460,6 +484,7 @@ const CandidatesSection = () => {
                         return t;
                     });
                     setAvailableTags(migrated);
+                    sectionCache.tags = migrated; // semilla anti-brinco para la próxima re-entrada
                 }
             } catch (e) {
                 console.error('Error fetching tags', e);
@@ -467,6 +492,9 @@ const CandidatesSection = () => {
         };
         loadTags();
     }, []);
+
+    // Espeja ediciones locales de etiquetas al caché (igual que la lista de candidatos).
+    useEffect(() => { if (availableTags.length > 0 || sectionCache.tags) sectionCache.tags = availableTags; }, [availableTags]);
 
     const saveTagsGlobal = async (newGlobalTags) => {
         setAvailableTags(newGlobalTags);
@@ -637,6 +665,15 @@ const CandidatesSection = () => {
         }
     }, [globalStats]);
 
+    // Espeja CUALQUIER cambio de la lista (SSE nuevo/actualizado/borrado, etiquetas, bloqueo,
+    // magic-fix) al caché de módulo. Sin esto, el caché solo se actualizaba en el poll de montaje,
+    // así que al salir quedaba desfasado de lo que viste por SSE y, al re-entrar, el poll de
+    // revalidación "re-descubría" esos cambios → filas que aparecían/desaparecían/brincaban. El
+    // guard evita pisar el caché con [] antes de la primera carga real (preserva el skeleton 1×).
+    useEffect(() => {
+        if (candidates.length > 0 || sectionCache.candidates) sectionCache.candidates = candidates;
+    }, [candidates]);
+
     const subscriptionRef = useRef(null);
     const aiFilteredCandidatesRef = useRef(aiFilteredCandidates);
     
@@ -676,7 +713,13 @@ const CandidatesSection = () => {
         const subscription = new CandidatesSubscription((newCandidates, newStats) => {
             if (!aiFilteredCandidatesRef.current) {
                 if (newCandidates !== null) {
-                    setCandidates(newCandidates);
+                    // Reconcilia contra lo que ya se muestra (preserva referencias de filas sin
+                    // cambio) en vez de reemplazar el array completo → no re-renderiza todo ni brinca.
+                    setCandidates(prev => {
+                        const reconciled = reconcileCandidates(prev, newCandidates);
+                        sectionCache.candidates = reconciled; // semilla para la próxima re-entrada
+                        return reconciled;
+                    });
                     setTotalItems(prev => {
                         const next = newStats?.total || newStats?.candidates || prev;
                         sectionCache.totalItems = next;
@@ -684,7 +727,6 @@ const CandidatesSection = () => {
                     });
                     setIsInitialLoading(false);
                     setLoading(false);
-                    sectionCache.candidates = newCandidates; // semilla para la próxima re-entrada
                 }
                 if (newStats) setStats(prev => {
                     const merged = { ...prev, ...newStats };
