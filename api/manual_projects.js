@@ -278,6 +278,23 @@ export default async function handler(req, res) {
                 return res.status(200).json({ success: true });
             }
 
+            if (action === 'batchMove') {
+                const { projectId, candidateIds, stepId } = body;
+                if (!projectId || !candidateIds?.length || !stepId) return res.status(400).json({ error: 'Missing data' });
+                if (!canSeeProject(await findProjectById(projectId))) return res.status(403).json({ error: 'Sin permiso sobre este proyecto' });
+
+                const moveSet = new Set(candidateIds);
+                await withCrmProjectLinksLock(projectId, async (links) => ({
+                    links: links.map(l => moveSet.has(l.candidateId) ? { ...l, stepId } : l),
+                    result: null
+                }));
+                await Promise.all(candidateIds.map(cId =>
+                    updateCandidate(cId, { manualProjectId: projectId, manualProjectStepId: stepId })
+                ));
+                publishRealtime('crm:candidate', { action: 'batchMove', projectId, candidateIds, stepId });
+                return res.status(200).json({ success: true, moved: candidateIds.length });
+            }
+
             if (action === 'reorderCandidates') {
                 const { projectId, stepId, candidateIds } = body;
                 if (!projectId || !stepId || !candidateIds?.length) return res.status(400).json({ error: 'Missing data' });

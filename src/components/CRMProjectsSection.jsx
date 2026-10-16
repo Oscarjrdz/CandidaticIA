@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { FolderPlus, Trash2, Plus, Pencil, Users, User, Search, X, Loader2, MessageCircle, Copy, ChevronRight, GraduationCap, MapPin, Calendar, Palette, GripVertical, Tag, Check } from 'lucide-react';
+import { FolderPlus, Trash2, Plus, Pencil, Users, User, Search, X, Loader2, MessageCircle, Copy, ChevronRight, GraduationCap, MapPin, Calendar, Palette, GripVertical, Tag, Check, Send, MoveRight } from 'lucide-react';
 import Card from './ui/Card';
 import Button from './ui/Button';
 import { useConfirmModal } from './ui/ConfirmModal';
@@ -342,6 +342,12 @@ const CRMProjectsSection = () => {
         });
     };
 
+    // Acciones masivas de la barrita de selección (mover de paso / mandar mensaje).
+    const [bulkMoveModal, setBulkMoveModal] = useState(null);   // { candidateIds, fromStepId, targetStepId }
+    const [bulkMsgModal, setBulkMsgModal] = useState(null);      // { candidateIds }
+    const [bulkMsgText, setBulkMsgText] = useState('');
+    const [bulkBusy, setBulkBusy] = useState(false);
+
     const STEP_COLOR_PALETTE = [
         '#3b82f6', // blue
         '#8b5cf6', // violet
@@ -486,6 +492,14 @@ const CRMProjectsSection = () => {
                     if (c.id !== update.candidateId) return c;
                     return { ...c, crmMeta: { ...(c.crmMeta || {}), stepId: update.stepId } };
                 }));
+                return;
+            }
+
+            if (update.action === 'batchMove' && Array.isArray(update.candidateIds) && update.stepId) {
+                const moveSet = new Set(update.candidateIds);
+                setCandidates(prev => prev.map(c =>
+                    moveSet.has(c.id) ? { ...c, crmMeta: { ...(c.crmMeta || {}), stepId: update.stepId } } : c
+                ));
                 return;
             }
 
@@ -745,6 +759,81 @@ const CRMProjectsSection = () => {
         } catch (e) { showToast('Error', 'error'); }
     };
 
+    // Abre el modal "mover a otro paso". Pre-selecciona el paso contiguo como sugerencia.
+    const openBulkMove = (candidateIds, fromStepId) => {
+        if (!candidateIds.length) return;
+        const steps = activeProject?.steps || [];
+        const idx = steps.findIndex(s => s.id === fromStepId);
+        const nextStep = steps.find((s, i) => i > idx && s.id !== fromStepId);
+        const firstOther = steps.find(s => s.id !== fromStepId);
+        setBulkMoveModal({
+            candidateIds,
+            fromStepId,
+            targetStepId: (nextStep || firstOther)?.id || ''
+        });
+    };
+
+    const handleBulkMove = async () => {
+        if (!activeProject || !bulkMoveModal?.targetStepId || !bulkMoveModal.candidateIds.length) return;
+        const { candidateIds, targetStepId } = bulkMoveModal;
+        setBulkBusy(true);
+        try {
+            await fetch('/api/manual_projects', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'batchMove', projectId: activeProject.id, candidateIds, stepId: targetStepId })
+            });
+            const moveSet = new Set(candidateIds);
+            setCandidates(prev => prev.map(c =>
+                moveSet.has(c.id) ? { ...c, crmMeta: { ...(c.crmMeta || {}), stepId: targetStepId } } : c
+            ));
+            setSelectedCandidateIds(prev => {
+                const next = new Set(prev);
+                candidateIds.forEach(id => next.delete(id));
+                return next;
+            });
+            const stepName = activeProject.steps?.find(s => s.id === targetStepId)?.name || 'paso';
+            showToast(`${candidateIds.length} candidato${candidateIds.length > 1 ? 's movidos' : ' movido'} a "${stepName}"`, 'success');
+            setBulkMoveModal(null);
+        } catch (e) { showToast('Error al mover', 'error'); }
+        finally { setBulkBusy(false); }
+    };
+
+    const openBulkMessage = (candidateIds) => {
+        if (!candidateIds.length) return;
+        setBulkMsgText('');
+        setBulkMsgModal({ candidateIds });
+    };
+
+    const handleBulkSendMessage = async () => {
+        if (!bulkMsgModal?.candidateIds.length) return;
+        const text = bulkMsgText.trim();
+        if (!text) return;
+        const { candidateIds } = bulkMsgModal;
+        setBulkBusy(true);
+        let ok = 0, fail = 0;
+        // Secuencial a propósito: evita ráfagas simultáneas contra la Cloud API de Meta.
+        for (const candidateId of candidateIds) {
+            try {
+                const resp = await fetch('/api/chat', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        candidateId,
+                        message: text,
+                        type: 'text',
+                        senderId: user?.id || user?.whatsapp,
+                        senderName: user?.name || user?.nombre
+                    })
+                });
+                if (resp.ok) ok++; else fail++;
+            } catch { fail++; }
+        }
+        setBulkBusy(false);
+        setBulkMsgModal(null);
+        setBulkMsgText('');
+        if (fail === 0) showToast(`Mensaje enviado a ${ok} candidato${ok > 1 ? 's' : ''}`, 'success');
+        else showToast(`Enviados: ${ok} · Fallaron: ${fail}`, ok > 0 ? 'info' : 'error');
+    };
+
     const handleDragStart = (event) => {
         const { active } = event;
         setActiveId(active.id);
@@ -991,12 +1080,34 @@ const CRMProjectsSection = () => {
                                                             </div>
                                                         </div>
                                                         {selectedInStep.length > 0 && (
-                                                            <button
-                                                                onClick={() => handleBulkUnlink(selectedInStep.map(c => c.id))}
-                                                                className="w-full flex items-center justify-center gap-1.5 px-2 py-1 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-[10px] font-semibold hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors"
-                                                            >
-                                                                <Trash2 className="w-3 h-3" /> Quitar {selectedInStep.length} seleccionado{selectedInStep.length > 1 ? 's' : ''}
-                                                            </button>
+                                                            <div className="space-y-1">
+                                                                <div className="text-[9px] font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400 px-0.5">
+                                                                    {selectedInStep.length} seleccionado{selectedInStep.length > 1 ? 's' : ''}
+                                                                </div>
+                                                                <div className="grid grid-cols-3 gap-1">
+                                                                    <button
+                                                                        onClick={() => openBulkMove(selectedInStep.map(c => c.id), step.id)}
+                                                                        title="Mover a otro paso"
+                                                                        className="flex flex-col items-center justify-center gap-0.5 px-1 py-1.5 rounded-lg bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 text-[9px] font-semibold hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors"
+                                                                    >
+                                                                        <MoveRight className="w-3.5 h-3.5" /> Mover
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={() => openBulkMessage(selectedInStep.map(c => c.id))}
+                                                                        title="Mandar un mensaje a la selección"
+                                                                        className="flex flex-col items-center justify-center gap-0.5 px-1 py-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 text-[9px] font-semibold hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-colors"
+                                                                    >
+                                                                        <Send className="w-3.5 h-3.5" /> Mensaje
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={() => handleBulkUnlink(selectedInStep.map(c => c.id))}
+                                                                        title="Quitar del paso"
+                                                                        className="flex flex-col items-center justify-center gap-0.5 px-1 py-1.5 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-[9px] font-semibold hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors"
+                                                                    >
+                                                                        <Trash2 className="w-3.5 h-3.5" /> Quitar
+                                                                    </button>
+                                                                </div>
+                                                            </div>
                                                         )}
                                                     </div>
                                                 }
@@ -1213,7 +1324,77 @@ const CRMProjectsSection = () => {
                 </div>
             )}
 
-            <CalendarNotesModal 
+            {/* Modal: mover selección a otro paso */}
+            {bulkMoveModal && (
+                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => !bulkBusy && setBulkMoveModal(null)}>
+                    <div onClick={e => e.stopPropagation()} className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4 animate-in zoom-in-95 duration-200">
+                        <h3 className="text-lg font-black text-slate-800 dark:text-white flex items-center gap-2">
+                            <MoveRight className="w-5 h-5 text-blue-500" /> Mover selección
+                        </h3>
+                        <p className="text-sm text-slate-500 dark:text-slate-400">
+                            Mover <b className="text-slate-700 dark:text-slate-200">{bulkMoveModal.candidateIds.length}</b> candidato{bulkMoveModal.candidateIds.length > 1 ? 's' : ''} a:
+                        </p>
+                        <div className="space-y-1.5 max-h-60 overflow-y-auto">
+                            {(activeProject?.steps || []).filter(s => s.id !== bulkMoveModal.fromStepId).map(s => {
+                                const selected = bulkMoveModal.targetStepId === s.id;
+                                return (
+                                    <button
+                                        key={s.id}
+                                        onClick={() => setBulkMoveModal(prev => ({ ...prev, targetStepId: s.id }))}
+                                        className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-xl border text-sm font-semibold transition-all ${selected ? 'border-blue-400 ring-1 ring-blue-400/50 bg-blue-50 dark:bg-blue-900/20 text-slate-800 dark:text-white' : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/40'}`}
+                                    >
+                                        <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: s.color || '#64748b' }} />
+                                        <span className="truncate flex-1 text-left">{s.name}</span>
+                                        {selected && <Check className="w-4 h-4 text-blue-500 shrink-0" />}
+                                    </button>
+                                );
+                            })}
+                            {(activeProject?.steps || []).filter(s => s.id !== bulkMoveModal.fromStepId).length === 0 && (
+                                <p className="text-xs text-slate-400 py-4 text-center">No hay otro paso al cual mover.</p>
+                            )}
+                        </div>
+                        <div className="flex gap-3">
+                            <Button onClick={() => setBulkMoveModal(null)} disabled={bulkBusy} className="flex-1 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl py-3 font-bold">Cancelar</Button>
+                            <Button onClick={handleBulkMove} disabled={bulkBusy || !bulkMoveModal.targetStepId} className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl py-3 font-bold">
+                                {bulkBusy ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : 'Mover'}
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal: mandar mensaje a la selección */}
+            {bulkMsgModal && (
+                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => !bulkBusy && setBulkMsgModal(null)}>
+                    <div onClick={e => e.stopPropagation()} className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4 animate-in zoom-in-95 duration-200">
+                        <h3 className="text-lg font-black text-slate-800 dark:text-white flex items-center gap-2">
+                            <Send className="w-5 h-5 text-emerald-500" /> Mandar mensaje
+                        </h3>
+                        <p className="text-sm text-slate-500 dark:text-slate-400">
+                            Se enviará a <b className="text-slate-700 dark:text-slate-200">{bulkMsgModal.candidateIds.length}</b> candidato{bulkMsgModal.candidateIds.length > 1 ? 's' : ''}. Puedes usar variables como <code className="text-[11px] bg-slate-100 dark:bg-slate-700 px-1 rounded">{'{{nombre}}'}</code>.
+                        </p>
+                        <textarea
+                            value={bulkMsgText}
+                            onChange={e => setBulkMsgText(e.target.value)}
+                            rows={4}
+                            placeholder="Escribe el mensaje…"
+                            autoFocus
+                            className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm outline-none focus:border-emerald-500 dark:text-white resize-none"
+                        />
+                        <p className="text-[11px] text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 rounded-lg px-3 py-2">
+                            ⚠️ Como mensaje de texto normal, solo llega a quienes te escribieron en las últimas 24h (regla de Meta). Para los demás usa una plantilla oficial desde el chat.
+                        </p>
+                        <div className="flex gap-3">
+                            <Button onClick={() => setBulkMsgModal(null)} disabled={bulkBusy} className="flex-1 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl py-3 font-bold">Cancelar</Button>
+                            <Button onClick={handleBulkSendMessage} disabled={bulkBusy || !bulkMsgText.trim()} className="flex-1 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-xl py-3 font-bold">
+                                {bulkBusy ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : `Enviar a ${bulkMsgModal.candidateIds.length}`}
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            <CalendarNotesModal
                 isOpen={calendarModalConfig.isOpen}
                 onClose={() => setCalendarModalConfig({ ...calendarModalConfig, isOpen: false })}
                 projectId={calendarModalConfig.projectId}
