@@ -6,7 +6,9 @@
 >
 > **Proyectos (CRM Manual) desplegado (2026-10-15):** 8 tools — `listar_proyectos`, `ver_candidatos_proyecto`, `meter_en_proyecto`, `sacar_de_proyecto`, `mover_en_proyecto`, `crear_proyecto`, `agregar_paso`, `eliminar_proyecto` (destructivo). Reusan `/api/manual_projects`. **RBAC:** crear/eliminar proyectos y editar pasos exigen SuperAdmin → la sesión de sistema efímera de `callInternal` ahora se identifica como un SuperAdmin real (`getSystemUserId`, cacheado).
 >
-> **Cerebro analítico de la base desplegado (2026-10-15):** 2 tools — `estadisticas_base` (total + distribuciones por género/estatus/escolaridad/municipio/colonia/edad) y `filtrar_base` (cruza dimensiones → conteo exacto SINTERCARD + muestra). Reusan el índice facetado (`getFilterCountsWithIndex`/`countSegment`/`resolveSegmentIds`). **Se agregó `colonia` al índice** (`api/utils/facet-index.js`, aditivo): filtrable y contable, pero EXCLUIDA de `meta.dims` para no cambiar la UI de Envíos Masivos. **Total: 32 tools** (14 lectura chat + 2 analítica + 8 escritura chat + 8 Proyectos).
+> **Cerebro analítico de la base desplegado (2026-10-15):** 2 tools — `estadisticas_base` (total + distribuciones por género/estatus/escolaridad/municipio/colonia/edad) y `filtrar_base` (cruza dimensiones → conteo exacto SINTERCARD + muestra). Reusan el índice facetado (`getFilterCountsWithIndex`/`countSegment`/`resolveSegmentIds`). **Se agregó `colonia` al índice** (`api/utils/facet-index.js`, aditivo): filtrable y contable, pero EXCLUIDA de `meta.dims` para no cambiar la UI de Envíos Masivos.
+>
+> **Ajustes pedidos por Grok (2026-10-15):** (1) `listar_chats`/`buscar_candidato`/`filtrar_base`/`leer_chat` SIN tope fijo → `limit` (default 50, máx 500/pág) + `offset` + respuesta con `total`/`offset`/`hayMas`; `todos:true` (pagina interno, tope de seguridad ~3000) y `campos:[]` (proyección de columnas, protege el presupuesto de tokens). (2) nueva `estadisticas_por_hora` (lectura): distribución por hora del día y día de la semana; `tipo` "nuevos" (fecha del id `cand_<ms>_`, sin leer blobs) o "mensajes" (entrantes, acotado a 1200 cands); `desde`/`hasta`/`etiqueta`/`zonaHoraria` (default MTY). (3) `enviar_mensaje` hace PREFLIGHT de la ventana de 24h: fuera de ella rechaza y sugiere `enviar_plantilla` (el 131047 llega async por webhook, invisible en la respuesta síncrona); `forzar:true` para intentar igual. **Total: 33 tools** (15 lectura/analítica + 8 escritura chat + 8 Proyectos + estadisticas_por_hora).
 >
 > **Cómo funciona la escritura (Fase 2):** las tools NO reimplementan la lógica del Chat Web. Llaman internamente (fetch a la misma URL pública) a los endpoints ya probados (`/api/chat`, `/api/candidates/block`, `/api/candidates/bulk-tag`) usando una **sesión de reclutador de SISTEMA efímera** (`session:admin:mcpsys_<rand>`, userId `mcp-grok`, TTL 120s) que valida `validateAdminSession`. Así reusa el pipeline completo (media multi-número, reintentos, stats, SSE, silencio de la IA). Lección del 403: era el kill switch en OFF, NO firewall.
 > **Fecha:** 2026-10-14.
@@ -101,8 +103,33 @@ La lista fue acordada con el usuario. Divididas por grupo. En cada una se anota 
 ### Acciones avanzadas (Fase 3)
 | # | Tool | Qué hace | Se apoya en |
 |---|------|----------|-------------|
-| 21 | `bloquear` | Bloqueo interno (silencia IA) o real en Meta | `candidates/block.js`, `candidates/meta-block.js` |
+| 21 | `bloquear` | Bloqueo REAL en Meta (`enMeta`); distinto de `toggle_bot` que solo silencia la IA | `candidates/meta-block.js` |
 | 22 | `crear_recordatorio` | Crea un recordatorio (campanita) | `candidate-reminders.js` |
+
+> Nota: el plan original listaba `mover_crm` (#20) como tool de columna de chat. En la implementación real, el movimiento en el CRM se hace con las tools de **Proyectos** (abajo); no existe un `mover_crm` suelto. `ver_estado_crm` (lectura) sí existe.
+
+### Analítica de la base (2026-10-15)
+| Tool | Qué hace | Se apoya en |
+|------|----------|-------------|
+| `estadisticas_base` | Total + distribuciones por género, estatus, escolaridad, municipio, colonia, edad | índice facetado `getFilterCountsWithIndex` |
+| `filtrar_base` | Cruza dimensiones → conteo exacto + muestra (paginada) | `countSegment` / `resolveSegmentIds` |
+| `estadisticas_por_hora` | Distribución por hora del día / día de la semana (nuevos o mensajes) | id `cand_<ms>_` / `getMessages` |
+
+### Proyectos — CRM Manual (2026-10-15)
+| Tool | Qué hace | Se apoya en |
+|------|----------|-------------|
+| `listar_proyectos` | Lista proyectos con sus pasos | `GET /api/manual_projects` |
+| `ver_candidatos_proyecto` | Tablero: candidatos por paso | `GET /api/manual_projects?view=candidates` |
+| `meter_en_proyecto` | Vincula candidato a un proyecto/paso | `linkCandidate` |
+| `sacar_de_proyecto` | Desvincula candidato | `unlinkCandidate` |
+| `mover_en_proyecto` | Mueve candidato entre pasos | `moveCandidate` |
+| `crear_proyecto` | Crea proyecto (nace con paso "Inicio") | `POST /api/manual_projects` |
+| `agregar_paso` | Agrega un paso al final | `updateSteps` |
+| `eliminar_proyecto` | Borra proyecto (destructivo) | `DELETE /api/manual_projects` |
+
+> Crear/eliminar proyectos y editar pasos exigen SuperAdmin por RBAC → la sesión de sistema de `callInternal` se identifica como un SuperAdmin real (`getSystemUserId`).
+
+**Paginación/campos (todas las listas):** `limit` (default 50, máx 500) + `offset` → respuesta con `total`/`offset`/`hayMas`; `todos:true` (tope ~3000) y `campos:[]` para elegir columnas.
 
 ---
 
