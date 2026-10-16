@@ -12,6 +12,16 @@ import { CSS } from '@dnd-kit/utilities';
 import { useToastContext } from '../contexts/ToastContext';
 import { useAuthContext } from '../contexts/AuthContext';
 
+// Campos efímeros de los updates SSE (candidate:update) que esta sección NO pinta —
+// typing, mensajes, estatus de entrega. Se filtran para no re-renderizar tarjetas por
+// ellos. El resto (tags, nombreReal, municipio, etc.) SÍ se aplica en vivo, así que un
+// cambio de etiqueta hecho por otro reclutador o por el bot/MCP (Grok) actualiza los
+// chips sin necesidad de refrescar.
+const CRM_TRANSIENT_UPDATE_KEYS = new Set([
+    'candidateTyping', 'markAllSentAsRead', 'messageFrom', 'messagePayload',
+    'messageStatusUpdate', 'newMessage', 'reactionUpdate', 'recruiterTyping', 'statusUpdate',
+]);
+
 // Droppable step container — accepts candidates dropped into it
 const DroppableStepZone = ({ stepId, isOver, children }) => {
     const { setNodeRef, isOver: isDragOver } = useDroppable({ id: stepId, data: { type: 'step', stepId } });
@@ -502,13 +512,39 @@ const CRMProjectsSection = () => {
             setChatCandidate(prev => prev?.id === deletedId ? null : prev);
         };
 
+        // Patch genérico de candidato (candidate:update) → trae cambios de datos como las
+        // etiquetas. Los eventos sse:crm:* solo cubren link/unlink/move dentro del proyecto;
+        // sin este listener, etiquetar desde el Chat Web, otro reclutador o el MCP (Grok) no
+        // se reflejaba aquí hasta refrescar. Solo tocamos candidatos ya cargados (el del
+        // proyecto activo y el chat abierto); los campos efímeros se descartan.
+        const handleCandidatePatch = (event) => {
+            const { candidateId, updates } = event.detail || {};
+            if (!candidateId || !updates) return;
+            const patch = Object.fromEntries(
+                Object.entries(updates).filter(([k]) => !CRM_TRANSIENT_UPDATE_KEYS.has(k))
+            );
+            if (Object.keys(patch).length === 0) return;
+            setCandidates(prev => {
+                let touched = false;
+                const next = prev.map(c => {
+                    if (c.id !== candidateId) return c;
+                    touched = true;
+                    return { ...c, ...patch };
+                });
+                return touched ? next : prev;
+            });
+            setChatCandidate(prev => (prev && prev.id === candidateId) ? { ...prev, ...patch } : prev);
+        };
+
         window.addEventListener('sse:crm:project', handleProjectRealtime);
         window.addEventListener('sse:crm:candidate', handleCandidateRealtime);
         window.addEventListener('sse:candidate:delete', handleCandidateDelete);
+        window.addEventListener('sse:candidate:update', handleCandidatePatch);
         return () => {
             window.removeEventListener('sse:crm:project', handleProjectRealtime);
             window.removeEventListener('sse:crm:candidate', handleCandidateRealtime);
             window.removeEventListener('sse:candidate:delete', handleCandidateDelete);
+            window.removeEventListener('sse:candidate:update', handleCandidatePatch);
         };
     }, []);
 
