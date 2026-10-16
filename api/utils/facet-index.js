@@ -85,6 +85,11 @@ export function municipioCanonico(municipio) {
     return String(municipio).trim();
 }
 
+export function coloniaCanonica(colonia) {
+    if (!isMeaningful(colonia)) return SIN_DATO;
+    return String(colonia).trim();
+}
+
 function within24h(candidate) {
     const raw = candidate.lastUserMessageAt || candidate.ultimoMensajeUsuario || null;
     if (!raw) return false;
@@ -119,7 +124,7 @@ export async function buildCandidateFacetIndex(redis, { manualProjects = [], pro
     const existingCandidateIds = new Set();
 
     // Conteos legados (compatibilidad con filter_counts).
-    const counts = { ages: {}, genders: {}, municipalities: {}, projects: {}, stepsByProject: {} };
+    const counts = { ages: {}, genders: {}, municipalities: {}, colonias: {}, escolaridades: {}, estatus: {}, projects: {}, stepsByProject: {} };
     const inc = (map, rawValue) => {
         const value = String(rawValue || '').trim();
         if (!value) return;
@@ -128,7 +133,7 @@ export async function buildCandidateFacetIndex(redis, { manualProjects = [], pro
 
     // Acumuladores del índice invertido: dim → value → [ids]
     const members = {
-        genero: {}, municipio: {}, escolaridad: {}, edad: {}, estatus: {}, ventana24h: {}, tags: {}
+        genero: {}, municipio: {}, colonia: {}, escolaridad: {}, edad: {}, estatus: {}, ventana24h: {}, tags: {}
     };
     const push = (dim, value, id) => {
         if (!members[dim][value]) members[dim][value] = [];
@@ -149,20 +154,27 @@ export async function buildCandidateFacetIndex(redis, { manualProjects = [], pro
             const id = String(c.id);
             existingCandidateIds.add(id);
 
-            // Conteos legados
+            // Conteos legados + distribuciones (colonia/escolaridad/estatus para analítica)
+            const coloniaVal = coloniaCanonica(c.colonia);
+            const escolaridadVal = escolaridadCanonica(c.escolaridad);
+            const estatusVal = auditProfile(c).isComplete ? 'completo' : 'incompleto';
             inc(counts.ages, c.edad);
             inc(counts.genders, c.genero);
             inc(counts.municipalities, c.municipio);
+            inc(counts.colonias, coloniaVal);
+            inc(counts.escolaridades, escolaridadVal);
+            inc(counts.estatus, estatusVal);
             inc(counts.projects, c.manualProjectId);
 
             // Índice invertido facetado
             push('genero', generoCanonico(c.genero), id);
             push('municipio', municipioCanonico(c.municipio), id);
-            push('escolaridad', escolaridadCanonica(c.escolaridad), id);
+            push('colonia', coloniaVal, id);
+            push('escolaridad', escolaridadVal, id);
             // Edad exacta (para rangos desde/hasta). Sin dato/invalida → no entra a ningún set.
             const ageNum = parseInt(c.edad, 10);
             if (Number.isFinite(ageNum) && ageNum >= AGE_MIN && ageNum <= AGE_MAX) push('edad', String(ageNum), id);
-            push('estatus', auditProfile(c).isComplete ? 'completo' : 'incompleto', id);
+            push('estatus', estatusVal, id);
             if (within24h(c)) push('ventana24h', 'si', id);
             candidateTags(c).forEach(t => push('tags', t, id));
         });
@@ -227,6 +239,9 @@ export async function buildCandidateFacetIndex(redis, { manualProjects = [], pro
     // La edad se filtra por rango (desde/hasta), no por lista de valores → no la exponemos
     // en meta.dims (los sets por edad exacta sí existen para el SUNIONSTORE del rango).
     delete dims.edad;
+    // Colonia: alta cardinalidad. Se indexa (sets) para poder filtrar/contar por colonia,
+    // pero NO se expone en meta.dims para no meterla como faceta en la UI de Envíos Masivos.
+    delete dims.colonia;
     if (dims.escolaridad) dims.escolaridad = orderBy(dims.escolaridad, ESCOLARIDAD_CANON);
     if (dims.estatus) dims.estatus = orderBy(dims.estatus, ESTATUS_VALUES);
     if (dims.genero) dims.genero = orderBy(dims.genero, ['Hombre', 'Mujer']);
@@ -351,7 +366,7 @@ async function countIntersection(redis, keys) {
 async function buildConstraintKeys(redis, selection) {
     const constraints = {};
     const tempKeys = [];
-    const dimsMulti = ['genero', 'municipio', 'escolaridad', 'tags'];
+    const dimsMulti = ['genero', 'municipio', 'colonia', 'escolaridad', 'tags'];
 
     for (const dim of dimsMulti) {
         const vals = Array.isArray(selection?.[dim]) ? selection[dim].filter(Boolean) : [];

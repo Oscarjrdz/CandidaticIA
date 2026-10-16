@@ -31,6 +31,7 @@ import {
     getUsers
 } from '../utils/storage.js';
 import { substituteVariables, substituteDynamicPhrase } from '../utils/shortcuts.js';
+import { getFilterCountsWithIndex, countSegment, resolveSegmentIds } from '../utils/facet-index.js';
 
 const SERVER_INFO = { name: 'candidatic-chatweb', version: '1.0.0' };
 const SUPPORTED_PROTOCOL_VERSIONS = ['2025-06-18', '2025-03-26', '2024-11-05'];
@@ -93,6 +94,20 @@ async function getSystemUserId() {
         _sysUserIdCache = su?.id || su?.whatsapp || 'mcp-grok';
     } catch { _sysUserIdCache = 'mcp-grok'; }
     return _sysUserIdCache;
+}
+
+// Loader de proyectos para el índice facetado (mismo que candidates.js/system/stats.js),
+// para que si mi lectura dispara un rebuild, el caché compartido quede consistente.
+async function loadManualProjectData(redis) {
+    const projectsRaw = await redis.get('candidatic_manual_projects').catch(() => null);
+    const projects = projectsRaw ? JSON.parse(projectsRaw) : [];
+    const projectLinks = {};
+    await Promise.all((Array.isArray(projects) ? projects : []).map(async (project) => {
+        if (!project?.id) return;
+        const linksRaw = await redis.get(`crm_links:${project.id}`).catch(() => null);
+        try { projectLinks[project.id] = linksRaw ? JSON.parse(linksRaw) : []; } catch { projectLinks[project.id] = []; }
+    }));
+    return { manualProjects: Array.isArray(projects) ? projects : [], projectLinks };
 }
 
 async function callInternal(req, redis, path, method, body) {
@@ -427,6 +442,97 @@ const TOOLS = {
             } catch {
                 return { atendiendo: false };
             }
+        }
+    },
+
+    // ───────────────────── ANALÍTICA DE LA BASE COMPLETA ─────────────────────
+
+    estadisticas_base: {
+        description: 'Panorama agregado de TODA la base de candidatos: total y distribuciones por género, estatus (completo/incompleto), escolaridad, municipio, colonia y edad. Instantáneo (índice facetado). Úsalo para responder "cuántos tenemos", "distribución por X", etc.',
+        inputSchema: { type: 'object', properties: {} },
+        handler: async (_args, { redis }) => {
+            const counts = await getFilterCountsWithIndex(redis, () => loadManualProjectData(redis));
+            const top = (obj, n) => Object.entries(obj || {})
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, n)
+                .map(([valor, total]) => ({ valor, total }));
+            return {
+                total: counts.total || 0,
+                porGenero: top(counts.genders, 10),
+                porEstatus: top(counts.estatus, 5),
+                porEscolaridad: top(counts.escolaridades, 10),
+                porMunicipio: top(counts.municipalities, 25),
+                porColonia: top(counts.colonias, 30),
+                porEdad: Object.entries(counts.ages || {})
+                    .map(([edad, total]) => ({ edad, total }))
+                    .sort((a, b) => Number(a.edad) - Number(b.edad))
+            };
+        }
+    },
+
+    filtrar_base: {
+        description: 'Cruza/filtra TODA la base por varias dimensiones a la vez y devuelve el conteo exacto + una muestra de candidatos. Ej: mujeres de Monterrey con secundaria. Usa los valores EXACTOS que ves en estadisticas_base (género "Hombre"/"Mujer", escolaridad "Secundaria", etc.; "Sin dato" para faltantes).',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                genero: { type: 'string', description: 'Hombre | Mujer | Sin dato' },
+                municipio: { type: 'string', description: 'Nombre de municipio (puede ser varios separados por coma).' },
+                colonia: { type: 'string', description: 'Nombre de colonia (puede ser varias separadas por coma).' },
+                escolaridad: { type: 'string', description: 'Primaria | Secundaria | Preparatoria | Técnica | Licenciatura | Posgrado | Sin dato' },
+                estatus: { type: 'string', enum: ['completo', 'incompleto'], description: 'Perfil completo o incompleto.' },
+                etiqueta: { type: 'string', description: 'Una etiqueta exacta (o varias separadas por coma).' },
+                edadMin: { type: 'number', description: 'Edad mínima.' },
+                edadMax: { type: 'number', description: 'Edad máxima.' },
+                soloVentana24h: { type: 'boolean', description: 'Solo quienes escribieron en las últimas 24h (se les puede mandar texto libre).' },
+                muestra: { type: 'number', description: 'Cuántos candidatos de ejemplo devolver (máx 50, default 15). 0 = solo el conteo.' }
+            }
+        },
+        handler: async (args, { redis }) => {
+            const multi = (v) => v == null ? [] : String(v).split(',').map(s => s.trim()).filter(Boolean);
+            const selection = {
+                genero: multi(args?.genero),
+                municipio: multi(args?.municipio),
+                colonia: multi(args?.colonia),
+                escolaridad: multi(args?.escolaridad),
+                tags: multi(args?.etiqueta)
+            };
+            if (args?.estatus === 'completo' || args?.estatus === 'incompleto') selection.estatus = args.estatus;
+            if (args?.soloVentana24h === true) selection.ventana24h = 'si';
+            if (args?.edadMin != null || args?.edadMax != null) {
+                selection.edadRange = { min: args?.edadMin ?? '', max: args?.edadMax ?? '' };
+            }
+
+            const total = await countSegment(redis, selection);
+
+            const sampleN = Math.min(Math.max(parseInt(args?.muestra, 10) ?? 15, 0) || 15, 50);
+            let muestra = [];
+            if (sampleN > 0 && total > 0) {
+                const ids = await resolveSegmentIds(redis, selection, [], sampleN);
+                if (ids.length) {
+                    const pipe = redis.pipeline();
+                    ids.forEach(id => pipe.get(`candidate:${id}`));
+                    const rows = await pipe.exec();
+                    muestra = (rows || []).map(([e, raw]) => {
+                        if (e || !raw) return null;
+                        try {
+                            const c = JSON.parse(raw);
+                            return {
+                                candidateId: c.id,
+                                nombre: (c.nombreReal && c.nombreReal.trim()) || c.nombre || 'Sin nombre',
+                                telefono: c.whatsapp || null,
+                                edad: c.edad || null,
+                                genero: c.genero || null,
+                                municipio: c.municipio || null,
+                                colonia: c.colonia || null,
+                                escolaridad: c.escolaridad || null,
+                                categoria: c.categoria || null,
+                                vacanteActual: c.vacanteActual || null
+                            };
+                        } catch { return null; }
+                    }).filter(Boolean);
+                }
+            }
+            return { total, muestra };
         }
     },
 
