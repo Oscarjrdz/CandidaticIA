@@ -161,75 +161,151 @@ function toTagNames(savedTags) {
     return savedTags.map(t => (typeof t === 'object' && t ? (t.name || t.label || '') : String(t))).filter(Boolean);
 }
 
+// ── Paginación + proyección de campos (para listas grandes; el agente decide) ──
+const ABS_MAX_PAGE = 500;    // tope duro por página (protege el presupuesto de tokens)
+const ABS_MAX_TODOS = 3000;  // tope duro cuando se pide "todos"
+
+function pageArgs(args) {
+    const todos = args?.todos === true;
+    let limit = parseInt(args?.limit, 10);
+    if (!Number.isFinite(limit) || limit <= 0) limit = 50;
+    limit = Math.min(limit, ABS_MAX_PAGE);
+    const offset = Math.max(parseInt(args?.offset, 10) || 0, 0);
+    return { todos, limit, offset };
+}
+
+function pickFields(obj, campos) {
+    if (!Array.isArray(campos) || !campos.length) return obj;
+    const out = {};
+    for (const k of campos) if (k in obj) out[k] = obj[k];
+    return out;
+}
+
+// Trae candidatos vía getCandidates con paginación o 'todos' (tope ABS_MAX_TODOS).
+async function fetchCandidatesPaged({ todos, limit, offset, search = '', tag = '' }) {
+    if (!todos) {
+        const { candidates, total } = await getCandidates(limit, offset, search, false, tag);
+        return { candidates: candidates || [], total, offset, hayMas: offset + (candidates?.length || 0) < total };
+    }
+    const all = [];
+    let off = 0; let total = 0; const page = 500;
+    while (all.length < ABS_MAX_TODOS) {
+        const { candidates, total: t } = await getCandidates(page, off, search, false, tag);
+        total = t;
+        if (!candidates?.length) break;
+        all.push(...candidates);
+        off += candidates.length;
+        if (off >= total) break;
+    }
+    const truncado = total > all.length;
+    return { candidates: all.slice(0, ABS_MAX_TODOS), total, offset: 0, hayMas: truncado, truncado };
+}
+
+// ¿El candidato está dentro de la ventana de 24h de Meta (escribió hace <24h)?
+function dentroVentana24h(candidate) {
+    const raw = candidate?.lastUserMessageAt || candidate?.ultimoMensajeUsuario || null;
+    if (!raw) return false;
+    const t = new Date(raw).getTime();
+    return Number.isFinite(t) && (Date.now() - t) < 24 * 60 * 60 * 1000;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
-// Registro de TOOLS (Fase 1: solo lectura)
-// Cada tool: { description, inputSchema, handler(args, { redis }) -> any }
+// Registro de TOOLS
+// Cada tool: { description, inputSchema, handler(args, { redis, req }) -> any }
 // El valor que regrese el handler se serializa a JSON dentro de un content text.
 // ─────────────────────────────────────────────────────────────────────────────
 const TOOLS = {
     listar_chats: {
-        description: 'Lista los chats/candidatos del Chat Web (nombre, teléfono, etiquetas, si tiene mensajes no leídos y su vacante). Úsalo para ver la bandeja. Devuelve un resumen, no el historial.',
+        description: 'Lista los chats/candidatos del Chat Web (resumen). Paginado: limit (default 50, máx 500) + offset, o todos:true para traer toda la base (tope de seguridad ~3000). Elige columnas con "campos". Respuesta: {total, offset, hayMas, chats}.',
         inputSchema: {
             type: 'object',
             properties: {
-                limit: { type: 'number', description: 'Cuántos chats traer (máx 50). Default 30.' },
+                limit: { type: 'number', description: 'Cuántos por página (default 50, máx 500).' },
+                offset: { type: 'number', description: 'Desde qué posición (default 0).' },
+                todos: { type: 'boolean', description: 'true = traer todos (pagina internamente; tope ~3000).' },
                 busqueda: { type: 'string', description: 'Texto para filtrar por nombre o teléfono.' },
                 etiqueta: { type: 'string', description: 'Filtrar por una etiqueta exacta.' },
-                soloNoLeidos: { type: 'boolean', description: 'Si es true, solo chats con mensajes no leídos.' }
+                soloNoLeidos: { type: 'boolean', description: 'Si es true, solo chats con mensajes no leídos.' },
+                campos: { type: 'array', items: { type: 'string' }, description: 'Qué campos devolver (ej. ["candidateId","nombre","telefono"]). Vacío = todos.' }
             }
         },
         handler: async (args) => {
-            const limit = Math.min(Math.max(parseInt(args?.limit, 10) || 30, 1), 50);
-            const busqueda = String(args?.busqueda || '');
-            const etiqueta = String(args?.etiqueta || '');
-            const { candidates, total } = await getCandidates(limit, 0, busqueda, false, etiqueta);
-            let chats = (candidates || []).map(summarizeChat);
+            const { todos, limit, offset } = pageArgs(args);
+            const res = await fetchCandidatesPaged({ todos, limit, offset, search: String(args?.busqueda || ''), tag: String(args?.etiqueta || '') });
+            let chats = res.candidates.map(summarizeChat);
             if (args?.soloNoLeidos) chats = chats.filter(c => c.noLeido);
-            return { total, mostrados: chats.length, chats };
+            return {
+                total: res.total, offset: res.offset, mostrados: chats.length, hayMas: res.hayMas,
+                ...(res.truncado ? { truncado: true } : {}),
+                chats: chats.map(c => pickFields(c, args?.campos))
+            };
         }
     },
 
     leer_chat: {
-        description: 'Lee el historial de mensajes de un chat (candidato). Devuelve los mensajes recientes con quién los mandó, texto, tipo, fecha y estado de entrega.',
+        description: 'Lee el historial de mensajes de un chat. limit (default 50, máx 500) = cuántos mensajes recientes; offset = saltar N desde el final (para ir más atrás en el historial). Respuesta: {total, offset, hayMas, mensajes}.',
         inputSchema: {
             type: 'object',
             properties: {
                 candidateId: { type: 'string', description: 'ID del candidato (de listar_chats o buscar_candidato).' },
-                limit: { type: 'number', description: 'Cuántos mensajes recientes (máx 100). Default 30.' }
+                limit: { type: 'number', description: 'Cuántos mensajes recientes (default 50, máx 500).' },
+                offset: { type: 'number', description: 'Saltar N mensajes desde el más reciente (default 0).' }
             },
             required: ['candidateId']
         },
         handler: async (args) => {
             const id = String(args?.candidateId || '').trim();
             if (!id) throw new Error('Falta candidateId');
-            const limit = Math.min(Math.max(parseInt(args?.limit, 10) || 30, 1), 100);
-            const msgs = await getMessages(id, limit);
-            return (msgs || []).map(m => ({
-                de: m.from === 'me' ? 'reclutador' : (m.from === 'bot' ? 'brenda' : 'candidato'),
-                texto: m.content || '',
-                tipo: m.type || 'text',
-                fecha: m.timestamp || m.fecha || null,
-                estado: m.status || null
-            }));
+            let limit = parseInt(args?.limit, 10);
+            if (!Number.isFinite(limit) || limit <= 0) limit = 50;
+            limit = Math.min(limit, ABS_MAX_PAGE);
+            const offset = Math.max(parseInt(args?.offset, 10) || 0, 0);
+
+            // getMessages regresa los más recientes en orden cronológico (viejo→nuevo).
+            // Traemos una ventana de offset+limit y tomamos el tramo pedido desde el final.
+            const window = await getMessages(id, Math.min(offset + limit, 1000));
+            const totalVentana = window.length;
+            const endExclusive = Math.max(totalVentana - offset, 0);
+            const startInclusive = Math.max(endExclusive - limit, 0);
+            const slice = window.slice(startInclusive, endExclusive);
+            return {
+                offset,
+                mostrados: slice.length,
+                hayMas: startInclusive > 0,
+                mensajes: slice.map(m => ({
+                    de: m.from === 'me' ? 'reclutador' : (m.from === 'bot' ? 'brenda' : 'candidato'),
+                    texto: m.content || '',
+                    tipo: m.type || 'text',
+                    fecha: m.timestamp || m.fecha || null,
+                    estado: m.status || null
+                }))
+            };
         }
     },
 
     buscar_candidato: {
-        description: 'Busca candidatos por nombre o teléfono. Devuelve coincidencias con su candidateId para luego leer o actuar sobre ellas.',
+        description: 'Busca candidatos por nombre o teléfono. Paginado: limit (default 50, máx 500) + offset, o todos:true. Elige columnas con "campos". Devuelve candidateId para luego leer o actuar.',
         inputSchema: {
             type: 'object',
             properties: {
                 texto: { type: 'string', description: 'Nombre o teléfono a buscar.' },
-                limit: { type: 'number', description: 'Máximo de resultados (máx 20). Default 10.' }
+                limit: { type: 'number', description: 'Cuántos por página (default 50, máx 500).' },
+                offset: { type: 'number', description: 'Desde qué posición (default 0).' },
+                todos: { type: 'boolean', description: 'true = traer todas las coincidencias (tope ~3000).' },
+                campos: { type: 'array', items: { type: 'string' }, description: 'Qué campos devolver. Vacío = todos.' }
             },
             required: ['texto']
         },
         handler: async (args) => {
             const texto = String(args?.texto || '').trim();
             if (!texto) throw new Error('Falta el texto de búsqueda');
-            const limit = Math.min(Math.max(parseInt(args?.limit, 10) || 10, 1), 20);
-            const { candidates, total } = await getCandidates(limit, 0, texto);
-            return { total, resultados: (candidates || []).map(summarizeChat) };
+            const { todos, limit, offset } = pageArgs(args);
+            const res = await fetchCandidatesPaged({ todos, limit, offset, search: texto });
+            return {
+                total: res.total, offset: res.offset, mostrados: res.candidates.length, hayMas: res.hayMas,
+                ...(res.truncado ? { truncado: true } : {}),
+                resultados: res.candidates.map(c => pickFields(summarizeChat(c), args?.campos))
+            };
         }
     },
 
@@ -484,7 +560,10 @@ const TOOLS = {
                 edadMin: { type: 'number', description: 'Edad mínima.' },
                 edadMax: { type: 'number', description: 'Edad máxima.' },
                 soloVentana24h: { type: 'boolean', description: 'Solo quienes escribieron en las últimas 24h (se les puede mandar texto libre).' },
-                muestra: { type: 'number', description: 'Cuántos candidatos de ejemplo devolver (máx 50, default 15). 0 = solo el conteo.' }
+                muestra: { type: 'number', description: 'Cuántos candidatos devolver (default 15, máx 500; con todos:true hasta ~3000). 0 = solo el conteo.' },
+                offset: { type: 'number', description: 'Desde qué posición de la muestra (default 0).' },
+                todos: { type: 'boolean', description: 'true = traer todos los que caen en el filtro (tope ~3000).' },
+                campos: { type: 'array', items: { type: 'string' }, description: 'Qué campos devolver por candidato. Vacío = todos.' }
             }
         },
         handler: async (args, { redis }) => {
@@ -504,10 +583,16 @@ const TOOLS = {
 
             const total = await countSegment(redis, selection);
 
-            const sampleN = Math.min(Math.max(parseInt(args?.muestra, 10) ?? 15, 0) || 15, 50);
+            const todos = args?.todos === true;
+            const offset = Math.max(parseInt(args?.offset, 10) || 0, 0);
+            let sampleN = parseInt(args?.muestra, 10);
+            if (!Number.isFinite(sampleN)) sampleN = todos ? ABS_MAX_TODOS : 15;
+            sampleN = Math.min(Math.max(sampleN, 0), todos ? ABS_MAX_TODOS : ABS_MAX_PAGE);
+
             let muestra = [];
             if (sampleN > 0 && total > 0) {
-                const ids = await resolveSegmentIds(redis, selection, [], sampleN);
+                let ids = await resolveSegmentIds(redis, selection, [], offset + sampleN);
+                ids = ids.slice(offset, offset + sampleN);
                 if (ids.length) {
                     const pipe = redis.pipeline();
                     ids.forEach(id => pipe.get(`candidate:${id}`));
@@ -516,7 +601,7 @@ const TOOLS = {
                         if (e || !raw) return null;
                         try {
                             const c = JSON.parse(raw);
-                            return {
+                            return pickFields({
                                 candidateId: c.id,
                                 nombre: (c.nombreReal && c.nombreReal.trim()) || c.nombre || 'Sin nombre',
                                 telefono: c.whatsapp || null,
@@ -527,12 +612,93 @@ const TOOLS = {
                                 escolaridad: c.escolaridad || null,
                                 categoria: c.categoria || null,
                                 vacanteActual: c.vacanteActual || null
-                            };
+                            }, args?.campos);
                         } catch { return null; }
                     }).filter(Boolean);
                 }
             }
-            return { total, muestra };
+            return { total, offset, mostrados: muestra.length, hayMas: offset + muestra.length < total, muestra };
+        }
+    },
+
+    estadisticas_por_hora: {
+        description: 'Distribución por hora del día y día de la semana. tipo="nuevos" (default) = candidatos CREADOS (hora de registro, del id/createdAt); tipo="mensajes" = mensajes ENTRANTES del candidato (más pesado; conviene acotar con etiqueta). Opcional: desde/hasta (ISO), etiqueta, zonaHoraria (default America/Monterrey). Responde {rango, total, porHora, porDiaSemana, horaPico, diaPico}.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                tipo: { type: 'string', enum: ['nuevos', 'mensajes'], description: 'nuevos (registros, default) o mensajes (entrantes).' },
+                desde: { type: 'string', description: 'Fecha-hora ISO de inicio (opcional; sin ella = toda la base).' },
+                hasta: { type: 'string', description: 'Fecha-hora ISO de fin (opcional).' },
+                etiqueta: { type: 'string', description: 'Acota a candidatos con esta etiqueta (recomendado para tipo=mensajes).' },
+                zonaHoraria: { type: 'string', description: 'Zona horaria IANA (default America/Monterrey).' }
+            }
+        },
+        handler: async (args, { redis }) => {
+            const tipo = args?.tipo === 'mensajes' ? 'mensajes' : 'nuevos';
+            const tz = String(args?.zonaHoraria || 'America/Monterrey');
+            const desdeMs = args?.desde ? new Date(args.desde).getTime() : null;
+            const hastaMs = args?.hasta ? new Date(args.hasta).getTime() : null;
+            const inRange = (ms) => Number.isFinite(ms)
+                && (desdeMs == null || ms >= desdeMs)
+                && (hastaMs == null || ms <= hastaMs);
+
+            const DIAS = { Sun: 'Domingo', Mon: 'Lunes', Tue: 'Martes', Wed: 'Miércoles', Thu: 'Jueves', Fri: 'Viernes', Sat: 'Sábado' };
+            const ORDEN = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
+            const fmt = new Intl.DateTimeFormat('en-US', { timeZone: tz, hour12: false, hour: '2-digit', weekday: 'short' });
+            const parts = (ms) => {
+                const p = fmt.formatToParts(new Date(ms));
+                let hora = 0, wd = 'Mon';
+                for (const x of p) { if (x.type === 'hour') hora = parseInt(x.value, 10) % 24; if (x.type === 'weekday') wd = x.value; }
+                return { hora, dia: DIAS[wd] || wd };
+            };
+
+            const porHora = Array.from({ length: 24 }, (_, h) => ({ hora: h, total: 0 }));
+            const porDiaMap = Object.fromEntries(ORDEN.map(d => [d, 0]));
+            let total = 0;
+            const bump = (ms) => { const { hora, dia } = parts(ms); porHora[hora].total++; if (dia in porDiaMap) porDiaMap[dia]++; total++; };
+
+            const selection = args?.etiqueta ? { tags: [String(args.etiqueta).trim()] } : {};
+            const ids = await resolveSegmentIds(redis, selection, [], 0);
+
+            let truncado = false;
+            if (tipo === 'nuevos') {
+                for (const id of ids) {
+                    const m = /^cand_(\d+)_/.exec(String(id));
+                    if (!m) continue;
+                    const ms = parseInt(m[1], 10);
+                    if (inRange(ms)) bump(ms);
+                }
+            } else {
+                // mensajes entrantes: lee historial por candidato (acotado por seguridad)
+                const CAP = 1200;
+                const scan = ids.slice(0, CAP);
+                truncado = ids.length > CAP;
+                const CHUNK = 50;
+                for (let i = 0; i < scan.length; i += CHUNK) {
+                    const batch = scan.slice(i, i + CHUNK);
+                    const lists = await Promise.all(batch.map(id => getMessages(id, 300).catch(() => [])));
+                    for (const msgs of lists) {
+                        for (const msg of (msgs || [])) {
+                            if (msg.from === 'me' || msg.from === 'bot') continue; // solo entrantes del candidato
+                            const ms = new Date(msg.timestamp || msg.fecha || 0).getTime();
+                            if (inRange(ms)) bump(ms);
+                        }
+                    }
+                }
+            }
+
+            const horaPico = porHora.reduce((a, b) => b.total > a.total ? b : a, porHora[0]);
+            const porDiaSemana = ORDEN.map(d => ({ dia: d, total: porDiaMap[d] }));
+            const diaPico = porDiaSemana.reduce((a, b) => b.total > a.total ? b : a, porDiaSemana[0]);
+            return {
+                rango: { tipo, zonaHoraria: tz, desde: args?.desde || null, hasta: args?.hasta || null, etiqueta: args?.etiqueta || null },
+                total,
+                porHora,
+                porDiaSemana,
+                horaPico: { hora: horaPico.hora, total: horaPico.total },
+                diaPico: { dia: diaPico.dia, total: diaPico.total },
+                ...(truncado ? { truncado: true, escaneados: 1200 } : {})
+            };
         }
     },
 
@@ -560,12 +726,13 @@ const TOOLS = {
     },
 
     enviar_mensaje: {
-        description: 'Envía un mensaje de texto al candidato por WhatsApp, como lo haría un reclutador. El mensaje admite variables de plantilla ({{nombre}}, etc.), que se resuelven en el servidor.',
+        description: 'Envía un mensaje de texto libre al candidato por WhatsApp (admite variables como {{nombre}}). OJO: Meta solo permite texto libre si el candidato escribió en las últimas 24h; si está fuera de esa ventana, esta tool lo RECHAZA de antemano y debes usar enviar_plantilla. Pasa forzar:true para intentarlo igual bajo tu riesgo.',
         inputSchema: {
             type: 'object',
             properties: {
                 candidateId: { type: 'string', description: 'ID del candidato.' },
-                texto: { type: 'string', description: 'Texto a enviar.' }
+                texto: { type: 'string', description: 'Texto a enviar.' },
+                forzar: { type: 'boolean', description: 'Enviar aunque esté fuera de la ventana de 24h (probablemente falle en Meta).' }
             },
             required: ['candidateId', 'texto']
         },
@@ -574,13 +741,27 @@ const TOOLS = {
             const texto = String(args?.texto || '').trim();
             if (!id) throw new Error('Falta candidateId');
             if (!texto) throw new Error('Falta el texto del mensaje');
+
+            // Pre-vuelo: ventana de 24h. Fuera de ella, el texto libre suele fallar en Meta
+            // (a veces de forma asíncrona vía webhook, por eso no basta con mirar la respuesta).
+            const candidate = await getCandidateById(id);
+            if (!candidate) throw new Error('Candidato no encontrado');
+            if (!args?.forzar && !dentroVentana24h(candidate)) {
+                throw new Error('El candidato está FUERA de la ventana de 24h de Meta: el texto libre será rechazado (error 131047). Usa enviar_plantilla, o pasa forzar:true para intentarlo igual.');
+            }
+
             const r = await callInternal(req, redis, '/api/chat', 'POST', {
                 candidateId: id, message: texto, type: 'text', senderId: 'mcp-grok', senderName: 'Grok (IA)'
             });
             if (!r.ok || r.data?.success === false) throw new Error(r.data?.error || `Fallo al enviar (${r.status})`);
             const estado = r.data?.message?.status || 'enviado';
             if (estado === 'failed') throw new Error(r.data?.message?.error || 'El envío falló en Meta');
-            return { candidateId: id, enviado: true, estado };
+            return {
+                candidateId: id,
+                enviado: true,
+                estado,
+                nota: 'estado=sent significa aceptado por Meta; una falla de entrega posterior (ej. 131047) puede llegar luego por webhook.'
+            };
         }
     },
 
