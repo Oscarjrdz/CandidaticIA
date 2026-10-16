@@ -286,6 +286,11 @@ const SortableProjectCard = ({ project, isActive, onSelect, onEdit, onClone, onD
 let projectsCache = null;
 let activeProjectCache = null;
 const projectCandidatesCache = {}; // { [projectId]: candidates[] }
+// Etiquetas globales (color de los chips): también cacheadas. Sin esto, al re-entrar las
+// tarjetas pintaban al instante (desde projectCandidatesCache) pero availableTags arrancaba
+// en [] → los chips salían gris (#64748b) y ~1s después, al resolver /api/tags, brincaban a
+// su color real. Sembrarlas desde el caché elimina ese parpadeo de color.
+let availableTagsCache = null;
 
 const CRMProjectsSection = () => {
     const { showToast } = useToastContext();
@@ -315,8 +320,9 @@ const CRMProjectsSection = () => {
     const [stepEditName, setStepEditName] = useState('');
     const [stepEditColor, setStepEditColor] = useState('#3b82f6');
 
-    // Etiquetas globales (compartidas con Chat Web)
-    const [availableTags, setAvailableTags] = useState([]);
+    // Etiquetas globales (compartidas con Chat Web) — sembradas del caché para que los chips
+    // pinten con su color real al instante al re-entrar (ver availableTagsCache arriba).
+    const [availableTags, setAvailableTags] = useState(() => availableTagsCache || []);
 
     // Buscador + selección múltiple por columna (paso). El texto de búsqueda vive por
     // stepId; la selección es un solo Set global de candidateId (cada candidato solo
@@ -378,7 +384,9 @@ const CRMProjectsSection = () => {
     useEffect(() => { if (projectsCache) projectsCache = projects; }, [projects]);
     useEffect(() => { activeProjectCache = activeProject; }, [activeProject]);
     useEffect(() => {
-        fetch('/api/tags').then(r => r.json()).then(d => { if (d.success) setAvailableTags(d.tags || []); }).catch(() => {});
+        fetch('/api/tags').then(r => r.json()).then(d => {
+            if (d.success) { const tags = d.tags || []; setAvailableTags(tags); availableTagsCache = tags; }
+        }).catch(() => {});
     }, []);
 
     // RBAC de proyectos (espejo del backend en api/manual_projects.js):
