@@ -984,7 +984,9 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
     // respuesta del POST como red). Aquí lo guardamos por id y se aplica al insertar el mensaje.
     const pendingStatusByIdRef = useRef(new Map());
     const displayMessageCacheRef = useRef(new Map());
-    const bottomAnchorRef = useRef(false);
+    // Sembrado en true cuando re-entramos con un chat abierto desde caché → el cuerpo se ancla
+    // al fondo en el 1er asentamiento igual que al abrir un chat fresco (ver máscara abajo).
+    const bottomAnchorRef = useRef(!!chatSectionCache.selectedChat);
     // Última altura total reportada por Virtuoso. El scroll manual (totalListHeightChanged, único
     // mecanismo — followOutput está desactivado) baja al fondo cuando el alto crece >8px estando al
     // fondo/enviando: mensaje nuevo, o un mensaje que crece tarde (reacción = +pb-5, imagen que mide
@@ -1000,7 +1002,11 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
     // (opacity 0) 1-2 frames hasta que Virtuoso mide y hace scroll al fondo, y se revela YA asentada.
     // Así nunca se ve el reacomodo de montaje (stickers/imágenes que "nacen abajo y suben"). Se pone
     // false al abrir y true cuando el primer scroll al fondo (bottomAnchorRef) ya se aplicó.
-    const [chatContentReady, setChatContentReady] = useState(true);
+    // Arranca ENMASCARADO (false) cuando re-entramos con un chat sembrado desde caché, para que el
+    // reacomodo de montaje del Virtuoso (imágenes/stickers que miden su alto tarde, scroll
+    // asentándose al fondo) quede oculto y el chat aparezca YA asentado — igual que al abrir uno
+    // fresco. Sin chat sembrado (1ª vez, o sin chat abierto) arranca listo (true), como antes.
+    const [chatContentReady, setChatContentReady] = useState(() => !chatSectionCache.selectedChat);
     const chatReadyTimerRef = useRef(null);
     const revealChatContent = useCallback(() => {
         if (chatReadyTimerRef.current) { clearTimeout(chatReadyTimerRef.current); chatReadyTimerRef.current = null; }
@@ -1013,6 +1019,16 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         // lento/fallido), revelar de todos modos para no dejar la lista invisible. 600ms da margen a
         // que loadMessages traiga los datos en el 1er open sin que se vea un blanco largo.
         chatReadyTimerRef.current = setTimeout(() => setChatContentReady(true), 600);
+    }, []);
+    // Re-entrada con chat sembrado: el cuerpo ya arranca enmascarado (useState de arriba) y
+    // anclado (bottomAnchorRef). Aquí solo armamos la red de seguridad de 600ms por si el settle
+    // no llega (loadMessages lento / chat sin mensajes); el reveal normal cae en el 1er
+    // totalListHeightChanged CON mensajes. No re-dispara la auto-apertura (esa checa selectedChatRef).
+    useEffect(() => {
+        if (!chatSectionCache.selectedChat) return;
+        chatReadyTimerRef.current = setTimeout(() => setChatContentReady(true), 600);
+        return () => { if (chatReadyTimerRef.current) { clearTimeout(chatReadyTimerRef.current); chatReadyTimerRef.current = null; } };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
     // Ventana "acabo de enviar" (~2s): durante ella, la lista de mensajes SOLO hace scroll al
     // fondo cuando CRECE (llega una burbuja nueva), no en re-mediciones (palomita de estado,
