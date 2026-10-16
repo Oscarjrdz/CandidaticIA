@@ -799,6 +799,14 @@ export default async function handler(req, res) {
             await markMessageAsDone(msgId);
             if (redis) await redis.del('stats:bot:last_calc');
 
+            // ── Webhooks salientes (fire-and-forget): no bloquean ni rompen el webhook ──
+            try {
+                const { dispatchWebhook } = await import('../utils/outbound-webhooks.js');
+                const _whCand = freshCandidate || candidate;
+                if (isNewCandidate) dispatchWebhook(redis, 'chat_nuevo', { candidate: _whCand, texto: body });
+                dispatchWebhook(redis, 'mensaje_entrante', { candidate: _whCand, texto: body });
+            } catch { /* los webhooks salientes nunca interrumpen la entrada */ }
+
             const globalBotSetting = redis ? await redis.get('bot_ia_active').catch(() => null) : null;
             const isBotGloballyActive = globalBotSetting !== 'false';
             const shouldAutoReadIncoming = freshCandidate?.blocked !== true && isBotGloballyActive;

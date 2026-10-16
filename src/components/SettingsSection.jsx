@@ -3,6 +3,7 @@ import { Settings } from 'lucide-react';
 import GPTSettings from './GPTSettings';
 import WhatsAppSettings from './WhatsAppSettings';
 import RedisBandwidthSettings from './RedisBandwidthSettings';
+import WebhooksSettings from './WebhooksSettings';
 import UsersSection from './UsersSection';
 import { useToastContext } from '../contexts/ToastContext';
 
@@ -40,6 +41,9 @@ const SettingsSection = () => {
                     <RedisBandwidthSettings className="flex-1" />
                 </div>
             </div>
+
+            {/* Webhooks salientes — Candidatic notifica eventos a una URL externa (ej. Grok). */}
+            <WebhooksSettings showToast={showToast} />
 
             {/* Equipo y accesos — antes vivía en su propia sección "Usuarios" del menú.
                 Se integró aquí abajo para consolidar toda la administración en Configuración.

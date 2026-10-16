@@ -3031,6 +3031,12 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
                 // ejecuta las acciones que apliquen. Sin cron ni IA — ver api/utils/flow-engine.js.
                 await runFlowsForCandidate(candidateId, { ...candidateData, ...candidateUpdates })
                     .catch(e => console.error('[COMPLETION] flows:', e?.message));
+
+                // Webhook saliente: perfil completado (fire-and-forget interno).
+                try {
+                    const { dispatchWebhook } = await import('../utils/outbound-webhooks.js');
+                    dispatchWebhook(null, 'perfil_completo', { candidate: { ...candidateData, ...candidateUpdates } });
+                } catch (e) { console.error('[COMPLETION] webhook:', e?.message); }
             })());
         }
 
