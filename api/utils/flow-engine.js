@@ -362,6 +362,22 @@ function isOptionExpired(expiresAt) {
     return exp <= nowMty.replace(' ', 'T'); // a la hora exacta ya vence ("a partir de ahí ya no se manda")
 }
 
+// Trunca un título a N "caracteres" visibles (graphemes), espejo del límite de Meta
+// (20 para botón, 24 para fila de lista). CRÍTICO: NO usar `.substring(0, N)` — corta por
+// unidades UTF-16 y parte un emoji al final en un surrogate suelto (ej. "…RUTA😄" → "…RUTA\uD83D"),
+// y ese título roto nunca vuelve a cuadrar con lo que Meta devuelve al clic → la opción no rutea.
+// Bug confirmado en prod (2026-10-18): la opción "SI ME QUEDA LA RUTA😄" (emoji justo en la
+// posición 20) quedaba muda, mientras "NO ME QUEDA LA RUTA 😭" (emoji más allá de 20) sí ruteaba.
+const truncateTitleSafe = (s, n) => {
+    const str = String(s || '');
+    try {
+        const seg = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
+        return [...seg.segment(str)].slice(0, n).map(g => g.segment).join('');
+    } catch {
+        return [...str].slice(0, n).join(''); // fallback por code points (no parte surrogates)
+    }
+};
+
 // Construye y ENVÍA el mensaje interactivo de un nodo 'accion_botones' (botón/lista/cta_url)
 // con header/footer/variables, lo guarda en el historial (chips + palomitas) y devuelve
 // { sendOk, options } — options = [{handle, match}] para registrar la espera del ruteo.
@@ -453,9 +469,9 @@ async function sendInteractiveNode(redis, node, candidate, flowId, opts = {}, pr
     // Solo las VIGENTES: nadie debe quedar esperando un botón que no se mandó.
     const options = [];
     if (mode === 'button') {
-        for (const b of liveButtons) if (b?.id) options.push({ handle: b.id, match: substituteVariables(b.title, candidate).substring(0, 20) });
+        for (const b of liveButtons) if (b?.id) options.push({ handle: b.id, match: truncateTitleSafe(substituteVariables(b.title, candidate), 20) });
     } else if (mode === 'list') {
-        for (const sec of liveSections) for (const r of sec.rows) if (r?.id) options.push({ handle: r.id, match: substituteVariables(r.title, candidate).substring(0, 24) });
+        for (const sec of liveSections) for (const r of sec.rows) if (r?.id) options.push({ handle: r.id, match: truncateTitleSafe(substituteVariables(r.title, candidate), 24) });
     }
     return { sendOk, options };
 }
