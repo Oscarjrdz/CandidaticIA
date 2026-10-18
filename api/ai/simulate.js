@@ -6,8 +6,14 @@ import { getRedisClient, getCandidateByPhone, saveCandidate, deleteCandidate, sa
 import { processMessage } from './agent.js';
 
 export default async function handler(req, res) {
-    const phone = '5211234567890'; 
+    const phone = '5211234567890';
     const redis = getRedisClient();
+
+    // 🔒 Solo dashboard autenticado (el simulador corre la IA completa de Brenda)
+    {
+        const { validateAdminSession } = await import('../utils/storage.js');
+        if (!(await validateAdminSession(req))) return res.status(401).json({ error: 'No autorizado' });
+    }
 
     // ---- GET: Fetch Simulator History ----
     if (req.method === 'GET') {

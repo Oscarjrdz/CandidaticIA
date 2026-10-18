@@ -5,6 +5,12 @@ export default async function handler(req, res) {
         return res.status(405).json({ error: 'Method not allowed' });
     }
 
+    // 🔒 Solo dashboard autenticado (evita abuso de crédito OpenAI con visión)
+    {
+        const { validateAdminSession } = await import('../utils/storage.js');
+        if (!(await validateAdminSession(req))) return res.status(401).json({ error: 'No autorizado' });
+    }
+
     try {
         const { image } = req.body; // Expects base64 string data:image/...;base64,...
 

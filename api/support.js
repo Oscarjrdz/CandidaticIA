@@ -14,9 +14,22 @@ export default async function handler(req, res) {
       const { name, email, subject, message } = req.body;
       if (!name || !email || !message) return res.status(400).json({ error: 'Faltan campos' });
 
+      // Tope de tamaño: ticket público sin sesión, evita payloads gigantes que inflen Redis
+      if (String(name).length > 100 || String(email).length > 150 ||
+          String(subject || '').length > 150 || String(message).length > 5000) {
+        return res.status(413).json({ error: 'Campos demasiado largos' });
+      }
+
       const { getRedisClient } = await import('./utils/storage.js');
       const redis = getRedisClient();
       if (redis) {
+        // Rate limit por IP: máx 5 tickets por hora (anti-flood anónimo)
+        const ip = (req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'unknown').split(',')[0].trim();
+        const rlKey = `support:rl:${ip}`;
+        const rlCount = await redis.incr(rlKey);
+        if (rlCount === 1) await redis.expire(rlKey, 3600);
+        if (rlCount > 5) return res.status(429).json({ error: 'Demasiados mensajes. Intenta más tarde.' });
+
         const ticket = {
           id: Date.now().toString(),
           name, email, subject: subject || 'Sin asunto', message,

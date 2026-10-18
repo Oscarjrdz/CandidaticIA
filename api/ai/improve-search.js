@@ -4,6 +4,12 @@ import { getRedisClient } from '../utils/storage.js';
 export default async function handler(req, res) {
     if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
+    // 🔒 Solo dashboard autenticado (evita abuso de crédito OpenAI)
+    {
+        const { validateAdminSession } = await import('../utils/storage.js');
+        if (!(await validateAdminSession(req))) return res.status(401).json({ error: 'No autorizado' });
+    }
+
     try {
         const { prompt } = req.body;
         if (!prompt) return res.status(400).json({ success: false, error: 'Prompt is required' });

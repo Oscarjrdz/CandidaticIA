@@ -58,7 +58,8 @@ export default async function handler(req, res) {
     }
 
     if (!isBot && data.redirectEnabled && data.redirectUrl) {
-        let safeUrl = data.redirectUrl;
+        // Quitar CRLF/control chars para evitar inyección de headers en Location
+        let safeUrl = String(data.redirectUrl).replace(/[\r\n\t\0]/g, '');
         if (!safeUrl.startsWith('http://') && !safeUrl.startsWith('https://')) {
             safeUrl = 'https://' + safeUrl;
         }
@@ -68,32 +69,41 @@ export default async function handler(req, res) {
         return res.status(302).end();
     }
 
+    // Escape anti-XSS: title/description/image pueden venir de query params (?title=...),
+    // así que se reflejan en el HTML solo después de neutralizar < > " ' &.
+    const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const eTitle = esc(metaTitle);
+    const eDesc = esc(metaDesc);
+    const eUrl = esc(currentUrl);
+    const eImageAbs = esc(absoluteImage);
+    const eImage = esc(metaImage);
+
     const html = `
     <!DOCTYPE html>
     <html lang="es" prefix="og: https://ogp.me/ns#">
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>${metaTitle}</title>
+        <title>${eTitle}</title>
         
         <!-- Open Graph / Facebook -->
         <meta property="og:type" content="article">
-        <meta property="og:url" content="${currentUrl}">
-        <meta property="og:title" content="${metaTitle}">
-        <meta property="og:description" content="${metaDesc}">
+        <meta property="og:url" content="${eUrl}">
+        <meta property="og:title" content="${eTitle}">
+        <meta property="og:description" content="${eDesc}">
         
-        <meta property="og:image" content="${absoluteImage}">
-        <meta property="og:image:secure_url" content="${absoluteImage}">
+        <meta property="og:image" content="${eImageAbs}">
+        <meta property="og:image:secure_url" content="${eImageAbs}">
         <meta property="og:image:type" content="image/jpeg">
         <meta property="og:image:width" content="1200">
         <meta property="og:image:height" content="630">
         
         <!-- Twitter -->
         <meta property="twitter:card" content="summary_large_image">
-        <meta property="twitter:url" content="${currentUrl}">
-        <meta property="twitter:title" content="${metaTitle}">
-        <meta property="twitter:description" content="${metaDesc}">
-        <meta property="twitter:image" content="${absoluteImage}">
+        <meta property="twitter:url" content="${eUrl}">
+        <meta property="twitter:title" content="${eTitle}">
+        <meta property="twitter:description" content="${eDesc}">
+        <meta property="twitter:image" content="${eImageAbs}">
 
         <!-- Simple Clean CSS -->
         <style>
@@ -164,11 +174,11 @@ export default async function handler(req, res) {
     </head>
     <body>
         <div class="container">
-            ${metaImage ? `<img src="${metaImage}" class="hero-image" alt="Post Image" onerror="this.style.display='none'"/>` : ''}
+            ${metaImage ? `<img src="${eImage}" class="hero-image" alt="Post Image" onerror="this.style.display='none'"/>` : ''}
             
             <div class="content">
-                <h1>${metaTitle}</h1>
-                <p>${metaDesc}</p>
+                <h1>${eTitle}</h1>
+                <p>${eDesc}</p>
                 
                 ${(data.redirectEnabled && data.redirectUrl) ? (() => {
             let safeUrl = data.redirectUrl;
@@ -177,7 +187,7 @@ export default async function handler(req, res) {
             }
             return `
                     <script>
-                        window.location.replace("${safeUrl}");
+                        window.location.replace(${JSON.stringify(safeUrl)});
                     </script>
                 `;
         })() : ''}

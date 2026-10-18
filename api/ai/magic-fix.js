@@ -5,6 +5,12 @@ import { cleanEscolaridadWithAI, cleanCategoryWithAI, cleanNameWithAI, cleanMuni
 export default async function handler(req, res) {
     if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
+    // 🔒 Solo dashboard autenticado (evita abuso de crédito OpenAI + mutación de datos sin sesión)
+    {
+        const { validateAdminSession } = await import('../utils/storage.js');
+        if (!(await validateAdminSession(req))) return res.status(401).json({ error: 'No autorizado' });
+    }
+
     try {
         const { candidateId, field } = req.body;
 
