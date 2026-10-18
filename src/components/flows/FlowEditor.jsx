@@ -745,6 +745,7 @@ const FlowEditorInner = ({ flowId, onBack }) => {
             />
 
             <ReactFlow
+                className="select-none"
                 nodes={displayNodes}
                 edges={edges}
                 onNodesChange={onNodesChange}
@@ -789,7 +790,7 @@ const FlowEditorInner = ({ flowId, onBack }) => {
             {/* Mini-menú flotante de selección múltiple (aparece al soltar con 2+ nodos). */}
             {selMenu && selectedIds.length >= 2 && (
                 <div
-                    className="fixed z-[300] -translate-x-1/2 -translate-y-full mb-2 flex items-center gap-1 bg-white dark:bg-[#202c33] rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 p-1"
+                    className="fixed z-[300] -translate-x-1/2 -translate-y-full mb-2 flex items-center gap-1 bg-white dark:bg-[#202c33] rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 p-1 select-none"
                     style={{ left: selMenu.x, top: selMenu.y - 10 }}
                 >
                     <span className="text-[11px] font-semibold text-gray-400 px-2 select-none">{selectedIds.length} sel.</span>

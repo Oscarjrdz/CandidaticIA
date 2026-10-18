@@ -21,7 +21,7 @@ const FlowToolbar = ({ flowName, active, dirty, saving, onAddNode, onSave, onTog
     }, []);
 
     return (
-        <div className="absolute top-3 left-3 right-3 z-[100] flex items-center justify-between gap-3 pointer-events-none">
+        <div className="absolute top-3 left-3 right-3 z-[100] flex items-center justify-between gap-3 pointer-events-none select-none">
             <div className="flex items-center gap-2 pointer-events-auto">
                 <button
                     onClick={onBack}
@@ -38,7 +38,7 @@ const FlowToolbar = ({ flowName, active, dirty, saving, onAddNode, onSave, onTog
                         onChange={(e) => setNameDraft(e.target.value)}
                         onBlur={() => { setEditingName(false); if (nameDraft.trim() && nameDraft !== flowName) onRename(nameDraft.trim()); }}
                         onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
-                        className="px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 dark:bg-gray-800 text-sm font-semibold shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        className="px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 dark:bg-gray-800 text-sm font-semibold shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 select-text"
                     />
                 ) : (
                     <button
