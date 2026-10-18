@@ -897,6 +897,35 @@ export const isProfileComplete = (c, customFields = []) => {
     return c.paso2Estado === 'completo';
 };
 
+/**
+ * Deriva el estado de PASO 2 a partir de los datos crudos (colonia + experiencia +
+ * meses), con las MISMAS reglas que la máquina de estados de Brenda en agent.js:
+ *   - colonia válida es requisito (si falta → 'esperando_colonia').
+ *   - experiencia 'No' → 'completo' (sin importar meses).
+ *   - experiencia 'Sí' → 'completo' solo si hay meses > 0, si no 'esperando_meses_experiencia'.
+ *   - experiencia como arreglo (candidatos de la app, [{empresa,puesto,anios}]) → 'completo':
+ *     su sola presencia ya es paso 2 resuelto, no se exige un `meses` suelto.
+ *   - experiencia vacía/desconocida → 'esperando_experiencia'.
+ * Se usa en la edición MANUAL del perfil (modal "Perfil del Candidato" del Chat Web)
+ * para que la tarjeta se marque completa/incompleta según lo que quedó guardado.
+ */
+export const computePaso2Estado = (c) => {
+    const EMPTY = ['', 'n/a', 'na', 'null', 'ninguno', 'ninguna', 'none', '-', 'desconocido'];
+    const col = String(c?.colonia || '').trim().toLowerCase();
+    const colOk = col.length >= 2 && !col.includes('proporcionad') && !EMPTY.includes(col);
+    if (!colOk) return 'esperando_colonia';
+
+    const exp = c?.experiencia;
+    if (Array.isArray(exp)) return 'completo';
+    const expStr = String(exp || '').trim().toLowerCase();
+    if (expStr === 'no') return 'completo';
+    if (expStr === 'sí' || expStr === 'si') {
+        const m = parseInt(c?.meses, 10);
+        return (!isNaN(m) && m > 0) ? 'completo' : 'esperando_meses_experiencia';
+    }
+    return 'esperando_experiencia';
+};
+
 // Set (minúscula) de las etiquetas propias del usuario (createdBy === user.id), leído del
 // registro `candidatic:chat_tags`. Devuelve null si no está en modo "solo sus propias etiquetas"
 // (o es SuperAdmin). Es el insumo para la visibilidad de chats "propios" en tags_own_mode.

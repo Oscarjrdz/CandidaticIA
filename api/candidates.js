@@ -364,8 +364,14 @@ export default async function handler(req, res) {
                 });
             }
 
-            const { updateCandidate, getCandidateById } = await import('./utils/storage.js');
+            const { updateCandidate, getCandidateById, computePaso2Estado } = await import('./utils/storage.js');
             const { cleanNameWithAI, detectGender, cleanMunicipioWithAI } = await import('./utils/ai.js');
+
+            // Edición MANUAL del perfil (modal "Perfil del Candidato" del Chat Web):
+            // bandera interna que NO se guarda. Gatea el recálculo de campos derivados
+            // para no tocar edad/paso2Estado en PUTs ajenos (etiquetas, asignación, etc.).
+            const _isProfileEdit = updates._profileEdit === true;
+            delete updates._profileEdit;
 
             // --- AI Logic for Nombre Real ---
             if (updates.nombreReal) {
@@ -386,6 +392,31 @@ export default async function handler(req, res) {
             if (updates.municipio) {
                 const cleanedMunicipio = await cleanMunicipioWithAI(updates.municipio);
                 updates.municipio = cleanedMunicipio;
+            }
+
+            // 🧮 EDICIÓN MANUAL: recalcula los campos DERIVADOS igual que Brenda extractora,
+            // para que la tarjeta quede completa/incompleta según lo guardado (bidireccional):
+            //  - edad ← fechaNacimiento (DD/MM/YYYY); se vacía si se borró la fecha.
+            //  - paso2Estado ← colonia + experiencia (+meses). Fuente única: computePaso2Estado.
+            if (_isProfileEdit) {
+                const existing = await getCandidateById(id);
+                const merged = { ...(existing || {}), ...updates };
+
+                const _fecha = String(merged.fechaNacimiento || '').trim();
+                const _dp = _fecha.split('/');
+                if (_dp.length === 3 && _dp.every(p => p !== '')) {
+                    // Misma derivación que agent.js (AUTO-EDAD): edad real en años.
+                    const _bd = new Date(+_dp[2], +_dp[1] - 1, +_dp[0]);
+                    if (!isNaN(_bd.getTime())) {
+                        const _ageDate = new Date(Date.now() - _bd.getTime());
+                        const _age = Math.abs(_ageDate.getUTCFullYear() - 1970);
+                        if (_age >= 15 && _age <= 80) updates.edad = _age;
+                    }
+                } else if (!_fecha) {
+                    updates.edad = ''; // fecha borrada → edad vacía
+                }
+
+                updates.paso2Estado = computePaso2Estado(merged);
             }
 
             const updatedCandidate = await updateCandidate(id, updates);

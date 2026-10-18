@@ -635,7 +635,7 @@ const ProfileModal = React.memo(({ candidate, onClose, onSave }) => {
 
     const [formData, setFormData] = useState({
         nombreReal: candidate.nombreReal || candidate.nombre || '',
-        edad: candidate.edad || candidate.fechaNacimiento || '',
+        fechaNacimiento: candidate.fechaNacimiento || '',
         genero: candidate.genero || '',
         municipio: candidate.municipio || '',
         escolaridad: candidate.escolaridad || '',
@@ -646,12 +646,23 @@ const ProfileModal = React.memo(({ candidate, onClose, onSave }) => {
     });
 
     const handleSave = () => {
-        const updates = { ...formData };
+        // _profileEdit: el backend recalcula edad (desde fecha) y paso2Estado, igual que
+        // Brenda extractora, para que la tarjeta se marque completa/incompleta al guardar.
+        const updates = { ...formData, _profileEdit: true };
         // No sobrescribir el array de lugares si el reclutador no tocó el selector.
         if (experienciaEsArray && updates.experiencia === experienciaInicial) {
             delete updates.experiencia;
         }
         onSave(updates);
+    };
+
+    // Fecha de nacimiento: autoformato DD/MM/AAAA mientras se escribe, igual que Brenda
+    // "intuye" los dígitos amontonados (19121974 → 19/12/1974). Solo acepta números.
+    const handleFechaChange = (e) => {
+        let v = e.target.value.replace(/\D/g, '').slice(0, 8);
+        if (v.length >= 5) v = `${v.slice(0, 2)}/${v.slice(2, 4)}/${v.slice(4)}`;
+        else if (v.length >= 3) v = `${v.slice(0, 2)}/${v.slice(2)}`;
+        setFormData(prev => ({ ...prev, fechaNacimiento: v }));
     };
 
     const [botCategories, setBotCategories] = useState([]);
@@ -691,8 +702,8 @@ const ProfileModal = React.memo(({ candidate, onClose, onSave }) => {
                     </div>
                     <div className="flex gap-4">
                         <div className="flex-1">
-                            <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1 uppercase">Edad</label>
-                            <input type="text" name="edad" value={formData.edad} onChange={handleChange} className="w-full text-sm p-2.5 bg-[#f0f2f5] dark:bg-[#2a3942] rounded-lg outline-none text-[#111b21] dark:text-[#d1d7db] border border-transparent focus:border-blue-500 focus:ring-1 focus:ring-blue-500/50 transition-all" placeholder="Ej. 25" />
+                            <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1 uppercase">Fecha de Nacimiento</label>
+                            <input type="text" inputMode="numeric" name="fechaNacimiento" value={formData.fechaNacimiento} onChange={handleFechaChange} maxLength={10} className="w-full text-sm p-2.5 bg-[#f0f2f5] dark:bg-[#2a3942] rounded-lg outline-none text-[#111b21] dark:text-[#d1d7db] border border-transparent focus:border-blue-500 focus:ring-1 focus:ring-blue-500/50 transition-all" placeholder="DD/MM/AAAA" />
                         </div>
                         <div className="flex-1">
                             <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1 uppercase">Género</label>
@@ -7368,12 +7379,29 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                     candidate={profileModalCandidate}
                     onClose={() => setProfileModalCandidate(null)}
                     onSave={async (updates) => {
+                        // Confirmación antes de tocar la BD: solo si algún dato cambió respecto
+                        // al perfil actual (si no cambió nada, se guarda sin preguntar).
+                        const { _profileEdit, ...fields } = updates;
+                        const huboCambios = Object.keys(fields).some(
+                            k => String(profileModalCandidate?.[k] ?? '') !== String(fields[k] ?? '')
+                        );
+                        if (huboCambios) {
+                            const ok = await new Promise(resolve => setConfirmModal({
+                                title: 'Guardar cambios',
+                                message: '¿Seguro que quieres cambiar los datos de este candidato? Se actualizará la base de datos.',
+                                confirmText: 'Sí, guardar',
+                                variant: 'warning',
+                                onConfirm: () => resolve(true),
+                                onCancel: () => resolve(false)
+                            }));
+                            if (!ok) return; // Canceló: el modal de perfil sigue abierto para seguir editando.
+                        }
                         // Optimistic UI update
-                        const updatedChat = { ...profileModalCandidate, ...updates };
+                        const updatedChat = { ...profileModalCandidate, ...fields };
                         if (selectedChat?.id === updatedChat.id) setSelectedChat(updatedChat);
                         setCandidates(prev => prev.map(c => c.id === updatedChat.id ? updatedChat : c));
                         setProfileModalCandidate(null);
-                        
+
                         try {
                             const res = await fetch('/api/candidates', {
                                 method: 'PUT',
@@ -7381,6 +7409,18 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                                 body: JSON.stringify({ id: updatedChat.id, ...updates })
                             });
                             if (!res.ok) throw new Error('Failed to update candidate');
+                            // Reconciliar los campos DERIVADOS que calculó el backend (edad desde la
+                            // fecha, paso2Estado y statusAudit) para que la tarjeta se marque
+                            // completa/incompleta al instante, sin esperar el SSE.
+                            const data = await res.json().catch(() => null);
+                            const fresh = data?.candidate;
+                            if (fresh) {
+                                const DERIVED = ['nombreReal', 'genero', 'edad', 'fechaNacimiento', 'municipio', 'escolaridad', 'categoria', 'colonia', 'experiencia', 'meses', 'paso2Estado', 'statusAudit'];
+                                const patch = {};
+                                for (const k of DERIVED) if (k in fresh) patch[k] = fresh[k];
+                                if (selectedChat?.id === fresh.id) setSelectedChat(prev => prev ? { ...prev, ...patch } : prev);
+                                setCandidates(prev => prev.map(c => c.id === fresh.id ? { ...c, ...patch } : c));
+                            }
                             showToast && showToast('Perfil actualizado correctamente', 'success');
                         } catch (error) {
                             console.error('Error updating profile:', error);
