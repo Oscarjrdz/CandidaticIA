@@ -815,15 +815,21 @@ export async function evaluateOrExecute(node, candidate, flowId, redis, opts = {
             // así la reanudación tras el clic retoma sin re-enviar lo anterior.
             if (!options.length) return true;
 
+            // "Nunca se vence": el listado NO caduca — la espera no lleva expiresAt (resume y
+            // hasLiveInteractiveMenuFor tratan "sin expiresAt" como vivo para siempre) y el registro
+            // persiste ~5 años en Redis. El candidato puede clicar días/semanas después y continúa.
+            const neverExpires = data.timeoutNever === true;
             const timeoutHoras = Number(data.timeoutHoras) > 0 ? Number(data.timeoutHoras) : 48;
-            const ttlSec = Math.max(PROGRESS_TTL_SEC, Math.ceil(timeoutHoras * 3600) + 86400);
+            const NEVER_TTL_SEC = 60 * 60 * 24 * 365 * 5; // 5 años
+            const ttlSec = neverExpires ? NEVER_TTL_SEC : Math.max(PROGRESS_TTL_SEC, Math.ceil(timeoutHoras * 3600) + 86400);
             try {
                 const key = `${WAITING_PREFIX}${candidate.id}`;
                 // reaskCount arranca en 0: cuántas veces se le ha re-mandado los botones al que
                 // escribe en vez de tocar (ver el re-envío en resumeWaitingFlowIfMatch).
                 const payload = JSON.stringify({
                     nodeId: node.id, kind: 'interactive', options, reaskCount: 0,
-                    expiresAt: Date.now() + timeoutHoras * 3600 * 1000
+                    // Sin expiresAt cuando "nunca se vence" → la espera no caduca.
+                    ...(neverExpires ? {} : { expiresAt: Date.now() + timeoutHoras * 3600 * 1000 })
                 });
                 await redis.hset(key, flowId, payload);
                 await redis.expire(key, ttlSec);

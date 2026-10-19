@@ -571,7 +571,11 @@ const BotonesConfig = ({ data, patch }) => {
                         <>
                             <div>
                                 <label className="text-xs text-gray-500 dark:text-gray-400 mb-1 block">Timeout (horas sin responder → rama Timeout)</label>
-                                <input type="number" min="1" value={data.timeoutHoras ?? 48} onChange={(e) => patch({ timeoutHoras: e.target.value === '' ? 48 : Number(e.target.value) })} className={`${inputCls} w-28`} />
+                                <input type="number" min="1" disabled={data.timeoutNever === true} value={data.timeoutHoras ?? 48} onChange={(e) => patch({ timeoutHoras: e.target.value === '' ? 48 : Number(e.target.value) })} className={`${inputCls} w-28 ${data.timeoutNever === true ? 'opacity-40 cursor-not-allowed' : ''}`} />
+                                <label className="flex items-center gap-2 mt-2 cursor-pointer">
+                                    <input type="checkbox" checked={data.timeoutNever === true} onChange={(e) => patch({ timeoutNever: e.target.checked })} className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500" />
+                                    <span className="text-xs text-gray-600 dark:text-gray-300"><strong>Nunca se vence</strong> — el listado espera el clic para siempre (no hay rama Timeout)</span>
+                                </label>
                             </div>
                             <p className="text-xs bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-2.5 text-amber-700 dark:text-amber-300">
                                 ⚠️ El ruteo por clic solo funciona con Brenda en <strong>silencio</strong>: pon un nodo <strong>“Desactivar Bot”</strong> ANTES de este, si no, Brenda contestará el clic en vez de rutear.
