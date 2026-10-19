@@ -4,7 +4,7 @@ import {
     addEdge, applyNodeChanges, applyEdgeChanges, BackgroundVariant,
     useReactFlow
 } from '@xyflow/react';
-import { Copy, Trash2 } from 'lucide-react';
+import { Copy, Trash2, AlignStartVertical, AlignCenterVertical, AlignEndVertical, AlignVerticalSpaceAround } from 'lucide-react';
 import '@xyflow/react/dist/style.css';
 import { useToastContext } from '../../contexts/ToastContext';
 import { useAuthContext } from '../../contexts/AuthContext';
@@ -463,6 +463,55 @@ const FlowEditorInner = ({ flowId, onBack }) => {
         showToast(`Clonados ${newNodes.length} nodo(s) — copiados para pegar en otro flujo`, 'success');
     }, [selectedIds, nodes, edges, buildDuplicate, copySelectionToClipboard, showToast]);
 
+    // ALINEAR selección: empareja la X de los nodos seleccionados a su borde izquierdo
+    // ('left'), su centro ('center') o su borde derecho ('right') — calculado sobre la propia
+    // selección (su caja envolvente). Deja la Y intacta: solo ordena la columna horizontalmente.
+    const handleAlign = useCallback((mode) => {
+        const idSet = new Set(selectedIds);
+        const sel = nodes.filter(n => idSet.has(n.id));
+        if (sel.length < 2) return;
+        const widthOf = (n) => Number.isFinite(n.measured?.width) ? n.measured.width : (Number.isFinite(n.width) ? n.width : 240);
+        const minLeft = Math.min(...sel.map(n => n.position.x));
+        const maxRight = Math.max(...sel.map(n => n.position.x + widthOf(n)));
+        const center = (minLeft + maxRight) / 2;
+        const newX = (n) => mode === 'left' ? minLeft : mode === 'right' ? maxRight - widthOf(n) : center - widthOf(n) / 2;
+        setNodes(nds => nds.map(n => idSet.has(n.id) ? { ...n, position: { ...n.position, x: newX(n) } } : n));
+        setDirty(true);
+    }, [selectedIds, nodes]);
+
+    // DISTRIBUIR selección: deja los HUECOS entre nodos parejos. Detecta el eje dominante
+    // (vertical si la selección se extiende más a lo alto, horizontal si a lo ancho), fija el
+    // primero y el último en su lugar y reparte los de en medio con espacios iguales (restando
+    // el tamaño real de cada nodo, no solo su posición). Necesita 3+ nodos para tener huecos.
+    const handleDistribute = useCallback(() => {
+        const idSet = new Set(selectedIds);
+        const sel = nodes.filter(n => idSet.has(n.id));
+        if (sel.length < 3) return;
+        const widthOf = (n) => Number.isFinite(n.measured?.width) ? n.measured.width : (Number.isFinite(n.width) ? n.width : 240);
+        const heightOf = (n) => Number.isFinite(n.measured?.height) ? n.measured.height : (Number.isFinite(n.height) ? n.height : 80);
+        const spanX = Math.max(...sel.map(n => n.position.x)) - Math.min(...sel.map(n => n.position.x));
+        const spanY = Math.max(...sel.map(n => n.position.y)) - Math.min(...sel.map(n => n.position.y));
+        const vertical = spanY >= spanX;
+        const posOf = (n) => vertical ? n.position.y : n.position.x;
+        const sizeOf = vertical ? heightOf : widthOf;
+        const sorted = [...sel].sort((a, b) => posOf(a) - posOf(b));
+        const start = posOf(sorted[0]);
+        const end = posOf(sorted[sorted.length - 1]) + sizeOf(sorted[sorted.length - 1]);
+        const totalSize = sorted.reduce((s, n) => s + sizeOf(n), 0);
+        const gap = (end - start - totalSize) / (sorted.length - 1);
+        const newPos = new Map();
+        let cursor = start;
+        for (const n of sorted) { newPos.set(n.id, cursor); cursor += sizeOf(n) + gap; }
+        setNodes(nds => nds.map(n => {
+            if (!newPos.has(n.id)) return n;
+            const v = newPos.get(n.id);
+            return vertical
+                ? { ...n, position: { ...n.position, y: v } }
+                : { ...n, position: { ...n.position, x: v } };
+        }));
+        setDirty(true);
+    }, [selectedIds, nodes]);
+
     // CLONAR UNO: duplica un solo elemento (texto / fondo) con offset. Su botón vive en la
     // barra flotante del propio elemento (FlowNode). Reusa buildDuplicate (ya hidrata, filtra
     // inicios y pone id/offset nuevos). Un elemento decorativo no tiene aristas → [].
@@ -794,6 +843,37 @@ const FlowEditorInner = ({ flowId, onBack }) => {
                     style={{ left: selMenu.x, top: selMenu.y - 10 }}
                 >
                     <span className="text-[11px] font-semibold text-gray-400 px-2 select-none">{selectedIds.length} sel.</span>
+                    <button
+                        onClick={() => handleAlign('left')}
+                        className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-semibold text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700/50"
+                        title="Alinear a la izquierda"
+                    >
+                        <AlignStartVertical className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                        onClick={() => handleAlign('center')}
+                        className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-semibold text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700/50"
+                        title="Alinear al centro"
+                    >
+                        <AlignCenterVertical className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                        onClick={() => handleAlign('right')}
+                        className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-semibold text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700/50"
+                        title="Alinear a la derecha"
+                    >
+                        <AlignEndVertical className="w-3.5 h-3.5" />
+                    </button>
+                    {selectedIds.length >= 3 && (
+                        <button
+                            onClick={handleDistribute}
+                            className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-semibold text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700/50"
+                            title="Espaciado parejo entre nodos"
+                        >
+                            <AlignVerticalSpaceAround className="w-3.5 h-3.5" />
+                        </button>
+                    )}
+                    <span className="w-px h-5 bg-gray-200 dark:bg-gray-700 mx-0.5" />
                     <button
                         onClick={handleCloneSelection}
                         className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20"
