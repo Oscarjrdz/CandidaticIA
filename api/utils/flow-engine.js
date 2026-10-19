@@ -378,6 +378,21 @@ const truncateTitleSafe = (s, n) => {
     }
 };
 
+// Normaliza un título de botón/lista para COMPARAR el clic contra la opción esperada, tolerando
+// cómo Meta/WhatsApp MUTILA un emoji que queda al final de un título de ~20 chars. Confirmado en
+// prod (chat 8116038195): el botón "SI ME QUEDA LA RUTA😄" (emoji justo en el char 20) lo devuelve
+// Meta como "SI ME QUEDA LA RUTA?" (emoji → "?"); "NO ME QUEDA LA RUTA 😭" lo devuelve SIN el emoji;
+// "TENGO CARRO 😎" (lejos del límite) lo devuelve intacto. Comparar títulos crudos era frágil.
+// Quitamos emojis/pictogramas, selectores de variación, ZWJ, surrogates sueltos (del substring
+// viejo) y el "?"/replacement final, y colapsamos espacios — así el match es robusto por ambos lados.
+const normInteractiveTitle = (s) => String(s || '')
+    .toLowerCase()
+    .replace(/[\p{Extended_Pictographic}\u{FE00}-\u{FE0F}‍]/gu, '')
+    .replace(/[\uD800-\uDFFF]/g, '')
+    .replace(/[?�\s]+$/u, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
 // Construye y ENVÍA el mensaje interactivo de un nodo 'accion_botones' (botón/lista/cta_url)
 // con header/footer/variables, lo guarda en el historial (chips + palomitas) y devuelve
 // { sendOk, options } — options = [{handle, match}] para registrar la espera del ruteo.
@@ -1592,9 +1607,9 @@ export async function resumeWaitingFlowIfMatch(candidateId, candidateSnapshot, i
             let handle = null;
             if (st.kind === 'interactive') {
                 if (!expired) {
-                    const inTxt = String(incomingText).trim().toLowerCase();
+                    const inTxt = normInteractiveTitle(incomingText);
                     const opt = (Array.isArray(st.options) ? st.options : [])
-                        .find(o => String(o.match || '').trim().toLowerCase() === inTxt);
+                        .find(o => normInteractiveTitle(o.match) === inTxt);
                     if (opt) { matched = true; handle = opt.handle; }
                     else {
                         // Escribió algo que NO es una opción y no expiró. Si el nodo tiene activado
@@ -1666,14 +1681,14 @@ export async function hasLiveInteractiveMenuFor(candidateId, clickTitle) {
         const all = await redis.hgetall(`${WAITING_PREFIX}${candidateId}`);
         if (!all || !Object.keys(all).length) return false;
         const now = Date.now();
-        const inTxt = String(clickTitle).trim().toLowerCase();
+        const inTxt = normInteractiveTitle(clickTitle);
         for (const val of Object.values(all)) {
             let st;
             try { st = JSON.parse(val); } catch { continue; }
             if (st.kind !== 'interactive') continue;
             if (st.expiresAt && now > Number(st.expiresAt)) continue; // expirado → ya no está vivo
             const options = Array.isArray(st.options) ? st.options : [];
-            if (options.some(o => String(o.match || '').trim().toLowerCase() === inTxt)) return true;
+            if (options.some(o => normInteractiveTitle(o.match) === inTxt)) return true;
         }
         return false;
     } catch {
