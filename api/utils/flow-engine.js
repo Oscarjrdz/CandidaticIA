@@ -51,32 +51,87 @@ function toAbsoluteMediaUrl(u) {
     return u;
 }
 
-// 📦 Envío de media del banco REUTILIZANDO el media_id ya cacheado en Meta (lo subió
-// media/upload.js al guardar el asset, y lo guarda en meta:image:<id>.metaMediaId).
-// Antes el flujo mandaba el LINK (/api/media/<id>.jpg), así que Meta descargaba el
-// archivo de NUESTRO servidor en cada envío — y cada descarga en frío jalaba el base64
-// de Redis o el binario del Blob. Mandar por id evita esa descarga por completo (menos
-// lecturas de Redis/Blob, menos carga, entrega más confiable). Mismo patrón ya probado
-// en chat.js para los envíos manuales y en bulks.js para los masivos (header de plantilla).
-// Si NO hay media_id cacheado, o el envío por id falla (Meta expira el media a ~30 días),
-// cae al envío por link de siempre → cero regresión.
-async function resolveCachedMetaMediaId(rawUrl) {
+// Lee los BYTES de un asset interno (med_X): primero el base64 de Redis y, si ya expiró,
+// desde Vercel Blob (almacenamiento permanente). Espejo de getInternalMediaBuffer en
+// chat.js — sin esto no se puede re-subir a Meta un asset cuyo base64 ya caducó.
+async function getFlowMediaBuffer(client, mediaId) {
+    try {
+        const b64 = await client?.get(`image:${mediaId}`);
+        if (b64) return Buffer.from(b64, 'base64');
+    } catch { /* sigue al Blob */ }
+    if (process.env.BLOB_READ_WRITE_TOKEN) {
+        try {
+            const { get } = await import('@vercel/blob');
+            const result = await get(`media/${mediaId}`, { access: 'private' });
+            if (result?.stream) return Buffer.from(await new Response(result.stream).arrayBuffer());
+        } catch { /* no está en Blob */ }
+    }
+    return null;
+}
+
+// Resuelve el media_id de Meta para un asset interno (med_X), ATADO al número emisor,
+// SUBIÉNDOLO a Meta si todavía no está cacheado para ese número.
+//
+// ⚠️ Por qué importa el ORDEN (bug confirmado, chat 8116038195, 2026-10-19): al mandar un
+// documento/imagen por LINK (/api/media/<id>.jpg), Meta descarga el archivo de NUESTRO
+// servidor de forma ASÍNCRONA y recién entonces lo entrega. Un PDF pesado tarda en bajar,
+// así que el mensaje SIGUIENTE del flujo (p.ej. los botones, que son minúsculos) se entrega
+// ANTES → el candidato ve los botones encima del PDF, al revés del orden del flujo. Si en
+// cambio mandamos por media_id, Meta YA tiene los bytes → entrega inmediata y en orden,
+// sin importar el peso. Este es el mecanismo que garantiza el orden, no una "mejora" opcional.
+//
+// Caché por número (meta.metaMediaIds[<num>]) igual que chat.js — los media_id de Meta son
+// por número emisor (multi-número); con fallback al legacy meta.metaMediaId. Solo se sube la
+// PRIMERA vez por (asset, número); después usa el id cacheado. Devuelve { mediaId, filename }
+// o null (sin id/credenciales/bytes → el llamador cae a link, cero regresión).
+async function resolveFlowMetaMediaId(config, rawUrl, type) {
     try {
         const m = /[?&]id=([^&.]+)/.exec(rawUrl || '');
         const redisMediaId = m?.[1];
         if (!redisMediaId) return null;
         const client = getRedisClient();
-        const raw = await client?.get(`meta:image:${redisMediaId}`);
-        return raw ? (JSON.parse(raw)?.metaMediaId || null) : null;
+        if (!client) return null;
+        const senderNumberId = (config?.instanceId && /^\d{10,}$/.test(String(config.instanceId)))
+            ? String(config.instanceId) : null;
+        const mediaCacheKey = senderNumberId || 'default';
+        const metaRaw = await client.get(`meta:image:${redisMediaId}`);
+        const meta = metaRaw ? JSON.parse(metaRaw) : {};
+        const filename = meta.filename || (type === 'document' ? 'documento.pdf' : 'imagen.jpg');
+        // El id POR NÚMERO es el único confiable. El `metaMediaId` singular legacy puede ser de
+        // OTRO número → Meta lo rechaza ("not a valid media attachment ID") → el envío por id
+        // falla y cae a link = justo la descarga async que desordena. Por eso NO usamos el
+        // singular para imagen/documento: si no hay id de ESTE número, subimos uno nuevo.
+        const cachedForNumber = meta.metaMediaIds?.[mediaCacheKey];
+        if (cachedForNumber) return { mediaId: cachedForNumber, filename };
+        // Solo subimos proactivamente imagen/documento (donde el peso causa el desorden).
+        // Para audio/video/sticker se conserva el comportamiento previo (id legacy o link) y
+        // así evitamos cualquier regresión de códec en notas de voz.
+        if (type !== 'image' && type !== 'document') {
+            return meta.metaMediaId ? { mediaId: meta.metaMediaId, filename } : null;
+        }
+        const buffer = await getFlowMediaBuffer(client, redisMediaId);
+        if (!buffer) return null;
+        const mimeType = meta.mime || (type === 'document' ? 'application/pdf' : 'image/jpeg');
+        const { uploadMediaToMeta } = await import('../whatsapp/utils.js');
+        const up = await uploadMediaToMeta(buffer, mimeType, filename, senderNumberId);
+        if (!up?.mediaId) return null;
+        meta.metaMediaIds = { ...(meta.metaMediaIds || {}), [mediaCacheKey]: up.mediaId };
+        client.set(`meta:image:${redisMediaId}`, JSON.stringify(meta)).catch(() => {}); // cachea para la próxima
+        return { mediaId: up.mediaId, filename };
     } catch { return null; } // best-effort: ante cualquier fallo se usa el link
 }
 
 async function sendFlowMediaById(config, to, rawUrl, type, extraParams = {}) {
     const absUrl = toAbsoluteMediaUrl(rawUrl);
-    const mediaId = await resolveCachedMetaMediaId(rawUrl);
+    const resolved = await resolveFlowMetaMediaId(config, rawUrl, type);
 
-    if (mediaId) {
-        const byId = await sendUltraMsgMessageWithRetry(config.instanceId, config.token, to, absUrl, type, { ...extraParams, mediaId });
+    if (resolved?.mediaId) {
+        const extra = {
+            ...extraParams,
+            mediaId: resolved.mediaId,
+            ...(type === 'document' && !extraParams.filename ? { filename: resolved.filename } : {})
+        };
+        const byId = await sendUltraMsgMessageWithRetry(config.instanceId, config.token, to, absUrl, type, extra);
         if (byId?.success) return byId;
         // media_id inválido/expirado → reintenta por link (Meta lo re-descarga una vez; el CDN lo cachea 1 año)
     }
@@ -407,12 +462,10 @@ async function sendInteractiveNode(redis, node, candidate, flowId, opts = {}, pr
     const header = (data.header && data.header.type && data.header.type !== 'none')
         ? { ...data.header, ...(data.header.text ? { text: substituteVariables(data.header.text, candidate) } : {}) }
         : null;
-    // Header multimedia (imagen/video/documento): reutiliza el media_id cacheado en Meta
-    // para no mandar el link y evitar que Meta descargue el archivo de nuestro servidor.
-    if (header && ['image', 'video', 'document'].includes(header.type) && !header.mediaId && header.mediaUrl) {
-        const cachedId = await resolveCachedMetaMediaId(header.mediaUrl);
-        if (cachedId) header.mediaId = cachedId;
-    }
+    // Header multimedia (imagen/video/documento): se resuelve a media_id más abajo, una vez
+    // que tenemos el `config` (número emisor), para subirlo a Meta si hace falta (ver el
+    // bloque tras getUltraMsgConfig). `extra.header` apunta a este mismo objeto, así que
+    // mutar header.mediaId antes del envío basta para que viaje por id en vez de link.
     const footer = data.footer?.trim() ? substituteVariables(data.footer, candidate) : '';
 
     // Opciones VIGENTES (descarta las vencidas por `expiresAt`). Se calculan una sola vez y se
@@ -465,6 +518,12 @@ async function sendInteractiveNode(redis, node, candidate, flowId, opts = {}, pr
     try {
         const config = await getUltraMsgConfig(candidate.incomingPhoneNumberId || candidate.instanceId);
         if (!config?.token || !config?.instanceId) throw new Error('sin credenciales de WhatsApp');
+        // Header multimedia → media_id (sube a Meta si no está cacheado para este número).
+        // Mutar header.mediaId aquí se refleja en extra.header (misma referencia).
+        if (header && ['image', 'video', 'document'].includes(header.type) && !header.mediaId && header.mediaUrl) {
+            const resolvedHeader = await resolveFlowMetaMediaId(config, header.mediaUrl, header.type);
+            if (resolvedHeader?.mediaId) header.mediaId = resolvedHeader.mediaId;
+        }
         const cleanTo = String(candidate.whatsapp).replace(/\D/g, '');
         const sendResult = await pacedSend(opts, () => sendUltraMsgMessageWithRetry(config.instanceId, config.token, cleanTo, bodyText, 'interactive', extra));
         if (sendResult?.success) {
