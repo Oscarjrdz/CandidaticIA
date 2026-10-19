@@ -402,6 +402,14 @@ const FlowNode = ({ id, type, data, selected }) => {
                 <span className={`text-xs font-semibold ${colors.text}`}>{def.label}</span>
             </div>
 
+            {/* Nombre personalizado del nodo (data.customName): alias visible para
+                identificarlo rápido (p. ej. al pedirle cambios a Grok). */}
+            {data.customName?.trim() && (
+                <p className="px-3 pt-1 text-[13px] font-bold text-gray-900 dark:text-white truncate" title={data.customName}>
+                    {data.customName}
+                </p>
+            )}
+
             {isTest ? (
                 <TestNodeBody id={id} data={data} colors={colors} />
             ) : isInicioLista ? (

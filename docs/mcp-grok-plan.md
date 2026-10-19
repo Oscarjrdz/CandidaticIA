@@ -158,6 +158,8 @@ Acceso total a la sección de Flujos. **Todas pasan por `/api/flows` vía `callI
 
 > **Regla de oro al editar nodos (`guardar_flujo`):** nodos y aristas **NO se fusionan** — se sustituye el arreglo entero (igual que el PUT del front). Flujo de trabajo obligado: `ver_flujo` → modificar el arreglo → `guardar_flujo` con el arreglo COMPLETO. Consultar `ver_catalogos_flujos` antes de poner valores de municipio/categoría/etiqueta/vacante para no dejar nodos inválidos.
 
+> **Nombre personalizado de nodo (`data.customName`):** cualquier nodo puede llevar un alias libre (ej. "Botones de fecha Metalsa"), editable desde el drawer del editor (campo "Nombre del nodo", arriba de todo) y visible en el nodo del lienzo. Es **solo etiqueta** — el motor lo ignora, no cambia el comportamiento. `ver_flujo` lo surtea en el campo `indice: [{nodeId, tipo, nombre}]` para que Grok ubique un nodo por su nombre cuando el usuario dice "en el nodo X cambia tal cosa"; para ponerlo/cambiarlo, Grok edita `node.data.customName` y guarda con `guardar_flujo`. No confundir con `data.name` (Check Point) ni `data.label` (Contador), que son campos propios de esos tipos.
+
 **Paginación/campos (todas las listas):** `limit` (default 50, máx 500) + `offset` → respuesta con `total`/`offset`/`hayMas`; `todos:true` (tope ~3000) y `campos:[]` para elegir columnas.
 
 ---

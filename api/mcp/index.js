@@ -1174,7 +1174,7 @@ const TOOLS = {
     },
 
     ver_flujo: {
-        description: 'Devuelve un flujo COMPLETO: nombre, activo, y los arreglos nodes y edges tal cual se guardan (cada nodo con su id, type, position y data). Léelo antes de editar: para guardar cambios con guardar_flujo debes mandar el arreglo nodes/edges completo ya modificado.',
+        description: 'Devuelve un flujo COMPLETO: nombre, activo, los arreglos nodes y edges tal cual se guardan (cada nodo con su id, type, position y data), más un "indice" liviano [{nodeId, tipo, nombre}] para ubicar un nodo por su nombre personalizado (data.customName, p. ej. "Botones de fecha Metalsa"). Léelo antes de editar: para guardar cambios con guardar_flujo debes mandar el arreglo nodes/edges completo ya modificado.',
         inputSchema: {
             type: 'object',
             properties: { flujoId: { type: 'string', description: 'ID del flujo (de listar_flujos).' } },
@@ -1188,11 +1188,15 @@ const TOOLS = {
             if (!r.ok || r.data?.success === false) throw new Error(r.data?.error || `Fallo al leer el flujo (${r.status})`);
             const f = r.data?.flow;
             if (!f) throw new Error('Flujo no encontrado');
+            const nodes = Array.isArray(f.nodes) ? f.nodes : [];
             return {
                 id: f.id,
                 nombre: f.name || null,
                 activo: !!f.active,
-                nodes: Array.isArray(f.nodes) ? f.nodes : [],
+                // Índice liviano para localizar un nodo por su nombre personalizado o su tipo
+                // sin tener que escanear el arreglo nodes completo.
+                indice: nodes.map(n => ({ nodeId: n.id, tipo: n.type, nombre: (n.data?.customName || '').trim() || null })),
+                nodes,
                 edges: Array.isArray(f.edges) ? f.edges : [],
                 creado: f.createdAt || null,
                 actualizado: f.updatedAt || null,
@@ -1239,7 +1243,7 @@ const TOOLS = {
     },
 
     guardar_flujo: {
-        description: 'Guarda cambios en un flujo. Puedes cambiar nombre, activo (true/false) y/o reemplazar por COMPLETO los arreglos nodes y edges. Los nodos/aristas NO se fusionan: se sustituye el arreglo entero, así que primero lee con ver_flujo, modifica el arreglo y mándalo completo. Activar un flujo lo pone en vivo para los candidatos.',
+        description: 'Guarda cambios en un flujo. Puedes cambiar nombre, activo (true/false) y/o reemplazar por COMPLETO los arreglos nodes y edges. Los nodos/aristas NO se fusionan: se sustituye el arreglo entero, así que primero lee con ver_flujo, modifica el arreglo y mándalo completo. Para ponerle o cambiar el nombre a un nodo, edita su data.customName (es solo una etiqueta; no cambia el comportamiento del nodo). Activar un flujo lo pone en vivo para los candidatos.',
         inputSchema: {
             type: 'object',
             properties: {

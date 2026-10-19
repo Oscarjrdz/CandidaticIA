@@ -717,6 +717,22 @@ const NodeConfigDrawer = ({ node, flowId, meta, quickReplies, reminderTemplates,
             </div>
 
             <div className="flex-1 overflow-y-auto p-5">
+                {/* Nombre personalizado del nodo — aplica a CUALQUIER tipo. Sirve de alias
+                    para referirse a este nodo (ej. decirle a Grok "el nodo X cambia tal").
+                    Vive en data.customName; el motor lo ignora (es solo etiqueta). */}
+                <div className="mb-5 pb-5 border-b border-gray-100 dark:border-gray-700">
+                    <label className="text-xs text-gray-500 dark:text-gray-400 mb-1.5 block">Nombre del nodo (opcional)</label>
+                    <input
+                        type="text"
+                        maxLength={60}
+                        value={data.customName || ''}
+                        onChange={(e) => patch({ customName: e.target.value })}
+                        placeholder={`Ej. “Botones de fecha Metalsa”`}
+                        className={inputCls}
+                    />
+                    <p className="text-[11px] text-gray-400 mt-1.5">Un alias para identificar este nodo (p. ej. al pedirle cambios a Grok). No cambia su comportamiento.</p>
+                </div>
+
                 {node.type === 'inicio' && (() => {
                     const trigger = (Array.isArray(data.trigger) && data.trigger.length) ? data.trigger : ['al_completar'];
                     const toggleTrigger = (val) => {
