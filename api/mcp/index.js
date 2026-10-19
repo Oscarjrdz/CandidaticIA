@@ -16,8 +16,10 @@
  *     (se genera/rota desde Configuración → WhatsApp). Sin token válido → 401.
  *   - Kill switch: `mcp:enabled` en Redis. Si no está encendido → se rechaza todo.
  *
- * FASE 1 = SOLO LECTURA (14 tools). Las de escritura se agregan después.
- * Plan completo: docs/mcp-grok-plan.md
+ * Tools: lectura + escritura de Chat Web, analítica, CRM Manual (Proyectos) y la
+ * sección completa de Flujos (ver/crear/editar/borrar flujos y nodos + métricas y
+ * ejecución). Las de escritura llaman a los endpoints reales vía callInternal.
+ * Plan y lista completa de tools: docs/mcp-grok-plan.md
  */
 
 import { randomBytes } from 'crypto';
@@ -1140,6 +1142,335 @@ const TOOLS = {
             const r = await callInternal(req, redis, `/api/manual_projects?id=${encodeURIComponent(projectId)}`, 'DELETE');
             if (!r.ok || r.data?.success === false) throw new Error(r.data?.error || `Fallo al eliminar proyecto (${r.status})`);
             return { projectId, eliminado: true };
+        }
+    },
+
+    // ───────────────────── FLUJOS (editor de flujos / nodos) ─────────────────────
+    // Acceso completo a la sección de Flujos. Todas pasan por /api/flows vía
+    // callInternal, así heredan la auth de SuperAdmin y los side-effects del endpoint
+    // (activatedAt al activar, limpieza de contadores/exec-set al borrar, invalidación
+    // de caché). No reimplementan nada de flows.js.
+
+    listar_flujos: {
+        description: 'Lista TODOS los flujos (resumen). Devuelve id, nombre, si está activo, cuántos nodos/aristas tiene y los tipos de nodo. Usa ver_flujo para traer los nodos completos de uno.',
+        inputSchema: { type: 'object', properties: {} },
+        handler: async (_args, { redis, req }) => {
+            const r = await callInternal(req, redis, '/api/flows', 'GET');
+            if (!r.ok || r.data?.success === false) throw new Error(r.data?.error || `Fallo al listar flujos (${r.status})`);
+            const flows = Array.isArray(r.data?.flows) ? r.data.flows : [];
+            return {
+                total: flows.length,
+                flujos: flows.map(f => ({
+                    id: f.id,
+                    nombre: f.name || 'Flujo sin nombre',
+                    activo: !!f.active,
+                    numNodos: Array.isArray(f.nodes) ? f.nodes.length : 0,
+                    numAristas: Array.isArray(f.edges) ? f.edges.length : 0,
+                    tiposDeNodo: Array.from(new Set((f.nodes || []).map(n => n.type).filter(Boolean))),
+                    actualizado: f.updatedAt || null
+                }))
+            };
+        }
+    },
+
+    ver_flujo: {
+        description: 'Devuelve un flujo COMPLETO: nombre, activo, y los arreglos nodes y edges tal cual se guardan (cada nodo con su id, type, position y data). Léelo antes de editar: para guardar cambios con guardar_flujo debes mandar el arreglo nodes/edges completo ya modificado.',
+        inputSchema: {
+            type: 'object',
+            properties: { flujoId: { type: 'string', description: 'ID del flujo (de listar_flujos).' } },
+            required: ['flujoId']
+        },
+        handler: async (args, { redis, req }) => {
+            const id = String(args?.flujoId || '').trim();
+            if (!id) throw new Error('Falta flujoId');
+            const r = await callInternal(req, redis, `/api/flows?id=${encodeURIComponent(id)}`, 'GET');
+            if (r.status === 404) throw new Error('Flujo no encontrado');
+            if (!r.ok || r.data?.success === false) throw new Error(r.data?.error || `Fallo al leer el flujo (${r.status})`);
+            const f = r.data?.flow;
+            if (!f) throw new Error('Flujo no encontrado');
+            return {
+                id: f.id,
+                nombre: f.name || null,
+                activo: !!f.active,
+                nodes: Array.isArray(f.nodes) ? f.nodes : [],
+                edges: Array.isArray(f.edges) ? f.edges : [],
+                creado: f.createdAt || null,
+                actualizado: f.updatedAt || null,
+                activadoEn: f.activatedAt || null
+            };
+        }
+    },
+
+    ver_catalogos_flujos: {
+        description: 'Devuelve los valores válidos para configurar nodos: municipios de Nuevo León, categorías, escolaridades, etiquetas y vacantes (con id y nombre). Consúltalo antes de editar la data de un nodo para no poner valores inválidos.',
+        inputSchema: { type: 'object', properties: {} },
+        handler: async (_args, { redis, req }) => {
+            const r = await callInternal(req, redis, '/api/flows?meta=1', 'GET');
+            if (!r.ok || r.data?.success === false) throw new Error(r.data?.error || `Fallo al leer catálogos (${r.status})`);
+            return {
+                municipios: r.data?.municipios || [],
+                categorias: r.data?.categorias || [],
+                escolaridades: r.data?.escolaridades || [],
+                etiquetas: r.data?.tags || [],
+                vacantes: r.data?.vacantes || []
+            };
+        }
+    },
+
+    crear_flujo: {
+        description: 'Crea un flujo NUEVO (vacío, inactivo) con solo su nodo inicial. tipoRaiz="estandar" (en vivo, arranca con nodo Inicio), "lista" (manual, sobre una lista filtrada) o "incompletos" (incompletos en silencio por cron). Después usa ver_flujo + guardar_flujo para armar los nodos.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                nombre: { type: 'string', description: 'Nombre del flujo.' },
+                tipoRaiz: { type: 'string', enum: ['estandar', 'lista', 'incompletos'], description: 'Tipo de nodo raíz (default "estandar").' }
+            },
+            required: ['nombre']
+        },
+        handler: async (args, { redis, req }) => {
+            const nombre = String(args?.nombre || '').trim();
+            if (!nombre) throw new Error('Falta el nombre del flujo');
+            const rootType = args?.tipoRaiz === 'lista' ? 'lista' : args?.tipoRaiz === 'incompletos' ? 'incompletos' : 'estandar';
+            const r = await callInternal(req, redis, '/api/flows', 'POST', { name: nombre, rootType });
+            if (!r.ok || r.data?.success === false) throw new Error(r.data?.error || `Fallo al crear el flujo (${r.status})`);
+            const f = r.data?.flow;
+            return { flujoId: f?.id || null, nombre: f?.name || nombre, activo: !!f?.active, creado: true };
+        }
+    },
+
+    guardar_flujo: {
+        description: 'Guarda cambios en un flujo. Puedes cambiar nombre, activo (true/false) y/o reemplazar por COMPLETO los arreglos nodes y edges. Los nodos/aristas NO se fusionan: se sustituye el arreglo entero, así que primero lee con ver_flujo, modifica el arreglo y mándalo completo. Activar un flujo lo pone en vivo para los candidatos.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                flujoId: { type: 'string', description: 'ID del flujo a guardar.' },
+                nombre: { type: 'string', description: 'Nuevo nombre (opcional).' },
+                activo: { type: 'boolean', description: 'true = activar (ponerlo en vivo), false = desactivar (opcional).' },
+                nodes: { type: 'array', items: { type: 'object' }, description: 'Arreglo COMPLETO de nodos (reemplaza el actual). Cada nodo: {id, type, position:{x,y}, data:{...}}.' },
+                edges: { type: 'array', items: { type: 'object' }, description: 'Arreglo COMPLETO de aristas/conexiones (reemplaza el actual).' }
+            },
+            required: ['flujoId']
+        },
+        handler: async (args, { redis, req }) => {
+            const id = String(args?.flujoId || '').trim();
+            if (!id) throw new Error('Falta flujoId');
+            const body = {};
+            if (args?.nombre !== undefined) body.name = String(args.nombre);
+            if (args?.activo !== undefined) {
+                if (typeof args.activo !== 'boolean') throw new Error('activo debe ser true o false');
+                body.active = args.activo;
+            }
+            if (args?.nodes !== undefined) {
+                if (!Array.isArray(args.nodes)) throw new Error('nodes debe ser un arreglo');
+                body.nodes = args.nodes;
+            }
+            if (args?.edges !== undefined) {
+                if (!Array.isArray(args.edges)) throw new Error('edges debe ser un arreglo');
+                body.edges = args.edges;
+            }
+            if (Object.keys(body).length === 0) throw new Error('Nada que guardar: manda nombre, activo, nodes y/o edges');
+
+            const r = await callInternal(req, redis, `/api/flows?id=${encodeURIComponent(id)}`, 'PUT', body);
+            if (r.status === 404) throw new Error('Flujo no encontrado');
+            if (!r.ok || r.data?.success === false) throw new Error(r.data?.error || `Fallo al guardar el flujo (${r.status})`);
+            const f = r.data?.flow;
+            return {
+                flujoId: f?.id || id,
+                nombre: f?.name || null,
+                activo: !!f?.active,
+                numNodos: Array.isArray(f?.nodes) ? f.nodes.length : 0,
+                numAristas: Array.isArray(f?.edges) ? f.edges.length : 0,
+                guardado: true
+            };
+        }
+    },
+
+    eliminar_flujo: {
+        description: 'ELIMINA un flujo completo (y sus contadores/registros de ejecución). Es destructivo e irreversible. Pide confirmación al usuario antes de usarlo.',
+        inputSchema: {
+            type: 'object',
+            properties: { flujoId: { type: 'string', description: 'ID del flujo a eliminar.' } },
+            required: ['flujoId']
+        },
+        handler: async (args, { redis, req }) => {
+            const id = String(args?.flujoId || '').trim();
+            if (!id) throw new Error('Falta flujoId');
+            const r = await callInternal(req, redis, `/api/flows?id=${encodeURIComponent(id)}`, 'DELETE');
+            if (r.status === 404) throw new Error('Flujo no encontrado');
+            if (!r.ok || r.data?.success === false) throw new Error(r.data?.error || `Fallo al eliminar el flujo (${r.status})`);
+            return { flujoId: id, eliminado: true };
+        }
+    },
+
+    ver_contadores_flujo: {
+        description: 'Métricas de los nodos "contador" de un flujo: cuántos candidatos pasaron por cada uno, con desglose total/hoy/ayer/estaSemana/esteMes. Devuelve {} si el flujo no tiene nodos contador.',
+        inputSchema: {
+            type: 'object',
+            properties: { flujoId: { type: 'string', description: 'ID del flujo.' } },
+            required: ['flujoId']
+        },
+        handler: async (args, { redis, req }) => {
+            const id = String(args?.flujoId || '').trim();
+            if (!id) throw new Error('Falta flujoId');
+            const r = await callInternal(req, redis, `/api/flows?id=${encodeURIComponent(id)}&mode=counters`, 'GET');
+            if (r.status === 404) throw new Error('Flujo no encontrado');
+            if (!r.ok || r.data?.success === false) throw new Error(r.data?.error || `Fallo al leer contadores (${r.status})`);
+            return { flujoId: id, contadores: r.data?.counters || {} };
+        }
+    },
+
+    ver_rango_contador: {
+        description: 'Cuántos candidatos pasaron por UN nodo contador en un rango de fechas personalizado (inclusive ambos extremos, zona Monterrey). from/to en formato YYYY-MM-DD.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                flujoId: { type: 'string', description: 'ID del flujo.' },
+                nodeId: { type: 'string', description: 'ID del nodo contador (de ver_flujo).' },
+                desde: { type: 'string', description: 'Fecha inicial YYYY-MM-DD (Monterrey).' },
+                hasta: { type: 'string', description: 'Fecha final YYYY-MM-DD (Monterrey).' }
+            },
+            required: ['flujoId', 'nodeId', 'desde', 'hasta']
+        },
+        handler: async (args, { redis, req }) => {
+            const id = String(args?.flujoId || '').trim();
+            const nodeId = String(args?.nodeId || '').trim();
+            const from = String(args?.desde || '').trim();
+            const to = String(args?.hasta || '').trim();
+            if (!id || !nodeId) throw new Error('Faltan flujoId o nodeId');
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to)) throw new Error('desde/hasta deben ser YYYY-MM-DD');
+            const qs = `id=${encodeURIComponent(id)}&mode=counter_range&nodeId=${encodeURIComponent(nodeId)}&from=${from}&to=${to}`;
+            const r = await callInternal(req, redis, `/api/flows?${qs}`, 'GET');
+            if (!r.ok || r.data?.success === false) throw new Error(r.data?.error || `Fallo al leer el rango (${r.status})`);
+            return { flujoId: id, nodeId, desde: from, hasta: to, total: r.data?.count || 0 };
+        }
+    },
+
+    ver_metricas_etiqueta_flujos: {
+        description: 'Tablero de altas (perfiles capturados) por ETIQUETA en un rango. rango="hoy" (default), "ayer", "semana", "mes", o manda desde/hasta (YYYY-MM-DD) para un rango exacto. Devuelve el conteo por etiqueta, el total y los sin etiqueta.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                rango: { type: 'string', enum: ['hoy', 'ayer', 'semana', 'mes'], description: 'Rango predefinido (ignóralo si usas desde/hasta).' },
+                desde: { type: 'string', description: 'Fecha inicial YYYY-MM-DD (opcional, para rango exacto).' },
+                hasta: { type: 'string', description: 'Fecha final YYYY-MM-DD (opcional).' }
+            }
+        },
+        handler: async (args, { redis, req }) => {
+            const params = new URLSearchParams({ mode: 'tag_metrics' });
+            if (args?.rango) params.set('rango', String(args.rango));
+            if (args?.desde) params.set('desde', String(args.desde));
+            if (args?.hasta) params.set('hasta', String(args.hasta));
+            const r = await callInternal(req, redis, `/api/flows?${params.toString()}`, 'GET');
+            if (!r.ok || r.data?.success === false) throw new Error(r.data?.error || `Fallo al leer métricas (${r.status})`);
+            return {
+                periodo: r.data?.label || null,
+                metricas: r.data?.metrics || {},
+                total: r.data?.total || 0,
+                sinEtiqueta: r.data?.untagged || 0
+            };
+        }
+    },
+
+    listar_checkpoints_flujos: {
+        description: 'Lista TODOS los Check Points de TODOS los flujos (flowId, nombre del flujo, nodeId y nombre del check point). Sirve para configurar nodos "Condición: Check Point" o el perfil de prueba.',
+        inputSchema: { type: 'object', properties: {} },
+        handler: async (_args, { redis, req }) => {
+            const r = await callInternal(req, redis, '/api/flows?mode=checkpoints', 'GET');
+            if (!r.ok || r.data?.success === false) throw new Error(r.data?.error || `Fallo al listar check points (${r.status})`);
+            return { checkpoints: r.data?.checkpoints || [] };
+        }
+    },
+
+    ver_candidatos_lista_flujo: {
+        description: 'Para un flujo de tipo LISTA (manual): devuelve los candidatos que caen en su lista filtrada y si ya se les corrió el flujo (executed). Filtra por perfil ("todos"/"completo"/"incompleto"), etiquetas y ventana de 24h. Usa los ids con correr_flujo_candidato.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                flujoId: { type: 'string', description: 'ID del flujo (de tipo lista).' },
+                perfil: { type: 'string', enum: ['todos', 'completo', 'incompleto'], description: 'Filtro de perfil (default "todos").' },
+                etiquetas: { type: 'array', items: { type: 'string' }, description: 'Etiquetas a exigir (opcional).' },
+                dentro24h: { type: 'boolean', description: 'true = solo los que escribieron en las últimas 24h.' }
+            },
+            required: ['flujoId']
+        },
+        handler: async (args, { redis, req }) => {
+            const id = String(args?.flujoId || '').trim();
+            if (!id) throw new Error('Falta flujoId');
+            const params = new URLSearchParams({ id, mode: 'filtered_candidates' });
+            params.set('profileFilter', args?.perfil === 'completo' || args?.perfil === 'incompleto' ? args.perfil : 'todos');
+            if (Array.isArray(args?.etiquetas) && args.etiquetas.length) params.set('tags', args.etiquetas.join(','));
+            if (args?.dentro24h) params.set('within24h', '1');
+            const r = await callInternal(req, redis, `/api/flows?${params.toString()}`, 'GET');
+            if (r.status === 404) throw new Error('Flujo no encontrado');
+            if (!r.ok || r.data?.success === false) throw new Error(r.data?.error || `Fallo al leer candidatos (${r.status})`);
+            const candidatos = Array.isArray(r.data?.candidates) ? r.data.candidates : [];
+            return {
+                flujoId: id,
+                total: r.data?.total || candidatos.length,
+                candidatos: candidatos.map(c => ({
+                    candidateId: c.id,
+                    nombre: (c.nombreReal && c.nombreReal.trim()) || c.nombre || 'Sin nombre',
+                    telefono: c.whatsapp || null,
+                    yaCorrido: c.executed === true
+                }))
+            };
+        }
+    },
+
+    probar_flujo: {
+        description: 'Prueba un flujo contra un número real SIN tocar ni persistir al candidato (perfil temporal en memoria). Los mensajes de prueba SÍ se envían a ese WhatsApp. perfil="completo" o "incompleto"; opcionalmente etiquetas, vacanteActual, checkpoints ya pasados [{flowId,nodeId}] y opcionMenu (título del botón/fila a simular, o "timeout"). Devuelve si el candidato de prueba pasó el filtro de entrada.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                flujoId: { type: 'string', description: 'ID del flujo a probar.' },
+                whatsapp: { type: 'string', description: 'Número de WhatsApp real para la prueba (recibirá los mensajes).' },
+                perfil: { type: 'string', enum: ['completo', 'incompleto'], description: 'Perfil temporal (default "completo").' },
+                etiquetas: { type: 'array', items: { type: 'string' }, description: 'Etiquetas del perfil de prueba.' },
+                vacanteActual: { type: 'string', description: 'Vacante actual simulada.' },
+                checkpoints: { type: 'array', items: { type: 'object' }, description: 'Check points ya pasados: [{flowId, nodeId}].' },
+                opcionMenu: { type: 'string', description: 'Opción de menú a simular (título exacto del botón/fila, o "timeout").' }
+            },
+            required: ['flujoId', 'whatsapp']
+        },
+        handler: async (args, { redis, req }) => {
+            const id = String(args?.flujoId || '').trim();
+            const whatsapp = String(args?.whatsapp || '').trim();
+            if (!id) throw new Error('Falta flujoId');
+            if (!whatsapp) throw new Error('Falta whatsapp');
+            const testProfile = {
+                perfil: args?.perfil === 'incompleto' ? 'incompleto' : 'completo',
+                tags: Array.isArray(args?.etiquetas) ? args.etiquetas : [],
+                vacanteActual: args?.vacanteActual ? String(args.vacanteActual) : '',
+                checkpoints: Array.isArray(args?.checkpoints) ? args.checkpoints : [],
+                simulatedOption: args?.opcionMenu ? String(args.opcionMenu) : ''
+            };
+            const r = await callInternal(req, redis, `/api/flows?id=${encodeURIComponent(id)}`, 'POST', { action: 'test', whatsapp, testProfile });
+            if (r.status === 404) throw new Error('Flujo no encontrado');
+            if (!r.ok || r.data?.success === false) throw new Error(r.data?.error || `Fallo al probar el flujo (${r.status})`);
+            return { flujoId: id, whatsapp, perfilProbado: r.data?.candidate?.nombre || null, paso: r.data?.passed === true };
+        }
+    },
+
+    correr_flujo_candidato: {
+        description: 'Corre un flujo de tipo LISTA (manual) sobre UN candidato concreto (le envía los mensajes del flujo). Por defecto no lo vuelve a correr si ya se le corrió; usa forzar=true para correrlo de nuevo. Usa ver_candidatos_lista_flujo para obtener los candidateId.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                flujoId: { type: 'string', description: 'ID del flujo (de tipo lista).' },
+                candidateId: { type: 'string', description: 'ID del candidato.' },
+                forzar: { type: 'boolean', description: 'true = correrlo aunque ya se le haya corrido antes.' }
+            },
+            required: ['flujoId', 'candidateId']
+        },
+        handler: async (args, { redis, req }) => {
+            const id = String(args?.flujoId || '').trim();
+            const candidateId = String(args?.candidateId || '').trim();
+            if (!id) throw new Error('Falta flujoId');
+            if (!candidateId) throw new Error('Falta candidateId');
+            const r = await callInternal(req, redis, `/api/flows?id=${encodeURIComponent(id)}`, 'POST', { action: 'run_list_item', candidateId, force: args?.forzar === true });
+            if (r.status === 404) throw new Error('Flujo o candidato no encontrado');
+            if (!r.ok || r.data?.success === false) throw new Error(r.data?.error || `Fallo al correr el flujo (${r.status})`);
+            return { flujoId: id, candidateId, yaEstabaCorrido: r.data?.alreadyExecuted === true };
         }
     }
 };

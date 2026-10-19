@@ -129,6 +129,35 @@ La lista fue acordada con el usuario. Divididas por grupo. En cada una se anota 
 
 > Crear/eliminar proyectos y editar pasos exigen SuperAdmin por RBAC → la sesión de sistema de `callInternal` se identifica como un SuperAdmin real (`getSystemUserId`).
 
+### Flujos — editor completo (2026-10-18)
+
+Acceso total a la sección de Flujos. **Todas pasan por `/api/flows` vía `callInternal`**, así que heredan la auth de SuperAdmin y **todos los side-effects del endpoint** (al activar un flujo: `activatedAt` + se borran contadores de la campaña de incompletos; al borrar: limpieza de exec-set, contadores y hashes de silencio; invalidación de caché). **No reimplementan nada de `flows.js`** — si la lógica del endpoint cambia, estas tools la heredan sola.
+
+**CRUD del contenido:**
+
+| Tool | Qué hace | Se apoya en |
+|------|----------|-------------|
+| `listar_flujos` | Resumen de todos: id, nombre, activo, # nodos/aristas, tipos de nodo, actualizado | `GET /api/flows` |
+| `ver_flujo` | Flujo completo: arreglos `nodes` y `edges` tal cual se guardan (id, type, position, data) | `GET /api/flows?id=` |
+| `ver_catalogos_flujos` | Valores válidos para configurar nodos: municipios, categorías, escolaridades, etiquetas, vacantes (id+nombre) | `GET /api/flows?meta=1` |
+| `crear_flujo` | Crea flujo nuevo vacío. `tipoRaiz`: `estandar` / `lista` / `incompletos` | `POST /api/flows` |
+| `guardar_flujo` | Edita `nombre`, `activo`, y/o **reemplaza por completo** `nodes` y `edges` | `PUT /api/flows?id=` |
+| `eliminar_flujo` | Borra flujo completo (destructivo) | `DELETE /api/flows?id=` |
+
+**Métricas y ejecución (auxiliares):**
+
+| Tool | Qué hace | Se apoya en |
+|------|----------|-------------|
+| `ver_contadores_flujo` | Nodos "contador": pasos por nodo con desglose total/hoy/ayer/estaSemana/esteMes | `GET …&mode=counters` |
+| `ver_rango_contador` | Pasos por UN nodo contador en rango `desde`/`hasta` (YYYY-MM-DD, Monterrey) | `GET …&mode=counter_range` |
+| `ver_metricas_etiqueta_flujos` | Altas por etiqueta en `rango` (hoy/ayer/semana/mes) o `desde`/`hasta` | `GET …&mode=tag_metrics` |
+| `listar_checkpoints_flujos` | Todos los Check Points de todos los flujos (flowId/nodeId/nombre) | `GET …&mode=checkpoints` |
+| `ver_candidatos_lista_flujo` | Flujo tipo LISTA: candidatos de la lista filtrada + flag `yaCorrido` | `GET …&mode=filtered_candidates` |
+| `probar_flujo` | Prueba contra un WhatsApp real con perfil temporal (NO persiste al candidato; los mensajes SÍ se envían) | `POST …{action:'test'}` |
+| `correr_flujo_candidato` | Corre un flujo LISTA sobre UN candidato (le envía los mensajes); `forzar` re-corre | `POST …{action:'run_list_item'}` |
+
+> **Regla de oro al editar nodos (`guardar_flujo`):** nodos y aristas **NO se fusionan** — se sustituye el arreglo entero (igual que el PUT del front). Flujo de trabajo obligado: `ver_flujo` → modificar el arreglo → `guardar_flujo` con el arreglo COMPLETO. Consultar `ver_catalogos_flujos` antes de poner valores de municipio/categoría/etiqueta/vacante para no dejar nodos inválidos.
+
 **Paginación/campos (todas las listas):** `limit` (default 50, máx 500) + `offset` → respuesta con `total`/`offset`/`hayMas`; `todos:true` (tope ~3000) y `campos:[]` para elegir columnas.
 
 ---
