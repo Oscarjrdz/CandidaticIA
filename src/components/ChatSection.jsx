@@ -131,6 +131,24 @@ const getSelectedTagValues = (value) => (
             : []
 );
 
+// ¿El candidato pasa el filtro de etiquetas activo? Mismo criterio exacto que el bloque
+// de etiquetas en filteredCandidates. Sin etiqueta seleccionada → siempre true (no acota).
+// Se usa para que el bubble-up del SSE NO inyecte candidatos que no tienen la etiqueta: con
+// una etiqueta activa, casi todos los mensajes del inbox son de candidatos sin esa etiqueta,
+// y inyectarlos hinchaba `candidates` sin límite → re-filtrado/re-orden en cada mensaje →
+// temblor de tarjetas y del chat. Con esto `candidates` se mantiene en solo los etiquetados.
+const candidateMatchesTagFilter = (candidate, selectedTagValues) => {
+    if (!selectedTagValues || selectedTagValues.length === 0) return true;
+    const tagNames = Array.isArray(candidate?.tags)
+        ? candidate.tags.map(t => (typeof t === 'string' ? t : (t?.name || '')).trim()).filter(Boolean)
+        : [];
+    const normalizedNames = tagNames.map(n => n.toLowerCase());
+    return selectedTagValues.some(tagValue => {
+        if (tagValue === UNTAGGED_TAG_FILTER) return tagNames.length === 0;
+        return normalizedNames.includes(tagValue.trim().toLowerCase());
+    });
+};
+
 const formatTagLabel = (value) => {
     if (value === UNTAGGED_TAG_FILTER) return UNTAGGED_TAG_LABEL;
     return toTitleCase(value);
@@ -3766,6 +3784,14 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                     .then(res => {
                         if (res.success && res.candidate) {
                             if (recentlyDeletedRef.current.has(res.candidate.id)) return;
+                            // 🛡️ Bubble-up consciente del filtro de etiquetas: con una etiqueta
+                            // activa, inyectar candidatos que NO la tienen hinchaba `candidates`
+                            // sin límite (casi todo el inbox) → re-filtrado/re-orden en cada
+                            // mensaje → temblor de tarjetas y del chat. Si el candidato no pasa
+                            // el filtro activo, no se inyecta (tampoco se vería: filteredCandidates
+                            // lo oculta). Un etiquetado que sí aplica sigue apareciendo al tope.
+                            const activeTagValues = getSelectedTagValues(selectedTagRef.current);
+                            if (!candidateMatchesTagFilter(res.candidate, activeTagValues)) return;
                             setCandidates(prev => {
                                 if (prev.some(c => c.id === res.candidate.id)) return prev;
                                 return [res.candidate, ...prev];
