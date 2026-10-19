@@ -211,6 +211,51 @@ function dentroVentana24h(candidate) {
     return Number.isFinite(t) && (Date.now() - t) < 24 * 60 * 60 * 1000;
 }
 
+// Etiqueta legible por tipo de nodo de Flujos — espejo de `label` en
+// src/components/flows/nodeTypes/nodeDefs.js (lo que el reclutador ve en el canvas).
+// Sirve para que el MCP le dé a Grok el MISMO nombre que ve un humano, no el `type` crudo.
+// Si agregas un tipo de nodo nuevo en nodeDefs.js, agrégalo también aquí.
+const NODE_TYPE_LABELS = {
+    inicio: 'Inicio',
+    inicio_lista: 'Inicio: Lista Filtrada',
+    inicio_incompleto_silencio: 'Inicio: Incompleto sin responder',
+    etiqueta: 'Filtro: Etiqueta',
+    condicion_genero: 'Condición: Género',
+    condicion_edad: 'Condición: Edad',
+    condicion_municipio: 'Condición: Municipio',
+    condicion_categoria: 'Condición: Categoría',
+    condicion_escolaridad: 'Condición: Escolaridad',
+    condicion_checkpoint: 'Condición: Check Point',
+    accion_whatsapp: 'Mandar WhatsApp',
+    accion_vacante: 'Mandar Vacante',
+    accion_whatsapp_personalizado: 'WhatsApp Personalizado',
+    accion_botones: 'Mandar Botones / Opciones',
+    frase_dinamica: 'Frase Dinámica',
+    accion_etiqueta: 'Agregar Etiqueta',
+    accion_quitar_etiqueta: 'Quitar Etiqueta',
+    accion_limpiar_etiquetas: 'Limpiar Etiquetas',
+    accion_recordatorio: 'Mandar Recordatorio',
+    accion_proyecto: 'Meter a Proyecto',
+    accion_marcar_leido: 'Marcar Leído',
+    accion_desactivar_bot: 'Desactivar Bot',
+    accion_reactivar_bot: 'Reactivar Bot',
+    esperando_respuesta: 'Esperando Respuesta',
+    contador: 'Contador',
+    checkpoint: 'Check Point',
+    test: 'Nodo Test',
+    nota: 'Nota',
+    bg: 'Fondo',
+    texto: 'Texto'
+};
+
+// Nombre visible de un nodo, igual que lo muestra el canvas: etiqueta del tipo +
+// alias personalizado (data.customName) si lo tiene. Nunca devuelve null.
+function nodeDisplayName(node) {
+    const tipoLabel = NODE_TYPE_LABELS[node?.type] || node?.type || 'Nodo';
+    const alias = (node?.data?.customName || '').trim();
+    return alias ? `${tipoLabel} — ${alias}` : tipoLabel;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Registro de TOOLS
 // Cada tool: { description, inputSchema, handler(args, { redis, req }) -> any }
@@ -1152,7 +1197,7 @@ const TOOLS = {
     // de caché). No reimplementan nada de flows.js.
 
     listar_flujos: {
-        description: 'Lista TODOS los flujos (resumen). Devuelve id, nombre, si está activo, cuántos nodos/aristas tiene y los tipos de nodo. Usa ver_flujo para traer los nodos completos de uno.',
+        description: 'Lista TODOS los flujos (resumen). Devuelve id, nombre, si está activo, cuántos nodos/aristas tiene, los tipos de nodo crudos y "nombresDeNodos" (los nombres visibles de cada nodo, tal como los ve el reclutador en el canvas). Usa ver_flujo para traer los nodos completos de uno.',
         inputSchema: { type: 'object', properties: {} },
         handler: async (_args, { redis, req }) => {
             const r = await callInternal(req, redis, '/api/flows', 'GET');
@@ -1167,6 +1212,7 @@ const TOOLS = {
                     numNodos: Array.isArray(f.nodes) ? f.nodes.length : 0,
                     numAristas: Array.isArray(f.edges) ? f.edges.length : 0,
                     tiposDeNodo: Array.from(new Set((f.nodes || []).map(n => n.type).filter(Boolean))),
+                    nombresDeNodos: (f.nodes || []).map(n => nodeDisplayName(n)),
                     actualizado: f.updatedAt || null
                 }))
             };
@@ -1174,7 +1220,7 @@ const TOOLS = {
     },
 
     ver_flujo: {
-        description: 'Devuelve un flujo COMPLETO: nombre, activo, los arreglos nodes y edges tal cual se guardan (cada nodo con su id, type, position y data), más un "indice" liviano [{nodeId, tipo, nombre}] para ubicar un nodo por su nombre personalizado (data.customName, p. ej. "Botones de fecha Metalsa"). Léelo antes de editar: para guardar cambios con guardar_flujo debes mandar el arreglo nodes/edges completo ya modificado.',
+        description: 'Devuelve un flujo COMPLETO: nombre, activo, los arreglos nodes y edges tal cual se guardan (cada nodo con su id, type, position y data), más un "indice" liviano [{nodeId, tipo, nombre, alias}] para ubicar cada nodo. "nombre" es el NOMBRE VISIBLE del nodo tal como lo ve el reclutador en el canvas (etiqueta del tipo + alias si tiene, p. ej. "Mandar Botones / Opciones — Botones de fecha Metalsa"); "tipo" es el type crudo (accion_botones); "alias" es solo el nombre personalizado (data.customName) o null. Léelo antes de editar: para guardar cambios con guardar_flujo debes mandar el arreglo nodes/edges completo ya modificado.',
         inputSchema: {
             type: 'object',
             properties: { flujoId: { type: 'string', description: 'ID del flujo (de listar_flujos).' } },
@@ -1193,9 +1239,15 @@ const TOOLS = {
                 id: f.id,
                 nombre: f.name || null,
                 activo: !!f.active,
-                // Índice liviano para localizar un nodo por su nombre personalizado o su tipo
-                // sin tener que escanear el arreglo nodes completo.
-                indice: nodes.map(n => ({ nodeId: n.id, tipo: n.type, nombre: (n.data?.customName || '').trim() || null })),
+                // Índice liviano para localizar un nodo por su nombre visible, su alias o su tipo
+                // sin tener que escanear el arreglo nodes completo. "nombre" = lo que ve el humano
+                // en el canvas (etiqueta del tipo + alias); "alias" = solo data.customName.
+                indice: nodes.map(n => ({
+                    nodeId: n.id,
+                    tipo: n.type,
+                    nombre: nodeDisplayName(n),
+                    alias: (n.data?.customName || '').trim() || null
+                })),
                 nodes,
                 edges: Array.isArray(f.edges) ? f.edges : [],
                 creado: f.createdAt || null,
