@@ -1186,13 +1186,23 @@ async function runOneFlow(redis, flow, candidateId, candidate, opts = {}) {
             // cuentan si su handle es EXACTAMENTE una de las ramas tomadas. Se unen con O.
             const branchDeps = deps.filter(d => branchTaken.has(d.source));
             const rest = deps.filter(d => !branchTaken.has(d.source));
-            const branchOk = branchDeps.length === 0
-                || branchDeps.some(d => branchTaken.get(d.source).has(d.handle || null));
+            // ¿Se tomó EXACTAMENTE una de las ramas que llegan a este nodo? (menú/esperando_respuesta reanudado)
+            const branchTakenHere = branchDeps.some(d => (branchTaken.get(d.source) || new Set()).has(d.handle || null));
+            const branchOk = branchDeps.length === 0 || branchTakenHere;
             const normal = rest.filter(d => d.handle !== 'no');
             const negativos = rest.filter(d => d.handle === 'no');
+            // Condiciones normales: ninguna ALCANZADA debe haber fallado (AND real entre las evaluadas).
+            // Si la entrada YA la provee una RAMA tomada (branchTakenHere), las normales de ramas NO
+            // recorridas se IGNORAN — caso del nodo FINAL compartido por DOS menús interactivos: el
+            // candidato pasó por uno (rama tomada) y el otro queda 'unreached'; sus aristas normales
+            // NO deben exigir que "alguna pase", o el nodo final nunca corría tras el 2º menú (bug
+            // confirmado en prod, chat 8116038195). Sin rama tomada se mantiene la regla original:
+            // ≥1 condición normal pasó Y ninguna alcanzada falló.
+            const noNormalReachedFailed = normal.every(d => outcome.get(d.source) !== 'fail');
             const normalOk = normal.length === 0 || (
-                normal.some(d => outcome.get(d.source) === 'pass')
-                && normal.every(d => outcome.get(d.source) !== 'fail')
+                branchTakenHere
+                    ? noNormalReachedFailed
+                    : (normal.some(d => outcome.get(d.source) === 'pass') && noNormalReachedFailed)
             );
             const negativoOk = negativos.length === 0 || negativos.some(d => outcome.get(d.source) === 'fail');
             return branchOk && normalOk && negativoOk;
