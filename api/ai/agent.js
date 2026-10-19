@@ -1853,9 +1853,15 @@ Responde ÚNICAMENTE con el número entero de meses. Si evade o no menciona ning
 
                 // Pre-chequeo para acentuados que \b no detecta bien en JS
                 const ACCENTED_SI = /(?:^|\s)(ajá|sí|así\s+es|ándale|órale)(?:\s|$)/i;
+                // Una duración ("25 años", "6 meses", "año y medio") IMPLICA que sí tiene
+                // experiencia — solo dices cuánto tiempo si lo tuviste. Si dejamos esto al
+                // intérprete GPT, respuestas como "25 años" se leen como ambiguas (puede sonar a
+                // edad) y caen a evasión → el paso 2 se atora sin guardar nada (chat 8333392002).
+                const DURATION_INLINE_RE = /\b(\d+)\s*(a[ñn]os?|meses?|semanas?|d[ií]as?)\b|\b(un|una|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|once|doce|quince|veinte)\s+(a[ñn]os?|meses?|semanas?)\b|a[ñn]o\s+y\s+medio/i;
                 let expResult = null;
                 if (NO_RE.test(aggregatedText)) expResult = 'No';
                 else if (ACCENTED_SI.test(aggregatedText) || SI_RE.test(aggregatedText)) expResult = 'Sí';
+                else if (DURATION_INLINE_RE.test(aggregatedText)) expResult = 'Sí';
 
                 if (!expResult) {
                     // Ambiguous — ask GPT mini to interpret
@@ -1886,7 +1892,7 @@ Responde ÚNICAMENTE con el número entero de meses. Si evade o no menciona ning
                     candidateUpdates.experiencia = 'Sí';
 
                     // Intentar extraer duración del mismo mensaje antes de preguntar
-                    const DURATION_INLINE_RE = /\b(\d+)\s*(a[ñn]os?|meses?|semanas?|d[ií]as?)\b|\b(un|una|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|once|doce|quince|veinte)\s+(a[ñn]os?|meses?|semanas?)\b|a[ñn]o\s+y\s+medio/i;
+                    // (DURATION_INLINE_RE ya está declarado arriba, se reutiliza aquí)
                     let mesesInline = null;
                     if (DURATION_INLINE_RE.test(aggregatedText)) {
                         try {
