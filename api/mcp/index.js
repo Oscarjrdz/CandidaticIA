@@ -36,7 +36,18 @@ import {
 import { substituteVariables, substituteDynamicPhrase } from '../utils/shortcuts.js';
 import { getFilterCountsWithIndex, countSegment, resolveSegmentIds } from '../utils/facet-index.js';
 
-const SERVER_INFO = { name: 'candidatic-chatweb', version: '1.0.0' };
+// `name` = identificador estable de la implementación (no cambiar, varios clientes
+// lo usan como id). `title` = nombre legible para humanos que la UI del conector
+// muestra (Candidatic, con C mayúscula). `icons` = logo que la UI pinta en vez del
+// avatar genérico "C"; apunta al PNG cuadrado público (512×512) servido por Vercel.
+const SERVER_INFO = {
+    name: 'candidatic-chatweb',
+    title: 'Candidatic',
+    version: '1.0.0',
+    icons: [
+        { src: 'https://www.candidatic.com/favicon-candidatic.png', mimeType: 'image/png', sizes: '512x512' }
+    ]
+};
 const SUPPORTED_PROTOCOL_VERSIONS = ['2025-06-18', '2025-03-26', '2024-11-05'];
 const PREFERRED_PROTOCOL_VERSION = '2025-06-18';
 
