@@ -148,6 +148,9 @@
         },
         "api/cron/flow-incompletos.js": {
             "maxDuration": 60
+        },
+        "api/cron/grok-seguimiento.js": {
+            "maxDuration": 120
         }
     },
     "crons": [
@@ -161,6 +164,10 @@
         },
         {
             "path": "/api/cron/flow-incompletos",
+            "schedule": "*/15 * * * *"
+        },
+        {
+            "path": "/api/cron/grok-seguimiento",
             "schedule": "*/15 * * * *"
         }
     ]
