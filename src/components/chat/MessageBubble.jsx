@@ -1,6 +1,6 @@
 import React from 'react';
 import { MapPin, List as ListIcon, ShoppingBag, UserSquare, Paperclip, Smile, Reply, X, FolderArchive } from 'lucide-react';
-import { safeFormatTime } from './chatUtils';
+import { safeFormatTime, formatWhatsAppText } from './chatUtils';
 import AudioPlayer from './AudioPlayer';
 import MessageStatusTicks from './MessageStatusTicks';
 
@@ -448,7 +448,7 @@ const MessageBubble = React.memo(function MessageBubble({
                                     const btns = btnsStr.split(' | ').filter(b => b.trim());
                                     return (
                                         <div className="flex flex-col w-full min-w-[220px]">
-                                            <div dangerouslySetInnerHTML={{ __html: mainText.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br/>') }} className="mb-2" />
+                                            <div dangerouslySetInnerHTML={{ __html: formatWhatsAppText(mainText) }} className="mb-2" />
                                             <div className="flex flex-col gap-1 w-full mt-1">
                                                 {btns.map((b, i) => (
                                                     <div key={i} className="w-full text-center py-2 px-3 bg-black/5 dark:bg-white/5 text-blue-500 dark:text-blue-400 text-sm rounded-lg border border-black/10 dark:border-white/10 transition-colors font-medium">
@@ -468,7 +468,7 @@ const MessageBubble = React.memo(function MessageBubble({
                                     const items = itemsStr.split(', ');
                                     return (
                                         <div className="flex flex-col w-full min-w-[220px]">
-                                            <div dangerouslySetInnerHTML={{ __html: mainText.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br/>') }} className="mb-2" />
+                                            <div dangerouslySetInnerHTML={{ __html: formatWhatsAppText(mainText) }} className="mb-2" />
                                             <div className="flex flex-col border border-indigo-100 dark:border-indigo-900/30 rounded-lg overflow-hidden mt-1">
                                                 <div className="bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-400 text-xs font-bold py-1.5 px-3 flex justify-between items-center"><ListIcon className="w-3 h-3" /> VER OPCIONES</div>
                                                 {items.map((it, i) => (
