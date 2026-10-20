@@ -16,9 +16,11 @@
  *     (se genera/rota desde Configuración → WhatsApp). Sin token válido → 401.
  *   - Kill switch: `mcp:enabled` en Redis. Si no está encendido → se rechaza todo.
  *
- * Tools: lectura + escritura de Chat Web, analítica, CRM Manual (Proyectos) y la
+ * Tools: lectura + escritura de Chat Web, analítica, CRM Manual (Proyectos), la
  * sección completa de Flujos (ver/crear/editar/borrar flujos y nodos + métricas y
- * ejecución). Las de escritura llaman a los endpoints reales vía callInternal.
+ * ejecución) y la sección de Estadísticas de Anuncios (ver métricas, archivar/restaurar
+ * anuncios, etiquetas de anuncio y comentarios de Facebook). Las de escritura llaman a
+ * los endpoints reales vía callInternal.
  * Plan y lista completa de tools: docs/mcp-grok-plan.md
  */
 
@@ -28,7 +30,6 @@ import {
     getCandidates,
     getCandidateById,
     getMessages,
-    getVacancies,
     getExpediente,
     getUsers
 } from '../utils/storage.js';
@@ -532,18 +533,169 @@ const TOOLS = {
     },
 
     listar_vacantes: {
-        description: 'Lista las vacantes disponibles en la plataforma.',
+        description: 'Lista TODAS las vacantes de la plataforma con sus datos completos: id, nombre, empresa, categoría, descripción, descripción para el mensaje al candidato y si está activa. El orden es el mismo en que Brenda las ofrece.',
         inputSchema: { type: 'object', properties: {} },
-        handler: async () => {
-            const vacancies = await getVacancies();
+        handler: async (_args, { redis, req }) => {
+            const r = await callInternal(req, redis, '/api/vacancies', 'GET');
+            if (!r.ok || r.data?.success === false) throw new Error(r.data?.error || `Fallo al listar vacantes (${r.status})`);
+            const vacancies = Array.isArray(r.data?.data) ? r.data.data : [];
             return {
-                vacantes: (Array.isArray(vacancies) ? vacancies : []).map(v => ({
+                total: vacancies.length,
+                vacantes: vacancies.map(v => ({
                     id: v.id,
-                    titulo: v.titulo || v.nombre || v.name || null,
-                    categoria: v.categoria || null,
-                    activa: v.activa !== undefined ? v.activa : (v.active !== undefined ? v.active : null)
+                    nombre: v.name || v.titulo || v.nombre || null,
+                    empresa: v.company || null,
+                    categoria: v.category || v.categoria || null,
+                    descripcion: v.description || '',
+                    descripcionMensaje: v.messageDescription || '',
+                    activa: v.active !== undefined ? v.active : (v.activa !== undefined ? v.activa : null)
                 }))
             };
+        }
+    },
+
+    crear_vacante: {
+        description: 'Crea una vacante nueva. nombre, empresa y categoria son obligatorios; descripcion y descripcionMensaje (el texto que Brenda le manda al candidato) son opcionales. La categoria debe existir (usa listar_categorias). Devuelve la vacante creada con su id.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                nombre: { type: 'string', description: 'Nombre/puesto de la vacante.' },
+                empresa: { type: 'string', description: 'Empresa.' },
+                categoria: { type: 'string', description: 'Categoría (nombre). Debe existir en el catálogo.' },
+                descripcion: { type: 'string', description: 'Descripción interna (opcional).' },
+                descripcionMensaje: { type: 'string', description: 'Texto que Brenda envía al candidato (opcional).' }
+            },
+            required: ['nombre', 'empresa', 'categoria']
+        },
+        handler: async (args, { redis, req }) => {
+            const name = String(args?.nombre || '').trim();
+            const company = String(args?.empresa || '').trim();
+            const category = String(args?.categoria || '').trim();
+            if (!name || !company || !category) throw new Error('Faltan nombre, empresa o categoria');
+            const r = await callInternal(req, redis, '/api/vacancies', 'POST', {
+                name, company, category,
+                description: args?.descripcion || '',
+                messageDescription: args?.descripcionMensaje || ''
+            });
+            if (!r.ok || r.data?.success === false) throw new Error(r.data?.error || `Fallo al crear la vacante (${r.status})`);
+            const v = r.data?.data || {};
+            return { creada: true, id: v.id, nombre: v.name, empresa: v.company, categoria: v.category };
+        }
+    },
+
+    editar_vacante: {
+        description: 'Edita una vacante existente (de listar_vacantes). Manda solo los campos que quieras cambiar (nombre, empresa, categoria, descripcion, descripcionMensaje, activa). Es un merge: lo que no mandes se conserva.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                id: { type: 'string', description: 'ID de la vacante.' },
+                nombre: { type: 'string', description: 'Nuevo nombre (opcional).' },
+                empresa: { type: 'string', description: 'Nueva empresa (opcional).' },
+                categoria: { type: 'string', description: 'Nueva categoría (opcional).' },
+                descripcion: { type: 'string', description: 'Nueva descripción interna (opcional).' },
+                descripcionMensaje: { type: 'string', description: 'Nuevo texto para el candidato (opcional).' },
+                activa: { type: 'boolean', description: 'Activar/desactivar la vacante (opcional).' }
+            },
+            required: ['id']
+        },
+        handler: async (args, { redis, req }) => {
+            const id = String(args?.id || '').trim();
+            if (!id) throw new Error('Falta id');
+            const updates = { id };
+            if (args?.nombre !== undefined) updates.name = String(args.nombre).trim();
+            if (args?.empresa !== undefined) updates.company = String(args.empresa).trim();
+            if (args?.categoria !== undefined) updates.category = String(args.categoria).trim();
+            if (args?.descripcion !== undefined) updates.description = String(args.descripcion);
+            if (args?.descripcionMensaje !== undefined) updates.messageDescription = String(args.descripcionMensaje);
+            if (typeof args?.activa === 'boolean') updates.active = args.activa;
+            const r = await callInternal(req, redis, '/api/vacancies', 'PUT', updates);
+            if (r.status === 404) throw new Error('Vacante no encontrada');
+            if (!r.ok || r.data?.success === false) throw new Error(r.data?.error || `Fallo al editar la vacante (${r.status})`);
+            const v = r.data?.data || {};
+            return { editada: true, id, nombre: v.name, empresa: v.company, categoria: v.category, activa: v.active };
+        }
+    },
+
+    borrar_vacante: {
+        description: 'Borra una vacante por su id (de listar_vacantes). Acción irreversible.',
+        inputSchema: {
+            type: 'object',
+            properties: { id: { type: 'string', description: 'ID de la vacante a borrar.' } },
+            required: ['id']
+        },
+        handler: async (args, { redis, req }) => {
+            const id = String(args?.id || '').trim();
+            if (!id) throw new Error('Falta id');
+            const r = await callInternal(req, redis, `/api/vacancies?id=${encodeURIComponent(id)}`, 'DELETE');
+            if (!r.ok || r.data?.success === false) throw new Error(r.data?.error || `Fallo al borrar la vacante (${r.status})`);
+            return { borrada: true, id };
+        }
+    },
+
+    listar_categorias: {
+        description: 'Lista las categorías de vacantes (id, nombre). El orden es el mismo en que Brenda las ofrece al candidato.',
+        inputSchema: { type: 'object', properties: {} },
+        handler: async (_args, { redis, req }) => {
+            const r = await callInternal(req, redis, '/api/categories', 'GET');
+            if (!r.ok || r.data?.success === false) throw new Error(r.data?.error || `Fallo al listar categorías (${r.status})`);
+            const cats = Array.isArray(r.data?.data) ? r.data.data : [];
+            return { total: cats.length, categorias: cats.map(c => ({ id: c.id, nombre: c.name })) };
+        }
+    },
+
+    crear_categoria: {
+        description: 'Crea una categoría nueva de vacantes. nombre obligatorio (no puede repetirse). Devuelve la categoría creada con su id.',
+        inputSchema: {
+            type: 'object',
+            properties: { nombre: { type: 'string', description: 'Nombre de la categoría.' } },
+            required: ['nombre']
+        },
+        handler: async (args, { redis, req }) => {
+            const name = String(args?.nombre || '').trim();
+            if (!name) throw new Error('Falta el nombre de la categoría');
+            const r = await callInternal(req, redis, '/api/categories', 'POST', { name });
+            if (!r.ok || r.data?.success === false) throw new Error(r.data?.error || `Fallo al crear la categoría (${r.status})`);
+            const c = r.data?.data || {};
+            return { creada: true, id: c.id, nombre: c.name };
+        }
+    },
+
+    editar_categoria: {
+        description: 'Renombra una categoría de vacantes existente (de listar_categorias). OJO: solo cambia el nombre en el catálogo; las vacantes que ya apuntaban al nombre viejo no se re-vinculan solas.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                id: { type: 'string', description: 'ID de la categoría.' },
+                nombre: { type: 'string', description: 'Nuevo nombre.' }
+            },
+            required: ['id', 'nombre']
+        },
+        handler: async (args, { redis, req }) => {
+            const id = String(args?.id || '').trim();
+            const name = String(args?.nombre || '').trim();
+            if (!id) throw new Error('Falta id');
+            if (!name) throw new Error('Falta el nombre');
+            const r = await callInternal(req, redis, '/api/categories', 'PUT', { id, name });
+            if (r.status === 404) throw new Error('Categoría no encontrada');
+            if (!r.ok || r.data?.success === false) throw new Error(r.data?.error || `Fallo al editar la categoría (${r.status})`);
+            const c = r.data?.data || {};
+            return { editada: true, id: c.id, nombre: c.name };
+        }
+    },
+
+    borrar_categoria: {
+        description: 'Borra una categoría de vacantes por su id (de listar_categorias). No borra las vacantes de esa categoría; solo la quita del catálogo.',
+        inputSchema: {
+            type: 'object',
+            properties: { id: { type: 'string', description: 'ID de la categoría a borrar.' } },
+            required: ['id']
+        },
+        handler: async (args, { redis, req }) => {
+            const id = String(args?.id || '').trim();
+            if (!id) throw new Error('Falta id');
+            const r = await callInternal(req, redis, `/api/categories?id=${encodeURIComponent(id)}`, 'DELETE');
+            if (!r.ok || r.data?.success === false) throw new Error(r.data?.error || `Fallo al borrar la categoría (${r.status})`);
+            return { borrada: true, id };
         }
     },
 
@@ -1527,6 +1679,239 @@ const TOOLS = {
             if (r.status === 404) throw new Error('Flujo o candidato no encontrado');
             if (!r.ok || r.data?.success === false) throw new Error(r.data?.error || `Fallo al correr el flujo (${r.status})`);
             return { flujoId: id, candidateId, yaEstabaCorrido: r.data?.alreadyExecuted === true };
+        }
+    },
+
+    // ──────────────── ESTADÍSTICAS DE ANUNCIOS (Ads) ────────────────
+    // Acceso completo a la sección de Estadísticas de Anuncios. Todo pasa por los
+    // endpoints reales (/api/ads-stats, /api/ad-labels, /api/ads-comments) vía
+    // callInternal, así hereda la auth y los side-effects (caché Meta, índices,
+    // aplicación de etiquetas a candidatos). No reimplementa nada.
+
+    ver_estadisticas_ads: {
+        description: 'Métricas de TODOS los anuncios (CTWA) del dashboard de Estadísticas de Anuncios: leads que trajo cada uno, calificados, estado en Meta e insights (impresiones, clics, gasto, CTR, CPC, conversaciones, costo por conversación). rango="all" (histórico) | "today" | "7d" | "30d". incluirArchivados=true agrega los anuncios archivados (marcados archivado:true). Usa el adId para archivar/etiquetar/ver comentarios de un anuncio.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                rango: { type: 'string', enum: ['all', 'today', '7d', '30d'], description: 'Ventana de tiempo (default "all" = histórico).' },
+                incluirArchivados: { type: 'boolean', description: 'true = incluir también los anuncios archivados.' }
+            }
+        },
+        handler: async (args, { redis, req }) => {
+            const rango = ['today', '7d', '30d'].includes(args?.rango) ? args.rango : 'all';
+            const incluir = args?.incluirArchivados === true;
+            const qs = `range=${rango}${incluir ? '&includeArchived=true' : ''}`;
+            const r = await callInternal(req, redis, `/api/ads-stats?${qs}`, 'GET');
+            if (!r.ok || r.data?.success === false) throw new Error(r.data?.error || `Fallo al leer estadísticas de anuncios (${r.status})`);
+            const ads = Array.isArray(r.data?.ads) ? r.data.ads : [];
+            // Compacto: solo lo útil para analizar. Se omiten imagen/video/body/url (pesados).
+            return {
+                rango: r.data?.range || rango,
+                totalLeadsDeAnuncios: r.data?.totalAdsLeads || 0,
+                numAnuncios: ads.length,
+                datoCacheado: r.data?.stale === true,
+                anuncios: ads.map(a => ({
+                    adId: a.adId || null,
+                    nombre: a.adName || a.adHeadline || 'Anuncio sin título',
+                    estadoMeta: a.effectiveStatus || null,
+                    leads: a.totalLeads || 0,
+                    leadsHoy: a.todayLeads || 0,
+                    calificados: a.completeLeads || 0,
+                    impresiones: a.impressions || null,
+                    clics: a.clicks || null,
+                    gasto: a.spend || null,
+                    ctr: a.ctr || null,
+                    cpc: a.cpc || null,
+                    cpm: a.cpm || null,
+                    alcance: a.reach || null,
+                    frecuencia: a.frequency || null,
+                    conversaciones: a.messagingConnections || null,
+                    primerasRespuestas: a.messagingReplies || null,
+                    costoPorConversacion: a.costPerConversation || null,
+                    primerLead: a.firstSeen || null,
+                    ultimoLead: a.lastSeen || null,
+                    archivado: a.archived === true
+                }))
+            };
+        }
+    },
+
+    archivar_ad: {
+        description: 'Archiva un anuncio del dashboard de Estadísticas (lo saca del listado y lo resta del total de leads). Es reversible con restaurar_ad. Pasa el adId (de ver_estadisticas_ads).',
+        inputSchema: {
+            type: 'object',
+            properties: { adId: { type: 'string', description: 'ID del anuncio a archivar.' } },
+            required: ['adId']
+        },
+        handler: async (args, { redis, req }) => {
+            const adKey = String(args?.adId || '').trim();
+            if (!adKey) throw new Error('Falta adId');
+            const r = await callInternal(req, redis, '/api/ads-stats', 'DELETE', { adKey });
+            if (!r.ok || r.data?.success === false) throw new Error(r.data?.error || `Fallo al archivar el anuncio (${r.status})`);
+            return { adId: adKey, archivado: true };
+        }
+    },
+
+    restaurar_ad: {
+        description: 'Restaura (desarchiva) un anuncio previamente archivado para que vuelva a aparecer en el dashboard de Estadísticas. Pasa el adId.',
+        inputSchema: {
+            type: 'object',
+            properties: { adId: { type: 'string', description: 'ID del anuncio a restaurar.' } },
+            required: ['adId']
+        },
+        handler: async (args, { redis, req }) => {
+            const adKey = String(args?.adId || '').trim();
+            if (!adKey) throw new Error('Falta adId');
+            const r = await callInternal(req, redis, '/api/ads-stats', 'DELETE', { adKey, restore: true });
+            if (!r.ok || r.data?.success === false) throw new Error(r.data?.error || `Fallo al restaurar el anuncio (${r.status})`);
+            return { adId: adKey, archivado: false };
+        }
+    },
+
+    listar_etiquetas_ads: {
+        description: 'Lista las etiquetas de anuncio (ad-labels): cada una agrupa uno o varios adIds bajo una etiqueta con nombre/emoji/color que se aplica automáticamente a los candidatos que vienen de esos anuncios. Devuelve id, nombre, adIds, color y empresa.',
+        inputSchema: { type: 'object', properties: {} },
+        handler: async (_args, { redis, req }) => {
+            const r = await callInternal(req, redis, '/api/ad-labels', 'GET');
+            if (!r.ok || r.data?.success === false) throw new Error(r.data?.error || `Fallo al listar etiquetas de anuncio (${r.status})`);
+            const labels = Array.isArray(r.data?.labels) ? r.data.labels : [];
+            return {
+                total: labels.length,
+                etiquetas: labels.map(l => ({
+                    id: l.id,
+                    nombre: l.tagName || null,
+                    emoji: l.emoji || '',
+                    color: l.color || null,
+                    empresa: l.company || '',
+                    adIds: Array.isArray(l.adIds) ? l.adIds : (l.adId ? [l.adId] : [])
+                }))
+            };
+        }
+    },
+
+    crear_etiqueta_ad: {
+        description: 'Crea una etiqueta de anuncio y la aplica a los candidatos que vinieron de esos anuncios. nombre obligatorio; adIds = uno o varios IDs de anuncio (array o string con comas). emoji/color/empresa opcionales. Devuelve cuántos candidatos quedaron etiquetados (aplicados).',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                nombre: { type: 'string', description: 'Nombre de la etiqueta.' },
+                adIds: { type: 'array', items: { type: 'string' }, description: 'IDs de anuncio a cubrir (al menos uno).' },
+                emoji: { type: 'string', description: 'Emoji opcional (se antepone al nombre).' },
+                color: { type: 'string', description: 'Color hex opcional (default #a855f7).' },
+                empresa: { type: 'string', description: 'Empresa opcional.' }
+            },
+            required: ['nombre', 'adIds']
+        },
+        handler: async (args, { redis, req }) => {
+            const nombre = String(args?.nombre || '').trim();
+            if (!nombre) throw new Error('Falta el nombre de la etiqueta');
+            const adIds = Array.isArray(args?.adIds) ? args.adIds.map(x => String(x).trim()).filter(Boolean) : [];
+            if (!adIds.length) throw new Error('Falta al menos un adId');
+            const r = await callInternal(req, redis, '/api/ad-labels', 'POST', {
+                name: nombre, adIds: adIds.join(','), emoji: args?.emoji || '', color: args?.color || '', company: args?.empresa || ''
+            });
+            if (!r.ok || r.data?.success === false) throw new Error(r.data?.error || `Fallo al crear la etiqueta (${r.status})`);
+            return { creada: true, id: r.data?.label?.id, nombre: r.data?.label?.tagName, candidatosEtiquetados: r.data?.applied || 0 };
+        }
+    },
+
+    editar_etiqueta_ad: {
+        description: 'Edita una etiqueta de anuncio existente (de listar_etiquetas_ads): cambia nombre/emoji/color/empresa y/o el conjunto de adIds. Si cambia el nombre, se renombra en todos los candidatos que la tenían; si se agregan adIds nuevos, se aplica a esos candidatos. Debes mandar el conjunto COMPLETO de adIds que quieres que quede.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                id: { type: 'string', description: 'ID de la etiqueta (de listar_etiquetas_ads).' },
+                nombre: { type: 'string', description: 'Nombre (obligatorio).' },
+                adIds: { type: 'array', items: { type: 'string' }, description: 'Conjunto COMPLETO de adIds que debe quedar (al menos uno).' },
+                emoji: { type: 'string', description: 'Emoji opcional.' },
+                color: { type: 'string', description: 'Color hex opcional.' },
+                empresa: { type: 'string', description: 'Empresa opcional.' }
+            },
+            required: ['id', 'nombre', 'adIds']
+        },
+        handler: async (args, { redis, req }) => {
+            const id = String(args?.id || '').trim();
+            const nombre = String(args?.nombre || '').trim();
+            if (!id) throw new Error('Falta id');
+            if (!nombre) throw new Error('Falta el nombre');
+            const adIds = Array.isArray(args?.adIds) ? args.adIds.map(x => String(x).trim()).filter(Boolean) : [];
+            if (!adIds.length) throw new Error('Falta al menos un adId');
+            const r = await callInternal(req, redis, '/api/ad-labels', 'PUT', {
+                id, name: nombre, adIds: adIds.join(','), emoji: args?.emoji || '', color: args?.color || '', company: args?.empresa || ''
+            });
+            if (r.status === 404) throw new Error('Etiqueta no encontrada');
+            if (!r.ok || r.data?.success === false) throw new Error(r.data?.error || `Fallo al editar la etiqueta (${r.status})`);
+            return { editada: true, id, nombre: r.data?.label?.tagName, nombreAnterior: r.data?.oldTagName || null, candidatosRenombrados: r.data?.renamed || 0 };
+        }
+    },
+
+    borrar_etiqueta_ad: {
+        description: 'Borra una etiqueta de anuncio (de listar_etiquetas_ads) en profundidad: la quita del catálogo global y de todos los candidatos que la tenían. Devuelve de cuántos candidatos se quitó.',
+        inputSchema: {
+            type: 'object',
+            properties: { id: { type: 'string', description: 'ID de la etiqueta a borrar.' } },
+            required: ['id']
+        },
+        handler: async (args, { redis, req }) => {
+            const id = String(args?.id || '').trim();
+            if (!id) throw new Error('Falta id');
+            const r = await callInternal(req, redis, `/api/ad-labels?id=${encodeURIComponent(id)}`, 'DELETE');
+            if (r.status === 404) throw new Error('Etiqueta no encontrada');
+            if (!r.ok || r.data?.success === false) throw new Error(r.data?.error || `Fallo al borrar la etiqueta (${r.status})`);
+            return { borrada: true, id, nombre: r.data?.removed?.tagName || null, candidatosAfectados: r.data?.removedFrom || 0 };
+        }
+    },
+
+    ver_comentarios_ad: {
+        description: 'Comentarios de Facebook del post vinculado a un anuncio: mensaje, autor, fecha, likes y respuestas anidadas. Pasa el adId (de ver_estadisticas_ads). Usa responder_comentario_ad para contestar uno.',
+        inputSchema: {
+            type: 'object',
+            properties: { adId: { type: 'string', description: 'ID del anuncio.' } },
+            required: ['adId']
+        },
+        handler: async (args, { redis, req }) => {
+            const adId = String(args?.adId || '').trim();
+            if (!adId) throw new Error('Falta adId');
+            const r = await callInternal(req, redis, `/api/ads-comments?adId=${encodeURIComponent(adId)}`, 'GET');
+            if (!r.ok || r.data?.success === false) throw new Error(r.data?.error || `Fallo al leer comentarios (${r.status})`);
+            const comments = Array.isArray(r.data?.comments) ? r.data.comments : [];
+            return {
+                adId,
+                postId: r.data?.postId || null,
+                totalComentarios: r.data?.totalComments || comments.length,
+                comentarios: comments.map(c => ({
+                    id: c.id,
+                    mensaje: c.message || '',
+                    autor: c.from?.name || 'Usuario',
+                    fecha: c.createdTime || null,
+                    likes: c.likeCount || 0,
+                    respuestas: (c.replies || []).map(rp => ({
+                        id: rp.id, mensaje: rp.message || '', autor: rp.from?.name || 'Usuario', fecha: rp.createdTime || null
+                    }))
+                }))
+            };
+        }
+    },
+
+    responder_comentario_ad: {
+        description: 'Responde públicamente a un comentario de Facebook de un anuncio (desde la Página). Pasa el commentId (de ver_comentarios_ad), el mensaje y opcionalmente el adId para refrescar su caché de comentarios.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                commentId: { type: 'string', description: 'ID del comentario a responder (de ver_comentarios_ad).' },
+                mensaje: { type: 'string', description: 'Texto de la respuesta.' },
+                adId: { type: 'string', description: 'ID del anuncio (opcional, para invalidar su caché de comentarios).' }
+            },
+            required: ['commentId', 'mensaje']
+        },
+        handler: async (args, { redis, req }) => {
+            const commentId = String(args?.commentId || '').trim();
+            const mensaje = String(args?.mensaje || '').trim();
+            if (!commentId) throw new Error('Falta commentId');
+            if (!mensaje) throw new Error('Falta el mensaje');
+            const r = await callInternal(req, redis, '/api/ads-comments', 'POST', { commentId, message: mensaje, adId: args?.adId ? String(args.adId).trim() : undefined });
+            if (!r.ok || r.data?.success === false) throw new Error(r.data?.error || `Fallo al responder el comentario (${r.status})`);
+            return { respondido: true, commentId, replyId: r.data?.replyId || null };
         }
     }
 };
