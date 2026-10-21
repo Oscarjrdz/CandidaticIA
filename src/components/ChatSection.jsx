@@ -5120,6 +5120,16 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         });
     };
 
+    // Firma estable de SOLO los campos del candidato que usa substituteVariables (ver
+    // api/utils/shortcuts.js). selectedChat se reemplaza por objeto nuevo en cada evento
+    // SSE (fuga #7 de CLAUDE.md), así que NO podemos depender del objeto completo en el
+    // useMemo de displayMessages. Esta firma solo cambia cuando un dato real del candidato
+    // cambia, evitando recalcular todas las burbujas en cada mensaje entrante.
+    const candidateSubKey = useMemo(() => {
+        const c = selectedChat || {};
+        return [c.id, c.nombreReal, c.nombre, c.whatsapp, c.municipio, c.fechaNacimiento, c.tieneEmpleo, c.aspiracionSalarial, c.categoria, c.ultimoBotonTexto].join('|');
+    }, [selectedChat]);
+
     // 🚀 MEMOIZED: Pre-compute display messages + formatted HTML (eliminates 700 regex ops/render)
     const displayMessages = useMemo(() => {
         if (!Array.isArray(messages)) return [];
@@ -5169,6 +5179,16 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
             if (content.includes('[REACCI')) {
                 content = content.replace(/\[REACCI[OÓ]N:\s*.*?\]/gi, '').trim();
                 if (!content && !msg.mediaUrl) { msgIdx++; continue; }
+            }
+
+            // Render de variables de plantilla en las burbujas (chat web + mensajes de flujos):
+            // si el contenido guardado todavía trae {{nombre}} u otra variable sin resolver —
+            // típico en mensajes de nodos de Flujos— se sustituye aquí al pintar con los datos
+            // del candidato del chat abierto. substituteVariables es idempotente: los envíos
+            // manuales y el banco de respuestas ya sustituyen al mandar, así que si el texto ya
+            // venía resuelto no se toca nada. Se salta el regex cuando no hay ningún token.
+            if (content.includes('{{')) {
+                content = substituteVariables(content, selectedChat);
             }
 
             const normalizedMsg = { ...msg, content };
@@ -5266,7 +5286,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
             cache.set(key, { signature, value: item });
             return item;
         });
-    }, [messages, frozenUnreadCount]);
+    }, [messages, frozenUnreadCount, candidateSubKey]);
 
     return (
         <div className="flex h-full w-full bg-[#f0f2f5] dark:bg-[#111b21] font-sans overflow-hidden">
