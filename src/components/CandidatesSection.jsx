@@ -1132,20 +1132,20 @@ const CandidatesSection = () => {
                             {ctrHoy && (
                             <div className="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm relative overflow-hidden group">
                                 <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
-                                    <TrendingUp className="w-16 h-16 text-emerald-500 transform rotate-6" />
+                                    <CalendarDays className="w-16 h-16 text-cyan-500 transform -rotate-6" />
                                 </div>
                                 <div className="flex flex-col relative z-10">
                                     <div className="flex items-center gap-1.5 mb-1">
                                         <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">CTR de Hoy</span>
                                         <span className="relative flex h-2 w-2">
-                                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                                            <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
+                                            <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-500"></span>
                                         </span>
                                     </div>
                                     {ctrHoy.total > 0 ? (
                                         <>
                                             <div className="flex items-baseline gap-2 flex-wrap">
-                                                <h3 className={`text-2xl font-bold leading-none tabular-nums ${ctrHoy.pct >= 70 ? 'text-emerald-500' : ctrHoy.pct >= 40 ? 'text-amber-500' : 'text-red-500'}`}>
+                                                <h3 className="text-2xl font-bold leading-none tabular-nums text-cyan-600 dark:text-cyan-400">
                                                     {ctrHoy.pct}%
                                                 </h3>
                                                 <span className="text-[10px] text-gray-400 dark:text-gray-500 font-medium">
@@ -1154,7 +1154,7 @@ const CandidatesSection = () => {
                                             </div>
                                             <div className="mt-2 w-full bg-gray-100 dark:bg-gray-700 rounded-full h-1.5">
                                                 <div
-                                                    className={`h-1.5 rounded-full transition-all duration-500 ${ctrHoy.pct >= 70 ? 'bg-emerald-500' : ctrHoy.pct >= 40 ? 'bg-amber-500' : 'bg-red-500'}`}
+                                                    className="h-1.5 rounded-full transition-all duration-500 bg-cyan-500"
                                                     style={{ width: `${ctrHoy.pct}%` }}
                                                 />
                                             </div>
@@ -1162,7 +1162,7 @@ const CandidatesSection = () => {
                                                 <div className="mt-1 flex items-baseline justify-between gap-1 whitespace-nowrap text-[10px] text-gray-500 dark:text-gray-400 tabular-nums">
                                                     {ctrHoy.stuck.map((s) => (
                                                         <span key={s.key} className="shrink-0">
-                                                            {s.short} <span className="font-bold text-amber-500">{s.count}</span>
+                                                            {s.short} <span className="font-bold text-cyan-600 dark:text-cyan-400">{s.count}</span>
                                                         </span>
                                                     ))}
                                                 </div>
