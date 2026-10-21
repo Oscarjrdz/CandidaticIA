@@ -36,6 +36,7 @@ import {
 import { substituteVariables, substituteDynamicPhrase } from '../utils/shortcuts.js';
 import { getFilterCountsWithIndex, countSegment, resolveSegmentIds } from '../utils/facet-index.js';
 import { getCtrBlocksCached, markRetornoAttendedByGrok, getGrokAttendedTodayCount } from '../utils/ctr-stats.js';
+import { CHECKPOINT_PREFIX } from '../utils/flow-engine.js';
 
 // `name` = identificador estable de la implementación (no cambiar, varios clientes
 // lo usan como id). `title` = nombre legible para humanos que la UI del conector
@@ -1690,6 +1691,80 @@ const TOOLS = {
             const r = await callInternal(req, redis, '/api/flows?mode=checkpoints', 'GET');
             if (!r.ok || r.data?.success === false) throw new Error(r.data?.error || `Fallo al listar check points (${r.status})`);
             return { checkpoints: r.data?.checkpoints || [] };
+        }
+    },
+
+    ver_checkpoint: {
+        description: 'Muestra QUIÉNES pasaron por un Check Point concreto y CUÁNDO (cada candidato queda marcado automáticamente al pasar por el nodo). Pasa flujoId + nodeId (obtenlos de listar_checkpoints_flujos). Devuelve el roster ordenado del paso más reciente al más antiguo, paginable con limit/offset (default 50, máx 500). Si pasas candidateId, devuelve en cambio el historial COMPLETO de ese candidato por este check point (todas las veces que pasó).',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                flujoId: { type: 'string', description: 'ID del flujo que contiene el Check Point.' },
+                nodeId: { type: 'string', description: 'ID del nodo Check Point.' },
+                candidateId: { type: 'string', description: 'Opcional: si lo pasas, devuelve el historial completo (todas las fechas) de ese candidato por este check point en vez del roster.' },
+                limit: { type: 'number', description: 'Tamaño de página del roster (default 50, máx 500).' },
+                offset: { type: 'number', description: 'Desplazamiento del roster (default 0).' }
+            },
+            required: ['flujoId', 'nodeId']
+        },
+        handler: async (args, { redis, req }) => {
+            const flowId = String(args?.flujoId || '').trim();
+            const nodeId = String(args?.nodeId || '').trim();
+            if (!flowId) throw new Error('Falta flujoId');
+            if (!nodeId) throw new Error('Falta nodeId');
+            const base = `${CHECKPOINT_PREFIX}${flowId}:${nodeId}`;
+
+            // El nombre del check point vive en el flujo (node.data.name), no en Redis —
+            // se resuelve en vivo por flowId+nodeId (rename retroactivo).
+            let nombre = null, flujoNombre = null;
+            try {
+                const meta = await callInternal(req, redis, '/api/flows?mode=checkpoints', 'GET');
+                const cp = (meta.data?.checkpoints || []).find(c => c.flowId === flowId && c.nodeId === nodeId);
+                if (cp) { nombre = cp.name || null; flujoNombre = cp.flowName || null; }
+            } catch { /* el nombre es cosmético; no bloquea la lectura del roster */ }
+
+            // Historial COMPLETO de un candidato puntual (todas las veces que pasó).
+            if (args?.candidateId) {
+                const cid = String(args.candidateId).trim();
+                const raw = await redis.lrange(`${base}:log:${cid}`, 0, -1).catch(() => []);
+                const pasos = (raw || []).map(ms => new Date(Number(ms)).toISOString());
+                const c = await getCandidateById(cid).catch(() => null);
+                return {
+                    checkpoint: { flujoId: flowId, nodeId, nombre, flujo: flujoNombre },
+                    candidateId: cid,
+                    nombre: c ? ((c.nombreReal && c.nombreReal.trim()) || c.nombre || 'Sin nombre') : null,
+                    telefono: c?.whatsapp || null,
+                    veces: pasos.length,
+                    pasos
+                };
+            }
+
+            // Roster: quién pasó + su paso MÁS reciente (HASH `:last`).
+            const lastMap = (await redis.hgetall(`${base}:last`).catch(() => ({}))) || {};
+            const entries = Object.entries(lastMap)
+                .map(([id, ms]) => ({ id, ms: Number(ms) || 0 }))
+                .sort((a, b) => b.ms - a.ms);
+            const total = entries.length;
+            const limit = Math.min(Math.max(Number(args?.limit) || 50, 1), 500);
+            const offset = Math.max(Number(args?.offset) || 0, 0);
+            const page = entries.slice(offset, offset + limit);
+            const candidatos = await Promise.all(page.map(async (e) => {
+                const c = await getCandidateById(e.id).catch(() => null);
+                return {
+                    candidateId: e.id,
+                    nombre: c ? ((c.nombreReal && c.nombreReal.trim()) || c.nombre || 'Sin nombre') : null,
+                    telefono: c?.whatsapp || null,
+                    ultimoPaso: e.ms ? new Date(e.ms).toISOString() : null
+                };
+            }));
+            return {
+                checkpoint: { flujoId: flowId, nodeId, nombre, flujo: flujoNombre },
+                total,
+                mostrados: candidatos.length,
+                offset,
+                hayMas: offset + candidatos.length < total,
+                candidatos
+            };
         }
     },
 
