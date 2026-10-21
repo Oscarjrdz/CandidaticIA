@@ -459,6 +459,13 @@ const CandidatesSection = () => {
     // ✅ META AUDIT: Deletion guard — prevents SSE ghost re-insertion after delete
     const recentlyDeletedRef = useRef(new Set());
     const statCardRef = useRef(null); // 🎊 Confetti origin anchor
+    // El store SSE (useCandidatesSSE) es un singleton de módulo: guarda el ÚLTIMO newCandidate
+    // "para siempre". Como esta sección se desmonta al cambiar de pestaña y se remonta al volver,
+    // el effect del confeti correría en el montaje con un candidato que llegó mientras estábamos
+    // en OTRA sección → confeti retroactivo. Este ref marca "ya pasó el montaje": en la primera
+    // corrida solo sembramos el candidato retenido como ya-manejado y NO festejamos. El confeti/
+    // toast solo salen para candidatos que lleguen EN VIVO con la sección ya abierta.
+    const confettiMountSeededRef = useRef(false);
 
     // === TAGS STATE & LOGIC ===
     const TAG_COLORS = ["#ef4444", "#f97316", "#eab308", "#22c55e", "#3b82f6", "#a855f7", "#ec4899", "#8b5cf6", "#64748b"];
@@ -597,17 +604,32 @@ const CandidatesSection = () => {
         if (newCandidate && newCandidate.id) {
             if (recentlyDeletedRef.current.has(newCandidate.id)) return;
 
+            // ¿Es una llegada EN VIVO (con la sección abierta) o el candidato retenido del store
+            // en el primer render tras montar? La primera corrida tras montar es retroactiva: el
+            // store guarda el último newCandidate "para siempre", así que al volver de otra sección
+            // trae uno que ya llegó antes. En ese caso insertamos a la lista pero NO festejamos.
+            const isLiveArrival = confettiMountSeededRef.current;
+            confettiMountSeededRef.current = true;
+
             setCandidates(prev => {
                 const exists = prev.some(c => c.id === newCandidate.id);
                 if (exists) return prev;
-                showToast && showToast('Nuevo candidato recibido 🎉', 'success');
-                // Only fire confetti once per candidate per session (survives remounts)
-                if (!_firedConfettiIds.has(newCandidate.id)) {
+                if (isLiveArrival) {
+                    showToast && showToast('Nuevo candidato recibido 🎉', 'success');
+                    // Only fire confetti once per candidate per session (survives remounts)
+                    if (!_firedConfettiIds.has(newCandidate.id)) {
+                        _firedConfettiIds.add(newCandidate.id);
+                        fireConfetti(80, statCardRef.current);
+                    }
+                } else {
+                    // Retroactivo: márcalo como ya-manejado para que nunca dispare confeti.
                     _firedConfettiIds.add(newCandidate.id);
-                    fireConfetti(80, statCardRef.current);
                 }
                 return [newCandidate, ...prev];
             });
+        } else {
+            // Montamos sin ningún newCandidate en el store todavía: la próxima llegada ya es en vivo.
+            confettiMountSeededRef.current = true;
         }
     }, [newCandidate, showToast]);
 
