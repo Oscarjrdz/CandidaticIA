@@ -28,6 +28,60 @@ export const isProfileComplete = (c) => {
     return hasCoreData && hasAgeData;
 };
 
+// Orden de captura de Brenda (paso 1 → paso 2). Cada entrada: key interna + etiqueta corta.
+// Se usa para el desglose "¿en qué paso se atoraron los incompletos?" de la sección Candidatos.
+export const STUCK_STEPS = [
+    { key: 'nombre', label: 'Nombre' },
+    { key: 'nacimiento', label: 'Nacimiento' },
+    { key: 'municipio', label: 'Municipio' },
+    { key: 'escolaridad', label: 'Escolaridad' },
+    { key: 'categoria', label: 'Categoría' },
+    { key: 'colonia', label: 'Colonia' },
+    { key: 'experiencia', label: 'Experiencia' },
+    { key: 'meses', label: 'Meses exp.' },
+];
+
+const isFieldEmpty = (v) => {
+    const val = valToStr(v);
+    return EMPTY_VALS.has(val) || val.includes('proporcionado') || val.length < 2;
+};
+
+/**
+ * Devuelve la `key` del PRIMER paso faltante de un candidato incompleto (orden de captura),
+ * o `null` si el perfil ya está completo. Mismas reglas de validez que isProfileComplete /
+ * computePaso2Estado. Alimenta el desglose de "atorados" en la tarjeta de CTR.
+ */
+export const firstMissingStep = (c) => {
+    if (!c || isProfileComplete(c)) return null;
+    // --- Paso 1 (en orden) ---
+    if (isFieldEmpty(c.nombreReal)) return 'nombre';
+    if (EMPTY_VALS.has(valToStr(c.edad || c.fechaNacimiento))) return 'nacimiento';
+    if (isFieldEmpty(c.municipio)) return 'municipio';
+    const esc = valToStr(c.escolaridad);
+    if (isFieldEmpty(c.escolaridad) || JUNK_EDUCATION.some(j => esc.includes(j))) return 'escolaridad';
+    if (isFieldEmpty(c.categoria)) return 'categoria';
+    // --- Paso 2 ---
+    // Preferir el estado precalculado por el backend cuando sea un esperando_* conocido.
+    const estado = c.paso2Estado;
+    if (estado === 'esperando_colonia') return 'colonia';
+    if (estado === 'esperando_experiencia') return 'experiencia';
+    if (estado === 'esperando_meses_experiencia') return 'meses';
+    // Fallback: derivar de los campos crudos (mismas reglas que computePaso2Estado).
+    if (isFieldEmpty(c.colonia)) return 'colonia';
+    const exp = c.experiencia;
+    if (!Array.isArray(exp)) {
+        const expStr = valToStr(exp);
+        if (expStr === 'sí' || expStr === 'si') {
+            const m = parseInt(c.meses, 10);
+            if (isNaN(m) || m <= 0) return 'meses';
+        } else if (expStr !== 'no') {
+            return 'experiencia';
+        }
+    }
+    // Incompleto por una razón que no mapea a un paso de captura (ej. género derivado).
+    return 'nombre';
+};
+
 /**
  * Checks if a candidate's chat is empty (no messages exchanged).
  */

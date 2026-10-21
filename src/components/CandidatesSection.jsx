@@ -21,7 +21,7 @@ import { fireConfetti } from '../utils/confetti';
 
 // Module-level set: persists across component mounts/unmounts during the session
 const _firedConfettiIds = new Set();
-import { isProfileComplete, isChatEmpty } from '../utils/profileUtils';
+import { isProfileComplete, isChatEmpty, firstMissingStep, STUCK_STEPS } from '../utils/profileUtils';
 import { useToastContext } from '../contexts/ToastContext';
 import { useAuthContext } from '../contexts/AuthContext';
 
@@ -943,7 +943,16 @@ const CandidatesSection = () => {
         });
         const last100 = sorted.slice(0, 100);
         const completos = last100.filter(c => isProfileComplete(c)).length;
-        return { completos, total: last100.length, pct: Math.round((completos / last100.length) * 100) };
+        // Desglose de atorados: ¿en qué paso se quedó cada incompleto? (orden de captura)
+        const stuckCounts = {};
+        for (const c of last100) {
+            const step = firstMissingStep(c);
+            if (step) stuckCounts[step] = (stuckCounts[step] || 0) + 1;
+        }
+        const stuck = STUCK_STEPS
+            .map(s => ({ ...s, count: stuckCounts[s.key] || 0 }))
+            .filter(s => s.count > 0);
+        return { completos, total: last100.length, pct: Math.round((completos / last100.length) * 100), stuck };
     }, [candidates]);
 
     // ✅ META AUDIT: Memoized pipeline — filter + sort only recalculated when deps change
@@ -1029,6 +1038,18 @@ const CandidatesSection = () => {
                                         />
                                     </div>
                                     <span className="text-[9px] text-gray-400 dark:text-gray-500 mt-1">Qué tan bien trabaja Brenda</span>
+                                    {completionCTR.stuck.length > 0 && (
+                                        <div className="mt-2 pt-2 border-t border-gray-100 dark:border-gray-700">
+                                            <span className="text-[9px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">Atorados en</span>
+                                            <div className="flex flex-wrap gap-x-2 gap-y-0.5 mt-1">
+                                                {completionCTR.stuck.map(s => (
+                                                    <span key={s.key} className="text-[10px] text-gray-500 dark:text-gray-400 tabular-nums">
+                                                        {s.label} <span className="font-bold text-amber-500">{s.count}</span>
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                             )}
