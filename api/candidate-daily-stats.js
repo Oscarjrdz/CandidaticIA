@@ -33,6 +33,42 @@ function buildDayArray(fromStr, toStr, counts) {
     return days;
 }
 
+const INIT_MARKER = 'stats:daily:captures:initialized';
+const BACKFILL_LOCK_KEY = 'stats:daily:captures:backfill_lock';
+
+// Backfill ÚNICO: escanea toda la base una sola vez, escribe los conteos ABSOLUTOS por día en el
+// hash stats:daily:captures (HSET, idempotente) y prende el marcador. A partir de ahí el endpoint
+// sirve siempre desde ese hash barato; el incremento en vivo (storage.saveCandidate → hincrby con
+// createdAt||primerContacto en zona Monterrey) lo mantiene al día. Usa los MISMOS criterios de
+// fecha que el incremento en vivo para no desalinearse. Protegido por lock para que dos instancias
+// serverless no escaneen los ~13.6k blobs (~14 MB) a la vez. Devuelve true si este proceso lo hizo.
+async function backfillDailyCaptures(redis) {
+    const gotLock = await redis.set(BACKFILL_LOCK_KEY, '1', 'NX', 'EX', 180).catch(() => null);
+    if (!gotLock) return false; // otra instancia ya lo está haciendo
+    try {
+        const { candidates } = await getCandidates(100000, 0, '', false);
+        const counts = {};
+        for (const c of candidates) {
+            const raw = c.createdAt || c.primerContacto;
+            if (!raw) continue;
+            try {
+                const key = toMtyDate(raw);
+                counts[key] = (counts[key] || 0) + 1;
+            } catch {}
+        }
+        const pipe = redis.pipeline();
+        pipe.del(HASH_KEY);
+        const flat = [];
+        for (const [k, v] of Object.entries(counts)) flat.push(k, String(v));
+        if (flat.length) pipe.hset(HASH_KEY, ...flat);
+        pipe.set(INIT_MARKER, '1');
+        await pipe.exec();
+        return true;
+    } finally {
+        await redis.del(BACKFILL_LOCK_KEY).catch(() => {});
+    }
+}
+
 export default async function handler(req, res) {
     if (req.method !== 'GET') return res.status(405).end();
 
@@ -46,21 +82,26 @@ export default async function handler(req, res) {
 
     const redis = getRedisClient();
 
-    // Fast path: Redis hash — only after backfill has run (marker key set)
+    // Fast path: Redis hash. La PRIMERA vez que corre tras un deploy el marcador no existe, así que
+    // se dispara el backfill único (detrás de lock); de ahí en adelante siempre sirve desde el hash.
     if (redis) {
         try {
-            const initialized = await redis.exists('stats:daily:captures:initialized');
+            let initialized = await redis.exists(INIT_MARKER);
+            if (!initialized) {
+                const did = await backfillDailyCaptures(redis);
+                initialized = did || (await redis.exists(INIT_MARKER));
+            }
             if (initialized) {
                 const hash = await redis.hgetall(HASH_KEY) || {};
                 const days = buildDayArray(fromStr, toStr, hash);
                 const total = days.reduce((s, d) => s + d.count, 0);
-                const payload = { days, total, from: fromStr, to: toStr, source: 'hash' };
-                return res.status(200).json(payload);
+                res.setHeader('Cache-Control', 'private, max-age=60');
+                return res.status(200).json({ days, total, from: fromStr, to: toStr, source: 'hash' });
             }
         } catch {}
     }
 
-    // Fallback: full scan (used until backfill is run once via POST /api/admin/backfill-daily-stats)
+    // Fallback: escaneo completo (solo si el backfill lo tomó otra instancia y aún no termina).
     const fallbackCacheKey = `${fromStr}:${toStr}`;
     const cached = fallbackRangeCache.get(fallbackCacheKey);
     if (cached && cached.expiresAt > Date.now()) {

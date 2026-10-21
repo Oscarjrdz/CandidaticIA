@@ -76,7 +76,6 @@ function _connectSingleton() {
         _singletonES = eventSource;
 
         eventSource.onopen = () => {
-            console.log('✅ SSE connected (singleton)');
             _reconnectAttempts = 0;
             _updateState({ connected: true, error: null });
         };
@@ -95,13 +94,11 @@ function _connectSingleton() {
                     }
                     return;
                 } else if (data.type === 'connected') {
-                    console.log('📡 SSE connection established (singleton)');
+                    // conexión establecida — sin log (hot path compartido)
                 } else if (data.type === 'candidate:new') {
-                    console.log('🆕 New candidate via SSE:', data.data);
                     _updateState({ newCandidate: data.data });
                     window.dispatchEvent(new CustomEvent(SSE_EVENTS.CANDIDATE_NEW, { detail: data.data }));
                 } else if (data.type === 'candidate:update') {
-                    console.log('🔄 Candidate update via SSE:', data.data?.candidateId);
                     // 🚀 CRITICAL: Dispatch via DOM CustomEvent to bypass React 18 batching.
                     window.dispatchEvent(new CustomEvent(SSE_EVENTS.CANDIDATE_UPDATE, { detail: data.data }));
                     // Also update state for backward-compat (simple consumers that only need latest)
@@ -148,7 +145,6 @@ function _connectSingleton() {
             if (_subscriberCount > 0) {
                 const delay = Math.min(500 * Math.pow(2, _reconnectAttempts) + Math.random() * 1000, 30000);
                 _reconnectAttempts++;
-                console.log(`🔄 SSE reconnecting in ${Math.round(delay)}ms (attempt ${_reconnectAttempts})...`);
                 _singletonReconnectTimer = setTimeout(() => {
                     if (_subscriberCount > 0) _connectSingleton();
                 }, delay);

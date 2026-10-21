@@ -11,7 +11,9 @@ async function getCandidatesCached(getCandidates) {
     if (_candidatesCache && (now - _candidatesCacheAt) < CANDIDATES_CACHE_TTL) {
         return _candidatesCache;
     }
-    const { candidates } = await getCandidates(10000, 0, '', false);
+    // Toda la base (antes el tope era 10,000 y la base tiene ~13.6k → los ~3.6k más antiguos
+    // quedaban fuera de la búsqueda IA). El caché de 5 min amortiza el costo del escaneo.
+    const { candidates } = await getCandidates(100000, 0, '', false);
     _candidatesCache = candidates;
     _candidatesCacheAt = now;
     return candidates;

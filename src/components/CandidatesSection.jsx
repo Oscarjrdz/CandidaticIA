@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Users, Search, Trash2, RefreshCw, User, MessageCircle, Clock, Loader2, CheckCircle, Sparkles, Send, Zap, Ban, GripVertical, Tag, ChevronDown, ChevronLeft, ChevronRight, X, Pencil, Plus, AlertTriangle, TrendingUp, CalendarDays, RotateCcw } from 'lucide-react';
+import { Users, Search, Trash2, RefreshCw, User, MessageCircle, Clock, Loader2, CheckCircle, Check, Sparkles, Send, Zap, Ban, GripVertical, Tag, ChevronDown, ChevronLeft, ChevronRight, X, Pencil, Plus, AlertTriangle, TrendingUp, CalendarDays, RotateCcw } from 'lucide-react';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, horizontalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -101,10 +101,9 @@ const areCandidatePropsEqual = (prev, next) => {
 
 const CandidateRow = React.memo(({ candidate, columnOrder, fieldsMap, magicLoading, isBlockLoading, onOpenChat, onBlockToggle, onDelete, onMagicFix, showEmptyRing }) => {
     const isComplete = isProfileComplete(candidate);
-    // Asistencia = el candidato SÍ llegó a la cita. Cuando exista el dato real vendrá en
-    // candidate.asistencia; por ahora, DEMO: forzado para 8116038195 (Oscar) para ver el look.
-    const isAsistencia = candidate.asistencia === true
-        || (candidate.whatsapp && String(candidate.whatsapp).includes('8116038195'));
+    // Asistencia = el candidato SÍ llegó a la cita. Dato real del backend (candidate.asistencia);
+    // el punto se enciende solo cuando viene true, gris tenue mientras no.
+    const isAsistencia = candidate.asistencia === true;
     return (
         <tr className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-900 smooth-transition relative">
             <td className="py-px px-1 text-center">
@@ -349,7 +348,7 @@ const CandidatesSection = () => {
     // Semilla desde caché SOLO si el rango cacheado coincide con el rango inicial por defecto
     // (evita pintar barras de un rango distinto al re-entrar). Refresca en silencio al montar.
     const [dailyStats, setDailyStats] = useState(() =>
-        (sectionCache.daily?.from === mtyDaysAgo(6) && sectionCache.daily?.to === mtyToday)
+        (sectionCache.daily?.from === mtyDaysAgo(6) && sectionCache.daily?.to === mtyToday())
             ? sectionCache.daily.data : null
     );
     const [dailyFrom, setDailyFrom] = useState(() => mtyDaysAgo(6));
@@ -796,44 +795,6 @@ const CandidatesSection = () => {
         }
     }, [currentPage, search]);
 
-    // AI Action Flow
-    const [aiActionOpen, setAiActionOpen] = useState(false);
-
-    const handleAiAction = async (query) => {
-        try {
-            const context = {
-                candidateCount: displayedCandidates.length,
-                candidateIds: displayedCandidates.map(c => c.id)
-            };
-
-            const res = await fetch('/api/ai/action', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ query, context })
-            });
-
-            const data = await res.json();
-
-            if (data.success && data.action) {
-                const { intent, explanation } = data.action;
-
-                setAiActionOpen(false); // Close AI Input
-
-                if (intent === 'REFINE_FILTER') {
-                    showToast(explanation || 'Refinando filtros...', 'info');
-                    // Removed broken aiQuery reference.
-                    // Instead just instruct user to use main search for filtering.
-                    showToast('Utiliza la barra de búsqueda superior para refinar mejor', 'info');
-                } else {
-                    showToast('No entendí la acción. Intenta de nuevo.', 'warning');
-                }
-            }
-        } catch (error) {
-            console.error('AI Action Error', error);
-            showToast('Error procesando acción', 'error');
-        }
-    };
-
     const loadCandidates = async (page = 1) => {
         setLoading(true);
         if (candidates.length === 0) setIsInitialLoading(true);
@@ -1033,6 +994,8 @@ const CandidatesSection = () => {
     // sabe el servidor (no se puede aproximar con los 100 cargados en cliente), así que se muestra
     // únicamente cuando responde /api/candidates/ctr.
     const retornosHoyTotal = realCtr?.retornosHoy?.total || 0;
+    // De esos retornados, cuántos atendió Grok hoy (lo marca vía la tool MCP marcar_retorno_atendido).
+    const retornosAtendidosGrok = realCtr?.retornosHoy?.atendidosPorGrok || 0;
 
     // ✅ META AUDIT: Memoized pipeline — filter + sort only recalculated when deps change
     const displayedCandidates = React.useMemo(() => {
@@ -1181,12 +1144,16 @@ const CandidatesSection = () => {
                                         </div>
                                     )}
                                     {/* Retornados completos de hoy: completos que YA existían y volvieron a escribir hoy
-                                        (actividad de Sala de Espera). Dato REAL del servidor. */}
-                                    {retornosHoyTotal > 0 && (
+                                        (actividad de Sala de Espera). Dato REAL del servidor; visible siempre que haya
+                                        respondido /api/candidates/ctr, incluso en 0 (es un KPI en vivo). */}
+                                    {realCtr?.retornosHoy && (
                                         <div className="mt-2 pt-1.5 border-t border-gray-100 dark:border-gray-700/60 flex items-center gap-1 text-[10px] text-gray-500 dark:text-gray-400 tabular-nums">
                                             <RotateCcw className="w-3 h-3 text-cyan-500 shrink-0" />
                                             <span className="font-bold text-cyan-600 dark:text-cyan-400">{retornosHoyTotal}</span>
                                             <span>{retornosHoyTotal === 1 ? 'completo volvió hoy' : 'completos volvieron hoy'}</span>
+                                            {retornosAtendidosGrok > 0 && (
+                                                <span className="text-[9px] text-gray-400 dark:text-gray-500">({retornosAtendidosGrok} atendidos por Grok)</span>
+                                            )}
                                         </div>
                                     )}
                                 </div>
@@ -1403,19 +1370,6 @@ const CandidatesSection = () => {
 
 
 
-
-                    {/* AI Action Modal (Follow-up) */}
-                    {aiActionOpen && (
-                        <MagicSearch
-                            initialMode="action"
-                            customTitle={`¿Qué hacemos con estos ${displayedCandidates.length} candidatos?`}
-                            customPlaceholder="Ej: 'Filtrar solo los que sepan Inglés' o 'Enviarles un saludo'..."
-                            onAction={handleAiAction}
-                            isOpenProp={true}
-                            onClose={() => setAiActionOpen(false)}
-                            showToast={showToast}
-                        />
-                    )}
 
                     <div className="relative w-full sm:w-64 group order-first sm:order-none">
                         <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4 group-focus-within:text-gray-600 transition-colors" />
