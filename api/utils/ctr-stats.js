@@ -147,6 +147,45 @@ export async function getCtrBlocksCached() {
     return fresh ? { ...fresh, cache: 'miss' } : null;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Marcadores "atendido por Grok" — de los COMPLETOS que volvieron a escribir HOY.
+// ─────────────────────────────────────────────────────────────────────────────
+// Grok atiende a los completos que regresaron hoy (bloque `retornosHoy`) y marca cada uno vía la
+// tool MCP `marcar_retorno_atendido`. Se guardan en un set por día (zona Monterrey) para contar
+// cuántos lleva atendidos; el set expira solo a los 7 días — el KPI es "de hoy" y se reinicia cada
+// día, no es un histórico perpetuo. El número que ve el dashboard = SCARD de ese set.
+const GROK_ATTENDED_KEY = 'ctr:grok_attended'; // :YYYY-MM-DD
+const GROK_ATTENDED_TTL_SECONDS = 7 * 24 * 60 * 60; // 7 días: se autolimpia sin cron
+
+function grokAttendedKey(ymd) {
+    return `${GROK_ATTENDED_KEY}:${ymd || mtyTodayYmd()}`;
+}
+
+// Marca un candidato (completo que volvió hoy) como atendido por Grok HOY. Idempotente (SADD).
+// Devuelve el conteo actualizado de atendidos hoy.
+export async function markRetornoAttendedByGrok(candidateId) {
+    const redis = getRedisClient();
+    if (!redis || !candidateId) return 0;
+    const key = grokAttendedKey();
+    const res = await redis.pipeline()
+        .sadd(key, String(candidateId))
+        .expire(key, GROK_ATTENDED_TTL_SECONDS)
+        .scard(key)
+        .exec();
+    const scard = res?.[2]?.[1]; // [[err,sadd],[err,expire],[err,scard]]
+    return Number.isFinite(scard) ? scard : 0;
+}
+
+// Cuántos completos-que-volvieron atendió Grok HOY (SCARD del set del día). Barato (1 comando).
+export async function getGrokAttendedTodayCount() {
+    const redis = getRedisClient();
+    if (!redis) return 0;
+    try {
+        const n = await redis.scard(grokAttendedKey());
+        return Number.isFinite(n) ? n : 0;
+    } catch { return 0; }
+}
+
 // Proyección ligera para el dashboard: solo conteos (sin la composición id+nombre).
 export function stripComposition(block) {
     if (!block) return { total: 0, completos: 0, pct: 0, stuck: [] };

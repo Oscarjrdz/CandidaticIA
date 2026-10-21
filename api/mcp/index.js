@@ -35,7 +35,7 @@ import {
 } from '../utils/storage.js';
 import { substituteVariables, substituteDynamicPhrase } from '../utils/shortcuts.js';
 import { getFilterCountsWithIndex, countSegment, resolveSegmentIds } from '../utils/facet-index.js';
-import { getCtrBlocksCached } from '../utils/ctr-stats.js';
+import { getCtrBlocksCached, markRetornoAttendedByGrok, getGrokAttendedTodayCount } from '../utils/ctr-stats.js';
 
 // `name` = identificador estable de la implementación (no cambiar, varios clientes
 // lo usan como id). `title` = nombre legible para humanos que la UI del conector
@@ -401,7 +401,7 @@ const TOOLS = {
     },
 
     ver_ctr: {
-        description: 'CTR de completos del dashboard (datos REALES, sin tope de 100). Dos bloques: "hoy" = candidatos cuyo PRIMER CONTACTO es hoy (00:00 → ahora, zona Monterrey); "ultimos100" = los 100 candidatos más recientes. Por bloque devuelve total, completos, incompletos, pct y el desglose de "atorados" por paso de captura (nombre, nacimiento, municipio, escolaridad, categoría, colonia, experiencia, meses). Además devuelve "retornadosCompletosHoy": candidatos con perfil COMPLETO que YA existían (primer contacto en un día anterior) y volvieron a escribir HOY — señal de actividad de Sala de Espera, disjunto de los completos nuevos de hoy. Para cada número incluye la COMPOSICIÓN: los candidatos (id + nombre) que lo forman, con tope por grupo. Usa candidateId luego en ver_perfil_candidato / leer_chat.',
+        description: 'CTR de completos del dashboard (datos REALES, sin tope de 100). Dos bloques: "hoy" = candidatos cuyo PRIMER CONTACTO es hoy (00:00 → ahora, zona Monterrey); "ultimos100" = los 100 candidatos más recientes. Por bloque devuelve total, completos, incompletos, pct y el desglose de "atorados" por paso de captura (nombre, nacimiento, municipio, escolaridad, categoría, colonia, experiencia, meses). Además devuelve "retornadosCompletosHoy": candidatos con perfil COMPLETO que YA existían (primer contacto en un día anterior) y volvieron a escribir HOY — señal de actividad de Sala de Espera, disjunto de los completos nuevos de hoy. Ese bloque trae "atendidosPorGrok" (cuántos de esos retornados ya marcaste como atendidos hoy con la tool marcar_retorno_atendido) y "pendientesPorAtender". Para cada número incluye la COMPOSICIÓN: los candidatos (id + nombre) que lo forman, con tope por grupo. Usa candidateId luego en ver_perfil_candidato / leer_chat, y marcar_retorno_atendido cuando ya le diste seguimiento a un retornado.',
         inputSchema: {
             type: 'object',
             properties: {
@@ -413,6 +413,8 @@ const TOOLS = {
         handler: async (args) => {
             const data = await getCtrBlocksCached();
             if (!data) throw new Error('CTR no disponible (Redis sin conexión)');
+            // Cuántos de los completos-que-volvieron atendió Grok HOY (fresco, SCARD del set del día).
+            const atendidosPorGrok = await getGrokAttendedTodayCount();
 
             const incluir = args?.incluirCandidatos !== false;
             let cap = parseInt(args?.maxPorGrupo, 10);
@@ -447,8 +449,8 @@ const TOOLS = {
             };
 
             const fmtRetornos = (r) => {
-                if (!r) return { total: 0 };
-                const out = { total: r.total };
+                if (!r) return { total: 0, atendidosPorGrok };
+                const out = { total: r.total, atendidosPorGrok, pendientesPorAtender: Math.max(0, r.total - atendidosPorGrok) };
                 if (incluir) {
                     const comp = takeRefs(r.refs, r.total);
                     out.candidatos = comp.candidatos;
@@ -470,6 +472,23 @@ const TOOLS = {
                 result.retornadosCompletosHoy = fmtRetornos(data.retornosHoy);
             }
             return result;
+        }
+    },
+
+    marcar_retorno_atendido: {
+        description: 'Marca a un candidato de "completos que volvieron hoy" (bloque retornadosCompletosHoy de ver_ctr) como ATENDIDO por ti (Grok). Úsalo cuando YA conversaste o diste seguimiento a ese completo que regresó a escribir hoy. Idempotente: marcar dos veces al mismo no lo cuenta doble. El contador se reinicia cada día (zona Monterrey) y se refleja en el dashboard como "(N atendidos por Grok)" junto a "completos volvieron hoy". Devuelve el total de atendidos hoy.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                candidateId: { type: 'string', description: 'ID del candidato (el "id" que te dio ver_ctr en retornadosCompletosHoy.candidatos).' }
+            },
+            required: ['candidateId']
+        },
+        handler: async (args) => {
+            const id = String(args?.candidateId || '').trim();
+            if (!id) throw new Error('Falta candidateId');
+            const atendidosPorGrokHoy = await markRetornoAttendedByGrok(id);
+            return { ok: true, candidateId: id, atendidosPorGrokHoy };
         }
     },
 

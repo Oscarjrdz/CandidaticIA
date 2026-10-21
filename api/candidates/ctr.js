@@ -1,5 +1,5 @@
 import { validateAdminSession } from '../utils/storage.js';
-import { getCtrBlocksCached, stripComposition } from '../utils/ctr-stats.js';
+import { getCtrBlocksCached, stripComposition, getGrokAttendedTodayCount } from '../utils/ctr-stats.js';
 
 /**
  * CTR de completos (REAL, sin tope de 100) para el dashboard de Candidatos.
@@ -21,14 +21,19 @@ export default async function handler(req, res) {
     if (!userId) return res.status(401).json({ error: 'No autorizado' });
 
     try {
-        const data = await getCtrBlocksCached();
-        if (!data) return res.status(200).json({ today: stripComposition(null), ultimos100: stripComposition(null), retornosHoy: { total: 0 }, asOf: Date.now() });
+        // El conteo de "atendidos por Grok" se lee fresco (SCARD, 1 comando) aunque los bloques CTR
+        // vengan de la caché de 60s — así se refleja de inmediato cuando Grok acaba de marcar uno.
+        const [data, atendidosPorGrok] = await Promise.all([
+            getCtrBlocksCached(),
+            getGrokAttendedTodayCount(),
+        ]);
+        if (!data) return res.status(200).json({ today: stripComposition(null), ultimos100: stripComposition(null), retornosHoy: { total: 0, atendidosPorGrok }, asOf: Date.now() });
 
         res.setHeader('Cache-Control', 'private, max-age=30');
         return res.status(200).json({
             today: stripComposition(data.today),
             ultimos100: stripComposition(data.ultimos100),
-            retornosHoy: { total: data.retornosHoy?.total || 0 },
+            retornosHoy: { total: data.retornosHoy?.total || 0, atendidosPorGrok },
             asOf: data.asOf,
             fecha: data.fecha,
         });
