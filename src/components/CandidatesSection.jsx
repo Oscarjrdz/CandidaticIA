@@ -1059,18 +1059,19 @@ const CandidatesSection = () => {
                                             style={{ width: `${completionCTR.pct}%` }}
                                         />
                                     </div>
-                                    <span className="text-[9px] text-gray-400 dark:text-gray-500 mt-1">Qué tan bien trabaja Brenda</span>
-                                    {completionCTR.stuck.length > 0 && (
-                                        <div className="mt-2 pt-2 border-t border-gray-100 dark:border-gray-700">
-                                            <span className="text-[9px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">Atorados en</span>
-                                            <div className="flex flex-wrap gap-x-2 gap-y-0.5 mt-1">
-                                                {completionCTR.stuck.map(s => (
-                                                    <span key={s.key} className="text-[10px] text-gray-500 dark:text-gray-400 tabular-nums">
-                                                        {s.label} <span className="font-bold text-amber-500">{s.count}</span>
+                                    {completionCTR.stuck.length > 0 ? (
+                                        <div className="mt-1 flex items-baseline gap-2 overflow-hidden whitespace-nowrap">
+                                            <span className="text-[9px] text-gray-400 dark:text-gray-500 flex-none">Atorados:</span>
+                                            <span className="text-[10px] text-gray-500 dark:text-gray-400 tabular-nums truncate">
+                                                {completionCTR.stuck.map((s, i) => (
+                                                    <span key={s.key}>
+                                                        {i > 0 && ' · '}{s.label} <span className="font-bold text-amber-500">{s.count}</span>
                                                     </span>
                                                 ))}
-                                            </div>
+                                            </span>
                                         </div>
+                                    ) : (
+                                        <span className="text-[9px] text-gray-400 dark:text-gray-500 mt-1">Qué tan bien trabaja Brenda</span>
                                     )}
                                 </div>
                             </div>
