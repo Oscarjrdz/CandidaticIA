@@ -30,15 +30,17 @@ export const isProfileComplete = (c) => {
 
 // Orden de captura de Brenda (paso 1 → paso 2). Cada entrada: key interna + etiqueta corta.
 // Se usa para el desglose "¿en qué paso se atoraron los incompletos?" de la sección Candidatos.
+// `short` = abreviatura de 3 letras para que el desglose de "atorados" quepa en UNA sola línea
+// dentro de la tarjeta de CTR (son hasta 8 pasos; con el nombre completo no caben y se truncan).
 export const STUCK_STEPS = [
-    { key: 'nombre', label: 'Nombre' },
-    { key: 'nacimiento', label: 'Nacimiento' },
-    { key: 'municipio', label: 'Municipio' },
-    { key: 'escolaridad', label: 'Escolaridad' },
-    { key: 'categoria', label: 'Categoría' },
-    { key: 'colonia', label: 'Colonia' },
-    { key: 'experiencia', label: 'Experiencia' },
-    { key: 'meses', label: 'Meses exp.' },
+    { key: 'nombre', label: 'Nombre', short: 'Nom' },
+    { key: 'nacimiento', label: 'Nacimiento', short: 'Nac' },
+    { key: 'municipio', label: 'Municipio', short: 'Mun' },
+    { key: 'escolaridad', label: 'Escolaridad', short: 'Esc' },
+    { key: 'categoria', label: 'Categoría', short: 'Cat' },
+    { key: 'colonia', label: 'Colonia', short: 'Col' },
+    { key: 'experiencia', label: 'Experiencia', short: 'Exp' },
+    { key: 'meses', label: 'Meses exp.', short: 'Mes' },
 ];
 
 const isFieldEmpty = (v) => {

@@ -1060,15 +1060,12 @@ const CandidatesSection = () => {
                                         />
                                     </div>
                                     {completionCTR.stuck.length > 0 ? (
-                                        <div className="mt-1 flex items-baseline gap-2 overflow-hidden whitespace-nowrap">
-                                            <span className="text-[9px] text-gray-400 dark:text-gray-500 flex-none">Atorados:</span>
-                                            <span className="text-[10px] text-gray-500 dark:text-gray-400 tabular-nums truncate">
-                                                {completionCTR.stuck.map((s, i) => (
-                                                    <span key={s.key}>
-                                                        {i > 0 && ' · '}{s.label} <span className="font-bold text-amber-500">{s.count}</span>
-                                                    </span>
-                                                ))}
-                                            </span>
+                                        <div className="mt-1 flex items-baseline justify-between gap-1 whitespace-nowrap text-[10px] text-gray-500 dark:text-gray-400 tabular-nums">
+                                            {completionCTR.stuck.map((s) => (
+                                                <span key={s.key} className="shrink-0">
+                                                    {s.short} <span className="font-bold text-amber-500">{s.count}</span>
+                                                </span>
+                                            ))}
                                         </div>
                                     ) : (
                                         <span className="text-[9px] text-gray-400 dark:text-gray-500 mt-1">Qué tan bien trabaja Brenda</span>
