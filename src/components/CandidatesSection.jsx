@@ -355,6 +355,11 @@ const CandidatesSection = () => {
     const [dailyFrom, setDailyFrom] = useState(() => mtyDaysAgo(6));
     const [dailyTo, setDailyTo] = useState(mtyToday);
     const [dailyLoading, setDailyLoading] = useState(false);
+
+    // CTR REAL (sin tope de 100) calculado en el servidor: bloque "hoy" (primer contacto hoy) y
+    // "ultimos100". Se refresca cada 60s (igual que su caché en Redis). sectionCache para pintar
+    // al instante al re-entrar a la sección.
+    const [realCtr, setRealCtr] = useState(() => sectionCache.realCtr || null);
     const [calOpen, setCalOpen] = useState(false);
     const [calYear, setCalYear] = useState(() => new Date().getFullYear());
     const [calMonth, setCalMonth] = useState(() => new Date().getMonth());
@@ -406,6 +411,22 @@ const CandidatesSection = () => {
     };
 
     useEffect(() => { fetchDailyStats(dailyFrom, dailyTo); }, []);
+
+    const fetchCtr = async () => {
+        try {
+            const res = await fetch('/api/candidates/ctr');
+            if (res.ok) {
+                const data = await res.json();
+                setRealCtr(data);
+                sectionCache.realCtr = data;
+            }
+        } catch {}
+    };
+    useEffect(() => {
+        fetchCtr();
+        const t = setInterval(fetchCtr, 60000);
+        return () => clearInterval(t);
+    }, []);
 
     // SSE: increment the visible daily bar once per candidate (no fetch needed)
     useEffect(() => {
@@ -977,6 +998,38 @@ const CandidatesSection = () => {
         return { completos, total: last100.length, pct: Math.round((completos / last100.length) * 100), stuck };
     }, [candidates]);
 
+    // CTR del DÍA CORRIENTE: mismo cálculo que completionCTR pero sobre los candidatos cuyo
+    // primer contacto es HOY (00:00 → ahora, zona horaria Monterrey) en vez de los últimos 100.
+    // Nota: `candidates` es la primera página (100 más recientes, orden zrevrange del backend),
+    // así que cubre todo el día salvo que hoy entren >100 candidatos (mismo tope que completionCTR).
+    const todayCTR = React.useMemo(() => {
+        if (!candidates || candidates.length === 0) return null;
+        const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Monterrey' });
+        const todays = candidates.filter(c => {
+            const raw = c.primerContacto || c.createdAt;
+            if (!raw) return false;
+            const d = new Date(raw);
+            if (isNaN(d)) return false;
+            return d.toLocaleDateString('sv-SE', { timeZone: 'America/Monterrey' }) === today;
+        });
+        if (todays.length === 0) return { completos: 0, total: 0, pct: 0, stuck: [] };
+        const completos = todays.filter(c => isProfileComplete(c)).length;
+        const stuckCounts = {};
+        for (const c of todays) {
+            const step = firstMissingStep(c);
+            if (step) stuckCounts[step] = (stuckCounts[step] || 0) + 1;
+        }
+        const stuck = STUCK_STEPS
+            .map(s => ({ ...s, count: stuckCounts[s.key] || 0 }))
+            .filter(s => s.count > 0);
+        return { completos, total: todays.length, pct: Math.round((completos / todays.length) * 100), stuck };
+    }, [candidates]);
+
+    // El bloque "CTR de Hoy" usa el dato REAL del servidor (sin tope de 100). Mientras llega,
+    // cae al cálculo cliente (todayCTR, aproximado sobre los 100 cargados) para pintar al instante
+    // sin parpadeo; se corrige solo en cuanto responde /api/candidates/ctr.
+    const ctrHoy = realCtr?.today || todayCTR;
+
     // ✅ META AUDIT: Memoized pipeline — filter + sort only recalculated when deps change
     const displayedCandidates = React.useMemo(() => {
         let result = aiFilteredCandidates || candidates;
@@ -1074,42 +1127,87 @@ const CandidatesSection = () => {
                             </div>
                             )}
 
-                            {/* Card 3: Incoming Messages (Live) */}
+                            {/* Card 3: CTR del día de HOY (00:00 → ahora, Monterrey) — dato REAL del
+                                servidor (/api/candidates/ctr, sin tope de 100), clon visual de la Card 2 */}
+                            {ctrHoy && (
                             <div className="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm relative overflow-hidden group">
                                 <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
-                                    <MessageCircle className="w-16 h-16 text-green-500 opacity-20 transform -rotate-12" />
+                                    <TrendingUp className="w-16 h-16 text-emerald-500 transform rotate-6" />
                                 </div>
                                 <div className="flex flex-col relative z-10">
-                                    <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-1">Mensajes Entrantes</span>
-                                    <div className="flex items-baseline space-x-2">
-                                        <h3 className="text-2xl font-bold text-gray-900 dark:text-white tabular-nums">
-                                            {Number(stats?.incoming || 0).toLocaleString()}
-                                        </h3>
-                                        <div className="flex items-center space-x-1">
-                                            <span className="relative flex h-2.5 w-2.5">
-                                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                                                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500"></span>
-                                            </span>
-                                            <span className="text-[10px] text-green-500 font-medium ml-1">En vivo</span>
-                                        </div>
+                                    <div className="flex items-center gap-1.5 mb-1">
+                                        <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">CTR de Hoy</span>
+                                        <span className="relative flex h-2 w-2">
+                                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                                            <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                                        </span>
                                     </div>
+                                    {ctrHoy.total > 0 ? (
+                                        <>
+                                            <div className="flex items-baseline gap-2 flex-wrap">
+                                                <h3 className={`text-2xl font-bold leading-none tabular-nums ${ctrHoy.pct >= 70 ? 'text-emerald-500' : ctrHoy.pct >= 40 ? 'text-amber-500' : 'text-red-500'}`}>
+                                                    {ctrHoy.pct}%
+                                                </h3>
+                                                <span className="text-[10px] text-gray-400 dark:text-gray-500 font-medium">
+                                                    {ctrHoy.completos}/{ctrHoy.total} hoy
+                                                </span>
+                                            </div>
+                                            <div className="mt-2 w-full bg-gray-100 dark:bg-gray-700 rounded-full h-1.5">
+                                                <div
+                                                    className={`h-1.5 rounded-full transition-all duration-500 ${ctrHoy.pct >= 70 ? 'bg-emerald-500' : ctrHoy.pct >= 40 ? 'bg-amber-500' : 'bg-red-500'}`}
+                                                    style={{ width: `${ctrHoy.pct}%` }}
+                                                />
+                                            </div>
+                                            {ctrHoy.stuck.length > 0 ? (
+                                                <div className="mt-1 flex items-baseline justify-between gap-1 whitespace-nowrap text-[10px] text-gray-500 dark:text-gray-400 tabular-nums">
+                                                    {ctrHoy.stuck.map((s) => (
+                                                        <span key={s.key} className="shrink-0">
+                                                            {s.short} <span className="font-bold text-amber-500">{s.count}</span>
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            ) : (
+                                                <span className="text-[9px] text-gray-400 dark:text-gray-500 mt-1">Rendimiento de Brenda hoy</span>
+                                            )}
+                                        </>
+                                    ) : (
+                                        <div className="flex items-baseline gap-2">
+                                            <h3 className="text-2xl font-bold leading-none tabular-nums text-gray-300 dark:text-gray-600">—</h3>
+                                            <span className="text-[10px] text-gray-400 dark:text-gray-500 font-medium">Sin candidatos hoy aún</span>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
+                            )}
 
-                            {/* Card 4: Outgoing Messages */}
+                            {/* Card 4: Mensajes (entrantes + salientes) */}
                             <div className="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm relative overflow-hidden group">
                                 <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
                                     <Send className="w-16 h-16 text-purple-500 transform rotate-6" />
                                 </div>
                                 <div className="flex flex-col relative z-10">
-                                    <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-1">Mensajes Enviados</span>
-                                    <div className="flex items-baseline space-x-2">
-                                        <h3 className="text-2xl font-bold text-gray-900 dark:text-white tabular-nums">
-                                            {Number(stats?.outgoing || 0).toLocaleString()}
-                                        </h3>
-                                        <span className="text-[10px] text-purple-500 font-medium flex items-center bg-purple-50 dark:bg-purple-900/20 px-1.5 py-px rounded-full">
-                                            <Sparkles className="w-3 h-3 mr-0.5" /> AI & Manual
-                                        </span>
+                                    <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-2">Mensajes</span>
+                                    <div className="flex flex-col gap-2">
+                                        {/* Entrantes */}
+                                        <div className="flex items-center gap-2">
+                                            <span className="w-5 h-5 rounded-md bg-green-100 dark:bg-green-900/30 flex items-center justify-center shrink-0">
+                                                <MessageCircle className="w-3 h-3 text-green-600 dark:text-green-400" />
+                                            </span>
+                                            <h3 className="text-xl font-bold text-gray-900 dark:text-white leading-none tabular-nums">
+                                                {Number(stats?.incoming || 0).toLocaleString()}
+                                            </h3>
+                                            <span className="text-[9px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">Entrantes</span>
+                                        </div>
+                                        {/* Salientes */}
+                                        <div className="flex items-center gap-2">
+                                            <span className="w-5 h-5 rounded-md bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center shrink-0">
+                                                <Send className="w-3 h-3 text-purple-600 dark:text-purple-400" />
+                                            </span>
+                                            <h3 className="text-xl font-bold text-gray-900 dark:text-white leading-none tabular-nums">
+                                                {Number(stats?.outgoing || 0).toLocaleString()}
+                                            </h3>
+                                            <span className="text-[9px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">Enviados</span>
+                                        </div>
                                     </div>
                                 </div>
                             </div>

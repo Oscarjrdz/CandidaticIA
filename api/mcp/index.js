@@ -35,6 +35,7 @@ import {
 } from '../utils/storage.js';
 import { substituteVariables, substituteDynamicPhrase } from '../utils/shortcuts.js';
 import { getFilterCountsWithIndex, countSegment, resolveSegmentIds } from '../utils/facet-index.js';
+import { getCtrBlocksCached } from '../utils/ctr-stats.js';
 
 // `name` = identificador estable de la implementación (no cambiar, varios clientes
 // lo usan como id). `title` = nombre legible para humanos que la UI del conector
@@ -396,6 +397,66 @@ const TOOLS = {
                 perfilCompleto: c.paso2Estado === 'completo',
                 creado: c.createdAt || null
             };
+        }
+    },
+
+    ver_ctr: {
+        description: 'CTR de completos del dashboard (datos REALES, sin tope de 100). Dos bloques: "hoy" = candidatos cuyo PRIMER CONTACTO es hoy (00:00 → ahora, zona Monterrey); "ultimos100" = los 100 candidatos más recientes. Por bloque devuelve total, completos, incompletos, pct y el desglose de "atorados" por paso de captura (nombre, nacimiento, municipio, escolaridad, categoría, colonia, experiencia, meses). Para cada número incluye la COMPOSICIÓN: los candidatos (id + nombre) que lo forman, con tope por grupo. Usa candidateId luego en ver_perfil_candidato / leer_chat.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                bloque: { type: 'string', description: 'Opcional: "hoy" o "ultimos100" para traer solo uno. Vacío = ambos.' },
+                incluirCandidatos: { type: 'boolean', description: 'Incluir la lista de candidatos que compone cada número (default true).' },
+                maxPorGrupo: { type: 'number', description: 'Máximo de candidatos a listar por grupo/paso (default 25, máx 200). El resto se resume en "yMas".' }
+            }
+        },
+        handler: async (args) => {
+            const data = await getCtrBlocksCached();
+            if (!data) throw new Error('CTR no disponible (Redis sin conexión)');
+
+            const incluir = args?.incluirCandidatos !== false;
+            let cap = parseInt(args?.maxPorGrupo, 10);
+            if (!Number.isFinite(cap) || cap <= 0) cap = 25;
+            cap = Math.min(cap, 200);
+
+            const takeRefs = (refs, count) => {
+                const shown = (refs || []).slice(0, cap);
+                const yMas = count - shown.length;
+                return { candidatos: shown, ...(yMas > 0 ? { yMas } : {}) };
+            };
+            const fmtBlock = (b) => {
+                if (!b) return null;
+                const out = {
+                    total: b.total,
+                    completos: b.completos,
+                    incompletos: b.total - b.completos,
+                    pct: b.pct,
+                    atorados: (b.stuck || []).map(s => ({
+                        paso: s.label,
+                        clave: s.key,
+                        cantidad: s.count,
+                        ...(incluir ? takeRefs(s.refs, s.count) : {})
+                    }))
+                };
+                if (incluir) {
+                    const comp = takeRefs(b.completosRefs, b.completos);
+                    out.candidatosCompletos = comp.candidatos;
+                    if (comp.yMas) out.completosYMas = comp.yMas;
+                }
+                return out;
+            };
+
+            const which = String(args?.bloque || '').toLowerCase().replace(/[_\s]/g, '');
+            const result = { fecha: data.fecha, generado: new Date(data.asOf).toISOString() };
+            if (which === 'hoy') {
+                result.hoy = fmtBlock(data.today);
+            } else if (which === 'ultimos100' || which === 'ultimos') {
+                result.ultimos100 = fmtBlock(data.ultimos100);
+            } else {
+                result.hoy = fmtBlock(data.today);
+                result.ultimos100 = fmtBlock(data.ultimos100);
+            }
+            return result;
         }
     },
 
