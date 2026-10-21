@@ -165,10 +165,6 @@
         {
             "path": "/api/cron/flow-incompletos",
             "schedule": "*/15 * * * *"
-        },
-        {
-            "path": "/api/cron/grok-seguimiento",
-            "schedule": "*/15 * * * *"
         }
     ]
 }
