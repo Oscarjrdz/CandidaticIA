@@ -104,6 +104,19 @@ export async function computeCtrBlocks() {
     const activeToday = await mgetCandidates(redis, activeTodayIds);
     const todayCohort = activeToday.filter(c => mtyDateOf(c.primerContacto || c.createdAt) === todayYmd);
 
+    // RETORNADOS COMPLETOS DE HOY: candidatos con perfil completo que YA existían (primer contacto
+    // en un día anterior) y volvieron a escribir hoy. Señal de actividad de Sala de Espera. Se saca
+    // del MISMO superconjunto "activos hoy" (sin lectura extra de Redis): activos hoy − leads nuevos
+    // de hoy, filtrado a completos. Disjunto del cohorte de hoy (esos tienen primer contacto hoy),
+    // así que nunca se cuenta dos veces un "completo nuevo" como "retornado".
+    const retornadosCohort = activeToday.filter(c =>
+        isProfileComplete(c) && mtyDateOf(c.primerContacto || c.createdAt) !== todayYmd
+    );
+    const retornosRefs = [];
+    for (const c of retornadosCohort) {
+        if (retornosRefs.length < MAX_REFS_PER_BUCKET) retornosRefs.push({ id: c.id, nombre: candName(c) });
+    }
+
     // ÚLTIMOS 100: los 100 más recientes del índice.
     const last100Ids = await redis.zrevrange(LIST_KEY, 0, 99);
     const last100 = await mgetCandidates(redis, last100Ids);
@@ -111,6 +124,7 @@ export async function computeCtrBlocks() {
     return {
         today: classify(todayCohort),
         ultimos100: classify(last100),
+        retornosHoy: { total: retornadosCohort.length, refs: retornosRefs },
         asOf: Date.now(),
         fecha: todayYmd,
     };

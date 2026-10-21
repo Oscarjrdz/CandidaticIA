@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Users, Search, Trash2, RefreshCw, User, MessageCircle, Clock, Loader2, CheckCircle, Sparkles, Send, Zap, Ban, GripVertical, Tag, ChevronDown, ChevronLeft, ChevronRight, X, Pencil, Plus, AlertTriangle, TrendingUp, CalendarDays } from 'lucide-react';
+import { Users, Search, Trash2, RefreshCw, User, MessageCircle, Clock, Loader2, CheckCircle, Sparkles, Send, Zap, Ban, GripVertical, Tag, ChevronDown, ChevronLeft, ChevronRight, X, Pencil, Plus, AlertTriangle, TrendingUp, CalendarDays, RotateCcw } from 'lucide-react';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, horizontalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -1029,6 +1029,10 @@ const CandidatesSection = () => {
     // cae al cálculo cliente (todayCTR, aproximado sobre los 100 cargados) para pintar al instante
     // sin parpadeo; se corrige solo en cuanto responde /api/candidates/ctr.
     const ctrHoy = realCtr?.today || todayCTR;
+    // Retornados completos de hoy: completos que YA existían y volvieron a escribir hoy. Solo lo
+    // sabe el servidor (no se puede aproximar con los 100 cargados en cliente), así que se muestra
+    // únicamente cuando responde /api/candidates/ctr.
+    const retornosHoyTotal = realCtr?.retornosHoy?.total || 0;
 
     // ✅ META AUDIT: Memoized pipeline — filter + sort only recalculated when deps change
     const displayedCandidates = React.useMemo(() => {
@@ -1174,6 +1178,15 @@ const CandidatesSection = () => {
                                         <div className="flex items-baseline gap-2">
                                             <h3 className="text-2xl font-bold leading-none tabular-nums text-gray-300 dark:text-gray-600">—</h3>
                                             <span className="text-[10px] text-gray-400 dark:text-gray-500 font-medium">Sin candidatos hoy aún</span>
+                                        </div>
+                                    )}
+                                    {/* Retornados completos de hoy: completos que YA existían y volvieron a escribir hoy
+                                        (actividad de Sala de Espera). Dato REAL del servidor. */}
+                                    {retornosHoyTotal > 0 && (
+                                        <div className="mt-2 pt-1.5 border-t border-gray-100 dark:border-gray-700/60 flex items-center gap-1 text-[10px] text-gray-500 dark:text-gray-400 tabular-nums">
+                                            <RotateCcw className="w-3 h-3 text-cyan-500 shrink-0" />
+                                            <span className="font-bold text-cyan-600 dark:text-cyan-400">{retornosHoyTotal}</span>
+                                            <span>{retornosHoyTotal === 1 ? 'completo volvió hoy' : 'completos volvieron hoy'}</span>
                                         </div>
                                     )}
                                 </div>

@@ -401,7 +401,7 @@ const TOOLS = {
     },
 
     ver_ctr: {
-        description: 'CTR de completos del dashboard (datos REALES, sin tope de 100). Dos bloques: "hoy" = candidatos cuyo PRIMER CONTACTO es hoy (00:00 → ahora, zona Monterrey); "ultimos100" = los 100 candidatos más recientes. Por bloque devuelve total, completos, incompletos, pct y el desglose de "atorados" por paso de captura (nombre, nacimiento, municipio, escolaridad, categoría, colonia, experiencia, meses). Para cada número incluye la COMPOSICIÓN: los candidatos (id + nombre) que lo forman, con tope por grupo. Usa candidateId luego en ver_perfil_candidato / leer_chat.',
+        description: 'CTR de completos del dashboard (datos REALES, sin tope de 100). Dos bloques: "hoy" = candidatos cuyo PRIMER CONTACTO es hoy (00:00 → ahora, zona Monterrey); "ultimos100" = los 100 candidatos más recientes. Por bloque devuelve total, completos, incompletos, pct y el desglose de "atorados" por paso de captura (nombre, nacimiento, municipio, escolaridad, categoría, colonia, experiencia, meses). Además devuelve "retornadosCompletosHoy": candidatos con perfil COMPLETO que YA existían (primer contacto en un día anterior) y volvieron a escribir HOY — señal de actividad de Sala de Espera, disjunto de los completos nuevos de hoy. Para cada número incluye la COMPOSICIÓN: los candidatos (id + nombre) que lo forman, con tope por grupo. Usa candidateId luego en ver_perfil_candidato / leer_chat.',
         inputSchema: {
             type: 'object',
             properties: {
@@ -446,15 +446,28 @@ const TOOLS = {
                 return out;
             };
 
+            const fmtRetornos = (r) => {
+                if (!r) return { total: 0 };
+                const out = { total: r.total };
+                if (incluir) {
+                    const comp = takeRefs(r.refs, r.total);
+                    out.candidatos = comp.candidatos;
+                    if (comp.yMas) out.yMas = comp.yMas;
+                }
+                return out;
+            };
+
             const which = String(args?.bloque || '').toLowerCase().replace(/[_\s]/g, '');
             const result = { fecha: data.fecha, generado: new Date(data.asOf).toISOString() };
             if (which === 'hoy') {
                 result.hoy = fmtBlock(data.today);
+                result.retornadosCompletosHoy = fmtRetornos(data.retornosHoy);
             } else if (which === 'ultimos100' || which === 'ultimos') {
                 result.ultimos100 = fmtBlock(data.ultimos100);
             } else {
                 result.hoy = fmtBlock(data.today);
                 result.ultimos100 = fmtBlock(data.ultimos100);
+                result.retornadosCompletosHoy = fmtRetornos(data.retornosHoy);
             }
             return result;
         }

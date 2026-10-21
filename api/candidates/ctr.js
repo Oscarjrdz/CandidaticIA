@@ -4,11 +4,12 @@ import { getCtrBlocksCached, stripComposition } from '../utils/ctr-stats.js';
 /**
  * CTR de completos (REAL, sin tope de 100) para el dashboard de Candidatos.
  *
- *   GET /api/candidates/ctr → { today, ultimos100, asOf, fecha }
+ *   GET /api/candidates/ctr → { today, ultimos100, retornosHoy, asOf, fecha }
  *
- * Cada bloque: { total, completos, pct, stuck:[{key,short,count}] }.
+ * Cada bloque CTR: { total, completos, pct, stuck:[{key,short,count}] }.
  *   - today      = candidatos con primer contacto HOY (00:00 → ahora, zona Monterrey).
  *   - ultimos100 = los 100 candidatos más recientes.
+ *   - retornosHoy = { total } — completos que YA existían y volvieron a escribir hoy.
  *
  * La composición (qué candidatos forman cada número) NO se devuelve aquí — eso es para Grok vía
  * la tool MCP `ver_ctr`. El dashboard solo necesita los conteos. Cacheado 60s en el servidor.
@@ -21,12 +22,13 @@ export default async function handler(req, res) {
 
     try {
         const data = await getCtrBlocksCached();
-        if (!data) return res.status(200).json({ today: stripComposition(null), ultimos100: stripComposition(null), asOf: Date.now() });
+        if (!data) return res.status(200).json({ today: stripComposition(null), ultimos100: stripComposition(null), retornosHoy: { total: 0 }, asOf: Date.now() });
 
         res.setHeader('Cache-Control', 'private, max-age=30');
         return res.status(200).json({
             today: stripComposition(data.today),
             ultimos100: stripComposition(data.ultimos100),
+            retornosHoy: { total: data.retornosHoy?.total || 0 },
             asOf: data.asOf,
             fecha: data.fecha,
         });
