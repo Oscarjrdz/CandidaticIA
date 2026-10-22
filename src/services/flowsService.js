@@ -204,6 +204,24 @@ export const getQuickReplies = async () => {
     }
 };
 
+// Guarda el banco de respuestas COMPLETO (el endpoint reemplaza el array entero).
+// Reusado por el editor inline del nodo "accion_whatsapp" para editar el mensaje
+// seleccionado sin salir del flujo. Edita el banco globalmente, no solo este nodo.
+export const saveQuickReplies = async (replies) => {
+    try {
+        const res = await fetch('/api/quick_replies', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ replies })
+        });
+        const data = await res.json();
+        if (data.success) return { success: true, replies: data.replies };
+        return { success: false, error: data.error };
+    } catch (error) {
+        return { success: false, error: error.message };
+    }
+};
+
 // Plantillas de recordatorio — reusadas tal cual por el nodo "accion_recordatorio".
 export const getReminderTemplates = async () => {
     try {

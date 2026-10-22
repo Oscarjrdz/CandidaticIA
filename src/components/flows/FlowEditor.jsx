@@ -9,7 +9,7 @@ import '@xyflow/react/dist/style.css';
 import { useToastContext } from '../../contexts/ToastContext';
 import { useAuthContext } from '../../contexts/AuthContext';
 import { getFlowLocks, toggleNodeLock, initFlowLocksIfNeeded } from '../../utils/nodeLocks';
-import { getFlow, updateFlow, getFlowsMeta, getFlowCounters, getQuickReplies, getReminderTemplates, getManualProjects, testFlow, getFilteredFlowCandidates, runFlowListItem } from '../../services/flowsService';
+import { getFlow, updateFlow, getFlowsMeta, getFlowCounters, getQuickReplies, saveQuickReplies, getReminderTemplates, getManualProjects, testFlow, getFilteredFlowCandidates, runFlowListItem } from '../../services/flowsService';
 import { flowNodeTypes, COLOR_CLASSES, NODE_DEFS } from './nodeTypes';
 import FlowEdge from './edgeTypes/FlowEdge';
 import NodeConfigDrawer from './NodeConfigDrawer';
@@ -146,6 +146,23 @@ const FlowEditorInner = ({ flowId, onBack }) => {
     const handleDuplicateNodeRef = useRef(null);
 
     const handleConfigure = useCallback((nodeId) => setSelectedNodeId(nodeId), []);
+
+    // Edita UN mensaje del banco desde el editor inline del nodo "Mandar WhatsApp".
+    // Optimista: actualiza el estado local, persiste el banco completo y, si falla,
+    // revierte. Cambia el mensaje en el banco globalmente (se usa en todos lados).
+    const handleSaveQuickReply = useCallback(async (updatedQr) => {
+        const prev = quickReplies;
+        const nextList = prev.map(r => r.id === updatedQr.id ? updatedQr : r);
+        setQuickReplies(nextList);
+        const res = await saveQuickReplies(nextList);
+        if (res.success) {
+            showToast('Mensaje del banco actualizado', 'success');
+            return true;
+        }
+        setQuickReplies(prev);
+        showToast('No se pudo guardar el mensaje', 'error');
+        return false;
+    }, [quickReplies, showToast]);
 
     const handleDeleteNode = useCallback((nodeId) => {
         setNodes(nds => nds.filter(n => n.id !== nodeId));
@@ -897,6 +914,7 @@ const FlowEditorInner = ({ flowId, onBack }) => {
                     flowId={flowId}
                     meta={meta}
                     quickReplies={quickReplies}
+                    onSaveQuickReply={handleSaveQuickReply}
                     reminderTemplates={reminderTemplates}
                     projects={projects}
                     onChange={handleNodeConfigChange}

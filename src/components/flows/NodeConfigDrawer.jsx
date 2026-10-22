@@ -693,7 +693,87 @@ const TestNodeConfig = ({ data, patch, meta }) => {
     );
 };
 
-const NodeConfigDrawer = ({ node, flowId, meta, quickReplies, reminderTemplates, projects, onChange, onClose }) => {
+// Editor inline del mensaje seleccionado en el nodo "Mandar WhatsApp". Muestra el texto
+// del mensaje del banco y permite editarlo SIN salir del flujo. Guardar edita el banco
+// globalmente (el mismo mensaje se usa en el chat, envíos, otros flujos). Los adjuntos
+// (imagen, audio, ubicación, documento) se muestran como aviso de solo lectura — este
+// editor rápido solo toca el texto; para cambiar adjuntos está el banco de respuestas.
+const QuickReplyInlineEditor = ({ qr, onSave }) => {
+    const [text, setText] = useState(qr.message || '');
+    const [saving, setSaving] = useState(false);
+    const taRef = useRef(null);
+
+    // Al cambiar de mensaje seleccionado, re-sincroniza el borrador.
+    useEffect(() => { setText(qr.message || ''); }, [qr.id]);
+
+    const dirty = text !== (qr.message || '');
+
+    const attachments = [];
+    const imgCount = (qr.imageUrls || (qr.imageUrl ? [qr.imageUrl] : [])).length;
+    if (imgCount) attachments.push(imgCount > 1 ? `${imgCount} imágenes` : 'Imagen');
+    if (qr.audioUrl) attachments.push(qr.voice ? 'Nota de voz' : 'Audio');
+    if (qr.location?.lat) attachments.push('Ubicación');
+    if (qr.documentUrl) attachments.push('Documento');
+
+    const insertAtCursor = (emoji) => {
+        const ta = taRef.current;
+        if (!ta) { setText(t => t + emoji); return; }
+        const start = ta.selectionStart ?? text.length;
+        const end = ta.selectionEnd ?? text.length;
+        const next = text.slice(0, start) + emoji + text.slice(end);
+        setText(next);
+        requestAnimationFrame(() => {
+            ta.focus();
+            const pos = start + emoji.length;
+            try { ta.setSelectionRange(pos, pos); } catch { /* noop */ }
+        });
+    };
+
+    const handleSave = async () => {
+        if (!dirty || saving) return;
+        setSaving(true);
+        await onSave({ ...qr, message: text });
+        setSaving(false);
+    };
+
+    return (
+        <div className="mt-3 rounded-xl border border-emerald-200 dark:border-emerald-800/60 bg-emerald-50/50 dark:bg-emerald-900/10 p-3">
+            <div className="flex items-center justify-between mb-2">
+                <label className="text-xs font-semibold text-emerald-700 dark:text-emerald-300">Contenido del mensaje</label>
+                <EmojiPickerButton onPick={insertAtCursor} />
+            </div>
+            <textarea
+                ref={taRef}
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                placeholder="(Este mensaje no tiene texto)"
+                rows={6}
+                className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-y"
+            />
+            {attachments.length > 0 && (
+                <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                    {attachments.map((a) => (
+                        <span key={a} className="inline-flex items-center px-2 py-0.5 rounded-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-[11px] text-gray-500 dark:text-gray-400">📎 {a}</span>
+                    ))}
+                    <span className="text-[11px] text-gray-400">— los adjuntos se editan en el banco</span>
+                </div>
+            )}
+            <div className="mt-2.5 flex items-center justify-between gap-2">
+                <p className="text-[11px] text-gray-400 leading-snug">Al guardar se actualiza este mensaje en <strong>todo el banco de respuestas</strong>, no solo aquí.</p>
+                <button
+                    type="button"
+                    onClick={handleSave}
+                    disabled={!dirty || saving}
+                    className="shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                    {saving ? 'Guardando…' : 'Guardar cambios'}
+                </button>
+            </div>
+        </div>
+    );
+};
+
+const NodeConfigDrawer = ({ node, flowId, meta, quickReplies, onSaveQuickReply, reminderTemplates, projects, onChange, onClose }) => {
     if (!node) return null;
     const def = NODE_DEFS[node.type] || NODE_DEFS.contador;
     const colors = COLOR_CLASSES[def.color] || COLOR_CLASSES.gray;
@@ -1048,9 +1128,24 @@ const NodeConfigDrawer = ({ node, flowId, meta, quickReplies, reminderTemplates,
                             ringClass="focus:ring-emerald-500"
                             emptyLabel="No hay mensajes en el banco de respuestas"
                         />
-                        {data.quickReplyId && (
-                            <p className="mt-2 text-xs text-gray-400">Se manda con variables ya resueltas ({'{{nombre}}'}, {'{{municipio}}'}, etc.)</p>
-                        )}
+                        {data.quickReplyId && (() => {
+                            const selectedQr = (quickReplies || []).find(r => r.id === data.quickReplyId);
+                            if (!selectedQr) {
+                                return <p className="mt-2 text-xs text-amber-500">Este mensaje ya no existe en el banco. Elige otro.</p>;
+                            }
+                            return (
+                                <>
+                                    {onSaveQuickReply && (
+                                        <QuickReplyInlineEditor
+                                            key={selectedQr.id}
+                                            qr={selectedQr}
+                                            onSave={onSaveQuickReply}
+                                        />
+                                    )}
+                                    <p className="mt-2 text-xs text-gray-400">Se manda con variables ya resueltas ({'{{nombre}}'}, {'{{municipio}}'}, etc.)</p>
+                                </>
+                            );
+                        })()}
                     </div>
                 )}
 
