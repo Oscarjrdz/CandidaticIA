@@ -337,7 +337,12 @@
       "Bash(node --check src/utils/profileUtils.js)",
       "Bash(git -C /Users/oscar/Candidatic_IA apply --cached --check /private/tmp/claude-501/-Users-oscar-Candidatic-IA/c48f8957-f740-45a6-a783-629d235adcc5/scratchpad/confetti.patch)",
       "Bash(git -C /Users/oscar/Candidatic_IA apply --cached /private/tmp/claude-501/-Users-oscar-Candidatic-IA/c48f8957-f740-45a6-a783-629d235adcc5/scratchpad/confetti.patch)",
-      "Bash(git -C /Users/oscar/Candidatic_IA diff --cached --stat)"
+      "Bash(git -C /Users/oscar/Candidatic_IA diff --cached --stat)",
+      "Bash(node /private/tmp/claude-501/-Users-oscar-Candidatic-IA/c48f8957-f740-45a6-a783-629d235adcc5/scratchpad/_ctr_test.mjs)",
+      "Bash(node --check api/utils/ctr-stats.js)",
+      "Bash(node --check api/candidates/ctr.js)",
+      "Bash(node --check src/components/CandidatesSection.jsx)",
+      "Bash(echo \"lint exit=$?\")"
     ],
     "additionalDirectories": [
       "/Users/oscar/App Candidatic/Candidatic_App/utils",
