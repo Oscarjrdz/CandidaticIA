@@ -448,6 +448,34 @@ const normInteractiveTitle = (s) => String(s || '')
     .replace(/\s+/g, ' ')
     .trim();
 
+// ── Distancia geográfica para el nodo "Pedir Ubicación" (condicion por parada más cercana) ──
+// Haversine: metros de gran círculo entre dos puntos {lat,lng} (grados decimales). No usa
+// ningún API externo — es la fórmula estándar, suficiente para rangos de ciudad (error <0.5%).
+function haversineMeters(a, b) {
+    const R = 6371000; // radio terrestre medio en metros
+    const toRad = (x) => (x * Math.PI) / 180;
+    const dLat = toRad(b.lat - a.lat);
+    const dLng = toRad(b.lng - a.lng);
+    const lat1 = toRad(a.lat);
+    const lat2 = toRad(b.lat);
+    const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+    return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)));
+}
+
+// Parada más cercana a un punto. paradas = [{ nombre?, lat, lng }]. Descarta coords inválidas.
+// Devuelve { nombre, lat, lng, meters } o null si no hay ninguna parada válida.
+function nearestStop(point, paradas) {
+    let best = null;
+    for (const p of (Array.isArray(paradas) ? paradas : [])) {
+        const lat = Number(p?.lat);
+        const lng = Number(p?.lng);
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+        const meters = haversineMeters(point, { lat, lng });
+        if (!best || meters < best.meters) best = { nombre: p?.nombre || '', lat, lng, meters };
+    }
+    return best;
+}
+
 // Construye y ENVÍA el mensaje interactivo de un nodo 'accion_botones' (botón/lista/cta_url)
 // con header/footer/variables, lo guarda en el historial (chips + palomitas) y devuelve
 // { sendOk, options } — options = [{handle, match}] para registrar la espera del ruteo.
@@ -894,6 +922,59 @@ export async function evaluateOrExecute(node, candidate, flowId, redis, opts = {
                 await redis.expire(key, ttlSec);
             } catch (e) {
                 console.error(`[FLOW-ENGINE] accion_botones espera ${flowId}/${node.id}:`, e?.message);
+                return true; // si falla el registro, no cuelgues el flujo
+            }
+            return { __pause: true, ttlSec };
+        }
+
+        case 'accion_ubicacion': {
+            // 📍 PEDIR UBICACIÓN: manda el botón nativo "Enviar ubicación" de WhatsApp y PAUSA
+            // el flujo esperando que el candidato comparta su GPS. Cuando llega (lo atrapa el
+            // webhook, igual que un clic interactivo), se calcula la distancia a la parada más
+            // cercana de `data.paradas` y se reanuda por la rama 'cerca' (≤ radio) o 'lejos'.
+            // Rama 'timeout' = compartió la ubicación después de vencerse la ventana.
+            const body = (data.body || '').trim();
+            if (!body) return true; // sin cuerpo no manda nada, no rompe la cadena
+
+            // Modo PRUEBA (nodo Test) o EPHEMERAL (cron "al regresar"): no hay candidato real
+            // que comparta su ubicación → no pausa, deja pasar para previsualizar los siguientes.
+            if (opts.skipClaim || opts.ephemeral) return true;
+
+            let sendOk = false;
+            try {
+                const config = await getUltraMsgConfig(candidate.incomingPhoneNumberId || candidate.instanceId);
+                if (!config?.token || !config?.instanceId) throw new Error('sin credenciales de WhatsApp');
+                const cleanTo = String(candidate.whatsapp).replace(/\D/g, '');
+                const bodyText = substituteVariables(body, candidate);
+                const sendResult = await pacedSend(opts, () => sendUltraMsgMessageWithRetry(config.instanceId, config.token, cleanTo, bodyText, 'interactive', { interactiveType: 'location_request', priority: 1 }));
+                if (sendResult?.success) {
+                    sendOk = true;
+                    await saveFlowOutbound(candidate.id, {
+                        from: 'me', content: `${bodyText}\n\n[📍 Pide ubicación]`, timestamp: new Date().toISOString(),
+                        meta: { flow: true, flowId, nodeId: node.id, locationRequest: true }
+                    }, sendResult);
+                } else {
+                    console.error(`[FLOW-ENGINE] accion_ubicacion ${flowId}/${node.id} candidato ${candidate.id}: envío falló —`, sendResult?.error);
+                }
+            } catch (e) {
+                console.error(`[FLOW-ENGINE] accion_ubicacion ${flowId}/${node.id}:`, e?.message);
+            }
+            if (!sendOk) return true; // si no se mandó, no cuelga el flujo
+
+            const neverExpires = data.timeoutNever === true;
+            const timeoutHoras = Number(data.timeoutHoras) > 0 ? Number(data.timeoutHoras) : 48;
+            const NEVER_TTL_SEC = 60 * 60 * 24 * 365 * 5; // 5 años
+            const ttlSec = neverExpires ? NEVER_TTL_SEC : Math.max(PROGRESS_TTL_SEC, Math.ceil(timeoutHoras * 3600) + 86400);
+            try {
+                const key = `${WAITING_PREFIX}${candidate.id}`;
+                const payload = JSON.stringify({
+                    nodeId: node.id, kind: 'location',
+                    ...(neverExpires ? {} : { expiresAt: Date.now() + timeoutHoras * 3600 * 1000 })
+                });
+                await redis.hset(key, flowId, payload);
+                await redis.expire(key, ttlSec);
+            } catch (e) {
+                console.error(`[FLOW-ENGINE] accion_ubicacion espera ${flowId}/${node.id}:`, e?.message);
                 return true; // si falla el registro, no cuelgues el flujo
             }
             return { __pause: true, ttlSec };
@@ -1734,6 +1815,87 @@ export async function resumeWaitingFlowIfMatch(candidateId, candidateSnapshot, i
         return false;
     } catch (e) {
         console.error('[FLOW-ENGINE] resumeWaitingFlowIfMatch:', e?.message);
+        return false;
+    }
+}
+
+// Reanuda un flujo pausado en un nodo "Pedir Ubicación" (kind 'location') cuando el candidato
+// comparte su GPS. Lo llama el webhook al recibir un mensaje de tipo 'location' (análogo a
+// resumeWaitingFlowIfMatch para clics). Calcula la parada más cercana de las configuradas en el
+// nodo y rutea: 'cerca' (≤ radioMetros), 'lejos' (fuera del radio) o 'timeout' (llegó tarde).
+// Guarda en el candidato la parada más cercana y los metros (para tokens {{parada cercana}} /
+// {{metros parada}}). Devuelve true si reanudó algún flujo.
+export async function resumeWaitingLocationFlow(candidateId, candidateSnapshot, coords) {
+    try {
+        const redis = getRedisClient();
+        if (!redis || !candidateId || !coords || !Number.isFinite(coords.lat) || !Number.isFinite(coords.lng)) return false;
+
+        const key = `${WAITING_PREFIX}${candidateId}`;
+        const all = await redis.hgetall(key);
+        if (!all || !Object.keys(all).length) return false;
+
+        const raw = await getCachedConfig(redis, FLOWS_KEY);
+        const flows = raw ? JSON.parse(raw) : [];
+        const now = Date.now();
+
+        for (const [flowId, val] of Object.entries(all)) {
+            let st;
+            try { st = JSON.parse(val); } catch { await redis.hdel(key, flowId).catch(() => {}); continue; }
+            if (st.kind !== 'location') continue; // solo esperas de ubicación
+
+            const expired = st.expiresAt && now > Number(st.expiresAt);
+            const flow = flows.find(f => f.id === flowId && f.active && Array.isArray(f.nodes) && f.nodes.length);
+            const node = flow?.nodes?.find(n => n.id === st.nodeId);
+
+            let handle;
+            let nearest = null;
+            if (expired || !node) {
+                handle = 'no'; // llegó tarde (venció la ventana) o el nodo ya no existe → No
+            } else {
+                const d = node.data || {};
+                const radio = Number(d.radioMetros) > 0 ? Number(d.radioMetros) : 1000;
+                // Varias rutas (nuevo) o una sola lista de paradas (compat viejo). Se toma la
+                // parada MÁS CERCANA de TODAS las rutas: si queda dentro del radio → Sí.
+                const rutas = (Array.isArray(d.rutas) && d.rutas.length)
+                    ? d.rutas
+                    : (Array.isArray(d.paradas) ? [{ nombre: d.rutaNombre || '', paradas: d.paradas }] : []);
+                for (const ruta of rutas) {
+                    const n = nearestStop(coords, Array.isArray(ruta?.paradas) ? ruta.paradas : []);
+                    if (n && (!nearest || n.meters < nearest.meters)) {
+                        nearest = { ...n, ruta: ruta?.nombre || ruta?.ruta || '' };
+                    }
+                }
+                // Sin paradas válidas en ninguna ruta → nadie "queda cerca": rutea 'no'.
+                handle = (nearest && nearest.meters <= radio) ? 'si' : 'no';
+            }
+
+            // Consume la espera ANTES de reanudar (idempotencia: una ubicación = una reanudación).
+            await redis.hdel(key, flowId).catch(() => {});
+            if (!flow) return false; // flujo borrado/desactivado mientras esperaba → se descarta
+
+            // Guarda el resultado en el candidato para tokens posteriores ({{parada cercana}}, etc.).
+            if (nearest) {
+                const locPatch = {
+                    ubicacionRutaCercana: nearest.ruta || '',
+                    ubicacionParadaCercana: nearest.nombre,
+                    ubicacionMetrosParada: Math.round(nearest.meters),
+                    ubicacionLat: coords.lat,
+                    ubicacionLng: coords.lng
+                };
+                try {
+                    await updateCandidate(candidateId, locPatch);
+                    Object.assign(candidateSnapshot, locPatch);
+                } catch { /* no crítico: el ruteo ya quedó decidido */ }
+            }
+
+            await runOneFlow(redis, flow, candidateId, { ...candidateSnapshot }, {
+                resumeWait: { nodeId: st.nodeId, handle }
+            });
+            return true; // una reanudación por ubicación
+        }
+        return false;
+    } catch (e) {
+        console.error('[FLOW-ENGINE] resumeWaitingLocationFlow:', e?.message);
         return false;
     }
 }

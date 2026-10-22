@@ -47,6 +47,18 @@ const InteractiveHandles = ({ data }) => {
     );
 };
 
+// Salidas del nodo "Pedir Ubicación": 'si' (le queda — dentro del radio de la parada más
+// cercana de cualquier ruta, verde a la derecha) y 'no' (no le queda / llegó tarde, rojo abajo).
+// Los ids son los handles que la arista usa como sourceHandle y que rutea resumeWaitingLocationFlow.
+const UbicacionHandles = () => (
+    <>
+        <Handle type="source" id="si" position={Position.Right} className="!w-3 !h-3 !bg-emerald-500 !border-2 !border-white dark:!border-gray-900" />
+        <span className="absolute top-1/2 -translate-y-1/2 -right-1 translate-x-full text-[10px] font-bold text-emerald-600 dark:text-emerald-400 pointer-events-none whitespace-nowrap">Sí · le queda</span>
+        <Handle type="source" id="no" position={Position.Bottom} className="!w-3 !h-3 !bg-red-500 !border-2 !border-white dark:!border-gray-900" />
+        <span className="absolute left-1/2 -translate-x-1/2 -bottom-5 text-[10px] font-bold text-red-500 pointer-events-none whitespace-nowrap">No · no le queda</span>
+    </>
+);
+
 const BG_COLORS = ['#6366f1', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#64748b'];
 const TEXT_COLORS = ['#111827', '#ffffff', '#6366f1', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#ec4899'];
 
@@ -428,7 +440,9 @@ const FlowNode = ({ id, type, data, selected }) => {
                 </div>
             )}
 
-            {type === 'accion_botones' && data.routeByOption !== false && (data.mode || 'button') !== 'cta_url' ? (
+            {type === 'accion_ubicacion' ? (
+                <UbicacionHandles />
+            ) : type === 'accion_botones' && data.routeByOption !== false && (data.mode || 'button') !== 'cta_url' ? (
                 <InteractiveHandles data={data} />
             ) : def.branching ? (
                 <>

@@ -627,6 +627,146 @@ const BotonesConfig = ({ data, patch }) => {
     );
 };
 
+// Normaliza el JSON pegado de UNA ruta: acepta un array suelto o un objeto { ruta?, paradas:[...] }.
+// Devuelve { error, paradas:[{nombre,lat,lng}], nombre }. Descarta paradas sin lat/lng numéricos.
+const parseRutaJson = (text) => {
+    if (!text.trim()) return { error: '', paradas: [], nombre: '' };
+    let parsed;
+    try { parsed = JSON.parse(text); } catch { return { error: 'JSON inválido — revisa comas y llaves.', paradas: [], nombre: '' }; }
+    const arr = Array.isArray(parsed) ? parsed : Array.isArray(parsed?.paradas) ? parsed.paradas : null;
+    if (!arr) return { error: 'Esperaba { "paradas": [...] } o un arreglo de paradas.', paradas: [], nombre: '' };
+    const norm = arr.map(p => ({ nombre: String(p?.nombre || '').trim(), lat: Number(p?.lat), lng: Number(p?.lng) }));
+    const valid = norm.filter(p => Number.isFinite(p.lat) && Number.isFinite(p.lng));
+    if (!valid.length) return { error: 'Ninguna parada trae lat/lng numéricos válidos.', paradas: [], nombre: '' };
+    return { error: '', paradas: norm, nombre: parsed?.ruta ? String(parsed.ruta) : '' };
+};
+
+// 📍 Config del nodo "Pedir Ubicación": mensaje que acompaña al botón nativo de WhatsApp, VARIAS
+// rutas (cada una = nombre + su JSON de paradas) y un radio (slider). El motor compara la ubicación
+// que comparte el candidato contra la parada MÁS CERCANA de TODAS las rutas: dentro del radio → Sí.
+const UbicacionConfig = ({ data, patch }) => {
+    const radio = Number(data.radioMetros) > 0 ? Number(data.radioMetros) : 1000;
+    const radioLabel = radio >= 1000 ? `${(radio / 1000).toFixed(radio % 1000 === 0 ? 0 : 1)} km` : `${radio} m`;
+
+    // Estado local de edición: por ruta guarda el texto crudo + error, además de las paradas
+    // normalizadas. A Redis solo va { nombre, paradas } (sin el raw ni el error). Migra el formato
+    // viejo (data.paradas = una sola ruta) a una ruta en la lista.
+    const [rutas, setRutas] = useState(() => {
+        const base = (Array.isArray(data.rutas) && data.rutas.length)
+            ? data.rutas.map(r => ({ nombre: r.nombre || r.ruta || '', paradas: Array.isArray(r.paradas) ? r.paradas : [] }))
+            : (Array.isArray(data.paradas) && data.paradas.length)
+                ? [{ nombre: data.rutaNombre || '', paradas: data.paradas }]
+                : [{ nombre: '', paradas: [] }];
+        return base.map((r, i) => ({
+            id: `r${Date.now()}_${i}`,
+            nombre: r.nombre,
+            paradas: r.paradas,
+            raw: r.paradas.length ? JSON.stringify({ ruta: r.nombre || undefined, paradas: r.paradas }, null, 2) : '',
+            error: ''
+        }));
+    });
+
+    // Vuelca al nodo SOLO lo que el motor necesita (nombre + paradas de las rutas con ≥1 parada).
+    const commit = (next) => {
+        setRutas(next);
+        const clean = next.map(r => ({ nombre: r.nombre || '', paradas: Array.isArray(r.paradas) ? r.paradas : [] }))
+            .filter(r => r.paradas.length);
+        patch({ rutas: clean, paradas: undefined, rutaNombre: undefined });
+    };
+
+    const updateRaw = (id, text) => {
+        const res = parseRutaJson(text);
+        commit(rutas.map(r => r.id === id
+            ? { ...r, raw: text, error: res.error, paradas: res.paradas, nombre: res.nombre || r.nombre }
+            : r));
+    };
+    const updateNombre = (id, nombre) => commit(rutas.map(r => r.id === id ? { ...r, nombre } : r));
+    const addRuta = () => commit([...rutas, { id: `r${Date.now()}`, nombre: '', paradas: [], raw: '', error: '' }]);
+    const removeRuta = (id) => {
+        const next = rutas.filter(r => r.id !== id);
+        commit(next.length ? next : [{ id: `r${Date.now()}`, nombre: '', paradas: [], raw: '', error: '' }]);
+    };
+
+    const totalStops = rutas.reduce((a, r) => a + r.paradas.length, 0);
+
+    return (
+        <div className="space-y-5">
+            <p className="text-xs bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg p-2.5 text-emerald-800 dark:text-emerald-300">
+                Manda el botón nativo <strong>“Enviar ubicación”</strong> de WhatsApp y espera el GPS del candidato. Al llegar, compara contra la parada <strong>más cercana de todas las rutas</strong>: si queda dentro del radio sale por <strong className="text-emerald-600 dark:text-emerald-400">Sí</strong>, si no por <strong className="text-red-500">No</strong>.
+            </p>
+
+            <div>
+                <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-xs text-gray-500 dark:text-gray-400">Mensaje que acompaña al botón</label>
+                    <EmojiPickerButton onPick={(emoji) => patch({ body: (data.body || '') + emoji })} />
+                </div>
+                <textarea rows={3} maxLength={1024} value={data.body || ''} onChange={(e) => patch({ body: e.target.value })}
+                    placeholder="Ej. Para saber si alguna ruta te queda cerca, compárteme tu ubicación 📍" className={inputCls} />
+                <p className="text-[11px] text-gray-400 mt-1">Admite variables: {'{{nombre}}'}, {'{{municipio}}'}…</p>
+            </div>
+
+            <div>
+                <div className="flex items-center justify-between mb-2">
+                    <label className="text-xs text-gray-500 dark:text-gray-400">Rutas {totalStops ? <span className="text-emerald-600 dark:text-emerald-400 font-semibold">· {totalStops} paradas</span> : ''}</label>
+                    <button type="button" onClick={addRuta} className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:underline">+ Agregar ruta</button>
+                </div>
+                <div className="space-y-3">
+                    {rutas.map((r, idx) => {
+                        const valid = r.paradas.length;
+                        return (
+                            <div key={r.id} className="rounded-xl border border-gray-200 dark:border-gray-700 p-2.5 space-y-2 bg-gray-50/60 dark:bg-gray-800/40">
+                                <div className="flex items-center gap-2">
+                                    <input type="text" value={r.nombre || ''} onChange={(e) => updateNombre(r.id, e.target.value)}
+                                        placeholder={`Nombre de la ruta ${idx + 1} (ej. Ruta 215)`} className={`${inputCls} py-1.5 font-semibold`} />
+                                    {rutas.length > 1 && (
+                                        <button type="button" onClick={() => removeRuta(r.id)} className="shrink-0 p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20" title="Quitar ruta">
+                                            <X className="w-4 h-4" />
+                                        </button>
+                                    )}
+                                </div>
+                                <textarea rows={5} value={r.raw} onChange={(e) => updateRaw(r.id, e.target.value)} spellCheck={false}
+                                    placeholder={'Pega aquí el JSON de esta ruta:\n{ "paradas": [ { "nombre": "...", "lat": 25.70, "lng": -100.38 } ] }'}
+                                    className={`${inputCls} py-1.5 font-mono text-xs leading-snug`} />
+                                {r.error
+                                    ? <p className="text-[11px] text-red-500">{r.error}</p>
+                                    : <p className={`text-[11px] ${valid ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-400'}`}>
+                                        {valid ? `✓ ${valid} ${valid === 1 ? 'parada' : 'paradas'}` : 'Pega el JSON de paradas que te generó Claude.'}
+                                      </p>}
+                            </div>
+                        );
+                    })}
+                </div>
+            </div>
+
+            <div>
+                <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-xs text-gray-500 dark:text-gray-400">Radio: qué tan cerca cuenta como “le queda”</label>
+                    <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 tabular-nums">{radioLabel}</span>
+                </div>
+                <input type="range" min="100" max="5000" step="100" value={radio}
+                    onChange={(e) => patch({ radioMetros: Number(e.target.value) })}
+                    className="w-full accent-emerald-500 cursor-pointer" />
+                <div className="flex justify-between text-[10px] text-gray-400 mt-0.5"><span>100 m</span><span>5 km</span></div>
+            </div>
+
+            <div>
+                <label className="text-xs text-gray-500 dark:text-gray-400 mb-1 block">Tiempo máximo de espera (horas)</label>
+                <div className="flex items-center gap-3">
+                    <input type="number" min="1" disabled={data.timeoutNever === true}
+                        value={data.timeoutHoras ?? 48}
+                        onChange={(e) => patch({ timeoutHoras: e.target.value === '' ? 48 : Math.max(1, Number(e.target.value)) })}
+                        className={`${inputCls} w-28 ${data.timeoutNever === true ? 'opacity-40 cursor-not-allowed' : ''}`} />
+                    <label className="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" checked={data.timeoutNever === true} onChange={(e) => patch({ timeoutNever: e.target.checked })} className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500" />
+                        <span className="text-xs text-gray-600 dark:text-gray-300"><strong>Nunca se vence</strong></span>
+                    </label>
+                </div>
+                <p className="text-[11px] text-gray-400 mt-1.5">Si comparte la ubicación después de este plazo, sale por <strong>No</strong>. Guarda la ruta y parada más cercanas en <strong>{'{{ruta cercana}}'}</strong>, <strong>{'{{parada cercana}}'}</strong> y <strong>{'{{metros parada}}'}</strong>.</p>
+            </div>
+        </div>
+    );
+};
+
 // 🧪 Config del nodo Test: arma un PERFIL TEMPORAL (perfil completo/incompleto, etiquetas,
 // vacante actual y check points "ya pasados") para probar el flujo sin tocar candidatos reales.
 // El número y el botón Run siguen en el cuerpo del nodo; aquí se elige "con qué se entra".
@@ -1234,6 +1374,10 @@ const NodeConfigDrawer = ({ node, flowId, meta, quickReplies, onSaveQuickReply, 
 
                 {node.type === 'accion_botones' && (
                     <BotonesConfig data={data} patch={patch} />
+                )}
+
+                {node.type === 'accion_ubicacion' && (
+                    <UbicacionConfig data={data} patch={patch} />
                 )}
 
                 {node.type === 'test' && (

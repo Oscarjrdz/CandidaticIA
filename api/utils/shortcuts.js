@@ -45,7 +45,12 @@ export const substituteVariables = (text, candidate) => {
             'fechanacimiento': candidate.fechaNacimiento || 'No especificada',
             'tieneempleo': candidate.tieneEmpleo || 'No especificado',
             'aspiracionsalarial': candidate.aspiracionSalarial || 'No especificada',
-            'categoria': candidate.categoria || 'No especificada'
+            'categoria': candidate.categoria || 'No especificada',
+            // Nodo "Pedir Ubicación": ruta + parada de transporte más cercana + distancia en
+            // metros (las fija resumeWaitingLocationFlow cuando el candidato comparte su ubicación).
+            'ruta cercana': candidate.ubicacionRutaCercana || 'No especificada',
+            'parada cercana': candidate.ubicacionParadaCercana || 'No especificada',
+            'metros parada': candidate.ubicacionMetrosParada != null ? String(candidate.ubicacionMetrosParada) : ''
         };
 
         if (mappings[lowerKey] !== undefined) {

@@ -1,4 +1,4 @@
-import { Play, Tag, CalendarRange, MapPin, Briefcase, GraduationCap, MessageCircle, Hash, UserRound, CircleMinus, BellRing, FolderKanban, FlaskConical, Eraser, Filter, MessageSquareText, ListChecks, CheckCheck, BotOff, Bot, Ear, AlarmClock, StickyNote, Quote, Square, Type, Flag, MousePointerClick } from 'lucide-react';
+import { Play, Tag, CalendarRange, MapPin, Briefcase, GraduationCap, MessageCircle, Hash, UserRound, CircleMinus, BellRing, FolderKanban, FlaskConical, Eraser, Filter, MessageSquareText, ListChecks, CheckCheck, BotOff, Bot, Ear, AlarmClock, StickyNote, Quote, Square, Type, Flag, MousePointerClick, Navigation } from 'lucide-react';
 
 export const PROFILE_FILTER_LABELS = {
     active: 'Activos (no bloqueados)',
@@ -184,6 +184,22 @@ export const NODE_DEFS = {
                 : (data.sections || []).reduce((a, s) => a + (s.rows || []).filter(r => r?.title?.trim()).length, 0);
             const kind = mode === 'button' ? 'Botones' : 'Lista';
             return data.body?.trim() ? `${kind} (${n}) — ${data.body.slice(0, 30)}${data.body.length > 30 ? '…' : ''}` : `${kind} — configura el mensaje`;
+        }
+    },
+    accion_ubicacion: {
+        label: 'Pedir Ubicación',
+        icon: Navigation,
+        color: 'emerald',
+        hasTarget: true,
+        hasSource: true, // las salidas reales (Sí / No) las dibuja FlowNode a mano
+        summary: (data) => {
+            const rutas = (Array.isArray(data.rutas) && data.rutas.length)
+                ? data.rutas
+                : (Array.isArray(data.paradas) && data.paradas.length ? [{ paradas: data.paradas }] : []);
+            const stops = rutas.reduce((a, r) => a + (Array.isArray(r?.paradas) ? r.paradas.filter(p => Number.isFinite(Number(p?.lat)) && Number.isFinite(Number(p?.lng))).length : 0), 0);
+            const radio = Number(data.radioMetros) > 0 ? Number(data.radioMetros) : 1000;
+            const rLabel = radio >= 1000 ? `${(radio / 1000).toFixed(radio % 1000 === 0 ? 0 : 1)} km` : `${radio} m`;
+            return stops ? `${rutas.length} ${rutas.length === 1 ? 'ruta' : 'rutas'} · ${stops} paradas · radio ${rLabel}` : 'Carga rutas (JSON) y fija el radio';
         }
     },
     frase_dinamica: {

@@ -265,6 +265,16 @@ export const sendMetaMessage = async (to, body, type = 'chat', extraParams = {})
                             }
                         }
                     };
+                } else if (intType === 'location_request') {
+                    // Botón nativo de WhatsApp "Enviar ubicación" (location_request_message).
+                    // El candidato lo toca, comparte su GPS y Meta devuelve un mensaje de tipo
+                    // 'location'. Es UI nativa de WhatsApp → funciona en TODOS los dispositivos
+                    // sin depender de ningún mapa/API externo. Solo acepta body (sin header/footer).
+                    payload.interactive = {
+                        type: 'location_request_message',
+                        body: { text: String(body).substring(0, 1024) },
+                        action: { name: 'send_location' }
+                    };
                 } else if (intType === 'product') {
                     payload.interactive = {
                         type: 'product',

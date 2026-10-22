@@ -352,6 +352,9 @@ export default async function handler(req, res) {
             // distinto en el chat). NO altera `body`: Brenda y el ruteo de flujos siguen
             // recibiendo el título limpio de la opción como si el candidato lo hubiera escrito.
             let isInteractiveReply = false;
+            // Coordenadas crudas si el candidato compartió su ubicación (para el nodo de flujo
+            // "Pedir Ubicación"). Null para cualquier otro tipo de mensaje.
+            let incomingLocation = null;
 
             switch (metaMsgType) {
                 case 'text':
@@ -403,6 +406,7 @@ export default async function handler(req, res) {
                 case 'location':
                     body = `📍 Ubicación: ${metaMsg.location?.latitude}, ${metaMsg.location?.longitude}`;
                     messageType = 'location';
+                    incomingLocation = { lat: Number(metaMsg.location?.latitude), lng: Number(metaMsg.location?.longitude) };
                     break;
                 case 'button':
                     body = metaMsg.button?.text || '';
@@ -1197,6 +1201,26 @@ export default async function handler(req, res) {
                         continue; // clic interactivo resuelto por el motor de flujos, nunca por Brenda
                     } catch (e) {
                         console.error('[Webhook] interactive click guard error:', e?.message);
+                    }
+                }
+
+                // 📍 UBICACIÓN COMPARTIDA → si un nodo "Pedir Ubicación" está esperando, el motor
+                // de flujos calcula la distancia a la parada más cercana y rutea (le queda / no le
+                // queda). Igual que el clic interactivo: se resuelve aquí y NO lo ve Brenda. Sin
+                // espera de ubicación activa cae al flujo normal (Brenda re-pregunta el dato escrito).
+                if (messageType === 'location' && incomingLocation && Number.isFinite(incomingLocation.lat) && Number.isFinite(incomingLocation.lng)) {
+                    try {
+                        const waitingRaw = redis ? await redis.hgetall(`flow:waiting:v1:${candidateId}`) : null;
+                        const hasLocWait = waitingRaw && Object.values(waitingRaw).some(v => {
+                            try { return JSON.parse(v)?.kind === 'location'; } catch { return false; }
+                        });
+                        if (hasLocWait) {
+                            const { resumeWaitingLocationFlow } = await import('../utils/flow-engine.js');
+                            await resumeWaitingLocationFlow(candidateId, updatedCandidate, incomingLocation).catch(() => {});
+                            continue; // ubicación resuelta por el motor de flujos, nunca por Brenda
+                        }
+                    } catch (e) {
+                        console.error('[Webhook] location flow guard error:', e?.message);
                     }
                 }
 
