@@ -968,7 +968,10 @@ export async function evaluateOrExecute(node, candidate, flowId, redis, opts = {
                     const config = await getUltraMsgConfig(candidate.incomingPhoneNumberId || candidate.instanceId);
                     if (config?.token && config?.instanceId) {
                         const cleanTo = String(candidate.whatsapp).replace(/\D/g, '');
-                        const extraBody = substituteVariables((data.extraButtonBody || '').trim() || '¿No estás en tu casa en este momento?', candidate);
+                        // Meta OBLIGA a que el mensaje de botón lleve cuerpo (no acepta body vacío):
+                        // si no escribiste texto, mandamos un '👇' mínimo que apunta al botón, sin
+                        // una frase larga por default.
+                        const extraBody = substituteVariables((data.extraButtonBody || '').trim() || '👇', candidate);
                         const btnTitle = truncateTitleSafe(substituteVariables(extraTitle, candidate), 20);
                         const extraRes = await pacedSend(opts, () => sendUltraMsgMessageWithRetry(config.instanceId, config.token, cleanTo, extraBody, 'interactive', {
                             interactiveType: 'button', buttons: [{ id: 'nocasa', title: btnTitle }], priority: 1

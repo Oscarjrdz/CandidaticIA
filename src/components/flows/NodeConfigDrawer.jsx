@@ -730,9 +730,10 @@ const UbicacionConfig = ({ data, patch }) => {
                             Se manda en un <strong>2º mensaje</strong> debajo de la petición de ubicación. Quien lo toque sigue el flujo por la salida <strong className="text-amber-600 dark:text-amber-400">“No estoy en casa”</strong>, sin pasar por “le queda / no le queda”.
                         </p>
                         <div>
-                            <label className="text-[11px] text-gray-500 dark:text-gray-400 mb-1 block">Texto del mensaje</label>
+                            <label className="text-[11px] text-gray-500 dark:text-gray-400 mb-1 block">Texto del mensaje <span className="text-gray-400">(opcional)</span></label>
                             <input type="text" maxLength={1024} value={data.extraButtonBody ?? ''} onChange={(e) => patch({ extraButtonBody: e.target.value })}
-                                placeholder="¿No estás en tu casa en este momento?" className={inputCls} />
+                                placeholder="Déjalo vacío para mandar solo el botón" className={inputCls} />
+                            <p className="text-[10px] text-gray-400 mt-1">Si lo dejas vacío se manda solo el botón (con un 👇 mínimo, porque WhatsApp no permite botones sin texto).</p>
                         </div>
                         <div>
                             <label className="text-[11px] text-gray-500 dark:text-gray-400 mb-1 block">Texto del botón (máx. 20 caracteres)</label>
