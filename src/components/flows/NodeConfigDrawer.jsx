@@ -785,10 +785,10 @@ const UbicacionConfig = ({ data, patch }) => {
                     <label className="text-xs text-gray-500 dark:text-gray-400">Radio: qué tan cerca cuenta como “le queda”</label>
                     <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 tabular-nums">{radioLabel}</span>
                 </div>
-                <input type="range" min="100" max="5000" step="100" value={radio}
+                <input type="range" min="100" max="20000" step="100" value={radio}
                     onChange={(e) => patch({ radioMetros: Number(e.target.value) })}
                     className="w-full accent-emerald-500 cursor-pointer" />
-                <div className="flex justify-between text-[10px] text-gray-400 mt-0.5"><span>100 m</span><span>5 km</span></div>
+                <div className="flex justify-between text-[10px] text-gray-400 mt-0.5"><span>100 m</span><span>20 km</span></div>
             </div>
 
             <div>
