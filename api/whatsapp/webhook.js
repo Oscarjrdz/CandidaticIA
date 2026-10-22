@@ -734,11 +734,16 @@ export default async function handler(req, res) {
                 updatedCandidate.ubicacionLng = incomingLocation.lng;
                 updatedCandidate.ubicacionCompartidaAt = new Date().toISOString();
                 if (redis) {
-                    const nombrePin = String(updatedCandidate.nombreReal || updatedCandidate.nombre || '').slice(0, 60);
+                    const pin = {
+                        id: candidateId, lat: incomingLocation.lat, lng: incomingLocation.lng,
+                        nombre: String(updatedCandidate.nombreReal || updatedCandidate.nombre || '').slice(0, 60),
+                        whatsapp: updatedCandidate.whatsapp || '', ts: Date.now()
+                    };
                     redis.hset('candidatic:candidate_locations', candidateId, JSON.stringify({
-                        lat: incomingLocation.lat, lng: incomingLocation.lng,
-                        nombre: nombrePin, whatsapp: updatedCandidate.whatsapp || '', ts: Date.now()
+                        lat: pin.lat, lng: pin.lng, nombre: pin.nombre, whatsapp: pin.whatsapp, ts: pin.ts
                     })).catch(() => {});
+                    // Pin EN VIVO para la sección Mapa (mismo canal SSE del dashboard) — fire-and-forget.
+                    redis.publish('channel:sse:updates', JSON.stringify({ type: 'location:pin', pin })).catch(() => {});
                 }
             }
 
