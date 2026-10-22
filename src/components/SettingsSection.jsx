@@ -44,9 +44,9 @@ const SettingsSection = () => {
 
             {/* Segunda fila simétrica: Webhooks (izq) y Equipo y Accesos (der), 50/50,
                 mismo diseño de tarjeta que la fila de arriba. */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-                <WebhooksSettings showToast={showToast} />
-                <UsersSection />
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
+                <WebhooksSettings showToast={showToast} className="h-full" />
+                <UsersSection className="h-full" />
             </div>
         </div>
     );
