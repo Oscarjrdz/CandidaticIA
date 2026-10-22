@@ -380,6 +380,10 @@ export function buildIncomingMap(edges) {
 // runOneFlow para UN candidato — se usa como carrier mutable para recordar cuándo fue el
 // último envío de ESTE candidato en ESTA corrida.
 const FLOW_MESSAGE_GAP_MS = 450;
+// Respiro EXTRA tras enviar una foto/PDF antes de mandar el siguiente mensaje: Meta entrega la
+// media más lento que el texto, así que sin esta ventaja el texto siguiente le gana la carrera y
+// la imagen aparece DESPUÉS, fuera de orden. Background, nadie espera → es seguro y barato.
+const MEDIA_DELIVERY_SETTLE_MS = 1500;
 
 async function pacedSend(opts, sendFn) {
     if (opts._lastFlowSendAt) {
@@ -1885,6 +1889,11 @@ export async function resumeWaitingLocationFlow(candidateId, candidateSnapshot, 
                 } catch { /* no crítico: el ruteo ya quedó decidido */ }
             }
 
+            // opts COMPARTIDO: encadena el pacing de estos envíos (felicitación + foto/PDF) con los
+            // del resto del flujo que corre en runOneFlow, para que todo respete el mismo ritmo y el
+            // orden de entrega sea coherente.
+            const resumeOpts = { resumeWait: { nodeId: st.nodeId, handle } };
+
             // ✅ LE QUEDA: el NODO mismo manda el mensaje de felicitación + la foto/PDF de ESA
             // ruta (configurados por ruta). Se hace aquí, antes de rutear por 'si', para que salga
             // aunque no conectes nada a la salida Sí. Best-effort: si algo falla, igual se rutea.
@@ -1897,17 +1906,20 @@ export async function resumeWaitingLocationFlow(candidateId, candidateSnapshot, 
                         const msg = (ruta.successMessage || '').trim();
                         if (msg) {
                             const text = substituteVariables(msg, candidateSnapshot);
-                            const res = await sendUltraMsgMessageWithRetry(config.instanceId, config.token, cleanTo, text, 'chat', { priority: 1 });
+                            const res = await pacedSend(resumeOpts, () => sendUltraMsgMessageWithRetry(config.instanceId, config.token, cleanTo, text, 'chat', { priority: 1 }));
                             if (res?.success) {
                                 await saveFlowOutbound(candidateId, { from: 'me', content: text, timestamp: new Date().toISOString(), meta: { flow: true, flowId, nodeId: st.nodeId } }, res);
                             }
                         }
                         if (ruta.mediaUrl) {
                             const mType = ruta.mediaType === 'document' ? 'document' : 'image';
-                            const mRes = await sendFlowMediaById(config, cleanTo, ruta.mediaUrl, mType, { priority: 1, ...(ruta.mediaName ? { filename: ruta.mediaName } : {}) });
+                            const mRes = await pacedSend(resumeOpts, () => sendFlowMediaById(config, cleanTo, ruta.mediaUrl, mType, { priority: 1, ...(ruta.mediaName ? { filename: ruta.mediaName } : {}) }));
                             if (mRes?.success) {
                                 await saveFlowOutbound(candidateId, { from: 'me', content: '', type: mType, mediaUrl: ruta.mediaUrl, timestamp: new Date().toISOString(), meta: { flow: true, flowId, nodeId: st.nodeId } }, mRes);
                             }
+                            // Dale ventaja a la media sobre el texto del siguiente nodo (ver constante).
+                            await new Promise(r => setTimeout(r, MEDIA_DELIVERY_SETTLE_MS));
+                            resumeOpts._lastFlowSendAt = Date.now();
                         }
                     }
                 } catch (e) {
@@ -1915,9 +1927,7 @@ export async function resumeWaitingLocationFlow(candidateId, candidateSnapshot, 
                 }
             }
 
-            await runOneFlow(redis, flow, candidateId, { ...candidateSnapshot }, {
-                resumeWait: { nodeId: st.nodeId, handle }
-            });
+            await runOneFlow(redis, flow, candidateId, { ...candidateSnapshot }, resumeOpts);
             return true; // una reanudación por ubicación
         }
         return false;
