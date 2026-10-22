@@ -714,6 +714,35 @@ const UbicacionConfig = ({ data, patch }) => {
                     placeholder="Ej. Para saber si alguna ruta te queda cerca, compárteme tu ubicación 📍" className={inputCls} />
             </div>
 
+            {/* 🚪 Botón extra "No estoy en casa": salida independiente del GPS. El mensaje nativo de
+                ubicación de Meta no admite botones extra, así que esto va en un 2º mensaje pegado
+                abajo con un solo botón. Su clic rutea por la salida ámbar "No estoy en casa". */}
+            <div className="rounded-xl border border-amber-200 dark:border-amber-800/60 bg-amber-50/50 dark:bg-amber-900/10 p-3 space-y-2.5">
+                <label className="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" checked={data.extraButtonEnabled === true}
+                        onChange={(e) => patch({ extraButtonEnabled: e.target.checked })}
+                        className="w-4 h-4 rounded text-amber-600 focus:ring-amber-500" />
+                    <span className="text-xs font-semibold text-amber-700 dark:text-amber-300">Agregar botón “No estoy en casa”</span>
+                </label>
+                {data.extraButtonEnabled === true && (
+                    <>
+                        <p className="text-[11px] text-gray-500 dark:text-gray-400">
+                            Se manda en un <strong>2º mensaje</strong> debajo de la petición de ubicación. Quien lo toque sigue el flujo por la salida <strong className="text-amber-600 dark:text-amber-400">“No estoy en casa”</strong>, sin pasar por “le queda / no le queda”.
+                        </p>
+                        <div>
+                            <label className="text-[11px] text-gray-500 dark:text-gray-400 mb-1 block">Texto del mensaje</label>
+                            <input type="text" maxLength={1024} value={data.extraButtonBody ?? ''} onChange={(e) => patch({ extraButtonBody: e.target.value })}
+                                placeholder="¿No estás en tu casa en este momento?" className={inputCls} />
+                        </div>
+                        <div>
+                            <label className="text-[11px] text-gray-500 dark:text-gray-400 mb-1 block">Texto del botón (máx. 20 caracteres)</label>
+                            <input type="text" maxLength={20} value={data.extraButtonText ?? ''} onChange={(e) => patch({ extraButtonText: e.target.value })}
+                                placeholder="No estoy en casa" className={inputCls} />
+                        </div>
+                    </>
+                )}
+            </div>
+
             <div>
                 <div className="flex items-center justify-between mb-2">
                     <label className="text-xs text-gray-500 dark:text-gray-400">Rutas {totalStops ? <span className="text-emerald-600 dark:text-emerald-400 font-semibold">· {totalStops} paradas</span> : ''}</label>

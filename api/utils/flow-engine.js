@@ -955,6 +955,39 @@ export async function evaluateOrExecute(node, candidate, flowId, redis, opts = {
             }
             if (!sendOk) return true; // si no se mandó, no cuelga el flujo
 
+            // 🚪 BOTÓN EXTRA "No estoy en casa" (salida independiente): el mensaje nativo de
+            // ubicación de Meta SOLO admite su único botón "Enviar ubicación" (no se le puede
+            // agregar otro), así que el botón de escape va en un SEGUNDO mensaje interactivo que
+            // sale justo debajo. Al tocarlo, el webhook lo trata como un clic de menú vivo
+            // (hasLiveInteractiveMenuFor reconoce la espera 'location') y resumeWaitingFlowIfMatch
+            // rutea por el handle 'nocasa' — SIN tocar el "le queda / no le queda" del GPS.
+            let extraOptions = null;
+            if (data.extraButtonEnabled === true) {
+                const extraTitle = (data.extraButtonText || '').trim() || 'No estoy en casa';
+                try {
+                    const config = await getUltraMsgConfig(candidate.incomingPhoneNumberId || candidate.instanceId);
+                    if (config?.token && config?.instanceId) {
+                        const cleanTo = String(candidate.whatsapp).replace(/\D/g, '');
+                        const extraBody = substituteVariables((data.extraButtonBody || '').trim() || '¿No estás en tu casa en este momento?', candidate);
+                        const btnTitle = truncateTitleSafe(substituteVariables(extraTitle, candidate), 20);
+                        const extraRes = await pacedSend(opts, () => sendUltraMsgMessageWithRetry(config.instanceId, config.token, cleanTo, extraBody, 'interactive', {
+                            interactiveType: 'button', buttons: [{ id: 'nocasa', title: btnTitle }], priority: 1
+                        }));
+                        if (extraRes?.success) {
+                            extraOptions = [{ handle: 'nocasa', match: btnTitle }];
+                            await saveFlowOutbound(candidate.id, {
+                                from: 'me', content: `${extraBody}\n\n[Botones: ${btnTitle}]`, timestamp: new Date().toISOString(),
+                                meta: { flow: true, flowId, nodeId: node.id, interactive: true }
+                            }, extraRes);
+                        } else {
+                            console.error(`[FLOW-ENGINE] accion_ubicacion botón extra ${flowId}/${node.id} candidato ${candidate.id}: envío falló —`, extraRes?.error);
+                        }
+                    }
+                } catch (e) {
+                    console.error(`[FLOW-ENGINE] accion_ubicacion botón extra ${flowId}/${node.id}:`, e?.message);
+                }
+            }
+
             const neverExpires = data.timeoutNever === true;
             const timeoutHoras = Number(data.timeoutHoras) > 0 ? Number(data.timeoutHoras) : 48;
             const NEVER_TTL_SEC = 60 * 60 * 24 * 365 * 5; // 5 años
@@ -963,6 +996,8 @@ export async function evaluateOrExecute(node, candidate, flowId, redis, opts = {
                 const key = `${WAITING_PREFIX}${candidate.id}`;
                 const payload = JSON.stringify({
                     nodeId: node.id, kind: 'location',
+                    // options → el botón extra "No estoy en casa" (clic = texto que devuelve Meta).
+                    ...(extraOptions ? { options: extraOptions } : {}),
                     ...(neverExpires ? {} : { expiresAt: Date.now() + timeoutHoras * 3600 * 1000 })
                 });
                 await redis.hset(key, flowId, payload);
@@ -1783,6 +1818,17 @@ export async function resumeWaitingFlowIfMatch(candidateId, candidateSnapshot, i
                 } else {
                     handle = 'timeout';
                 }
+            } else if (st.kind === 'location') {
+                // Nodo "Pedir Ubicación" con botón extra (ej. "No estoy en casa"). El GPS lo
+                // resuelve resumeWaitingLocationFlow; AQUÍ solo atendemos el clic/texto del botón
+                // extra. Cualquier otro texto NO consume la espera — el candidato todavía puede
+                // compartir su ubicación. (Sin botón extra, st.options no existe → nunca matchea.)
+                const inTxt = normInteractiveTitle(incomingText);
+                const opt = (!expired)
+                    ? (Array.isArray(st.options) ? st.options : []).find(o => normInteractiveTitle(o.match) === inTxt)
+                    : null;
+                if (!opt) continue; // no es el botón extra → sigue esperando el GPS (no consume)
+                matched = true; handle = opt.handle;
             } else {
                 if (!expired) {
                     for (const g of (Array.isArray(st.grupos) ? st.grupos : [])) {
@@ -1963,7 +2009,9 @@ export async function hasLiveInteractiveMenuFor(candidateId, clickTitle) {
         for (const val of Object.values(all)) {
             let st;
             try { st = JSON.parse(val); } catch { continue; }
-            if (st.kind !== 'interactive') continue;
+            // 'interactive' = menú normal; 'location' = nodo Pedir Ubicación con botón extra
+            // ("No estoy en casa"), que también trae options para su clic de escape.
+            if (st.kind !== 'interactive' && st.kind !== 'location') continue;
             if (st.expiresAt && now > Number(st.expiresAt)) continue; // expirado → ya no está vivo
             const options = Array.isArray(st.options) ? st.options : [];
             if (options.some(o => normInteractiveTitle(o.match) === inTxt)) return true;

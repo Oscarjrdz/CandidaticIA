@@ -50,12 +50,21 @@ const InteractiveHandles = ({ data }) => {
 // Salidas del nodo "Pedir Ubicación": 'si' (le queda — dentro del radio de la parada más
 // cercana de cualquier ruta, verde a la derecha) y 'no' (no le queda / llegó tarde, rojo abajo).
 // Los ids son los handles que la arista usa como sourceHandle y que rutea resumeWaitingLocationFlow.
-const UbicacionHandles = () => (
+// Salida extra 'nocasa' (ámbar, abajo-derecha) SOLO si el nodo tiene activado el botón
+// "No estoy en casa": es un escape independiente del GPS (no toca Sí/No). El id 'nocasa' es
+// el handle que rutea resumeWaitingFlowIfMatch al clicar ese botón.
+const UbicacionHandles = ({ data }) => (
     <>
         <Handle type="source" id="si" position={Position.Right} className="!w-3 !h-3 !bg-emerald-500 !border-2 !border-white dark:!border-gray-900" />
         <span className="absolute top-1/2 -translate-y-1/2 -right-1 translate-x-full text-[10px] font-bold text-emerald-600 dark:text-emerald-400 pointer-events-none whitespace-nowrap">Sí · le queda</span>
         <Handle type="source" id="no" position={Position.Bottom} className="!w-3 !h-3 !bg-red-500 !border-2 !border-white dark:!border-gray-900" />
         <span className="absolute left-1/2 -translate-x-1/2 -bottom-5 text-[10px] font-bold text-red-500 pointer-events-none whitespace-nowrap">No · no le queda</span>
+        {data?.extraButtonEnabled === true && (
+            <>
+                <Handle type="source" id="nocasa" position={Position.Bottom} style={{ left: '82%' }} className="!w-3 !h-3 !bg-amber-500 !border-2 !border-white dark:!border-gray-900" />
+                <span className="absolute left-[82%] -translate-x-1/2 -bottom-5 text-[10px] font-bold text-amber-600 dark:text-amber-400 pointer-events-none whitespace-nowrap">No estoy en casa</span>
+            </>
+        )}
     </>
 );
 
@@ -373,9 +382,11 @@ const FlowNode = ({ id, type, data, selected }) => {
         ? `${data.mode || 'button'}|${data.routeByOption !== false}|${((data.mode === 'list'
             ? (data.sections || []).flatMap(s => (s.rows || []).filter(r => r?.title?.trim()).map(r => r.id))
             : (data.buttons || []).filter(b => b?.title?.trim()).map(b => b.id))).join(',')}`
-        : '';
+        : type === 'accion_ubicacion'
+            ? `${data.extraButtonEnabled === true}` // la salida 'nocasa' aparece/desaparece con el botón extra
+            : '';
     useEffect(() => {
-        if (type === 'accion_botones') updateNodeInternals(id);
+        if (type === 'accion_botones' || type === 'accion_ubicacion') updateNodeInternals(id);
     }, [id, type, handleSig, updateNodeInternals]);
 
     if (type === 'nota') return <NotaNode id={id} data={data} selected={selected} />;
@@ -441,7 +452,7 @@ const FlowNode = ({ id, type, data, selected }) => {
             )}
 
             {type === 'accion_ubicacion' ? (
-                <UbicacionHandles />
+                <UbicacionHandles data={data} />
             ) : type === 'accion_botones' && data.routeByOption !== false && (data.mode || 'button') !== 'cta_url' ? (
                 <InteractiveHandles data={data} />
             ) : def.branching ? (
