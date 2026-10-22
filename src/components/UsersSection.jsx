@@ -38,7 +38,7 @@ const AVAILABLE_EXTRA_PERMS = [
 // instante (sin skeleton ni salto) y revalida en silencio. Ver docs/anti-brinco-secciones.md.
 let usersSectionCache = null; // { users, roles, manualProjects, tags, waNumbers }
 
-const UsersSection = () => {
+const UsersSection = ({ className = '' }) => {
     const { showToast } = useToastContext();
     const [activeTab, setActiveTab] = useState('users');
     const { confirmModalJSX, showConfirm } = useConfirmModal();
@@ -446,298 +446,287 @@ const UsersSection = () => {
     const filteredUsers = users;
     const filteredRoles = roles;
 
+    const tabBtn = (id, label, Icon) => (
+        <button
+            onClick={() => setActiveTab(id)}
+            role="tab"
+            aria-selected={activeTab === id}
+            className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                activeTab === id
+                    ? 'bg-white dark:bg-gray-700 text-blue-600 dark:text-blue-400 shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+            }`}
+        >
+            {Icon && <Icon className="w-3.5 h-3.5" />}
+            {label}
+        </button>
+    );
+
     return (
-        <div className="space-y-6">
-            {/* Header: Command Bar Style */}
-            <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-700 p-5 flex flex-col md:flex-row items-center justify-between gap-4 min-h-[82px]">
-                <div className="flex items-center space-x-4">
-                    <div className="w-10 h-10 rounded-2xl bg-blue-600 shadow-lg shadow-blue-500/20 flex items-center justify-center transition-all">
-                        {activeTab === 'users' ? <User className="w-5 h-5 text-white" /> : <ShieldCheck className="w-5 h-5 text-white" />}
-                    </div>
-                    <div>
-                        <h2 className="text-lg font-bold text-gray-900 dark:text-white leading-tight uppercase tracking-tight">EQUIPO Y ACCESOS</h2>
-                        <div className="flex items-center gap-2 mt-0.5">
-                            <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></span>
-                            <p className="text-[10px] font-black tracking-widest uppercase text-blue-600 dark:text-blue-400">GESTIÓN DE PERSONAL Y ROLES</p>
+        <>
+        <Card className={className}>
+            <div className="p-5 space-y-4">
+                {/* Header compacto, consistente con las demás tarjetas de Configuración */}
+                <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center">
+                            {activeTab === 'roles' ? <ShieldCheck className="w-4 h-4 text-white" /> : <User className="w-4 h-4 text-white" />}
+                        </div>
+                        <div>
+                            <h3 className="text-sm font-bold text-gray-900 dark:text-white">Equipo y Accesos</h3>
+                            <p className="text-[11px] text-gray-500 dark:text-gray-400">Personal y roles</p>
                         </div>
                     </div>
-                </div>
-                <div className="flex items-center gap-2">
-                    <Button onClick={loadData} icon={RefreshCw} variant="outline" size="sm" disabled={loading} />
-                    {activeTab === 'users' ? (
-                        <Button onClick={() => handleOpenModal()} icon={UserPlus} className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-[10px] font-black uppercase tracking-widest">
-                            Nuevo Usuario
-                        </Button>
-                    ) : (
-                        <Button onClick={() => handleOpenRoleModal()} icon={Shield} className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-[10px] font-black uppercase tracking-widest">
-                            Nuevo Rol
-                        </Button>
-                    )}
-                </div>
-            </div>
-
-            <div className="flex space-x-1 bg-gray-100 dark:bg-gray-800 p-1 rounded-xl w-fit">
-                <button
-                    onClick={() => setActiveTab('users')}
-                    className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${
-                        activeTab === 'users'
-                            ? 'bg-white dark:bg-gray-700 text-blue-600 dark:text-blue-400 shadow-sm'
-                            : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
-                    }`}
-                >
-                    Usuarios
-                </button>
-                <button
-                    onClick={() => setActiveTab('roles')}
-                    className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${
-                        activeTab === 'roles'
-                            ? 'bg-white dark:bg-gray-700 text-blue-600 dark:text-blue-400 shadow-sm'
-                            : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
-                    }`}
-                >
-                    Roles y Permisos
-                </button>
-                <button
-                    onClick={() => setActiveTab('activity')}
-                    className={`px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-1.5 ${
-                        activeTab === 'activity'
-                            ? 'bg-white dark:bg-gray-700 text-blue-600 dark:text-blue-400 shadow-sm'
-                            : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
-                    }`}
-                >
-                    <BarChart2 className="w-3.5 h-3.5" />
-                    Actividad
-                </button>
-            </div>
-
-            <Card>
-                <div className="p-4 border-b border-gray-100 dark:border-gray-700/50 flex items-center justify-end">
-                    <div className="text-[10px] font-black uppercase tracking-widest text-gray-400">
-                        Total: {activeTab === 'users' ? users.length : roles.length}
-                    </div>
-                </div>
-                
-                <div className="overflow-x-auto">
-                    {loading ? (
-                        <div className="p-12 text-center">
-                            <Loader2 className="w-8 h-8 animate-spin mx-auto text-blue-600 mb-4" />
-                            <p className="text-gray-500">Cargando...</p>
-                        </div>
-                    ) : activeTab === 'users' ? (
-                        /* ----------- TABLA DE USUARIOS ----------- */
-                        filteredUsers.length === 0 ? (
-                            <div className="p-12 text-center text-gray-500 uppercase text-xs tracking-wider">
-                                No se encontraron usuarios
-                            </div>
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={loadData}
+                            disabled={loading}
+                            aria-label="Recargar"
+                            className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 dark:border-gray-700 text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 transition-colors"
+                        >
+                            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+                        </button>
+                        {activeTab === 'roles' ? (
+                            <button onClick={() => handleOpenRoleModal()} className="flex items-center gap-1.5 px-3 h-8 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition-colors">
+                                <Shield className="w-3.5 h-3.5" /> Nuevo
+                            </button>
                         ) : (
-                            <table className="w-full text-left">
-                                <thead className="bg-gray-50 dark:bg-gray-800/50 border-b border-gray-100 dark:border-gray-700">
-                                    <tr>
-                                        <th className="py-4 px-6 font-semibold text-gray-700 dark:text-gray-300 text-sm">Usuario</th>
-                                        <th className="py-4 px-6 font-semibold text-gray-700 dark:text-gray-300 text-sm">WhatsApp</th>
-                                        <th className="py-4 px-6 font-semibold text-gray-700 dark:text-gray-300 text-sm">Rol</th>
-                                        <th className="py-4 px-6 font-semibold text-gray-700 dark:text-gray-300 text-sm">Estado</th>
-                                        <th className="py-4 px-6 font-semibold text-gray-700 dark:text-gray-300 text-sm text-right">Acciones</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-gray-100 dark:divide-gray-700/50">
-                                    {filteredUsers.map(user => (
-                                        <tr key={user.id} className="hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors">
-                                            <td className="py-4 px-6">
-                                                <div className="flex items-center space-x-3">
-                                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold ${user.role === 'SuperAdmin' ? 'bg-purple-100 text-purple-600 dark:bg-purple-900 dark:text-purple-300' :
-                                                        'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
-                                                        }`}>
-                                                        {(user.name || 'U').charAt(0).toUpperCase()}
-                                                    </div>
-                                                    <div>
-                                                        <p className="font-bold text-gray-900 dark:text-white text-sm">{user.name}</p>
-                                                    </div>
-                                                </div>
-                                            </td>
-                                            <td className="py-4 px-6 text-sm text-gray-700 dark:text-gray-300">
-                                                {user.whatsapp}
-                                            </td>
-                                            <td className="py-4 px-6">
-                                                <span className="flex items-center space-x-1.5 text-sm">
-                                                    <Shield className={`w-3.5 h-3.5 ${user.role === 'SuperAdmin' ? 'text-purple-500' : 'text-blue-500'}`} />
-                                                    <span className="text-gray-700 dark:text-gray-300">{user.role}</span>
-                                                </span>
-                                            </td>
-                                            <td className="py-4 px-6">
-                                                <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase ${user.status === 'Active' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                                                    {user.status === 'Active' ? 'Activo' : 'Inactivo'}
-                                                </span>
-                                            </td>
-                                            <td className="py-4 px-6 text-right">
-                                                <div className="flex items-center justify-end space-x-2">
-                                                    <button onClick={() => handleOpenModal(user)} className="p-2 text-gray-400 hover:text-blue-500 transition-colors">
-                                                        <Pencil className="w-4 h-4" />
-                                                    </button>
-                                                    {user.role !== 'SuperAdmin' && (
-                                                        <button onClick={() => handleDelete(user.id)} className="p-2 text-gray-400 hover:text-red-500 transition-colors" title="Eliminar usuario">
-                                                            <Trash2 className="w-4 h-4" />
-                                                        </button>
-                                                    )}
-                                                </div>
-                                            </td>
+                            <button onClick={() => handleOpenModal()} className="flex items-center gap-1.5 px-3 h-8 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition-colors">
+                                <UserPlus className="w-3.5 h-3.5" /> Nuevo
+                            </button>
+                        )}
+                    </div>
+                </div>
+
+                {/* Tabs */}
+                <div role="tablist" className="flex gap-1 bg-gray-100 dark:bg-gray-900 p-1 rounded-xl">
+                    {tabBtn('users', 'Usuarios', null)}
+                    {tabBtn('roles', 'Roles', null)}
+                    {tabBtn('activity', 'Actividad', BarChart2)}
+                </div>
+
+                {/* Tabla enmarcada */}
+                <div className="rounded-xl border border-gray-100 dark:border-gray-700 overflow-hidden">
+                    <div className="px-4 py-2.5 border-b border-gray-100 dark:border-gray-700/50 flex items-center justify-between gap-2 min-h-[44px]">
+                        {activeTab === 'activity' ? (
+                            <>
+                                <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Actividad diaria</span>
+                                <div className="flex items-center gap-2">
+                                    <input
+                                        type="date"
+                                        value={activityDate}
+                                        onChange={e => setActivityDate(e.target.value)}
+                                        className="text-xs px-2.5 py-1 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    />
+                                    <button onClick={() => loadActivityStats(activityDate)} aria-label="Recargar actividad" className="p-1.5 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                                        <RefreshCw className={`w-3.5 h-3.5 text-gray-500 ${activityLoading ? 'animate-spin' : ''}`} />
+                                    </button>
+                                </div>
+                            </>
+                        ) : (
+                            <span className="ml-auto text-[10px] font-black uppercase tracking-widest text-gray-400">
+                                Total: {activeTab === 'users' ? users.length : roles.length}
+                            </span>
+                        )}
+                    </div>
+
+                    <div className="overflow-x-auto">
+                        {loading ? (
+                            <div className="p-12 text-center">
+                                <Loader2 className="w-8 h-8 animate-spin mx-auto text-blue-600 mb-4" />
+                                <p className="text-gray-500 text-sm">Cargando...</p>
+                            </div>
+                        ) : activeTab === 'users' ? (
+                            /* ----------- TABLA DE USUARIOS ----------- */
+                            filteredUsers.length === 0 ? (
+                                <div className="p-12 text-center text-gray-500 uppercase text-xs tracking-wider">
+                                    No se encontraron usuarios
+                                </div>
+                            ) : (
+                                <table className="w-full text-left">
+                                    <thead className="bg-gray-50 dark:bg-gray-800/50 border-b border-gray-100 dark:border-gray-700">
+                                        <tr>
+                                            <th className="py-3 px-4 font-semibold text-gray-700 dark:text-gray-300 text-xs">Usuario</th>
+                                            <th className="py-3 px-4 font-semibold text-gray-700 dark:text-gray-300 text-xs">WhatsApp</th>
+                                            <th className="py-3 px-4 font-semibold text-gray-700 dark:text-gray-300 text-xs">Rol</th>
+                                            <th className="py-3 px-4 font-semibold text-gray-700 dark:text-gray-300 text-xs">Estado</th>
+                                            <th className="py-3 px-4 font-semibold text-gray-700 dark:text-gray-300 text-xs text-right">Acciones</th>
                                         </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        )
-                    ) : (
-                        /* ----------- TABLA DE ROLES ----------- */
-                        filteredRoles.length === 0 ? (
-                            <div className="p-12 text-center text-gray-500 uppercase text-xs tracking-wider">
-                                No se encontraron roles
-                            </div>
-                        ) : (
-                            <table className="w-full text-left">
-                                <thead className="bg-gray-50 dark:bg-gray-800/50 border-b border-gray-100 dark:border-gray-700">
-                                    <tr>
-                                        <th className="py-4 px-6 font-semibold text-gray-700 dark:text-gray-300 text-sm">Nombre del Rol</th>
-                                        <th className="py-4 px-6 font-semibold text-gray-700 dark:text-gray-300 text-sm">Secciones Permitidas</th>
-                                        <th className="py-4 px-6 font-semibold text-gray-700 dark:text-gray-300 text-sm text-right">Acciones</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-gray-100 dark:divide-gray-700/50">
-                                    {filteredRoles.map(role => {
-                                        const perms = role.permissions || {};
-                                        const activeCount = role.name === 'SuperAdmin'
-                                            ? GATEABLE_SECTION_IDS.length
-                                            : GATEABLE_SECTION_IDS.filter(id => perms[id]).length;
-                                        return (
-                                            <tr key={role.id} className="hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors">
-                                                <td className="py-4 px-6">
-                                                    <div className="flex items-center space-x-2">
-                                                        <ShieldCheck className={`w-5 h-5 ${role.name === 'SuperAdmin' ? 'text-purple-500' : 'text-blue-500'}`} />
-                                                        <span className="font-bold text-gray-900 dark:text-white">{role.name}</span>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-100 dark:divide-gray-700/50">
+                                        {filteredUsers.map(user => (
+                                            <tr key={user.id} className="hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors">
+                                                <td className="py-3 px-4">
+                                                    <div className="flex items-center space-x-3">
+                                                        <div className={`w-9 h-9 rounded-full flex items-center justify-center font-bold shrink-0 ${user.role === 'SuperAdmin' ? 'bg-purple-100 text-purple-600 dark:bg-purple-900 dark:text-purple-300' :
+                                                            'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
+                                                            }`}>
+                                                            {(user.name || 'U').charAt(0).toUpperCase()}
+                                                        </div>
+                                                        <p className="font-bold text-gray-900 dark:text-white text-sm whitespace-nowrap">{user.name}</p>
                                                     </div>
                                                 </td>
-                                                <td className="py-4 px-6 text-sm">
-                                                    <span className="px-2 py-1 rounded bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300 text-xs font-bold">
-                                                        {activeCount} de {GATEABLE_SECTION_IDS.length}
+                                                <td className="py-3 px-4 text-sm text-gray-700 dark:text-gray-300 whitespace-nowrap">
+                                                    {user.whatsapp}
+                                                </td>
+                                                <td className="py-3 px-4">
+                                                    <span className="flex items-center space-x-1.5 text-sm whitespace-nowrap">
+                                                        <Shield className={`w-3.5 h-3.5 ${user.role === 'SuperAdmin' ? 'text-purple-500' : 'text-blue-500'}`} />
+                                                        <span className="text-gray-700 dark:text-gray-300">{user.role}</span>
                                                     </span>
                                                 </td>
-                                                <td className="py-4 px-6 text-right">
-                                                    <div className="flex items-center justify-end space-x-2">
-                                                        <button onClick={() => handleOpenRoleModal(role)} className="p-2 text-gray-400 hover:text-blue-500 transition-colors">
+                                                <td className="py-3 px-4">
+                                                    <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase ${user.status === 'Active' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                                        {user.status === 'Active' ? 'Activo' : 'Inactivo'}
+                                                    </span>
+                                                </td>
+                                                <td className="py-3 px-4 text-right">
+                                                    <div className="flex items-center justify-end space-x-1">
+                                                        <button onClick={() => handleOpenModal(user)} aria-label="Editar usuario" className="p-2 text-gray-400 hover:text-blue-500 transition-colors">
                                                             <Pencil className="w-4 h-4" />
                                                         </button>
-                                                        {role.name !== 'SuperAdmin' && (
-                                                            <button onClick={() => handleRoleDelete(role.id)} className="p-2 text-gray-400 hover:text-red-500 transition-colors" title="Eliminar rol">
+                                                        {user.role !== 'SuperAdmin' && (
+                                                            <button onClick={() => handleDelete(user.id)} aria-label="Eliminar usuario" className="p-2 text-gray-400 hover:text-red-500 transition-colors" title="Eliminar usuario">
                                                                 <Trash2 className="w-4 h-4" />
                                                             </button>
                                                         )}
                                                     </div>
                                                 </td>
                                             </tr>
-                                        );
-                                    })}
-                                </tbody>
-                            </table>
-                        )
-                    )}
-                </div>
-            </Card>
-
-            {/* ----------- ACTIVITY TAB ----------- */}
-            {activeTab === 'activity' && (
-                <Card>
-                    <div className="p-4 border-b border-gray-100 dark:border-gray-700/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                        <div>
-                            <h3 className="text-sm font-bold text-gray-900 dark:text-white">Actividad de Reclutadores</h3>
-                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Estadísticas diarias de todos los usuarios</p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <input
-                                type="date"
-                                value={activityDate}
-                                onChange={e => setActivityDate(e.target.value)}
-                                className="text-xs px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            />
-                            <button onClick={() => loadActivityStats(activityDate)} className="p-1.5 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
-                                <RefreshCw className={`w-3.5 h-3.5 text-gray-500 ${activityLoading ? 'animate-spin' : ''}`} />
-                            </button>
-                        </div>
-                    </div>
-
-                    <div className="overflow-x-auto">
-                        {activityLoading ? (
-                            <div className="flex items-center justify-center py-12">
-                                <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
-                            </div>
-                        ) : activityStats.length === 0 ? (
-                            <div className="text-center py-12 text-gray-400 dark:text-gray-500 text-sm">
-                                Sin actividad registrada para este día
-                            </div>
-                        ) : (
-                            <table className="w-full text-left">
-                                <thead>
-                                    <tr className="border-b border-gray-100 dark:border-gray-700/50">
-                                        {['Reclutador', 'Tiempo activo', 'Chats visitados', 'Chats respondidos', 'Mensajes enviados', 'Dentro 24h ✅', 'Fuera 24h ⛔'].map(label => (
-                                            <th key={label} className="px-4 py-3 text-[10px] font-black uppercase tracking-widest text-gray-400 dark:text-gray-500 whitespace-nowrap">
-                                                {label}
-                                            </th>
                                         ))}
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-gray-50 dark:divide-gray-700/30">
-                                    {activityStats.map((s) => (
-                                        <tr key={s.userId} className="hover:bg-gray-50 dark:hover:bg-gray-700/20 transition-colors">
-                                            <td className="px-4 py-3">
-                                                <div className="flex items-center gap-2">
-                                                    <div className="w-7 h-7 rounded-full bg-blue-600 flex items-center justify-center text-white text-[11px] font-bold shrink-0">
-                                                        {s.userName.charAt(0).toUpperCase()}
-                                                    </div>
-                                                    <div>
-                                                        <p className="text-sm font-semibold text-gray-900 dark:text-white">{s.userName}</p>
-                                                        <p className="text-[10px] text-gray-400">{s.role}</p>
-                                                    </div>
-                                                </div>
-                                            </td>
-                                            <td className="px-4 py-3">
-                                                <span className="flex items-center gap-1 text-sm font-mono font-semibold text-gray-700 dark:text-gray-200">
-                                                    <Clock className="w-3.5 h-3.5 text-blue-400" />
-                                                    {s.timeHuman}
-                                                </span>
-                                            </td>
-                                            <td className="px-4 py-3">
-                                                <span className="flex items-center gap-1 text-sm font-semibold text-gray-700 dark:text-gray-200">
-                                                    <MessageSquare className="w-3.5 h-3.5 text-gray-400" />
-                                                    {s.chatsVisited}
-                                                </span>
-                                            </td>
-                                            <td className="px-4 py-3">
-                                                <span className="flex items-center gap-1 text-sm font-semibold text-gray-700 dark:text-gray-200">
-                                                    <MessageSquare className="w-3.5 h-3.5 text-indigo-400" />
-                                                    {s.chatsResponded}
-                                                </span>
-                                            </td>
-                                            <td className="px-4 py-3">
-                                                <span className="text-sm font-semibold text-gray-700 dark:text-gray-200">{s.messagesSent}</span>
-                                            </td>
-                                            <td className="px-4 py-3">
-                                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 text-xs font-bold">
-                                                    <CheckCircle className="w-3 h-3" />
-                                                    {s.chatsIn24h}
-                                                </span>
-                                            </td>
-                                            <td className="px-4 py-3">
-                                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 text-xs font-bold">
-                                                    <XCircle className="w-3 h-3" />
-                                                    {s.chatsOut24h}
-                                                </span>
-                                            </td>
+                                    </tbody>
+                                </table>
+                            )
+                        ) : activeTab === 'roles' ? (
+                            /* ----------- TABLA DE ROLES ----------- */
+                            filteredRoles.length === 0 ? (
+                                <div className="p-12 text-center text-gray-500 uppercase text-xs tracking-wider">
+                                    No se encontraron roles
+                                </div>
+                            ) : (
+                                <table className="w-full text-left">
+                                    <thead className="bg-gray-50 dark:bg-gray-800/50 border-b border-gray-100 dark:border-gray-700">
+                                        <tr>
+                                            <th className="py-3 px-4 font-semibold text-gray-700 dark:text-gray-300 text-xs">Rol</th>
+                                            <th className="py-3 px-4 font-semibold text-gray-700 dark:text-gray-300 text-xs">Secciones</th>
+                                            <th className="py-3 px-4 font-semibold text-gray-700 dark:text-gray-300 text-xs text-right">Acciones</th>
                                         </tr>
-                                    ))}
-                                </tbody>
-                            </table>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-100 dark:divide-gray-700/50">
+                                        {filteredRoles.map(role => {
+                                            const perms = role.permissions || {};
+                                            const activeCount = role.name === 'SuperAdmin'
+                                                ? GATEABLE_SECTION_IDS.length
+                                                : GATEABLE_SECTION_IDS.filter(id => perms[id]).length;
+                                            return (
+                                                <tr key={role.id} className="hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors">
+                                                    <td className="py-3 px-4">
+                                                        <div className="flex items-center space-x-2 whitespace-nowrap">
+                                                            <ShieldCheck className={`w-5 h-5 ${role.name === 'SuperAdmin' ? 'text-purple-500' : 'text-blue-500'}`} />
+                                                            <span className="font-bold text-gray-900 dark:text-white">{role.name}</span>
+                                                        </div>
+                                                    </td>
+                                                    <td className="py-3 px-4 text-sm">
+                                                        <span className="px-2 py-1 rounded bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300 text-xs font-bold whitespace-nowrap">
+                                                            {activeCount} de {GATEABLE_SECTION_IDS.length}
+                                                        </span>
+                                                    </td>
+                                                    <td className="py-3 px-4 text-right">
+                                                        <div className="flex items-center justify-end space-x-1">
+                                                            <button onClick={() => handleOpenRoleModal(role)} aria-label="Editar rol" className="p-2 text-gray-400 hover:text-blue-500 transition-colors">
+                                                                <Pencil className="w-4 h-4" />
+                                                            </button>
+                                                            {role.name !== 'SuperAdmin' && (
+                                                                <button onClick={() => handleRoleDelete(role.id)} aria-label="Eliminar rol" className="p-2 text-gray-400 hover:text-red-500 transition-colors" title="Eliminar rol">
+                                                                    <Trash2 className="w-4 h-4" />
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            )
+                        ) : (
+                            /* ----------- TABLA DE ACTIVIDAD ----------- */
+                            activityLoading ? (
+                                <div className="flex items-center justify-center py-12">
+                                    <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
+                                </div>
+                            ) : activityStats.length === 0 ? (
+                                <div className="text-center py-12 text-gray-400 dark:text-gray-500 text-sm">
+                                    Sin actividad registrada para este día
+                                </div>
+                            ) : (
+                                <table className="w-full text-left">
+                                    <thead>
+                                        <tr className="bg-gray-50 dark:bg-gray-800/50 border-b border-gray-100 dark:border-gray-700">
+                                            {['Reclutador', 'Tiempo activo', 'Chats visitados', 'Chats respondidos', 'Mensajes enviados', 'Dentro 24h ✅', 'Fuera 24h ⛔'].map(label => (
+                                                <th key={label} className="px-4 py-3 text-[10px] font-black uppercase tracking-widest text-gray-400 dark:text-gray-500 whitespace-nowrap">
+                                                    {label}
+                                                </th>
+                                            ))}
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-50 dark:divide-gray-700/30">
+                                        {activityStats.map((s) => (
+                                            <tr key={s.userId} className="hover:bg-gray-50 dark:hover:bg-gray-700/20 transition-colors">
+                                                <td className="px-4 py-3">
+                                                    <div className="flex items-center gap-2 whitespace-nowrap">
+                                                        <div className="w-7 h-7 rounded-full bg-blue-600 flex items-center justify-center text-white text-[11px] font-bold shrink-0">
+                                                            {s.userName.charAt(0).toUpperCase()}
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-sm font-semibold text-gray-900 dark:text-white">{s.userName}</p>
+                                                            <p className="text-[10px] text-gray-400">{s.role}</p>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td className="px-4 py-3">
+                                                    <span className="flex items-center gap-1 text-sm font-mono font-semibold text-gray-700 dark:text-gray-200 whitespace-nowrap">
+                                                        <Clock className="w-3.5 h-3.5 text-blue-400" />
+                                                        {s.timeHuman}
+                                                    </span>
+                                                </td>
+                                                <td className="px-4 py-3">
+                                                    <span className="flex items-center gap-1 text-sm font-semibold text-gray-700 dark:text-gray-200">
+                                                        <MessageSquare className="w-3.5 h-3.5 text-gray-400" />
+                                                        {s.chatsVisited}
+                                                    </span>
+                                                </td>
+                                                <td className="px-4 py-3">
+                                                    <span className="flex items-center gap-1 text-sm font-semibold text-gray-700 dark:text-gray-200">
+                                                        <MessageSquare className="w-3.5 h-3.5 text-indigo-400" />
+                                                        {s.chatsResponded}
+                                                    </span>
+                                                </td>
+                                                <td className="px-4 py-3">
+                                                    <span className="text-sm font-semibold text-gray-700 dark:text-gray-200">{s.messagesSent}</span>
+                                                </td>
+                                                <td className="px-4 py-3">
+                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 text-xs font-bold">
+                                                        <CheckCircle className="w-3 h-3" />
+                                                        {s.chatsIn24h}
+                                                    </span>
+                                                </td>
+                                                <td className="px-4 py-3">
+                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 text-xs font-bold">
+                                                        <XCircle className="w-3 h-3" />
+                                                        {s.chatsOut24h}
+                                                    </span>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            )
                         )}
                     </div>
-                </Card>
-            )}
+                </div>
+            </div>
+        </Card>
 
             {/* ----------- USER MODAL ----------- */}
             <Modal
@@ -1193,7 +1182,7 @@ const UsersSection = () => {
                 </form>
             </Modal>
             {confirmModalJSX}
-        </div>
+        </>
     );
 };
 

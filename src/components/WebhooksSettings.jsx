@@ -94,7 +94,7 @@ const WebhooksSettings = ({ showToast, className = '' }) => {
                         <div>
                             <h3 className="text-sm font-bold text-gray-900 dark:text-white">Webhooks salientes</h3>
                             <p className="text-[11px] text-gray-500 dark:text-gray-400">
-                                {cfg?.enabled ? 'Encendido · Candidatic notifica eventos a tu URL' : 'Apagado · no se envía nada'}
+                                {cfg?.enabled ? 'Encendido' : 'Apagado'}
                             </p>
                         </div>
                     </div>
@@ -153,7 +153,7 @@ const WebhooksSettings = ({ showToast, className = '' }) => {
                                     className="rounded"
                                 />
                                 <span className="font-mono">{et.id}</span>
-                                <span className="text-gray-400">· {et.label}{!et.activo ? ' (próximamente)' : ''}</span>
+                                {!et.activo && <span className="text-gray-400">· próximamente</span>}
                             </label>
                         ))}
                     </div>

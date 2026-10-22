@@ -42,13 +42,12 @@ const SettingsSection = () => {
                 </div>
             </div>
 
-            {/* Webhooks salientes — Candidatic notifica eventos a una URL externa (ej. Grok). */}
-            <WebhooksSettings showToast={showToast} />
-
-            {/* Equipo y accesos — antes vivía en su propia sección "Usuarios" del menú.
-                Se integró aquí abajo para consolidar toda la administración en Configuración.
-                UsersSection es autónoma (trae su propio header y pestañas Usuarios/Roles/Actividad). */}
-            <UsersSection />
+            {/* Segunda fila simétrica: Webhooks (izq) y Equipo y Accesos (der), 50/50,
+                mismo diseño de tarjeta que la fila de arriba. */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+                <WebhooksSettings showToast={showToast} />
+                <UsersSection />
+            </div>
         </div>
     );
 };
