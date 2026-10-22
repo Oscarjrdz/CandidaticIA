@@ -1843,6 +1843,7 @@ export const deleteCandidate = async (id) => {
             .srem(KEYS.LIST_COMPLETE, id)
             .srem(KEYS.LIST_PENDING, id)
             .srem(KEYS.CANDIDATES_UNREAD, id)
+            .hdel('candidatic:candidate_locations', id) // pin del Mapa
             .zrem(INDEX_KEYS.UNTAGGED, id);
         if (wasUnread) {
             multi.eval(

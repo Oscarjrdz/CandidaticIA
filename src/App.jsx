@@ -53,6 +53,7 @@ const CRMProjectsSection = lazyWithRetry(() => import('./components/CRMProjectsS
 const AdsStatisticsSection = lazyWithRetry(() => import('./components/AdsStatisticsSection'), 'AdsStatisticsSection');
 const StatsSection = lazyWithRetry(() => import('./components/StatsSection'), 'StatsSection');
 const VoxSection = lazyWithRetry(() => import('./components/VoxSection'), 'VoxSection');
+const MapSection = lazyWithRetry(() => import('./components/MapSection'), 'MapSection');
 
 /**
  * Inner app shell — consumes both contexts.
@@ -314,6 +315,7 @@ function AppShell() {
                       : activeSection === 'history' ? 'Historial'
                       : activeSection === 'media-library' ? 'Biblioteca'
                       : activeSection === 'projects' ? 'Proyectos'
+                      : activeSection === 'mapa' ? 'Mapa'
                       : activeSection === 'vox' ? 'Vox'
                       : 'Configuración'}
                   </h1>
@@ -367,6 +369,7 @@ function AppShell() {
                       : activeSection === 'history' ? 'Historial de conversaciones'
                       : activeSection === 'media-library' ? 'Biblioteca de archivos y recursos del Bot'
                       : activeSection === 'projects' ? 'Kanban de reclutamiento'
+                      : activeSection === 'mapa' ? 'Ubicación de tus candidatos en el mapa'
                       : activeSection === 'vox' ? 'Cerebro de voz de Brenda: habla por micrófono y mide el costo por minuto en vivo'
                       : 'Credenciales y configuración del sistema'}
                   </p>
@@ -441,7 +444,7 @@ function AppShell() {
             el contenido no se ensanche/encoja (brinco horizontal) cuando aparece/desaparece
             la barra al cambiar la altura del contenido (p.ej. contraer/expandir tarjetas).
             Solo en secciones normales; chat/bulks tienen su propio scroll interno. */}
-        <main className={`flex-1 overflow-y-auto overflow-x-hidden flex flex-col min-h-0 ${activeSection === 'chat' || activeSection === 'bulks' || activeSection === 'flows' ? 'p-0' : 'px-3 sm:px-8 py-4 sm:py-8 [scrollbar-gutter:stable]'}`}>
+        <main className={`flex-1 overflow-y-auto overflow-x-hidden flex flex-col min-h-0 ${activeSection === 'chat' || activeSection === 'bulks' || activeSection === 'flows' || activeSection === 'mapa' ? 'p-0' : 'px-3 sm:px-8 py-4 sm:py-8 [scrollbar-gutter:stable]'}`}>
           <ErrorBoundary>
           <Suspense fallback={<SectionSkeleton />}>
           {activeSection === 'candidates' ? (
@@ -468,6 +471,8 @@ function AppShell() {
             <MediaLibrarySection />
           ) : activeSection === 'projects' ? (
             <CRMProjectsSection />
+          ) : activeSection === 'mapa' ? (
+            <MapSection onOpenCandidate={(id) => { setActiveSection('chat'); window.dispatchEvent(new CustomEvent('navigate_to_recruiter_chat', { detail: { candidateId: id } })); }} />
           ) : activeSection === 'vox' && user?.role === 'SuperAdmin' ? (
             <VoxSection />
           ) : (

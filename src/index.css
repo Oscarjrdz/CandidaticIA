@@ -577,3 +577,16 @@ input[type="color"]::-moz-color-swatch {
 @keyframes dots-loader-spin {
   to { transform: rotate(360deg); }
 }
+
+/* Sección Mapa (Leaflet): tiles en dark mode + z-index controlado para no tapar el sidebar */
+.dark .map-section-canvas .leaflet-tile {
+  filter: invert(1) hue-rotate(180deg) brightness(0.92) contrast(0.95);
+}
+.map-section-canvas .leaflet-control-attribution {
+  font-size: 9px;
+  background: rgba(255,255,255,0.7);
+}
+.dark .map-section-canvas .leaflet-control-attribution {
+  background: rgba(31,41,55,0.7);
+  color: #9ca3af;
+}

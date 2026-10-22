@@ -724,6 +724,24 @@ export default async function handler(req, res) {
                 updatedCandidate.ultimoBotonTexto = body;
             }
 
+            // 📍 UBICACIÓN: guarda SIEMPRE la última ubicación compartida en el candidato (sin
+            // importar si un nodo de flujo la procesa o si le queda una ruta), para la sección
+            // Mapa. Va dentro del mismo `candidateUpdates` → cero escritura extra para el blob.
+            // Además la refleja en un índice ligero (hash id → {lat,lng,nombre,...}) que la sección
+            // Mapa lee de un jalón; fire-and-forget para no bloquear el webhook.
+            if (incomingLocation && Number.isFinite(incomingLocation.lat) && Number.isFinite(incomingLocation.lng)) {
+                updatedCandidate.ubicacionLat = incomingLocation.lat;
+                updatedCandidate.ubicacionLng = incomingLocation.lng;
+                updatedCandidate.ubicacionCompartidaAt = new Date().toISOString();
+                if (redis) {
+                    const nombrePin = String(updatedCandidate.nombreReal || updatedCandidate.nombre || '').slice(0, 60);
+                    redis.hset('candidatic:candidate_locations', candidateId, JSON.stringify({
+                        lat: incomingLocation.lat, lng: incomingLocation.lng,
+                        nombre: nombrePin, whatsapp: updatedCandidate.whatsapp || '', ts: Date.now()
+                    })).catch(() => {});
+                }
+            }
+
             // ─── META AI RETARGETING FIX: Update referral for existing candidates ───
             // 🛑 SOLO candidatos EXISTENTES que vuelven desde un anuncio. Para un candidato RECIÉN
             // creado (isNewCandidate) el bloque de creación de arriba YA aplicó etiqueta + vacanteActual
