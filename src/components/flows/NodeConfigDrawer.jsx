@@ -4,6 +4,21 @@ import { NODE_DEFS, COLOR_CLASSES, PROFILE_FILTER_LABELS, ETIQUETA_MODE_LABELS, 
 import FlowSelect from './FlowSelect';
 import { getFlowCounters, getFlowCounterRange, getAllCheckpoints } from '../../services/flowsService';
 import { candidaticEmojiPickerProps } from '../../utils/candidaticEmoji';
+import { compressImage } from '../../utils/imageCompress';
+
+// Sube un asset del banco (imagen/PDF) al mismo endpoint y con el mismo candidateId
+// 'quick_reply_asset' que usa el panel del Chat — así el archivo queda permanente y el
+// editor inline del nodo no reimplementa nada propio. Las imágenes se comprimen antes.
+const uploadQuickReplyAsset = async (file, { compress = false } = {}) => {
+    const f = compress ? await compressImage(file) : file;
+    const formData = new FormData();
+    formData.append('file', f);
+    formData.append('candidateId', 'quick_reply_asset');
+    const res = await fetch('/api/media/upload', { method: 'POST', body: formData });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Error al subir el archivo');
+    return data.url || data.mediaUrl || null;
+};
 
 // Mismo picker de emojis que el chat (emoji-picker-react, lazy para no cargarlo hasta abrirlo).
 const EmojiPicker = lazy(() => import('emoji-picker-react'));
@@ -693,35 +708,51 @@ const TestNodeConfig = ({ data, patch, meta }) => {
     );
 };
 
-// Editor inline del mensaje seleccionado en el nodo "Mandar WhatsApp". Muestra el texto
-// del mensaje del banco y permite editarlo SIN salir del flujo. Guardar edita el banco
-// globalmente (el mismo mensaje se usa en el chat, envíos, otros flujos). Los adjuntos
-// (imagen, audio, ubicación, documento) se muestran como aviso de solo lectura — este
-// editor rápido solo toca el texto; para cambiar adjuntos está el banco de respuestas.
+// Editor inline del mensaje seleccionado en el nodo "Mandar WhatsApp". Permite editar SIN
+// salir del flujo: texto + fotos (tipo texto, hasta 4) o caption + PDF (tipo documento).
+// Guardar edita el banco GLOBALMENTE (el mismo mensaje se usa en el chat, envíos, otros
+// flujos). Audio y ubicación quedan como aviso de solo lectura — se editan en el banco.
+const QR_MAX_IMAGES = 4;
+
 const QuickReplyInlineEditor = ({ qr, onSave }) => {
+    const kind = qr.type === 'document' ? 'document'
+        : qr.type === 'audio' ? 'audio'
+        : qr.type === 'location' ? 'location'
+        : 'text';
+
+    const initialImages = qr.imageUrls?.length ? qr.imageUrls : (qr.imageUrl ? [qr.imageUrl] : []);
+
     const [text, setText] = useState(qr.message || '');
+    const [images, setImages] = useState(initialImages);
+    const [docUrl, setDocUrl] = useState(qr.documentUrl || '');
+    const [docName, setDocName] = useState(qr.documentName || '');
     const [saving, setSaving] = useState(false);
+    const [uploading, setUploading] = useState(false);
+    const [err, setErr] = useState('');
     const taRef = useRef(null);
+    const imgInputRef = useRef(null);
+    const docInputRef = useRef(null);
 
     // Al cambiar de mensaje seleccionado, re-sincroniza el borrador.
-    useEffect(() => { setText(qr.message || ''); }, [qr.id]);
+    useEffect(() => {
+        setText(qr.message || '');
+        setImages(qr.imageUrls?.length ? qr.imageUrls : (qr.imageUrl ? [qr.imageUrl] : []));
+        setDocUrl(qr.documentUrl || '');
+        setDocName(qr.documentName || '');
+        setErr('');
+    }, [qr.id]);
 
-    const dirty = text !== (qr.message || '');
-
-    const attachments = [];
-    const imgCount = (qr.imageUrls || (qr.imageUrl ? [qr.imageUrl] : [])).length;
-    if (imgCount) attachments.push(imgCount > 1 ? `${imgCount} imágenes` : 'Imagen');
-    if (qr.audioUrl) attachments.push(qr.voice ? 'Nota de voz' : 'Audio');
-    if (qr.location?.lat) attachments.push('Ubicación');
-    if (qr.documentUrl) attachments.push('Documento');
+    const sameArray = (a, b) => a.length === b.length && a.every((v, i) => v === b[i]);
+    const dirty = kind === 'document'
+        ? (text !== (qr.message || '') || docUrl !== (qr.documentUrl || ''))
+        : (text !== (qr.message || '') || !sameArray(images, initialImages));
 
     const insertAtCursor = (emoji) => {
         const ta = taRef.current;
         if (!ta) { setText(t => t + emoji); return; }
         const start = ta.selectionStart ?? text.length;
         const end = ta.selectionEnd ?? text.length;
-        const next = text.slice(0, start) + emoji + text.slice(end);
-        setText(next);
+        setText(text.slice(0, start) + emoji + text.slice(end));
         requestAnimationFrame(() => {
             ta.focus();
             const pos = start + emoji.length;
@@ -729,15 +760,49 @@ const QuickReplyInlineEditor = ({ qr, onSave }) => {
         });
     };
 
+    const handleAddImages = async (fileList) => {
+        const files = Array.from(fileList || []).slice(0, QR_MAX_IMAGES - images.length);
+        if (!files.length) return;
+        setErr(''); setUploading(true);
+        try {
+            const urls = [];
+            for (const f of files) {
+                const url = await uploadQuickReplyAsset(f, { compress: true });
+                if (url) urls.push(url);
+            }
+            setImages(prev => [...prev, ...urls].slice(0, QR_MAX_IMAGES));
+        } catch (e) { setErr(e.message || 'Error al subir la imagen'); }
+        finally { setUploading(false); if (imgInputRef.current) imgInputRef.current.value = ''; }
+    };
+
+    const handleReplaceDoc = async (file) => {
+        if (!file) return;
+        setErr(''); setUploading(true);
+        try {
+            const url = await uploadQuickReplyAsset(file);
+            if (url) { setDocUrl(url); setDocName(file.name); }
+        } catch (e) { setErr(e.message || 'Error al subir el PDF'); }
+        finally { setUploading(false); if (docInputRef.current) docInputRef.current.value = ''; }
+    };
+
     const handleSave = async () => {
         if (!dirty || saving) return;
         setSaving(true);
-        await onSave({ ...qr, message: text });
+        let entry;
+        if (kind === 'document') {
+            entry = { ...qr, type: 'document', message: text, documentUrl: docUrl, documentName: docName };
+        } else {
+            // Tipo texto: limpiamos los campos legados de imagen suelta y dejamos solo imageUrls,
+            // igual que como reconstruye la entrada el banco del Chat al guardar.
+            entry = { ...qr, type: 'text', message: text, imageUrls: images };
+            delete entry.imageUrl; delete entry.imageUrl2; delete entry.imageUrl3; delete entry.imageUrl4;
+        }
+        await onSave(entry);
         setSaving(false);
     };
 
-    return (
-        <div className="mt-3 rounded-xl border border-emerald-200 dark:border-emerald-800/60 bg-emerald-50/50 dark:bg-emerald-900/10 p-3">
+    const textEditor = (
+        <>
             <div className="flex items-center justify-between mb-2">
                 <label className="text-xs font-semibold text-emerald-700 dark:text-emerald-300">Contenido del mensaje</label>
                 <EmojiPickerButton onPick={insertAtCursor} />
@@ -746,29 +811,90 @@ const QuickReplyInlineEditor = ({ qr, onSave }) => {
                 ref={taRef}
                 value={text}
                 onChange={(e) => setText(e.target.value)}
-                placeholder="(Este mensaje no tiene texto)"
-                rows={6}
+                placeholder={kind === 'document' ? 'Texto que acompaña al PDF (opcional)' : '(Este mensaje no tiene texto)'}
+                rows={kind === 'document' ? 3 : 6}
                 className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-y"
             />
-            {attachments.length > 0 && (
-                <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                    {attachments.map((a) => (
-                        <span key={a} className="inline-flex items-center px-2 py-0.5 rounded-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-[11px] text-gray-500 dark:text-gray-400">📎 {a}</span>
-                    ))}
-                    <span className="text-[11px] text-gray-400">— los adjuntos se editan en el banco</span>
+        </>
+    );
+
+    return (
+        <div className="mt-3 rounded-xl border border-emerald-200 dark:border-emerald-800/60 bg-emerald-50/50 dark:bg-emerald-900/10 p-3">
+            {(kind === 'text' || kind === 'document') && textEditor}
+
+            {kind === 'text' && (
+                <div className="mt-3">
+                    <label className="text-xs font-semibold text-emerald-700 dark:text-emerald-300">Fotos ({images.length}/{QR_MAX_IMAGES})</label>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                        {images.map((url, i) => (
+                            <div key={url + i} className="relative group w-16 h-16 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700">
+                                <img src={url} alt={`foto ${i + 1}`} className="w-full h-full object-cover" />
+                                <button
+                                    type="button"
+                                    onClick={() => setImages(prev => prev.filter((_, idx) => idx !== i))}
+                                    className="absolute top-0.5 right-0.5 w-5 h-5 rounded-full bg-black/60 text-white flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity"
+                                    aria-label="Quitar foto"
+                                >×</button>
+                            </div>
+                        ))}
+                        {images.length < QR_MAX_IMAGES && (
+                            <button
+                                type="button"
+                                onClick={() => imgInputRef.current?.click()}
+                                disabled={uploading}
+                                className="w-16 h-16 rounded-lg border-2 border-dashed border-emerald-300 dark:border-emerald-700 text-emerald-500 flex items-center justify-center text-xl hover:bg-emerald-50 dark:hover:bg-emerald-900/20 disabled:opacity-40"
+                                aria-label="Agregar foto"
+                            >{uploading ? '…' : '+'}</button>
+                        )}
+                    </div>
+                    <input ref={imgInputRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => handleAddImages(e.target.files)} />
                 </div>
             )}
-            <div className="mt-2.5 flex items-center justify-between gap-2">
-                <p className="text-[11px] text-gray-400 leading-snug">Al guardar se actualiza este mensaje en <strong>todo el banco de respuestas</strong>, no solo aquí.</p>
-                <button
-                    type="button"
-                    onClick={handleSave}
-                    disabled={!dirty || saving}
-                    className="shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                >
-                    {saving ? 'Guardando…' : 'Guardar cambios'}
-                </button>
-            </div>
+
+            {kind === 'document' && (
+                <div className="mt-3">
+                    <label className="text-xs font-semibold text-emerald-700 dark:text-emerald-300">Documento (PDF)</label>
+                    <div className="mt-2 flex items-center gap-2">
+                        {docUrl ? (
+                            <div className="flex-1 flex items-center gap-2 px-3 py-2 rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 min-w-0">
+                                <span className="text-base">📄</span>
+                                <a href={docUrl} target="_blank" rel="noreferrer" className="text-xs text-emerald-600 dark:text-emerald-400 truncate hover:underline">{docName || 'documento.pdf'}</a>
+                            </div>
+                        ) : (
+                            <span className="flex-1 text-xs text-gray-400">Sin documento</span>
+                        )}
+                        <button
+                            type="button"
+                            onClick={() => docInputRef.current?.click()}
+                            disabled={uploading}
+                            className="shrink-0 px-2.5 py-1.5 rounded-lg text-xs font-medium border border-emerald-300 dark:border-emerald-700 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 disabled:opacity-40"
+                        >{uploading ? '…' : (docUrl ? 'Reemplazar' : 'Subir PDF')}</button>
+                    </div>
+                    <input ref={docInputRef} type="file" accept="application/pdf" className="hidden" onChange={(e) => handleReplaceDoc(e.target.files?.[0])} />
+                </div>
+            )}
+
+            {(kind === 'audio' || kind === 'location') && (
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                    Este mensaje es de tipo <strong>{kind === 'audio' ? 'audio / nota de voz' : 'ubicación'}</strong>. Ese contenido se edita en el banco de respuestas (sección Chat).
+                </p>
+            )}
+
+            {err && <p className="mt-2 text-[11px] text-red-500">{err}</p>}
+
+            {(kind === 'text' || kind === 'document') && (
+                <div className="mt-2.5 flex items-center justify-between gap-2">
+                    <p className="text-[11px] text-gray-400 leading-snug">Al guardar se actualiza este mensaje en <strong>todo el banco de respuestas</strong>, no solo aquí.</p>
+                    <button
+                        type="button"
+                        onClick={handleSave}
+                        disabled={!dirty || saving || uploading}
+                        className="shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    >
+                        {saving ? 'Guardando…' : 'Guardar cambios'}
+                    </button>
+                </div>
+            )}
         </div>
     );
 };
