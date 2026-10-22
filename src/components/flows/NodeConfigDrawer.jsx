@@ -641,6 +641,9 @@ const parseRutaJson = (text) => {
     return { error: '', paradas: norm, nombre: parsed?.ruta ? String(parsed.ruta) : '' };
 };
 
+// Mensaje de felicitación por default al crear una ruta nueva (editable por ruta).
+const DEFAULT_SUCCESS_MSG = '🎉 ¡Felicidades {{nombre}}! Te queda la ruta {{ruta cercana}} en la parada #{{numero parada}} ({{parada cercana}}), a {{metros parada}} m.';
+
 // 📍 Config del nodo "Pedir Ubicación": mensaje del botón nativo + VARIAS rutas. Cada ruta trae su
 // JSON de paradas, su mensaje de felicitación (con {{variables}}) y una foto/PDF opcional. El motor
 // compara la ubicación contra la parada MÁS CERCANA de todas las rutas: dentro del radio → Sí, y
@@ -656,8 +659,8 @@ const UbicacionConfig = ({ data, patch }) => {
         const base = (Array.isArray(data.rutas) && data.rutas.length)
             ? data.rutas.map(r => ({ nombre: r.nombre || r.ruta || '', paradas: Array.isArray(r.paradas) ? r.paradas : [], successMessage: r.successMessage || '', mediaUrl: r.mediaUrl || '', mediaType: r.mediaType || '', mediaName: r.mediaName || '' }))
             : (Array.isArray(data.paradas) && data.paradas.length)
-                ? [{ nombre: data.rutaNombre || '', paradas: data.paradas, successMessage: '', mediaUrl: '', mediaType: '', mediaName: '' }]
-                : [{ nombre: '', paradas: [], successMessage: '', mediaUrl: '', mediaType: '', mediaName: '' }];
+                ? [{ nombre: data.rutaNombre || '', paradas: data.paradas, successMessage: DEFAULT_SUCCESS_MSG, mediaUrl: '', mediaType: '', mediaName: '' }]
+                : [{ nombre: '', paradas: [], successMessage: DEFAULT_SUCCESS_MSG, mediaUrl: '', mediaType: '', mediaName: '' }];
         return base.map((r, i) => ({
             id: `r${Date.now()}_${i}`, ...r,
             raw: r.paradas.length ? JSON.stringify({ ruta: r.nombre || undefined, paradas: r.paradas }, null, 2) : '',
@@ -681,10 +684,10 @@ const UbicacionConfig = ({ data, patch }) => {
             ? { ...r, raw: text, error: res.error, paradas: res.paradas, nombre: res.nombre || r.nombre }
             : r));
     };
-    const addRuta = () => commit([...rutas, { id: `r${Date.now()}`, nombre: '', paradas: [], raw: '', error: '', successMessage: '', mediaUrl: '', mediaType: '', mediaName: '' }]);
+    const addRuta = () => commit([...rutas, { id: `r${Date.now()}`, nombre: '', paradas: [], raw: '', error: '', successMessage: DEFAULT_SUCCESS_MSG, mediaUrl: '', mediaType: '', mediaName: '' }]);
     const removeRuta = (id) => {
         const next = rutas.filter(r => r.id !== id);
-        commit(next.length ? next : [{ id: `r${Date.now()}`, nombre: '', paradas: [], raw: '', error: '', successMessage: '', mediaUrl: '', mediaType: '', mediaName: '' }]);
+        commit(next.length ? next : [{ id: `r${Date.now()}`, nombre: '', paradas: [], raw: '', error: '', successMessage: DEFAULT_SUCCESS_MSG, mediaUrl: '', mediaType: '', mediaName: '' }]);
     };
     const uploadMedia = async (id, file) => {
         if (!file) return;
@@ -702,10 +705,6 @@ const UbicacionConfig = ({ data, patch }) => {
 
     return (
         <div className="space-y-5">
-            <p className="text-xs bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg p-2.5 text-emerald-800 dark:text-emerald-300">
-                Manda el botón nativo <strong>“Enviar ubicación”</strong> y espera el GPS del candidato. Compara contra la parada <strong>más cercana de todas las rutas</strong>: si queda dentro del radio sale por <strong className="text-emerald-600 dark:text-emerald-400">Sí</strong> (y manda el mensaje + archivo de esa ruta), si no por <strong className="text-red-500">No</strong>.
-            </p>
-
             <div>
                 <div className="flex items-center justify-between mb-1.5">
                     <label className="text-xs text-gray-500 dark:text-gray-400">Mensaje que acompaña al botón</label>
@@ -713,7 +712,6 @@ const UbicacionConfig = ({ data, patch }) => {
                 </div>
                 <textarea rows={3} maxLength={1024} value={data.body || ''} onChange={(e) => patch({ body: e.target.value })}
                     placeholder="Ej. Para saber si alguna ruta te queda cerca, compárteme tu ubicación 📍" className={inputCls} />
-                <p className="text-[11px] text-gray-400 mt-1">Admite variables: {'{{nombre}}'}, {'{{municipio}}'}…</p>
             </div>
 
             <div>
