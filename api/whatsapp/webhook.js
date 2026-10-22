@@ -1233,15 +1233,15 @@ export default async function handler(req, res) {
                 // espera de ubicación activa cae al flujo normal (Brenda re-pregunta el dato escrito).
                 if (messageType === 'location' && incomingLocation && Number.isFinite(incomingLocation.lat) && Number.isFinite(incomingLocation.lng)) {
                     try {
-                        const waitingRaw = redis ? await redis.hgetall(`flow:waiting:v1:${candidateId}`) : null;
-                        const hasLocWait = waitingRaw && Object.values(waitingRaw).some(v => {
-                            try { return JSON.parse(v)?.kind === 'location'; } catch { return false; }
-                        });
-                        if (hasLocWait) {
-                            const { resumeWaitingLocationFlow } = await import('../utils/flow-engine.js');
-                            await resumeWaitingLocationFlow(candidateId, updatedCandidate, incomingLocation).catch(() => {});
-                            continue; // ubicación resuelta por el motor de flujos, nunca por Brenda
-                        }
+                        // Llamada DIRECTA a la reanudación (hace su propia verificación atómica de la
+                        // espera): si había un nodo "Pedir Ubicación" esperando, rutea Sí/No y devuelve
+                        // true → cortamos aquí. Si no, devuelve false → sigue al flujo normal. Antes se
+                        // hacía un pre-check con hgetall y LUEGO se reanudaba: ese doble-read abría una
+                        // ventana de carrera (la espera podía cambiar entre ambos) que a veces dejaba
+                        // caer la ubicación al agente y RE-DISPARABA el flujo. Un solo read elimina eso.
+                        const { resumeWaitingLocationFlow } = await import('../utils/flow-engine.js');
+                        const routed = await resumeWaitingLocationFlow(candidateId, updatedCandidate, incomingLocation).catch(() => false);
+                        if (routed) continue; // ubicación resuelta por el motor de flujos, nunca por Brenda
                     } catch (e) {
                         console.error('[Webhook] location flow guard error:', e?.message);
                     }

@@ -926,9 +926,13 @@ export async function evaluateOrExecute(node, candidate, flowId, redis, opts = {
             const body = (data.body || '').trim();
             if (!body) return true; // sin cuerpo no manda nada, no rompe la cadena
 
-            // Modo PRUEBA (nodo Test) o EPHEMERAL (cron "al regresar"): no hay candidato real
-            // que comparta su ubicación → no pausa, deja pasar para previsualizar los siguientes.
-            if (opts.skipClaim || opts.ephemeral) return true;
+            // Modo PRUEBA (nodo Test): no hay candidato real que comparta ubicación → no pausa,
+            // solo previsualiza el envío y deja pasar. En EPHEMERAL (flujos "al regresar" y listas
+            // manuales) SÍ pausa y registra la espera (igual que el nodo Botones): su reanudación la
+            // dispara el webhook al llegar la ubicación — NO depende del ledger como esperando_respuesta.
+            // Antes incluía `|| opts.ephemeral` por error → en listas/al-regresar no registraba la
+            // espera y al compartir ubicación el flujo se re-disparaba en vez de rutear Sí/No.
+            if (opts.skipClaim) return true;
 
             let sendOk = false;
             try {
