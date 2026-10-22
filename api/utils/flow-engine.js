@@ -568,6 +568,37 @@ async function sendInteractiveNode(redis, node, candidate, flowId, opts = {}, pr
     return { sendOk, options };
 }
 
+// Reenvía el botón nativo "Enviar ubicación" de un nodo "Pedir Ubicación" cuando el candidato
+// escribió texto en vez de compartir su GPS (re-mandar / anti-rebote). Es un envío sencillo:
+// NO re-registra la espera (el registro 'location' sigue vivo en WAITING_PREFIX) ni reenvía el
+// botón extra "No estoy en casa". El cuerpo es el `reaskText` si se configuró, si no el `body`
+// original del nodo. Devuelve true si se mandó.
+async function resendLocationRequest(redis, candidate, flowId, node) {
+    const d = node?.data || {};
+    const text = (typeof d.reaskText === 'string' && d.reaskText.trim())
+        ? d.reaskText.trim()
+        : (d.body || '').trim();
+    if (!text) return false;
+    try {
+        const config = await getUltraMsgConfig(candidate.incomingPhoneNumberId || candidate.instanceId);
+        if (!config?.token || !config?.instanceId) return false;
+        const cleanTo = String(candidate.whatsapp).replace(/\D/g, '');
+        const bodyText = substituteVariables(text, candidate);
+        const sendResult = await sendUltraMsgMessageWithRetry(config.instanceId, config.token, cleanTo, bodyText, 'interactive', { interactiveType: 'location_request', priority: 1 });
+        if (sendResult?.success) {
+            await saveFlowOutbound(candidate.id, {
+                from: 'me', content: `${bodyText}\n\n[📍 Pide ubicación]`, timestamp: new Date().toISOString(),
+                meta: { flow: true, flowId, nodeId: node.id, locationRequest: true }
+            }, sendResult);
+            return true;
+        }
+        console.error(`[FLOW-ENGINE] resendLocationRequest ${flowId}/${node.id} candidato ${candidate.id}: envío falló —`, sendResult?.error);
+    } catch (e) {
+        console.error(`[FLOW-ENGINE] resendLocationRequest ${flowId}/${node.id}:`, e?.message);
+    }
+    return false;
+}
+
 export async function evaluateOrExecute(node, candidate, flowId, redis, opts = {}) {
     const data = node.data || {};
 
@@ -1830,7 +1861,26 @@ export async function resumeWaitingFlowIfMatch(candidateId, candidateSnapshot, i
                 const opt = (!expired)
                     ? (Array.isArray(st.options) ? st.options : []).find(o => normInteractiveTitle(o.match) === inTxt)
                     : null;
-                if (!opt) continue; // no es el botón extra → sigue esperando el GPS (no consume)
+                if (!opt) {
+                    // No es el botón extra. Si el nodo tiene "re-mandar" activado y no expiró,
+                    // reenvía el botón de ubicación (hasta reaskMax veces), porque escribió texto
+                    // en vez de compartir su GPS. Luego sigue esperando (no consume la espera).
+                    if (!expired) {
+                        const rflow = flows.find(f => f.id === flowId && f.active && Array.isArray(f.nodes) && f.nodes.length);
+                        const rnode = rflow?.nodes?.find(n => n.id === st.nodeId);
+                        const rd = rnode?.data || {};
+                        if (rnode && rd.reask) {
+                            const count = Number(st.reaskCount) || 0;
+                            const max = Number(rd.reaskMax) > 0 ? Number(rd.reaskMax) : 2;
+                            if (count < max) {
+                                await resendLocationRequest(redis, candidateSnapshot, flowId, rnode).catch(() => {});
+                                st.reaskCount = count + 1;
+                                await redis.hset(key, flowId, JSON.stringify(st)).catch(() => {});
+                            }
+                        }
+                    }
+                    continue; // sigue esperando el GPS (no consume)
+                }
                 matched = true; handle = opt.handle;
             } else {
                 if (!expired) {

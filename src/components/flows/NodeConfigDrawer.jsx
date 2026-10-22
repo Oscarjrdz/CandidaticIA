@@ -726,19 +726,41 @@ const UbicacionConfig = ({ data, patch }) => {
                 </label>
                 {data.extraButtonEnabled === true && (
                     <>
-                        <p className="text-[11px] text-gray-500 dark:text-gray-400">
-                            Se manda en un <strong>2º mensaje</strong> debajo de la petición de ubicación. Quien lo toque sigue el flujo por la salida <strong className="text-amber-600 dark:text-amber-400">“No estoy en casa”</strong>, sin pasar por “le queda / no le queda”.
-                        </p>
                         <div>
                             <label className="text-[11px] text-gray-500 dark:text-gray-400 mb-1 block">Texto del mensaje <span className="text-gray-400">(opcional)</span></label>
                             <input type="text" maxLength={1024} value={data.extraButtonBody ?? ''} onChange={(e) => patch({ extraButtonBody: e.target.value })}
                                 placeholder="Déjalo vacío para mandar solo el botón" className={inputCls} />
-                            <p className="text-[10px] text-gray-400 mt-1">Si lo dejas vacío se manda solo el botón (con un 👇 mínimo, porque WhatsApp no permite botones sin texto).</p>
                         </div>
                         <div>
                             <label className="text-[11px] text-gray-500 dark:text-gray-400 mb-1 block">Texto del botón (máx. 20 caracteres)</label>
                             <input type="text" maxLength={20} value={data.extraButtonText ?? ''} onChange={(e) => patch({ extraButtonText: e.target.value })}
                                 placeholder="No estoy en casa" className={inputCls} />
+                        </div>
+                    </>
+                )}
+            </div>
+
+            {/* 🔁 Re-mandar el botón de ubicación: si el candidato escribe texto en vez de compartir
+                su GPS, se le reenvía el botón (hasta un tope anti-spam). No consume la espera: sigue
+                pudiendo compartir su ubicación o tocar "No estoy en casa". */}
+            <div className="rounded-xl border border-gray-200 dark:border-gray-700 p-3 space-y-2.5">
+                <label className="flex items-start gap-2 cursor-pointer">
+                    <input type="checkbox" checked={!!data.reask} onChange={(e) => patch({ reask: e.target.checked })}
+                        className="w-4 h-4 mt-0.5 rounded text-emerald-600 focus:ring-emerald-500" />
+                    <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">Re-mandar el botón si escribe texto en vez de su ubicación</span>
+                </label>
+                {data.reask && (
+                    <>
+                        <div>
+                            <label className="text-[11px] text-gray-500 dark:text-gray-400 mb-1 block">Máximo de reenvíos</label>
+                            <input type="number" min="1" max="5" value={data.reaskMax ?? 2}
+                                onChange={(e) => patch({ reaskMax: e.target.value === '' ? 2 : Number(e.target.value) })} className={`${inputCls} w-24`} />
+                        </div>
+                        <div>
+                            <label className="text-[11px] text-gray-500 dark:text-gray-400 mb-1 block">Texto al reenviar <span className="text-gray-400">(opcional)</span></label>
+                            <input type="text" value={data.reaskText ?? ''} onChange={(e) => patch({ reaskText: e.target.value })}
+                                placeholder="Déjalo vacío para repetir el mensaje de arriba" className={inputCls} />
+                            <p className="text-[10px] text-gray-400 mt-1">Si lo dejas vacío se reenvía el mismo “Mensaje que acompaña al botón”.</p>
                         </div>
                     </>
                 )}
@@ -1148,7 +1170,6 @@ const NodeConfigDrawer = ({ node, flowId, meta, quickReplies, onSaveQuickReply, 
                         placeholder={`Ej. “Botones de fecha Metalsa”`}
                         className={inputCls}
                     />
-                    <p className="text-[11px] text-gray-400 mt-1.5">Un alias para identificar este nodo (p. ej. al pedirle cambios a Grok). No cambia su comportamiento.</p>
                 </div>
 
                 {node.type === 'inicio' && (() => {
