@@ -462,20 +462,6 @@ function haversineMeters(a, b) {
     return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)));
 }
 
-// Parada más cercana a un punto. paradas = [{ nombre?, lat, lng }]. Descarta coords inválidas.
-// Devuelve { nombre, lat, lng, meters } o null si no hay ninguna parada válida.
-function nearestStop(point, paradas) {
-    let best = null;
-    for (const p of (Array.isArray(paradas) ? paradas : [])) {
-        const lat = Number(p?.lat);
-        const lng = Number(p?.lng);
-        if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
-        const meters = haversineMeters(point, { lat, lng });
-        if (!best || meters < best.meters) best = { nombre: p?.nombre || '', lat, lng, meters };
-    }
-    return best;
-}
-
 // Construye y ENVÍA el mensaje interactivo de un nodo 'accion_botones' (botón/lista/cta_url)
 // con header/footer/variables, lo guarda en el historial (chips + palomitas) y devuelve
 // { sendOk, options } — options = [{handle, match}] para registrar la espera del ruteo.
@@ -1848,21 +1834,29 @@ export async function resumeWaitingLocationFlow(candidateId, candidateSnapshot, 
             const node = flow?.nodes?.find(n => n.id === st.nodeId);
 
             let handle;
-            let nearest = null;
+            let nearest = null; // { nombre, meters, ruta: nombreRuta, numero, rutaObj }
             if (expired || !node) {
                 handle = 'no'; // llegó tarde (venció la ventana) o el nodo ya no existe → No
             } else {
                 const d = node.data || {};
                 const radio = Number(d.radioMetros) > 0 ? Number(d.radioMetros) : 1000;
-                // Varias rutas (nuevo) o una sola lista de paradas (compat viejo). Se toma la
-                // parada MÁS CERCANA de TODAS las rutas: si queda dentro del radio → Sí.
+                // Varias rutas (nuevo) o una sola lista de paradas (compat viejo). Se busca la
+                // parada MÁS CERCANA de TODAS las rutas, guardando su NÚMERO (posición 1-based en
+                // su ruta) y la ruta a la que pertenece. Si queda dentro del radio → Sí.
                 const rutas = (Array.isArray(d.rutas) && d.rutas.length)
                     ? d.rutas
                     : (Array.isArray(d.paradas) ? [{ nombre: d.rutaNombre || '', paradas: d.paradas }] : []);
                 for (const ruta of rutas) {
-                    const n = nearestStop(coords, Array.isArray(ruta?.paradas) ? ruta.paradas : []);
-                    if (n && (!nearest || n.meters < nearest.meters)) {
-                        nearest = { ...n, ruta: ruta?.nombre || ruta?.ruta || '' };
+                    const paradas = Array.isArray(ruta?.paradas) ? ruta.paradas : [];
+                    for (let i = 0; i < paradas.length; i++) {
+                        const p = paradas[i];
+                        const lat = Number(p?.lat);
+                        const lng = Number(p?.lng);
+                        if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+                        const meters = haversineMeters(coords, { lat, lng });
+                        if (!nearest || meters < nearest.meters) {
+                            nearest = { nombre: p?.nombre || '', meters, ruta: ruta?.nombre || ruta?.ruta || '', numero: i + 1, rutaObj: ruta };
+                        }
                     }
                 }
                 // Sin paradas válidas en ninguna ruta → nadie "queda cerca": rutea 'no'.
@@ -1873,11 +1867,14 @@ export async function resumeWaitingLocationFlow(candidateId, candidateSnapshot, 
             await redis.hdel(key, flowId).catch(() => {});
             if (!flow) return false; // flujo borrado/desactivado mientras esperaba → se descarta
 
-            // Guarda el resultado en el candidato para tokens posteriores ({{parada cercana}}, etc.).
+            // Guarda el resultado en el candidato para tokens posteriores ({{ruta cercana}},
+            // {{parada cercana}}, {{numero parada}}, {{metros parada}}). Se aplica al snapshot
+            // ANTES de armar el mensaje de felicitación para que las variables se sustituyan.
             if (nearest) {
                 const locPatch = {
                     ubicacionRutaCercana: nearest.ruta || '',
                     ubicacionParadaCercana: nearest.nombre,
+                    ubicacionNumeroParada: nearest.numero,
                     ubicacionMetrosParada: Math.round(nearest.meters),
                     ubicacionLat: coords.lat,
                     ubicacionLng: coords.lng
@@ -1886,6 +1883,36 @@ export async function resumeWaitingLocationFlow(candidateId, candidateSnapshot, 
                     await updateCandidate(candidateId, locPatch);
                     Object.assign(candidateSnapshot, locPatch);
                 } catch { /* no crítico: el ruteo ya quedó decidido */ }
+            }
+
+            // ✅ LE QUEDA: el NODO mismo manda el mensaje de felicitación + la foto/PDF de ESA
+            // ruta (configurados por ruta). Se hace aquí, antes de rutear por 'si', para que salga
+            // aunque no conectes nada a la salida Sí. Best-effort: si algo falla, igual se rutea.
+            if (handle === 'si' && nearest?.rutaObj) {
+                const ruta = nearest.rutaObj;
+                try {
+                    const config = await getUltraMsgConfig(candidateSnapshot.incomingPhoneNumberId || candidateSnapshot.instanceId);
+                    if (config?.token && config?.instanceId) {
+                        const cleanTo = String(candidateSnapshot.whatsapp).replace(/\D/g, '');
+                        const msg = (ruta.successMessage || '').trim();
+                        if (msg) {
+                            const text = substituteVariables(msg, candidateSnapshot);
+                            const res = await sendUltraMsgMessageWithRetry(config.instanceId, config.token, cleanTo, text, 'chat', { priority: 1 });
+                            if (res?.success) {
+                                await saveFlowOutbound(candidateId, { from: 'me', content: text, timestamp: new Date().toISOString(), meta: { flow: true, flowId, nodeId: st.nodeId } }, res);
+                            }
+                        }
+                        if (ruta.mediaUrl) {
+                            const mType = ruta.mediaType === 'document' ? 'document' : 'image';
+                            const mRes = await sendFlowMediaById(config, cleanTo, ruta.mediaUrl, mType, { priority: 1, ...(ruta.mediaName ? { filename: ruta.mediaName } : {}) });
+                            if (mRes?.success) {
+                                await saveFlowOutbound(candidateId, { from: 'me', content: '', type: mType, mediaUrl: ruta.mediaUrl, timestamp: new Date().toISOString(), meta: { flow: true, flowId, nodeId: st.nodeId } }, mRes);
+                            }
+                        }
+                    }
+                } catch (e) {
+                    console.error(`[FLOW-ENGINE] accion_ubicacion felicitación ${flowId}/${st.nodeId} candidato ${candidateId}:`, e?.message);
+                }
             }
 
             await runOneFlow(redis, flow, candidateId, { ...candidateSnapshot }, {

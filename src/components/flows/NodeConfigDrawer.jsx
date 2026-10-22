@@ -641,50 +641,61 @@ const parseRutaJson = (text) => {
     return { error: '', paradas: norm, nombre: parsed?.ruta ? String(parsed.ruta) : '' };
 };
 
-// 📍 Config del nodo "Pedir Ubicación": mensaje que acompaña al botón nativo de WhatsApp, VARIAS
-// rutas (cada una = nombre + su JSON de paradas) y un radio (slider). El motor compara la ubicación
-// que comparte el candidato contra la parada MÁS CERCANA de TODAS las rutas: dentro del radio → Sí.
+// 📍 Config del nodo "Pedir Ubicación": mensaje del botón nativo + VARIAS rutas. Cada ruta trae su
+// JSON de paradas, su mensaje de felicitación (con {{variables}}) y una foto/PDF opcional. El motor
+// compara la ubicación contra la parada MÁS CERCANA de todas las rutas: dentro del radio → Sí, y
+// manda el mensaje + archivo de ESA ruta.
 const UbicacionConfig = ({ data, patch }) => {
     const radio = Number(data.radioMetros) > 0 ? Number(data.radioMetros) : 1000;
     const radioLabel = radio >= 1000 ? `${(radio / 1000).toFixed(radio % 1000 === 0 ? 0 : 1)} km` : `${radio} m`;
+    const [busyId, setBusyId] = useState(null); // ruta cuyo archivo se está subiendo
 
-    // Estado local de edición: por ruta guarda el texto crudo + error, además de las paradas
-    // normalizadas. A Redis solo va { nombre, paradas } (sin el raw ni el error). Migra el formato
-    // viejo (data.paradas = una sola ruta) a una ruta en la lista.
+    // Estado local de edición: por ruta guarda el texto crudo + error, además de lo que se persiste.
+    // Migra el formato viejo (data.paradas = una sola ruta) a una ruta en la lista.
     const [rutas, setRutas] = useState(() => {
         const base = (Array.isArray(data.rutas) && data.rutas.length)
-            ? data.rutas.map(r => ({ nombre: r.nombre || r.ruta || '', paradas: Array.isArray(r.paradas) ? r.paradas : [] }))
+            ? data.rutas.map(r => ({ nombre: r.nombre || r.ruta || '', paradas: Array.isArray(r.paradas) ? r.paradas : [], successMessage: r.successMessage || '', mediaUrl: r.mediaUrl || '', mediaType: r.mediaType || '', mediaName: r.mediaName || '' }))
             : (Array.isArray(data.paradas) && data.paradas.length)
-                ? [{ nombre: data.rutaNombre || '', paradas: data.paradas }]
-                : [{ nombre: '', paradas: [] }];
+                ? [{ nombre: data.rutaNombre || '', paradas: data.paradas, successMessage: '', mediaUrl: '', mediaType: '', mediaName: '' }]
+                : [{ nombre: '', paradas: [], successMessage: '', mediaUrl: '', mediaType: '', mediaName: '' }];
         return base.map((r, i) => ({
-            id: `r${Date.now()}_${i}`,
-            nombre: r.nombre,
-            paradas: r.paradas,
+            id: `r${Date.now()}_${i}`, ...r,
             raw: r.paradas.length ? JSON.stringify({ ruta: r.nombre || undefined, paradas: r.paradas }, null, 2) : '',
             error: ''
         }));
     });
 
-    // Vuelca al nodo SOLO lo que el motor necesita (nombre + paradas de las rutas con ≥1 parada).
+    // Vuelca al nodo SOLO lo que el motor necesita (sin el raw/error locales), de las rutas con ≥1 parada.
     const commit = (next) => {
         setRutas(next);
-        const clean = next.map(r => ({ nombre: r.nombre || '', paradas: Array.isArray(r.paradas) ? r.paradas : [] }))
+        const clean = next
+            .map(r => ({ nombre: r.nombre || '', paradas: Array.isArray(r.paradas) ? r.paradas : [], successMessage: r.successMessage || '', mediaUrl: r.mediaUrl || '', mediaType: r.mediaType || '', mediaName: r.mediaName || '' }))
             .filter(r => r.paradas.length);
         patch({ rutas: clean, paradas: undefined, rutaNombre: undefined });
     };
 
+    const updateField = (id, fields) => commit(rutas.map(r => r.id === id ? { ...r, ...fields } : r));
     const updateRaw = (id, text) => {
         const res = parseRutaJson(text);
         commit(rutas.map(r => r.id === id
             ? { ...r, raw: text, error: res.error, paradas: res.paradas, nombre: res.nombre || r.nombre }
             : r));
     };
-    const updateNombre = (id, nombre) => commit(rutas.map(r => r.id === id ? { ...r, nombre } : r));
-    const addRuta = () => commit([...rutas, { id: `r${Date.now()}`, nombre: '', paradas: [], raw: '', error: '' }]);
+    const addRuta = () => commit([...rutas, { id: `r${Date.now()}`, nombre: '', paradas: [], raw: '', error: '', successMessage: '', mediaUrl: '', mediaType: '', mediaName: '' }]);
     const removeRuta = (id) => {
         const next = rutas.filter(r => r.id !== id);
-        commit(next.length ? next : [{ id: `r${Date.now()}`, nombre: '', paradas: [], raw: '', error: '' }]);
+        commit(next.length ? next : [{ id: `r${Date.now()}`, nombre: '', paradas: [], raw: '', error: '', successMessage: '', mediaUrl: '', mediaType: '', mediaName: '' }]);
+    };
+    const uploadMedia = async (id, file) => {
+        if (!file) return;
+        setBusyId(id);
+        try {
+            const isImg = (file.type || '').startsWith('image/');
+            const url = await uploadQuickReplyAsset(file, { compress: isImg });
+            if (url) updateField(id, { mediaUrl: url, mediaType: isImg ? 'image' : 'document', mediaName: file.name || '' });
+        } catch (e) {
+            alert('No se pudo subir el archivo: ' + (e?.message || e));
+        } finally { setBusyId(null); }
     };
 
     const totalStops = rutas.reduce((a, r) => a + r.paradas.length, 0);
@@ -692,7 +703,7 @@ const UbicacionConfig = ({ data, patch }) => {
     return (
         <div className="space-y-5">
             <p className="text-xs bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg p-2.5 text-emerald-800 dark:text-emerald-300">
-                Manda el botón nativo <strong>“Enviar ubicación”</strong> de WhatsApp y espera el GPS del candidato. Al llegar, compara contra la parada <strong>más cercana de todas las rutas</strong>: si queda dentro del radio sale por <strong className="text-emerald-600 dark:text-emerald-400">Sí</strong>, si no por <strong className="text-red-500">No</strong>.
+                Manda el botón nativo <strong>“Enviar ubicación”</strong> y espera el GPS del candidato. Compara contra la parada <strong>más cercana de todas las rutas</strong>: si queda dentro del radio sale por <strong className="text-emerald-600 dark:text-emerald-400">Sí</strong> (y manda el mensaje + archivo de esa ruta), si no por <strong className="text-red-500">No</strong>.
             </p>
 
             <div>
@@ -710,13 +721,13 @@ const UbicacionConfig = ({ data, patch }) => {
                     <label className="text-xs text-gray-500 dark:text-gray-400">Rutas {totalStops ? <span className="text-emerald-600 dark:text-emerald-400 font-semibold">· {totalStops} paradas</span> : ''}</label>
                     <button type="button" onClick={addRuta} className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:underline">+ Agregar ruta</button>
                 </div>
-                <div className="space-y-3">
+                <div className="space-y-4">
                     {rutas.map((r, idx) => {
                         const valid = r.paradas.length;
                         return (
-                            <div key={r.id} className="rounded-xl border border-gray-200 dark:border-gray-700 p-2.5 space-y-2 bg-gray-50/60 dark:bg-gray-800/40">
+                            <div key={r.id} className="rounded-xl border border-gray-200 dark:border-gray-700 p-2.5 space-y-2.5 bg-gray-50/60 dark:bg-gray-800/40">
                                 <div className="flex items-center gap-2">
-                                    <input type="text" value={r.nombre || ''} onChange={(e) => updateNombre(r.id, e.target.value)}
+                                    <input type="text" value={r.nombre || ''} onChange={(e) => updateField(r.id, { nombre: e.target.value })}
                                         placeholder={`Nombre de la ruta ${idx + 1} (ej. Ruta 215)`} className={`${inputCls} py-1.5 font-semibold`} />
                                     {rutas.length > 1 && (
                                         <button type="button" onClick={() => removeRuta(r.id)} className="shrink-0 p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20" title="Quitar ruta">
@@ -724,7 +735,7 @@ const UbicacionConfig = ({ data, patch }) => {
                                         </button>
                                     )}
                                 </div>
-                                <textarea rows={5} value={r.raw} onChange={(e) => updateRaw(r.id, e.target.value)} spellCheck={false}
+                                <textarea rows={4} value={r.raw} onChange={(e) => updateRaw(r.id, e.target.value)} spellCheck={false}
                                     placeholder={'Pega aquí el JSON de esta ruta:\n{ "paradas": [ { "nombre": "...", "lat": 25.70, "lng": -100.38 } ] }'}
                                     className={`${inputCls} py-1.5 font-mono text-xs leading-snug`} />
                                 {r.error
@@ -732,6 +743,39 @@ const UbicacionConfig = ({ data, patch }) => {
                                     : <p className={`text-[11px] ${valid ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-400'}`}>
                                         {valid ? `✓ ${valid} ${valid === 1 ? 'parada' : 'paradas'}` : 'Pega el JSON de paradas que te generó Claude.'}
                                       </p>}
+
+                                {/* Mensaje de felicitación que se manda si ESTA ruta le queda */}
+                                <div>
+                                    <div className="flex items-center justify-between mb-1">
+                                        <label className="text-[11px] font-semibold text-gray-500 dark:text-gray-400">Mensaje si le queda esta ruta</label>
+                                        <EmojiPickerButton onPick={(emoji) => updateField(r.id, { successMessage: (r.successMessage || '') + emoji })} />
+                                    </div>
+                                    <textarea rows={3} value={r.successMessage || ''} onChange={(e) => updateField(r.id, { successMessage: e.target.value })}
+                                        placeholder={'🎉 ¡Felicidades {{nombre}}! Te queda la ruta {{ruta cercana}} en la parada #{{numero parada}} ({{parada cercana}}), a {{metros parada}} m.'}
+                                        className={`${inputCls} py-1.5 text-xs`} />
+                                </div>
+
+                                {/* Foto o PDF que se manda junto con la felicitación */}
+                                <div>
+                                    <label className="text-[11px] font-semibold text-gray-500 dark:text-gray-400 mb-1 block">Foto o PDF de la ruta (opcional)</label>
+                                    {r.mediaUrl ? (
+                                        <div className="flex items-center gap-2 rounded-lg border border-gray-200 dark:border-gray-700 p-2 bg-white dark:bg-gray-800">
+                                            {r.mediaType === 'image'
+                                                ? <img src={r.mediaUrl} alt="ruta" className="w-12 h-12 rounded object-cover shrink-0" />
+                                                : <div className="w-12 h-12 rounded bg-red-50 dark:bg-red-900/20 flex items-center justify-center text-red-500 text-[10px] font-bold shrink-0">PDF</div>}
+                                            <span className="flex-1 text-[11px] text-gray-600 dark:text-gray-300 truncate">{r.mediaName || (r.mediaType === 'image' ? 'Imagen' : 'Documento')}</span>
+                                            <button type="button" onClick={() => updateField(r.id, { mediaUrl: '', mediaType: '', mediaName: '' })} className="shrink-0 p-1 rounded text-gray-400 hover:text-red-500" title="Quitar archivo">
+                                                <X className="w-4 h-4" />
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <label className={`flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-dashed border-gray-300 dark:border-gray-600 text-xs font-semibold cursor-pointer hover:border-emerald-400 ${busyId === r.id ? 'opacity-50 pointer-events-none' : 'text-gray-500 dark:text-gray-400'}`}>
+                                            {busyId === r.id ? 'Subiendo…' : '📎 Subir foto o PDF'}
+                                            <input type="file" accept="image/*,application/pdf" className="hidden"
+                                                onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; uploadMedia(r.id, f); }} />
+                                        </label>
+                                    )}
+                                </div>
                             </div>
                         );
                     })}
@@ -761,7 +805,7 @@ const UbicacionConfig = ({ data, patch }) => {
                         <span className="text-xs text-gray-600 dark:text-gray-300"><strong>Nunca se vence</strong></span>
                     </label>
                 </div>
-                <p className="text-[11px] text-gray-400 mt-1.5">Si comparte la ubicación después de este plazo, sale por <strong>No</strong>. Guarda la ruta y parada más cercanas en <strong>{'{{ruta cercana}}'}</strong>, <strong>{'{{parada cercana}}'}</strong> y <strong>{'{{metros parada}}'}</strong>.</p>
+                <p className="text-[11px] text-gray-400 mt-1.5">Variables disponibles en el mensaje de cada ruta: <strong>{'{{nombre}}'}</strong>, <strong>{'{{ruta cercana}}'}</strong>, <strong>{'{{parada cercana}}'}</strong>, <strong>{'{{numero parada}}'}</strong>, <strong>{'{{metros parada}}'}</strong>.</p>
             </div>
         </div>
     );

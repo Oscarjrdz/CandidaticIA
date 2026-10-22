@@ -50,6 +50,7 @@ export const substituteVariables = (text, candidate) => {
             // metros (las fija resumeWaitingLocationFlow cuando el candidato comparte su ubicación).
             'ruta cercana': candidate.ubicacionRutaCercana || 'No especificada',
             'parada cercana': candidate.ubicacionParadaCercana || 'No especificada',
+            'numero parada': candidate.ubicacionNumeroParada != null ? String(candidate.ubicacionNumeroParada) : '',
             'metros parada': candidate.ubicacionMetrosParada != null ? String(candidate.ubicacionMetrosParada) : ''
         };
 
