@@ -39,9 +39,10 @@ const DEFAULT_DATA_BY_TYPE = {
         sections: [{ title: 'Opciones', rows: [{ id: '__OPT__', title: '', description: '' }] }],
         ctaDisplayText: '',
         ctaUrl: '',
-        routeByOption: true,
+        routeByOption: true,                    // ON por default (rutea por opción)
         timeoutHoras: 48,
-        reask: false,                           // si escribe en vez de tocar, re-mandar los botones
+        timeoutNever: true,                     // ON por default (el menú no caduca)
+        reask: true,                            // ON por default: si escribe en vez de tocar, re-mandar los botones
         reaskMax: 2,
         reaskText: 'Por favor elige una de las opciones 👇'
     },
