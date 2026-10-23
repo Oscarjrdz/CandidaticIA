@@ -1751,6 +1751,12 @@ export const saveCandidate = async (candidate) => {
         }
     }
     syncCandidateSecondaryIndexes(client, previousCandidate, finalCandidate).catch(() => {});
+    // Proyección ligera para el índice facetado: evita que su rebuild lea el blob
+    // completo (~1 KB) de los 21K candidatos cada vez. Import dinámico para no crear
+    // dependencia circular (facet-index importa de storage). Fire-and-forget.
+    if (client) {
+        import('./facet-index.js').then(m => m.writeFacetProjection(client, finalCandidate)).catch(() => {});
+    }
     // ATOMIC TAG COUNTS al CREARSE: mantener candidatic:tag_counts en sync también
     // en la creación. Antes solo se incrementaba el contador de "sin etiqueta"; un
     // candidato creado ya con etiqueta (p.ej. viene de un anuncio con la etiqueta
@@ -1880,6 +1886,8 @@ export const deleteCandidate = async (id) => {
             `debug:ultramsg:${phone || id}`,
             `noInteresa:${id}`,
             `vacancy_history:${id}`,
+            `candidate:facet:${id}`,   // proyección ligera del índice facetado
+            `candidate:ctwa:${id}`,    // side-key del adClickId (ctwa_clid)
         ];
         await client.del(...stateKeys).catch(() => {});
 

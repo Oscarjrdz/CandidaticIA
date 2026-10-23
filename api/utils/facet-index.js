@@ -35,6 +35,40 @@ const STALE_TTL_SECONDS = 24 * 60 * 60;   // 24 h
 const CANDIDATES_LIST_KEY = 'candidates:list';
 const CHUNK_SIZE = 500;
 
+// ─── Proyección ligera por candidato (ahorro de ancho de banda en el rebuild) ──
+// El rebuild necesita leer la base COMPLETA, pero solo usa ~13 campos de cada blob
+// (~1 KB). Guardamos esos campos en una llave chica `candidate:facet:<id>` escrita
+// en CADA saveCandidate (único punto de escritura del blob, así que siempre va
+// sincronizada — incluido lastUserMessageAt). El rebuild lee estas proyecciones y
+// SOLO cae al blob completo cuando falta la proyección (candidato dormido/nuevo),
+// sembrándola de paso. Correctitud: la lógica de bucketing corre idéntica sobre la
+// proyección; dentro van TODOS los campos que tocan auditProfile(core)/within24h/
+// canonicalizadores. Si alguna vez el rebuild necesita un campo nuevo, agrégalo aquí.
+export const FACET_PROJECTION_PREFIX = 'candidate:facet:';
+const FACET_PROJECTION_FIELDS = [
+    'id', 'edad', 'genero', 'municipio', 'colonia', 'escolaridad',
+    'manualProjectId', 'tags', 'lastUserMessageAt', 'ultimoMensajeUsuario',
+    'nombreReal', 'fechaNacimiento', 'categoria'
+];
+const PROJ_TTL_SECONDS = 60 * 60 * 24 * 180; // 180d, refrescado en cada saveCandidate
+
+export function buildFacetProjection(c) {
+    if (!c || !c.id) return null;
+    const p = {};
+    for (const f of FACET_PROJECTION_FIELDS) {
+        if (c[f] !== undefined) p[f] = c[f];
+    }
+    return p;
+}
+
+/** Escribe la proyección ligera de un candidato. Fire-and-forget, nunca lanza. */
+export function writeFacetProjection(redis, c) {
+    if (!redis || !c || !c.id || String(c.id).startsWith('sim_')) return;
+    const p = buildFacetProjection(c);
+    if (!p) return;
+    redis.set(`${FACET_PROJECTION_PREFIX}${c.id}`, JSON.stringify(p), 'EX', PROJ_TTL_SECONDS).catch(() => {});
+}
+
 const SIN_DATO = 'Sin dato';
 
 // La edad se indexa por edad EXACTA (bulk:idx:v1:edad:<n>) para permitir rangos
@@ -140,19 +174,12 @@ export async function buildCandidateFacetIndex(redis, { manualProjects = [], pro
         members[dim][value].push(id);
     };
 
-    for (let i = 0; i < ids.length; i += CHUNK_SIZE) {
-        const chunk = ids.slice(i, i + CHUNK_SIZE);
-        const pipe = redis.pipeline();
-        chunk.forEach(id => pipe.get(`candidate:${id}`));
-        const rows = await pipe.exec();
-
-        rows.forEach(([err, raw]) => {
-            if (err || !raw) return;
-            let c;
-            try { c = JSON.parse(raw); } catch { return; }
-            if (!c?.id) return;
-            const id = String(c.id);
-            existingCandidateIds.add(id);
+    // Procesa un candidato ya parseado (desde proyección o blob). Lógica idéntica
+    // a la de antes — solo se extrajo a un closure para reusarla en ambos caminos.
+    const ingest = (c) => {
+        if (!c?.id) return;
+        const id = String(c.id);
+        existingCandidateIds.add(id);
 
             // Conteos legados + distribuciones (colonia/escolaridad/estatus para analítica)
             const coloniaVal = coloniaCanonica(c.colonia);
@@ -177,7 +204,41 @@ export async function buildCandidateFacetIndex(redis, { manualProjects = [], pro
             push('estatus', estatusVal, id);
             if (within24h(c)) push('ventana24h', 'si', id);
             candidateTags(c).forEach(t => push('tags', t, id));
+    };
+
+    // Lectura por chunks: primero las proyecciones ligeras; solo las que faltan caen
+    // al blob completo (y se siembran para el próximo rebuild).
+    for (let i = 0; i < ids.length; i += CHUNK_SIZE) {
+        const chunk = ids.slice(i, i + CHUNK_SIZE);
+
+        const projPipe = redis.pipeline();
+        chunk.forEach(id => projPipe.get(`${FACET_PROJECTION_PREFIX}${id}`));
+        const projRows = await projPipe.exec();
+
+        const missIds = [];
+        projRows.forEach(([err, raw], idx) => {
+            if (!err && raw) {
+                try { ingest(JSON.parse(raw)); return; } catch { /* proyección corrupta → fallback */ }
+            }
+            missIds.push(chunk[idx]);
         });
+
+        if (missIds.length) {
+            const blobPipe = redis.pipeline();
+            missIds.forEach(id => blobPipe.get(`candidate:${id}`));
+            const blobRows = await blobPipe.exec();
+            const seed = redis.pipeline();
+            let anySeed = false;
+            blobRows.forEach(([err, raw]) => {
+                if (err || !raw) return;
+                let c;
+                try { c = JSON.parse(raw); } catch { return; }
+                ingest(c);
+                const p = buildFacetProjection(c);
+                if (p?.id) { seed.set(`${FACET_PROJECTION_PREFIX}${p.id}`, JSON.stringify(p), 'EX', PROJ_TTL_SECONDS); anySeed = true; }
+            });
+            if (anySeed) seed.exec().catch(() => {});
+        }
     }
 
     // Steps por proyecto (compatibilidad con filter_counts) — reusa links ya cargados.
