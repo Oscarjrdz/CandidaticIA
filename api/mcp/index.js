@@ -271,6 +271,79 @@ function nodeDisplayName(node) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Helpers del nodo "Pedir Ubicación" (accion_ubicacion)
+// Espejo de los defaults del editor (FlowEditor.jsx / NodeConfigDrawer.jsx) para
+// que Grok no tenga que reconstruir a mano el data.rutas[] completo. Todo lo demás
+// (guardar, auth, side-effects) sigue pasando por /api/flows vía callInternal.
+// ─────────────────────────────────────────────────────────────────────────────
+const UBICACION_DEFAULT_BODY = '📍 ¡Mándame tu ubicación! Con el botón de abajo compárteme dónde vives y te digo si la ruta te queda cerca 😊';
+const UBICACION_DEFAULT_SUCCESS_MSG = '🎉 ¡Felicidades {{nombre}}! Te queda la ruta {{ruta cercana}} en la parada #{{numero parada}} ({{parada cercana}}), a {{metros parada}} m.';
+
+// Lee las rutas de un nodo, tolerando el formato viejo (data.paradas = una sola lista).
+function getNodeRutas(node) {
+    const d = node?.data || {};
+    if (Array.isArray(d.rutas) && d.rutas.length) return d.rutas;
+    if (Array.isArray(d.paradas) && d.paradas.length) {
+        return [{ nombre: d.rutaNombre || '', paradas: d.paradas, successMessage: UBICACION_DEFAULT_SUCCESS_MSG, mediaUrl: '', mediaType: '', mediaName: '' }];
+    }
+    return [];
+}
+
+// Valida y normaliza UNA ruta a la forma que el motor espera. Lanza error legible si algo falla.
+function normalizeRuta(ruta, i = 0) {
+    if (!ruta || typeof ruta !== 'object') throw new Error(`Ruta #${i + 1} inválida (debe ser un objeto)`);
+    const nombre = String(ruta.nombre || '').trim();
+    if (!nombre) throw new Error(`Ruta #${i + 1}: falta "nombre"`);
+    const paradasRaw = Array.isArray(ruta.paradas) ? ruta.paradas : [];
+    const paradas = paradasRaw.map((p, j) => {
+        const pn = String(p?.nombre || '').trim();
+        const lat = Number(p?.lat);
+        const lng = Number(p?.lng);
+        if (!pn) throw new Error(`Ruta "${nombre}", parada #${j + 1}: falta "nombre"`);
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) throw new Error(`Ruta "${nombre}", parada "${pn}": lat/lng deben ser números (grados decimales; lng negativa en México)`);
+        return { nombre: pn, lat, lng };
+    });
+    // successMessage: si no mandan nada, se pre-carga el default (igual que el editor).
+    const successMessage = (ruta.successMessage === undefined || ruta.successMessage === null)
+        ? UBICACION_DEFAULT_SUCCESS_MSG
+        : String(ruta.successMessage);
+    const mediaUrl = String(ruta.mediaUrl || '').trim();
+    const mediaType = mediaUrl ? (String(ruta.mediaType || 'image') === 'document' ? 'document' : 'image') : '';
+    const mediaName = mediaUrl ? String(ruta.mediaName || '').trim() : '';
+    return { nombre, paradas, successMessage, mediaUrl, mediaType, mediaName };
+}
+
+// Resumen liviano de una ruta (para listados, sin volcar todas las paradas).
+function summarizeRuta(ruta) {
+    return {
+        nombre: String(ruta?.nombre || ''),
+        numParadas: Array.isArray(ruta?.paradas) ? ruta.paradas.length : 0,
+        tieneMensaje: !!String(ruta?.successMessage || '').trim(),
+        media: ruta?.mediaUrl ? { tipo: ruta.mediaType || 'image', nombre: ruta.mediaName || '', url: ruta.mediaUrl } : null
+    };
+}
+
+// Lee un flujo por id vía callInternal; lanza error si no existe.
+async function fetchFlowOrThrow(req, redis, id) {
+    const r = await callInternal(req, redis, `/api/flows?id=${encodeURIComponent(id)}`, 'GET');
+    if (r.status === 404) throw new Error('Flujo no encontrado');
+    if (!r.ok || r.data?.success === false) throw new Error(r.data?.error || `Fallo al leer el flujo (${r.status})`);
+    const f = r.data?.flow;
+    if (!f) throw new Error('Flujo no encontrado');
+    return f;
+}
+
+// Guarda nodes (y opcionalmente edges) de un flujo vía callInternal (PUT /api/flows).
+async function saveFlowNodes(req, redis, id, nodes, edges) {
+    const body = { nodes };
+    if (edges !== undefined) body.edges = edges;
+    const r = await callInternal(req, redis, `/api/flows?id=${encodeURIComponent(id)}`, 'PUT', body);
+    if (r.status === 404) throw new Error('Flujo no encontrado');
+    if (!r.ok || r.data?.success === false) throw new Error(r.data?.error || `Fallo al guardar el flujo (${r.status})`);
+    return r.data?.flow;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Registro de TOOLS
 // Cada tool: { description, inputSchema, handler(args, { redis, req }) -> any }
 // El valor que regrese el handler se serializa a JSON dentro de un content text.
@@ -1858,6 +1931,383 @@ const TOOLS = {
             if (r.status === 404) throw new Error('Flujo o candidato no encontrado');
             if (!r.ok || r.data?.success === false) throw new Error(r.data?.error || `Fallo al correr el flujo (${r.status})`);
             return { flujoId: id, candidateId, yaEstabaCorrido: r.data?.alreadyExecuted === true };
+        }
+    },
+
+    // ──────────────── NODO "PEDIR UBICACIÓN" (accion_ubicacion) ────────────────
+    // Tools dedicadas para ver/crear/editar nodos de ubicación y sus RUTAS sin que
+    // Grok tenga que reconstruir a mano el data.rutas[] completo (en METALSA son 49
+    // rutas / 1060 paradas). Todas hacen read-modify-write contra el flujo y guardan
+    // vía /api/flows (callInternal) → heredan auth SuperAdmin + side-effects. Para
+    // ver lo que el nodo GENERA (qué candidatos compartieron ubicación, qué ruta les
+    // quedó, distancia) están ver_ubicaciones_candidatos (agregado) y ver_ubicacion_candidato.
+
+    ver_nodos_ubicacion: {
+        description: 'Lista los nodos de "Pedir Ubicación" (accion_ubicacion). Sin flujoId: busca en TODOS los flujos. Con flujoId: solo ese flujo. Por cada nodo devuelve flujoId/flujoNombre, nodeId, alias (customName), el mensaje (body), radioMetros, timeout, y el resumen de cada ruta {nombre, numParadas, tieneMensaje, media}. Con detalle=true incluye las paradas completas (lat/lng) y el successMessage de cada ruta. Úsalo antes de editar para saber qué nodeId tocar.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                flujoId: { type: 'string', description: 'ID del flujo (opcional; si lo omites busca en todos).' },
+                nodeId: { type: 'string', description: 'ID de un nodo concreto (opcional; requiere flujoId).' },
+                detalle: { type: 'boolean', description: 'true = incluir paradas completas (lat/lng) y successMessage por ruta.' }
+            }
+        },
+        handler: async (args, { redis, req }) => {
+            const flujoId = String(args?.flujoId || '').trim();
+            const nodeIdFilter = String(args?.nodeId || '').trim();
+            const detalle = args?.detalle === true;
+
+            let flows = [];
+            if (flujoId) {
+                flows = [await fetchFlowOrThrow(req, redis, flujoId)];
+            } else {
+                const r = await callInternal(req, redis, '/api/flows', 'GET');
+                if (!r.ok || r.data?.success === false) throw new Error(r.data?.error || `Fallo al listar flujos (${r.status})`);
+                const list = Array.isArray(r.data?.flows) ? r.data.flows : (Array.isArray(r.data) ? r.data : []);
+                // El listado puede venir sin nodes completos; rehidratamos cada flujo.
+                for (const f of list) {
+                    const needHydrate = !Array.isArray(f.nodes);
+                    flows.push(needHydrate ? await fetchFlowOrThrow(req, redis, f.id) : f);
+                }
+            }
+
+            const nodos = [];
+            for (const f of flows) {
+                const nodes = Array.isArray(f.nodes) ? f.nodes : [];
+                for (const n of nodes) {
+                    if (n?.type !== 'accion_ubicacion') continue;
+                    if (nodeIdFilter && n.id !== nodeIdFilter) continue;
+                    const d = n.data || {};
+                    const rutas = getNodeRutas(n);
+                    const info = {
+                        flujoId: f.id,
+                        flujoNombre: f.name || null,
+                        flujoActivo: !!f.active,
+                        nodeId: n.id,
+                        alias: (d.customName || '').trim() || null,
+                        body: d.body || '',
+                        radioMetros: Number(d.radioMetros) || 1000,
+                        timeoutNever: d.timeoutNever !== false,
+                        timeoutHoras: Number(d.timeoutHoras) || 48,
+                        numRutas: rutas.length,
+                        totalParadas: rutas.reduce((s, rt) => s + (Array.isArray(rt.paradas) ? rt.paradas.length : 0), 0),
+                        rutas: detalle
+                            ? rutas.map(rt => ({ nombre: rt.nombre || '', paradas: rt.paradas || [], successMessage: rt.successMessage || '', media: rt.mediaUrl ? { tipo: rt.mediaType || 'image', nombre: rt.mediaName || '', url: rt.mediaUrl } : null }))
+                            : rutas.map(summarizeRuta)
+                    };
+                    nodos.push(info);
+                }
+            }
+            return { total: nodos.length, nodos };
+        }
+    },
+
+    crear_nodo_ubicacion: {
+        description: 'Agrega un nodo "Pedir Ubicación" (accion_ubicacion) NUEVO a un flujo. SOLO inserta el nodo con su configuración y rutas; NO conecta las aristas Sí/No (eso lo haces después en el canvas o con guardar_flujo). Devuelve el nodeId nuevo. Parámetros: body (mensaje arriba del botón; default pre-cargado), radioMetros (100–5000, default 1000), timeoutNever (default true), rutas (opcional, mismo formato que editar_rutas_ubicacion). Consulta ver_catalogos_flujos no aplica aquí (las rutas son coordenadas libres). Para el JSON de rutas: una ruta = {nombre, paradas:[{nombre,lat,lng}], successMessage?, mediaUrl?, mediaType?, mediaName?}, grados decimales, lng negativa en México.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                flujoId: { type: 'string', description: 'ID del flujo donde insertar el nodo.' },
+                body: { type: 'string', description: 'Mensaje arriba del botón nativo (≤1024). Si lo omites se usa el default.' },
+                radioMetros: { type: 'number', description: 'Radio en metros para considerar "le queda cerca" (100–5000, default 1000).' },
+                timeoutNever: { type: 'boolean', description: 'true (default) = la espera de ubicación no caduca. false = caduca a timeoutHoras.' },
+                timeoutHoras: { type: 'number', description: 'Horas de ventana si timeoutNever=false (default 48).' },
+                alias: { type: 'string', description: 'Nombre visible del nodo en el canvas (data.customName, opcional).' },
+                posicion: { type: 'object', description: 'Posición en el canvas {x, y} (opcional; default aproximado).' },
+                rutas: { type: 'array', items: { type: 'object' }, description: 'Rutas iniciales (opcional). Cada una: {nombre, paradas:[{nombre,lat,lng}], successMessage?, mediaUrl?, mediaType?, mediaName?}.' }
+            },
+            required: ['flujoId']
+        },
+        handler: async (args, { redis, req }) => {
+            const flujoId = String(args?.flujoId || '').trim();
+            if (!flujoId) throw new Error('Falta flujoId');
+            const f = await fetchFlowOrThrow(req, redis, flujoId);
+            const nodes = Array.isArray(f.nodes) ? [...f.nodes] : [];
+
+            const rutasRaw = Array.isArray(args?.rutas) ? args.rutas : [];
+            const rutas = rutasRaw.map((rt, i) => normalizeRuta(rt, i));
+
+            let radio = Number(args?.radioMetros);
+            if (!Number.isFinite(radio)) radio = 1000;
+            radio = Math.max(100, Math.min(5000, radio));
+
+            const nodeId = `n_${Date.now()}_${randomBytes(3).toString('hex')}`;
+            const pos = (args?.posicion && typeof args.posicion === 'object')
+                ? { x: Number(args.posicion.x) || 0, y: Number(args.posicion.y) || 0 }
+                : { x: 400, y: 200 + nodes.length * 40 };
+
+            const data = {
+                body: args?.body !== undefined ? String(args.body) : UBICACION_DEFAULT_BODY,
+                rutas,
+                radioMetros: radio,
+                timeoutHoras: Number(args?.timeoutHoras) || 48,
+                timeoutNever: args?.timeoutNever !== false
+            };
+            const alias = String(args?.alias || '').trim();
+            if (alias) data.customName = alias;
+
+            nodes.push({ id: nodeId, type: 'accion_ubicacion', position: pos, data });
+            const saved = await saveFlowNodes(req, redis, flujoId, nodes);
+            return {
+                flujoId,
+                nodeId,
+                creado: true,
+                aristasSinConectar: true,
+                nota: 'El nodo quedó SIN conectar (sin aristas de entrada ni salidas Sí/No). Conéctalo en el canvas o con guardar_flujo.',
+                numRutas: rutas.length,
+                numNodosFlujo: Array.isArray(saved?.nodes) ? saved.nodes.length : nodes.length
+            };
+        }
+    },
+
+    editar_nodo_ubicacion: {
+        description: 'Edita la configuración GENERAL de un nodo de ubicación existente (NO sus rutas — para eso usa editar_rutas_ubicacion). Haz read-modify-write: solo manda los campos que quieras cambiar (body, radioMetros, timeoutNever, timeoutHoras, alias); el resto se conserva. Requiere flujoId + nodeId (de ver_nodos_ubicacion).',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                flujoId: { type: 'string', description: 'ID del flujo.' },
+                nodeId: { type: 'string', description: 'ID del nodo accion_ubicacion.' },
+                body: { type: 'string', description: 'Nuevo mensaje arriba del botón (opcional).' },
+                radioMetros: { type: 'number', description: 'Nuevo radio en metros 100–5000 (opcional).' },
+                timeoutNever: { type: 'boolean', description: 'true = la espera no caduca; false = caduca (opcional).' },
+                timeoutHoras: { type: 'number', description: 'Horas de ventana si timeoutNever=false (opcional).' },
+                alias: { type: 'string', description: 'Nombre visible del nodo (data.customName). Cadena vacía lo quita (opcional).' }
+            },
+            required: ['flujoId', 'nodeId']
+        },
+        handler: async (args, { redis, req }) => {
+            const flujoId = String(args?.flujoId || '').trim();
+            const nodeId = String(args?.nodeId || '').trim();
+            if (!flujoId) throw new Error('Falta flujoId');
+            if (!nodeId) throw new Error('Falta nodeId');
+            const f = await fetchFlowOrThrow(req, redis, flujoId);
+            const nodes = Array.isArray(f.nodes) ? [...f.nodes] : [];
+            const idx = nodes.findIndex(n => n?.id === nodeId);
+            if (idx === -1) throw new Error('Nodo no encontrado en ese flujo');
+            if (nodes[idx].type !== 'accion_ubicacion') throw new Error(`El nodo ${nodeId} no es de tipo "Pedir Ubicación"`);
+
+            const data = { ...(nodes[idx].data || {}) };
+            if (args?.body !== undefined) data.body = String(args.body);
+            if (args?.radioMetros !== undefined) {
+                let radio = Number(args.radioMetros);
+                if (!Number.isFinite(radio)) throw new Error('radioMetros debe ser un número');
+                data.radioMetros = Math.max(100, Math.min(5000, radio));
+            }
+            if (args?.timeoutNever !== undefined) {
+                if (typeof args.timeoutNever !== 'boolean') throw new Error('timeoutNever debe ser true o false');
+                data.timeoutNever = args.timeoutNever;
+            }
+            if (args?.timeoutHoras !== undefined) {
+                const h = Number(args.timeoutHoras);
+                if (!Number.isFinite(h) || h <= 0) throw new Error('timeoutHoras debe ser un número positivo');
+                data.timeoutHoras = h;
+            }
+            if (args?.alias !== undefined) {
+                const alias = String(args.alias).trim();
+                if (alias) data.customName = alias; else delete data.customName;
+            }
+
+            nodes[idx] = { ...nodes[idx], data };
+            const saved = await saveFlowNodes(req, redis, flujoId, nodes);
+            return {
+                flujoId,
+                nodeId,
+                guardado: true,
+                config: {
+                    body: data.body || '',
+                    radioMetros: Number(data.radioMetros) || 1000,
+                    timeoutNever: data.timeoutNever !== false,
+                    timeoutHoras: Number(data.timeoutHoras) || 48,
+                    alias: (data.customName || '').trim() || null,
+                    numRutas: getNodeRutas(nodes[idx]).length
+                },
+                numNodosFlujo: Array.isArray(saved?.nodes) ? saved.nodes.length : nodes.length
+            };
+        }
+    },
+
+    editar_rutas_ubicacion: {
+        description: 'Gestiona las RUTAS (data.rutas[]) de un nodo de ubicación. accion="reemplazar" sustituye TODO el arreglo de rutas por el que mandes; "agregar" añade rutas al final; "quitar" elimina rutas por nombre (nombres[]) o por índice 1-based (indices[]); "editar_ruta" fusiona cambios en UNA ruta existente (localizada por nombre o indice). Formato de cada ruta: {nombre, paradas:[{nombre,lat,lng}], successMessage?, mediaUrl?, mediaType?("image"|"document"), mediaName?}. Grados decimales, lng NEGATIVA en México. Si una ruta gana pero no tiene media/mensaje, el nodo no manda eso (nunca toma el de otra ruta). Devuelve el resumen de rutas resultante.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                flujoId: { type: 'string', description: 'ID del flujo.' },
+                nodeId: { type: 'string', description: 'ID del nodo accion_ubicacion.' },
+                accion: { type: 'string', enum: ['reemplazar', 'agregar', 'quitar', 'editar_ruta'], description: 'Operación sobre el arreglo de rutas.' },
+                rutas: { type: 'array', items: { type: 'object' }, description: 'Rutas para "reemplazar" o "agregar". Cada una: {nombre, paradas:[{nombre,lat,lng}], successMessage?, mediaUrl?, mediaType?, mediaName?}.' },
+                nombres: { type: 'array', items: { type: 'string' }, description: 'Para "quitar": nombres de ruta a eliminar.' },
+                indices: { type: 'array', items: { type: 'number' }, description: 'Para "quitar": índices 1-based de ruta a eliminar.' },
+                ruta: { type: 'object', description: 'Para "editar_ruta": campos a fusionar en la ruta localizada (puedes cambiar nombre, paradas, successMessage, media).' },
+                nombreRuta: { type: 'string', description: 'Para "editar_ruta": nombre de la ruta a editar.' },
+                indiceRuta: { type: 'number', description: 'Para "editar_ruta": índice 1-based de la ruta a editar (alternativa a nombreRuta).' }
+            },
+            required: ['flujoId', 'nodeId', 'accion']
+        },
+        handler: async (args, { redis, req }) => {
+            const flujoId = String(args?.flujoId || '').trim();
+            const nodeId = String(args?.nodeId || '').trim();
+            const accion = String(args?.accion || '').trim();
+            if (!flujoId) throw new Error('Falta flujoId');
+            if (!nodeId) throw new Error('Falta nodeId');
+            const f = await fetchFlowOrThrow(req, redis, flujoId);
+            const nodes = Array.isArray(f.nodes) ? [...f.nodes] : [];
+            const idx = nodes.findIndex(n => n?.id === nodeId);
+            if (idx === -1) throw new Error('Nodo no encontrado en ese flujo');
+            if (nodes[idx].type !== 'accion_ubicacion') throw new Error(`El nodo ${nodeId} no es de tipo "Pedir Ubicación"`);
+
+            let rutas = getNodeRutas(nodes[idx]).map((rt, i) => normalizeRuta(rt, i));
+
+            if (accion === 'reemplazar') {
+                const nuevas = Array.isArray(args?.rutas) ? args.rutas : [];
+                rutas = nuevas.map((rt, i) => normalizeRuta(rt, i));
+            } else if (accion === 'agregar') {
+                const nuevas = Array.isArray(args?.rutas) ? args.rutas : [];
+                if (!nuevas.length) throw new Error('accion "agregar" requiere rutas[]');
+                rutas = rutas.concat(nuevas.map((rt, i) => normalizeRuta(rt, i)));
+            } else if (accion === 'quitar') {
+                const nombres = (Array.isArray(args?.nombres) ? args.nombres : []).map(s => String(s).trim().toLowerCase()).filter(Boolean);
+                const indices = (Array.isArray(args?.indices) ? args.indices : []).map(n => Number(n)).filter(n => Number.isInteger(n) && n >= 1);
+                if (!nombres.length && !indices.length) throw new Error('accion "quitar" requiere nombres[] o indices[]');
+                const idxSet = new Set(indices.map(n => n - 1));
+                const antes = rutas.length;
+                rutas = rutas.filter((rt, i) => !idxSet.has(i) && !nombres.includes(String(rt.nombre || '').trim().toLowerCase()));
+                if (rutas.length === antes) throw new Error('Ninguna ruta coincidió con los nombres/índices dados');
+            } else if (accion === 'editar_ruta') {
+                const nombreRuta = String(args?.nombreRuta || '').trim().toLowerCase();
+                const indiceRuta = Number(args?.indiceRuta);
+                let target = -1;
+                if (Number.isInteger(indiceRuta) && indiceRuta >= 1) target = indiceRuta - 1;
+                else if (nombreRuta) target = rutas.findIndex(rt => String(rt.nombre || '').trim().toLowerCase() === nombreRuta);
+                if (target < 0 || target >= rutas.length) throw new Error('No se encontró la ruta a editar (revisa nombreRuta/indiceRuta)');
+                if (!args?.ruta || typeof args.ruta !== 'object') throw new Error('accion "editar_ruta" requiere el objeto "ruta" con los campos a cambiar');
+                const merged = { ...rutas[target], ...args.ruta };
+                rutas[target] = normalizeRuta(merged, target);
+            } else {
+                throw new Error('accion inválida (usa reemplazar, agregar, quitar o editar_ruta)');
+            }
+
+            const data = { ...(nodes[idx].data || {}), rutas };
+            // Si existía el formato viejo data.paradas, lo quitamos para no confundir al motor.
+            delete data.paradas;
+            delete data.rutaNombre;
+            nodes[idx] = { ...nodes[idx], data };
+            const saved = await saveFlowNodes(req, redis, flujoId, nodes);
+            return {
+                flujoId,
+                nodeId,
+                accion,
+                guardado: true,
+                numRutas: rutas.length,
+                totalParadas: rutas.reduce((s, rt) => s + rt.paradas.length, 0),
+                rutas: rutas.map(summarizeRuta),
+                numNodosFlujo: Array.isArray(saved?.nodes) ? saved.nodes.length : nodes.length
+            };
+        }
+    },
+
+    ver_ubicacion_candidato: {
+        description: 'Devuelve la ubicación que un candidato compartió (snapshot que fijó el nodo "Pedir Ubicación"): ruta más cercana, parada, número de parada, metros y las coordenadas lat/lng. Barato (lee un solo candidato). Si el candidato nunca compartió ubicación, compartio=false. OJO: es un snapshot del momento; no se actualiza si editas las rutas después.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                candidateId: { type: 'string', description: 'ID del candidato.' }
+            },
+            required: ['candidateId']
+        },
+        handler: async (args) => {
+            const id = String(args?.candidateId || '').trim();
+            if (!id) throw new Error('Falta candidateId');
+            const c = await getCandidateById(id);
+            if (!c) throw new Error('Candidato no encontrado');
+            const compartio = c.ubicacionLat !== undefined && c.ubicacionLat !== null && c.ubicacionLat !== '';
+            return {
+                candidateId: id,
+                nombre: c.nombreReal || c.nombre || '',
+                telefono: c.phone || c.telefono || '',
+                compartio: !!compartio,
+                rutaCercana: c.ubicacionRutaCercana || null,
+                paradaCercana: c.ubicacionParadaCercana || null,
+                numeroParada: c.ubicacionNumeroParada ?? null,
+                metrosParada: c.ubicacionMetrosParada ?? null,
+                lat: compartio ? Number(c.ubicacionLat) : null,
+                lng: compartio ? Number(c.ubicacionLng) : null
+            };
+        }
+    },
+
+    ver_ubicaciones_candidatos: {
+        description: 'AGREGADO de lo que genera el nodo "Pedir Ubicación" en toda la base: escanea candidatos (con TOPE por costo — NO está indexado) y devuelve cuántos compartieron ubicación, la distribución por ruta cercana, stats de distancia (min/mediana/máx), y una muestra de candidatos con sus datos. Filtra por "ruta" (nombre de ruta cercana) si quieres. Parámetros: limite (cuántos candidatos escanear, default 2000, máx 5000), muestra (cuántos candidatos devolver en la muestra, default 50). Para el detalle de uno usa ver_ubicacion_candidato.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                ruta: { type: 'string', description: 'Filtrar solo candidatos cuya ruta cercana sea esta (opcional).' },
+                limite: { type: 'number', description: 'Cuántos candidatos escanear (default 2000, máx 5000). Más = más completo pero más caro.' },
+                muestra: { type: 'number', description: 'Cuántos candidatos incluir en la muestra de salida (default 50, máx 300).' }
+            }
+        },
+        handler: async (args) => {
+            let limite = Number(args?.limite);
+            if (!Number.isFinite(limite) || limite <= 0) limite = 2000;
+            limite = Math.min(5000, Math.floor(limite));
+            let muestraN = Number(args?.muestra);
+            if (!Number.isFinite(muestraN) || muestraN <= 0) muestraN = 50;
+            muestraN = Math.min(300, Math.floor(muestraN));
+            const rutaFiltro = String(args?.ruta || '').trim().toLowerCase();
+
+            const { candidates, total } = await getCandidates(limite);
+            const lista = Array.isArray(candidates) ? candidates : [];
+
+            const porRuta = {};
+            const distancias = [];
+            const muestra = [];
+            let conUbicacion = 0;
+            for (const c of lista) {
+                const tiene = c.ubicacionLat !== undefined && c.ubicacionLat !== null && c.ubicacionLat !== '';
+                if (!tiene) continue;
+                const ruta = String(c.ubicacionRutaCercana || '').trim();
+                if (rutaFiltro && ruta.toLowerCase() !== rutaFiltro) continue;
+                conUbicacion++;
+                const key = ruta || '(sin ruta)';
+                porRuta[key] = (porRuta[key] || 0) + 1;
+                const m = Number(c.ubicacionMetrosParada);
+                if (Number.isFinite(m)) distancias.push(m);
+                if (muestra.length < muestraN) {
+                    muestra.push({
+                        candidateId: c.id,
+                        nombre: c.nombreReal || c.nombre || '',
+                        telefono: c.phone || c.telefono || '',
+                        rutaCercana: ruta || null,
+                        paradaCercana: c.ubicacionParadaCercana || null,
+                        numeroParada: c.ubicacionNumeroParada ?? null,
+                        metrosParada: Number.isFinite(m) ? m : null,
+                        lat: Number(c.ubicacionLat),
+                        lng: Number(c.ubicacionLng)
+                    });
+                }
+            }
+
+            distancias.sort((a, b) => a - b);
+            const mediana = distancias.length
+                ? (distancias.length % 2
+                    ? distancias[(distancias.length - 1) / 2]
+                    : Math.round((distancias[distancias.length / 2 - 1] + distancias[distancias.length / 2]) / 2))
+                : null;
+            const rutasOrdenadas = Object.entries(porRuta)
+                .map(([nombre, conteo]) => ({ ruta: nombre, conteo }))
+                .sort((a, b) => b.conteo - a.conteo);
+
+            return {
+                escaneados: lista.length,
+                totalEnBase: total,
+                topeAlcanzado: lista.length >= limite && total > lista.length,
+                conUbicacion,
+                filtroRuta: rutaFiltro ? (args.ruta || '') : null,
+                distribucionPorRuta: rutasOrdenadas,
+                distanciaMetros: distancias.length
+                    ? { min: distancias[0], mediana, max: distancias[distancias.length - 1] }
+                    : null,
+                muestra
+            };
         }
     },
 
