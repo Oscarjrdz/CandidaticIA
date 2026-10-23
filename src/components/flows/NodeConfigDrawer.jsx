@@ -31,10 +31,41 @@ const EmojiPickerButton = ({ onPick }) => {
     const [pos, setPos] = useState(null);   // posición FIXED (para escapar el overflow del drawer)
     const btnRef = useRef(null);
     const popRef = useRef(null);
+    // Campo de texto que tenía el foco al abrir el picker (+ posición del cursor). Permite
+    // inyectar el emoji DONDE está el cursor en vez de al final. Null → no había campo enfocado
+    // (se cae al onPick de siempre, que agrega al final).
+    const fieldRef = useRef(null);
     const W = 300, H = 360;
+
+    // Inserta el emoji en el campo nativo respetando el cursor y dispara el onChange de React
+    // (vía el setter nativo de value) para que el estado del nodo se actualice igual que tecleando.
+    const insertIntoField = (el, start, end, emoji) => {
+        const val = el.value ?? '';
+        const s = start ?? val.length, e = end ?? val.length;
+        const next = val.slice(0, s) + emoji + val.slice(e);
+        const proto = el.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+        const setter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
+        if (setter) setter.call(el, next); else el.value = next;
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+        const caret = s + emoji.length;
+        requestAnimationFrame(() => { try { el.focus(); el.setSelectionRange(caret, caret); } catch { /* noop */ } });
+    };
+
+    const handlePick = (emoji) => {
+        setOpen(false);
+        const f = fieldRef.current;
+        if (f?.el && document.body.contains(f.el)) insertIntoField(f.el, f.start, f.end, emoji);
+        else onPick(emoji); // fallback: sin campo enfocado → al final (comportamiento previo)
+    };
 
     const toggle = () => {
         if (open) { setOpen(false); return; }
+        // Captura el campo enfocado ANTES de abrir el picker. El onMouseDown del botón hace
+        // preventDefault, así que el textarea/input NO perdió el foco y conserva su cursor.
+        const el = document.activeElement;
+        const isText = el && (el.tagName === 'TEXTAREA' ||
+            (el.tagName === 'INPUT' && /^(text|search|url|tel|email|)$/i.test(el.type || '')));
+        fieldRef.current = isText ? { el, start: el.selectionStart, end: el.selectionEnd } : null;
         const r = btnRef.current?.getBoundingClientRect();
         if (r) {
             // Alinea el borde derecho del picker con el del botón; lo mantiene dentro de la pantalla.
@@ -62,6 +93,7 @@ const EmojiPickerButton = ({ onPick }) => {
             <button
                 ref={btnRef}
                 type="button"
+                onMouseDown={(e) => e.preventDefault()}
                 onClick={toggle}
                 title="Insertar emoji"
                 className={`p-1.5 rounded-lg transition-colors ${open ? 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-500' : 'text-gray-400 hover:text-emerald-500 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
@@ -72,7 +104,7 @@ const EmojiPickerButton = ({ onPick }) => {
                 <div ref={popRef} style={{ position: 'fixed', top: pos.top, left: pos.left, zIndex: 400 }}
                     className="rounded-2xl overflow-hidden shadow-xl ring-1 ring-black/5 dark:ring-white/10 bg-white dark:bg-gray-800">
                     <Suspense fallback={<div style={{ width: W, height: H }} className="flex items-center justify-center text-xs text-gray-400">Cargando emojis…</div>}>
-                        <EmojiPicker onEmojiClick={(d) => { onPick(d.emoji); setOpen(false); }} width={W} height={H} {...candidaticEmojiPickerProps()} />
+                        <EmojiPicker onEmojiClick={(d) => handlePick(d.emoji)} width={W} height={H} {...candidaticEmojiPickerProps()} />
                     </Suspense>
                 </div>
             )}
