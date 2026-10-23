@@ -6,7 +6,33 @@
 import { sendMetaMessage } from '../whatsapp/utils.js';
 import { getRedisClient } from './storage.js';
 
+// Mismo host público que usa el motor de flujos para absolutizar media relativa
+// (ej. "/api/image?id=..."). Messenger NO acepta media por media_id de Meta ni rutas
+// relativas: descarga la URL pública directa, así que hay que mandarla absoluta.
+const MEDIA_HOST = 'https://www.candidatic.com';
+
 export class MediaEngine {
+    // ─── Ruteo multi-plataforma (WhatsApp vs Messenger) ─────────────────────────
+    // Mismo criterio que sendUltraMsgMessage en whatsapp/utils.js: si el "teléfono" es un
+    // PSID registrado en messenger:psid_index, el destinatario es de Messenger. Sin esto,
+    // TODA la media de MediaEngine (stickers, felicitación, etc.) se iba a la API de WhatsApp
+    // con el PSID → Meta devolvía 131026 ("no está en WhatsApp") y el handler de 131026 marcaba
+    // al candidato incontactable/blocked → Brenda quedaba muda para siempre.
+    static async _isMessenger(phone) {
+        try {
+            const client = getRedisClient();
+            if (!client) return false;
+            const id = String(phone).replace(/[^\d@.]/g, '');
+            if (!id) return false;
+            return !!(await client.hget('messenger:psid_index', id));
+        } catch { return false; }
+    }
+
+    static _absUrl(u) {
+        if (u && typeof u === 'string' && u.startsWith('/')) return `${MEDIA_HOST}${u}`;
+        return u;
+    }
+
     /**
      * Sends a "Congratulations" pack (Sticker + Optional Text)
      */
@@ -34,6 +60,15 @@ export class MediaEngine {
             import('./storage.js').then(async ({ saveMessage }) => {
                 await saveMessage(candidateId, { from: 'bot', content: '[Sticker]', type: 'sticker', mediaUrl: stickerUrl, timestamp: new Date().toISOString() }).catch(() => {});
             });
+        }
+
+        // 🔀 Messenger: mandar la URL pública directa como adjunto (sin el baile de media_id
+        // de WhatsApp, que es lo que detonaba el 131026). sendMessengerMessage trata 'sticker'
+        // como imagen internamente.
+        if (await MediaEngine._isMessenger(phone)) {
+            const { sendMessengerMessage } = await import('../messenger/utils.js');
+            const psid = String(phone).replace(/[^\d@.]/g, '');
+            return await sendMessengerMessage(psid, MediaEngine._absUrl(stickerUrl), 'sticker');
         }
 
         const phoneExtra = _config?.phoneNumberId ? { phoneNumberId: _config.phoneNumberId } : {};
@@ -93,6 +128,13 @@ export class MediaEngine {
         let type = 'image';
         if (mediaUrl.toLowerCase().endsWith('.pdf')) type = 'document';
         if (mediaUrl.toLowerCase().includes('sticker')) type = 'sticker';
+
+        // 🔀 Messenger: URL pública directa (misma razón que en sendCongratsPack).
+        if (await MediaEngine._isMessenger(phone)) {
+            const { sendMessengerMessage } = await import('../messenger/utils.js');
+            const psid = String(phone).replace(/[^\d@.]/g, '');
+            return await sendMessengerMessage(psid, MediaEngine._absUrl(mediaUrl), type, { caption });
+        }
 
         const phoneExtra = _config?.phoneNumberId ? { phoneNumberId: _config.phoneNumberId } : {};
         return await sendMetaMessage(phone, mediaUrl, type, { ...phoneExtra, caption });
