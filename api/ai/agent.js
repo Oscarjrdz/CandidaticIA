@@ -1782,19 +1782,33 @@ REGLAS:
                 isHostMode = true;
                 // Extraer duración y convertir a meses con GPT mini
                 let mesesResult = null;
-                try {
-                    const mesesGpt = await getOpenAIResponse(
-                        [{ from: 'user', content: aggregatedText }],
-                        `El candidato respondió cuánto tiempo lleva trabajando en fábrica. Convierte su respuesta a número de meses enteros.
+
+                // 🩹 Número SIN unidad ("15", "10 o mas", "como 20"): quien responde a
+                // "¿cuántos años de experiencia?" con un número pelón quiere decir AÑOS.
+                // El conversor GPT-mini los leía como null → caía a evasión y el paso 2 se
+                // atoraba re-preguntando para siempre (chat Marco 5214794263451, 2026-10-23).
+                // Lo rescatamos aquí antes de gastar la llamada a la IA.
+                const _bareNum = aggregatedText.match(/\b(\d{1,2})\b(?!\s*(?:a[ñn]os?|meses?|semanas?|d[ií]as?))/i);
+                if (_bareNum) {
+                    const _n = parseInt(_bareNum[1], 10);
+                    if (_n > 0 && _n <= 60) mesesResult = _n * 12; // "15" → 180 meses (15 años)
+                }
+
+                if (mesesResult === null) {
+                    try {
+                        const mesesGpt = await getOpenAIResponse(
+                            [{ from: 'user', content: aggregatedText }],
+                            `El candidato respondió cuánto tiempo lleva de experiencia. Convierte su respuesta a número de meses enteros.
 Ejemplos: "2 años" → 24, "6 meses" → 6, "año y medio" → 18, "3 semanas" → 1, "10 días" → 1, "un año" → 12, "poco más de un año" → 14, "5 años" → 60.
 Responde ÚNICAMENTE con el número entero de meses. Si evade o no menciona ningún tiempo, responde null.`,
-                        modelAvanzado,
-                        activeAiConfig.openaiApiKey
-                    );
-                    const mesesRaw = (mesesGpt?.content || '').trim();
-                    const parsed = parseInt(mesesRaw, 10);
-                    if (!isNaN(parsed) && parsed > 0) mesesResult = parsed;
-                } catch (_e) { /* fall through to evasion */ }
+                            modelAvanzado,
+                            activeAiConfig.openaiApiKey
+                        );
+                        const mesesRaw = (mesesGpt?.content || '').trim();
+                        const parsed = parseInt(mesesRaw, 10);
+                        if (!isNaN(parsed) && parsed > 0) mesesResult = parsed;
+                    } catch (_e) { /* fall through to evasion */ }
+                }
 
                 // Duración CUALITATIVA que afirma experiencia larga sin dar un número
                 // ("varios años", "muchos años", "bastante tiempo", "ya tengo años",
@@ -1821,15 +1835,20 @@ Responde ÚNICAMENTE con el número entero de meses. Si evade o no menciona ning
                     // para no repetir el mismo fraseo, como lo haría un humano real.
                     candidateUpdates.paso2AskCount = p2AskCount + 1;
                     const _mName = p2FirstName ? `${p2FirstName}, ` : '';
+                    // Personaliza con la categoría elegida (ej. "de Chofer Vendedor"), igual
+                    // que la rama de experiencia — NUNCA degradar a "en fábrica", que confunde
+                    // a quien no aplica a fábrica/maquila (chat Marco 5214794263451, 2026-10-23).
+                    const _mesesCat = (candidateUpdates.categoria || candidateData.categoria || '').trim();
+                    const _mesesArea = _mesesCat ? `de ${_mesesCat}` : 'en tu área';
                     // Fallbacks variados (solo si el LLM falla): rotan por intento para no repetir.
                     const MESES_REASK_FALLBACKS = [
-                        `${_mName}no te preocupes 😊[MSG_SPLIT]solo dime un aproximado, ¿cuánto tiempo llevas trabajando en fábrica? 🏭`,
-                        `Va, sin presión 🙂[MSG_SPLIT]nada más para cerrar tu registro, ¿como cuántos años o meses de experiencia juntas? 🏭`,
-                        `Te entiendo 😄[MSG_SPLIT]¿me echas un número aunque sea al aire? ¿cuánto llevas en fábrica, más o menos? ⏱️`,
-                        `Jeje ${_mName}vamos al grano 🙂[MSG_SPLIT]¿tienes idea de cuánto tiempo llevas de experiencia? un estimado me basta 🏭`
+                        `${_mName}no te preocupes 😊[MSG_SPLIT]solo dime un aproximado, ¿cuánto tiempo llevas de experiencia ${_mesesArea}? ⏱️`,
+                        `Va, sin presión 🙂[MSG_SPLIT]nada más para cerrar tu registro, ¿como cuántos años o meses de experiencia juntas? 🙂`,
+                        `Te entiendo 😄[MSG_SPLIT]¿me echas un número aunque sea al aire? ¿cuánto llevas ${_mesesArea}, más o menos? ⏱️`,
+                        `Jeje ${_mName}vamos al grano 🙂[MSG_SPLIT]¿tienes idea de cuánto tiempo llevas de experiencia? un estimado me basta 🙂`
                     ];
                     const fallbackEvasion = MESES_REASK_FALLBACKS[p2AskCount % MESES_REASK_FALLBACKS.length];
-                    const evasionSys = `${promptAvanzado ? promptAvanzado + '\n\n' : ''}Eres Brenda Rodríguez, reclutadora de ${brand}. Le preguntaste al candidato cuánto tiempo de experiencia tiene en fábrica y en vez de responder evadió (broma, coqueteo, pregunta, tema distinto). Genera EXACTAMENTE 2 burbujas separadas por [MSG_SPLIT]: (1) una línea corta que reconozca con gracia y calidez lo que dijo; (2) la re-pregunta de cuánto tiempo de experiencia lleva en fábrica (un aproximado basta). REGLAS CRÍTICAS: es una RE-pregunta, ya lo intentaste antes — usa PALABRAS DISTINTAS a las que ya usaste en la conversación TANTO en el reconocimiento COMO en la pregunta; varía el fraseo como un humano real y NUNCA repitas frases anteriores. NUNCA le sigas la corriente (no coquetees, no respondas su juego). NUNCA digas que ya tienes el dato ni inventes un número. Si pregunta qué hacen o detalles del puesto, PROHIBIDO explicar funciones, dar tu opinión o inventar nada del trabajo: reconoce su curiosidad con calidez y regrésalo a la pregunta. Máximo 15 palabras por burbuja. Sin markdown.\n[ADN]: ${JSON.stringify(cleanAdnBase)}`;
+                    const evasionSys = `${promptAvanzado ? promptAvanzado + '\n\n' : ''}Eres Brenda Rodríguez, reclutadora de ${brand}. Le preguntaste al candidato cuánto tiempo de experiencia tiene ${_mesesArea} y en vez de responder evadió (broma, coqueteo, pregunta, tema distinto). Genera EXACTAMENTE 2 burbujas separadas por [MSG_SPLIT]: (1) una línea corta que reconozca con gracia y calidez lo que dijo; (2) la re-pregunta de cuánto tiempo de experiencia lleva ${_mesesArea} (un aproximado basta). REGLAS CRÍTICAS: es una RE-pregunta, ya lo intentaste antes — usa PALABRAS DISTINTAS a las que ya usaste en la conversación TANTO en el reconocimiento COMO en la pregunta; varía el fraseo como un humano real y NUNCA repitas frases anteriores. La pregunta DEBE ser sobre el TIEMPO de experiencia (años/meses) — está PROHIBIDO preguntar por su colonia, dirección o ruta de transporte (ese dato ya lo tienes). NUNCA le sigas la corriente (no coquetees, no respondas su juego). NUNCA digas que ya tienes el dato ni inventes un número. Si pregunta qué hacen o detalles del puesto, PROHIBIDO explicar funciones, dar tu opinión o inventar nada del trabajo: reconoce su curiosidad con calidez y regrésalo a la pregunta. Máximo 15 palabras por burbuja. Sin markdown.\n[ADN]: ${JSON.stringify(cleanAdnBase)}`;
                     try {
                         const evasionGpt = await getOpenAIResponse(
                             allMessages.slice(-6),
@@ -1838,8 +1857,11 @@ Responde ÚNICAMENTE con el número entero de meses. Si evade o no menciona ning
                             activeAiConfig.openaiApiKey
                         );
                         const gen = (evasionGpt?.content || '').replace(/\*/g, '').trim();
-                        // Debe traer la re-pregunta (un '¿'); si no, cae al fallback variado.
-                        responseTextVal = gen.includes('¿') ? gen : fallbackEvasion;
+                        // Debe traer la re-pregunta (un '¿') Y ser sobre el TIEMPO de experiencia,
+                        // NO desviarse a colonia/ruta (dato ya capturado). Si no cumple, fallback.
+                        const _preguntaTiempo = /tiempo|a[ñn]os?|meses|experiencia|llevas|trabaj/i.test(gen);
+                        const _pideColonia = /colonia|rutas?\b|transporte|d[oó]nde\s+vives|direcci[oó]n/i.test(gen);
+                        responseTextVal = (gen.includes('¿') && _preguntaTiempo && !_pideColonia) ? gen : fallbackEvasion;
                     } catch (_e) {
                         responseTextVal = fallbackEvasion;
                     }
