@@ -1,4 +1,4 @@
-import { Play, Tag, CalendarRange, MapPin, Briefcase, GraduationCap, MessageCircle, Hash, UserRound, CircleMinus, BellRing, FolderKanban, FlaskConical, Eraser, Filter, MessageSquareText, ListChecks, CheckCheck, BotOff, Bot, Ear, AlarmClock, StickyNote, Quote, Square, Type, Flag, MousePointerClick, Navigation } from 'lucide-react';
+import { Play, Tag, CalendarRange, MapPin, Briefcase, GraduationCap, MessageCircle, Hash, UserRound, CircleMinus, BellRing, FolderKanban, FlaskConical, Eraser, Filter, MessageSquareText, ListChecks, CheckCheck, BotOff, Bot, Ear, AlarmClock, StickyNote, Quote, Square, Type, Flag, MousePointerClick, Navigation, Forward } from 'lucide-react';
 
 export const PROFILE_FILTER_LABELS = {
     active: 'Activos (no bloqueados)',
@@ -303,6 +303,20 @@ export const NODE_DEFS = {
         hasTarget: true,
         hasSource: true,
         summary: (data) => data.name?.trim() ? data.name : 'Marca el paso por este punto (ponle nombre)'
+    },
+    // Redirección: al llegar aquí, el candidato SALTA a otro nodo (de este u otro flujo) y
+    // sigue el flujo desde ahí. Nodo TERMINAL en este flujo (hasSource:false) — entrega el
+    // control y no continúa localmente. El destino se elige por su "Nombre del nodo"
+    // (data.customName); el motor rutea por refFlowId+refNodeId (refName es solo para mostrar).
+    accion_redireccion: {
+        label: 'Redirección',
+        icon: Forward,
+        color: 'rose',
+        hasTarget: true,
+        hasSource: false,
+        summary: (data) => data.refNodeId
+            ? (data.refName?.trim() ? `→ ${data.refName}` : '→ otro nodo')
+            : 'Elige un nodo destino'
     },
     test: {
         label: 'Nodo Test',

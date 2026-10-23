@@ -158,6 +158,30 @@ export default async function handler(req, res) {
             return res.status(200).json({ success: true, checkpoints });
         }
 
+        // Lista GLOBAL de nodos con "Nombre del nodo" (data.customName) de TODOS los flujos —
+        // la usa el nodo "Redirección" para elegir a cuál nodo saltar. Payload ligero
+        // (flowId/flowName/nodeId/nombre/tipo). Se excluyen las redirecciones mismas (no te
+        // rediriges a otra redirección) y los nodos de inicio/decorativos (no son destino útil).
+        if (method === 'GET' && mode === 'namednodes') {
+            const EXCLUDED = new Set(['accion_redireccion', 'inicio', 'inicio_lista', 'inicio_incompleto_silencio', 'bg', 'texto', 'nota', 'test']);
+            const flows = await getFlows(redis);
+            const nodes = [];
+            for (const f of flows) {
+                for (const n of (f.nodes || [])) {
+                    const name = (n.data?.customName || '').trim();
+                    if (!name || EXCLUDED.has(n.type)) continue;
+                    nodes.push({
+                        flowId: f.id,
+                        flowName: f.name || 'Flujo sin nombre',
+                        nodeId: n.id,
+                        name,
+                        nodeType: n.type
+                    });
+                }
+            }
+            return res.status(200).json({ success: true, nodes });
+        }
+
         if (method === 'GET' && id && mode === 'counters') {
             const flows = await getFlows(redis);
             const flow = flows.find(f => f.id === id);

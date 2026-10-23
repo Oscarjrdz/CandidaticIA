@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect, useRef, lazy, Suspense } from 'rea
 import { X, Smile } from 'lucide-react';
 import { NODE_DEFS, COLOR_CLASSES, PROFILE_FILTER_LABELS, ETIQUETA_MODE_LABELS, GENEROS } from './nodeTypes';
 import FlowSelect from './FlowSelect';
-import { getFlowCounters, getFlowCounterRange, getAllCheckpoints } from '../../services/flowsService';
+import { getFlowCounters, getFlowCounterRange, getAllCheckpoints, getAllNamedNodes } from '../../services/flowsService';
 import { candidaticEmojiPickerProps } from '../../utils/candidaticEmoji';
 import { compressImage } from '../../utils/imageCompress';
 
@@ -396,6 +396,60 @@ const CheckpointPicker = ({ data, onPatch }) => {
                 />
             )}
             <p className="mt-2 text-xs text-gray-400">La rama <strong className="text-emerald-600 dark:text-emerald-400">Sí</strong> es para quien <strong>ya pasó</strong> por ese Check Point (aquí o en otro flujo); la <strong className="text-red-500">No</strong> para quien nunca pasó.</p>
+        </div>
+    );
+};
+
+// ↪️ Selector del nodo "Redirección". Trae la lista GLOBAL de nodos con "Nombre del nodo"
+// (customName) de todos los flujos (/api/flows?mode=namednodes) y deja elegir a cuál saltar.
+// El valor guardado es refFlowId + refNodeId (el motor rutea por ahí); refName es solo para
+// mostrar. El destino puede estar en ESTE flujo o en cualquier otro (ej. saltar de un flujo
+// de incompletos al nodo de "completos" de otro flujo).
+const RedireccionPicker = ({ data, onPatch }) => {
+    const [namedNodes, setNamedNodes] = useState([]);
+    const [loaded, setLoaded] = useState(false);
+    useEffect(() => {
+        let alive = true;
+        getAllNamedNodes()
+            .then(r => { if (alive && r.success) setNamedNodes(r.nodes); })
+            .finally(() => { if (alive) setLoaded(true); });
+        return () => { alive = false; };
+    }, []);
+
+    const value = data.refNodeId ? `${data.refFlowId}::${data.refNodeId}` : '';
+    const options = namedNodes.map(n => {
+        const tipo = NODE_DEFS[n.nodeType]?.label || n.nodeType;
+        return {
+            value: `${n.flowId}::${n.nodeId}`,
+            label: `${n.name} · ${tipo} — ${n.flowName}`,
+            name: n.name
+        };
+    });
+
+    return (
+        <div>
+            <label className="text-xs text-gray-500 dark:text-gray-400 mb-2 block">¿A qué nodo redirigir?</label>
+            {loaded && namedNodes.length === 0 ? (
+                <p className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-2.5">
+                    Todavía no hay nodos con <strong>Nombre del nodo</strong>. Ponle un nombre al nodo destino (campo “Nombre del nodo (opcional)”, arriba de su configuración) para poder elegirlo aquí — puede estar en este o en cualquier otro flujo.
+                </p>
+            ) : (
+                <FlowSelect
+                    value={value}
+                    onChange={(v) => {
+                        const [refFlowId, refNodeId] = v.split('::');
+                        const opt = options.find(o => o.value === v);
+                        onPatch({ refFlowId, refNodeId, refName: opt?.name || '' });
+                    }}
+                    options={options}
+                    placeholder={loaded ? 'Elige un nodo destino...' : 'Cargando...'}
+                    ringClass="focus:ring-rose-500"
+                    emptyLabel="No hay nodos con nombre"
+                />
+            )}
+            <p className="mt-2 text-xs text-gray-400">
+                Cuando el candidato llegue aquí, <strong>saltará</strong> a ese nodo y seguirá el flujo desde ahí (aunque esté en otro flujo). Apunta a un nodo de <strong>acción</strong> (mensajes, etiquetas, vacante…). Si el destino fuera un menú interactivo, se enviará pero el ruteo de sus botones no continúa a través de la redirección.
+            </p>
         </div>
     );
 };
@@ -1495,6 +1549,10 @@ const NodeConfigDrawer = ({ node, flowId, meta, quickReplies, onSaveQuickReply, 
 
                 {node.type === 'condicion_checkpoint' && (
                     <CheckpointPicker data={data} onPatch={patch} />
+                )}
+
+                {node.type === 'accion_redireccion' && (
+                    <RedireccionPicker data={data} onPatch={patch} />
                 )}
 
                 {node.type === 'accion_botones' && (

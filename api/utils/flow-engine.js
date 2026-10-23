@@ -355,6 +355,24 @@ export function topoSort(nodes, edges) {
     return order;
 }
 
+// Conjunto de nodos ALCANZABLES hacia adelante desde `startId` siguiendo las aristas (BFS
+// sobre source→target). Lo usa el nodo "Redirección": al saltar a un nodo destino, solo se
+// recorre ESE nodo y todo lo que cuelga de él (no el resto del grafo del flujo destino).
+export function forwardReachableFrom(startId, edges) {
+    const adj = new Map();
+    for (const e of edges) {
+        if (!adj.has(e.source)) adj.set(e.source, []);
+        adj.get(e.source).push(e.target);
+    }
+    const seen = new Set([startId]);
+    const stack = [startId];
+    while (stack.length) {
+        const id = stack.pop();
+        for (const t of (adj.get(id) || [])) if (!seen.has(t)) { seen.add(t); stack.push(t); }
+    }
+    return seen;
+}
+
 // Devuelve Map<target, [{source, handle}]>. `handle` es el sourceHandle de la arista:
 //   - 'no'  → sale de la ramita "No cumple" de una condición (se activa cuando el
 //             origen quedó en 'fail').
@@ -911,6 +929,10 @@ export async function evaluateOrExecute(node, candidate, flowId, redis, opts = {
             // ¿Rutea por opción? Solo button/list con routeByOption y si el envío salió.
             const canRoute = data.routeByOption !== false && (mode === 'button' || mode === 'list');
             if (!canRoute || !sendOk) return true;
+            // En una REDIRECCIÓN el menú se ENVÍA pero no se pausa a esperar el clic (el ruteo de
+            // sus botones no continúa a través del salto). Apunta la redirección a una acción, no
+            // a un menú interactivo, si necesitas que sus opciones ruteen.
+            if (opts.redirectRun) return true;
             // Modo PRUEBA (nodo Test) con una "opción a simular" elegida → NO pausa: runOneFlow
             // enruta esa opción para previsualizar la ruta en un solo Run (sin clic físico).
             // Modo PRUEBA SIN opción a simular → cae abajo y registra la espera REAL (igual que
@@ -963,7 +985,8 @@ export async function evaluateOrExecute(node, candidate, flowId, redis, opts = {
             // dispara el webhook al llegar la ubicación — NO depende del ledger como esperando_respuesta.
             // Antes incluía `|| opts.ephemeral` por error → en listas/al-regresar no registraba la
             // espera y al compartir ubicación el flujo se re-disparaba en vez de rutear Sí/No.
-            if (opts.skipClaim) return true;
+            // En una REDIRECCIÓN no se pausa a esperar GPS (el ruteo no continúa por el salto).
+            if (opts.skipClaim || opts.redirectRun) return true;
 
             let sendOk = false;
             try {
@@ -1143,7 +1166,8 @@ export async function evaluateOrExecute(node, candidate, flowId, redis, opts = {
 
             // En modo test (skipClaim) o ephemeral (cron) no hay ledger que reanudar → no
             // tiene sentido pausar: pasa de largo para que el tester vea los nodos siguientes.
-            if (opts.skipClaim || opts.ephemeral) return true;
+            // En una REDIRECCIÓN tampoco se pausa (el ruteo no continúa a través del salto).
+            if (opts.skipClaim || opts.ephemeral || opts.redirectRun) return true;
 
             // Sin frases configuradas no hay nada que esperar → deja pasar (no cuelga la cadena).
             if (!grupos.length) return true;
@@ -1287,6 +1311,57 @@ export async function evaluateOrExecute(node, candidate, flowId, redis, opts = {
             return true; // nodo de paso: el flujo continúa después de él
         }
 
+        // ↪️ REDIRECCIÓN: salta a un nodo destino (de este u otro flujo) y corre ESE nodo + todo
+        // lo que cuelga de él, reusando el MISMO candidato y el carrier `opts` (así se conserva
+        // el ritmo de envíos a Meta y la frase dinámica vigente). Es un nodo TERMINAL en el flujo
+        // de origen (sin salida), así que tras redirigir no continúa nada localmente.
+        case 'accion_redireccion': {
+            const { refFlowId, refNodeId } = data;
+            if (!refFlowId || !refNodeId) return true; // sin configurar → termina sin hacer nada
+
+            // Modo PRUEBA (nodo Test): no saltamos a otro flujo (evita mandar mensajes reales de
+            // OTRO flujo durante una simulación) — solo se marca que se alcanzó el nodo.
+            if (opts.skipClaim) return true;
+
+            // Tope de redirecciones encadenadas: corta bucles (A→B→A…) y redirecciones muy
+            // anidadas. 5 saltos es holgado para cualquier encadenamiento legítimo.
+            const depth = Number(opts._redirectDepth || 0);
+            if (depth >= 5) {
+                console.warn(`[FLOW-ENGINE] accion_redireccion ${flowId}/${node.id}: tope de redirecciones (${depth}) alcanzado — se detiene para evitar bucle (candidato ${candidate.id})`);
+                return true;
+            }
+
+            try {
+                const raw = await redis.get(FLOWS_KEY);
+                const flows = raw ? JSON.parse(raw) : [];
+                const target = flows.find(f => f.id === refFlowId);
+                if (!target) {
+                    console.warn(`[FLOW-ENGINE] accion_redireccion ${flowId}/${node.id}: flujo destino "${refFlowId}" no existe (candidato ${candidate.id})`);
+                    return true;
+                }
+                const targetNode = (target.nodes || []).find(n => n.id === refNodeId);
+                if (!targetNode) {
+                    console.warn(`[FLOW-ENGINE] accion_redireccion ${flowId}/${node.id}: nodo destino "${refNodeId}" no existe en "${refFlowId}" (candidato ${candidate.id})`);
+                    return true;
+                }
+
+                // Sub-corrida anidada: entra al flujo destino por refNodeId. Pasa solo los
+                // carriers de pacing/frase (no el resto de opts: nada de resumeWait/ephemeral/
+                // simulated* del origen) + las banderas de redirección. runOneFlow con startAtNode
+                // recorta al subgrafo, fuerza el nodo destino como elegible y no toca dedupe/lock/ledger.
+                await runOneFlow(redis, target, candidate.id, candidate, {
+                    startAtNode: refNodeId,
+                    redirectRun: true,
+                    _redirectDepth: depth + 1,
+                    _lastFlowSendAt: opts._lastFlowSendAt,
+                    _dynamicPhrase: opts._dynamicPhrase
+                });
+            } catch (e) {
+                console.error(`[FLOW-ENGINE] accion_redireccion ${flowId}/${node.id}:`, e?.message);
+            }
+            return true;
+        }
+
         default:
             return true;
     }
@@ -1325,7 +1400,15 @@ async function runOneFlow(redis, flow, candidateId, candidate, opts = {}) {
     // permanente (flow:executed) — por eso se salta el claim de "ya completado" y el
     // ledger de retomar. SÍ toma el lock de concurrencia y SÍ incrementa los contadores.
     const ephemeral = !!opts.ephemeral;
-    const useClaim = !testMode && !ephemeral;   // idempotencia permanente (flujos normales en vivo)
+    // Sub-corrida de REDIRECCIÓN (nodo "accion_redireccion"): se entra al flujo destino por un
+    // nodo arbitrario (opts.startAtNode) y se corre ESE nodo + lo que cuelga de él. Es una
+    // continuación anidada dentro de la corrida del flujo de origen (ya lockeada para este
+    // candidato), así que NO toma lock propio (evitaría un auto-deadlock si redirige dentro del
+    // MISMO flujo), NO marca el flujo destino como "completado para siempre" (el candidato puede
+    // entrar a ese flujo por su cuenta más tarde) y NO toca su ledger de progreso. No pausa:
+    // los nodos de menú/ubicación/espera pasan de largo (ver opts.redirectRun en esos casos).
+    const isRedirect = !!opts.startAtNode;
+    const useClaim = !testMode && !ephemeral && !isRedirect;   // idempotencia permanente (flujos normales en vivo)
     const execKey = `${EXEC_SET_PREFIX}${flow.id}`;
     const progressKey = `${PROGRESS_PREFIX}${flow.id}:${candidateId}`;
     const lockKey = `${RUN_LOCK_PREFIX}${flow.id}:${candidateId}`;
@@ -1340,14 +1423,14 @@ async function runOneFlow(redis, flow, candidateId, candidate, opts = {}) {
     if (useClaim && !opts.resumeWait) {
         if (await redis.sismember(execKey, candidateId)) return passed; // ya completado
     }
-    if (!testMode) {
+    if (!testMode && !isRedirect) {
         const lock = await redis.set(lockKey, '1', 'EX', RUN_LOCK_TTL_SEC, 'NX').catch(() => null);
         if (lock !== 'OK') return passed; // otra invocación lo está corriendo (o fallo transitorio)
         lockAcquired = true;
     }
     if (useClaim) {
         prior = (await redis.hgetall(progressKey)) || {};
-    } else if (!opts.resumeWait) {
+    } else if (!opts.resumeWait && !isRedirect) {
         // Viaje FRESCO ephemeral/test (no es una reanudación): borra cualquier ledger viejo de
         // un viaje ANTERIOR incompleto. Si no, un resume de ESTE viaje (el clic del candidato)
         // heredaría nodos/ramas ya resueltos de la corrida pasada y dispararía mensajes/menús
@@ -1356,8 +1439,16 @@ async function runOneFlow(redis, flow, candidateId, candidate, opts = {}) {
     }
 
     try {
-        const order = topoSort(nodes, edges);
+        let order = topoSort(nodes, edges);
         const incoming = buildIncomingMap(edges);
+
+        // REDIRECCIÓN: recorta el recorrido al nodo destino y a todo lo que cuelga de él
+        // (el resto del grafo del flujo destino — su inicio, condiciones previas, etc. — se
+        // IGNORA). El nodo destino se trata como raíz virtual (siempre elegible, ver isEligible).
+        if (isRedirect) {
+            const reachable = forwardReachableFrom(opts.startAtNode, edges);
+            order = order.filter(n => reachable.has(n.id));
+        }
 
         // outcome por nodo: 'pass' (cumplió/se ejecutó), 'fail' (se alcanzó pero la
         // condición NO se cumplió) o 'unreached' (nunca fue elegible). La arista normal
@@ -1387,6 +1478,10 @@ async function runOneFlow(redis, flow, candidateId, candidate, opts = {}) {
         //     candidato falle en la rama que le tocó (cada candidato recorre una sola).
         //   • Si un nodo mezcla ambos tipos, debe cumplir las dos reglas a la vez.
         const isEligible = (deps, node) => {
+            // REDIRECCIÓN: el nodo destino es la raíz virtual del sub-recorrido — siempre
+            // elegible, sin importar sus aristas entrantes reales (que vienen de la parte del
+            // grafo que estamos saltando). Lo que cuelga de él se evalúa con las reglas normales.
+            if (isRedirect && node.id === opts.startAtNode) return true;
             // Sin aristas entrantes: solo los nodos de INICIO arrancan solos. Un nodo de
             // acción/condición sin conectar es un nodo suelto y NO se ejecuta (antes se
             // disparaba en cada corrida, incluidas las pruebas — bug ago 2026).

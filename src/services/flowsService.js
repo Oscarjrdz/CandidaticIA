@@ -78,6 +78,19 @@ export const getAllCheckpoints = async () => {
     }
 };
 
+// Lista global de nodos con "Nombre del nodo" (customName) de todos los flujos — para el
+// nodo "Redirección". Devuelve [{flowId, flowName, nodeId, name, nodeType}].
+export const getAllNamedNodes = async () => {
+    try {
+        const res = await fetch('/api/flows?mode=namednodes');
+        const data = await res.json();
+        if (data.success) return { success: true, nodes: data.nodes || [] };
+        return { success: false, error: data.error };
+    } catch (error) {
+        return { success: false, error: error.message };
+    }
+};
+
 export const getFlowsMeta = async () => {
     try {
         const res = await fetch('/api/flows?meta=1');
