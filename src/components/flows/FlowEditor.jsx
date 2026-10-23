@@ -46,7 +46,7 @@ const DEFAULT_DATA_BY_TYPE = {
         reaskMax: 2,
         reaskText: 'Por favor elige una de las opciones 👇'
     },
-    accion_ubicacion: { body: '📍 ¡Mándame tu ubicación! Con el botón de abajo compárteme dónde vives y te digo si la ruta te queda cerca 😊', rutas: [], radioMetros: 1000, timeoutHoras: 48, timeoutNever: true },
+    accion_ubicacion: { body: '📍 ¡Mándame tu ubicación! Con el botón de abajo compárteme dónde vives y te digo si la ruta te queda cerca 😊', rutas: [], radioMetros: 1000, timeoutHoras: 48, timeoutNever: true, reask: true, reaskMax: 2 },
     frase_dinamica: { value: '' },
     accion_etiqueta: { tag: '' },
     accion_quitar_etiqueta: { tag: '' },
