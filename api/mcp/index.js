@@ -244,6 +244,7 @@ const NODE_TYPE_LABELS = {
     accion_vacante: 'Mandar Vacante',
     accion_whatsapp_personalizado: 'WhatsApp Personalizado',
     accion_botones: 'Mandar Botones / Opciones',
+    accion_ubicacion: 'Pedir Ubicación',
     frase_dinamica: 'Frase Dinámica',
     accion_etiqueta: 'Agregar Etiqueta',
     accion_quitar_etiqueta: 'Quitar Etiqueta',
@@ -332,6 +333,19 @@ async function fetchFlowOrThrow(req, redis, id) {
     if (!f) throw new Error('Flujo no encontrado');
     return f;
 }
+
+// Clasifica un flujo por su nodo raíz: "estandar" (en vivo, arranca con "inicio"),
+// "lista" (manual sobre lista filtrada) o "incompletos" (incompletos en silencio por cron).
+function classifyFlowTipo(nodes) {
+    const types = new Set((Array.isArray(nodes) ? nodes : []).map(n => n?.type));
+    if (types.has('inicio_incompleto_silencio')) return 'incompletos';
+    if (types.has('inicio_lista')) return 'lista';
+    if (types.has('inicio')) return 'estandar';
+    return 'desconocido';
+}
+
+// Tipos de nodo válidos para crear_nodo (mismas llaves que NODE_TYPE_LABELS).
+const VALID_NODE_TYPES = new Set(Object.keys(NODE_TYPE_LABELS));
 
 // Guarda nodes (y opcionalmente edges) de un flujo vía callInternal (PUT /api/flows).
 async function saveFlowNodes(req, redis, id, nodes, edges) {
@@ -1527,7 +1541,7 @@ const TOOLS = {
     // de caché). No reimplementan nada de flows.js.
 
     listar_flujos: {
-        description: 'Lista TODOS los flujos (resumen). Devuelve id, nombre, si está activo, cuántos nodos/aristas tiene, los tipos de nodo crudos y "nombresDeNodos" (los nombres visibles de cada nodo, tal como los ve el reclutador en el canvas). Usa ver_flujo para traer los nodos completos de uno.',
+        description: 'Lista TODOS los flujos (resumen), de cualquier tipo. Devuelve id, nombre, si está activo, "tipo" (estandar = en vivo/perfil completo, lista = manual sobre lista filtrada, incompletos = incompletos en silencio por cron), cuántos nodos/aristas tiene, los tipos de nodo crudos y "nombresDeNodos" (los nombres visibles de cada nodo, tal como los ve el reclutador en el canvas). Usa ver_flujo para traer los nodos completos de uno.',
         inputSchema: { type: 'object', properties: {} },
         handler: async (_args, { redis, req }) => {
             const r = await callInternal(req, redis, '/api/flows', 'GET');
@@ -1539,6 +1553,7 @@ const TOOLS = {
                     id: f.id,
                     nombre: f.name || 'Flujo sin nombre',
                     activo: !!f.active,
+                    tipo: classifyFlowTipo(f.nodes),
                     numNodos: Array.isArray(f.nodes) ? f.nodes.length : 0,
                     numAristas: Array.isArray(f.edges) ? f.edges.length : 0,
                     tiposDeNodo: Array.from(new Set((f.nodes || []).map(n => n.type).filter(Boolean))),
@@ -1569,6 +1584,7 @@ const TOOLS = {
                 id: f.id,
                 nombre: f.name || null,
                 activo: !!f.active,
+                tipo: classifyFlowTipo(nodes),
                 // Índice liviano para localizar un nodo por su nombre visible, su alias o su tipo
                 // sin tener que escanear el arreglo nodes completo. "nombre" = lo que ve el humano
                 // en el canvas (etiqueta del tipo + alias); "alias" = solo data.customName.
@@ -1931,6 +1947,262 @@ const TOOLS = {
             if (r.status === 404) throw new Error('Flujo o candidato no encontrado');
             if (!r.ok || r.data?.success === false) throw new Error(r.data?.error || `Fallo al correr el flujo (${r.status})`);
             return { flujoId: id, candidateId, yaEstabaCorrido: r.data?.alreadyExecuted === true };
+        }
+    },
+
+    // ──────────────── NODOS (genérico, cualquier tipo) ────────────────
+    // CRUD por NODO sin reenviar el flujo entero: cada tool hace read-modify-write
+    // contra el flujo y guarda vía /api/flows (callInternal → auth SuperAdmin +
+    // side-effects + invalidación de caché). guardar_flujo sigue existiendo para
+    // reemplazos masivos; estas tools son para tocar UN nodo/arista a la vez.
+
+    ver_nodo: {
+        description: 'Lee UN nodo de un flujo (de cualquier tipo): su id, type, nombre visible, position y data completa, más sus aristas entrantes y salientes (origen/destino y la salida/sourceHandle de cada una). Úsalo para inspeccionar la configuración exacta de un nodo antes de editarlo, o para copiar la forma de su data al crear otro igual.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                flujoId: { type: 'string', description: 'ID del flujo.' },
+                nodeId: { type: 'string', description: 'ID del nodo.' }
+            },
+            required: ['flujoId', 'nodeId']
+        },
+        handler: async (args, { redis, req }) => {
+            const flujoId = String(args?.flujoId || '').trim();
+            const nodeId = String(args?.nodeId || '').trim();
+            if (!flujoId) throw new Error('Falta flujoId');
+            if (!nodeId) throw new Error('Falta nodeId');
+            const f = await fetchFlowOrThrow(req, redis, flujoId);
+            const nodes = Array.isArray(f.nodes) ? f.nodes : [];
+            const edges = Array.isArray(f.edges) ? f.edges : [];
+            const n = nodes.find(x => x?.id === nodeId);
+            if (!n) throw new Error('Nodo no encontrado en ese flujo');
+            return {
+                flujoId,
+                nodo: {
+                    id: n.id,
+                    tipo: n.type,
+                    nombre: nodeDisplayName(n),
+                    alias: (n.data?.customName || '').trim() || null,
+                    position: n.position || null,
+                    data: n.data || {}
+                },
+                aristasEntrantes: edges.filter(e => e.target === nodeId).map(e => ({ id: e.id, origen: e.source, salida: e.sourceHandle || null })),
+                aristasSalientes: edges.filter(e => e.source === nodeId).map(e => ({ id: e.id, destino: e.target, salida: e.sourceHandle || null }))
+            };
+        }
+    },
+
+    crear_nodo: {
+        description: 'Crea UN nodo NUEVO de cualquier tipo en un flujo. SOLO inserta el nodo con su data; NO lo conecta (usa conectar_nodos para las aristas). Para saber qué "data" lleva cada tipo, lee con ver_nodo un nodo del mismo tipo en otro flujo y copia su forma, y consulta ver_catalogos_flujos para valores válidos (municipios/categorías/etiquetas/vacantes). Para nodos de ubicación usa mejor crear_nodo_ubicacion. Devuelve el nodeId nuevo. Tipos válidos: inicio, inicio_lista, inicio_incompleto_silencio, etiqueta, condicion_genero, condicion_edad, condicion_municipio, condicion_categoria, condicion_escolaridad, condicion_checkpoint, accion_whatsapp, accion_vacante, accion_whatsapp_personalizado, accion_botones, accion_ubicacion, frase_dinamica, accion_etiqueta, accion_quitar_etiqueta, accion_limpiar_etiquetas, accion_recordatorio, accion_proyecto, accion_marcar_leido, accion_desactivar_bot, accion_reactivar_bot, esperando_respuesta, contador, checkpoint, test, nota, bg, texto.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                flujoId: { type: 'string', description: 'ID del flujo.' },
+                tipo: { type: 'string', description: 'Tipo de nodo (ver lista en la descripción).' },
+                data: { type: 'object', description: 'Config del nodo (opcional; default {}). Copia la forma de un nodo igual con ver_nodo.' },
+                alias: { type: 'string', description: 'Nombre visible del nodo en el canvas (data.customName, opcional).' },
+                posicion: { type: 'object', description: 'Posición {x, y} en el canvas (opcional; default aproximado).' }
+            },
+            required: ['flujoId', 'tipo']
+        },
+        handler: async (args, { redis, req }) => {
+            const flujoId = String(args?.flujoId || '').trim();
+            const tipo = String(args?.tipo || '').trim();
+            if (!flujoId) throw new Error('Falta flujoId');
+            if (!tipo) throw new Error('Falta tipo');
+            if (!VALID_NODE_TYPES.has(tipo)) throw new Error(`Tipo de nodo inválido: "${tipo}". Revisa la lista de tipos válidos en la descripción.`);
+            if (args?.data !== undefined && (typeof args.data !== 'object' || Array.isArray(args.data))) throw new Error('data debe ser un objeto');
+            const f = await fetchFlowOrThrow(req, redis, flujoId);
+            const nodes = Array.isArray(f.nodes) ? [...f.nodes] : [];
+
+            const nodeId = `n_${Date.now()}_${randomBytes(3).toString('hex')}`;
+            const pos = (args?.posicion && typeof args.posicion === 'object')
+                ? { x: Number(args.posicion.x) || 0, y: Number(args.posicion.y) || 0 }
+                : { x: 400, y: 160 + nodes.length * 40 };
+            const data = { ...(args?.data || {}) };
+            const alias = String(args?.alias || '').trim();
+            if (alias) data.customName = alias;
+
+            nodes.push({ id: nodeId, type: tipo, position: pos, data });
+            const saved = await saveFlowNodes(req, redis, flujoId, nodes);
+            return {
+                flujoId,
+                nodeId,
+                tipo,
+                creado: true,
+                sinConectar: true,
+                nota: 'El nodo quedó SIN conectar. Usa conectar_nodos para enlazarlo.',
+                numNodosFlujo: Array.isArray(saved?.nodes) ? saved.nodes.length : nodes.length
+            };
+        }
+    },
+
+    editar_nodo: {
+        description: 'Edita UN nodo existente sin reenviar el flujo completo. Por default FUSIONA (merge superficial) los campos de "data" que mandes con los que ya tiene (manda solo lo que cambias). Con reemplazarData=true sustituye TODA la data por la que mandes. También puedes cambiar posicion y alias (data.customName; alias="" lo quita). OJO: para arreglos dentro de data (p. ej. rutas, botones) el merge superficial REEMPLAZA el arreglo completo — manda el arreglo entero que quieras que quede. Para rutas de ubicación usa mejor editar_rutas_ubicacion.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                flujoId: { type: 'string', description: 'ID del flujo.' },
+                nodeId: { type: 'string', description: 'ID del nodo a editar.' },
+                data: { type: 'object', description: 'Campos de data a cambiar (merge superficial por default).' },
+                reemplazarData: { type: 'boolean', description: 'true = reemplazar TODA la data por "data" en vez de fusionar.' },
+                alias: { type: 'string', description: 'Nombre visible (data.customName). "" lo quita (opcional).' },
+                posicion: { type: 'object', description: 'Nueva posición {x, y} (opcional).' }
+            },
+            required: ['flujoId', 'nodeId']
+        },
+        handler: async (args, { redis, req }) => {
+            const flujoId = String(args?.flujoId || '').trim();
+            const nodeId = String(args?.nodeId || '').trim();
+            if (!flujoId) throw new Error('Falta flujoId');
+            if (!nodeId) throw new Error('Falta nodeId');
+            if (args?.data !== undefined && (typeof args.data !== 'object' || Array.isArray(args.data))) throw new Error('data debe ser un objeto');
+            const f = await fetchFlowOrThrow(req, redis, flujoId);
+            const nodes = Array.isArray(f.nodes) ? [...f.nodes] : [];
+            const idx = nodes.findIndex(n => n?.id === nodeId);
+            if (idx === -1) throw new Error('Nodo no encontrado en ese flujo');
+
+            let data;
+            if (args?.reemplazarData === true) {
+                data = { ...(args?.data || {}) };
+            } else {
+                data = { ...(nodes[idx].data || {}), ...(args?.data || {}) };
+            }
+            if (args?.alias !== undefined) {
+                const alias = String(args.alias).trim();
+                if (alias) data.customName = alias; else delete data.customName;
+            }
+            const next = { ...nodes[idx], data };
+            if (args?.posicion && typeof args.posicion === 'object') {
+                next.position = { x: Number(args.posicion.x) || 0, y: Number(args.posicion.y) || 0 };
+            }
+            nodes[idx] = next;
+            const saved = await saveFlowNodes(req, redis, flujoId, nodes);
+            return {
+                flujoId,
+                nodeId,
+                tipo: next.type,
+                guardado: true,
+                nombre: nodeDisplayName(next),
+                numNodosFlujo: Array.isArray(saved?.nodes) ? saved.nodes.length : nodes.length
+            };
+        }
+    },
+
+    eliminar_nodo: {
+        description: 'Elimina UN nodo de un flujo y TODAS sus aristas (entrantes y salientes). No se puede deshacer. Devuelve cuántas aristas se quitaron. No borres el nodo raíz (inicio/inicio_lista/inicio_incompleto_silencio) salvo que vayas a reemplazarlo: un flujo sin raíz no corre.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                flujoId: { type: 'string', description: 'ID del flujo.' },
+                nodeId: { type: 'string', description: 'ID del nodo a eliminar.' }
+            },
+            required: ['flujoId', 'nodeId']
+        },
+        handler: async (args, { redis, req }) => {
+            const flujoId = String(args?.flujoId || '').trim();
+            const nodeId = String(args?.nodeId || '').trim();
+            if (!flujoId) throw new Error('Falta flujoId');
+            if (!nodeId) throw new Error('Falta nodeId');
+            const f = await fetchFlowOrThrow(req, redis, flujoId);
+            const nodes = Array.isArray(f.nodes) ? f.nodes : [];
+            const edges = Array.isArray(f.edges) ? f.edges : [];
+            const target = nodes.find(n => n?.id === nodeId);
+            if (!target) throw new Error('Nodo no encontrado en ese flujo');
+            const nuevosNodes = nodes.filter(n => n?.id !== nodeId);
+            const nuevosEdges = edges.filter(e => e.source !== nodeId && e.target !== nodeId);
+            const saved = await saveFlowNodes(req, redis, flujoId, nuevosNodes, nuevosEdges);
+            return {
+                flujoId,
+                nodeId,
+                eliminado: true,
+                tipoEliminado: target.type,
+                aristasQuitadas: edges.length - nuevosEdges.length,
+                numNodosFlujo: Array.isArray(saved?.nodes) ? saved.nodes.length : nuevosNodes.length
+            };
+        }
+    },
+
+    conectar_nodos: {
+        description: 'Crea una arista (conexión) de un nodo origen a un nodo destino. "salida" es el sourceHandle: déjalo vacío para una salida normal; usa "si"/"no" para nodos de condición o de ubicación (rama Sí/No); para "Mandar Botones / Opciones" usa el id de la opción (el handle de ese botón, visible en ver_nodo de nodos conectados). Evita duplicar una arista idéntica. Devuelve el id de la arista creada.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                flujoId: { type: 'string', description: 'ID del flujo.' },
+                origen: { type: 'string', description: 'nodeId de origen (de donde sale la flecha).' },
+                destino: { type: 'string', description: 'nodeId de destino (a donde llega).' },
+                salida: { type: 'string', description: 'sourceHandle: vacío = normal; "si"/"no" = rama; id de opción para botones (opcional).' }
+            },
+            required: ['flujoId', 'origen', 'destino']
+        },
+        handler: async (args, { redis, req }) => {
+            const flujoId = String(args?.flujoId || '').trim();
+            const origen = String(args?.origen || '').trim();
+            const destino = String(args?.destino || '').trim();
+            const salida = args?.salida !== undefined && args.salida !== null && String(args.salida).trim() !== '' ? String(args.salida).trim() : null;
+            if (!flujoId) throw new Error('Falta flujoId');
+            if (!origen) throw new Error('Falta origen');
+            if (!destino) throw new Error('Falta destino');
+            if (origen === destino) throw new Error('Un nodo no se conecta consigo mismo');
+            const f = await fetchFlowOrThrow(req, redis, flujoId);
+            const nodes = Array.isArray(f.nodes) ? f.nodes : [];
+            const edges = Array.isArray(f.edges) ? [...f.edges] : [];
+            if (!nodes.some(n => n?.id === origen)) throw new Error('El nodo origen no existe en ese flujo');
+            if (!nodes.some(n => n?.id === destino)) throw new Error('El nodo destino no existe en ese flujo');
+            const dup = edges.find(e => e.source === origen && e.target === destino && (e.sourceHandle || null) === salida);
+            if (dup) return { flujoId, aristaId: dup.id, origen, destino, salida, yaExistia: true };
+            const edgeId = `e${Date.now()}_${randomBytes(2).toString('hex')}`;
+            edges.push({ id: edgeId, source: origen, target: destino, sourceHandle: salida, targetHandle: null });
+            const saved = await saveFlowNodes(req, redis, flujoId, nodes, edges);
+            return {
+                flujoId,
+                aristaId: edgeId,
+                origen,
+                destino,
+                salida,
+                conectado: true,
+                numAristasFlujo: Array.isArray(saved?.edges) ? saved.edges.length : edges.length
+            };
+        }
+    },
+
+    desconectar_nodos: {
+        description: 'Quita una o varias aristas de un flujo. Pasa aristaId para quitar una específica, o bien origen+destino (y opcionalmente salida) para quitar la(s) que coincidan. Devuelve cuántas aristas se quitaron.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                flujoId: { type: 'string', description: 'ID del flujo.' },
+                aristaId: { type: 'string', description: 'ID de la arista a quitar (de ver_nodo). Alternativa a origen+destino.' },
+                origen: { type: 'string', description: 'nodeId de origen (si no das aristaId).' },
+                destino: { type: 'string', description: 'nodeId de destino (si no das aristaId).' },
+                salida: { type: 'string', description: 'Filtrar por sourceHandle exacto (opcional; "si"/"no"/id de opción).' }
+            },
+            required: ['flujoId']
+        },
+        handler: async (args, { redis, req }) => {
+            const flujoId = String(args?.flujoId || '').trim();
+            if (!flujoId) throw new Error('Falta flujoId');
+            const aristaId = String(args?.aristaId || '').trim();
+            const origen = String(args?.origen || '').trim();
+            const destino = String(args?.destino || '').trim();
+            const tieneSalida = args?.salida !== undefined && args.salida !== null && String(args.salida).trim() !== '';
+            const salida = tieneSalida ? String(args.salida).trim() : null;
+            if (!aristaId && (!origen || !destino)) throw new Error('Da aristaId, o bien origen y destino');
+            const f = await fetchFlowOrThrow(req, redis, flujoId);
+            const nodes = Array.isArray(f.nodes) ? f.nodes : [];
+            const edges = Array.isArray(f.edges) ? f.edges : [];
+            const matches = (e) => aristaId
+                ? e.id === aristaId
+                : (e.source === origen && e.target === destino && (!tieneSalida || (e.sourceHandle || null) === salida));
+            const nuevosEdges = edges.filter(e => !matches(e));
+            const quitadas = edges.length - nuevosEdges.length;
+            if (quitadas === 0) throw new Error('Ninguna arista coincidió');
+            const saved = await saveFlowNodes(req, redis, flujoId, nodes, nuevosEdges);
+            return {
+                flujoId,
+                aristasQuitadas: quitadas,
+                numAristasFlujo: Array.isArray(saved?.edges) ? saved.edges.length : nuevosEdges.length
+            };
         }
     },
 
