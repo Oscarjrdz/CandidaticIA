@@ -1,6 +1,6 @@
 import { getRedisClient, validateAdminSession, getCandidateByPhone, getCandidateById, getCandidatesForFlowList } from './utils/storage.js';
 import { getCachedConfig, invalidateCache } from './utils/cache.js';
-import { runFlowTest, runFlowForListCandidate, resetFlowCandidateState } from './utils/flow-engine.js';
+import { runFlowTest, runFlowForListCandidate, resetFlowCandidateState, CHECKPOINT_PREFIX } from './utils/flow-engine.js';
 import { getBotVacancies, buildDateKeys, getCapturesByAllTags, getCapturesTotal } from './utils/flows-data.js';
 
 const REDIS_KEY = 'flows:v1';
@@ -155,6 +155,77 @@ export default async function handler(req, res) {
                     }
                 }
             }
+            return res.status(200).json({ success: true, checkpoints });
+        }
+
+        // Check Points con actividad HOY (zona Monterrey) — lo consume la tarjeta "Check Points"
+        // del dashboard. "Activo" = tuvo ≥1 candidato pasando HOY (NO depende de flow.active).
+        // Por cada checkpoint con paso hoy devuelve los NÚMEROS (whatsapp) que pasaron.
+        // Los nombres de checkpoint se resuelven en vivo por nodeId (rename retroactivo).
+        if (method === 'GET' && mode === 'checkpoint-today') {
+            const flows = await getFlows(redis);
+            const cps = [];
+            for (const f of flows) {
+                for (const n of (f.nodes || [])) {
+                    if (n.type === 'checkpoint') {
+                        cps.push({ flowId: f.id, flowName: f.name || 'Flujo sin nombre', nodeId: n.id, name: (n.data?.name || '').trim() });
+                    }
+                }
+            }
+            if (cps.length === 0) return res.status(200).json({ success: true, checkpoints: [] });
+
+            // 1 pipeline: HGETALL del :last de cada checkpoint (candidateId → ms del paso más nuevo).
+            const lastPipe = redis.pipeline();
+            cps.forEach(cp => lastPipe.hgetall(`${CHECKPOINT_PREFIX}${cp.flowId}:${cp.nodeId}:last`));
+            const lastRows = await lastPipe.exec();
+
+            // El :last guarda SOLO el paso más nuevo por candidato → si ese ms cae hoy, pasó hoy.
+            const todayStr = new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Monterrey' });
+            const msToMty = (ms) => new Date(Number(ms)).toLocaleDateString('sv-SE', { timeZone: 'America/Monterrey' });
+
+            const active = [];
+            const allIds = new Set();
+            cps.forEach((cp, i) => {
+                const hash = (lastRows[i] && lastRows[i][1]) || {};
+                const idsToday = [];
+                for (const [cid, ms] of Object.entries(hash)) {
+                    if (msToMty(ms) === todayStr) { idsToday.push({ id: cid, ms: Number(ms) }); allIds.add(cid); }
+                }
+                if (idsToday.length) {
+                    idsToday.sort((a, b) => b.ms - a.ms); // más reciente primero
+                    active.push({ ...cp, ids: idsToday });
+                }
+            });
+            if (active.length === 0) return res.status(200).json({ success: true, checkpoints: [] });
+
+            // Resolver número (whatsapp) + nombre de los candidatos ÚNICOS, 1 pipeline.
+            const idArr = [...allIds];
+            const candPipe = redis.pipeline();
+            idArr.forEach(cid => candPipe.get(`candidate:${cid}`));
+            const candRows = await candPipe.exec();
+            const infoById = {};
+            idArr.forEach((cid, i) => {
+                const raw = candRows[i] && candRows[i][1];
+                if (!raw) return;
+                try {
+                    const c = JSON.parse(raw);
+                    infoById[cid] = { phone: c.whatsapp || '', nombre: c.nombreReal || c.nombre || '' };
+                } catch { /* blob corrupto: se omite */ }
+            });
+
+            const checkpoints = active.map(cp => ({
+                flowId: cp.flowId,
+                flowName: cp.flowName,
+                nodeId: cp.nodeId,
+                name: cp.name || cp.flowName,
+                candidates: cp.ids
+                    .map(({ id, ms }) => ({ id, phone: infoById[id]?.phone || '', nombre: infoById[id]?.nombre || '', ms }))
+                    .filter(c => c.phone) // sin número no se muestra
+            }))
+                .map(cp => ({ ...cp, count: cp.candidates.length }))
+                .filter(cp => cp.count > 0)
+                .sort((a, b) => b.count - a.count);
+
             return res.status(200).json({ success: true, checkpoints });
         }
 

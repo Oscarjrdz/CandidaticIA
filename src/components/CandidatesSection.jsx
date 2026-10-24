@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Users, Search, Trash2, RefreshCw, User, MessageCircle, Clock, Loader2, CheckCircle, Check, Sparkles, Send, Zap, Ban, GripVertical, Tag, ChevronDown, ChevronLeft, ChevronRight, X, Pencil, Plus, AlertTriangle, TrendingUp, CalendarDays, RotateCcw } from 'lucide-react';
+import { Users, Search, Trash2, RefreshCw, User, MessageCircle, Clock, Loader2, CheckCircle, Check, Sparkles, Send, Zap, Ban, GripVertical, Tag, ChevronDown, ChevronLeft, ChevronRight, X, Pencil, Plus, AlertTriangle, TrendingUp, CalendarDays, RotateCcw, Flag, EyeOff, Eye } from 'lucide-react';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, horizontalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -229,7 +229,7 @@ const CandidateRow = React.memo(({ candidate, columnOrder, fieldsMap, magicLoadi
 //
 // Patrón Amazon/Linear: instant paint + silent revalidation.
 // ═══════════════════════════════════════════════════════════════════════════════════
-const sectionCache = { candidates: null, stats: null, totalItems: 0, fields: null, daily: null, tags: null };
+const sectionCache = { candidates: null, stats: null, totalItems: 0, fields: null, daily: null, tags: null, checkpoints: null };
 
 // Reconciliación por id al revalidar (poll de montaje): fusiona la lista entrante con la que ya
 // se está mostrando PRESERVANDO la referencia de cada candidato que no cambió. Como
@@ -257,7 +257,7 @@ const reconcileCandidates = (prev, incoming) => {
 
 const CandidatesSection = () => {
     const { showToast } = useToastContext();
-    const { user, rolePermissions } = useAuthContext();
+    const { user, setUser, rolePermissions } = useAuthContext();
     const canManageTags = user?.role === 'SuperAdmin' || user?.can_manage_tags === true;
     const canViewIncomplete = !user || user.role === 'SuperAdmin' ||
         !rolePermissions || Object.keys(rolePermissions).length === 0 ||
@@ -426,6 +426,59 @@ const CandidatesSection = () => {
         const t = setInterval(fetchCtr, 60000);
         return () => clearInterval(t);
     }, []);
+
+    // ─── Check Points de HOY (tarjeta "Check Points") ────────────────────────────
+    // Lista los Check Points que tuvieron ≥1 candidato pasando hoy (Monterrey) con los
+    // números de cada uno. El dato lo calcula el servidor (/api/flows?mode=checkpoint-today).
+    // Se refresca cada 2 min (más tranquilo que el CTR: implica leer blobs de candidatos).
+    const [checkpointsToday, setCheckpointsToday] = useState(() => sectionCache.checkpoints || []);
+    const [checkpointsLoading, setCheckpointsLoading] = useState(() => !sectionCache.checkpoints);
+    // Check Points ocultos POR PERFIL (clave `${flowId}:${nodeId}`), guardados en las
+    // preferencias del reclutador. "Mostrar todos" los limpia.
+    const hiddenCheckpoints = Array.isArray(user?.preferences?.hiddenCheckpoints) ? user.preferences.hiddenCheckpoints : [];
+    const hiddenSet = new Set(hiddenCheckpoints);
+
+    const fetchCheckpointsToday = async () => {
+        try {
+            const res = await fetch('/api/flows?mode=checkpoint-today');
+            if (res.ok) {
+                const data = await res.json();
+                const list = Array.isArray(data?.checkpoints) ? data.checkpoints : [];
+                setCheckpointsToday(list);
+                sectionCache.checkpoints = list;
+            }
+        } catch { /* se reintenta en el próximo tick */ }
+        finally { setCheckpointsLoading(false); }
+    };
+    useEffect(() => {
+        fetchCheckpointsToday();
+        const t = setInterval(fetchCheckpointsToday, 120000);
+        return () => clearInterval(t);
+    }, []);
+
+    // Persistencia por perfil del set oculto (delta de una sola sub-llave; saveUser mergea
+    // preferences un nivel → no pisa otras preferencias del reclutador).
+    const persistHiddenCheckpoints = (next) => {
+        if (!user?.id) return;
+        setUser(prev => prev ? { ...prev, preferences: { ...(prev.preferences || {}), hiddenCheckpoints: next } } : prev);
+        fetch('/api/users', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: user.id, preferences: { hiddenCheckpoints: next } })
+        }).catch(() => {});
+    };
+    const hideCheckpoint = (key) => {
+        if (hiddenSet.has(key)) return;
+        persistHiddenCheckpoints([...hiddenCheckpoints, key]);
+    };
+    const showAllCheckpoints = () => {
+        if (hiddenCheckpoints.length === 0) return;
+        persistHiddenCheckpoints([]);
+    };
+
+    const cpKey = (cp) => `${cp.flowId}:${cp.nodeId}`;
+    const visibleCheckpoints = checkpointsToday.filter(cp => !hiddenSet.has(cpKey(cp)));
+    const hiddenCount = checkpointsToday.length - visibleCheckpoints.length;
 
     // SSE: increment the visible daily bar once per candidate (no fetch needed)
     useEffect(() => {
@@ -1160,34 +1213,100 @@ const CandidatesSection = () => {
                             </div>
                             )}
 
-                            {/* Card 4: Mensajes (entrantes + salientes) */}
-                            <div className="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm relative overflow-hidden group">
-                                <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
-                                    <Send className="w-16 h-16 text-purple-500 transform rotate-6" />
-                                </div>
-                                <div className="flex flex-col relative z-10">
+                            {/* Card 4: Mensajes (izquierda) + Check Points de hoy (derecha) */}
+                            <div className="bg-white dark:bg-gray-800 p-3 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm flex" style={{ minHeight: '130px' }}>
+                                {/* ── Mitad izquierda: Mensajes (entrantes + salientes) ── */}
+                                <div className="flex flex-col w-[38%] shrink-0 pr-3 border-r border-gray-100 dark:border-gray-700">
                                     <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-2">Mensajes</span>
-                                    <div className="flex flex-col gap-2">
+                                    <div className="flex flex-col gap-3 justify-center flex-1">
                                         {/* Entrantes */}
-                                        <div className="flex items-center gap-2">
+                                        <div className="flex items-center gap-1.5">
                                             <span className="w-5 h-5 rounded-md bg-green-100 dark:bg-green-900/30 flex items-center justify-center shrink-0">
                                                 <MessageCircle className="w-3 h-3 text-green-600 dark:text-green-400" />
                                             </span>
-                                            <h3 className="text-xl font-bold text-gray-900 dark:text-white leading-none tabular-nums">
-                                                {Number(stats?.incoming || 0).toLocaleString()}
-                                            </h3>
-                                            <span className="text-[9px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">Entrantes</span>
+                                            <div className="flex flex-col leading-none min-w-0">
+                                                <h3 className="text-lg font-bold text-gray-900 dark:text-white leading-none tabular-nums">
+                                                    {Number(stats?.incoming || 0).toLocaleString()}
+                                                </h3>
+                                                <span className="text-[8px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">Entrantes</span>
+                                            </div>
                                         </div>
                                         {/* Salientes */}
-                                        <div className="flex items-center gap-2">
+                                        <div className="flex items-center gap-1.5">
                                             <span className="w-5 h-5 rounded-md bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center shrink-0">
                                                 <Send className="w-3 h-3 text-purple-600 dark:text-purple-400" />
                                             </span>
-                                            <h3 className="text-xl font-bold text-gray-900 dark:text-white leading-none tabular-nums">
-                                                {Number(stats?.outgoing || 0).toLocaleString()}
-                                            </h3>
-                                            <span className="text-[9px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">Enviados</span>
+                                            <div className="flex flex-col leading-none min-w-0">
+                                                <h3 className="text-lg font-bold text-gray-900 dark:text-white leading-none tabular-nums">
+                                                    {Number(stats?.outgoing || 0).toLocaleString()}
+                                                </h3>
+                                                <span className="text-[8px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">Enviados</span>
+                                            </div>
                                         </div>
+                                    </div>
+                                </div>
+
+                                {/* ── Mitad derecha: Check Points con paso HOY ── */}
+                                <div className="flex flex-col flex-1 min-w-0 pl-3">
+                                    <div className="flex items-center justify-between gap-1 mb-1.5">
+                                        <div className="flex items-center gap-1 min-w-0">
+                                            <Flag className="w-3 h-3 text-rose-500 shrink-0" />
+                                            <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 truncate">Check Points</span>
+                                        </div>
+                                        {hiddenCount > 0 && (
+                                            <button
+                                                onClick={showAllCheckpoints}
+                                                title="Mostrar todos los Check Points ocultos"
+                                                className="flex items-center gap-0.5 text-[9px] font-semibold text-rose-600 dark:text-rose-400 hover:text-rose-700 dark:hover:text-rose-300 bg-rose-50 dark:bg-rose-900/20 px-1.5 py-px rounded-full shrink-0 transition-colors"
+                                            >
+                                                <Eye className="w-2.5 h-2.5" /> {hiddenCount}
+                                            </button>
+                                        )}
+                                    </div>
+
+                                    <div className="flex-1 overflow-y-auto -mr-1 pr-1 space-y-2" style={{ maxHeight: '96px' }}>
+                                        {checkpointsLoading ? (
+                                            <div className="h-full flex items-center justify-center">
+                                                <Loader2 className="w-3.5 h-3.5 animate-spin text-gray-300" />
+                                            </div>
+                                        ) : visibleCheckpoints.length === 0 ? (
+                                            <div className="h-full flex items-center justify-center">
+                                                <span className="text-[9px] text-gray-400 dark:text-gray-500 text-center">
+                                                    {checkpointsToday.length === 0 ? 'Sin pasos hoy' : 'Todos ocultos'}
+                                                </span>
+                                            </div>
+                                        ) : visibleCheckpoints.map((cp) => (
+                                            <div key={cpKey(cp)}>
+                                                <div className="flex items-center justify-between gap-1 mb-0.5">
+                                                    <div className="flex items-center gap-1 min-w-0">
+                                                        <span className="text-[10px] font-bold text-gray-700 dark:text-gray-200 truncate" title={`${cp.name} · ${cp.flowName}`}>
+                                                            {cp.name}
+                                                        </span>
+                                                        <span className="text-[9px] font-bold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-900/20 px-1 rounded-full tabular-nums shrink-0">
+                                                            {cp.count}
+                                                        </span>
+                                                    </div>
+                                                    <button
+                                                        onClick={() => hideCheckpoint(cpKey(cp))}
+                                                        title="Ocultar este Check Point"
+                                                        className="p-0.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-300 hover:text-rose-500 transition-colors shrink-0"
+                                                    >
+                                                        <EyeOff className="w-3 h-3" />
+                                                    </button>
+                                                </div>
+                                                <div className="flex flex-col gap-px pl-0.5">
+                                                    {cp.candidates.map((c) => (
+                                                        <span
+                                                            key={c.id}
+                                                            title={c.nombre || undefined}
+                                                            className="text-[10px] text-gray-500 dark:text-gray-400 tabular-nums truncate leading-tight"
+                                                        >
+                                                            {formatPhone(c.phone)}
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        ))}
                                     </div>
                                 </div>
                             </div>
