@@ -160,8 +160,8 @@ export default async function handler(req, res) {
 
         // Check Points con actividad HOY (zona Monterrey) — lo consume la tarjeta "Check Points"
         // del dashboard. "Activo" = tuvo ≥1 candidato pasando HOY (NO depende de flow.active).
-        // Por cada checkpoint con paso hoy devuelve los NÚMEROS (whatsapp) que pasaron.
-        // Los nombres de checkpoint se resuelven en vivo por nodeId (rename retroactivo).
+        // Solo nombre + TOTAL por checkpoint (no se arrastran los números → no se leen blobs
+        // de candidatos). Los nombres se resuelven en vivo por nodeId (rename retroactivo).
         if (method === 'GET' && mode === 'checkpoint-today') {
             const flows = await getFlows(redis);
             const cps = [];
@@ -183,46 +183,14 @@ export default async function handler(req, res) {
             const todayStr = new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Monterrey' });
             const msToMty = (ms) => new Date(Number(ms)).toLocaleDateString('sv-SE', { timeZone: 'America/Monterrey' });
 
-            const active = [];
-            const allIds = new Set();
-            cps.forEach((cp, i) => {
+            const checkpoints = cps.map((cp, i) => {
                 const hash = (lastRows[i] && lastRows[i][1]) || {};
-                const idsToday = [];
-                for (const [cid, ms] of Object.entries(hash)) {
-                    if (msToMty(ms) === todayStr) { idsToday.push({ id: cid, ms: Number(ms) }); allIds.add(cid); }
+                let count = 0;
+                for (const ms of Object.values(hash)) {
+                    if (msToMty(ms) === todayStr) count++;
                 }
-                if (idsToday.length) {
-                    idsToday.sort((a, b) => b.ms - a.ms); // más reciente primero
-                    active.push({ ...cp, ids: idsToday });
-                }
-            });
-            if (active.length === 0) return res.status(200).json({ success: true, checkpoints: [] });
-
-            // Resolver número (whatsapp) + nombre de los candidatos ÚNICOS, 1 pipeline.
-            const idArr = [...allIds];
-            const candPipe = redis.pipeline();
-            idArr.forEach(cid => candPipe.get(`candidate:${cid}`));
-            const candRows = await candPipe.exec();
-            const infoById = {};
-            idArr.forEach((cid, i) => {
-                const raw = candRows[i] && candRows[i][1];
-                if (!raw) return;
-                try {
-                    const c = JSON.parse(raw);
-                    infoById[cid] = { phone: c.whatsapp || '', nombre: c.nombreReal || c.nombre || '' };
-                } catch { /* blob corrupto: se omite */ }
-            });
-
-            const checkpoints = active.map(cp => ({
-                flowId: cp.flowId,
-                flowName: cp.flowName,
-                nodeId: cp.nodeId,
-                name: cp.name || cp.flowName,
-                candidates: cp.ids
-                    .map(({ id, ms }) => ({ id, phone: infoById[id]?.phone || '', nombre: infoById[id]?.nombre || '', ms }))
-                    .filter(c => c.phone) // sin número no se muestra
-            }))
-                .map(cp => ({ ...cp, count: cp.candidates.length }))
+                return { flowId: cp.flowId, flowName: cp.flowName, nodeId: cp.nodeId, name: cp.name || cp.flowName, count };
+            })
                 .filter(cp => cp.count > 0)
                 .sort((a, b) => b.count - a.count);
 

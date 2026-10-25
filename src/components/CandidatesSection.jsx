@@ -1264,7 +1264,7 @@ const CandidatesSection = () => {
                                         )}
                                     </div>
 
-                                    <div className="flex-1 overflow-y-auto -mr-1 pr-1 space-y-2" style={{ maxHeight: '96px' }}>
+                                    <div className="flex-1 overflow-y-auto -mr-1 pr-1 space-y-1.5" style={{ maxHeight: '96px' }}>
                                         {checkpointsLoading ? (
                                             <div className="h-full flex items-center justify-center">
                                                 <Loader2 className="w-3.5 h-3.5 animate-spin text-gray-300" />
@@ -1276,35 +1276,22 @@ const CandidatesSection = () => {
                                                 </span>
                                             </div>
                                         ) : visibleCheckpoints.map((cp) => (
-                                            <div key={cpKey(cp)}>
-                                                <div className="flex items-center justify-between gap-1 mb-0.5">
-                                                    <div className="flex items-center gap-1 min-w-0">
-                                                        <span className="text-[10px] font-bold text-gray-700 dark:text-gray-200 truncate" title={`${cp.name} · ${cp.flowName}`}>
-                                                            {cp.name}
-                                                        </span>
-                                                        <span className="text-[9px] font-bold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-900/20 px-1 rounded-full tabular-nums shrink-0">
-                                                            {cp.count}
-                                                        </span>
-                                                    </div>
-                                                    <button
-                                                        onClick={() => hideCheckpoint(cpKey(cp))}
-                                                        title="Ocultar este Check Point"
-                                                        className="p-0.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-300 hover:text-rose-500 transition-colors shrink-0"
-                                                    >
-                                                        <EyeOff className="w-3 h-3" />
-                                                    </button>
+                                            <div key={cpKey(cp)} className="flex items-center justify-between gap-1">
+                                                <div className="flex items-center gap-1 min-w-0">
+                                                    <span className="text-[11px] font-bold text-gray-700 dark:text-gray-200 truncate" title={`${cp.name} · ${cp.flowName}`}>
+                                                        {cp.name}
+                                                    </span>
+                                                    <span className="text-[9px] font-bold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-900/20 px-1 rounded-full tabular-nums shrink-0">
+                                                        {cp.count}
+                                                    </span>
                                                 </div>
-                                                <div className="flex flex-col gap-px pl-0.5">
-                                                    {cp.candidates.map((c) => (
-                                                        <span
-                                                            key={c.id}
-                                                            title={c.nombre || undefined}
-                                                            className="text-[10px] text-gray-500 dark:text-gray-400 tabular-nums truncate leading-tight"
-                                                        >
-                                                            {formatPhone(c.phone)}
-                                                        </span>
-                                                    ))}
-                                                </div>
+                                                <button
+                                                    onClick={() => hideCheckpoint(cpKey(cp))}
+                                                    title="Ocultar este Check Point"
+                                                    className="p-0.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-300 hover:text-rose-500 transition-colors shrink-0"
+                                                >
+                                                    <EyeOff className="w-3 h-3" />
+                                                </button>
                                             </div>
                                         ))}
                                     </div>
