@@ -399,7 +399,12 @@ const CommentsModal = ({ ad, onClose, showToast }) => {
 };
 
 /* ─── Main Component ──────────────────────────────────────────────────── */
-const PRESET_COLORS = ['#a855f7','#3b82f6','#22c55e','#f97316','#ef4444','#eab308','#06b6d4','#ec4899','#64748b','#10b981'];
+const PRESET_COLORS = [
+    '#a855f7','#8b5cf6','#6366f1','#3b82f6','#0ea5e9','#06b6d4',
+    '#14b8a6','#10b981','#22c55e','#84cc16','#eab308','#f59e0b',
+    '#f97316','#ef4444','#f43f5e','#ec4899','#d946ef','#78716c',
+    '#64748b','#1e293b'
+];
 
 // Caché stale-while-revalidate a nivel de módulo → re-entrar pinta las estadísticas de Ads
 // al instante (sin skeleton ni salto) y revalida en silencio. Ver docs/anti-brinco-secciones.md.
@@ -419,10 +424,10 @@ const AdsStatisticsSection = () => {
     const [editingLabel, setEditingLabel] = useState(null); // null = crear, object = editar
     const [labelForm, setLabelForm] = useState({ adIds: '', name: '', emoji: '', color: '#a855f7', company: '' });
     const [labelSaving, setLabelSaving] = useState(false);
-    // La tarjeta de etiquetas ocupa mucho alto (todos los Ad IDs). Se puede contraer para
-    // ahorrar espacio; el estado se recuerda en localStorage. Default: contraída.
+    // La lista de etiquetas ahora es compacta (los Ad IDs están ocultos tras un contador),
+    // así que nace expandida. Se puede contraer; el estado se recuerda en localStorage.
     const [labelsCollapsed, setLabelsCollapsed] = useState(() => {
-        try { return localStorage.getItem('adLabelsCollapsed') !== 'false'; } catch { return true; }
+        try { return localStorage.getItem('adLabelsCollapsed') === 'true'; } catch { return false; }
     });
     const persistLabelsCollapsed = (next) => {
         setLabelsCollapsed(next);
@@ -439,6 +444,14 @@ const AdsStatisticsSection = () => {
 
     /* ── Asignación de etiqueta por anuncio (chip en cada tarjeta) ── */
     const [labelMenu, setLabelMenu] = useState(null); // { ad, x, y } | null
+    // Qué etiquetas tienen sus Ad IDs desplegados (ocultos por defecto — la lista enseña
+    // solo el nombre + contador de anuncios vinculados, mucho más limpio).
+    const [expandedIds, setExpandedIds] = useState(() => new Set());
+    const toggleIdsExpanded = (id) => setExpandedIds(prev => {
+        const next = new Set(prev);
+        next.has(id) ? next.delete(id) : next.add(id);
+        return next;
+    });
 
     const nameOnlyOf = (label) => label.emoji ? label.tagName.replace(label.emoji + ' ', '') : label.tagName;
     const labelIdsOf = (label) => (label.adIds || (label.adId ? [label.adId] : [])).map(String);
@@ -510,7 +523,7 @@ const AdsStatisticsSection = () => {
 
     const handleSubmitLabel = async (e) => {
         e.preventDefault();
-        if (!labelForm.adIds.trim() || !labelForm.name.trim()) return;
+        if (!labelForm.name.trim()) return;
         setLabelSaving(true);
         try {
             const isEdit = !!editingLabel;
@@ -538,7 +551,7 @@ const AdsStatisticsSection = () => {
                     }
                 } else {
                     setAdLabels(prev => [...prev, data.label]);
-                    showToast?.(`Etiqueta creada y aplicada a ${data.applied} candidatos`, 'success');
+                    showToast?.(data.applied > 0 ? `Etiqueta creada y aplicada a ${data.applied} candidatos` : 'Etiqueta creada', 'success');
                     window.dispatchEvent(new CustomEvent('ad_label_created', {
                         detail: { adId: data.label.adId, tagName: data.label.tagName, color: data.label.color }
                     }));
@@ -763,15 +776,14 @@ const AdsStatisticsSection = () => {
                         <div className="flex flex-col gap-3 mb-3">
                             <div>
                                 <label className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase mb-1 block">
-                                    Ad IDs * <span className="font-normal normal-case text-gray-400">— separa varios con coma</span>
+                                    Ad IDs <span className="font-normal normal-case text-gray-400">— opcional, separa varios con coma</span>
                                 </label>
                                 <input
                                     type="text"
-                                    placeholder="ej: 120245715187570620, 120245715187570621"
+                                    placeholder="Opcional — ej: 120245715187570620, 120245715187570621"
                                     value={labelForm.adIds}
                                     onChange={e => setLabelForm(f => ({ ...f, adIds: e.target.value }))}
                                     className="w-full text-xs px-3 py-2 rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white outline-none focus:border-violet-400 dark:focus:border-violet-500 transition-colors font-mono"
-                                    required
                                 />
                                 {labelForm.adIds && (
                                     <div className="flex flex-wrap gap-1 mt-1.5">
@@ -840,10 +852,10 @@ const AdsStatisticsSection = () => {
                             </div>
                         </div>
                         <div className="flex gap-2">
-                            <button type="submit" disabled={labelSaving || !labelForm.adIds.trim() || !labelForm.name.trim()}
+                            <button type="submit" disabled={labelSaving || !labelForm.name.trim()}
                                 className="flex items-center gap-1.5 text-xs font-bold text-white bg-violet-600 hover:bg-violet-700 disabled:opacity-50 disabled:cursor-not-allowed px-4 py-2 rounded-lg transition-colors">
                                 {labelSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-                                {labelSaving ? (editingLabel ? 'Guardando...' : 'Aplicando...') : (editingLabel ? 'Guardar cambios' : 'Crear y aplicar')}
+                                {labelSaving ? (editingLabel ? 'Guardando...' : 'Aplicando...') : (editingLabel ? 'Guardar cambios' : 'Crear etiqueta')}
                             </button>
                             <button type="button" onClick={resetForm}
                                 className="text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
@@ -860,39 +872,68 @@ const AdsStatisticsSection = () => {
                             No hay etiquetas creadas. Crea una para vincular un Ad ID a una etiqueta automática.
                         </div>
                     ) : (
-                        adLabels.map(label => (
-                            <div key={label.id} className={`px-5 py-3 flex items-center justify-between gap-4 transition-colors ${editingLabel?.id === label.id ? 'bg-violet-50/60 dark:bg-violet-500/5' : ''}`}>
-                                <div className="flex items-center gap-3 min-w-0">
-                                    <div className="flex flex-col gap-0.5 shrink-0">
-                                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-white px-3 py-1 rounded-full"
-                                            style={{ backgroundColor: label.color }}>
-                                            {label.emoji && <span>{label.emoji}</span>}
-                                            {label.tagName.replace(label.emoji ? label.emoji + ' ' : '', '')}
-                                        </span>
-                                        {label.company && (
-                                            <span className="text-[10px] text-gray-500 dark:text-gray-400 px-1 font-medium truncate max-w-[160px]">{label.company}</span>
-                                        )}
+                        adLabels.map(label => {
+                            const ids = label.adIds || (label.adId ? [label.adId] : []);
+                            const isOpen = expandedIds.has(label.id);
+                            return (
+                            <div key={label.id} className={`group px-5 py-3.5 transition-colors ${editingLabel?.id === label.id ? 'bg-violet-50/60 dark:bg-violet-500/5' : 'hover:bg-gray-50/70 dark:hover:bg-gray-700/20'}`}>
+                                <div className="flex items-center justify-between gap-4">
+                                    <div className="flex items-center gap-3 min-w-0">
+                                        {/* Punto de color */}
+                                        <span className="w-2.5 h-2.5 rounded-full shrink-0 ring-2 ring-white dark:ring-gray-800 shadow-sm"
+                                            style={{ backgroundColor: label.color }} />
+                                        {/* Nombre + empresa */}
+                                        <div className="flex flex-col min-w-0">
+                                            <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-gray-900 dark:text-white truncate">
+                                                {label.emoji && <span className="text-base leading-none">{label.emoji}</span>}
+                                                {label.tagName.replace(label.emoji ? label.emoji + ' ' : '', '')}
+                                            </span>
+                                            {label.company && (
+                                                <span className="text-[11px] text-gray-400 dark:text-gray-500 font-medium truncate max-w-[220px]">{label.company}</span>
+                                            )}
+                                        </div>
                                     </div>
-                                    <div className="flex flex-wrap gap-1 min-w-0">
-                                        {(label.adIds || (label.adId ? [label.adId] : [])).map(id => (
-                                            <span key={id} className="text-[9px] font-mono text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-700 px-1.5 py-0.5 rounded truncate max-w-[160px]">{id}</span>
+                                    <div className="flex items-center gap-1.5 shrink-0">
+                                        {/* Contador de anuncios vinculados (clic → ver/ocultar IDs) */}
+                                        <button
+                                            onClick={() => ids.length && toggleIdsExpanded(label.id)}
+                                            disabled={!ids.length}
+                                            title={ids.length ? (isOpen ? 'Ocultar Ad IDs' : 'Ver Ad IDs') : 'Sin anuncios vinculados'}
+                                            className={`flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-full transition-colors ${
+                                                ids.length
+                                                    ? 'text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700/60 hover:bg-gray-200 dark:hover:bg-gray-700 cursor-pointer'
+                                                    : 'text-gray-300 dark:text-gray-600 bg-gray-50 dark:bg-gray-800 cursor-default'
+                                            }`}>
+                                            <Megaphone className="w-3 h-3" />
+                                            {ids.length} {ids.length === 1 ? 'anuncio' : 'anuncios'}
+                                            {ids.length > 0 && <ChevronDown className={`w-3 h-3 transition-transform ${isOpen ? 'rotate-180' : ''}`} />}
+                                        </button>
+                                        <button onClick={() => handleOpenEdit(label)}
+                                            title="Editar etiqueta"
+                                            className="p-1.5 text-gray-400 hover:text-violet-500 dark:hover:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-900/20 rounded-lg transition-colors">
+                                            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                                        </button>
+                                        <button onClick={() => handleDeleteLabel(label)}
+                                            title="Eliminar etiqueta (en profundidad)"
+                                            className="p-1.5 text-gray-400 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors">
+                                            <Trash2 className="w-3.5 h-3.5" />
+                                        </button>
+                                    </div>
+                                </div>
+                                {/* Ad IDs — ocultos por defecto, se despliegan al hacer clic en el contador */}
+                                {isOpen && ids.length > 0 && (
+                                    <div className="flex flex-wrap gap-1 mt-2.5 pl-6 animate-in fade-in slide-in-from-top-1 duration-150">
+                                        {ids.map(id => (
+                                            <span key={id} className="inline-flex items-center gap-1 text-[9px] font-mono text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 px-1.5 py-0.5 rounded">
+                                                {id}
+                                                <Copy className="w-2.5 h-2.5 cursor-pointer hover:text-violet-500" onClick={() => cp(id)} />
+                                            </span>
                                         ))}
                                     </div>
-                                </div>
-                                <div className="flex items-center gap-1 shrink-0">
-                                    <button onClick={() => handleOpenEdit(label)}
-                                        title="Editar etiqueta"
-                                        className="p-1.5 text-gray-400 hover:text-violet-500 dark:hover:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-900/20 rounded-lg transition-colors">
-                                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                                    </button>
-                                    <button onClick={() => handleDeleteLabel(label)}
-                                        title="Eliminar etiqueta (en profundidad)"
-                                        className="p-1.5 text-gray-400 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors">
-                                        <Trash2 className="w-3.5 h-3.5" />
-                                    </button>
-                                </div>
+                                )}
                             </div>
-                        ))
+                            );
+                        })
                     )}
                 </div>
                 </>)}

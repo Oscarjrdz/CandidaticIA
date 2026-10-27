@@ -41,8 +41,8 @@ export default async function handler(req, res) {
         if (req.method === 'POST') {
             const { adIds: rawAdIds, name, emoji, color, company } = req.body || {};
             const adIds = parseAdIds(rawAdIds);
-            if (!adIds.length || !name?.trim()) {
-                return res.status(400).json({ error: 'Al menos un Ad ID y nombre son obligatorios' });
+            if (!name?.trim()) {
+                return res.status(400).json({ error: 'El nombre es obligatorio' });
             }
 
             const tagName  = emoji?.trim() ? `${emoji.trim()} ${name.trim()}` : name.trim();
@@ -51,8 +51,12 @@ export default async function handler(req, res) {
 
             const rawLabels = await redis.get(AD_LABELS_KEY);
             const labels = (rawLabels ? JSON.parse(rawLabels) : []).map(normalize);
-            if (labels.some(l => l.tagName === tagName && l.adIds.some(id => adIds.includes(id)))) {
-                return res.status(400).json({ error: 'Ya existe una etiqueta con ese nombre para alguno de esos Ad IDs' });
+            // Con Ad IDs: evita duplicar nombre+id. Sin Ad IDs: evita duplicar el nombre a secas.
+            const dup = adIds.length
+                ? labels.some(l => l.tagName === tagName && l.adIds.some(id => adIds.includes(id)))
+                : labels.some(l => l.tagName === tagName);
+            if (dup) {
+                return res.status(400).json({ error: 'Ya existe una etiqueta con ese nombre' + (adIds.length ? ' para alguno de esos Ad IDs' : '') });
             }
 
             const newLabel = { id: labelId, adIds, tagName, emoji: emoji?.trim() || '', color: tagColor, company: company?.trim() || '', createdAt: new Date().toISOString() };
@@ -69,7 +73,8 @@ export default async function handler(req, res) {
 
             // Batch apply sólo a candidatos indexados con cualquiera de esos adIds.
             // Evita barrer toda la base de candidatos por cada etiqueta creada.
-            const candidates = await getCandidatesByAdIds(adIds, 2000);
+            // Sin Ad IDs la etiqueta nace vacía (solo para asignación manual) — no hay batch.
+            const candidates = adIds.length ? await getCandidatesByAdIds(adIds, 2000) : [];
             const updates = [];
             let applied = 0;
             for (const c of candidates) {
@@ -92,7 +97,6 @@ export default async function handler(req, res) {
             if (!id || !name?.trim()) return res.status(400).json({ error: 'id y nombre son obligatorios' });
 
             const adIds = parseAdIds(rawAdIds);
-            if (!adIds.length) return res.status(400).json({ error: 'Al menos un Ad ID es obligatorio' });
 
             const rawLabels = await redis.get(AD_LABELS_KEY);
             const labels = (rawLabels ? JSON.parse(rawLabels) : []).map(normalize);
