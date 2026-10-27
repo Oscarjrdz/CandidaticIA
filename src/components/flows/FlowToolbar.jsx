@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { ArrowLeft, Plus, Save, Check, ClipboardPaste, Square, Type } from 'lucide-react';
 import { NODE_DEFS, COLOR_CLASSES, ELEMENT_TYPES } from './nodeTypes';
 
-const ENTRY_TYPES = ['inicio', 'inicio_lista', 'inicio_incompleto_silencio'];
+const ENTRY_TYPES = ['inicio', 'inicio_lista', 'inicio_incompleto_silencio', 'inicio_sin_extraccion'];
 // Los elementos decorativos (bg/texto) se agregan con iconos aparte, no en el desplegable.
 const ADDABLE_TYPES = Object.keys(NODE_DEFS).filter(t => !ENTRY_TYPES.includes(t) && !ELEMENT_TYPES.includes(t));
 

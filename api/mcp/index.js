@@ -233,6 +233,7 @@ const NODE_TYPE_LABELS = {
     inicio: 'Inicio',
     inicio_lista: 'Inicio: Lista Filtrada',
     inicio_incompleto_silencio: 'Inicio: Incompleto sin responder',
+    inicio_sin_extraccion: 'Inicio: Sin extracción',
     etiqueta: 'Filtro: Etiqueta',
     condicion_genero: 'Condición: Género',
     condicion_edad: 'Condición: Edad',
@@ -339,6 +340,7 @@ async function fetchFlowOrThrow(req, redis, id) {
 function classifyFlowTipo(nodes) {
     const types = new Set((Array.isArray(nodes) ? nodes : []).map(n => n?.type));
     if (types.has('inicio_incompleto_silencio')) return 'incompletos';
+    if (types.has('inicio_sin_extraccion')) return 'sin_extraccion';
     if (types.has('inicio_lista')) return 'lista';
     if (types.has('inicio')) return 'estandar';
     return 'desconocido';
@@ -1625,14 +1627,14 @@ const TOOLS = {
             type: 'object',
             properties: {
                 nombre: { type: 'string', description: 'Nombre del flujo.' },
-                tipoRaiz: { type: 'string', enum: ['estandar', 'lista', 'incompletos'], description: 'Tipo de nodo raíz (default "estandar").' }
+                tipoRaiz: { type: 'string', enum: ['estandar', 'lista', 'incompletos', 'sin_extraccion'], description: 'Tipo de nodo raíz (default "estandar"). "sin_extraccion" = incompletos de cierta etiqueta a los que Brenda nunca extrae; el flujo los atiende desde el primer mensaje.' }
             },
             required: ['nombre']
         },
         handler: async (args, { redis, req }) => {
             const nombre = String(args?.nombre || '').trim();
             if (!nombre) throw new Error('Falta el nombre del flujo');
-            const rootType = args?.tipoRaiz === 'lista' ? 'lista' : args?.tipoRaiz === 'incompletos' ? 'incompletos' : 'estandar';
+            const rootType = args?.tipoRaiz === 'lista' ? 'lista' : args?.tipoRaiz === 'incompletos' ? 'incompletos' : args?.tipoRaiz === 'sin_extraccion' ? 'sin_extraccion' : 'estandar';
             const r = await callInternal(req, redis, '/api/flows', 'POST', { name: nombre, rootType });
             if (!r.ok || r.data?.success === false) throw new Error(r.data?.error || `Fallo al crear el flujo (${r.status})`);
             const f = r.data?.flow;

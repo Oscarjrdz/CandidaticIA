@@ -1328,28 +1328,6 @@ const NodeConfigDrawer = ({ node, flowId, meta, quickReplies, onSaveQuickReply, 
                                             </span>
                                         </label>
                                     )}
-                                    {(data.profileFilter === 'incompleto') && (
-                                        <label className="flex items-start gap-2.5 p-2.5 mt-2 rounded-xl border border-rose-200 dark:border-rose-800 hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer">
-                                            <input type="checkbox" checked={!!data.returnOnAnyText} onChange={(e) => patch({ returnOnAnyText: e.target.checked })} className="w-4 h-4 mt-0.5 rounded text-rose-600 focus:ring-rose-500" />
-                                            <span>
-                                                <span className="text-sm text-gray-700 dark:text-gray-200 block">Cualquier mensaje — Brenda nunca extrae <span className="text-rose-500">(sin extracción)</span></span>
-                                                <span className="text-xs text-gray-400">Un incompleto con la(s) etiqueta(s) de abajo dispara el flujo con <b>lo que sea</b> que escriba, <b>incluido su primer mensaje</b>. Brenda jamás intenta extraer sus datos — el flujo maneja la conversación. <b>Requiere al menos una etiqueta</b> abajo (si no, no dispara, para no secuestrar a todos los incompletos).</span>
-                                            </span>
-                                        </label>
-                                    )}
-                                </div>
-                                <div>
-                                    <label className="text-xs text-gray-500 dark:text-gray-400 mb-2 block">
-                                        Solo candidatos con estas etiquetas
-                                        {(data.profileFilter === 'incompleto' && data.returnOnAnyText)
-                                            ? <span className="text-rose-500"> (obligatorio para “sin extracción”)</span>
-                                            : <span className="text-gray-400"> (opcional)</span>}
-                                    </label>
-                                    <MultiSelectChecklist items={meta?.tags || []} selected={data.returnTags || []} onChange={(v) => patch({ returnTags: v })} searchable />
-                                    <p className="text-xs text-gray-400 mt-1.5">Vacío = cualquier etiqueta. Con etiquetas, el flujo solo dispara si el candidato trae al menos una (p.ej. la etiqueta del anuncio con que llegó).</p>
-                                    {(data.profileFilter === 'incompleto' && data.returnOnAnyText && !(data.returnTags || []).length) && (
-                                        <p className="text-xs text-rose-500 mt-1.5">⚠️ “Sin extracción” no disparará hasta que elijas al menos una etiqueta.</p>
-                                    )}
                                 </div>
                                 {data.returnOnPhrase && (
                                     <div className="space-y-3">
@@ -1483,6 +1461,34 @@ const NodeConfigDrawer = ({ node, flowId, meta, quickReplies, onSaveQuickReply, 
                             <p className="text-xs text-gray-400 mt-1.5">
                                 <b>0</b> = dispara 1 sola vez por candidato (los que nunca han pasado). <b>1</b> = los que nunca pasaron + los que pasaron 1 vez (2 disparos). En general dispara {(Number(data.maxPasses ?? 0)) + 1} {(Number(data.maxPasses ?? 0)) + 1 === 1 ? 'vez' : 'veces'} en total, esperando el silencio entre cada una.
                             </p>
+                        </div>
+                    </div>
+                )}
+
+                {node.type === 'inicio_sin_extraccion' && (
+                    <div className="space-y-5">
+                        <p className="text-xs bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800 rounded-lg p-2.5 text-rose-800 dark:text-rose-300">
+                            Los candidatos <b>incompletos</b> que traigan alguna de estas etiquetas entran <b>solo a este flujo</b> con <b>cualquier mensaje</b> que escriban, <b>incluido el primero</b>. <b>Brenda nunca les extrae</b> sus datos — el flujo maneja toda la conversación.
+                        </p>
+                        <div>
+                            <label className="text-xs text-gray-500 dark:text-gray-400 mb-2 block">¿Qué etiqueta(s)? <span className="text-rose-500">(obligatorio)</span></label>
+                            <MultiSelectChecklist items={meta?.tags || []} selected={data.tags || []} onChange={(v) => patch({ tags: v })} searchable />
+                            <p className="text-xs text-gray-400 mt-1.5">El candidato debe traer al menos una (p.ej. la etiqueta del anuncio con que llegó). Normalmente la misma etiqueta del anuncio de esa vacante.</p>
+                            {!(data.tags || []).length && (
+                                <p className="text-xs text-rose-500 mt-1.5">⚠️ Sin etiqueta el flujo no dispara (así no secuestra a todos los incompletos).</p>
+                            )}
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                            <div>
+                                <label className="text-xs text-gray-500 dark:text-gray-400 mb-2 block">Máx. de veces</label>
+                                <input type="number" min="0" step="1" value={data.maxReturns ?? 0} onChange={(e) => patch({ maxReturns: Math.max(0, parseInt(e.target.value, 10) || 0) })} className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 dark:bg-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-rose-500" />
+                                <p className="text-xs text-gray-400 mt-1.5"><b>0</b> = sin tope (maneja cada mensaje).</p>
+                            </div>
+                            <div>
+                                <label className="text-xs text-gray-500 dark:text-gray-400 mb-2 block">Cooldown (días)</label>
+                                <input type="number" min="0" step="1" value={data.returnCooldownDays ?? 0} onChange={(e) => patch({ returnCooldownDays: Math.max(0, parseInt(e.target.value, 10) || 0) })} className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 dark:bg-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-rose-500" />
+                                <p className="text-xs text-gray-400 mt-1.5">Mínimo entre disparos.</p>
+                            </div>
                         </div>
                     </div>
                 )}

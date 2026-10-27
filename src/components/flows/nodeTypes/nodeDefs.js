@@ -80,6 +80,18 @@ export const NODE_DEFS = {
             return `${h}h en silencio · máx ${total} ${total === 1 ? 'disparo' : 'disparos'}`;
         }
     },
+    inicio_sin_extraccion: {
+        label: 'Inicio: Sin extracción',
+        icon: BotOff,
+        color: 'rose',
+        hasTarget: false,
+        hasSource: true,
+        summary: (data) => {
+            const tags = Array.isArray(data?.tags) ? data.tags.filter(Boolean) : [];
+            if (!tags.length) return '⚠️ Elige una etiqueta';
+            return `Sin Brenda · ${formatMultiSummary(tags, '')}`;
+        }
+    },
     etiqueta: {
         label: 'Filtro: Etiqueta',
         icon: Tag,

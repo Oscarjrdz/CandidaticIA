@@ -30,7 +30,7 @@ import { businessDayOffset, isPastCutoff } from './reminder-schedule.js';
 // ninguna arista entrante. Cualquier otro nodo sin conexión es un nodo "suelto"
 // (colgado en el lienzo pero aún no cableado) y NO debe ejecutarse — sin esto,
 // un nodo de acción sin conectar se disparaba solo en cada corrida (bug ago 2026).
-const ENTRY_NODE_TYPES = new Set(['inicio', 'inicio_lista', 'inicio_incompleto_silencio']);
+const ENTRY_NODE_TYPES = new Set(['inicio', 'inicio_lista', 'inicio_incompleto_silencio', 'inicio_sin_extraccion']);
 
 const FLOWS_KEY = 'flows:v1';
 const QUICK_REPLIES_KEY = 'candidatic:quick_replies';
@@ -641,6 +641,14 @@ export async function evaluateOrExecute(node, candidate, flowId, redis, opts = {
         // ya la resolvió api/cron/flow-incompletos.js antes de llamar al motor, así que
         // aquí el nodo siempre "pasa" — igual que inicio_lista.
         case 'inicio_incompleto_silencio':
+            return true;
+
+        // Raíz de un flujo "SIN EXTRACCIÓN" (disparador en vivo): atiende a candidatos
+        // INCOMPLETOS que traen cierta(s) etiqueta(s) con CUALQUIER mensaje (incluido el primero),
+        // de modo que Brenda nunca les extrae y el flujo maneja la conversación. La elegibilidad
+        // real (perfil incompleto + etiqueta + señal "cualquier mensaje") la resuelve
+        // runReturningFlowsForCandidate antes de entrar al grafo, así que aquí siempre "pasa".
+        case 'inicio_sin_extraccion':
             return true;
 
         case 'etiqueta': {
@@ -1678,6 +1686,9 @@ export async function runFlowsForCandidate(candidateId, candidateSnapshot) {
         // excluyen aquí para que el evento de completado nunca los dispare.
         const active = flows.filter(f => f.active && Array.isArray(f.nodes) && f.nodes.length
             && !f.nodes.some(n => n.type === 'inicio_incompleto_silencio')
+            // Los flujos "sin extracción" se disparan por evento (cualquier mensaje de un incompleto
+            // con la etiqueta) vía runReturningFlowsForCandidate, nunca en el flanco de completado.
+            && !f.nodes.some(n => n.type === 'inicio_sin_extraccion')
             // Excluye los flujos cuyo Inicio dispara SOLO 'al_regresar': esos no deben
             // correr en el flanco de completado. Los que incluyen 'al_completar' (o no
             // tienen trigger = legado) sí corren aquí, exactamente como antes.
@@ -1760,9 +1771,14 @@ export async function runReturningFlowsForCandidate(candidateId, candidateSnapsh
 
         const raw = await getCachedConfig(redis, FLOWS_KEY);
         const flows = raw ? JSON.parse(raw) : [];
+        // Dos familias entran por este despachador en vivo:
+        //   • Inicio normal con disparador 'al_regresar' (completos/incompletos, config manual).
+        //   • Inicio "sin extracción" (inicio_sin_extraccion): preset de incompleto + cualquier
+        //     mensaje + etiqueta obligatoria; su data se sintetiza abajo para reusar toda la lógica.
         const returnFlows = (Array.isArray(flows) ? flows : []).filter(f =>
             f.active && Array.isArray(f.nodes) && f.nodes.length
-            && getInicioTrigger(f).includes('al_regresar'));
+            && (getInicioTrigger(f).includes('al_regresar')
+                || f.nodes.some(n => n.type === 'inicio_sin_extraccion')));
         if (!returnFlows.length) return 0;
 
         // ¿Este turno vino de un click de anuncio? La marca la pone el webhook como { tag, reclick }.
@@ -1781,8 +1797,22 @@ export async function runReturningFlowsForCandidate(candidateId, candidateSnapsh
 
         const eligible = [];
         for (const flow of returnFlows) {
+            // Inicio "sin extracción": sintetiza la config equivalente (incompleto + cualquier
+            // mensaje + etiqueta) para que el resto del loop —perfil, reja de etiqueta, señal,
+            // cadencia— corra idéntico que un 'al_regresar' manual. La etiqueta es obligatoria:
+            // sin ella hasTagFilter=false y la señal "cualquier mensaje" nunca dispara (reja).
+            const sinExt = flow.nodes.find(n => n.type === 'inicio_sin_extraccion');
             const inicio = flow.nodes.find(n => n.type === 'inicio');
-            const d = inicio?.data || {};
+            const d = sinExt
+                ? {
+                    profileFilter: 'incompleto',
+                    returnOnAnyText: true, returnOnAd: false, returnOnPhrase: false, returnOnOrganic: false,
+                    returnTags: Array.isArray(sinExt.data?.tags) ? sinExt.data.tags : [],
+                    minReturnDays: 0,
+                    maxReturns: Number(sinExt.data?.maxReturns) || 0,
+                    returnCooldownDays: Number(sinExt.data?.returnCooldownDays) || 0,
+                }
+                : (inicio?.data || {});
 
             // 0) FILTRO DE PERFIL del Inicio: 'completo' (default) / 'incompleto' / 'todos'. Así un
             //    mismo disparador "al regresar" enruta completos e incompletos a flujos distintos, cada

@@ -114,7 +114,7 @@ const persistableDims = (n) => {
 // partes de un flujo en OTRO flujo. Los nodos de inicio nunca se clonan/copian (un flujo
 // tiene una sola raíz). IDs nuevos siempre, para no chocar con los existentes.
 const CLIPBOARD_KEY = 'flow_editor_clipboard_v1';
-const ENTRY_TYPES = new Set(['inicio', 'inicio_lista', 'inicio_incompleto_silencio']);
+const ENTRY_TYPES = new Set(['inicio', 'inicio_lista', 'inicio_incompleto_silencio', 'inicio_sin_extraccion']);
 const EMPTY_LOCKS = {}; // ref estable para el default de candados (evita recalcular el memo)
 const genNodeId = () => `n_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 const genEdgeId = () => `e${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -745,7 +745,7 @@ const FlowEditorInner = ({ flowId, onBack }) => {
     // El toggle también vive dentro del nodo "inicio" (además del botón del toolbar) —
     // se inyecta al vuelo, no se guarda como parte de node.data (stripTransientData lo quita).
     useEffect(() => {
-        setNodes(nds => nds.map(n => (n.type === 'inicio' || n.type === 'inicio_incompleto_silencio')
+        setNodes(nds => nds.map(n => (n.type === 'inicio' || n.type === 'inicio_incompleto_silencio' || n.type === 'inicio_sin_extraccion')
             ? { ...n, data: { ...n.data, active: flowMeta.active, onToggleActive: handleToggleActive } }
             : n));
     }, [flowMeta.active, handleToggleActive]);

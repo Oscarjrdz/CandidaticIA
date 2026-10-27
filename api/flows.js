@@ -97,6 +97,19 @@ function defaultFlowNodesIncompletos() {
     };
 }
 
+// Flujo "SIN EXTRACCIÓN" (disparador en vivo, vía flow-engine.runReturningFlowsForCandidate):
+// atiende a candidatos INCOMPLETOS que traen alguna de las etiquetas con CUALQUIER mensaje
+// (incluido el primero) — Brenda nunca les extrae, el flujo maneja la conversación. La etiqueta
+// es obligatoria (sin ella no dispara, para no secuestrar a todos los incompletos).
+function defaultFlowNodesSinExtraccion() {
+    return {
+        nodes: [
+            { id: 'n1', type: 'inicio_sin_extraccion', position: { x: 80, y: 200 }, data: { tags: [], maxReturns: 0, returnCooldownDays: 0 } }
+        ],
+        edges: []
+    };
+}
+
 export default async function handler(req, res) {
     const userId = await validateAdminSession(req);
     if (!userId) return res.status(401).json({ error: 'No autorizado' });
@@ -202,7 +215,7 @@ export default async function handler(req, res) {
         // (flowId/flowName/nodeId/nombre/tipo). Se excluyen las redirecciones mismas (no te
         // rediriges a otra redirección) y los nodos de inicio/decorativos (no son destino útil).
         if (method === 'GET' && mode === 'namednodes') {
-            const EXCLUDED = new Set(['accion_redireccion', 'inicio', 'inicio_lista', 'inicio_incompleto_silencio', 'bg', 'texto', 'nota', 'test']);
+            const EXCLUDED = new Set(['accion_redireccion', 'inicio', 'inicio_lista', 'inicio_incompleto_silencio', 'inicio_sin_extraccion', 'bg', 'texto', 'nota', 'test']);
             const flows = await getFlows(redis);
             const nodes = [];
             for (const f of flows) {
@@ -407,6 +420,7 @@ export default async function handler(req, res) {
                 updatedAt: new Date().toISOString(),
                 ...(rootType === 'lista' ? defaultFlowNodesLista()
                     : rootType === 'incompletos' ? defaultFlowNodesIncompletos()
+                    : rootType === 'sin_extraccion' ? defaultFlowNodesSinExtraccion()
                     : defaultFlowNodes())
             };
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Workflow, Trash2, Zap, ListChecks, AlarmClock } from 'lucide-react';
+import { Plus, Workflow, Trash2, Zap, ListChecks, AlarmClock, BotOff } from 'lucide-react';
 import Button from '../ui/Button';
 import Modal from '../ui/Modal';
 import { useToastContext } from '../../contexts/ToastContext';
@@ -50,7 +50,7 @@ const FlowsGallery = ({ onOpenFlow }) => {
     const handleCreate = async () => {
         if (!nameDraft.trim()) return;
         setCreating(true);
-        const rootTypeMap = { lista: 'lista', incompletos: 'incompletos' };
+        const rootTypeMap = { lista: 'lista', incompletos: 'incompletos', sin_extraccion: 'sin_extraccion' };
         const res = await createFlow(nameDraft.trim(), rootTypeMap[rootTypeDraft]);
         setCreating(false);
         if (res.success) {
@@ -197,6 +197,20 @@ const FlowsGallery = ({ onOpenFlow }) => {
                             <span>
                                 <span className="block text-sm font-semibold text-gray-900 dark:text-white">Incompleto sin responder</span>
                                 <span className="block text-xs text-gray-500 dark:text-gray-400">Se dispara solo cuando un candidato con perfil incompleto lleva N horas sin responderle a Brenda (como el reenganche).</span>
+                            </span>
+                        </button>
+                        <button
+                            onClick={() => setRootTypeDraft('sin_extraccion')}
+                            className={`w-full flex items-start gap-3 p-3 rounded-xl border text-left transition-colors ${
+                                rootTypeDraft === 'sin_extraccion'
+                                    ? 'border-rose-400 bg-rose-50 dark:bg-rose-900/20 dark:border-rose-600'
+                                    : 'border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50'
+                            }`}
+                        >
+                            <BotOff className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
+                            <span>
+                                <span className="block text-sm font-semibold text-gray-900 dark:text-white">Sin extracción (por etiqueta)</span>
+                                <span className="block text-xs text-gray-500 dark:text-gray-400">Los candidatos con cierta etiqueta los atiende SOLO este flujo — Brenda nunca les extrae, desde su primer mensaje.</span>
                             </span>
                         </button>
                     </div>
