@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Users, Search, Trash2, RefreshCw, User, MessageCircle, Clock, Loader2, CheckCircle, Check, Sparkles, Send, Zap, Ban, GripVertical, Tag, ChevronDown, ChevronLeft, ChevronRight, X, Pencil, Plus, AlertTriangle, TrendingUp, CalendarDays, RotateCcw, Flag, EyeOff, Eye } from 'lucide-react';
+import { Users, Search, Trash2, RefreshCw, User, MessageCircle, Clock, Loader2, CheckCircle, Check, Sparkles, Send, Ban, GripVertical, Tag, ChevronDown, ChevronLeft, ChevronRight, X, Pencil, Plus, AlertTriangle, TrendingUp, CalendarDays, RotateCcw, Flag, EyeOff, Eye } from 'lucide-react';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, horizontalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -1108,9 +1108,6 @@ const CandidatesSection = () => {
                                             </span>
                                             <span className="text-[10px] text-amber-500 font-bold flex items-center bg-amber-50 dark:bg-amber-900/20 px-2 py-px rounded-full border border-amber-100 dark:border-amber-800/50 tabular-nums">
                                                 <Clock className="w-3 h-3 mr-1" /> {incompletos.toLocaleString()} Incompletos <span className="ml-1 opacity-70">({incompletosPct}%)</span>
-                                            </span>
-                                            <span className="text-[10px] text-blue-500 font-bold flex items-center bg-blue-50 dark:bg-blue-900/20 px-2 py-px rounded-full border border-blue-100 dark:border-blue-800/50">
-                                                <Zap className="w-3 h-3 mr-1" /> Activos
                                             </span>
                                         </div>
                                     </div>
