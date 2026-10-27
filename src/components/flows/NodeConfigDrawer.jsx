@@ -1328,6 +1328,28 @@ const NodeConfigDrawer = ({ node, flowId, meta, quickReplies, onSaveQuickReply, 
                                             </span>
                                         </label>
                                     )}
+                                    {(data.profileFilter === 'incompleto') && (
+                                        <label className="flex items-start gap-2.5 p-2.5 mt-2 rounded-xl border border-rose-200 dark:border-rose-800 hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer">
+                                            <input type="checkbox" checked={!!data.returnOnAnyText} onChange={(e) => patch({ returnOnAnyText: e.target.checked })} className="w-4 h-4 mt-0.5 rounded text-rose-600 focus:ring-rose-500" />
+                                            <span>
+                                                <span className="text-sm text-gray-700 dark:text-gray-200 block">Cualquier mensaje — Brenda nunca extrae <span className="text-rose-500">(sin extracción)</span></span>
+                                                <span className="text-xs text-gray-400">Un incompleto con la(s) etiqueta(s) de abajo dispara el flujo con <b>lo que sea</b> que escriba, <b>incluido su primer mensaje</b>. Brenda jamás intenta extraer sus datos — el flujo maneja la conversación. <b>Requiere al menos una etiqueta</b> abajo (si no, no dispara, para no secuestrar a todos los incompletos).</span>
+                                            </span>
+                                        </label>
+                                    )}
+                                </div>
+                                <div>
+                                    <label className="text-xs text-gray-500 dark:text-gray-400 mb-2 block">
+                                        Solo candidatos con estas etiquetas
+                                        {(data.profileFilter === 'incompleto' && data.returnOnAnyText)
+                                            ? <span className="text-rose-500"> (obligatorio para “sin extracción”)</span>
+                                            : <span className="text-gray-400"> (opcional)</span>}
+                                    </label>
+                                    <MultiSelectChecklist items={meta?.tags || []} selected={data.returnTags || []} onChange={(v) => patch({ returnTags: v })} searchable />
+                                    <p className="text-xs text-gray-400 mt-1.5">Vacío = cualquier etiqueta. Con etiquetas, el flujo solo dispara si el candidato trae al menos una (p.ej. la etiqueta del anuncio con que llegó).</p>
+                                    {(data.profileFilter === 'incompleto' && data.returnOnAnyText && !(data.returnTags || []).length) && (
+                                        <p className="text-xs text-rose-500 mt-1.5">⚠️ “Sin extracción” no disparará hasta que elijas al menos una etiqueta.</p>
+                                    )}
                                 </div>
                                 {data.returnOnPhrase && (
                                     <div className="space-y-3">

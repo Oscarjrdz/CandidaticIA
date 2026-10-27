@@ -1721,20 +1721,28 @@ export async function runFlowsForCandidate(candidateId, candidateSnapshot) {
 //   • ORGÁNICO (solo INCOMPLETOS): vuelve por su cuenta (sin anuncio ni frase) tras estar inactivo
 //     ≥ minReturnHours. El gate de inactividad + "ya platicó antes" (botHasSpoken) separa al que se
 //     fue y volvió del que está contestando a Brenda en el momento. Sin él secuestraría capturas vivas.
-//   • CUALQUIER TEXTO (solo COMPLETOS): un completo dispara con cualquier mensaje. No lleva reja de
+//   • CUALQUIER TEXTO (COMPLETOS): un completo dispara con cualquier mensaje. No lleva reja de
 //     inactividad (un completo ya no está en captura); la cadencia (cooldown/máx./min. días) lo acota.
-export function returnFlowSignalMatches(d = {}, { complete = false, adClicked = false, adReclick = false, botHasSpoken = false, minSinceLastBot = 0, incomingText = '' } = {}) {
+//   • CUALQUIER TEXTO (INCOMPLETOS = "sin extracción"): un incompleto dispara con cualquier mensaje
+//     INCLUSO en su primer contacto (no exige botHasSpoken) — así Brenda NUNCA le extrae y el flujo
+//     maneja la conversación desde el mensaje 1. SOLO es seguro con filtro de etiqueta (hasTagFilter):
+//     sin él secuestraría la extracción de TODOS los incompletos. El gate de etiqueta vive en
+//     runReturningFlowsForCandidate y se refleja aquí con hasTagFilter para que la señal pura lo respete.
+export function returnFlowSignalMatches(d = {}, { complete = false, adClicked = false, adReclick = false, botHasSpoken = false, minSinceLastBot = 0, incomingText = '', hasTagFilter = false } = {}) {
     const wantAd = d.returnOnAd !== false;   // default true
     if (wantAd && adClicked && (complete || adReclick)) return true;
     if (d.returnOnPhrase && complete) {
         const grupos = Array.isArray(d.returnGrupos) ? d.returnGrupos : [];
         if (grupos.some(g => flowTextMatchesGroup(incomingText, g, d.returnMatchMode))) return true;
     }
-    // CUALQUIER TEXTO (solo COMPLETOS): un completo dispara el flujo con cualquier mensaje que
-    // escriba. Como el flujo "al regresar" corre ANTES de la Sala de Espera (agent.js), esto
-    // equivale a "valida primero si entra a un flujo; si no, entra a Sala de Espera". La cadencia
-    // (cooldown / máx. veces / min. días) evita reenviarle la info en cada mensaje.
-    if (d.returnOnAnyText && complete && String(incomingText || '').trim()) return true;
+    // CUALQUIER TEXTO: completos siempre; incompletos solo con filtro de etiqueta ("sin extracción").
+    // Para completos corre ANTES de la Sala de Espera (agent.js) → "valida primero si entra a un flujo;
+    // si no, Sala de Espera". Para incompletos corre ANTES de la extracción → Brenda calla ese turno.
+    // La cadencia (cooldown / máx. veces / min. días) evita reenviarle la info en cada mensaje.
+    if (d.returnOnAnyText && String(incomingText || '').trim()) {
+        if (complete) return true;
+        if (!complete && hasTagFilter) return true;
+    }
     if (d.returnOnOrganic && !complete && botHasSpoken) {
         const minHours = Number(d.minReturnHours) || 0;
         if (minHours > 0 && minSinceLastBot >= minHours * 60) return true;
@@ -1783,8 +1791,20 @@ export async function runReturningFlowsForCandidate(candidateId, candidateSnapsh
             if (pf === 'completo' && !complete) continue;
             if (pf === 'incompleto' && complete) continue;
 
-            // 1) SEÑAL — anuncio, frase y/o regreso orgánico (OR). Default: si no configuran nada, exige anuncio.
-            if (!returnFlowSignalMatches(d, { complete, adClicked, adReclick, botHasSpoken, minSinceLastBot, incomingText })) continue;
+            // 0.5) FILTRO DE ETIQUETA del Inicio: data.returnTags (array de nombres de etiqueta).
+            //    Vacío = cualquier etiqueta (compat con flujos viejos). Con etiquetas → el candidato
+            //    debe traer AL MENOS UNA. Es la reja que hace seguro el "sin extracción" (cualquier
+            //    mensaje) para incompletos: sin ella, ese modo secuestraría a TODOS los incompletos.
+            const returnTags = Array.isArray(d.returnTags) ? d.returnTags.filter(Boolean) : [];
+            const hasTagFilter = returnTags.length > 0;
+            if (hasTagFilter) {
+                const candTags = Array.isArray(candidateSnapshot.tags) ? candidateSnapshot.tags : [];
+                if (!returnTags.some(t => candTags.includes(t))) continue;
+            }
+
+            // 1) SEÑAL — anuncio, frase, regreso orgánico y/o "cualquier mensaje" (OR). Default: si no
+            //    configuran nada, exige anuncio. hasTagFilter habilita el "sin extracción" de incompletos.
+            if (!returnFlowSignalMatches(d, { complete, adClicked, adReclick, botHasSpoken, minSinceLastBot, incomingText, hasTagFilter })) continue;
 
             // 2) ANTIGÜEDAD — solo si completó hace ≥ N días. Sin paso2CompletadoAt (completos
             // viejos, previos a esta feature) no se puede medir → no bloquea.
