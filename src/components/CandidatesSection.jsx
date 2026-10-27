@@ -1087,6 +1087,13 @@ const CandidatesSection = () => {
                     ) : (
                         <>
                             {/* Card 1: Candidates */}
+                            {(() => {
+                                const completos = Number(stats?.complete || 0);
+                                const incompletos = Number(stats?.pending || 0);
+                                const totalCand = completos + incompletos || totalItems;
+                                const completosPct = totalCand > 0 ? Math.round((completos / totalCand) * 100) : 0;
+                                const incompletosPct = totalCand > 0 ? Math.round((incompletos / totalCand) * 100) : 0;
+                                return (
                             <div ref={statCardRef} className="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm relative overflow-hidden group">
                                 <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
                                     <Users className="w-16 h-16 text-blue-500 transform rotate-12" />
@@ -1094,13 +1101,13 @@ const CandidatesSection = () => {
                                 <div className="flex flex-col relative z-10">
                                     <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-1">Total Candidatos</span>
                                     <div className="flex items-center flex-wrap gap-2">
-                                        <h3 className="text-2xl font-bold text-gray-900 dark:text-white leading-none tabular-nums">{Number((stats?.complete || 0) + (stats?.pending || 0) || totalItems).toLocaleString()}</h3>
+                                        <h3 className="text-2xl font-bold text-gray-900 dark:text-white leading-none tabular-nums">{Number(totalCand).toLocaleString()}</h3>
                                         <div className="flex items-center gap-1.5 flex-wrap">
                                             <span className="text-[10px] text-emerald-500 font-bold flex items-center bg-emerald-50 dark:bg-emerald-900/20 px-2 py-px rounded-full border border-emerald-100 dark:border-emerald-800/50 tabular-nums">
-                                                <CheckCircle className="w-3 h-3 mr-1" /> {Number(stats?.complete || 0).toLocaleString()} Completos
+                                                <CheckCircle className="w-3 h-3 mr-1" /> {completos.toLocaleString()} Completos <span className="ml-1 opacity-70">({completosPct}%)</span>
                                             </span>
                                             <span className="text-[10px] text-amber-500 font-bold flex items-center bg-amber-50 dark:bg-amber-900/20 px-2 py-px rounded-full border border-amber-100 dark:border-amber-800/50 tabular-nums">
-                                                <Clock className="w-3 h-3 mr-1" /> {Number(stats?.pending || 0).toLocaleString()} Incompletos
+                                                <Clock className="w-3 h-3 mr-1" /> {incompletos.toLocaleString()} Incompletos <span className="ml-1 opacity-70">({incompletosPct}%)</span>
                                             </span>
                                             <span className="text-[10px] text-blue-500 font-bold flex items-center bg-blue-50 dark:bg-blue-900/20 px-2 py-px rounded-full border border-blue-100 dark:border-blue-800/50">
                                                 <Zap className="w-3 h-3 mr-1" /> Activos
@@ -1109,6 +1116,8 @@ const CandidatesSection = () => {
                                     </div>
                                 </div>
                             </div>
+                                );
+                            })()}
 
                             {/* Card 2: CTR Completos (últimos 100) */}
                             {completionCTR && (
