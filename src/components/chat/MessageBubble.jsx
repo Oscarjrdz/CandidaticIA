@@ -162,6 +162,25 @@ const SmoothMediaImage = React.memo(function SmoothMediaImage({ src, previewSrc,
     );
 });
 
+// Limpia los marcadores de mensajes interactivos ([Botones:]/[Lista:]/[📍 Pide ubicación]/…)
+// para la VISTA PREVIA DE CITA: ahí no se renderizan chips, solo texto, así que quitamos el
+// marcador crudo. Si el mensaje era SOLO el marcador, devolvemos una etiqueta corta.
+function cleanInteractivePreview(text) {
+    if (typeof text !== 'string') return text;
+    if (/^\[Producto del Catálogo:/.test(text)) return '🛍️ Producto';
+    if (/^\[Ubicación:/.test(text)) return '📍 Ubicación';
+    const stripped = text
+        .replace(/\n*\s*\[📍 Pide ubicación\]\s*$/u, '')
+        .replace(/\n*\s*\[Botones:[^\]]*\]\s*$/u, '')
+        .replace(/\n*\s*\[Lista:[^\]]*\]\s*$/u, '')
+        .trim();
+    if (stripped) return stripped;
+    if (/\[📍 Pide ubicación\]/.test(text)) return '📍 Pide ubicación';
+    if (/\[Botones:/.test(text)) return 'Opciones';
+    if (/\[Lista:/.test(text)) return 'Lista de opciones';
+    return text;
+}
+
 const MessageBubble = React.memo(function MessageBubble({
     msg,
     chatWhatsapp,
@@ -332,14 +351,14 @@ const MessageBubble = React.memo(function MessageBubble({
                             </div>
                             {(() => {
                                 const q = msg.contextInfo.quotedMessage;
-                                if (q.text) return <div className="line-clamp-3 text-[#111b21]/80 dark:text-[#e9edef]/80 break-words leading-tight">{q.text}</div>;
+                                if (q.text) return <div className="line-clamp-3 text-[#111b21]/80 dark:text-[#e9edef]/80 break-words leading-tight">{cleanInteractivePreview(q.text)}</div>;
 
                                 // Sin texto guardado: el padre ya resolvió la cita en el memo de
                                 // displayMessages (_quotedResolved) para NO pasar allMessages a cada
                                 // burbuja (eso re-renderizaba todas en cada mensaje SSE → parpadeo).
                                 const quotedMsg = msg._quotedResolved;
                                 if (quotedMsg?.content) {
-                                    return <div className="line-clamp-3 text-[#111b21]/80 dark:text-[#e9edef]/80 break-words leading-tight">{quotedMsg.content.replace(/<[^>]*>?/gm, '').substring(0, 100)}</div>;
+                                    return <div className="line-clamp-3 text-[#111b21]/80 dark:text-[#e9edef]/80 break-words leading-tight">{cleanInteractivePreview(quotedMsg.content.replace(/<[^>]*>?/gm, '')).substring(0, 100)}</div>;
                                 }
 
                                 const mediaUrl = q.mediaUrl || quotedMsg?.mediaUrl;
