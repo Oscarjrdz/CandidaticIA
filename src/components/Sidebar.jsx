@@ -3,7 +3,7 @@ import { useAuthContext } from '../contexts/AuthContext';
 import { useCandidatesSSE } from '../hooks/useCandidatesSSE';
 import {
     Users, Settings, Bot, History, Briefcase, Send, LogOut, BarChart3,
-    MessageSquare, Smartphone, Folder, FolderKanban, GripVertical, Wifi, X, ChevronLeft, ChevronRight, Bell, Workflow, PieChart, Mic, MapPin
+    MessageSquare, Smartphone, Folder, FolderKanban, GripVertical, Wifi, X, ChevronLeft, ChevronRight, Bell, Workflow, PieChart, MapPin
 } from 'lucide-react';
 import {
     DndContext,
@@ -43,7 +43,6 @@ const SECTION_ICONS = {
     vacancies: Briefcase,
     bolsa: Smartphone,
     notificaciones: Bell,
-    vox: Mic,
     mapa: MapPin,
     projects: FolderKanban,
     settings: Settings,

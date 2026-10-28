@@ -52,7 +52,6 @@ const MediaLibrarySection = lazyWithRetry(() => import('./components/MediaLibrar
 const CRMProjectsSection = lazyWithRetry(() => import('./components/CRMProjectsSection'), 'CRMProjectsSection');
 const AdsStatisticsSection = lazyWithRetry(() => import('./components/AdsStatisticsSection'), 'AdsStatisticsSection');
 const StatsSection = lazyWithRetry(() => import('./components/StatsSection'), 'StatsSection');
-const VoxSection = lazyWithRetry(() => import('./components/VoxSection'), 'VoxSection');
 const MapSection = lazyWithRetry(() => import('./components/MapSection'), 'MapSection');
 
 /**
@@ -316,7 +315,6 @@ function AppShell() {
                       : activeSection === 'media-library' ? 'Biblioteca'
                       : activeSection === 'projects' ? 'Proyectos'
                       : activeSection === 'mapa' ? 'Mapa'
-                      : activeSection === 'vox' ? 'Vox'
                       : 'Configuración'}
                   </h1>
 
@@ -370,7 +368,6 @@ function AppShell() {
                       : activeSection === 'media-library' ? 'Biblioteca de archivos y recursos del Bot'
                       : activeSection === 'projects' ? 'Kanban de reclutamiento'
                       : activeSection === 'mapa' ? 'Ubicación de tus candidatos en el mapa'
-                      : activeSection === 'vox' ? 'Cerebro de voz de Brenda: habla por micrófono y mide el costo por minuto en vivo'
                       : 'Credenciales y configuración del sistema'}
                   </p>
 
@@ -473,8 +470,6 @@ function AppShell() {
             <CRMProjectsSection />
           ) : activeSection === 'mapa' ? (
             <MapSection onOpenCandidate={(id) => { setActiveSection('chat'); window.dispatchEvent(new CustomEvent('navigate_to_recruiter_chat', { detail: { candidateId: id } })); }} />
-          ) : activeSection === 'vox' && user?.role === 'SuperAdmin' ? (
-            <VoxSection />
           ) : (
             <SettingsSection />
           )}
