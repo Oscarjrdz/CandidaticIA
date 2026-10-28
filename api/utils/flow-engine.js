@@ -191,6 +191,14 @@ const BROADCAST_REPLY_PENDING_PREFIX = 'broadcast:reply_pending:';
 //   • 'al_regresar'  → cuando un COMPLETO vuelve (click de anuncio o frase).
 // Ausente/vacío = ['al_completar'] — compat: los flujos viejos disparaban al completar.
 function getInicioTrigger(flow) {
+    // Un flujo "sin extracción" (raíz inicio_sin_extraccion) NO tiene nodo `inicio` ni disparador
+    // clásico: corre EXCLUSIVAMENTE por el despachador en vivo (runReturningFlowsForCandidate), que
+    // filtra por etiqueta y exige perfil incompleto. Sin esta rama caería en el default 'al_completar'
+    // de abajo y el path de completar lo dispararía para CUALQUIER completo, ignorando su etiqueta
+    // (bug confirmado 2026-10-28: un completo sin la etiqueta entró igual). Devolver [] lo saca de
+    // los tres filtros por disparador (al_completar / al_regresar / al_responder_broadcast) — al
+    // regresar lo reintroduce su propia rama por tipo de nodo, no por este trigger.
+    if (Array.isArray(flow?.nodes) && flow.nodes.some(n => n.type === 'inicio_sin_extraccion')) return [];
     const inicio = Array.isArray(flow?.nodes) ? flow.nodes.find(n => n.type === 'inicio') : null;
     const t = inicio?.data?.trigger;
     if (Array.isArray(t) && t.length) return t;
