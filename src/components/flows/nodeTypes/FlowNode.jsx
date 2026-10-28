@@ -119,6 +119,8 @@ const BgNode = ({ id, data, selected }) => {
                     <span className="text-[10px] font-semibold text-gray-400">Opacidad</span>
                     <input type="range" min="5" max="80" value={Math.round(opacity * 100)}
                         onChange={(e) => change({ opacity: Number(e.target.value) / 100 })}
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onMouseDown={(e) => e.stopPropagation()}
                         className="nodrag w-20 accent-gray-500 cursor-pointer" />
                 </div>
                 <button type="button" onClick={() => data.onDuplicate?.(id)}

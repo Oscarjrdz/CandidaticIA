@@ -4,7 +4,7 @@ import {
     addEdge, applyNodeChanges, applyEdgeChanges, BackgroundVariant,
     useReactFlow
 } from '@xyflow/react';
-import { Copy, Trash2, AlignStartVertical, AlignCenterVertical, AlignEndVertical, AlignVerticalSpaceAround } from 'lucide-react';
+import { Copy, Trash2, AlignStartVertical, AlignCenterVertical, AlignEndVertical, AlignVerticalSpaceAround, AlignStartHorizontal, AlignCenterHorizontal, AlignEndHorizontal, AlignHorizontalSpaceAround } from 'lucide-react';
 import '@xyflow/react/dist/style.css';
 import { useToastContext } from '../../contexts/ToastContext';
 import { useAuthContext } from '../../contexts/AuthContext';
@@ -483,27 +483,34 @@ const FlowEditorInner = ({ flowId, onBack }) => {
         showToast(`Clonados ${newNodes.length} nodo(s) — copiados para pegar en otro flujo`, 'success');
     }, [selectedIds, nodes, edges, buildDuplicate, copySelectionToClipboard, showToast]);
 
-    // ALINEAR selección: empareja la X de los nodos seleccionados a su borde izquierdo
-    // ('left'), su centro ('center') o su borde derecho ('right') — calculado sobre la propia
-    // selección (su caja envolvente). Deja la Y intacta: solo ordena la columna horizontalmente.
+    // ALINEAR selección a su caja envolvente. Eje X ('left' / 'center' / 'right') deja la Y intacta;
+    // eje Y ('top' / 'middle' / 'bottom') deja la X intacta. El tamaño real de cada nodo se descuenta
+    // para que los bordes (no las esquinas superior-izquierda) queden parejos.
     const handleAlign = useCallback((mode) => {
         const idSet = new Set(selectedIds);
         const sel = nodes.filter(n => idSet.has(n.id));
         if (sel.length < 2) return;
         const widthOf = (n) => Number.isFinite(n.measured?.width) ? n.measured.width : (Number.isFinite(n.width) ? n.width : 240);
-        const minLeft = Math.min(...sel.map(n => n.position.x));
-        const maxRight = Math.max(...sel.map(n => n.position.x + widthOf(n)));
-        const center = (minLeft + maxRight) / 2;
-        const newX = (n) => mode === 'left' ? minLeft : mode === 'right' ? maxRight - widthOf(n) : center - widthOf(n) / 2;
-        setNodes(nds => nds.map(n => idSet.has(n.id) ? { ...n, position: { ...n.position, x: newX(n) } } : n));
+        const heightOf = (n) => Number.isFinite(n.measured?.height) ? n.measured.height : (Number.isFinite(n.height) ? n.height : 80);
+        const horizontal = mode === 'left' || mode === 'center' || mode === 'right';
+        const axis = horizontal ? 'x' : 'y';
+        const sizeOf = horizontal ? widthOf : heightOf;
+        const minEdge = Math.min(...sel.map(n => n.position[axis]));
+        const maxEdge = Math.max(...sel.map(n => n.position[axis] + sizeOf(n)));
+        const mid = (minEdge + maxEdge) / 2;
+        const newCoord = (n) => (mode === 'left' || mode === 'top') ? minEdge
+            : (mode === 'right' || mode === 'bottom') ? maxEdge - sizeOf(n)
+            : mid - sizeOf(n) / 2;
+        setNodes(nds => nds.map(n => idSet.has(n.id) ? { ...n, position: { ...n.position, [axis]: newCoord(n) } } : n));
         setDirty(true);
     }, [selectedIds, nodes]);
 
-    // DISTRIBUIR selección: deja los HUECOS entre nodos parejos. Detecta el eje dominante
-    // (vertical si la selección se extiende más a lo alto, horizontal si a lo ancho), fija el
-    // primero y el último en su lugar y reparte los de en medio con espacios iguales (restando
-    // el tamaño real de cada nodo, no solo su posición). Necesita 3+ nodos para tener huecos.
-    const handleDistribute = useCallback(() => {
+    // DISTRIBUIR selección: deja los HUECOS entre nodos parejos. El eje puede forzarse
+    // ('vertical' / 'horizontal'); si no se pasa, detecta el dominante (vertical si la selección
+    // se extiende más a lo alto, horizontal si a lo ancho). Fija el primero y el último en su lugar
+    // y reparte los de en medio con espacios iguales (restando el tamaño real de cada nodo, no solo
+    // su posición). Necesita 3+ nodos para tener huecos.
+    const handleDistribute = useCallback((forceAxis) => {
         const idSet = new Set(selectedIds);
         const sel = nodes.filter(n => idSet.has(n.id));
         if (sel.length < 3) return;
@@ -511,7 +518,7 @@ const FlowEditorInner = ({ flowId, onBack }) => {
         const heightOf = (n) => Number.isFinite(n.measured?.height) ? n.measured.height : (Number.isFinite(n.height) ? n.height : 80);
         const spanX = Math.max(...sel.map(n => n.position.x)) - Math.min(...sel.map(n => n.position.x));
         const spanY = Math.max(...sel.map(n => n.position.y)) - Math.min(...sel.map(n => n.position.y));
-        const vertical = spanY >= spanX;
+        const vertical = forceAxis === 'vertical' ? true : forceAxis === 'horizontal' ? false : spanY >= spanX;
         const posOf = (n) => vertical ? n.position.y : n.position.x;
         const sizeOf = vertical ? heightOf : widthOf;
         const sorted = [...sel].sort((a, b) => posOf(a) - posOf(b));
@@ -859,10 +866,11 @@ const FlowEditorInner = ({ flowId, onBack }) => {
             {/* Mini-menú flotante de selección múltiple (aparece al soltar con 2+ nodos). */}
             {selMenu && selectedIds.length >= 2 && (
                 <div
-                    className="fixed z-[300] -translate-x-1/2 -translate-y-full mb-2 flex items-center gap-1 bg-white dark:bg-[#202c33] rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 p-1 select-none"
+                    className="fixed z-[300] -translate-x-1/2 -translate-y-full mb-2 flex items-center flex-nowrap whitespace-nowrap gap-1.5 bg-white dark:bg-[#202c33] rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 px-2 py-1.5 select-none"
                     style={{ left: selMenu.x, top: selMenu.y - 10 }}
                 >
                     <span className="text-[11px] font-semibold text-gray-400 px-2 select-none">{selectedIds.length} sel.</span>
+                    {/* Eje horizontal: alinea la X (izquierda / centro / derecha) */}
                     <button
                         onClick={() => handleAlign('left')}
                         className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-semibold text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700/50"
@@ -873,7 +881,7 @@ const FlowEditorInner = ({ flowId, onBack }) => {
                     <button
                         onClick={() => handleAlign('center')}
                         className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-semibold text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700/50"
-                        title="Alinear al centro"
+                        title="Centrar horizontalmente"
                     >
                         <AlignCenterVertical className="w-3.5 h-3.5" />
                     </button>
@@ -884,14 +892,48 @@ const FlowEditorInner = ({ flowId, onBack }) => {
                     >
                         <AlignEndVertical className="w-3.5 h-3.5" />
                     </button>
+                    <span className="w-px h-5 bg-gray-200 dark:bg-gray-700 mx-0.5" />
+                    {/* Eje vertical: alinea la Y (arriba / medio / abajo) */}
+                    <button
+                        onClick={() => handleAlign('top')}
+                        className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-semibold text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700/50"
+                        title="Alinear arriba"
+                    >
+                        <AlignStartHorizontal className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                        onClick={() => handleAlign('middle')}
+                        className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-semibold text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700/50"
+                        title="Centrar verticalmente"
+                    >
+                        <AlignCenterHorizontal className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                        onClick={() => handleAlign('bottom')}
+                        className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-semibold text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700/50"
+                        title="Alinear abajo"
+                    >
+                        <AlignEndHorizontal className="w-3.5 h-3.5" />
+                    </button>
                     {selectedIds.length >= 3 && (
-                        <button
-                            onClick={handleDistribute}
-                            className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-semibold text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700/50"
-                            title="Espaciado parejo entre nodos"
-                        >
-                            <AlignVerticalSpaceAround className="w-3.5 h-3.5" />
-                        </button>
+                        <>
+                            <span className="w-px h-5 bg-gray-200 dark:bg-gray-700 mx-0.5" />
+                            {/* Distribuir: huecos parejos (interlineado) horizontal o vertical */}
+                            <button
+                                onClick={() => handleDistribute('horizontal')}
+                                className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-semibold text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700/50"
+                                title="Espaciado horizontal parejo"
+                            >
+                                <AlignHorizontalSpaceAround className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                                onClick={() => handleDistribute('vertical')}
+                                className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-semibold text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700/50"
+                                title="Espaciado vertical parejo"
+                            >
+                                <AlignVerticalSpaceAround className="w-3.5 h-3.5" />
+                            </button>
+                        </>
                     )}
                     <span className="w-px h-5 bg-gray-200 dark:bg-gray-700 mx-0.5" />
                     <button
