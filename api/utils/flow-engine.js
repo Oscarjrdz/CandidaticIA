@@ -644,12 +644,31 @@ export async function evaluateOrExecute(node, candidate, flowId, redis, opts = {
             return true;
 
         // Raíz de un flujo "SIN EXTRACCIÓN" (disparador en vivo): atiende a candidatos
-        // INCOMPLETOS que traen cierta(s) etiqueta(s) con CUALQUIER mensaje (incluido el primero),
-        // de modo que Brenda nunca les extrae y el flujo maneja la conversación. La elegibilidad
-        // real (perfil incompleto + etiqueta + señal "cualquier mensaje") la resuelve
-        // runReturningFlowsForCandidate antes de entrar al grafo, así que aquí siempre "pasa".
-        case 'inicio_sin_extraccion':
+        // INCOMPLETOS que traen cierta(s) etiqueta(s) con CUALQUIER mensaje (incluido el primero).
+        // La elegibilidad real (perfil incompleto + etiqueta + señal "cualquier mensaje") la resuelve
+        // runReturningFlowsForCandidate antes de entrar al grafo. Al ENTRAR por este nodo, DESACTIVA
+        // EL BOT (modo intervención humana) EXACTAMENTE igual que el nodo "accion_desactivar_bot":
+        // así Brenda extractora queda callada de forma garantizada para este candidato (vía el BLOCK
+        // SHIELD de agent.js), no solo en el turno que dispara el flujo. Se reactiva sola a las 24h
+        // (lazy en getCandidateById) o con "Reactivar Bot" — igual que cualquier intervención humana.
+        case 'inicio_sin_extraccion': {
+            try {
+                if (candidate.blocked !== true) {
+                    const now = new Date();
+                    const patch = {
+                        blocked: true,
+                        blockedAt: now.toISOString(),
+                        blockedExpiresAt: new Date(now.getTime() + HUMAN_INTERVENTION_SILENCE_MS).toISOString(),
+                        blockedReason: 'human_intervention'
+                    };
+                    await updateCandidate(candidate.id, patch);
+                    Object.assign(candidate, patch); // snapshot en memoria en sync para el resto de la corrida
+                }
+            } catch (e) {
+                console.error(`[FLOW-ENGINE] inicio_sin_extraccion desactivar-bot ${flowId}/${node.id}:`, e?.message);
+            }
             return true;
+        }
 
         case 'etiqueta': {
             const mode = data.mode || 'todas';

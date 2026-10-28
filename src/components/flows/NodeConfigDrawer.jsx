@@ -1468,7 +1468,7 @@ const NodeConfigDrawer = ({ node, flowId, meta, quickReplies, onSaveQuickReply, 
                 {node.type === 'inicio_sin_extraccion' && (
                     <div className="space-y-5">
                         <p className="text-xs bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800 rounded-lg p-2.5 text-rose-800 dark:text-rose-300">
-                            Los candidatos <b>incompletos</b> que traigan alguna de estas etiquetas entran <b>solo a este flujo</b> con <b>cualquier mensaje</b> que escriban, <b>incluido el primero</b>. <b>Brenda nunca les extrae</b> sus datos — el flujo maneja toda la conversación.
+                            Los candidatos <b>incompletos</b> que traigan alguna de estas etiquetas entran <b>solo a este flujo</b> con <b>cualquier mensaje</b> que escriban, <b>incluido el primero</b>. Al entrar, se les <b>desactiva el bot</b> (modo intervención humana), así <b>Brenda nunca les extrae</b> — el flujo y los reclutadores manejan la conversación. Se reactiva solo a las 24h o con el nodo “Reactivar Bot”.
                         </p>
                         <div>
                             <label className="text-xs text-gray-500 dark:text-gray-400 mb-2 block">¿Qué etiqueta(s)? <span className="text-rose-500">(obligatorio)</span></label>
