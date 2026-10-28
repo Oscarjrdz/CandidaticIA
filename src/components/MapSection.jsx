@@ -96,7 +96,9 @@ export default function MapSection({ onOpenCandidate }) {
         if (mapRef.current || !containerRef.current) return;
         const center = savedView ? [savedView.lat, savedView.lng] : MTY;
         const zoom = savedView?.zoom || 11;
-        const map = L.map(containerRef.current, { center, zoom, preferCanvas: true, zoomControl: true });
+        // zoomControl a la derecha para que los botones +/− no choquen con el buscador (arriba-izquierda).
+        const map = L.map(containerRef.current, { center, zoom, preferCanvas: true, zoomControl: false });
+        L.control.zoom({ position: 'topright' }).addTo(map);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '&copy; OpenStreetMap', maxZoom: 19
         }).addTo(map);
@@ -229,6 +231,20 @@ export default function MapSection({ onOpenCandidate }) {
     const runSearch = useCallback(async (q) => {
         const term = q.trim();
         if (!term) { setResults([]); setShowResults(false); return; }
+
+        // ¿Escribió coordenadas? "25.6866, -100.3161" o "25.6866 -100.3161" → salta directo al punto.
+        const coord = term.match(/^(-?\d{1,3}(?:\.\d+)?)\s*[,;\s]\s*(-?\d{1,3}(?:\.\d+)?)$/);
+        if (coord) {
+            const lat = Number(coord[1]), lng = Number(coord[2]);
+            if (Number.isFinite(lat) && Number.isFinite(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+                searchAbortRef.current?.abort();
+                setSearching(false);
+                setResults([{ place_id: 'coords', lat: String(lat), lon: String(lng), display_name: `📍 Ir a coordenadas ${lat}, ${lng}` }]);
+                setShowResults(true);
+                return;
+            }
+        }
+
         searchAbortRef.current?.abort();
         const ctrl = new AbortController();
         searchAbortRef.current = ctrl;
@@ -345,7 +361,7 @@ export default function MapSection({ onOpenCandidate }) {
                             value={query}
                             onChange={(e) => setQuery(e.target.value)}
                             onFocus={() => { if (results.length) setShowResults(true); }}
-                            placeholder="Buscar un lugar, calle o colonia…"
+                            placeholder="Buscar lugar, calle o coordenadas (lat, lng)…"
                             className="w-full pl-9 pr-9 py-2.5 rounded-xl text-sm bg-white/95 dark:bg-gray-800/95 backdrop-blur border border-gray-200 dark:border-gray-700 shadow-md text-gray-800 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-400"
                         />
                         <div className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center">
