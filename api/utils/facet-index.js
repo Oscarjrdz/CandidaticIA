@@ -48,7 +48,7 @@ export const FACET_PROJECTION_PREFIX = 'candidate:facet:';
 const FACET_PROJECTION_FIELDS = [
     'id', 'edad', 'genero', 'municipio', 'colonia', 'escolaridad',
     'manualProjectId', 'tags', 'lastUserMessageAt', 'ultimoMensajeUsuario',
-    'nombreReal', 'fechaNacimiento', 'categoria'
+    'nombreReal', 'fechaNacimiento', 'categoria', 'asistencia', 'asistenciaAt'
 ];
 const PROJ_TTL_SECONDS = 60 * 60 * 24 * 180; // 180d, refrescado en cada saveCandidate
 

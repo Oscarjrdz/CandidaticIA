@@ -48,6 +48,7 @@ export default async function handler(req, res) {
                 const results = await pipe.exec();
                 for (let i = 0; i < pins.length; i++) {
                     let tags = [];
+                    let asistencia = false;
                     try {
                         const facetRaw = results?.[i]?.[1];
                         if (facetRaw) {
@@ -55,9 +56,11 @@ export default async function handler(req, res) {
                             if (Array.isArray(facet?.tags)) {
                                 tags = facet.tags.map(t => typeof t === 'string' ? t : t?.name).filter(Boolean);
                             }
+                            asistencia = facet?.asistencia === true;
                         }
                     } catch { /* pin sin facet o JSON inválido → sin etiquetas */ }
                     pins[i].tags = tags;
+                    pins[i].asistencia = asistencia;
                 }
             } catch { /* si falla el pipeline, los pines van sin etiquetas */ }
         }

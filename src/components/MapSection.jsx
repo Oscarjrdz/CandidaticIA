@@ -102,6 +102,10 @@ export default function MapSection({ onOpenCandidate }) {
     const [showTagFilter, setShowTagFilter] = useState(false);
     const [tagSearch, setTagSearch] = useState('');
     const tagFilterRef = useRef(null);
+
+    // 🔵 Modo "Ver asistencias": colorea de azul las burbujas de candidatos con asistencia confirmada.
+    const [showAsistencias, setShowAsistencias] = useState(false);
+    const asistenciaCount = useMemo(() => pins.filter(p => p.asistencia === true).length, [pins]);
     const tagColorMap = useMemo(() => {
         const m = new Map();
         for (const t of allTags) m.set(String(t.name || '').trim().toLowerCase(), t.color || '#3b82f6');
@@ -284,7 +288,10 @@ export default function MapSection({ onOpenCandidate }) {
         const filtering = selectedTagsSet.size > 0;
         for (const p of pins) {
             let style;
-            if (filtering) {
+            if (showAsistencias && p.asistencia === true) {
+                // Asistencia confirmada → burbuja azul (tiene prioridad sobre el filtro de etiquetas).
+                style = { radius: 9, weight: 3, color: '#ffffff', fillColor: '#1d4ed8', fillOpacity: 1 };
+            } else if (filtering) {
                 // ¿Coincide con alguna etiqueta seleccionada? → resalta con el color de esa etiqueta.
                 const pinTags = (p.tags || []).map(t => String(t || '').trim().toLowerCase());
                 const matched = pinTags.find(t => selectedTagsSet.has(t));
@@ -308,7 +315,7 @@ export default function MapSection({ onOpenCandidate }) {
             } catch { /* bounds vacíos */ }
             didFit.current = true;
         }
-    }, [pins, drawPin, selectedTagsSet, tagColorMap]);
+    }, [pins, drawPin, selectedTagsSet, tagColorMap, showAsistencias]);
 
     // Redibuja los pines personalizados (capa aparte). Marcador tipo "gota" con color + popup con nota y botón borrar.
     useEffect(() => {
@@ -650,6 +657,11 @@ export default function MapSection({ onOpenCandidate }) {
                             </div>
                         )}
                     </div>
+                    <button onClick={() => setShowAsistencias(v => !v)}
+                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${showAsistencias ? 'bg-blue-700 border-blue-700 text-white' : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50'}`}>
+                        <span className={`w-2.5 h-2.5 rounded-full ${showAsistencias ? 'bg-white' : 'bg-blue-700'}`} />
+                        Ver asistencias{asistenciaCount ? ` (${asistenciaCount})` : ''}
+                    </button>
                     <button onClick={() => { setAddMode(m => !m); setDraft(null); }}
                         className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${addMode ? 'bg-blue-500 border-blue-500 text-white' : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50'}`}>
                         <Plus className="w-3.5 h-3.5" />
