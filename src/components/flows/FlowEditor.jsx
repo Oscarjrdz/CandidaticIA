@@ -908,6 +908,12 @@ const FlowEditorInner = ({ flowId, onBack }) => {
         return {
             ...n,
             draggable: !locked,
+            // Un nodo bloqueado tampoco se selecciona: si quedara seleccionable, el marco de
+            // selección múltiple (Shift+arrastrar) lo atrapaba pero al mover el grupo NO se movía
+            // (no es draggable) — se quedaba anclado y el marco se "estiraba". Con selectable:false
+            // el marco lo ignora. El candado se sigue pudiendo clicar para desbloquear (su botón
+            // tiene pointer-events propio y no depende de que el nodo sea seleccionable).
+            selectable: !locked,
             deletable: ENTRY_TYPES.has(n.type) ? false : !locked,
             // El nodo "texto" (zIndex 20, encima de las tarjetas) tapaba con su caja transparente
             // los controles (candado, ×) de un nodo vecino debajo: el wrapper .react-flow__node

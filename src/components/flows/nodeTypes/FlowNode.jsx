@@ -117,11 +117,16 @@ const BgNode = ({ id, data, selected }) => {
                 </div>
                 <div className="flex items-center gap-1.5 pl-2 border-l border-gray-200 dark:border-gray-700">
                     <span className="text-[10px] font-semibold text-gray-400">Opacidad</span>
+                    {/* nopan es la clave: el arrastre del thumb lo robaba el PANEO del lienzo
+                        (d3-zoom de React Flow, que se filtra por `nopan`, NO por `nodrag` —
+                        esto último solo frena el arrastre de NODOS). Sin nopan el navegador
+                        perdía la captura de puntero al instante y el deslizante no se movía.
+                        nowheel evita que hacer scroll sobre la barra haga zoom al lienzo. */}
                     <input type="range" min="5" max="80" value={Math.round(opacity * 100)}
                         onChange={(e) => change({ opacity: Number(e.target.value) / 100 })}
                         onPointerDown={(e) => e.stopPropagation()}
                         onMouseDown={(e) => e.stopPropagation()}
-                        className="nodrag w-20 accent-gray-500 cursor-pointer" />
+                        className="nodrag nopan nowheel w-20 accent-gray-500 cursor-pointer" />
                 </div>
                 <button type="button" onClick={() => data.onDuplicate?.(id)}
                     className="pl-2 border-l border-gray-200 dark:border-gray-700 text-gray-400 hover:text-indigo-500" title="Clonar fondo">
