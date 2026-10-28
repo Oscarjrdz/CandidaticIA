@@ -479,6 +479,19 @@ const MessageBubble = React.memo(function MessageBubble({
                                     );
                                 }
 
+                                const isLocationRequest = typeof msg.content === 'string' && msg.content.includes('[📍 Pide ubicación]');
+                                if (isLocationRequest) {
+                                    const mainText = msg.content.split('\n\n[📍 Pide ubicación]')[0];
+                                    return (
+                                        <div className="flex flex-col w-full min-w-[220px]">
+                                            <div dangerouslySetInnerHTML={{ __html: formatWhatsAppText(mainText) }} className="mb-2" />
+                                            <div className="w-full flex items-center justify-center gap-1.5 py-2 px-3 bg-black/5 dark:bg-white/5 text-blue-500 dark:text-blue-400 text-sm rounded-lg border border-black/10 dark:border-white/10 font-medium mt-1">
+                                                <MapPin className="w-4 h-4" /> Enviar ubicación
+                                            </div>
+                                        </div>
+                                    );
+                                }
+
                                 const isLocation = typeof msg.content === 'string' && msg.content.startsWith('[Ubicación:');
                                 if (isLocation) {
                                     const nameMatch = msg.content.match(/\[Ubicación:\s*(.+)\]/i);
