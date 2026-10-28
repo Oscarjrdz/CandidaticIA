@@ -4,7 +4,7 @@ import {
     addEdge, applyNodeChanges, applyEdgeChanges, BackgroundVariant,
     useReactFlow
 } from '@xyflow/react';
-import { Copy, Trash2, AlignStartVertical, AlignCenterVertical, AlignEndVertical, AlignVerticalSpaceAround, AlignStartHorizontal, AlignCenterHorizontal, AlignEndHorizontal, AlignHorizontalSpaceAround } from 'lucide-react';
+import { Copy, Trash2, Save, Check, Undo2, AlignStartVertical, AlignCenterVertical, AlignEndVertical, AlignVerticalSpaceAround, AlignStartHorizontal, AlignCenterHorizontal, AlignEndHorizontal, AlignHorizontalSpaceAround } from 'lucide-react';
 import '@xyflow/react/dist/style.css';
 import { useToastContext } from '../../contexts/ToastContext';
 import { useAuthContext } from '../../contexts/AuthContext';
@@ -110,6 +110,14 @@ const persistableDims = (n) => {
     return out;
 };
 
+// Firma estable del lienzo para el historial de "Regresar" (undo). Ignora selección,
+// arrastre y los campos transitorios de data (liveCount del contador, testStatus, callbacks…)
+// para que mover el ratón, seleccionar un nodo o un tick de contador NO cuenten como cambios.
+const historySig = (nodes, edges) => JSON.stringify({
+    n: nodes.map(n => ({ id: n.id, type: n.type, position: n.position, data: stripTransientData(n.data), ...persistableDims(n) })),
+    e: edges.map(e => ({ id: e.id, source: e.source, target: e.target, sourceHandle: e.sourceHandle ?? null, targetHandle: e.targetHandle ?? null }))
+});
+
 // Portapapeles de selección (nodos+aristas) — persiste en localStorage para poder pegar
 // partes de un flujo en OTRO flujo. Los nodos de inicio nunca se clonan/copian (un flujo
 // tiene una sola raíz). IDs nuevos siempre, para no chocar con los existentes.
@@ -142,6 +150,19 @@ const FlowEditorInner = ({ flowId, onBack }) => {
     const [selectedIds, setSelectedIds] = useState([]);
     const [selMenu, setSelMenu] = useState(null); // { x, y } en coords de pantalla
     const [canPaste, setCanPaste] = useState(() => { try { return !!localStorage.getItem(CLIPBOARD_KEY); } catch { return false; } });
+    // Vida del lienzo (transitorio, no se guarda): nodo bajo el mouse para resaltar sus
+    // conectores, y aristas "fluyendo" (candidato recién pasó por su nodo destino).
+    const [hoveredNodeId, setHoveredNodeId] = useState(null);
+    const [flowingEdgeIds, setFlowingEdgeIds] = useState(() => new Set());
+    const edgesRef = useRef([]); edgesRef.current = edges; // lectura fresca sin re-suscribir el SSE
+    const flowTimers = useRef(new Map());                  // edgeId → timeout de apagado
+    // Historial para "Regresar" (undo, Ctrl/Cmd+Z): pila de instantáneas del lienzo. Cada
+    // cambio significativo empuja la foto ANTERIOR; deshacer restaura la última guardada.
+    const historyPast = useRef([]);
+    const historyBaseSig = useRef(null);    // firma del último estado ya registrado
+    const historyBaseState = useRef(null);  // {nodes, edges} de ese estado
+    const skipHistory = useRef(false);      // true mientras aplicamos un undo (no re-registrar)
+    const [canUndo, setCanUndo] = useState(false);
     const rf = useReactFlow();
     const handleTestRunRef = useRef(null);
     const handleLoadListRef = useRef(null);
@@ -325,6 +346,15 @@ const FlowEditorInner = ({ flowId, onBack }) => {
         return () => { cancelled = true; };
     }, [flowId]);
 
+    // Al cambiar de flujo, borra el historial de undo (el baseline se re-siembra solo con
+    // la primera instantánea del lienzo ya cargado — ver efecto más abajo).
+    useEffect(() => {
+        historyPast.current = [];
+        historyBaseSig.current = null;
+        historyBaseState.current = null;
+        setCanUndo(false);
+    }, [flowId]);
+
     // Contador en vivo: carga el valor inicial al abrir el flujo (o al agregar un nodo
     // contador nuevo). Las actualizaciones posteriores llegan por SSE (efecto de abajo),
     // sin poll recurrente.
@@ -340,9 +370,32 @@ const FlowEditorInner = ({ flowId, onBack }) => {
         })();
     }, [flowId, nodes.length]);
 
+    // Enciende las aristas dadas en modo "fluyendo" (punto luminoso) y las apaga sola
+    // ~1.2s después. Reinicia el timer si ya estaban encendidas (dos candidatos seguidos).
+    const triggerEdgeFlow = useCallback((edgeIds) => {
+        if (!edgeIds.length) return;
+        setFlowingEdgeIds(prev => {
+            const next = new Set(prev);
+            edgeIds.forEach(id => next.add(id));
+            return next;
+        });
+        edgeIds.forEach(id => {
+            clearTimeout(flowTimers.current.get(id));
+            flowTimers.current.set(id, setTimeout(() => {
+                flowTimers.current.delete(id);
+                setFlowingEdgeIds(prev => {
+                    const next = new Set(prev);
+                    next.delete(id);
+                    return next;
+                });
+            }, 1250));
+        });
+    }, []);
+    useEffect(() => () => { flowTimers.current.forEach(t => clearTimeout(t)); }, []); // limpia al desmontar
+
     // Empuje en vivo vía SSE (channel:sse:updates, publicado en flow-engine.js justo
     // cuando un candidato SUMA al contador): el número salta al instante para quien
-    // tenga el editor abierto.
+    // tenga el editor abierto, y el conector que ENTRA a ese nodo se ilumina ("va caminando").
     useEffect(() => {
         const handler = (e) => {
             const { flowId: evFlowId, nodeId, count } = e.detail || {};
@@ -350,10 +403,11 @@ const FlowEditorInner = ({ flowId, onBack }) => {
             setNodes(nds => nds.map(n => (n.type === 'contador' && n.id === nodeId)
                 ? { ...n, data: { ...n.data, liveCount: count } }
                 : n));
+            triggerEdgeFlow(edgesRef.current.filter(ed => ed.target === nodeId).map(ed => ed.id));
         };
         window.addEventListener('sse:flow:counter', handler);
         return () => window.removeEventListener('sse:flow:counter', handler);
-    }, [flowId]);
+    }, [flowId, triggerEdgeFlow]);
 
     const onNodesChange = useCallback((changes) => {
         setNodes(nds => applyNodeChanges(changes, nds));
@@ -582,7 +636,47 @@ const FlowEditorInner = ({ flowId, onBack }) => {
         showToast(`Pegados ${newNodes.length} nodo(s) en este flujo`, 'success');
     }, [buildDuplicate, showToast]);
 
-    // Atajos: Ctrl/Cmd+C copia la selección, Ctrl/Cmd+V pega (sirve entre flujos distintos).
+    // Registro del historial de undo: cada vez que el lienzo cambia DE VERDAD, empuja la foto
+    // anterior a la pila. Debounced para que un arrastre completo (decenas de onNodesChange)
+    // cuente como UN solo paso de deshacer. La selección/arrastre/tick de contador no cuentan
+    // (misma firma → no se registra). Durante un undo, skipHistory evita re-registrar.
+    useEffect(() => {
+        if (loading) return;
+        if (skipHistory.current) { skipHistory.current = false; return; }
+        const t = setTimeout(() => {
+            const sig = historySig(nodes, edges);
+            if (historyBaseSig.current === null) {
+                // Primera foto tras cargar: es el baseline, no un paso deshacible.
+                historyBaseSig.current = sig;
+                historyBaseState.current = { nodes, edges };
+                return;
+            }
+            if (sig === historyBaseSig.current) return; // nada significativo cambió
+            historyPast.current.push(historyBaseState.current);
+            if (historyPast.current.length > 60) historyPast.current.shift();
+            historyBaseSig.current = sig;
+            historyBaseState.current = { nodes, edges };
+            setCanUndo(true);
+        }, 350);
+        return () => clearTimeout(t);
+    }, [nodes, edges, loading]);
+
+    // Regresar (undo): restaura la última instantánea guardada.
+    const handleUndo = useCallback(() => {
+        const prev = historyPast.current.pop();
+        if (!prev) return;
+        skipHistory.current = true;
+        setNodes(prev.nodes);
+        setEdges(prev.edges);
+        historyBaseSig.current = historySig(prev.nodes, prev.edges);
+        historyBaseState.current = { nodes: prev.nodes, edges: prev.edges };
+        setCanUndo(historyPast.current.length > 0);
+        setDirty(true);
+        showToast('Cambio deshecho', 'success');
+    }, [showToast]);
+
+    // Atajos: Ctrl/Cmd+C copia la selección, Ctrl/Cmd+V pega (sirve entre flujos distintos),
+    // Ctrl/Cmd+Z deshace (regresar).
     useEffect(() => {
         const onKey = (e) => {
             const tag = (e.target?.tagName || '').toLowerCase();
@@ -594,11 +688,14 @@ const FlowEditorInner = ({ flowId, onBack }) => {
                 if (copySelectionToClipboard(selectedIds)) showToast('Copiado — pégalo en cualquier flujo (Ctrl/Cmd+V)', 'success');
             } else if (k === 'v') {
                 handlePaste();
+            } else if (k === 'z' && !e.shiftKey) {
+                e.preventDefault();
+                handleUndo();
             }
         };
         window.addEventListener('keydown', onKey);
         return () => window.removeEventListener('keydown', onKey);
-    }, [selectedIds, copySelectionToClipboard, handlePaste, showToast]);
+    }, [selectedIds, copySelectionToClipboard, handlePaste, handleUndo, showToast]);
 
     const handleNodeConfigChange = useCallback((nodeId, patch) => {
         setNodes(nds => nds.map(n => n.id === nodeId ? { ...n, data: { ...n.data, ...patch } } : n));
@@ -785,6 +882,19 @@ const FlowEditorInner = ({ flowId, onBack }) => {
         };
     }), [nodes, nodeLocks, handleToggleLock]);
 
+    // Capa de render de aristas: inyecta `highlighted` (hover de un nodo que la toca) y
+    // `flowing` (candidato recién pasó) SIN tocar el estado base `edges` — así no marca
+    // dirty ni entra al historial. Si no hay hover ni flujo activo devuelve la MISMA
+    // referencia (`edges`): cero trabajo y cero re-render en reposo.
+    const displayEdges = useMemo(() => {
+        if (!hoveredNodeId && flowingEdgeIds.size === 0) return edges;
+        return edges.map(e => {
+            const highlighted = !!hoveredNodeId && (e.source === hoveredNodeId || e.target === hoveredNodeId);
+            const flowing = flowingEdgeIds.has(e.id);
+            return (highlighted || flowing) ? { ...e, data: { ...e.data, highlighted, flowing } } : e;
+        });
+    }, [edges, hoveredNodeId, flowingEdgeIds]);
+
     // 🔍 ZOOM/POSICIÓN PERSISTENTE POR FLUJO: React Flow, con `fitView`, reencuadra a todos los
     // nodos CADA vez que entras (ignora tu zoom). Guardamos el viewport (x/y/zoom) por flujo en
     // localStorage y lo restauramos como `defaultViewport`; solo hacemos `fitView` la PRIMERA vez
@@ -862,6 +972,28 @@ const FlowEditorInner = ({ flowId, onBack }) => {
                     }}
                 />
             </ReactFlow>
+
+            {/* Acciones rápidas flotantes (arriba a la derecha): Regresar (undo) + Guardar,
+                para no tener que ir al toolbar de la izquierda cada vez. */}
+            <div className="absolute top-4 right-4 z-[200] flex items-center gap-2 select-none">
+                <button
+                    onClick={handleUndo}
+                    disabled={!canUndo}
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white dark:bg-[#202c33] text-gray-700 dark:text-gray-200 text-sm font-semibold shadow-md border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 disabled:opacity-40 disabled:cursor-not-allowed"
+                    title="Regresar (deshacer último cambio) · Ctrl/Cmd+Z"
+                >
+                    <Undo2 className="w-4 h-4" /> Regresar
+                </button>
+                <button
+                    onClick={() => handleSave()}
+                    disabled={saving}
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-gray-900 dark:bg-white text-white dark:text-gray-900 text-sm font-semibold shadow-md hover:opacity-90 disabled:opacity-50"
+                    title="Guardar el flujo"
+                >
+                    {saving ? <Check className="w-4 h-4" /> : <Save className="w-4 h-4" />}
+                    {saving ? 'Guardado' : dirty ? 'Guardar' : 'Guardado'}
+                </button>
+            </div>
 
             {/* Mini-menú flotante de selección múltiple (aparece al soltar con 2+ nodos). */}
             {selMenu && selectedIds.length >= 2 && (
