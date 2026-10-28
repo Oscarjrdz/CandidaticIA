@@ -144,6 +144,7 @@ const FlowEditorInner = ({ flowId, onBack }) => {
     const [projects, setProjects] = useState([]);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
+    const [menuSaving, setMenuSaving] = useState(false);
     const [dirty, setDirty] = useState(false);
     const [selectedNodeId, setSelectedNodeId] = useState(null);
     // Selección múltiple (rubber-band): ids seleccionados + posición del mini-menú flotante.
@@ -729,8 +730,8 @@ const FlowEditorInner = ({ flowId, onBack }) => {
         setDirty(true);
     }, []);
 
-    const handleSave = useCallback(async ({ silent = false } = {}) => {
-        setSaving(true);
+    const handleSave = useCallback(async ({ silent = false, trackGlobal = true } = {}) => {
+        if (trackGlobal) setSaving(true);
         const payload = {
             nodes: nodes.map(n => ({
                 id: n.id, type: n.type, position: n.position, data: stripTransientData(n.data),
@@ -741,7 +742,7 @@ const FlowEditorInner = ({ flowId, onBack }) => {
             edges: edges.map(e => ({ id: e.id, source: e.source, target: e.target, sourceHandle: e.sourceHandle ?? null, targetHandle: e.targetHandle ?? null }))
         };
         const res = await updateFlow(flowId, payload);
-        setSaving(false);
+        if (trackGlobal) setSaving(false);
         if (res.success) {
             setDirty(false);
             if (!silent) showToast('Flujo guardado', 'success');
@@ -750,6 +751,14 @@ const FlowEditorInner = ({ flowId, onBack }) => {
         }
         return res;
     }, [flowId, nodes, edges, showToast]);
+
+    // Guardar desde el menú flotante de alineación: usa su propio spinner (menuSaving) y
+    // NO toca el `saving` global, para que el botón Guardar del toolbar no se anime también.
+    const handleMenuSave = useCallback(async () => {
+        setMenuSaving(true);
+        await handleSave({ trackGlobal: false });
+        setMenuSaving(false);
+    }, [handleSave]);
 
     // Nodo "test": corre el flujo COMPLETO contra un candidato real por teléfono, sin
     // pasar por el claim de dedupe de producción (para poder repetir la prueba) ni por
@@ -1100,13 +1109,13 @@ const FlowEditorInner = ({ flowId, onBack }) => {
                         <Undo2 className="w-3.5 h-3.5" /> Regresar
                     </button>
                     <button
-                        onClick={() => handleSave()}
-                        disabled={saving}
+                        onClick={handleMenuSave}
+                        disabled={menuSaving}
                         className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-gray-900 dark:bg-white text-white dark:text-gray-900 text-xs font-semibold hover:opacity-90 disabled:opacity-50"
                         title="Guardar el flujo"
                     >
-                        {saving ? <Check className="w-3.5 h-3.5" /> : <Save className="w-3.5 h-3.5" />}
-                        {saving ? 'Guardado' : dirty ? 'Guardar' : 'Guardado'}
+                        {menuSaving ? <Check className="w-3.5 h-3.5" /> : <Save className="w-3.5 h-3.5" />}
+                        {menuSaving ? 'Guardado' : dirty ? 'Guardar' : 'Guardado'}
                     </button>
                 </div>
             )}
