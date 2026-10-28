@@ -562,7 +562,7 @@ export default function MapSection({ onOpenCandidate }) {
                 </div>
             </div>
 
-            <div className="relative flex-1 min-h-0 rounded-2xl overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm">
+            <div className="relative isolate flex-1 min-h-0 rounded-2xl overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm">
                 <div ref={containerRef} className="map-section-canvas absolute inset-0" />
 
                 {/* 🔎 Buscador de lugares (flota sobre el mapa, arriba a la izquierda) */}
