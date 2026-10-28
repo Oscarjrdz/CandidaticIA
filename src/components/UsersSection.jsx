@@ -7,7 +7,7 @@ import Modal from './ui/Modal';
 import Input from './ui/Input';
 import Select from './ui/Select';
 import { useToastContext } from '../contexts/ToastContext';
-import { MENU_SECTIONS, GATEABLE_SECTIONS } from '../constants/menuSections';
+import { MENU_SECTIONS } from '../constants/menuSections';
 
 // Las secciones del editor de permisos son EXACTAMENTE las del menú lateral (fuente única de
 // verdad en constants/menuSections.js). Adaptamos {label} → {name} para el render de este modal.
@@ -15,11 +15,10 @@ import { MENU_SECTIONS, GATEABLE_SECTIONS } from '../constants/menuSections';
 const AVAILABLE_SECTIONS = MENU_SECTIONS.map(s => ({
     id: s.id,
     name: s.label,
-    superAdminOnly: !!s.superAdminOnly,
 }));
 
-// Denominador del contador "X de N secciones": solo las que un rol normal puede recibir.
-const GATEABLE_SECTION_IDS = GATEABLE_SECTIONS.map(s => s.id);
+// Denominador del contador "X de N secciones": todas son asignables a un rol.
+const GATEABLE_SECTION_IDS = AVAILABLE_SECTIONS.map(s => s.id);
 
 const AVAILABLE_CHAT_FILTERS = [
     { id: 'filter_todos', name: 'Todos' },
@@ -1094,34 +1093,20 @@ const UsersSection = ({ className = '' }) => {
                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-1 p-1.5 border border-gray-100 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800/50">
                             {AVAILABLE_SECTIONS.map(section => {
                                 const isSuperAdminRole = editingRole && editingRole.name === 'SuperAdmin';
-                                // Sección exclusiva de SuperAdmin: se muestra pero NO es asignable a un rol
-                                // normal (el Sidebar la oculta siempre salvo SuperAdmin). Evita un toggle
-                                // que aparente conceder acceso sin lograrlo.
-                                const lockedSuperAdminOnly = section.superAdminOnly && !isSuperAdminRole;
-                                const disabled = isSuperAdminRole || lockedSuperAdminOnly;
-                                const checked = section.superAdminOnly
-                                    ? isSuperAdminRole // solo el rol SuperAdmin la "tiene"
-                                    : !!roleFormData.permissions[section.id];
                                 return (
                                     <label
                                         key={section.id}
-                                        title={lockedSuperAdminOnly ? 'Sección exclusiva de SuperAdmin (no asignable a un rol)' : undefined}
-                                        className={`flex items-center space-x-2 px-2 py-1.5 rounded-lg transition-colors ${disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800'}`}
+                                        className={`flex items-center space-x-2 px-2 py-1.5 rounded-lg transition-colors ${isSuperAdminRole ? 'cursor-not-allowed opacity-60' : 'cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800'}`}
                                     >
                                         <input
                                             type="checkbox"
-                                            checked={checked}
+                                            checked={!!roleFormData.permissions[section.id]}
                                             onChange={() => togglePermission(section.id)}
-                                            disabled={disabled}
+                                            disabled={isSuperAdminRole}
                                             className="w-3.5 h-3.5 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 disabled:opacity-100"
                                         />
                                         <span className="text-xs font-medium text-gray-900 dark:text-gray-300 select-none flex items-center gap-1 min-w-0">
                                             <span className="truncate">{section.name}</span>
-                                            {section.superAdminOnly && (
-                                                <span className="shrink-0 inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wide bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300">
-                                                    Super
-                                                </span>
-                                            )}
                                         </span>
                                     </label>
                                 );

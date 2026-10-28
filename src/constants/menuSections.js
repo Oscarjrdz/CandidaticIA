@@ -14,9 +14,6 @@
 //
 // El ORDEN de este arreglo define el orden por defecto del menú lateral (para usuarios que
 // aún no han arrastrado sus items). No lo reordenes a la ligera: cambia el layout default.
-//
-// `superAdminOnly: true` → la sección solo la ve el SuperAdmin, sin importar el rol. En el
-// editor de permisos se muestra bloqueada (no es asignable a un rol normal).
 
 export const MENU_SECTIONS = [
     { id: 'candidates', label: 'Candidatos', position: 'top' },
@@ -33,6 +30,3 @@ export const MENU_SECTIONS = [
     { id: 'projects', label: 'Proyectos', position: 'top' },
     { id: 'settings', label: 'Settings', position: 'bottom' },
 ];
-
-// Secciones que SÍ se pueden conceder a un rol (las superAdminOnly no son asignables).
-export const GATEABLE_SECTIONS = MENU_SECTIONS.filter(s => !s.superAdminOnly);

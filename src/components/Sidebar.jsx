@@ -172,7 +172,6 @@ const Sidebar = ({ activeSection, onSectionChange, onLogout, isMobileOpen, onClo
         const permittedDefaults = isViewerRole
             ? DEFAULT_MENU_ITEMS.filter(item => item.id === 'chat')
             : DEFAULT_MENU_ITEMS.filter(item => {
-                if (item.superAdminOnly && user?.role !== 'SuperAdmin') return false;
                 return rolePermissions[item.id] === true || user?.role === 'SuperAdmin';
             });
 
