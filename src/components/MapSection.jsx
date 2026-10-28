@@ -59,9 +59,20 @@ function renderDemographics(c) {
         ? '<span style="background:#dcfce7;color:#166534;font-size:10px;font-weight:700;padding:2px 7px;border-radius:9999px">✓ Completo</span>'
         : '<span style="background:#fef3c7;color:#92400e;font-size:10px;font-weight:700;padding:2px 7px;border-radius:9999px">Incompleto</span>';
 
+    // Etiquetas del candidato (strings u objetos {name}).
+    const tags = (Array.isArray(c.tags) ? c.tags : [])
+        .map(t => typeof t === 'string' ? t : t?.name)
+        .map(t => String(t || '').trim())
+        .filter(Boolean);
+    const tagChips = tags.length
+        ? `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:5px">${tags.map(t =>
+            `<span style="background:#e0e7ff;color:#3730a3;font-size:10px;font-weight:600;padding:2px 8px;border-radius:9999px">🏷️ ${esc(t)}</span>`).join('')}</div>`
+        : '<div style="color:#d1d5db;font-size:10px;margin-top:5px">Sin etiquetas</div>';
+
     return `<div style="margin:4px 0 8px">
         <div style="margin-bottom:5px">${badge}</div>
         ${body}
+        ${tagChips}
       </div>`;
 }
 
@@ -72,6 +83,7 @@ export default function MapSection({ onOpenCandidate }) {
     const containerRef = useRef(null);
     const mapRef = useRef(null);
     const layerRef = useRef(null);
+    const candMarkersRef = useRef(new Map()); // id de candidato → marker (para abrir su popup al buscarlo)
     const hadSavedView = useRef(!!savedView); // si el usuario ya tiene vista guardada, NO auto-encuadrar
     const didFit = useRef(false);
     const saveTimer = useRef(null);
@@ -81,6 +93,8 @@ export default function MapSection({ onOpenCandidate }) {
     const [pins, setPins] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
+    const pinsRef = useRef(pins); // espejo para que el buscador (deps []) vea los candidatos actuales
+    useEffect(() => { pinsRef.current = pins; }, [pins]);
 
     // 💬 Chat embebido: al tocar "Ver chat" en un pin de candidato, abre la MISMA ventana de chat
     // de la sección Candidatos (ChatWindow) aquí, sin salir del mapa.
@@ -105,8 +119,6 @@ export default function MapSection({ onOpenCandidate }) {
             if (el.isConnected) el.innerHTML = '<div style="color:#ef4444;font-size:11px;padding:4px 0">No se pudo cargar la info</div>';
         }
     }, []);
-    const enrichPopupRef = useRef(enrichPopup);
-    useEffect(() => { enrichPopupRef.current = enrichPopup; }, [enrichPopup]);
 
     // 🔎 Buscador de lugares (geocodificación con Nominatim de OSM — gratis, mismo proveedor que las tiles).
     const [query, setQuery] = useState('');
@@ -197,10 +209,10 @@ export default function MapSection({ onOpenCandidate }) {
             setDraft({ lat: +e.latlng.lat.toFixed(6), lng: +e.latlng.lng.toFixed(6), label: '', note: '', color: 'blue' });
             setAddMode(false);
         });
-        // Al abrir el popup de un candidato: carga su info demográfica completa dentro de la tarjeta.
+        // Al abrir cualquier popup: enriquece demográficos y cablea los botones (chat / borrar pin).
         map.on('popupopen', (e) => {
-            const el = e.popup?.getElement?.()?.querySelector?.('.map-cand-demo');
-            if (el) enrichPopupRef.current(el);
+            const root = e.popup?.getElement?.();
+            if (root) handlePopupOpenRef.current(root);
         });
         setTimeout(() => map.invalidateSize(), 150);
         return () => { map.remove(); mapRef.current = null; };
@@ -232,10 +244,16 @@ export default function MapSection({ onOpenCandidate }) {
         const map = mapRef.current, layer = layerRef.current;
         if (!map || !layer) return;
         layer.clearLayers();
+        candMarkersRef.current = new Map();
         if (!pins.length) return;
         const canvas = L.canvas({ padding: 0.5 });
         const latlngs = [];
-        for (const p of pins) { drawPin(p, canvas).addTo(layer); latlngs.push([p.lat, p.lng]); }
+        for (const p of pins) {
+            const mk = drawPin(p, canvas);
+            mk.addTo(layer);
+            candMarkersRef.current.set(p.id, mk);
+            latlngs.push([p.lat, p.lng]);
+        }
         if (!hadSavedView.current && !didFit.current) {
             try {
                 if (latlngs.length === 1) map.setView(latlngs[0], 14);
@@ -328,31 +346,28 @@ export default function MapSection({ onOpenCandidate }) {
         } catch { /* el optimista ya lo quitó; un Actualizar lo reconcilia */ }
         mapRef.current?.closePopup();
     }, []);
-    const deletePinRef = useRef(deletePin);
-    useEffect(() => { deletePinRef.current = deletePin; }, [deletePin]);
 
-    // Click dentro de un popup del mapa: "Ver chat" (candidato) o "Borrar pin" (pin manual).
-    useEffect(() => {
-        const el = containerRef.current;
-        if (!el) return;
-        const onClick = (e) => {
-            const chatBtn = e.target.closest?.('.map-open-chat');
-            if (chatBtn?.dataset?.cand) {
-                // Abre la ventana de chat EN EL MAPA (misma de Candidatos), sin navegar.
-                setChatCandidate({
-                    id: chatBtn.dataset.cand,
-                    nombre: decodeURIComponent(chatBtn.dataset.nombre || ''),
-                    whatsapp: chatBtn.dataset.tel || ''
-                });
-                mapRef.current?.closePopup();
-                return;
-            }
-            const delBtn = e.target.closest?.('.map-del-pin');
-            if (delBtn?.dataset?.pin) deletePinRef.current(delBtn.dataset.pin);
+    // Al abrir un popup: Leaflet DETIENE la propagación del clic hacia el contenedor, así que la
+    // delegación global no funciona — hay que enganchar los botones directamente en el DOM del popup.
+    // Enriquece demográficos y cablea "Abrir chat" / "Borrar pin".
+    const handlePopupOpen = useCallback((root) => {
+        if (!root) return;
+        const demo = root.querySelector('.map-cand-demo');
+        if (demo) enrichPopup(demo);
+        const chatBtn = root.querySelector('.map-open-chat');
+        if (chatBtn) chatBtn.onclick = () => {
+            setChatCandidate({
+                id: chatBtn.dataset.cand,
+                nombre: decodeURIComponent(chatBtn.dataset.nombre || ''),
+                whatsapp: chatBtn.dataset.tel || ''
+            });
+            mapRef.current?.closePopup();
         };
-        el.addEventListener('click', onClick);
-        return () => el.removeEventListener('click', onClick);
-    }, []);
+        const delBtn = root.querySelector('.map-del-pin');
+        if (delBtn) delBtn.onclick = () => deletePin(delBtn.dataset.pin);
+    }, [enrichPopup, deletePin]);
+    const handlePopupOpenRef = useRef(handlePopupOpen);
+    useEffect(() => { handlePopupOpenRef.current = handlePopupOpen; }, [handlePopupOpen]);
 
     // Geocodifica el texto con Nominatim. Sesga la búsqueda hacia Nuevo León / Monterrey (viewbox)
     // pero sin excluir el resto (bounded=0), para que "una calle en MTY" salga primero.
@@ -373,6 +388,33 @@ export default function MapSection({ onOpenCandidate }) {
             }
         }
 
+        // 👤 Candidatos del mapa que coincidan por teléfono o por nombre.
+        const digits = term.replace(/\D/g, '');
+        const lower = term.toLowerCase();
+        const candMatches = [];
+        for (const p of pinsRef.current) {
+            const pd = String(p.whatsapp || '').replace(/\D/g, '');
+            const byPhone = digits.length >= 3 && pd.includes(digits);
+            const byName = lower.length >= 2 && String(p.nombre || '').toLowerCase().includes(lower);
+            if (byPhone || byName) {
+                candMatches.push({
+                    type: 'candidate', place_id: 'c_' + p.id, id: p.id,
+                    lat: String(p.lat), lon: String(p.lng), nombre: p.nombre || 'Sin nombre', whatsapp: pd
+                });
+            }
+            if (candMatches.length >= 8) break;
+        }
+
+        // Si el término es básicamente un teléfono (puros dígitos/símbolos), no geocodificamos lugares.
+        const phoneOnly = digits.length >= 4 && /^[\d\s+()-]+$/.test(term);
+        if (phoneOnly) {
+            searchAbortRef.current?.abort();
+            setSearching(false);
+            setResults(candMatches);
+            setShowResults(true);
+            return;
+        }
+
         searchAbortRef.current?.abort();
         const ctrl = new AbortController();
         searchAbortRef.current = ctrl;
@@ -383,10 +425,11 @@ export default function MapSection({ onOpenCandidate }) {
                 + `&viewbox=-100.7,25.95,-99.9,25.4&q=${encodeURIComponent(term)}`;
             const res = await fetch(url, { signal: ctrl.signal, headers: { 'Accept': 'application/json' } });
             const data = await res.json();
-            setResults(Array.isArray(data) ? data : []);
+            // Candidatos primero, luego lugares.
+            setResults([...candMatches, ...(Array.isArray(data) ? data : [])]);
             setShowResults(true);
         } catch (e) {
-            if (e.name !== 'AbortError') { setResults([]); setShowResults(true); }
+            if (e.name !== 'AbortError') { setResults(candMatches); setShowResults(true); }
         } finally {
             if (searchAbortRef.current === ctrl) setSearching(false);
         }
@@ -405,6 +448,18 @@ export default function MapSection({ onOpenCandidate }) {
         if (!map || !r) return;
         const lat = Number(r.lat), lng = Number(r.lon);
         if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+
+        // Candidato del mapa: vuela a su pin y abre su popup (con demográficos + chat).
+        if (r.type === 'candidate') {
+            map.setView([lat, lng], Math.max(map.getZoom(), 16));
+            const mk = candMarkersRef.current.get(r.id);
+            if (mk) setTimeout(() => mk.openPopup(), 250);
+            setShowResults(false);
+            suppressSearchRef.current = true;
+            setQuery(r.nombre || '');
+            return;
+        }
+
         if (searchMarkerRef.current) { map.removeLayer(searchMarkerRef.current); searchMarkerRef.current = null; }
         const icon = L.divIcon({
             className: 'map-search-pin',
@@ -519,7 +574,7 @@ export default function MapSection({ onOpenCandidate }) {
                             value={query}
                             onChange={(e) => setQuery(e.target.value)}
                             onFocus={() => { if (results.length) setShowResults(true); }}
-                            placeholder="Buscar lugar, calle o coordenadas (lat, lng)…"
+                            placeholder="Buscar candidato (tel/nombre), lugar o coordenadas…"
                             className="w-full pl-9 pr-9 py-2.5 rounded-xl text-sm bg-white/95 dark:bg-gray-800/95 backdrop-blur border border-gray-200 dark:border-gray-700 shadow-md text-gray-800 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-400"
                         />
                         <div className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center">
@@ -536,7 +591,21 @@ export default function MapSection({ onOpenCandidate }) {
                         <div className="mt-1.5 rounded-xl bg-white/98 dark:bg-gray-800/98 backdrop-blur border border-gray-200 dark:border-gray-700 shadow-lg overflow-hidden max-h-72 overflow-y-auto">
                             {results.length === 0 ? (
                                 <div className="px-3.5 py-3 text-xs text-gray-400">Sin resultados</div>
-                            ) : results.map((r) => (
+                            ) : results.map((r) => r.type === 'candidate' ? (
+                                <button
+                                    key={r.place_id}
+                                    onClick={() => goToResult(r)}
+                                    className="w-full text-left px-3.5 py-2.5 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 border-b border-gray-100 dark:border-gray-700/50 last:border-0 flex items-center gap-2.5"
+                                >
+                                    <span className="w-7 h-7 rounded-full bg-emerald-100 dark:bg-emerald-500/20 flex items-center justify-center shrink-0">
+                                        <MessageSquare className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                                    </span>
+                                    <span className="min-w-0">
+                                        <span className="block text-xs font-semibold text-gray-800 dark:text-gray-100 truncate">{r.nombre}</span>
+                                        <span className="block text-[11px] text-gray-400">{r.whatsapp} · candidato</span>
+                                    </span>
+                                </button>
+                            ) : (
                                 <button
                                     key={r.place_id}
                                     onClick={() => goToResult(r)}
