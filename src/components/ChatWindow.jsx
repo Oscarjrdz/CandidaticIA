@@ -202,15 +202,26 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
         }
     };
 
-    // Auto-scroll on new messages
-    const scrollToBottom = () => {
+    // Auto-scroll: al ABRIR el chat salta directo al último mensaje (instantáneo, sin animación);
+    // para los mensajes nuevos que llegan con el chat ya abierto, sí baja suave.
+    const didInitialScrollRef = useRef(false);
+    const scrollToBottom = (behavior = 'smooth') => {
         if (messagesEndRef.current) {
-            messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+            messagesEndRef.current.scrollIntoView({ behavior });
         }
     };
 
+    // Reinicia el salto instantáneo cada vez que se cierra o cambia de candidato.
+    useEffect(() => { didInitialScrollRef.current = false; }, [isOpen, candidate?.id]);
+
     useEffect(() => {
-        scrollToBottom();
+        if (!messages.length) return;
+        if (!didInitialScrollRef.current) {
+            scrollToBottom('auto');            // apertura: directo al fondo, sin animación
+            didInitialScrollRef.current = true;
+        } else {
+            scrollToBottom('smooth');          // mensaje nuevo en vivo: baja suave
+        }
     }, [messages]);
 
     const loadMessages = async () => {
@@ -433,7 +444,9 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
         try {
             const date = new Date(ts);
             if (isNaN(date.getTime())) return '-';
-            return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }).toLowerCase();
+            const fecha = date.toLocaleDateString('es-MX', { day: 'numeric', month: 'short' }).replace('.', '');
+            const hora = date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }).toLowerCase();
+            return `${fecha}, ${hora}`;
         } catch (e) {
             return '-';
         }
