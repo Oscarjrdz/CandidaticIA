@@ -3,6 +3,8 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { MapPin, RefreshCw, Loader2, MessageSquare, Search, X, Plus, Trash2, Check } from 'lucide-react';
 import { useAuthContext } from '../contexts/AuthContext';
+import ChatWindow from './ChatWindow';
+import ErrorBoundary from './ui/ErrorBoundary';
 
 // Sección Mapa: un pin por cada candidato que compartió su ubicación (la guarda el webhook en el
 // índice candidatic:candidate_locations). Usa Leaflet directo (sin react-leaflet) con renderer de
@@ -15,6 +17,53 @@ import { useAuthContext } from '../contexts/AuthContext';
 //   retomar el mapa donde lo dejaste.
 
 const MTY = [25.6866, -100.3161]; // centro por defecto (Monterrey) si no hay vista guardada ni pins
+
+// ¿El valor es un dato real (no vacío ni placeholder de "aún no proporcionado")?
+const hasVal = (v) => {
+    if (Array.isArray(v)) return v.length > 0;
+    const s = String(v ?? '').trim().toLowerCase();
+    return s.length > 0 && !s.includes('proporcionad') && !['n/a', 'na', 'null', 'ninguno', 'ninguna', 'none', '-', 'desconocido', 'undefined'].includes(s);
+};
+const esc = (v) => String(v ?? '').replace(/[<>&]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]));
+
+// Arma el bloque demográfico del popup a partir del candidato completo (de /api/candidates?id=).
+// Marca "Completo/Incompleto" y muestra cada dato; los faltantes se ven en gris.
+function renderDemographics(c) {
+    const paso1ok = hasVal(c.nombreReal || c.nombre) && (hasVal(c.edad) || hasVal(c.fechaNacimiento))
+        && hasVal(c.municipio) && hasVal(c.categoria) && hasVal(c.escolaridad);
+    const completo = paso1ok && c.paso2Estado === 'completo';
+
+    let exp = '';
+    if (Array.isArray(c.experiencia)) exp = `${c.experiencia.length} empleo(s)`;
+    else if (hasVal(c.experiencia)) {
+        const s = String(c.experiencia).trim().toLowerCase();
+        exp = (s === 'sí' || s === 'si') ? (hasVal(c.meses) ? `Sí · ${c.meses} meses` : 'Sí') : (s === 'no' ? 'No' : esc(c.experiencia));
+    }
+
+    const rows = [
+        ['Edad', hasVal(c.edad) ? `${c.edad} años` : (hasVal(c.fechaNacimiento) ? esc(c.fechaNacimiento) : '')],
+        ['Género', hasVal(c.genero) ? esc(c.genero) : ''],
+        ['Municipio', esc(c.municipio)],
+        ['Colonia', esc(c.colonia)],
+        ['Escolaridad', esc(c.escolaridad)],
+        ['Categoría', esc(c.categoria)],
+        ['Experiencia', exp],
+    ];
+    const body = rows.map(([k, v]) => `
+        <div style="display:flex;justify-content:space-between;gap:8px;padding:2px 0;border-bottom:1px solid rgba(0,0,0,0.05)">
+          <span style="color:#9ca3af;font-size:11px">${k}</span>
+          <span style="font-size:11px;font-weight:600;text-align:right;${hasVal(v) ? 'color:#374151' : 'color:#d1d5db;font-weight:400'}">${hasVal(v) ? v : '—'}</span>
+        </div>`).join('');
+
+    const badge = completo
+        ? '<span style="background:#dcfce7;color:#166534;font-size:10px;font-weight:700;padding:2px 7px;border-radius:9999px">✓ Completo</span>'
+        : '<span style="background:#fef3c7;color:#92400e;font-size:10px;font-weight:700;padding:2px 7px;border-radius:9999px">Incompleto</span>';
+
+    return `<div style="margin:4px 0 8px">
+        <div style="margin-bottom:5px">${badge}</div>
+        ${body}
+      </div>`;
+}
 
 export default function MapSection({ onOpenCandidate }) {
     const { user, setUser } = useAuthContext();
@@ -32,6 +81,32 @@ export default function MapSection({ onOpenCandidate }) {
     const [pins, setPins] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
+
+    // 💬 Chat embebido: al tocar "Ver chat" en un pin de candidato, abre la MISMA ventana de chat
+    // de la sección Candidatos (ChatWindow) aquí, sin salir del mapa.
+    const [chatCandidate, setChatCandidate] = useState(null);
+
+    // Caché de candidatos completos ya traídos para el popup (evita re-fetch al reabrir el mismo pin).
+    const candCacheRef = useRef(new Map());
+
+    // Rellena el bloque demográfico del popup: usa caché o trae el candidato completo de la API.
+    const enrichPopup = useCallback(async (el) => {
+        const id = el?.dataset?.cand;
+        if (!id) return;
+        const cache = candCacheRef.current;
+        if (cache.has(id)) { el.innerHTML = renderDemographics(cache.get(id)); return; }
+        try {
+            const res = await fetch(`/api/candidates?id=${encodeURIComponent(id)}`);
+            const data = await res.json();
+            if (!res.ok || !data?.candidate) throw new Error();
+            cache.set(id, data.candidate);
+            if (el.isConnected) el.innerHTML = renderDemographics(data.candidate);
+        } catch {
+            if (el.isConnected) el.innerHTML = '<div style="color:#ef4444;font-size:11px;padding:4px 0">No se pudo cargar la info</div>';
+        }
+    }, []);
+    const enrichPopupRef = useRef(enrichPopup);
+    useEffect(() => { enrichPopupRef.current = enrichPopup; }, [enrichPopup]);
 
     // 🔎 Buscador de lugares (geocodificación con Nominatim de OSM — gratis, mismo proveedor que las tiles).
     const [query, setQuery] = useState('');
@@ -122,6 +197,11 @@ export default function MapSection({ onOpenCandidate }) {
             setDraft({ lat: +e.latlng.lat.toFixed(6), lng: +e.latlng.lng.toFixed(6), label: '', note: '', color: 'blue' });
             setAddMode(false);
         });
+        // Al abrir el popup de un candidato: carga su info demográfica completa dentro de la tarjeta.
+        map.on('popupopen', (e) => {
+            const el = e.popup?.getElement?.()?.querySelector?.('.map-cand-demo');
+            if (el) enrichPopupRef.current(el);
+        });
         setTimeout(() => map.invalidateSize(), 150);
         return () => { map.remove(); mapRef.current = null; };
     }, []);
@@ -134,11 +214,13 @@ export default function MapSection({ onOpenCandidate }) {
         });
         const tel = p.whatsapp ? String(p.whatsapp).replace(/\D/g, '') : '';
         const nombre = (p.nombre || 'Sin nombre').replace(/</g, '&lt;');
+        const nombreAttr = encodeURIComponent(p.nombre || '');
         m.bindPopup(
-            `<div style="min-width:160px">
-               <div style="font-weight:700;margin-bottom:2px">${nombre}</div>
-               ${tel ? `<div style="color:#6b7280;font-size:12px;margin-bottom:6px">${tel}</div>` : ''}
-               <button data-cand="${p.id}" class="map-open-chat" style="cursor:pointer;border:0;background:#10b981;color:#fff;font-weight:600;font-size:12px;padding:5px 10px;border-radius:8px">Ver chat</button>
+            `<div style="min-width:210px">
+               <div style="font-weight:700;margin-bottom:1px">${nombre}</div>
+               ${tel ? `<div style="color:#6b7280;font-size:12px;margin-bottom:4px">${tel}</div>` : ''}
+               <div class="map-cand-demo" data-cand="${p.id}"><div style="color:#9ca3af;font-size:11px;padding:4px 0">Cargando datos…</div></div>
+               <button data-cand="${p.id}" data-nombre="${nombreAttr}" data-tel="${tel}" class="map-open-chat" style="cursor:pointer;border:0;background:#10b981;color:#fff;font-weight:600;font-size:12px;padding:6px 12px;border-radius:8px;width:100%">💬 Abrir chat</button>
              </div>`
         );
         return m;
@@ -255,7 +337,16 @@ export default function MapSection({ onOpenCandidate }) {
         if (!el) return;
         const onClick = (e) => {
             const chatBtn = e.target.closest?.('.map-open-chat');
-            if (chatBtn?.dataset?.cand && onOpenRef.current) { onOpenRef.current(chatBtn.dataset.cand); return; }
+            if (chatBtn?.dataset?.cand) {
+                // Abre la ventana de chat EN EL MAPA (misma de Candidatos), sin navegar.
+                setChatCandidate({
+                    id: chatBtn.dataset.cand,
+                    nombre: decodeURIComponent(chatBtn.dataset.nombre || ''),
+                    whatsapp: chatBtn.dataset.tel || ''
+                });
+                mapRef.current?.closePopup();
+                return;
+            }
             const delBtn = e.target.closest?.('.map-del-pin');
             if (delBtn?.dataset?.pin) deletePinRef.current(delBtn.dataset.pin);
         };
@@ -543,6 +634,15 @@ export default function MapSection({ onOpenCandidate }) {
                     </div>
                 )}
             </div>
+
+            {/* 💬 Ventana de chat embebida (la misma de Candidatos) */}
+            <ErrorBoundary>
+                <ChatWindow
+                    isOpen={!!chatCandidate}
+                    onClose={() => setChatCandidate(null)}
+                    candidate={chatCandidate}
+                />
+            </ErrorBoundary>
         </div>
     );
 }
