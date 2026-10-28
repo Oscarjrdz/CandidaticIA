@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Trash2, AlertCircle, Maximize2, Minimize2, Paperclip, Mic, Image as ImageIcon, Send, ArrowLeft, RefreshCw, X, Play, Square, Download, Smile, Plus, Camera, MoreVertical, Reply, Copy, Check, CheckCheck, Clock } from 'lucide-react';
+import { Trash2, AlertCircle, Maximize2, Minimize2, Paperclip, Mic, Image as ImageIcon, Send, ArrowLeft, RefreshCw, X, Play, Square, Download, Smile, Plus, Camera, MoreVertical, Reply, Copy, Check, CheckCheck, Clock, Zap } from 'lucide-react';
 import Button from './ui/Button';
 import VacancyHistoryCard from './VacancyHistoryCard';
+import { substituteVariables, substituteDynamicPhrase } from '../../api/utils/shortcuts.js';
 
 const formatWhatsAppText = (text) => {
     if (!text) return '';
@@ -61,6 +62,12 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
     const [_availableFields, setAvailableFields] = useState([]);
     const [replyToMsg, setReplyToMsg] = useState(null);
 
+    // Banco de respuestas (mismo endpoint que Chat Web: /api/quick_replies).
+    const [showBank, setShowBank] = useState(false);
+    const [bankReplies, setBankReplies] = useState([]);
+    const [bankLoaded, setBankLoaded] = useState(false);
+    const [bankSearch, setBankSearch] = useState('');
+    const [fullCandidate, setFullCandidate] = useState(null); // candidato completo para sustituir variables
 
     // Recording State
     const [isRecording, setIsRecording] = useState(false);
@@ -241,12 +248,12 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
         }
     };
 
-    const handleSend = async (e, forceType = 'text', forceMedia = null) => {
+    const handleSend = async (e, forceType = 'text', forceMedia = null, forceText = null) => {
         if (e) e.preventDefault();
 
         // 1. Extraer datos directos del DOM para evitar retrasos de React (Stale State)
-        let messageToProcess = newMessage;
-        if (e && e.target && e.target.tagName === 'INPUT') {
+        let messageToProcess = forceText != null ? forceText : newMessage;
+        if (forceText == null && e && e.target && e.target.tagName === 'INPUT') {
             messageToProcess = e.target.value;
         }
         messageToProcess = messageToProcess.trim();
@@ -393,6 +400,102 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
         } finally {
             setSending(false);
             if (fileInputRef.current) fileInputRef.current.value = '';
+        }
+    };
+
+    // ── Banco de respuestas ───────────────────────────────────────────────────
+    // Carga el banco la primera vez que se abre el panel.
+    useEffect(() => {
+        if (!showBank || bankLoaded) return;
+        (async () => {
+            try {
+                const res = await fetch('/api/quick_replies');
+                const data = await res.json();
+                if (data.success) { setBankReplies(data.replies || []); setBankLoaded(true); }
+            } catch { /* se reintenta al reabrir */ }
+        })();
+    }, [showBank, bankLoaded]);
+
+    // Trae el candidato completo para sustituir variables ({{nombre}}, {{municipio}}, etc.).
+    useEffect(() => {
+        if (!isOpen || !candidate?.id) { setFullCandidate(null); return; }
+        let cancelled = false;
+        fetch(`/api/candidates?id=${encodeURIComponent(candidate.id)}`)
+            .then(r => r.json())
+            .then(d => { if (!cancelled && d?.candidate) setFullCandidate(d.candidate); })
+            .catch(() => {});
+        return () => { cancelled = true; };
+    }, [isOpen, candidate?.id]);
+
+    const filteredBank = useMemo(() => {
+        const q = bankSearch.trim().toLowerCase();
+        if (!q) return bankReplies;
+        return bankReplies.filter(qr => [qr.name, qr.message, qr.shortcut].some(f => String(f || '').toLowerCase().includes(q)));
+    }, [bankReplies, bankSearch]);
+
+    // Envío directo con UI optimista (ubicación/audio/documento) — reusa el mismo patrón de handleSend.
+    const sendDirect = async (payload, optimisticExtra) => {
+        const tempId = `temp_${Date.now()}`;
+        setMessages(prev => [...prev, { id: tempId, from: 'me', status: 'queued', timestamp: new Date().toISOString(), ...optimisticExtra }]);
+        try {
+            const res = await fetch('/api/chat', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ...payload, tempId })
+            });
+            const data = await res.json();
+            if (data.success) {
+                setMessages(prev => prev.map(m => m.id === tempId ? { ...m, ...data.message, status: data.message?.status || 'sent' } : m));
+                window.dispatchEvent(new CustomEvent('candidate_replied', { detail: { candidateId: candidate.id } }));
+            } else {
+                setMessages(prev => prev.filter(m => m.id !== tempId));
+                alert('Error al enviar: ' + (data.details || data.error || ''));
+            }
+        } catch (err) {
+            setMessages(prev => prev.filter(m => m.id !== tempId));
+            alert('Error de conexión: ' + err.message);
+        }
+    };
+
+    // Aplica una respuesta del banco: texto → se inyecta en el cajón (para revisar/editar, como Chat Web);
+    // imagen/ubicación/audio/documento → se envían directo (con variables ya sustituidas).
+    const applyBankReply = async (qr) => {
+        const c = fullCandidate || candidate || {};
+        const resolved = qr.message
+            ? substituteDynamicPhrase(
+                substituteVariables(qr.message, c),
+                substituteVariables(qr.dynamicPhrase || '', c)
+            ).replace(/[^\S\n]{2,}/g, ' ').trim()
+            : '';
+
+        if (qr.type === 'location' && qr.location?.lat && qr.location?.lng) {
+            sendDirect(
+                { candidateId: candidate.id, message: '', type: 'location', extraParams: { name: qr.location.name, address: qr.location.address, lat: qr.location.lat, lng: qr.location.lng } },
+                { type: 'location', content: `[Ubicación: ${qr.location.name || 'Mapa'}]` }
+            );
+            return;
+        }
+        if (qr.type === 'audio' && qr.audioUrl) {
+            sendDirect(
+                { candidateId: candidate.id, message: '', type: 'audio', mediaUrl: qr.audioUrl, voice: !!qr.voice },
+                { type: 'voice', content: qr.voice ? '🎤 Nota de voz' : '🎵 Audio', mediaUrl: qr.audioUrl }
+            );
+            return;
+        }
+        if (qr.type === 'document' && qr.documentUrl) {
+            sendDirect(
+                { candidateId: candidate.id, message: resolved, type: 'document', mediaUrl: qr.documentUrl },
+                { type: 'document', content: resolved, mediaUrl: qr.documentUrl, filename: qr.documentName || 'documento.pdf' }
+            );
+            return;
+        }
+        // Texto / imagen
+        const imgs = qr.imageUrls?.length ? qr.imageUrls : (qr.imageUrl ? [qr.imageUrl] : []);
+        if (imgs.length) {
+            for (let i = 0; i < imgs.length; i++) {
+                await handleSend(null, 'image', imgs[i], i === 0 ? resolved : '');
+            }
+        } else if (resolved) {
+            setNewMessage(resolved); // se inyecta en el cajón para revisar antes de enviar
         }
     };
 
@@ -814,9 +917,49 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
                 </div>
 
 
+                {/* Banco de respuestas (panel sobre el cajón de texto) */}
+                {showBank && (
+                    <div className="flex flex-col bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 max-h-[260px]">
+                        <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-100 dark:border-gray-700 shrink-0">
+                            <Zap className="w-4 h-4 text-amber-500" />
+                            <span className="text-xs font-bold text-gray-700 dark:text-gray-200">Banco de respuestas</span>
+                            <input
+                                value={bankSearch}
+                                onChange={(e) => setBankSearch(e.target.value)}
+                                placeholder="Buscar…"
+                                className="ml-auto w-32 text-xs px-2 py-1 rounded border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                            />
+                            <button type="button" onClick={() => setShowBank(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
+                                <X className="w-4 h-4" />
+                            </button>
+                        </div>
+                        <div className="overflow-y-auto custom-scrollbar">
+                            {filteredBank.length === 0 ? (
+                                <div className="px-3 py-4 text-xs text-gray-400 text-center">{bankLoaded ? 'Sin respuestas' : 'Cargando…'}</div>
+                            ) : filteredBank.map((qr) => (
+                                <button
+                                    key={qr.id}
+                                    type="button"
+                                    onClick={() => applyBankReply(qr)}
+                                    className="w-full text-left px-3 py-2 hover:bg-amber-50 dark:hover:bg-amber-500/10 border-b border-gray-50 dark:border-gray-700/50 last:border-0"
+                                >
+                                    <div className="flex items-center gap-1.5">
+                                        <span className="text-xs font-semibold text-gray-800 dark:text-gray-100 truncate">{qr.name}</span>
+                                        {qr.type && qr.type !== 'text' && (
+                                            <span className="text-[9px] uppercase bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 px-1.5 py-0.5 rounded">{qr.type}</span>
+                                        )}
+                                        {qr.shortcut && <span className="text-[10px] text-amber-600 dark:text-amber-400 ml-auto shrink-0">/{qr.shortcut}</span>}
+                                    </div>
+                                    {qr.message && <p className="text-[11px] text-gray-500 dark:text-gray-400 line-clamp-2 leading-relaxed mt-0.5">{qr.message}</p>}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
                 {/* Input Area (With Reply Context Banner) */}
                 <div className="flex flex-col bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
-                    
+
                     {/* Reply Banner preview */}
                     {replyToMsg && (
                         <div className="px-4 py-2 bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between animate-in slide-in-from-bottom-2">
@@ -898,6 +1041,14 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
                                         title="Grabar audio"
                                     >
                                         <Mic className="w-5 h-5" />
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowBank(s => !s)}
+                                        className={`p-2 transition-colors rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 ${showBank ? 'text-amber-500' : 'text-gray-400 hover:text-amber-500'}`}
+                                        title="Banco de respuestas"
+                                    >
+                                        <Zap className="w-5 h-5" />
                                     </button>
                                     <input
                                         type="text"
