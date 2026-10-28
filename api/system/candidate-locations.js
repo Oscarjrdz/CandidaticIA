@@ -39,6 +39,29 @@ export default async function handler(req, res) {
             pins.push({ id, lat, lng, nombre: p.nombre || '', whatsapp: p.whatsapp || '', ts: p.ts || 0 });
         }
 
+        // Etiquetas por pin — leídas de la proyección facetada `candidate:facet:<id>` (~277B c/u),
+        // NO del blob completo, para el filtro por etiqueta del Mapa (colorea sin ocultar).
+        if (pins.length) {
+            try {
+                const pipe = redis.pipeline();
+                for (const pin of pins) pipe.get(`candidate:facet:${pin.id}`);
+                const results = await pipe.exec();
+                for (let i = 0; i < pins.length; i++) {
+                    let tags = [];
+                    try {
+                        const facetRaw = results?.[i]?.[1];
+                        if (facetRaw) {
+                            const facet = JSON.parse(facetRaw);
+                            if (Array.isArray(facet?.tags)) {
+                                tags = facet.tags.map(t => typeof t === 'string' ? t : t?.name).filter(Boolean);
+                            }
+                        }
+                    } catch { /* pin sin facet o JSON inválido → sin etiquetas */ }
+                    pins[i].tags = tags;
+                }
+            } catch { /* si falla el pipeline, los pines van sin etiquetas */ }
+        }
+
         _pinsCache = { data: pins, ts: now };
         return res.status(200).json({ success: true, total: pins.length, pins });
     } catch (error) {

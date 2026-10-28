@@ -1,7 +1,7 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { MapPin, RefreshCw, Loader2, MessageSquare, Search, X, Plus, Trash2, Check } from 'lucide-react';
+import { MapPin, RefreshCw, Loader2, MessageSquare, Search, X, Plus, Trash2, Check, Tag } from 'lucide-react';
 import { useAuthContext } from '../contexts/AuthContext';
 import ChatWindow from './ChatWindow';
 import ErrorBoundary from './ui/ErrorBoundary';
@@ -95,6 +95,24 @@ export default function MapSection({ onOpenCandidate }) {
     const [error, setError] = useState('');
     const pinsRef = useRef(pins); // espejo para que el buscador (deps []) vea los candidatos actuales
     useEffect(() => { pinsRef.current = pins; }, [pins]);
+
+    // 🏷️ Filtro por etiqueta: COLOREA/marca los pines que coinciden, sin ocultar los demás.
+    const [allTags, setAllTags] = useState([]);            // [{name, color, count}]
+    const [selectedTags, setSelectedTags] = useState([]);  // nombres (normalizados) seleccionados
+    const [showTagFilter, setShowTagFilter] = useState(false);
+    const tagColorMap = useMemo(() => {
+        const m = new Map();
+        for (const t of allTags) m.set(String(t.name || '').trim().toLowerCase(), t.color || '#3b82f6');
+        return m;
+    }, [allTags]);
+    const selectedTagsSet = useMemo(() => new Set(selectedTags), [selectedTags]);
+
+    useEffect(() => {
+        fetch('/api/tags')
+            .then(r => r.json())
+            .then(d => { if (Array.isArray(d?.tags)) setAllTags(d.tags); })
+            .catch(() => {});
+    }, []);
 
     // 💬 Chat embebido: al tocar "Ver chat" en un pin de candidato, abre la MISMA ventana de chat
     // de la sección Candidatos (ChatWindow) aquí, sin salir del mapa.
@@ -219,11 +237,10 @@ export default function MapSection({ onOpenCandidate }) {
     }, []);
 
     // Dibuja un pin (circleMarker de canvas) con su popup. Reusado por la carga y por el SSE en vivo.
-    const drawPin = useCallback((p, canvas) => {
-        const m = L.circleMarker([p.lat, p.lng], {
-            renderer: canvas, radius: 6, weight: 2,
-            color: '#059669', fillColor: '#10b981', fillOpacity: 0.85
-        });
+    // `style` permite resaltar/atenuar el pin según el filtro de etiquetas (sin ocultar ninguno).
+    const drawPin = useCallback((p, canvas, style) => {
+        const base = { renderer: canvas, radius: 6, weight: 2, color: '#059669', fillColor: '#10b981', fillOpacity: 0.85 };
+        const m = L.circleMarker([p.lat, p.lng], { ...base, ...(style || {}) });
         const tel = p.whatsapp ? String(p.whatsapp).replace(/\D/g, '') : '';
         const nombre = (p.nombre || 'Sin nombre').replace(/</g, '&lt;');
         const nombreAttr = encodeURIComponent(p.nombre || '');
@@ -248,8 +265,22 @@ export default function MapSection({ onOpenCandidate }) {
         if (!pins.length) return;
         const canvas = L.canvas({ padding: 0.5 });
         const latlngs = [];
+        const filtering = selectedTagsSet.size > 0;
         for (const p of pins) {
-            const mk = drawPin(p, canvas);
+            let style;
+            if (filtering) {
+                // ¿Coincide con alguna etiqueta seleccionada? → resalta con el color de esa etiqueta.
+                const pinTags = (p.tags || []).map(t => String(t || '').trim().toLowerCase());
+                const matched = pinTags.find(t => selectedTagsSet.has(t));
+                if (matched) {
+                    const color = tagColorMap.get(matched) || '#f97316';
+                    style = { radius: 9, weight: 3, color: '#ffffff', fillColor: color, fillOpacity: 1 };
+                } else {
+                    // No coincide: se queda visible pero atenuado (no desaparece).
+                    style = { radius: 5, weight: 1, color: '#9ca3af', fillColor: '#9ca3af', fillOpacity: 0.25 };
+                }
+            }
+            const mk = drawPin(p, canvas, style);
             mk.addTo(layer);
             candMarkersRef.current.set(p.id, mk);
             latlngs.push([p.lat, p.lng]);
@@ -261,7 +292,7 @@ export default function MapSection({ onOpenCandidate }) {
             } catch { /* bounds vacíos */ }
             didFit.current = true;
         }
-    }, [pins, drawPin]);
+    }, [pins, drawPin, selectedTagsSet, tagColorMap]);
 
     // Redibuja los pines personalizados (capa aparte). Marcador tipo "gota" con color + popup con nota y botón borrar.
     useEffect(() => {
@@ -330,7 +361,7 @@ export default function MapSection({ onOpenCandidate }) {
                 const i = prev.findIndex(x => x.id === p.id);
                 const pin = { id: p.id, lat: Number(p.lat), lng: Number(p.lng), nombre: p.nombre || '', whatsapp: p.whatsapp || '', ts: p.ts || Date.now() };
                 if (i === -1) return [...prev, pin];
-                const next = prev.slice(); next[i] = pin; return next;
+                const next = prev.slice(); next[i] = { ...pin, tags: prev[i].tags || [] }; return next; // conserva etiquetas ya cargadas
             });
         };
         window.addEventListener('sse:location:pin', onPin);
@@ -549,6 +580,11 @@ export default function MapSection({ onOpenCandidate }) {
                     )}
                 </div>
                 <div className="flex items-center gap-2">
+                    <button onClick={() => setShowTagFilter(v => !v)}
+                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${showTagFilter || selectedTags.length ? 'bg-amber-500 border-amber-500 text-white' : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50'}`}>
+                        <Tag className="w-3.5 h-3.5" />
+                        Etiquetas{selectedTags.length ? ` (${selectedTags.length})` : ''}
+                    </button>
                     <button onClick={() => { setAddMode(m => !m); setDraft(null); }}
                         className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${addMode ? 'bg-blue-500 border-blue-500 text-white' : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50'}`}>
                         <Plus className="w-3.5 h-3.5" />
@@ -561,6 +597,38 @@ export default function MapSection({ onOpenCandidate }) {
                     </button>
                 </div>
             </div>
+
+            {/* 🏷️ Barra de filtro por etiqueta — colorea/marca los pines que coinciden, sin ocultar el resto */}
+            {showTagFilter && (
+                <div className="mb-3 shrink-0 flex flex-wrap items-center gap-1.5 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-xl p-2.5">
+                    {allTags.length === 0 ? (
+                        <span className="text-xs text-gray-400 px-1">No hay etiquetas registradas</span>
+                    ) : allTags.map((t) => {
+                        const key = String(t.name || '').trim().toLowerCase();
+                        const on = selectedTagsSet.has(key);
+                        return (
+                            <button
+                                key={key}
+                                onClick={() => setSelectedTags(prev => on ? prev.filter(x => x !== key) : [...prev, key])}
+                                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border transition-colors"
+                                style={on
+                                    ? { background: t.color || '#3b82f6', borderColor: t.color || '#3b82f6', color: '#fff' }
+                                    : { borderColor: (t.color || '#3b82f6') + '66', color: t.color || '#3b82f6' }}
+                            >
+                                <span className="w-2 h-2 rounded-full" style={{ background: t.color || '#3b82f6', boxShadow: on ? '0 0 0 1.5px #fff' : 'none' }} />
+                                {t.name}
+                                {on && <Check className="w-3 h-3" />}
+                            </button>
+                        );
+                    })}
+                    {selectedTags.length > 0 && (
+                        <button onClick={() => setSelectedTags([])}
+                            className="ml-auto inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold text-gray-500 dark:text-gray-400 hover:bg-gray-200/60 dark:hover:bg-gray-700">
+                            <X className="w-3 h-3" /> Limpiar
+                        </button>
+                    )}
+                </div>
+            )}
 
             <div className="relative isolate flex-1 min-h-0 rounded-2xl overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm">
                 <div ref={containerRef} className="map-section-canvas absolute inset-0" />
