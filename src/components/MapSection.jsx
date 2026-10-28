@@ -51,8 +51,14 @@ export default function MapSection({ onOpenCandidate }) {
     const addModeRef = useRef(false);                  // espejo de addMode para el handler de clic del mapa
     useEffect(() => { addModeRef.current = addMode; }, [addMode]);
 
-    // Paleta de colores de los pines manuales (clave Redis → hex para el ícono/UI).
-    const PIN_COLORS = { blue: '#2563eb', red: '#dc2626', amber: '#d97706', violet: '#7c3aed', emerald: '#059669', rose: '#e11d48' };
+    // Paleta de colores de los pines manuales (clave Redis → hex para el ícono/UI). Debe coincidir
+    // con el set COLORS de api/system/map-pins.js.
+    const PIN_COLORS = {
+        blue: '#2563eb', sky: '#0284c7', cyan: '#0891b2', teal: '#0d9488',
+        emerald: '#059669', green: '#16a34a', lime: '#65a30d', amber: '#d97706',
+        orange: '#ea580c', red: '#dc2626', rose: '#e11d48', pink: '#db2777',
+        fuchsia: '#c026d3', violet: '#7c3aed', indigo: '#4f46e5', slate: '#475569'
+    };
 
     const load = useCallback(async () => {
         setLoading(true); setError('');
@@ -166,24 +172,43 @@ export default function MapSection({ onOpenCandidate }) {
             const hex = PIN_COLORS[p.color] || PIN_COLORS.blue;
             const label = (p.label || 'Pin').replace(/</g, '&lt;');
             const note = (p.note || '').replace(/</g, '&lt;');
-            // Gota SVG grande: relleno de color, borde blanco grueso, centro blanco + anillo de pulso.
-            const icon = L.divIcon({
-                className: 'map-custom-pin',
-                html: `<div class="cm-pin" style="--cm-color:${hex}">
-                         <span class="cm-pulse"></span>
-                         <svg width="40" height="52" viewBox="0 0 40 52" fill="none" xmlns="http://www.w3.org/2000/svg">
-                           <path d="M20 1.5C9.5 1.5 1.5 9.5 1.5 20 1.5 34 20 50.5 20 50.5S38.5 34 38.5 20C38.5 9.5 30.5 1.5 20 1.5Z" fill="${hex}" stroke="#fff" stroke-width="3"/>
-                           <circle cx="20" cy="19.5" r="7" fill="#fff"/>
-                         </svg>
-                       </div>`,
-                iconSize: [40, 52], iconAnchor: [20, 50], popupAnchor: [0, -46], tooltipAnchor: [0, -4]
-            });
+            let icon;
+            if (p.logo) {
+                // Insignia circular con el logo del cliente: anillo de color, borde blanco, sombra y pulso + punta.
+                icon = L.divIcon({
+                    className: 'map-custom-pin',
+                    html: `<div class="cm-badge" style="--cm-color:${hex}">
+                             <span class="cm-pulse"></span>
+                             <div class="cm-badge-ring">
+                               <img src="${p.logo}" alt="" class="cm-badge-img" draggable="false" />
+                             </div>
+                             <span class="cm-badge-tip"></span>
+                           </div>`,
+                    iconSize: [56, 68], iconAnchor: [28, 64], popupAnchor: [0, -58], tooltipAnchor: [0, 2]
+                });
+            } else {
+                // Gota SVG grande: relleno de color, borde blanco grueso, centro blanco + anillo de pulso.
+                icon = L.divIcon({
+                    className: 'map-custom-pin',
+                    html: `<div class="cm-pin" style="--cm-color:${hex}">
+                             <span class="cm-pulse"></span>
+                             <svg width="40" height="52" viewBox="0 0 40 52" fill="none" xmlns="http://www.w3.org/2000/svg">
+                               <path d="M20 1.5C9.5 1.5 1.5 9.5 1.5 20 1.5 34 20 50.5 20 50.5S38.5 34 38.5 20C38.5 9.5 30.5 1.5 20 1.5Z" fill="${hex}" stroke="#fff" stroke-width="3"/>
+                               <circle cx="20" cy="19.5" r="7" fill="#fff"/>
+                             </svg>
+                           </div>`,
+                    iconSize: [40, 52], iconAnchor: [20, 50], popupAnchor: [0, -46], tooltipAnchor: [0, -4]
+                });
+            }
             const m = L.marker([p.lat, p.lng], { icon, riseOnHover: true });
             // Nombre del cliente siempre visible debajo del pin.
             m.bindTooltip(label, { permanent: true, direction: 'bottom', offset: [0, 4], className: 'map-client-label', opacity: 1 });
             m.bindPopup(
                 `<div style="min-width:180px">
-                   <div style="font-weight:800;font-size:14px;margin-bottom:2px">${label}</div>
+                   <div style="display:flex;align-items:center;gap:8px;margin-bottom:${note ? '6px' : '8px'}">
+                     ${p.logo ? `<img src="${p.logo}" alt="" style="width:34px;height:34px;border-radius:8px;object-fit:cover;border:2px solid ${hex}" />` : ''}
+                     <div style="font-weight:800;font-size:14px">${label}</div>
+                   </div>
                    ${note ? `<div style="color:#4b5563;font-size:12px;margin-bottom:8px;white-space:pre-wrap">${note}</div>` : ''}
                    <button data-pin="${p.id}" class="map-del-pin" style="cursor:pointer;border:0;background:#ef4444;color:#fff;font-weight:600;font-size:12px;padding:6px 12px;border-radius:8px">Borrar pin</button>
                  </div>`
@@ -310,6 +335,36 @@ export default function MapSection({ onOpenCandidate }) {
         if (map && searchMarkerRef.current) { map.removeLayer(searchMarkerRef.current); searchMarkerRef.current = null; }
     }, []);
 
+    // Reduce la imagen elegida a una miniatura cuadrada (máx 96px) y la devuelve como data URI
+    // webp/jpeg comprimido (~3-10KB) para no inflar Redis. Recorta centrado (object-fit: cover).
+    const [logoBusy, setLogoBusy] = useState(false);
+    const onPickLogo = useCallback((file) => {
+        if (!file || !file.type?.startsWith('image/')) return;
+        setLogoBusy(true);
+        const reader = new FileReader();
+        reader.onload = () => {
+            const img = new Image();
+            img.onload = () => {
+                const SIZE = 96;
+                const canvas = document.createElement('canvas');
+                canvas.width = SIZE; canvas.height = SIZE;
+                const ctx = canvas.getContext('2d');
+                const side = Math.min(img.width, img.height);
+                const sx = (img.width - side) / 2, sy = (img.height - side) / 2;
+                ctx.drawImage(img, sx, sy, side, side, 0, 0, SIZE, SIZE);
+                let data = '';
+                try { data = canvas.toDataURL('image/webp', 0.82); } catch { /* sin webp */ }
+                if (!data || data.length < 30 || !data.startsWith('data:image/webp')) data = canvas.toDataURL('image/jpeg', 0.82);
+                setDraft(d => d ? { ...d, logo: data } : d);
+                setLogoBusy(false);
+            };
+            img.onerror = () => setLogoBusy(false);
+            img.src = reader.result;
+        };
+        reader.onerror = () => setLogoBusy(false);
+        reader.readAsDataURL(file);
+    }, []);
+
     // Guarda el pin en edición (draft) en Redis y lo agrega a la lista.
     const savePin = useCallback(async () => {
         if (!draft) return;
@@ -431,12 +486,35 @@ export default function MapSection({ onOpenCandidate }) {
                                 onChange={(e) => setDraft(d => ({ ...d, note: e.target.value }))}
                                 placeholder="Detalles del lugar…"
                                 className="w-full mb-3 px-3 py-2 rounded-lg text-sm bg-gray-50 dark:bg-gray-900/40 border border-gray-200 dark:border-gray-700 text-gray-800 dark:text-gray-100 resize-none focus:outline-none focus:ring-2 focus:ring-blue-400" />
+
+                            <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1.5">Logo del cliente (opcional)</label>
+                            <div className="flex items-center gap-3 mb-3">
+                                <div className="w-14 h-14 rounded-full shrink-0 flex items-center justify-center overflow-hidden border-2"
+                                    style={{ borderColor: PIN_COLORS[draft.color] || PIN_COLORS.blue, background: (PIN_COLORS[draft.color] || PIN_COLORS.blue) + '18' }}>
+                                    {logoBusy ? <Loader2 className="w-5 h-5 text-gray-400 animate-spin" />
+                                        : draft.logo ? <img src={draft.logo} alt="logo" className="w-full h-full object-cover" />
+                                            : <MapPin className="w-5 h-5 text-gray-300" />}
+                                </div>
+                                <div className="flex flex-col gap-1.5">
+                                    <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer">
+                                        <Plus className="w-3.5 h-3.5" /> {draft.logo ? 'Cambiar logo' : 'Subir logo'}
+                                        <input type="file" accept="image/*" className="hidden" onChange={(e) => onPickLogo(e.target.files?.[0])} />
+                                    </label>
+                                    {draft.logo && (
+                                        <button type="button" onClick={() => setDraft(d => ({ ...d, logo: '' }))}
+                                            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10">
+                                            <Trash2 className="w-3.5 h-3.5" /> Quitar
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+
                             <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1.5">Color</label>
-                            <div className="flex items-center gap-2 mb-4">
+                            <div className="flex flex-wrap items-center gap-2 mb-4">
                                 {Object.entries(PIN_COLORS).map(([key, hex]) => (
                                     <button key={key} type="button" onClick={() => setDraft(d => ({ ...d, color: key }))}
-                                        className={`w-6 h-6 rounded-full border-2 transition-transform ${draft.color === key ? 'ring-2 ring-offset-2 ring-offset-white dark:ring-offset-gray-800 scale-110' : ''}`}
-                                        style={{ backgroundColor: hex, borderColor: hex, ...(draft.color === key ? { boxShadow: `0 0 0 2px ${hex}` } : {}) }}
+                                        className={`w-6 h-6 rounded-full border-2 transition-transform ${draft.color === key ? 'scale-110' : ''}`}
+                                        style={{ backgroundColor: hex, borderColor: hex, ...(draft.color === key ? { boxShadow: `0 0 0 2px #fff, 0 0 0 4px ${hex}` } : {}) }}
                                         title={key} />
                                 ))}
                             </div>

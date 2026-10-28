@@ -15,7 +15,18 @@
 
 const PINS_KEY = 'candidatic:map_pins';
 const MAX_PINS = 2000;          // tope de seguridad para no inflar el hash sin límite
-const COLORS = new Set(['blue', 'red', 'amber', 'violet', 'emerald', 'rose']);
+const MAX_LOGO_LEN = 200000;    // ~150KB en base64; el front ya reduce a miniatura, esto es el tope duro
+const COLORS = new Set([
+    'blue', 'sky', 'cyan', 'teal', 'emerald', 'green', 'lime', 'amber',
+    'orange', 'red', 'rose', 'pink', 'fuchsia', 'violet', 'indigo', 'slate'
+]);
+
+function cleanLogo(v) {
+    if (typeof v !== 'string') return '';
+    if (!v.startsWith('data:image/')) return '';   // solo miniaturas embebidas (data URI)
+    if (v.length > MAX_LOGO_LEN) return '';
+    return v;
+}
 
 function parsePin(id, raw) {
     let p;
@@ -28,6 +39,7 @@ function parsePin(id, raw) {
         label: typeof p.label === 'string' ? p.label : '',
         note: typeof p.note === 'string' ? p.note : '',
         color: COLORS.has(p.color) ? p.color : 'blue',
+        logo: cleanLogo(p.logo),
         createdBy: p.createdBy || '',
         ts: p.ts || 0
     };
@@ -74,6 +86,7 @@ export default async function handler(req, res) {
                 label: String(body.label || '').slice(0, 120),
                 note: String(body.note || '').slice(0, 500),
                 color: COLORS.has(body.color) ? body.color : 'blue',
+                logo: cleanLogo(body.logo),
                 createdBy: userId,
                 ts: Date.now()
             };
