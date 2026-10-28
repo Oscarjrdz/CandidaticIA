@@ -138,6 +138,10 @@ async function sendFlowMediaById(config, to, rawUrl, type, extraParams = {}) {
     return await sendUltraMsgMessageWithRetry(config.instanceId, config.token, to, absUrl, type, extraParams);
 }
 export const EXEC_SET_PREFIX = 'flow:executed:v1:';   // set: candidatos que COMPLETARON el flujo
+// Caminante en vivo (fase 2): el editor abierto pone esta llave (TTL corto, renovada cada
+// ~30s). runOneFlow SOLO publica el paso-a-paso (flow:step) si existe → cero tráfico cuando
+// nadie está viendo. Se apaga sola al cerrar el editor.
+export const WATCH_PREFIX = 'flow:watch:v1:';
 export const COUNTER_PREFIX = 'flow:counter:v1:';
 // ZSET paralelo al contador: member = candidatoId, score = ms de su PRIMER paso por el
 // nodo (ZADD NX no lo pisa en repasos). Habilita el desglose por fecha (hoy/ayer/semana/
@@ -1512,6 +1516,31 @@ async function runOneFlow(redis, flow, candidateId, candidate, opts = {}) {
         //     recibir la rama roja de muchas condiciones/ramas y dispararse en cuanto el
         //     candidato falle en la rama que le tocó (cada candidato recorre una sola).
         //   • Si un nodo mezcla ambos tipos, debe cumplir las dos reglas a la vez.
+        // 🚶 Caminante en vivo: publica un "paso" por cada nodo FRESCO que pisa el candidato,
+        // iluminando en el editor la(s) arista(s) por las que ENTRÓ. Comprobación PEREZOSA del
+        // watch: si la corrida no ejecuta ningún nodo nuevo (todo reusado/resume) no toca Redis;
+        // si publica, 1 EXISTS por corrida y luego solo publishes fire-and-forget (~80 B c/u).
+        // Respeta skipCounters (test/simulador no ensucia ni anima). `from` = orígenes de las
+        // aristas realmente recorridas hasta aquí (misma regla que isEligible), para que la luz
+        // viaje por la rama correcta y no por todas las entrantes.
+        let watchChecked = false, isWatched = false;
+        const emitStep = async (node, deps) => {
+            if (opts.skipCounters) return;
+            if (!watchChecked) {
+                watchChecked = true;
+                isWatched = (await redis.exists(`${WATCH_PREFIX}${flow.id}`).catch(() => 0)) === 1;
+            }
+            if (!isWatched) return;
+            const from = deps.filter(d => branchTaken.has(d.source)
+                ? (branchTaken.get(d.source) || new Set()).has(d.handle || null)
+                : d.handle === 'no' ? outcome.get(d.source) === 'fail' : outcome.get(d.source) === 'pass'
+            ).map(d => d.source);
+            redis.publish('channel:sse:updates', JSON.stringify({
+                type: 'flow:step', flowId: flow.id, nodeId: node.id, from,
+                timestamp: new Date().toISOString()
+            })).catch(() => {});
+        };
+
         const isEligible = (deps, node) => {
             // REDIRECCIÓN: el nodo destino es la raíz virtual del sub-recorrido — siempre
             // elegible, sin importar sus aristas entrantes reales (que vienen de la parte del
@@ -1599,6 +1628,10 @@ async function runOneFlow(redis, flow, candidateId, candidate, opts = {}) {
             }
 
             const result = await evaluateOrExecute(node, candidate, flow.id, redis, opts);
+
+            // Caminante: este nodo se acaba de pisar FRESCO (los reusados/resume hicieron
+            // `continue` antes de aquí → no re-animan). Ilumina su arista de entrada.
+            await emitStep(node, deps);
 
             // ⏸️ PAUSA (nodo "esperando_respuesta"): marca el nodo como hecho para reanudar
             // DESPUÉS de él y detiene la corrida SIN marcar el flujo completado (no sadd execKey,

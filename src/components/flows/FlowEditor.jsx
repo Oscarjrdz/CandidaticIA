@@ -9,7 +9,7 @@ import '@xyflow/react/dist/style.css';
 import { useToastContext } from '../../contexts/ToastContext';
 import { useAuthContext } from '../../contexts/AuthContext';
 import { getFlowLocks, toggleNodeLock, initFlowLocksIfNeeded } from '../../utils/nodeLocks';
-import { getFlow, updateFlow, getFlowsMeta, getFlowCounters, getQuickReplies, saveQuickReplies, getReminderTemplates, getManualProjects, testFlow, getFilteredFlowCandidates, runFlowListItem } from '../../services/flowsService';
+import { getFlow, updateFlow, getFlowsMeta, getFlowCounters, getQuickReplies, saveQuickReplies, getReminderTemplates, getManualProjects, testFlow, getFilteredFlowCandidates, runFlowListItem, watchFlow } from '../../services/flowsService';
 import { flowNodeTypes, COLOR_CLASSES, NODE_DEFS } from './nodeTypes';
 import FlowEdge from './edgeTypes/FlowEdge';
 import NodeConfigDrawer from './NodeConfigDrawer';
@@ -408,6 +408,33 @@ const FlowEditorInner = ({ flowId, onBack }) => {
         window.addEventListener('sse:flow:counter', handler);
         return () => window.removeEventListener('sse:flow:counter', handler);
     }, [flowId, triggerEdgeFlow]);
+
+    // 🚶 Caminante en vivo (fase 2): cada paso que da un candidato por CUALQUIER nodo llega
+    // como flow:step con `from` = nodo(s) de donde viene. Ilumina la arista por la que ENTRÓ
+    // (match source∈from && target=nodeId); si no vino `from`, cae a todas las entrantes.
+    useEffect(() => {
+        const handler = (e) => {
+            const { flowId: evFlowId, nodeId, from } = e.detail || {};
+            if (evFlowId !== flowId) return;
+            const fromSet = Array.isArray(from) && from.length ? new Set(from) : null;
+            const ids = edgesRef.current
+                .filter(ed => ed.target === nodeId && (!fromSet || fromSet.has(ed.source)))
+                .map(ed => ed.id);
+            triggerEdgeFlow(ids.length ? ids : edgesRef.current.filter(ed => ed.target === nodeId).map(ed => ed.id));
+        };
+        window.addEventListener('sse:flow:step', handler);
+        return () => window.removeEventListener('sse:flow:step', handler);
+    }, [flowId, triggerEdgeFlow]);
+
+    // Heartbeat del watch: avisa al motor que este editor está abierto (para que publique
+    // flow:step). Ping inmediato + cada 30s; la llave vive 70s, así que un lapso perdido no
+    // apaga el caminante. Al salir del editor deja de renovarse y expira sola.
+    useEffect(() => {
+        if (!flowId) return;
+        watchFlow(flowId);
+        const t = setInterval(() => watchFlow(flowId), 30000);
+        return () => clearInterval(t);
+    }, [flowId]);
 
     const onNodesChange = useCallback((changes) => {
         setNodes(nds => applyNodeChanges(changes, nds));
@@ -975,28 +1002,6 @@ const FlowEditorInner = ({ flowId, onBack }) => {
                 />
             </ReactFlow>
 
-            {/* Acciones rápidas flotantes (arriba a la derecha): Regresar (undo) + Guardar,
-                para no tener que ir al toolbar de la izquierda cada vez. */}
-            <div className="absolute top-4 right-4 z-[200] flex items-center gap-2 select-none">
-                <button
-                    onClick={handleUndo}
-                    disabled={!canUndo}
-                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white dark:bg-[#202c33] text-gray-700 dark:text-gray-200 text-sm font-semibold shadow-md border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 disabled:opacity-40 disabled:cursor-not-allowed"
-                    title="Regresar (deshacer último cambio) · Ctrl/Cmd+Z"
-                >
-                    <Undo2 className="w-4 h-4" /> Regresar
-                </button>
-                <button
-                    onClick={() => handleSave()}
-                    disabled={saving}
-                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-gray-900 dark:bg-white text-white dark:text-gray-900 text-sm font-semibold shadow-md hover:opacity-90 disabled:opacity-50"
-                    title="Guardar el flujo"
-                >
-                    {saving ? <Check className="w-4 h-4" /> : <Save className="w-4 h-4" />}
-                    {saving ? 'Guardado' : dirty ? 'Guardar' : 'Guardado'}
-                </button>
-            </div>
-
             {/* Mini-menú flotante de selección múltiple (aparece al soltar con 2+ nodos). */}
             {selMenu && selectedIds.length >= 2 && (
                 <div
@@ -1083,6 +1088,25 @@ const FlowEditorInner = ({ flowId, onBack }) => {
                         title="Borrar los nodos seleccionados"
                     >
                         <Trash2 className="w-3.5 h-3.5" /> Borrar
+                    </button>
+                    {/* Regresar (undo) + Guardar aquí mismo, para no viajar al toolbar mientras alineas. */}
+                    <span className="w-px h-5 bg-gray-200 dark:bg-gray-700 mx-0.5" />
+                    <button
+                        onClick={handleUndo}
+                        disabled={!canUndo}
+                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700/50 disabled:opacity-40 disabled:cursor-not-allowed"
+                        title="Regresar (deshacer último cambio) · Ctrl/Cmd+Z"
+                    >
+                        <Undo2 className="w-3.5 h-3.5" /> Regresar
+                    </button>
+                    <button
+                        onClick={() => handleSave()}
+                        disabled={saving}
+                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-gray-900 dark:bg-white text-white dark:text-gray-900 text-xs font-semibold hover:opacity-90 disabled:opacity-50"
+                        title="Guardar el flujo"
+                    >
+                        {saving ? <Check className="w-3.5 h-3.5" /> : <Save className="w-3.5 h-3.5" />}
+                        {saving ? 'Guardado' : dirty ? 'Guardar' : 'Guardado'}
                     </button>
                 </div>
             )}

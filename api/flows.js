@@ -150,6 +150,15 @@ export default async function handler(req, res) {
             });
         }
 
+        // Heartbeat "estoy viendo este flujo": el editor abierto lo renueva cada ~30s. El motor
+        // (flow-engine) SOLO publica el paso-a-paso del caminante (flow:step) si esta llave existe
+        // — así nadie paga tráfico de Redis cuando ningún editor está abierto (el caso común). TTL
+        // corto = se apaga solo al cerrar/salir del editor, sin cron de limpieza.
+        if (method === 'GET' && id && mode === 'watch') {
+            await redis.set(`flow:watch:v1:${id}`, '1', 'EX', 70).catch(() => {});
+            return res.status(200).json({ success: true });
+        }
+
         // Lista GLOBAL de Check Points de TODOS los flujos — la usa el nodo
         // "Condición: Check Point" para elegir a qué marca preguntar. Payload ligero
         // (solo flowId/nodeId/nombre), no arrastra nodos/edges completos.

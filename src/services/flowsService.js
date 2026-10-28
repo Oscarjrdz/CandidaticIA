@@ -24,6 +24,13 @@ export const getFlow = async (id) => {
     }
 };
 
+// Heartbeat "estoy viendo este flujo": renueva la llave flow:watch para que el motor publique
+// el paso-a-paso del caminante (flow:step). Silencioso: si falla, el peor caso es que no se
+// anime el recorrido, nada crítico.
+export const watchFlow = async (id) => {
+    try { await fetch(`/api/flows?id=${id}&mode=watch`); } catch { /* no crítico */ }
+};
+
 export const getFlowCounters = async (id) => {
     try {
         const res = await fetch(`/api/flows?id=${id}&mode=counters`);

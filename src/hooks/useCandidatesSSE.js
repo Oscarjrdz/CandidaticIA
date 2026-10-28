@@ -128,6 +128,8 @@ function _connectSingleton() {
                     window.dispatchEvent(new CustomEvent('sse:crm:candidate', { detail: data.data }));
                 } else if (data.type === 'flow:counter') {
                     window.dispatchEvent(new CustomEvent('sse:flow:counter', { detail: data.data }));
+                } else if (data.type === 'flow:step') {
+                    window.dispatchEvent(new CustomEvent('sse:flow:step', { detail: data.data }));
                 } else if (data.type === 'location:pin') {
                     // Pin de la sección Mapa: un candidato acaba de compartir su ubicación.
                     window.dispatchEvent(new CustomEvent('sse:location:pin', { detail: data.data?.pin }));
