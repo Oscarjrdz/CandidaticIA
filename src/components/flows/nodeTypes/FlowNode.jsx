@@ -152,6 +152,10 @@ const BgNode = ({ id, data, selected }) => {
 const TextoNode = ({ id, data, selected }) => {
     const [editing, setEditing] = useState(false);
     const fontSize = Number(data.fontSize) || 18;
+    // Tamaño de letra hasta 200 (títulos grandes de sección). Paso más grande arriba de 60
+    // para no obligar a decenas de clics; abajo de 60 el paso fino (2) conserva control.
+    const FONT_MIN = 10, FONT_MAX = 200;
+    const fontStep = fontSize >= 60 ? 8 : 2;
     const color = data.color || '#111827';
     const locked = !!data.locked;
     const change = (patch) => data.onElementChange?.(id, patch);
@@ -162,12 +166,12 @@ const TextoNode = ({ id, data, selected }) => {
             <NodeToolbar isVisible={selected && !locked} position={Position.Top}
                 className="flex items-center gap-2 bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 px-2 py-1.5">
                 <div className="flex items-center gap-1">
-                    <button type="button" onClick={() => change({ fontSize: Math.max(10, fontSize - 2) })}
+                    <button type="button" onClick={() => change({ fontSize: Math.max(FONT_MIN, fontSize - fontStep) })}
                         className="p-1 rounded-md text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700" title="Más chico">
                         <Minus className="w-3.5 h-3.5" />
                     </button>
-                    <span className="text-xs font-semibold text-gray-500 w-6 text-center tabular-nums">{fontSize}</span>
-                    <button type="button" onClick={() => change({ fontSize: Math.min(80, fontSize + 2) })}
+                    <span className="text-xs font-semibold text-gray-500 w-8 text-center tabular-nums">{fontSize}</span>
+                    <button type="button" onClick={() => change({ fontSize: Math.min(FONT_MAX, fontSize + fontStep) })}
                         className="p-1 rounded-md text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700" title="Más grande">
                         <Plus className="w-3.5 h-3.5" />
                     </button>

@@ -537,7 +537,10 @@ const FlowEditorInner = ({ flowId, onBack }) => {
         const idSet = new Set(ids);
         const clipNodes = nodes
             .filter(n => idSet.has(n.id) && !ENTRY_TYPES.has(n.type))
-            .map(n => ({ _srcId: n.id, type: n.type, position: n.position, data: stripTransientData(n.data) }));
+            // ...persistableDims: sin esto, un Fondo/Texto copiado se pegaba SIN tamaño y
+            // nacía colapsado (un bg vacío queda en 0×0 + 2px de borde por lado = 4×4 px, el
+            // "Fondo puntito" invisible). Igual que ya hacen historySig y buildDuplicate.
+            .map(n => ({ _srcId: n.id, type: n.type, position: n.position, data: stripTransientData(n.data), ...persistableDims(n) }));
         if (!clipNodes.length) return false;
         const srcIdSet = new Set(clipNodes.map(n => n._srcId));
         const clipEdges = edges
