@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { MapPin, RefreshCw, Loader2, MessageSquare, Search, X, Plus, Trash2, Check, Tag } from 'lucide-react';
+import { MapPin, RefreshCw, Loader2, MessageSquare, Search, X, Plus, Trash2, Check, Tag, Briefcase } from 'lucide-react';
 import { useAuthContext } from '../contexts/AuthContext';
 import ChatWindow from './ChatWindow';
 import ErrorBoundary from './ui/ErrorBoundary';
@@ -106,6 +106,45 @@ export default function MapSection({ onOpenCandidate }) {
     // 🔵 Modo "Ver asistencias": colorea de azul las burbujas de candidatos con asistencia confirmada.
     const [showAsistencias, setShowAsistencias] = useState(false);
     const asistenciaCount = useMemo(() => pins.filter(p => p.asistencia === true).length, [pins]);
+
+    // 📂 Filtro por categoría (se COMBINA con el de etiqueta: un pin resalta si cumple ambos criterios
+    // activos). La lista se arma con las categorías presentes en los pines; color asignado por paleta.
+    const CAT_PALETTE = ['#ef4444', '#f97316', '#f59e0b', '#84cc16', '#22c55e', '#14b8a6', '#06b6d4', '#3b82f6', '#6366f1', '#8b5cf6', '#a855f7', '#d946ef', '#ec4899', '#f43f5e', '#0ea5e9', '#eab308'];
+    const [selectedCats, setSelectedCats] = useState([]); // claves normalizadas
+    const [showCatFilter, setShowCatFilter] = useState(false);
+    const [catSearch, setCatSearch] = useState('');
+    const catFilterRef = useRef(null);
+    const selectedCatsSet = useMemo(() => new Set(selectedCats), [selectedCats]);
+
+    // Categorías distintas presentes en los pines, con color estable por paleta.
+    const allCats = useMemo(() => {
+        const seen = new Map(); // key → display
+        for (const p of pins) {
+            const name = String(p.categoria || '').trim();
+            if (!name) continue;
+            const key = name.toLowerCase();
+            if (!seen.has(key)) seen.set(key, name);
+        }
+        const list = [...seen.entries()].sort((a, b) => a[1].localeCompare(b[1]));
+        return list.map(([key, name], i) => ({ key, name, color: CAT_PALETTE[i % CAT_PALETTE.length] }));
+    }, [pins]);
+    const catColorMap = useMemo(() => {
+        const m = new Map();
+        for (const c of allCats) m.set(c.key, c.color);
+        return m;
+    }, [allCats]);
+    const filteredCats = useMemo(() => {
+        const q = catSearch.trim().toLowerCase();
+        if (!q) return allCats;
+        return allCats.filter(c => c.name.toLowerCase().includes(q));
+    }, [allCats, catSearch]);
+
+    useEffect(() => {
+        if (!showCatFilter) return;
+        const onDown = (e) => { if (catFilterRef.current && !catFilterRef.current.contains(e.target)) setShowCatFilter(false); };
+        document.addEventListener('mousedown', onDown);
+        return () => document.removeEventListener('mousedown', onDown);
+    }, [showCatFilter]);
     const tagColorMap = useMemo(() => {
         const m = new Map();
         for (const t of allTags) m.set(String(t.name || '').trim().toLowerCase(), t.color || '#3b82f6');
@@ -285,21 +324,29 @@ export default function MapSection({ onOpenCandidate }) {
         if (!pins.length) return;
         const canvas = L.canvas({ padding: 0.5 });
         const latlngs = [];
-        const filtering = selectedTagsSet.size > 0;
+        const tagActive = selectedTagsSet.size > 0;
+        const catActive = selectedCatsSet.size > 0;
+        const filtering = tagActive || catActive;
         for (const p of pins) {
             let style;
             if (showAsistencias && p.asistencia === true) {
-                // Asistencia confirmada → burbuja azul (tiene prioridad sobre el filtro de etiquetas).
+                // Asistencia confirmada → burbuja azul (tiene prioridad sobre los filtros).
                 style = { radius: 9, weight: 3, color: '#ffffff', fillColor: '#1d4ed8', fillOpacity: 1 };
             } else if (filtering) {
-                // ¿Coincide con alguna etiqueta seleccionada? → resalta con el color de esa etiqueta.
+                // Filtro COMBINADO: debe cumplir etiqueta (si hay) Y categoría (si hay).
                 const pinTags = (p.tags || []).map(t => String(t || '').trim().toLowerCase());
-                const matched = pinTags.find(t => selectedTagsSet.has(t));
-                if (matched) {
-                    const color = tagColorMap.get(matched) || '#f97316';
+                const matchedTag = pinTags.find(t => selectedTagsSet.has(t));
+                const catKey = String(p.categoria || '').trim().toLowerCase();
+                const tagOk = !tagActive || !!matchedTag;
+                const catOk = !catActive || selectedCatsSet.has(catKey);
+                if (tagOk && catOk) {
+                    // Color: etiqueta coincidente si el filtro de etiqueta está activo; si no, color de la categoría.
+                    const color = (tagActive && matchedTag)
+                        ? (tagColorMap.get(matchedTag) || '#f97316')
+                        : (catColorMap.get(catKey) || '#f97316');
                     style = { radius: 9, weight: 3, color: '#ffffff', fillColor: color, fillOpacity: 1 };
                 } else {
-                    // No coincide: se queda visible pero atenuado (no desaparece).
+                    // No cumple: se queda visible pero atenuado (no desaparece).
                     style = { radius: 5, weight: 1, color: '#9ca3af', fillColor: '#9ca3af', fillOpacity: 0.25 };
                 }
             }
@@ -315,7 +362,7 @@ export default function MapSection({ onOpenCandidate }) {
             } catch { /* bounds vacíos */ }
             didFit.current = true;
         }
-    }, [pins, drawPin, selectedTagsSet, tagColorMap, showAsistencias]);
+    }, [pins, drawPin, selectedTagsSet, tagColorMap, selectedCatsSet, catColorMap, showAsistencias]);
 
     // Redibuja los pines personalizados (capa aparte). Marcador tipo "gota" con color + popup con nota y botón borrar.
     useEffect(() => {
@@ -657,6 +704,60 @@ export default function MapSection({ onOpenCandidate }) {
                             </div>
                         )}
                     </div>
+
+                    {/* Filtro por CATEGORÍA (se combina con el de etiqueta) */}
+                    <div className="relative" ref={catFilterRef}>
+                        <button onClick={() => setShowCatFilter(v => !v)}
+                            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${showCatFilter || selectedCats.length ? 'bg-purple-600 border-purple-600 text-white' : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50'}`}>
+                            <Briefcase className="w-3.5 h-3.5" />
+                            Categorías{selectedCats.length ? ` (${selectedCats.length})` : ''}
+                        </button>
+                        {showCatFilter && (
+                            <div className="absolute right-0 mt-1.5 w-72 z-[1000] rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-xl overflow-hidden">
+                                <div className="p-2 border-b border-gray-100 dark:border-gray-700">
+                                    <div className="relative">
+                                        <Search className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                                        <input
+                                            value={catSearch}
+                                            onChange={(e) => setCatSearch(e.target.value)}
+                                            placeholder="Buscar categoría…"
+                                            className="w-full pl-8 pr-2 py-1.5 rounded-lg text-xs bg-gray-50 dark:bg-gray-900/40 border border-gray-200 dark:border-gray-700 text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-purple-400"
+                                        />
+                                    </div>
+                                </div>
+                                <div className="max-h-[360px] overflow-y-auto custom-scrollbar py-1">
+                                    {filteredCats.length === 0 ? (
+                                        <div className="px-3 py-3 text-xs text-gray-400 text-center">Sin categorías</div>
+                                    ) : filteredCats.map((c) => {
+                                        const on = selectedCatsSet.has(c.key);
+                                        return (
+                                            <button
+                                                key={c.key}
+                                                onClick={() => setSelectedCats(prev => on ? prev.filter(x => x !== c.key) : [...prev, c.key])}
+                                                className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-gray-50 dark:hover:bg-gray-700/50"
+                                            >
+                                                <span className={`w-4 h-4 rounded flex items-center justify-center shrink-0 border ${on ? 'border-transparent' : 'border-gray-300 dark:border-gray-600'}`}
+                                                    style={on ? { background: c.color } : {}}>
+                                                    {on && <Check className="w-3 h-3 text-white" />}
+                                                </span>
+                                                <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: c.color }} />
+                                                <span className="flex-1 min-w-0 text-xs font-medium text-gray-800 dark:text-gray-100 truncate">{c.name}</span>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                                {selectedCats.length > 0 && (
+                                    <div className="flex items-center justify-between px-3 py-2 border-t border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/30">
+                                        <span className="text-[11px] text-gray-500 dark:text-gray-400">{selectedCats.length} seleccionada{selectedCats.length === 1 ? '' : 's'}</span>
+                                        <button onClick={() => setSelectedCats([])} className="inline-flex items-center gap-1 text-[11px] font-semibold text-gray-500 dark:text-gray-400 hover:text-red-500">
+                                            <X className="w-3 h-3" /> Limpiar
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </div>
+
                     <button onClick={() => setShowAsistencias(v => !v)}
                         className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${showAsistencias ? 'bg-blue-700 border-blue-700 text-white' : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50'}`}>
                         <span className={`w-2.5 h-2.5 rounded-full ${showAsistencias ? 'bg-white' : 'bg-blue-700'}`} />
