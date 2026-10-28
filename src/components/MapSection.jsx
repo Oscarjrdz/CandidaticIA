@@ -100,6 +100,8 @@ export default function MapSection({ onOpenCandidate }) {
     const [allTags, setAllTags] = useState([]);            // [{name, color, count}]
     const [selectedTags, setSelectedTags] = useState([]);  // nombres (normalizados) seleccionados
     const [showTagFilter, setShowTagFilter] = useState(false);
+    const [tagSearch, setTagSearch] = useState('');
+    const tagFilterRef = useRef(null);
     const tagColorMap = useMemo(() => {
         const m = new Map();
         for (const t of allTags) m.set(String(t.name || '').trim().toLowerCase(), t.color || '#3b82f6');
@@ -113,6 +115,20 @@ export default function MapSection({ onOpenCandidate }) {
             .then(d => { if (Array.isArray(d?.tags)) setAllTags(d.tags); })
             .catch(() => {});
     }, []);
+
+    // Cierra el dropdown de etiquetas al hacer clic fuera de él.
+    useEffect(() => {
+        if (!showTagFilter) return;
+        const onDown = (e) => { if (tagFilterRef.current && !tagFilterRef.current.contains(e.target)) setShowTagFilter(false); };
+        document.addEventListener('mousedown', onDown);
+        return () => document.removeEventListener('mousedown', onDown);
+    }, [showTagFilter]);
+
+    const filteredTags = useMemo(() => {
+        const q = tagSearch.trim().toLowerCase();
+        if (!q) return allTags;
+        return allTags.filter(t => String(t.name || '').toLowerCase().includes(q));
+    }, [allTags, tagSearch]);
 
     // 💬 Chat embebido: al tocar "Ver chat" en un pin de candidato, abre la MISMA ventana de chat
     // de la sección Candidatos (ChatWindow) aquí, sin salir del mapa.
@@ -580,11 +596,60 @@ export default function MapSection({ onOpenCandidate }) {
                     )}
                 </div>
                 <div className="flex items-center gap-2">
-                    <button onClick={() => setShowTagFilter(v => !v)}
-                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${showTagFilter || selectedTags.length ? 'bg-amber-500 border-amber-500 text-white' : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50'}`}>
-                        <Tag className="w-3.5 h-3.5" />
-                        Etiquetas{selectedTags.length ? ` (${selectedTags.length})` : ''}
-                    </button>
+                    <div className="relative" ref={tagFilterRef}>
+                        <button onClick={() => setShowTagFilter(v => !v)}
+                            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${showTagFilter || selectedTags.length ? 'bg-amber-500 border-amber-500 text-white' : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50'}`}>
+                            <Tag className="w-3.5 h-3.5" />
+                            Etiquetas{selectedTags.length ? ` (${selectedTags.length})` : ''}
+                        </button>
+                        {showTagFilter && (
+                            <div className="absolute right-0 mt-1.5 w-72 z-[1000] rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-xl overflow-hidden">
+                                <div className="p-2 border-b border-gray-100 dark:border-gray-700">
+                                    <div className="relative">
+                                        <Search className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                                        <input
+                                            value={tagSearch}
+                                            onChange={(e) => setTagSearch(e.target.value)}
+                                            placeholder="Buscar etiqueta…"
+                                            className="w-full pl-8 pr-2 py-1.5 rounded-lg text-xs bg-gray-50 dark:bg-gray-900/40 border border-gray-200 dark:border-gray-700 text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                                        />
+                                    </div>
+                                </div>
+                                {/* ~10 filas visibles, luego scroll (cada fila ~36px) */}
+                                <div className="max-h-[360px] overflow-y-auto custom-scrollbar py-1">
+                                    {filteredTags.length === 0 ? (
+                                        <div className="px-3 py-3 text-xs text-gray-400 text-center">Sin etiquetas</div>
+                                    ) : filteredTags.map((t) => {
+                                        const key = String(t.name || '').trim().toLowerCase();
+                                        const on = selectedTagsSet.has(key);
+                                        return (
+                                            <button
+                                                key={key}
+                                                onClick={() => setSelectedTags(prev => on ? prev.filter(x => x !== key) : [...prev, key])}
+                                                className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-gray-50 dark:hover:bg-gray-700/50"
+                                            >
+                                                <span className={`w-4 h-4 rounded flex items-center justify-center shrink-0 border ${on ? 'border-transparent' : 'border-gray-300 dark:border-gray-600'}`}
+                                                    style={on ? { background: t.color || '#3b82f6' } : {}}>
+                                                    {on && <Check className="w-3 h-3 text-white" />}
+                                                </span>
+                                                <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: t.color || '#3b82f6' }} />
+                                                <span className="flex-1 min-w-0 text-xs font-medium text-gray-800 dark:text-gray-100 truncate">{t.name}</span>
+                                                {typeof t.count === 'number' && <span className="text-[10px] text-gray-400 shrink-0">{t.count}</span>}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                                {selectedTags.length > 0 && (
+                                    <div className="flex items-center justify-between px-3 py-2 border-t border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/30">
+                                        <span className="text-[11px] text-gray-500 dark:text-gray-400">{selectedTags.length} seleccionada{selectedTags.length === 1 ? '' : 's'}</span>
+                                        <button onClick={() => setSelectedTags([])} className="inline-flex items-center gap-1 text-[11px] font-semibold text-gray-500 dark:text-gray-400 hover:text-red-500">
+                                            <X className="w-3 h-3" /> Limpiar
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </div>
                     <button onClick={() => { setAddMode(m => !m); setDraft(null); }}
                         className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${addMode ? 'bg-blue-500 border-blue-500 text-white' : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50'}`}>
                         <Plus className="w-3.5 h-3.5" />
@@ -598,37 +663,6 @@ export default function MapSection({ onOpenCandidate }) {
                 </div>
             </div>
 
-            {/* 🏷️ Barra de filtro por etiqueta — colorea/marca los pines que coinciden, sin ocultar el resto */}
-            {showTagFilter && (
-                <div className="mb-3 shrink-0 flex flex-wrap items-center gap-1.5 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-xl p-2.5">
-                    {allTags.length === 0 ? (
-                        <span className="text-xs text-gray-400 px-1">No hay etiquetas registradas</span>
-                    ) : allTags.map((t) => {
-                        const key = String(t.name || '').trim().toLowerCase();
-                        const on = selectedTagsSet.has(key);
-                        return (
-                            <button
-                                key={key}
-                                onClick={() => setSelectedTags(prev => on ? prev.filter(x => x !== key) : [...prev, key])}
-                                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border transition-colors"
-                                style={on
-                                    ? { background: t.color || '#3b82f6', borderColor: t.color || '#3b82f6', color: '#fff' }
-                                    : { borderColor: (t.color || '#3b82f6') + '66', color: t.color || '#3b82f6' }}
-                            >
-                                <span className="w-2 h-2 rounded-full" style={{ background: t.color || '#3b82f6', boxShadow: on ? '0 0 0 1.5px #fff' : 'none' }} />
-                                {t.name}
-                                {on && <Check className="w-3 h-3" />}
-                            </button>
-                        );
-                    })}
-                    {selectedTags.length > 0 && (
-                        <button onClick={() => setSelectedTags([])}
-                            className="ml-auto inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold text-gray-500 dark:text-gray-400 hover:bg-gray-200/60 dark:hover:bg-gray-700">
-                            <X className="w-3 h-3" /> Limpiar
-                        </button>
-                    )}
-                </div>
-            )}
 
             <div className="relative isolate flex-1 min-h-0 rounded-2xl overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm">
                 <div ref={containerRef} className="map-section-canvas absolute inset-0" />
