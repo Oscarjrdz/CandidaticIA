@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { MapPin, RefreshCw, Loader2, MessageSquare } from 'lucide-react';
+import { MapPin, RefreshCw, Loader2, MessageSquare, Search, X, Plus, Trash2, Check } from 'lucide-react';
 import { useAuthContext } from '../contexts/AuthContext';
 
 // Sección Mapa: un pin por cada candidato que compartió su ubicación (la guarda el webhook en el
@@ -33,13 +33,41 @@ export default function MapSection({ onOpenCandidate }) {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
 
+    // 🔎 Buscador de lugares (geocodificación con Nominatim de OSM — gratis, mismo proveedor que las tiles).
+    const [query, setQuery] = useState('');
+    const [results, setResults] = useState([]);
+    const [searching, setSearching] = useState(false);
+    const [showResults, setShowResults] = useState(false);
+    const searchMarkerRef = useRef(null);    // marcador temporal del lugar buscado
+    const searchAbortRef = useRef(null);     // aborta la búsqueda anterior si el usuario sigue tecleando
+    const suppressSearchRef = useRef(false); // salta la búsqueda que dispararía setQuery al elegir un resultado
+
+    // 📍 Pines personalizados (creados a mano, guardados en Redis vía /api/system/map-pins).
+    const [customPins, setCustomPins] = useState([]);
+    const [addMode, setAddMode] = useState(false);     // al activarlo, el siguiente clic en el mapa crea un pin
+    const [draft, setDraft] = useState(null);          // { lat, lng, label, note, color } del pin en edición
+    const [savingPin, setSavingPin] = useState(false);
+    const customLayerRef = useRef(null);               // capa aparte para no pisar los pins de candidatos
+    const addModeRef = useRef(false);                  // espejo de addMode para el handler de clic del mapa
+    useEffect(() => { addModeRef.current = addMode; }, [addMode]);
+
+    // Paleta de colores de los pines manuales (clave Redis → hex para el ícono/UI).
+    const PIN_COLORS = { blue: '#2563eb', red: '#dc2626', amber: '#d97706', violet: '#7c3aed', emerald: '#059669', rose: '#e11d48' };
+
     const load = useCallback(async () => {
         setLoading(true); setError('');
         try {
-            const res = await fetch('/api/system/candidate-locations');
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.error || 'Error al cargar ubicaciones');
+            const [resCand, resCustom] = await Promise.all([
+                fetch('/api/system/candidate-locations'),
+                fetch('/api/system/map-pins')
+            ]);
+            const data = await resCand.json();
+            if (!resCand.ok) throw new Error(data.error || 'Error al cargar ubicaciones');
             setPins(Array.isArray(data.pins) ? data.pins : []);
+            if (resCustom.ok) {
+                const cd = await resCustom.json();
+                setCustomPins(Array.isArray(cd.pins) ? cd.pins : []);
+            }
         } catch (e) {
             setError(e.message || 'Error al cargar');
             setPins([]);
@@ -73,11 +101,18 @@ export default function MapSection({ onOpenCandidate }) {
             attribution: '&copy; OpenStreetMap', maxZoom: 19
         }).addTo(map);
         layerRef.current = L.layerGroup().addTo(map);
+        customLayerRef.current = L.layerGroup().addTo(map);
         mapRef.current = map;
         // Al mover/zoom: guarda cómo quedó el mapa (debounced).
         map.on('moveend', () => {
             const c = map.getCenter();
             saveView({ lat: +c.lat.toFixed(6), lng: +c.lng.toFixed(6), zoom: map.getZoom() });
+        });
+        // En modo "agregar pin", un clic en el mapa abre el formulario del nuevo pin en ese punto.
+        map.on('click', (e) => {
+            if (!addModeRef.current) return;
+            setDraft({ lat: +e.latlng.lat.toFixed(6), lng: +e.latlng.lng.toFixed(6), label: '', note: '', color: 'blue' });
+            setAddMode(false);
         });
         setTimeout(() => map.invalidateSize(), 150);
         return () => { map.remove(); mapRef.current = null; };
@@ -120,6 +155,32 @@ export default function MapSection({ onOpenCandidate }) {
         }
     }, [pins, drawPin]);
 
+    // Redibuja los pines personalizados (capa aparte). Marcador tipo "gota" con color + popup con nota y botón borrar.
+    useEffect(() => {
+        const layer = customLayerRef.current;
+        if (!layer) return;
+        layer.clearLayers();
+        for (const p of customPins) {
+            const hex = PIN_COLORS[p.color] || PIN_COLORS.blue;
+            const icon = L.divIcon({
+                className: 'map-custom-pin',
+                html: `<div style="width:22px;height:22px;border-radius:50% 50% 50% 0;background:${hex};border:3px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4);transform:rotate(-45deg)"></div>`,
+                iconSize: [22, 22], iconAnchor: [11, 22]
+            });
+            const label = (p.label || 'Pin').replace(/</g, '&lt;');
+            const note = (p.note || '').replace(/</g, '&lt;');
+            const m = L.marker([p.lat, p.lng], { icon });
+            m.bindPopup(
+                `<div style="min-width:170px">
+                   <div style="font-weight:700;margin-bottom:2px">${label}</div>
+                   ${note ? `<div style="color:#4b5563;font-size:12px;margin-bottom:6px;white-space:pre-wrap">${note}</div>` : ''}
+                   <button data-pin="${p.id}" class="map-del-pin" style="cursor:pointer;border:0;background:#ef4444;color:#fff;font-weight:600;font-size:12px;padding:5px 10px;border-radius:8px">Borrar pin</button>
+                 </div>`
+            );
+            m.addTo(layer);
+        }
+    }, [customPins]);
+
     // 📡 Pin EN VIVO (SSE): un candidato acaba de compartir su ubicación → upsert en la lista
     // (el efecto de arriba lo dibuja; no re-encuadra, respeta tu vista).
     useEffect(() => {
@@ -137,40 +198,241 @@ export default function MapSection({ onOpenCandidate }) {
         return () => window.removeEventListener('sse:location:pin', onPin);
     }, []);
 
-    // Click en "Ver chat" dentro de un popup → abre el chat del candidato.
+    // Borra un pin personalizado (Redis + mapa). Usado desde el popup.
+    const deletePin = useCallback(async (id) => {
+        if (!id) return;
+        setCustomPins(prev => prev.filter(p => p.id !== id));   // optimista
+        try {
+            await fetch(`/api/system/map-pins?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
+        } catch { /* el optimista ya lo quitó; un Actualizar lo reconcilia */ }
+        mapRef.current?.closePopup();
+    }, []);
+    const deletePinRef = useRef(deletePin);
+    useEffect(() => { deletePinRef.current = deletePin; }, [deletePin]);
+
+    // Click dentro de un popup del mapa: "Ver chat" (candidato) o "Borrar pin" (pin manual).
     useEffect(() => {
         const el = containerRef.current;
         if (!el) return;
         const onClick = (e) => {
-            const btn = e.target.closest?.('.map-open-chat');
-            if (btn?.dataset?.cand && onOpenRef.current) onOpenRef.current(btn.dataset.cand);
+            const chatBtn = e.target.closest?.('.map-open-chat');
+            if (chatBtn?.dataset?.cand && onOpenRef.current) { onOpenRef.current(chatBtn.dataset.cand); return; }
+            const delBtn = e.target.closest?.('.map-del-pin');
+            if (delBtn?.dataset?.pin) deletePinRef.current(delBtn.dataset.pin);
         };
         el.addEventListener('click', onClick);
         return () => el.removeEventListener('click', onClick);
     }, []);
+
+    // Geocodifica el texto con Nominatim. Sesga la búsqueda hacia Nuevo León / Monterrey (viewbox)
+    // pero sin excluir el resto (bounded=0), para que "una calle en MTY" salga primero.
+    const runSearch = useCallback(async (q) => {
+        const term = q.trim();
+        if (!term) { setResults([]); setShowResults(false); return; }
+        searchAbortRef.current?.abort();
+        const ctrl = new AbortController();
+        searchAbortRef.current = ctrl;
+        setSearching(true);
+        try {
+            const url = `https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=6`
+                + `&countrycodes=mx&accept-language=es`
+                + `&viewbox=-100.7,25.95,-99.9,25.4&q=${encodeURIComponent(term)}`;
+            const res = await fetch(url, { signal: ctrl.signal, headers: { 'Accept': 'application/json' } });
+            const data = await res.json();
+            setResults(Array.isArray(data) ? data : []);
+            setShowResults(true);
+        } catch (e) {
+            if (e.name !== 'AbortError') { setResults([]); setShowResults(true); }
+        } finally {
+            if (searchAbortRef.current === ctrl) setSearching(false);
+        }
+    }, []);
+
+    // Debounce de la búsqueda mientras el usuario teclea.
+    useEffect(() => {
+        if (suppressSearchRef.current) { suppressSearchRef.current = false; return; }
+        const t = setTimeout(() => { runSearch(query); }, 350);
+        return () => clearTimeout(t);
+    }, [query, runSearch]);
+
+    // Mueve el mapa al resultado elegido y deja un marcador temporal con etiqueta.
+    const goToResult = useCallback((r) => {
+        const map = mapRef.current;
+        if (!map || !r) return;
+        const lat = Number(r.lat), lng = Number(r.lon);
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+        if (searchMarkerRef.current) { map.removeLayer(searchMarkerRef.current); searchMarkerRef.current = null; }
+        const icon = L.divIcon({
+            className: 'map-search-pin',
+            html: '<div style="width:20px;height:20px;border-radius:50% 50% 50% 0;background:#2563eb;border:3px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4);transform:rotate(-45deg)"></div>',
+            iconSize: [20, 20], iconAnchor: [10, 20]
+        });
+        const marker = L.marker([lat, lng], { icon }).addTo(map);
+        marker.bindPopup(`<div style="max-width:220px;font-size:12px">${String(r.display_name || '').replace(/</g, '&lt;')}</div>`).openPopup();
+        searchMarkerRef.current = marker;
+        map.setView([lat, lng], Math.max(map.getZoom(), 16));
+        setShowResults(false);
+        suppressSearchRef.current = true;
+        setQuery(r.display_name ? String(r.display_name).split(',').slice(0, 2).join(',') : '');
+    }, []);
+
+    const clearSearch = useCallback(() => {
+        setQuery(''); setResults([]); setShowResults(false);
+        const map = mapRef.current;
+        if (map && searchMarkerRef.current) { map.removeLayer(searchMarkerRef.current); searchMarkerRef.current = null; }
+    }, []);
+
+    // Guarda el pin en edición (draft) en Redis y lo agrega a la lista.
+    const savePin = useCallback(async () => {
+        if (!draft) return;
+        setSavingPin(true);
+        try {
+            const res = await fetch('/api/system/map-pins', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(draft)
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'No se pudo guardar');
+            setCustomPins(prev => [data.pin, ...prev]);
+            setDraft(null);
+        } catch (e) {
+            setError(e.message || 'No se pudo guardar el pin');
+        } finally { setSavingPin(false); }
+    }, [draft]);
+
+    // Cursor de cruz cuando está activo el modo "agregar pin".
+    useEffect(() => {
+        const el = containerRef.current;
+        if (el) el.style.cursor = addMode ? 'crosshair' : '';
+    }, [addMode]);
 
     return (
         <div className="flex flex-col h-full min-h-0 p-3 sm:p-6">
             <div className="flex items-center justify-between mb-3 shrink-0">
                 <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
                     <MapPin className="w-4 h-4 text-emerald-500" />
-                    {loading ? 'Cargando ubicaciones…' : error ? <span className="text-red-500">{error}</span> : <span><strong>{pins.length}</strong> {pins.length === 1 ? 'candidato con ubicación' : 'candidatos con ubicación'}</span>}
+                    {loading ? 'Cargando ubicaciones…' : error ? <span className="text-red-500">{error}</span> : (
+                        <span>
+                            <strong>{pins.length}</strong> {pins.length === 1 ? 'candidato con ubicación' : 'candidatos con ubicación'}
+                            {customPins.length > 0 && <span className="text-gray-400"> · <strong className="text-blue-500">{customPins.length}</strong> {customPins.length === 1 ? 'pin propio' : 'pines propios'}</span>}
+                        </span>
+                    )}
                 </div>
-                <button onClick={load} disabled={loading}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50 disabled:opacity-50">
-                    {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
-                    Actualizar
-                </button>
+                <div className="flex items-center gap-2">
+                    <button onClick={() => { setAddMode(m => !m); setDraft(null); }}
+                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${addMode ? 'bg-blue-500 border-blue-500 text-white' : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50'}`}>
+                        <Plus className="w-3.5 h-3.5" />
+                        {addMode ? 'Clic en el mapa…' : 'Agregar pin'}
+                    </button>
+                    <button onClick={load} disabled={loading}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50 disabled:opacity-50">
+                        {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                        Actualizar
+                    </button>
+                </div>
             </div>
 
             <div className="relative flex-1 min-h-0 rounded-2xl overflow-hidden border border-gray-200 dark:border-gray-700 shadow-sm">
                 <div ref={containerRef} className="map-section-canvas absolute inset-0" />
-                {!loading && !error && pins.length === 0 && (
+
+                {/* 🔎 Buscador de lugares (flota sobre el mapa, arriba a la izquierda) */}
+                <div className="absolute top-3 left-3 z-[500] w-[min(320px,calc(100%-24px))]">
+                    <div className="relative">
+                        <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                        <input
+                            type="text"
+                            value={query}
+                            onChange={(e) => setQuery(e.target.value)}
+                            onFocus={() => { if (results.length) setShowResults(true); }}
+                            placeholder="Buscar un lugar, calle o colonia…"
+                            className="w-full pl-9 pr-9 py-2.5 rounded-xl text-sm bg-white/95 dark:bg-gray-800/95 backdrop-blur border border-gray-200 dark:border-gray-700 shadow-md text-gray-800 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                        />
+                        <div className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center">
+                            {searching ? <Loader2 className="w-4 h-4 text-gray-400 animate-spin" />
+                                : query ? (
+                                    <button onClick={clearSearch} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200" title="Limpiar">
+                                        <X className="w-4 h-4" />
+                                    </button>
+                                ) : null}
+                        </div>
+                    </div>
+
+                    {showResults && (
+                        <div className="mt-1.5 rounded-xl bg-white/98 dark:bg-gray-800/98 backdrop-blur border border-gray-200 dark:border-gray-700 shadow-lg overflow-hidden max-h-72 overflow-y-auto">
+                            {results.length === 0 ? (
+                                <div className="px-3.5 py-3 text-xs text-gray-400">Sin resultados</div>
+                            ) : results.map((r) => (
+                                <button
+                                    key={r.place_id}
+                                    onClick={() => goToResult(r)}
+                                    className="w-full text-left px-3.5 py-2.5 text-xs text-gray-700 dark:text-gray-200 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 border-b border-gray-100 dark:border-gray-700/50 last:border-0 flex items-start gap-2"
+                                >
+                                    <MapPin className="w-3.5 h-3.5 text-emerald-500 mt-0.5 shrink-0" />
+                                    <span className="leading-snug">{r.display_name}</span>
+                                </button>
+                            ))}
+                        </div>
+                    )}
+                </div>
+
+                {/* Pista del modo "agregar pin" */}
+                {addMode && (
+                    <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[500] bg-blue-500 text-white text-xs font-semibold px-3.5 py-2 rounded-full shadow-lg flex items-center gap-2">
+                        <MapPin className="w-3.5 h-3.5" /> Haz clic en el mapa para colocar el pin
+                        <button onClick={() => setAddMode(false)} className="ml-1 hover:opacity-80"><X className="w-3.5 h-3.5" /></button>
+                    </div>
+                )}
+
+                {/* Formulario del pin en edición */}
+                {draft && (
+                    <div className="absolute inset-0 z-[600] flex items-center justify-center bg-black/30 p-4" onClick={() => !savingPin && setDraft(null)}>
+                        <div onClick={(e) => e.stopPropagation()}
+                            className="w-[min(340px,100%)] rounded-2xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-xl p-4">
+                            <div className="flex items-center justify-between mb-3">
+                                <h3 className="text-sm font-bold text-gray-800 dark:text-gray-100 flex items-center gap-1.5"><MapPin className="w-4 h-4 text-blue-500" /> Nuevo pin</h3>
+                                <button onClick={() => setDraft(null)} disabled={savingPin} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 disabled:opacity-50"><X className="w-4 h-4" /></button>
+                            </div>
+                            <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Nombre</label>
+                            <input autoFocus type="text" value={draft.label} maxLength={120}
+                                onChange={(e) => setDraft(d => ({ ...d, label: e.target.value }))}
+                                placeholder="Ej. Oficina, Punto de entrevista…"
+                                className="w-full mb-3 px-3 py-2 rounded-lg text-sm bg-gray-50 dark:bg-gray-900/40 border border-gray-200 dark:border-gray-700 text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-400" />
+                            <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Nota (opcional)</label>
+                            <textarea value={draft.note} maxLength={500} rows={2}
+                                onChange={(e) => setDraft(d => ({ ...d, note: e.target.value }))}
+                                placeholder="Detalles del lugar…"
+                                className="w-full mb-3 px-3 py-2 rounded-lg text-sm bg-gray-50 dark:bg-gray-900/40 border border-gray-200 dark:border-gray-700 text-gray-800 dark:text-gray-100 resize-none focus:outline-none focus:ring-2 focus:ring-blue-400" />
+                            <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1.5">Color</label>
+                            <div className="flex items-center gap-2 mb-4">
+                                {Object.entries(PIN_COLORS).map(([key, hex]) => (
+                                    <button key={key} type="button" onClick={() => setDraft(d => ({ ...d, color: key }))}
+                                        className={`w-6 h-6 rounded-full border-2 transition-transform ${draft.color === key ? 'ring-2 ring-offset-2 ring-offset-white dark:ring-offset-gray-800 scale-110' : ''}`}
+                                        style={{ backgroundColor: hex, borderColor: hex, ...(draft.color === key ? { boxShadow: `0 0 0 2px ${hex}` } : {}) }}
+                                        title={key} />
+                                ))}
+                            </div>
+                            <div className="flex items-center justify-between gap-2">
+                                <span className="text-[11px] text-gray-400">{draft.lat}, {draft.lng}</span>
+                                <div className="flex gap-2">
+                                    <button onClick={() => setDraft(null)} disabled={savingPin}
+                                        className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50 disabled:opacity-50">Cancelar</button>
+                                    <button onClick={savePin} disabled={savingPin}
+                                        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-blue-500 text-white hover:bg-blue-600 disabled:opacity-50">
+                                        {savingPin ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />} Guardar
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {!loading && !error && pins.length === 0 && customPins.length === 0 && (
                     <div className="absolute inset-0 z-[400] flex items-center justify-center pointer-events-none">
                         <div className="bg-white/90 dark:bg-gray-800/90 rounded-xl px-5 py-4 text-center shadow-lg border border-gray-200 dark:border-gray-700 pointer-events-auto">
                             <MessageSquare className="w-6 h-6 text-gray-400 mx-auto mb-1.5" />
                             <p className="text-sm font-semibold text-gray-700 dark:text-gray-200">Aún no hay ubicaciones</p>
-                            <p className="text-xs text-gray-400 mt-0.5">Aparecerán aquí cuando un candidato comparta su ubicación por WhatsApp.</p>
+                            <p className="text-xs text-gray-400 mt-0.5">Aparecerán aquí cuando un candidato comparta su ubicación por WhatsApp, o crea tus propios pines con “Agregar pin”.</p>
                         </div>
                     </div>
                 )}
