@@ -20,9 +20,29 @@ const FlowEdge = ({ id, sourceX, sourceY, targetX, targetY, sourcePosition, targ
 
     const del = (e) => { e.stopPropagation(); e.preventDefault(); data?.onDelete?.(id); };
 
+    // Dos estados visuales transitorios (los inyecta FlowEditor vía `data`, NO se guardan):
+    //  • highlighted → el usuario pasó el mouse por un nodo que toca esta arista.
+    //  • flowing     → un candidato ACABA de pasar por el nodo destino (evento flow:counter);
+    //                  mandamos un punto luminoso deslizándose del origen al destino ~1.2s.
+    // Al resaltar/fluir subimos el color al tono fuerte del MISMO color base (índigo o rojo
+    // para la salida "No") y engrosamos con un leve glow — se lee bien sobre fondo claro.
+    const highlighted = !!data?.highlighted;
+    const flowing = !!data?.flowing;
+    const baseStroke = style?.stroke || '#a5b4fc';
+    const strongStroke = baseStroke === '#f87171' ? '#ef4444' : '#6366f1';
+    const active = highlighted || flowing;
+    const edgeStyle = active
+        ? { ...style, stroke: strongStroke, strokeWidth: 3, filter: `drop-shadow(0 0 3px ${strongStroke}99)`, transition: 'stroke .15s, stroke-width .15s' }
+        : { ...style, transition: 'stroke .15s, stroke-width .15s' };
+
     return (
         <>
-            <BaseEdge id={id} path={edgePath} style={style} markerEnd={markerEnd} />
+            <BaseEdge id={id} path={edgePath} style={edgeStyle} markerEnd={markerEnd} />
+            {flowing && (
+                <circle r={5} fill={strongStroke} style={{ filter: `drop-shadow(0 0 5px ${strongStroke})` }}>
+                    <animateMotion dur="1.15s" repeatCount="1" path={edgePath} rotate="auto" />
+                </circle>
+            )}
             {/* Franja ancha transparente: capta el hover y también borra al hacer clic
                 directo sobre la línea (respaldo por si no atinas al botón ×). */}
             <path

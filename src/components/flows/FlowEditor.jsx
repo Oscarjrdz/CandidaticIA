@@ -933,11 +933,13 @@ const FlowEditorInner = ({ flowId, onBack }) => {
             <ReactFlow
                 className="select-none"
                 nodes={displayNodes}
-                edges={edges}
+                edges={displayEdges}
                 onNodesChange={onNodesChange}
                 onEdgesChange={onEdgesChange}
                 onConnect={onConnect}
                 onSelectionChange={onSelectionChange}
+                onNodeMouseEnter={(_, node) => setHoveredNodeId(node.id)}
+                onNodeMouseLeave={() => setHoveredNodeId(null)}
                 nodeTypes={flowNodeTypes}
                 edgeTypes={flowEdgeTypes}
                 /* Respeta tu zoom/posición: restaura el viewport guardado; solo encuadra
