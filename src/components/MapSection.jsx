@@ -164,22 +164,34 @@ export default function MapSection({ onOpenCandidate }) {
         layer.clearLayers();
         for (const p of customPins) {
             const hex = PIN_COLORS[p.color] || PIN_COLORS.blue;
-            const icon = L.divIcon({
-                className: 'map-custom-pin',
-                html: `<div style="width:22px;height:22px;border-radius:50% 50% 50% 0;background:${hex};border:3px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4);transform:rotate(-45deg)"></div>`,
-                iconSize: [22, 22], iconAnchor: [11, 22]
-            });
             const label = (p.label || 'Pin').replace(/</g, '&lt;');
             const note = (p.note || '').replace(/</g, '&lt;');
-            const m = L.marker([p.lat, p.lng], { icon });
+            // Gota SVG grande: relleno de color, borde blanco grueso, centro blanco + anillo de pulso.
+            const icon = L.divIcon({
+                className: 'map-custom-pin',
+                html: `<div class="cm-pin" style="--cm-color:${hex}">
+                         <span class="cm-pulse"></span>
+                         <svg width="40" height="52" viewBox="0 0 40 52" fill="none" xmlns="http://www.w3.org/2000/svg">
+                           <path d="M20 1.5C9.5 1.5 1.5 9.5 1.5 20 1.5 34 20 50.5 20 50.5S38.5 34 38.5 20C38.5 9.5 30.5 1.5 20 1.5Z" fill="${hex}" stroke="#fff" stroke-width="3"/>
+                           <circle cx="20" cy="19.5" r="7" fill="#fff"/>
+                         </svg>
+                       </div>`,
+                iconSize: [40, 52], iconAnchor: [20, 50], popupAnchor: [0, -46], tooltipAnchor: [0, -4]
+            });
+            const m = L.marker([p.lat, p.lng], { icon, riseOnHover: true });
+            // Nombre del cliente siempre visible debajo del pin.
+            m.bindTooltip(label, { permanent: true, direction: 'bottom', offset: [0, 4], className: 'map-client-label', opacity: 1 });
             m.bindPopup(
-                `<div style="min-width:170px">
-                   <div style="font-weight:700;margin-bottom:2px">${label}</div>
-                   ${note ? `<div style="color:#4b5563;font-size:12px;margin-bottom:6px;white-space:pre-wrap">${note}</div>` : ''}
-                   <button data-pin="${p.id}" class="map-del-pin" style="cursor:pointer;border:0;background:#ef4444;color:#fff;font-weight:600;font-size:12px;padding:5px 10px;border-radius:8px">Borrar pin</button>
+                `<div style="min-width:180px">
+                   <div style="font-weight:800;font-size:14px;margin-bottom:2px">${label}</div>
+                   ${note ? `<div style="color:#4b5563;font-size:12px;margin-bottom:8px;white-space:pre-wrap">${note}</div>` : ''}
+                   <button data-pin="${p.id}" class="map-del-pin" style="cursor:pointer;border:0;background:#ef4444;color:#fff;font-weight:600;font-size:12px;padding:6px 12px;border-radius:8px">Borrar pin</button>
                  </div>`
             );
             m.addTo(layer);
+            // Pinta el borde de la etiqueta con el color del pin (el tooltip es un DOM aparte del pin).
+            const ttEl = m.getTooltip()?.getElement?.();
+            if (ttEl) ttEl.style.setProperty('--cm-color', hex);
         }
     }, [customPins]);
 

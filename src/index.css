@@ -590,3 +590,54 @@ input[type="color"]::-moz-color-swatch {
   background: rgba(31,41,55,0.7);
   color: #9ca3af;
 }
+
+/* 📍 Pines personalizados (clientes): gota grande con sombra, pulso suave y etiqueta visible */
+.map-custom-pin .cm-pin {
+  position: relative;
+  width: 40px;
+  height: 52px;
+  filter: drop-shadow(0 4px 5px rgba(0,0,0,0.35));
+  animation: cm-drop 0.35s cubic-bezier(0.17, 0.67, 0.3, 1.33);
+  transform-origin: 50% 100%;
+}
+.map-custom-pin .cm-pin:hover { transform: scale(1.12); transition: transform 0.12s ease; }
+.map-custom-pin .cm-pulse {
+  position: absolute;
+  left: 50%;
+  top: 14px;
+  width: 16px;
+  height: 16px;
+  margin-left: -8px;
+  border-radius: 50%;
+  background: var(--cm-color, #2563eb);
+  opacity: 0.55;
+  transform: translateZ(0);
+  animation: cm-pulse 1.9s ease-out infinite;
+  pointer-events: none;
+}
+@keyframes cm-pulse {
+  0%   { transform: scale(1); opacity: 0.55; }
+  70%  { transform: scale(3.2); opacity: 0; }
+  100% { transform: scale(3.2); opacity: 0; }
+}
+@keyframes cm-drop {
+  0%   { transform: translateY(-14px) scale(0.6); opacity: 0; }
+  100% { transform: translateY(0) scale(1); opacity: 1; }
+}
+/* Etiqueta con el nombre del cliente, siempre visible debajo del pin */
+.map-client-label.leaflet-tooltip {
+  background: #ffffff;
+  color: #111827;
+  border: 2px solid var(--cm-color, #2563eb);
+  border-radius: 9999px;
+  padding: 2px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+  white-space: nowrap;
+}
+.map-client-label.leaflet-tooltip::before { display: none; }
+.dark .map-client-label.leaflet-tooltip {
+  background: #1f2937;
+  color: #f9fafb;
+}
