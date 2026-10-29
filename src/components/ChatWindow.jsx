@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Trash2, AlertCircle, Maximize2, Minimize2, Paperclip, Mic, Image as ImageIcon, Send, ArrowLeft, RefreshCw, X, Play, Square, Download, Smile, Plus, Camera, MoreVertical, Reply, Copy, Check, CheckCheck, Clock, BookOpen, Search } from 'lucide-react';
+import { Trash2, AlertCircle, Maximize2, Minimize2, Paperclip, Mic, Image as ImageIcon, Send, ArrowLeft, RefreshCw, X, Play, Square, Download, Smile, Plus, Camera, MoreVertical, Reply, Copy, Check, CheckCheck, Clock, BookOpen, Search, CheckCircle2, Briefcase } from 'lucide-react';
 import Button from './ui/Button';
 import VacancyHistoryCard from './VacancyHistoryCard';
+import { isProfileComplete, firstMissingStep, STUCK_STEPS } from '../utils/profileUtils';
 import { substituteVariables, substituteDynamicPhrase } from '../../api/utils/shortcuts.js';
 
 const formatWhatsAppText = (text) => {
@@ -69,6 +70,7 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
     const [bankLoaded, setBankLoaded] = useState(false);
     const [bankSearch, setBankSearch] = useState('');
     const [fullCandidate, setFullCandidate] = useState(null); // candidato completo para sustituir variables
+    const [tagColors, setTagColors] = useState({});           // nombre (minúsculas) → color de la etiqueta
 
     // Recording State
     const [isRecording, setIsRecording] = useState(false);
@@ -110,16 +112,19 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
         }
     }, [isOpen]);
 
-    // Close on ESC
+    // Close on ESC. Fase de captura en window → se ejecuta antes que cualquier handler de
+    // descendientes (buscador del mapa, controles de Leaflet…), así nada puede "tragarse" la tecla.
+    // Si el banco está abierto, ESC lo cierra primero; si no, cierra el chat.
     useEffect(() => {
+        if (!isOpen) return undefined;
         const handleEsc = (e) => {
-            if (e.key === 'Escape') onClose();
+            if (e.key !== 'Escape') return;
+            if (showBank) { setShowBank(false); return; }
+            onClose();
         };
-        if (isOpen) {
-            window.addEventListener('keydown', handleEsc);
-        }
-        return () => window.removeEventListener('keydown', handleEsc);
-    }, [isOpen, onClose]);
+        window.addEventListener('keydown', handleEsc, true);
+        return () => window.removeEventListener('keydown', handleEsc, true);
+    }, [isOpen, onClose, showBank]);
 
     // Chat Initialization (One-time load) & Fields
     useEffect(() => {
@@ -427,6 +432,60 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
             .catch(() => {});
         return () => { cancelled = true; };
     }, [isOpen, candidate?.id]);
+
+    // Colores de etiquetas (para pintar los chips de la etiqueta del candidato en el header).
+    useEffect(() => {
+        if (!isOpen) return;
+        let cancelled = false;
+        fetch('/api/tags')
+            .then(r => r.json())
+            .then(d => {
+                if (cancelled || !Array.isArray(d?.tags)) return;
+                const m = {};
+                for (const t of d.tags) {
+                    const name = String(t?.name || t || '').trim().toLowerCase();
+                    if (name) m[name] = t?.color || '#3b82f6';
+                }
+                setTagColors(m);
+            })
+            .catch(() => {});
+        return () => { cancelled = true; };
+    }, [isOpen]);
+
+    // Resumen del candidato para el header: estado (completo/incompleto + paso faltante),
+    // demográficos presentes y etiquetas. Se recalcula cuando llega el perfil completo.
+    const candidateSummary = useMemo(() => {
+        const info = fullCandidate || candidate || {};
+        const clean = (v) => {
+            const s = String(v ?? '').trim();
+            return s && !['-', 'null', 'n/a', 'na', 'ninguno', 'ninguna', 'none', 'desconocido'].includes(s.toLowerCase()) ? s : '';
+        };
+        const complete = isProfileComplete(info);
+        const missKey = complete ? null : firstMissingStep(info);
+        const missingLabel = missKey ? (STUCK_STEPS.find(s => s.key === missKey)?.label || '') : '';
+
+        const categoria = clean(info.categoria);
+        const meses = parseInt(info.meses, 10);
+        let experiencia = '';
+        if (!isNaN(meses) && meses > 0) experiencia = `${meses} ${meses === 1 ? 'mes' : 'meses'} exp.`;
+        else if (clean(info.experiencia).toLowerCase() === 'no') experiencia = 'Sin experiencia';
+
+        const edad = clean(info.edad);
+        const demos = [
+            edad && `${edad} años`,
+            clean(info.genero),
+            clean(info.municipio),
+            clean(info.escolaridad),
+            clean(info.colonia),
+            experiencia
+        ].filter(Boolean);
+
+        const tags = (Array.isArray(info.tags) ? info.tags : [])
+            .map(t => (typeof t === 'string' ? t : (t?.name || '')).trim())
+            .filter(Boolean);
+
+        return { complete, missingLabel, categoria, demos, tags };
+    }, [fullCandidate, candidate]);
 
     const filteredBank = useMemo(() => {
         const q = bankSearch.trim().toLowerCase();
@@ -911,6 +970,46 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
                             <X className="w-4 h-4" />
                         </button>
                     </div>
+                </div>
+
+                {/* Resumen del candidato: estado + demográficos + etiqueta (elegante, compacto) */}
+                <div className="px-3 py-2 bg-gray-50/90 dark:bg-gray-900/50 border-b border-gray-100 dark:border-gray-700/60 flex flex-col gap-1.5">
+                    {/* Estado + categoría/puesto */}
+                    <div className="flex flex-wrap items-center gap-1.5">
+                        {candidateSummary.complete ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10.5px] font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">
+                                <CheckCircle2 className="w-3 h-3" /> Completo
+                            </span>
+                        ) : (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10.5px] font-bold bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300">
+                                <AlertCircle className="w-3 h-3" /> Incompleto{candidateSummary.missingLabel ? ` · falta ${candidateSummary.missingLabel}` : ''}
+                            </span>
+                        )}
+                        {candidateSummary.categoria && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10.5px] font-semibold bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300">
+                                <Briefcase className="w-3 h-3" /> {candidateSummary.categoria}
+                            </span>
+                        )}
+                    </div>
+                    {/* Demográficos */}
+                    {candidateSummary.demos.length > 0 && (
+                        <div className="flex flex-wrap items-center gap-1">
+                            {candidateSummary.demos.map((d, i) => (
+                                <span key={i} className="px-2 py-0.5 rounded-md text-[10.5px] font-medium bg-gray-100 text-gray-600 dark:bg-gray-700/60 dark:text-gray-300">{d}</span>
+                            ))}
+                        </div>
+                    )}
+                    {/* Etiquetas */}
+                    {candidateSummary.tags.length > 0 && (
+                        <div className="flex flex-wrap items-center gap-1">
+                            {candidateSummary.tags.map((t, i) => (
+                                <span key={i} className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10.5px] font-semibold bg-gray-100 dark:bg-gray-700/60 text-gray-700 dark:text-gray-200">
+                                    <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: tagColors[t.toLowerCase()] || '#3b82f6' }} />
+                                    {t}
+                                </span>
+                            ))}
+                        </div>
+                    )}
                 </div>
 
                 {/* Scalable Vacancy History Timeline */}
