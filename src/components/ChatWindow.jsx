@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Trash2, AlertCircle, Maximize2, Minimize2, Paperclip, Mic, Image as ImageIcon, Send, ArrowLeft, RefreshCw, X, Play, Square, Download, Smile, Plus, Camera, MoreVertical, Reply, Copy, Check, CheckCheck, Clock, Zap, Search } from 'lucide-react';
+import { Trash2, AlertCircle, Maximize2, Minimize2, Paperclip, Mic, Image as ImageIcon, Send, ArrowLeft, RefreshCw, X, Play, Square, Download, Smile, Plus, Camera, MoreVertical, Reply, Copy, Check, CheckCheck, Clock, BookOpen, Search } from 'lucide-react';
 import Button from './ui/Button';
 import VacancyHistoryCard from './VacancyHistoryCard';
 import { substituteVariables, substituteDynamicPhrase } from '../../api/utils/shortcuts.js';
@@ -1032,10 +1032,10 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
                                     <button
                                         type="button"
                                         onClick={() => setShowBank(s => !s)}
-                                        className={`p-2 transition-colors rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 ${showBank ? 'text-amber-500' : 'text-gray-400 hover:text-amber-500'}`}
-                                        title="Banco de respuestas"
+                                        className={`p-2 transition-colors rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 ${showBank ? 'text-green-600 dark:text-green-400' : 'text-gray-400 hover:text-green-600 dark:hover:text-green-400'}`}
+                                        title="Banco de Respuestas"
                                     >
-                                        <Zap className="w-5 h-5" />
+                                        <BookOpen className="w-5 h-5" />
                                     </button>
                                     <input
                                         type="text"
@@ -1083,8 +1083,8 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
                 <div className="w-[320px] h-full flex flex-col">
                     {/* Header */}
                     <div className="px-4 py-3 bg-[#f0f2f5] dark:bg-[#202c33] border-b border-[#d1d7db] dark:border-[#222e35] flex items-center gap-2 shrink-0">
-                        <Zap className="w-4 h-4 text-amber-500 shrink-0" />
-                        <span className="text-sm font-bold text-[#111b21] dark:text-[#e9edef]">Banco de respuestas</span>
+                        <BookOpen className="w-4 h-4 text-green-600 dark:text-green-400 shrink-0" />
+                        <span className="text-sm font-bold text-[#111b21] dark:text-[#e9edef]">Banco de Respuestas</span>
                         <button type="button" onClick={() => setShowBank(false)} className="ml-auto text-[#54656f] hover:text-[#111b21] dark:text-[#aebac1] dark:hover:text-white">
                             <X className="w-4 h-4" />
                         </button>
@@ -1110,7 +1110,7 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
                     <div className="flex-1 overflow-y-auto custom-scrollbar">
                         {filteredBank.length === 0 ? (
                             <div className="flex flex-col items-center justify-center h-full text-gray-400 dark:text-gray-600 p-6 text-center">
-                                <Zap className="w-9 h-9 mb-2 opacity-30" />
+                                <BookOpen className="w-9 h-9 mb-2 opacity-30" />
                                 <p className="text-xs">{bankLoaded ? (bankSearch ? 'Sin resultados' : 'Sin respuestas') : 'Cargando…'}</p>
                             </div>
                         ) : filteredBank.map((qr) => (

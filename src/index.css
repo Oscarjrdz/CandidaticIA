@@ -591,6 +591,26 @@ input[type="color"]::-moz-color-swatch {
   color: #9ca3af;
 }
 
+/* 🔒 Candado de zoom (control propio, apilado bajo los botones +/−).
+   La armella (zl-shackle) se levanta y gira al DESBLOQUEAR → se ve como un candado
+   que se abre; al BLOQUEAR cae cerrada y el icono se pinta de ámbar. */
+.zoom-lock-control a.zoom-lock-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #333;
+  cursor: pointer;
+}
+.dark .map-section-canvas .zoom-lock-control a.zoom-lock-btn { color: #e9edef; }
+.zoom-lock-control .zl-shackle {
+  transition: transform .35s cubic-bezier(.34, 1.56, .64, 1);
+  transform-origin: 17px 10px;
+}
+/* Default = DESBLOQUEADO: armella abierta */
+.zoom-lock-control:not(.locked) .zl-shackle { transform: translateY(-2px) rotate(-26deg); }
+/* BLOQUEADO: armella cerrada (sin transform) + icono ámbar */
+.zoom-lock-control.locked a.zoom-lock-btn { color: #f59e0b; }
+
 /* 📍 Pines personalizados (clientes): gota grande con sombra, pulso suave y etiqueta visible */
 .map-custom-pin .cm-pin {
   position: relative;

@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { MapPin, RefreshCw, Loader2, MessageSquare, Search, X, Plus, Trash2, Check, Tag, Briefcase, Lock, Unlock } from 'lucide-react';
+import { MapPin, RefreshCw, Loader2, MessageSquare, Search, X, Plus, Trash2, Check, Tag, Briefcase } from 'lucide-react';
 import { useAuthContext } from '../contexts/AuthContext';
 import ChatWindow from './ChatWindow';
 import ErrorBoundary from './ui/ErrorBoundary';
@@ -111,7 +111,9 @@ export default function MapSection({ onOpenCandidate }) {
     // la rueda, el pellizco, el doble clic y los botones +/− no cambien el acercamiento. El paneo
     // sigue libre. Al desactivarlo se restauran los límites originales del mapa.
     const [zoomLocked, setZoomLocked] = useState(false);
-    const zoomLimitsRef = useRef(null); // { min, max } originales, para restaurar al desbloquear
+    const zoomLimitsRef = useRef(null);   // { min, max } originales, para restaurar al desbloquear
+    const lockCtrlRef = useRef(null);     // DOM del control Leaflet del candado (para animar su estado)
+    const toggleZoomLockRef = useRef(null); // siempre apunta al toggle más reciente (el control se crea 1 vez)
     const toggleZoomLock = useCallback(() => {
         const map = mapRef.current;
         setZoomLocked(prev => {
@@ -129,6 +131,16 @@ export default function MapSection({ onOpenCandidate }) {
             return next;
         });
     }, []);
+    toggleZoomLockRef.current = toggleZoomLock;
+
+    // Refleja el estado del candado en el control del mapa (clase .locked → CSS anima la armella).
+    useEffect(() => {
+        const el = lockCtrlRef.current;
+        if (!el) return;
+        el.classList.toggle('locked', zoomLocked);
+        const a = el.querySelector('a');
+        if (a) a.title = zoomLocked ? 'Zoom bloqueado — clic para desbloquear' : 'Bloquear el zoom en el nivel actual';
+    }, [zoomLocked]);
 
     // 📂 Filtro por categoría (se COMBINA con el de etiqueta: un pin resalta si cumple ambos criterios
     // activos). La lista se arma con las categorías presentes en los pines; color asignado por paleta.
@@ -292,6 +304,22 @@ export default function MapSection({ onOpenCandidate }) {
         // zoomControl a la derecha para que los botones +/− no choquen con el buscador (arriba-izquierda).
         const map = L.map(containerRef.current, { center, zoom, preferCanvas: true, zoomControl: false });
         L.control.zoom({ position: 'topright' }).addTo(map);
+        // 🔒 Candado de zoom: control propio apilado JUSTO debajo de los botones +/− (mismo
+        // estilo leaflet-bar). La armella se abre/cierra con animación; el clic bloquea/libera.
+        const lockCtrl = L.control({ position: 'topright' });
+        lockCtrl.onAdd = () => {
+            const container = L.DomUtil.create('div', 'leaflet-bar leaflet-control zoom-lock-control');
+            const a = L.DomUtil.create('a', 'zoom-lock-btn', container);
+            a.href = '#';
+            a.setAttribute('role', 'button');
+            a.title = 'Bloquear el zoom en el nivel actual';
+            a.innerHTML = '<svg class="zl-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path class="zl-shackle" d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>';
+            L.DomEvent.disableClickPropagation(container);
+            L.DomEvent.on(a, 'click', (ev) => { L.DomEvent.preventDefault(ev); toggleZoomLockRef.current && toggleZoomLockRef.current(); });
+            lockCtrlRef.current = container;
+            return container;
+        };
+        lockCtrl.addTo(map);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '&copy; OpenStreetMap', maxZoom: 19
         }).addTo(map);
@@ -790,12 +818,6 @@ export default function MapSection({ onOpenCandidate }) {
                         className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${addMode ? 'bg-blue-500 border-blue-500 text-white' : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50'}`}>
                         <Plus className="w-3.5 h-3.5" />
                         {addMode ? 'Clic en el mapa…' : 'Agregar pin'}
-                    </button>
-                    <button onClick={toggleZoomLock}
-                        title={zoomLocked ? 'Zoom bloqueado — clic para desbloquear' : 'Bloquear el zoom en el nivel actual'}
-                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${zoomLocked ? 'bg-amber-500 border-amber-500 text-white' : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50'}`}>
-                        {zoomLocked ? <Lock className="w-3.5 h-3.5" /> : <Unlock className="w-3.5 h-3.5" />}
-                        {zoomLocked ? 'Zoom bloqueado' : 'Bloquear zoom'}
                     </button>
                     <button onClick={load} disabled={loading}
                         className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50 disabled:opacity-50">
