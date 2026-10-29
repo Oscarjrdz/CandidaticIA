@@ -27,7 +27,12 @@ const DAILY_KEY_PREFIX = 'bandwidth:daily:';
 const COMMANDS_KEY_PREFIX = 'bandwidth:commands:';
 const SCANS_KEY_PREFIX = 'bandwidth:scans:';
 const BLOBSIZE_KEY_PREFIX = 'bandwidth:blobsize:';
+const DISCONTINUITY_KEY_PREFIX = 'bandwidth:discontinuity:'; // cuantos intervalos se descartaron por dia (auditoria)
 const DAILY_TTL_SECONDS = 60 * 60 * 24 * 95; // ~95 dias — suficiente para vista mensual con margen
+// Techo de cordura: un delta de un solo intervalo (~15 min) por encima de esto no
+// es trafico real en un plan de 200 GB/mes — es una discontinuidad de contador que
+// run_id no alcanzo a atrapar. Se descarta ese intervalo (ver abajo).
+const MAX_PLAUSIBLE_DELTA_BYTES = 5 * 1024 * 1024 * 1024; // 5 GB
 const TZ = 'America/Monterrey';
 
 function todayMty(offsetDays = 0) {
@@ -46,6 +51,20 @@ function parseInfoStats(raw) {
         netOutputBytes: get('total_net_output_bytes'),
         commandsProcessed: get('total_commands_processed')
     };
+}
+
+/**
+ * Extrae el run_id de `INFO server` — identificador unico del PROCESO de Redis.
+ * Cambia en cada reinicio Y cuando el proxy administrado contesta INFO desde otro
+ * nodo del backend. Lo usamos para detectar discontinuidades de contador: si el
+ * run_id cambio entre dos fotos, el delta es basura (compara contadores de dos
+ * procesos distintos) y se descarta. Es el arreglo de raiz al pico fantasma del
+ * 2026-10-27 (126 GB "de salida" imposibles vs el consumo real del mes).
+ */
+function parseRunId(raw) {
+    if (!raw) return '';
+    const m = raw.match(/run_id:([0-9a-f]+)/);
+    return m ? m[1] : '';
 }
 
 /** Parsea `INFO commandstats` -> { GET: calls, LRANGE: calls, ... } (mayusculas). */
@@ -68,11 +87,13 @@ function parseCommandStats(raw) {
 export async function recordBandwidthSnapshot(redis) {
     if (!redis) return;
     try {
-        const [rawStats, rawCmd] = await Promise.all([
+        const [rawStats, rawCmd, rawServer] = await Promise.all([
             redis.info('stats'),
-            redis.info('commandstats').catch(() => '')
+            redis.info('commandstats').catch(() => ''),
+            redis.info('server').catch(() => '')
         ]);
         const current = parseInfoStats(rawStats);
+        current.runId = parseRunId(rawServer);
         const currentCmds = parseCommandStats(rawCmd);
 
         const lastRaw = await redis.get(SNAPSHOT_KEY);
@@ -86,16 +107,39 @@ export async function recordBandwidthSnapshot(redis) {
 
         if (!last) return; // primera corrida: solo establece el punto de partida
 
+        // GUARDA 1 — discontinuidad por run_id: reinicio de Redis O el proxy
+        // administrado contesto INFO desde otro nodo del backend. En ambos casos el
+        // delta entre fotos compara contadores de procesos distintos (absorbe la vida
+        // entera de otro proceso) -> se descarta ese intervalo y la base queda re-anclada
+        // en la foto nueva que ya guardamos arriba. Perdemos a lo mucho ~15 min de
+        // medicion ocasional; a cambio, cero picos fantasma.
+        if (last.runId && current.runId && last.runId !== current.runId) {
+            const dKey = `${DISCONTINUITY_KEY_PREFIX}${todayMty()}`;
+            redis.hincrby(dKey, 'runIdChange', 1).catch(() => {});
+            redis.expire(dKey, DAILY_TTL_SECONDS).catch(() => {});
+            return;
+        }
+
         const delta = {
             netInputBytes: current.netInputBytes - last.netInputBytes,
             netOutputBytes: current.netOutputBytes - last.netOutputBytes,
             commandsProcessed: current.commandsProcessed - last.commandsProcessed
         };
 
-        // Reset de contadores (reinicio de Redis): el delta es el valor actual completo
+        // Reset de contadores sin cambio de run_id (raro): el delta es el valor actual completo
         if (delta.netInputBytes < 0) delta.netInputBytes = current.netInputBytes;
         if (delta.netOutputBytes < 0) delta.netOutputBytes = current.netOutputBytes;
         if (delta.commandsProcessed < 0) delta.commandsProcessed = current.commandsProcessed;
+
+        // GUARDA 2 — tope de cordura: un delta de un intervalo por encima del techo no
+        // es trafico real en este plan; es una discontinuidad que run_id no atrapo. Se
+        // descarta (defensa en profundidad por si el proxy reusa run_id entre nodos).
+        if (delta.netInputBytes > MAX_PLAUSIBLE_DELTA_BYTES || delta.netOutputBytes > MAX_PLAUSIBLE_DELTA_BYTES) {
+            const dKey = `${DISCONTINUITY_KEY_PREFIX}${todayMty()}`;
+            redis.hincrby(dKey, 'clamp', 1).catch(() => {});
+            redis.expire(dKey, DAILY_TTL_SECONDS).catch(() => {});
+            return;
+        }
 
         const dayKey = `${DAILY_KEY_PREFIX}${todayMty()}`;
         const pipe = redis.pipeline();
