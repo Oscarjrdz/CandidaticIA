@@ -316,13 +316,17 @@ export default function MapSection({ onOpenCandidate }) {
         L.control.zoom({ position: 'topright' }).addTo(map);
         // 🔒 Candado de zoom: control propio apilado JUSTO debajo de los botones +/− (mismo
         // estilo leaflet-bar). La armella se abre/cierra con animación; el clic bloquea/libera.
+        const startLocked = !!savedView?.locked;
         const lockCtrl = L.control({ position: 'topright' });
         lockCtrl.onAdd = () => {
             const container = L.DomUtil.create('div', 'leaflet-bar leaflet-control zoom-lock-control');
             const a = L.DomUtil.create('a', 'zoom-lock-btn', container);
             a.href = '#';
             a.setAttribute('role', 'button');
-            a.title = 'Bloquear el zoom en el nivel actual';
+            // Refleja de entrada el candado guardado: sin esto el ícono arranca abierto aunque el
+            // zoom sí esté bloqueado (el effect que pinta .locked corre antes de existir este control).
+            if (startLocked) container.classList.add('locked');
+            a.title = startLocked ? 'Zoom bloqueado — clic para desbloquear' : 'Bloquear el zoom en el nivel actual';
             a.innerHTML = '<svg class="zl-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path class="zl-shackle" d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>';
             L.DomEvent.disableClickPropagation(container);
             L.DomEvent.on(a, 'click', (ev) => { L.DomEvent.preventDefault(ev); toggleZoomLockRef.current && toggleZoomLockRef.current(); });
