@@ -972,45 +972,55 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
                     </div>
                 </div>
 
-                {/* Resumen del candidato: estado + demográficos + etiqueta (elegante, compacto) */}
-                <div className="px-3 py-2 bg-gray-50/90 dark:bg-gray-900/50 border-b border-gray-100 dark:border-gray-700/60 flex flex-col gap-1.5">
-                    {/* Estado + categoría/puesto */}
-                    <div className="flex flex-wrap items-center gap-1.5">
-                        {candidateSummary.complete ? (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10.5px] font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">
-                                <CheckCircle2 className="w-3 h-3" /> Completo
-                            </span>
-                        ) : (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10.5px] font-bold bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300">
-                                <AlertCircle className="w-3 h-3" /> Incompleto{candidateSummary.missingLabel ? ` · falta ${candidateSummary.missingLabel}` : ''}
-                            </span>
-                        )}
-                        {candidateSummary.categoria && (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10.5px] font-semibold bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300">
-                                <Briefcase className="w-3 h-3" /> {candidateSummary.categoria}
-                            </span>
-                        )}
-                    </div>
-                    {/* Demográficos */}
-                    {candidateSummary.demos.length > 0 && (
-                        <div className="flex flex-wrap items-center gap-1">
-                            {candidateSummary.demos.map((d, i) => (
-                                <span key={i} className="px-2 py-0.5 rounded-md text-[10.5px] font-medium bg-gray-100 text-gray-600 dark:bg-gray-700/60 dark:text-gray-300">{d}</span>
-                            ))}
+                {/* Resumen del candidato. Renglón 1: etiqueta + estado + categoría (misma línea).
+                    Renglones 2 y 3: demográficos en DOS líneas. Todas las cápsulas de un renglón
+                    miden igual (flex-1 basis-0) con el texto centrado; el renglón corto de los
+                    demográficos se rellena con huecos invisibles para que los anchos coincidan. */}
+                {(() => {
+                    const base = 'flex-1 basis-0 min-w-0 inline-flex items-center justify-center gap-1 px-2 py-1 rounded-full text-[10.5px] leading-tight text-center';
+                    // ── Renglón 1: etiqueta(s) + completo + categoría ──
+                    const idChips = [];
+                    candidateSummary.tags.forEach((t, i) => idChips.push(
+                        <span key={`t${i}`} className={`${base} font-semibold bg-gray-100 dark:bg-gray-700/60 text-gray-700 dark:text-gray-200`}>
+                            <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: tagColors[t.toLowerCase()] || '#3b82f6' }} />
+                            {t}
+                        </span>
+                    ));
+                    idChips.push(candidateSummary.complete ? (
+                        <span key="st" className={`${base} font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300`}>
+                            <CheckCircle2 className="w-3 h-3 shrink-0" /> Completo
+                        </span>
+                    ) : (
+                        <span key="st" className={`${base} font-bold bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300`}>
+                            <AlertCircle className="w-3 h-3 shrink-0" /> Incompleto
+                        </span>
+                    ));
+                    if (candidateSummary.categoria) idChips.push(
+                        <span key="cat" className={`${base} font-semibold bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300`}>
+                            <Briefcase className="w-3 h-3 shrink-0" /> {candidateSummary.categoria}
+                        </span>
+                    );
+                    // ── Renglones 2 y 3: demográficos en dos líneas ──
+                    const demoChips = candidateSummary.demos.map((d, i) => (
+                        <span key={`d${i}`} className={`${base} font-medium bg-gray-100 text-gray-600 dark:bg-gray-700/60 dark:text-gray-300`}>{d}</span>
+                    ));
+                    const dcols = Math.max(1, Math.ceil(demoChips.length / 2));
+                    const drow1 = demoChips.slice(0, dcols);
+                    const drow2 = demoChips.slice(dcols);
+                    const dspacers = dcols - drow2.length;
+                    return (
+                        <div className="px-3 py-2 bg-gray-50/90 dark:bg-gray-900/50 border-b border-gray-100 dark:border-gray-700/60 flex flex-col gap-1.5">
+                            <div className="flex items-stretch gap-1.5">{idChips}</div>
+                            {drow1.length > 0 && <div className="flex items-stretch gap-1.5">{drow1}</div>}
+                            {drow2.length > 0 && (
+                                <div className="flex items-stretch gap-1.5">
+                                    {drow2}
+                                    {Array.from({ length: dspacers }).map((_, i) => <span key={`sp${i}`} className="flex-1 basis-0" aria-hidden="true" />)}
+                                </div>
+                            )}
                         </div>
-                    )}
-                    {/* Etiquetas */}
-                    {candidateSummary.tags.length > 0 && (
-                        <div className="flex flex-wrap items-center gap-1">
-                            {candidateSummary.tags.map((t, i) => (
-                                <span key={i} className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10.5px] font-semibold bg-gray-100 dark:bg-gray-700/60 text-gray-700 dark:text-gray-200">
-                                    <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: tagColors[t.toLowerCase()] || '#3b82f6' }} />
-                                    {t}
-                                </span>
-                            ))}
-                        </div>
-                    )}
-                </div>
+                    );
+                })()}
 
                 {/* Scalable Vacancy History Timeline */}
                 <VacancyHistoryCard candidateId={candidate?.id} />
