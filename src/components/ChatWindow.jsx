@@ -471,14 +471,17 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
         else if (clean(info.experiencia).toLowerCase() === 'no') experiencia = 'Sin experiencia';
 
         const edad = clean(info.edad);
-        const demos = [
-            edad && `${edad} años`,
-            clean(info.genero),
-            clean(info.municipio),
-            clean(info.escolaridad),
-            clean(info.colonia),
-            experiencia
-        ].filter(Boolean);
+        // Todos los campos demográficos: si falta el dato, la cápsula se muestra en estado
+        // "pendiente" (ghost) con el nombre de lo que falta (text = label, missing = true).
+        const demoSlots = [
+            { label: 'Edad', value: edad ? `${edad} años` : '' },
+            { label: 'Género', value: clean(info.genero) },
+            { label: 'Municipio', value: clean(info.municipio) },
+            { label: 'Escolaridad', value: clean(info.escolaridad) },
+            { label: 'Colonia', value: clean(info.colonia) },
+            { label: 'Experiencia', value: experiencia }
+        ];
+        const demos = demoSlots.map(s => ({ text: s.value || s.label, missing: !s.value }));
 
         const tags = (Array.isArray(info.tags) ? info.tags : [])
             .map(t => (typeof t === 'string' ? t : (t?.name || '')).trim())
@@ -977,7 +980,7 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
                     miden igual (flex-1 basis-0) con el texto centrado; el renglón corto de los
                     demográficos se rellena con huecos invisibles para que los anchos coincidan. */}
                 {(() => {
-                    const base = 'flex-1 basis-0 min-w-0 inline-flex items-center justify-center gap-1 px-2 py-1 rounded-full text-[10.5px] leading-tight text-center';
+                    const base = 'flex-1 basis-0 min-w-0 inline-flex items-center justify-center gap-1 px-2 py-1 rounded-full text-[10.5px] leading-tight text-center border border-transparent';
                     // ── Renglón 1: etiqueta(s) + completo + categoría ──
                     const idChips = [];
                     candidateSummary.tags.forEach((t, i) => idChips.push(
@@ -1000,9 +1003,18 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
                             <Briefcase className="w-3 h-3 shrink-0" /> {candidateSummary.categoria}
                         </span>
                     );
-                    // ── Renglones 2 y 3: demográficos en dos líneas ──
+                    // ── Renglones 2 y 3: demográficos en dos líneas. Mismo layout para completos
+                    //    e incompletos: lo que falta se pinta como cápsula "pendiente" (ghost). ──
                     const demoChips = candidateSummary.demos.map((d, i) => (
-                        <span key={`d${i}`} className={`${base} font-medium bg-gray-100 text-gray-600 dark:bg-gray-700/60 dark:text-gray-300`}>{d}</span>
+                        <span
+                            key={`d${i}`}
+                            className={`${base} font-medium border ${d.missing
+                                ? 'border-dashed border-gray-300 dark:border-gray-600 text-gray-400 dark:text-gray-500 italic'
+                                : 'border-transparent bg-gray-100 text-gray-600 dark:bg-gray-700/60 dark:text-gray-300'}`}
+                            title={d.missing ? 'Dato pendiente' : undefined}
+                        >
+                            {d.text}
+                        </span>
                     ));
                     const dcols = Math.max(1, Math.ceil(demoChips.length / 2));
                     const drow1 = demoChips.slice(0, dcols);
