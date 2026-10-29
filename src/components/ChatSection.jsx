@@ -3741,6 +3741,23 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                     if (patch.lastUserMessageAt !== undefined) afterUnread.lastUserMessageAt = patch.lastUserMessageAt;
                     if (patch.lastHumanMessageAt !== undefined) afterUnread.lastHumanMessageAt = patch.lastHumanMessageAt;
                     reconcileUnreadBadges(beforeUnread, afterUnread);
+                    // 🔑 Espejar candidatesRef/selectedChatRef SÍNCRONAMENTE con los dos campos que
+                    // mueven checkIfUnread. setCandidates (abajo) solo refresca el ref en el PRÓXIMO
+                    // commit (useEffect candidatesRef). Sin esto, dos mensajes del MISMO candidato que
+                    // llegan antes del re-render leen ambos el estado "leído" viejo como `before` y
+                    // suman +1 cada uno → el menú cuenta mensajes en vez de chats (descuadre/parpadeo
+                    // bajo tráfico alto). Con el espejo, el 2º mensaje ve before===after (delta 0).
+                    // Es el mismo patrón que ya aplica applyCandidateUnreadPatch para acciones locales.
+                    const unreadSync = {
+                        lastUserMessageAt: afterUnread.lastUserMessageAt,
+                        lastHumanMessageAt: afterUnread.lastHumanMessageAt,
+                    };
+                    candidatesRef.current = candidatesRef.current.map(c =>
+                        c.id === sseUpdate.candidateId ? { ...c, ...unreadSync } : c
+                    );
+                    if (selectedChatRef.current?.id === sseUpdate.candidateId) {
+                        selectedChatRef.current = { ...selectedChatRef.current, ...unreadSync };
+                    }
                 }
             }
 
