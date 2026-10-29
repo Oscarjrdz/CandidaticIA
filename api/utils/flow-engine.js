@@ -1614,6 +1614,19 @@ async function runOneFlow(redis, flow, candidateId, candidate, opts = {}) {
                     passed.set(node.id, true);
                     continue;
                 }
+                // ⏸️ PAUSA SIN RESOLVER (valor 'W'): un nodo interactivo/ubicación/espera quedó
+                // esperando la respuesta del candidato en una corrida PREVIA, y ESTA corrida NO es
+                // su reanudación (una reanudación real se intercepta ANTES, en el bloque resumeWait
+                // de arriba, y lo convierte a 'H:<handle>'). Si lo tratáramos como 'pass' plano se
+                // encenderían TODAS sus salidas a la vez (si/no/nocasa son aristas normales) y el
+                // flujo se detonaría en cascada — exactamente lo que pasa cuando un deploy/timeout
+                // corta una corrida a medias (deja la 'W') y un reintento de WhatsApp la vuelve a
+                // correr. La respuesta correcta es: SIGUE ESPERANDO. Detén la corrida aquí, sin
+                // tomar ninguna rama ni re-enviar nada; la espera real sigue viva en flow:waiting.
+                if (rawPrior === 'W') {
+                    passed.set(node.id, true);
+                    return passed;
+                }
                 const priorPass = rawPrior === '1';
                 // Excepción: 'frase_dinamica' no tiene efectos externos (solo fija una variable
                 // en memoria para los WhatsApp siguientes). Al reanudar un flujo pausado hay que
@@ -1633,10 +1646,17 @@ async function runOneFlow(redis, flow, candidateId, candidate, opts = {}) {
             // `continue` antes de aquí → no re-animan). Ilumina su arista de entrada.
             await emitStep(node, deps);
 
-            // ⏸️ PAUSA (nodo "esperando_respuesta"): marca el nodo como hecho para reanudar
-            // DESPUÉS de él y detiene la corrida SIN marcar el flujo completado (no sadd execKey,
-            // no borra el ledger). El TTL del ledger se alarga a la ventana de espera para que
-            // una reanudación tardía no re-empiece el flujo desde cero.
+            // ⏸️ PAUSA (nodos interactivos / ubicación / "esperando_respuesta"): marca el nodo en el
+            // ledger con el centinela 'W' (waiting = esperando respuesta) — NO '1' (ejecutado). La
+            // diferencia es crítica: '1' significa "pasó, sigue con sus salidas"; 'W' significa "aún
+            // no sé qué contestó, no tomes ninguna salida todavía". Si se marcara '1', una corrida
+            // que lea este ledger (p.ej. un reintento de WhatsApp tras cortarse la corrida por un
+            // deploy) lo trataría como pass y dispararía TODAS las ramas a la vez (cascada). Con 'W',
+            // el bloque de reutilización de arriba DETIENE la corrida en este nodo (sigue esperando).
+            // La reanudación REAL (clic/GPS del candidato) sobrescribe 'W' por 'H:<handle>' y toma
+            // SOLO la rama elegida. Detiene la corrida SIN marcar el flujo completado (no sadd
+            // execKey, no borra el ledger). El TTL del ledger se alarga a la ventana de espera para
+            // que una reanudación tardía no re-empiece el flujo desde cero.
             if (result && typeof result === 'object' && result.__pause) {
                 const pausePipe = redis.pipeline();
                 // En EPHEMERAL los nodos previos NO se fueron escribiendo al ledger → vuélcalos
@@ -1649,7 +1669,7 @@ async function runOneFlow(redis, flow, candidateId, candidate, opts = {}) {
                         if (oc === 'pass' || oc === 'fail') pausePipe.hset(progressKey, nid, oc === 'pass' ? '1' : '0');
                     }
                 }
-                pausePipe.hset(progressKey, node.id, '1');
+                pausePipe.hset(progressKey, node.id, 'W');
                 pausePipe.expire(progressKey, result.ttlSec || PROGRESS_TTL_SEC);
                 await pausePipe.exec().catch(() => {});
                 passed.set(node.id, true);
