@@ -624,8 +624,20 @@ input[type="color"]::-moz-color-swatch {
 }
 @keyframes cwFade { from { opacity: 0; } to { opacity: 1; } }
 .cw-backdrop-in { animation: cwFade .3s ease-out both; }
+/* Cierre: la tarjeta se encoge y cae suavemente mientras el telón se desvanece. */
+@keyframes cwPopOut {
+  0%   { opacity: 1; transform: translateY(0) scale(1); }
+  100% { opacity: 0; transform: translateY(10px) scale(.9); }
+}
+.cw-pop-out {
+  animation: cwPopOut .28s cubic-bezier(.4, 0, 1, 1) both;
+  transform-origin: center bottom;
+  will-change: transform, opacity;
+}
+@keyframes cwFadeOut { from { opacity: 1; } to { opacity: 0; } }
+.cw-backdrop-out { animation: cwFadeOut .28s ease-in both; }
 @media (prefers-reduced-motion: reduce) {
-  .cw-pop-in, .cw-backdrop-in { animation: none; }
+  .cw-pop-in, .cw-backdrop-in, .cw-pop-out, .cw-backdrop-out { animation: none; }
 }
 
 /* 📍 Pines personalizados (clientes): gota grande con sombra, pulso suave y etiqueta visible */

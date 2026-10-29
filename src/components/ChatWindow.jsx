@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } from 'react';
 import { Trash2, AlertCircle, Maximize2, Minimize2, Paperclip, Mic, Image as ImageIcon, Send, ArrowLeft, RefreshCw, X, Play, Square, Download, Smile, Plus, Camera, MoreVertical, Reply, Copy, Check, CheckCheck, Clock, BookOpen, Search, CheckCircle2, Briefcase } from 'lucide-react';
 import Button from './ui/Button';
 import VacancyHistoryCard from './VacancyHistoryCard';
@@ -63,6 +63,20 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
     const [_availableFields, setAvailableFields] = useState([]);
     const [replyToMsg, setReplyToMsg] = useState(null);
 
+    // Cierre animado: al pedir cerrar no desmontamos de golpe; marcamos isClosing para disparar
+    // la animación de salida y avisamos al padre (onClose) cuando termina (~280ms). Mientras tanto
+    // el candidato sigue presente, así el chat no "parpadea" vacío durante la salida.
+    const [isClosing, setIsClosing] = useState(false);
+    const requestClose = useCallback(() => setIsClosing(true), []);
+    // Al terminar la animación de salida, avisa al padre para que desmonte de verdad.
+    useEffect(() => {
+        if (!isClosing) return undefined;
+        const t = setTimeout(() => { onClose(); }, 280);
+        return () => clearTimeout(t);
+    }, [isClosing, onClose]);
+    // Reinicia la bandera al (re)abrir, antes de pintar, para que no herede la salida anterior.
+    useLayoutEffect(() => { if (isOpen) setIsClosing(false); }, [isOpen]);
+
     // Banco de respuestas (solo mostrar + mandar, mismo endpoint que Chat Web: /api/quick_replies).
     // Panel lateral derecho deslizable; NO edita ni crea (eso vive en Chat Web).
     const [showBank, setShowBank] = useState(false);
@@ -120,11 +134,11 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
         const handleEsc = (e) => {
             if (e.key !== 'Escape') return;
             if (showBank) { setShowBank(false); return; }
-            onClose();
+            requestClose();
         };
         window.addEventListener('keydown', handleEsc, true);
         return () => window.removeEventListener('keydown', handleEsc, true);
-    }, [isOpen, onClose, showBank]);
+    }, [isOpen, requestClose, showBank]);
 
     // Chat Initialization (One-time load) & Fields
     useEffect(() => {
@@ -905,7 +919,7 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
         <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
             {/* Telón sutil que da profundidad al abrir (no bloquea: pointer-events-none → el
                 chat se siente flotante, se puede seguir interactuando con el mapa detrás). */}
-            <div className="absolute inset-0 bg-black/10 dark:bg-black/30 pointer-events-none cw-backdrop-in" />
+            <div className={`absolute inset-0 bg-black/10 dark:bg-black/30 pointer-events-none ${isClosing ? 'cw-backdrop-out' : 'cw-backdrop-in'}`} />
 
             {/* Wrapper posicionable: contiene la ventana de chat y, pegado a su borde
                 derecho, el banco de respuestas deslizable (del mismo alto que el chat).
@@ -926,7 +940,7 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
             >
             <div
                 ref={windowRef}
-                className="w-full bg-white dark:bg-gray-800 shadow-2xl rounded-xl flex flex-col pointer-events-auto border border-gray-200 dark:border-gray-700 overflow-hidden cw-pop-in"
+                className={`w-full bg-white dark:bg-gray-800 shadow-2xl rounded-xl flex flex-col pointer-events-auto border border-gray-200 dark:border-gray-700 overflow-hidden ${isClosing ? 'cw-pop-out' : 'cw-pop-in'}`}
             >
                 {/* Header draggable */}
                 <div
@@ -961,7 +975,7 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
                         <button
                             onClick={(e) => {
                                 e.stopPropagation();
-                                onClose();
+                                requestClose();
                             }}
                             onMouseDown={(e) => e.stopPropagation()}
                             className="p-1.5 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full text-gray-500 hover:text-red-500 transition-colors pointer-events-auto"
