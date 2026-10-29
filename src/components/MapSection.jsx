@@ -110,14 +110,17 @@ export default function MapSection({ onOpenCandidate }) {
     // 🔒 Candado de zoom: al activarlo, fija el zoom actual (minZoom=maxZoom=zoom actual) para que
     // la rueda, el pellizco, el doble clic y los botones +/− no cambien el acercamiento. El paneo
     // sigue libre. Al desactivarlo se restauran los límites originales del mapa.
-    const [zoomLocked, setZoomLocked] = useState(false);
+    const [zoomLocked, setZoomLocked] = useState(!!savedView?.locked);
+    const zoomLockedRef = useRef(!!savedView?.locked); // espejo del estado, para que saveView siempre persista el candado
     const zoomLimitsRef = useRef(null);   // { min, max } originales, para restaurar al desbloquear
     const lockCtrlRef = useRef(null);     // DOM del control Leaflet del candado (para animar su estado)
     const toggleZoomLockRef = useRef(null); // siempre apunta al toggle más reciente (el control se crea 1 vez)
+    const saveViewRef = useRef(null);     // siempre apunta al saveView más reciente (se define más abajo)
     const toggleZoomLock = useCallback(() => {
         const map = mapRef.current;
         setZoomLocked(prev => {
             const next = !prev;
+            zoomLockedRef.current = next;
             if (!map) return next;
             if (next) {
                 if (!zoomLimitsRef.current) zoomLimitsRef.current = { min: map.getMinZoom(), max: map.getMaxZoom() };
@@ -128,6 +131,9 @@ export default function MapSection({ onOpenCandidate }) {
                 map.setMinZoom(zoomLimitsRef.current.min);
                 map.setMaxZoom(zoomLimitsRef.current.max);
             }
+            // Persiste el nuevo estado del candado junto con la vista actual.
+            const c = map.getCenter();
+            saveViewRef.current && saveViewRef.current({ lat: +c.lat.toFixed(6), lng: +c.lng.toFixed(6), zoom: map.getZoom() });
             return next;
         });
     }, []);
@@ -285,16 +291,20 @@ export default function MapSection({ onOpenCandidate }) {
     // spamear PUT /api/users al arrastrar/zoom. saveUser mergea preferences un nivel.
     const saveView = useCallback((view) => {
         if (!user?.id) return;
-        setUser(prev => prev ? { ...prev, preferences: { ...(prev.preferences || {}), mapView: view } } : prev);
+        // El candado (locked) viaja SIEMPRE dentro de mapView: saveUser reemplaza el objeto mapView
+        // completo, así que si no lo adjuntáramos en cada guardado de vista se borraría al mover/zoom.
+        const full = { ...view, locked: zoomLockedRef.current };
+        setUser(prev => prev ? { ...prev, preferences: { ...(prev.preferences || {}), mapView: full } } : prev);
         clearTimeout(saveTimer.current);
         saveTimer.current = setTimeout(() => {
             fetch('/api/users', {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ id: user.id, preferences: { mapView: view } })
+                body: JSON.stringify({ id: user.id, preferences: { mapView: full } })
             }).catch(() => {});
         }, 800);
     }, [user?.id, setUser]);
+    saveViewRef.current = saveView;
 
     // Inicializa el mapa una sola vez (centro/zoom desde la vista guardada si existe).
     useEffect(() => {
@@ -326,6 +336,12 @@ export default function MapSection({ onOpenCandidate }) {
         layerRef.current = L.layerGroup().addTo(map);
         customLayerRef.current = L.layerGroup().addTo(map);
         mapRef.current = map;
+        // 🔒 Si el usuario dejó el zoom bloqueado, re-aplica el candado al nivel guardado.
+        if (savedView?.locked) {
+            zoomLimitsRef.current = { min: map.getMinZoom(), max: map.getMaxZoom() };
+            map.setMinZoom(zoom);
+            map.setMaxZoom(zoom);
+        }
         // Al mover/zoom: guarda cómo quedó el mapa (debounced).
         map.on('moveend', () => {
             const c = map.getCenter();
