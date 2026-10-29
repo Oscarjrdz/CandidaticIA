@@ -870,16 +870,16 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
                     })()}
 
                     {hasTextBubble && (
-                        <div className="relative min-w-[60px] max-w-full text-[14.5px]">
+                        <div className="relative min-w-[108px] max-w-full text-[14.5px]">
                             <div
                                 className="whitespace-pre-wrap leading-snug break-words"
-                                dangerouslySetInnerHTML={{ __html: formatWhatsAppText(msg.content) + '<span class="inline-block w-[78px] h-2 invisible pointer-events-none"></span>' }}
+                                dangerouslySetInnerHTML={{ __html: formatWhatsAppText(msg.content) + '<span class="inline-block w-[104px] h-2 invisible pointer-events-none"></span>' }}
                             />
                         </div>
                     )}
 
                     <div className={`flex items-center gap-0.5 select-none ${hasTextBubble ? 'absolute bottom-1 right-2' : 'justify-end mt-1'}`}>
-                        <p className="text-[10px] text-gray-500/90 dark:text-gray-400/90 font-medium tracking-tight">
+                        <p className="text-[10px] text-gray-500/90 dark:text-gray-400/90 font-medium tracking-tight leading-none whitespace-nowrap">
                             {safeFormatTime(msg.timestamp)}
                         </p>
                         {isMe && (() => {
