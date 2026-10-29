@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { MapPin, RefreshCw, Loader2, MessageSquare, Search, X, Plus, Trash2, Check, Tag, Briefcase } from 'lucide-react';
+import { MapPin, RefreshCw, Loader2, MessageSquare, Search, X, Plus, Trash2, Check, Tag, Briefcase, Lock, Unlock } from 'lucide-react';
 import { useAuthContext } from '../contexts/AuthContext';
 import ChatWindow from './ChatWindow';
 import ErrorBoundary from './ui/ErrorBoundary';
@@ -106,6 +106,29 @@ export default function MapSection({ onOpenCandidate }) {
     // 🔵 Modo "Ver asistencias": colorea de azul las burbujas de candidatos con asistencia confirmada.
     const [showAsistencias, setShowAsistencias] = useState(false);
     const asistenciaCount = useMemo(() => pins.filter(p => p.asistencia === true).length, [pins]);
+
+    // 🔒 Candado de zoom: al activarlo, fija el zoom actual (minZoom=maxZoom=zoom actual) para que
+    // la rueda, el pellizco, el doble clic y los botones +/− no cambien el acercamiento. El paneo
+    // sigue libre. Al desactivarlo se restauran los límites originales del mapa.
+    const [zoomLocked, setZoomLocked] = useState(false);
+    const zoomLimitsRef = useRef(null); // { min, max } originales, para restaurar al desbloquear
+    const toggleZoomLock = useCallback(() => {
+        const map = mapRef.current;
+        setZoomLocked(prev => {
+            const next = !prev;
+            if (!map) return next;
+            if (next) {
+                if (!zoomLimitsRef.current) zoomLimitsRef.current = { min: map.getMinZoom(), max: map.getMaxZoom() };
+                const z = map.getZoom();
+                map.setMinZoom(z);
+                map.setMaxZoom(z);
+            } else if (zoomLimitsRef.current) {
+                map.setMinZoom(zoomLimitsRef.current.min);
+                map.setMaxZoom(zoomLimitsRef.current.max);
+            }
+            return next;
+        });
+    }, []);
 
     // 📂 Filtro por categoría (se COMBINA con el de etiqueta: un pin resalta si cumple ambos criterios
     // activos). La lista se arma con las categorías presentes en los pines; color asignado por paleta.
@@ -767,6 +790,12 @@ export default function MapSection({ onOpenCandidate }) {
                         className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${addMode ? 'bg-blue-500 border-blue-500 text-white' : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50'}`}>
                         <Plus className="w-3.5 h-3.5" />
                         {addMode ? 'Clic en el mapa…' : 'Agregar pin'}
+                    </button>
+                    <button onClick={toggleZoomLock}
+                        title={zoomLocked ? 'Zoom bloqueado — clic para desbloquear' : 'Bloquear el zoom en el nivel actual'}
+                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${zoomLocked ? 'bg-amber-500 border-amber-500 text-white' : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50'}`}>
+                        {zoomLocked ? <Lock className="w-3.5 h-3.5" /> : <Unlock className="w-3.5 h-3.5" />}
+                        {zoomLocked ? 'Zoom bloqueado' : 'Bloquear zoom'}
                     </button>
                     <button onClick={load} disabled={loading}
                         className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50 disabled:opacity-50">
