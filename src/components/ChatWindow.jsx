@@ -903,16 +903,13 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
-            {/* Backdrop opcional - lo haremos invisible para dar sensación 'flotante' real, 
-                pero si el usuario quiere modal behavior (no clicar atrás), ponemos div.
-                Usuario dijo "popup... flotante". Normalmente 'flotante' implica poder interactuar atrás, 
-                pero 'popup' suele ser modal.
-                Lo haremos 'Modeless-like' (pointer-events-none en container), 
-                pero el chat (pointer-events-auto) bloquea clicks en él mismo.
-            */}
+            {/* Telón sutil que da profundidad al abrir (no bloquea: pointer-events-none → el
+                chat se siente flotante, se puede seguir interactuando con el mapa detrás). */}
+            <div className="absolute inset-0 bg-black/10 dark:bg-black/30 pointer-events-none cw-backdrop-in" />
 
             {/* Wrapper posicionable: contiene la ventana de chat y, pegado a su borde
-                derecho, el banco de respuestas deslizable (del mismo alto que el chat). */}
+                derecho, el banco de respuestas deslizable (del mismo alto que el chat).
+                cw-pop-in (en la tarjeta) → animación de entrada elegante con leve rebote. */}
             <div
                 className="relative w-full max-w-md pointer-events-none"
                 style={
@@ -929,7 +926,7 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
             >
             <div
                 ref={windowRef}
-                className="w-full bg-white dark:bg-gray-800 shadow-2xl rounded-xl flex flex-col pointer-events-auto border border-gray-200 dark:border-gray-700 overflow-hidden"
+                className="w-full bg-white dark:bg-gray-800 shadow-2xl rounded-xl flex flex-col pointer-events-auto border border-gray-200 dark:border-gray-700 overflow-hidden cw-pop-in"
             >
                 {/* Header draggable */}
                 <div
@@ -1020,9 +1017,16 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
                     const drow1 = demoChips.slice(0, dcols);
                     const drow2 = demoChips.slice(dcols);
                     const dspacers = dcols - drow2.length;
+                    // El renglón 1 (etiqueta+estado+categoría) se rellena con huecos invisibles
+                    // hasta igualar las columnas de los demográficos, para que un candidato
+                    // incompleto (sin categoría) alinee columna a columna igual que uno completo.
+                    const idspacers = Math.max(0, dcols - idChips.length);
                     return (
                         <div className="px-3 py-2 bg-gray-50/90 dark:bg-gray-900/50 border-b border-gray-100 dark:border-gray-700/60 flex flex-col gap-1.5">
-                            <div className="flex items-stretch gap-1.5">{idChips}</div>
+                            <div className="flex items-stretch gap-1.5">
+                                {idChips}
+                                {Array.from({ length: idspacers }).map((_, i) => <span key={`isp${i}`} className="flex-1 basis-0" aria-hidden="true" />)}
+                            </div>
                             {drow1.length > 0 && <div className="flex items-stretch gap-1.5">{drow1}</div>}
                             {drow2.length > 0 && (
                                 <div className="flex items-stretch gap-1.5">
