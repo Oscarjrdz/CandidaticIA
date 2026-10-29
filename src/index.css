@@ -611,6 +611,23 @@ input[type="color"]::-moz-color-swatch {
 /* BLOQUEADO: armella cerrada (sin transform) + icono ámbar */
 .zoom-lock-control.locked a.zoom-lock-btn { color: #f59e0b; }
 
+/* 💬 Apertura del chat flotante (Mapa/Candidatos/CRM): la tarjeta surge con un
+   leve rebote (scale + rise + fade) y el telón hace un fundido suave detrás. */
+@keyframes cwPop {
+  0%   { opacity: 0; transform: translateY(12px) scale(.93); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+.cw-pop-in {
+  animation: cwPop .36s cubic-bezier(.34, 1.56, .64, 1) both;
+  transform-origin: center bottom;
+  will-change: transform, opacity;
+}
+@keyframes cwFade { from { opacity: 0; } to { opacity: 1; } }
+.cw-backdrop-in { animation: cwFade .3s ease-out both; }
+@media (prefers-reduced-motion: reduce) {
+  .cw-pop-in, .cw-backdrop-in { animation: none; }
+}
+
 /* 📍 Pines personalizados (clientes): gota grande con sombra, pulso suave y etiqueta visible */
 .map-custom-pin .cm-pin {
   position: relative;
