@@ -1,10 +1,11 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { MapPin, RefreshCw, Loader2, MessageSquare, Search, X, Plus, Trash2, Check, Tag, Briefcase } from 'lucide-react';
+import { MapPin, RefreshCw, Loader2, MessageSquare, Search, X, Plus, Trash2, Check, Tag, Briefcase, Bus } from 'lucide-react';
 import { useAuthContext } from '../contexts/AuthContext';
 import ChatWindow from './ChatWindow';
 import ErrorBoundary from './ui/ErrorBoundary';
+import { ECOVIA_STOPS } from '../data/ecoviaStops';
 
 // Sección Mapa: un pin por cada candidato que compartió su ubicación (la guarda el webhook en el
 // índice candidatic:candidate_locations). Usa Leaflet directo (sin react-leaflet) con renderer de
@@ -106,6 +107,11 @@ export default function MapSection({ onOpenCandidate }) {
     // 🔵 Modo "Ver asistencias": colorea de azul las burbujas de candidatos con asistencia confirmada.
     const [showAsistencias, setShowAsistencias] = useState(false);
     const asistenciaCount = useMemo(() => pins.filter(p => p.asistencia === true).length, [pins]);
+
+    // 🚌 Capa "Ecovía": al activarla, ilumina las paradas de la Ecovía (ECOVIA_STOPS, datos estáticos)
+    // con una línea del corredor + marcadores brillantes. Capa aparte, no toca los pines de candidatos.
+    const [showEcovia, setShowEcovia] = useState(false);
+    const ecoviaLayerRef = useRef(null);
 
     // 🔒 Candado de zoom: al activarlo, fija el zoom actual (minZoom=maxZoom=zoom actual) para que
     // la rueda, el pellizco, el doble clic y los botones +/− no cambien el acercamiento. El paneo
@@ -338,6 +344,7 @@ export default function MapSection({ onOpenCandidate }) {
             attribution: '&copy; OpenStreetMap', maxZoom: 19
         }).addTo(map);
         layerRef.current = L.layerGroup().addTo(map);
+        ecoviaLayerRef.current = L.layerGroup().addTo(map); // paradas de la Ecovía (debajo de los pines propios)
         customLayerRef.current = L.layerGroup().addTo(map);
         mapRef.current = map;
         // 🔒 Si el usuario dejó el zoom bloqueado, re-aplica el candado al nivel guardado.
@@ -491,6 +498,35 @@ export default function MapSection({ onOpenCandidate }) {
             if (ttEl) ttEl.style.setProperty('--cm-color', hex);
         }
     }, [customPins]);
+
+    // 🚌 Ecovía: dibuja/limpia la capa de paradas iluminadas. El corredor es una polilínea (con un
+    // halo más ancho y tenue debajo para el efecto "encendido") y cada parada es un punto brillante
+    // con su nombre al pasar el mouse. Al ENCENDERla, vuela a encuadrar toda la línea.
+    useEffect(() => {
+        const map = mapRef.current, layer = ecoviaLayerRef.current;
+        if (!map || !layer) return;
+        layer.clearLayers();
+        if (!showEcovia) return;
+        const ECO = '#f59e0b';
+        const latlngs = ECOVIA_STOPS.map(s => [s.lat, s.lng]);
+        if (!latlngs.length) return;
+        // Halo (línea ancha y tenue) + corredor (línea brillante) = efecto de corredor encendido.
+        L.polyline(latlngs, { color: ECO, weight: 12, opacity: 0.18, lineCap: 'round', lineJoin: 'round', interactive: false }).addTo(layer);
+        L.polyline(latlngs, { color: ECO, weight: 4, opacity: 0.95, lineCap: 'round', lineJoin: 'round', interactive: false }).addTo(layer);
+        for (const s of ECOVIA_STOPS) {
+            const icon = L.divIcon({
+                className: 'map-eco-stop',
+                html: `<div class="eco-stop" style="--eco-color:${ECO}"><span class="eco-glow"></span><span class="eco-dot"></span></div>`,
+                iconSize: [18, 18], iconAnchor: [9, 9], popupAnchor: [0, -10], tooltipAnchor: [0, -8]
+            });
+            const m = L.marker([s.lat, s.lng], { icon, riseOnHover: true });
+            m.bindTooltip(String(s.nombre || '').replace(/</g, '&lt;'), { direction: 'top', className: 'map-eco-label', offset: [0, -6] });
+            m.bindPopup(`<div style="min-width:150px"><div style="font-weight:700;margin-bottom:2px">🚌 ${String(s.nombre || '').replace(/</g, '&lt;')}</div><div style="color:#9ca3af;font-size:11px">${s.lat}, ${s.lng}</div></div>`);
+            m.addTo(layer);
+        }
+        // Encuadra la línea al encender (acción explícita del usuario → se espera que "lo lleve ahí").
+        try { map.fitBounds(L.latLngBounds(latlngs), { padding: [50, 50], maxZoom: 14 }); } catch { /* bounds vacíos */ }
+    }, [showEcovia]);
 
     // 📡 Pin EN VIVO (SSE): un candidato acaba de compartir su ubicación → upsert en la lista
     // (el efecto de arriba lo dibuja; no re-encuadra, respeta tu vista).
@@ -833,6 +869,11 @@ export default function MapSection({ onOpenCandidate }) {
                         className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${showAsistencias ? 'bg-blue-700 border-blue-700 text-white' : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50'}`}>
                         <span className={`w-2.5 h-2.5 rounded-full ${showAsistencias ? 'bg-white' : 'bg-blue-700'}`} />
                         Ver asistencias{asistenciaCount ? ` (${asistenciaCount})` : ''}
+                    </button>
+                    <button onClick={() => setShowEcovia(v => !v)}
+                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${showEcovia ? 'bg-amber-500 border-amber-500 text-white' : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50'}`}>
+                        <Bus className="w-3.5 h-3.5" />
+                        Ecovía ({ECOVIA_STOPS.length})
                     </button>
                     <button onClick={() => { setAddMode(m => !m); setDraft(null); }}
                         className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${addMode ? 'bg-blue-500 border-blue-500 text-white' : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50'}`}>
