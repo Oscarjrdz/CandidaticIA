@@ -485,6 +485,11 @@ const TOOLS = {
                 vacanteActual: c.vacanteActual || null,
                 etiquetas: Array.isArray(c.tags) ? c.tags : [],
                 perfilCompleto: c.paso2Estado === 'completo',
+                // Asistencia = el candidato SÍ llegó a su cita (mismo dato que el punto azul
+                // de la sección Candidatos y el botón "asistencia" del Chat Web). Márcala/quítala
+                // con marcar_asistencia.
+                asistencia: c.asistencia === true,
+                asistenciaAt: c.asistencia === true ? (c.asistenciaAt || null) : null,
                 creado: c.createdAt || null
             };
         }
@@ -1261,6 +1266,31 @@ const TOOLS = {
             const r = await callInternal(req, redis, '/api/candidates/bulk-tag', 'POST', { ids: [id], tag: etiqueta, action: accion });
             if (!r.ok || r.data?.success === false) throw new Error(r.data?.error || `Fallo al etiquetar (${r.status})`);
             return { candidateId: id, etiqueta, accion };
+        }
+    },
+
+    marcar_asistencia: {
+        description: 'Marca o desmarca que un candidato SÍ llegó a su cita (asistencia). Es el mismo botón de "asistencia" del Chat Web / punto azul de la sección Candidatos. asistio=true la marca y guarda la fecha-hora actual; asistio=false la quita. Default: true. Para consultar si ya está marcada usa ver_perfil_candidato (campos asistencia / asistenciaAt).',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                candidateId: { type: 'string', description: 'ID del candidato.' },
+                asistio: { type: 'boolean', description: 'true (default) = marcar asistencia (llegó a la cita); false = quitar la marca.' }
+            },
+            required: ['candidateId']
+        },
+        handler: async (args, { redis, req }) => {
+            const id = String(args?.candidateId || '').trim();
+            if (!id) throw new Error('Falta candidateId');
+            const turnOn = args?.asistio !== false;
+            // Mismo shape que handleMarkAsistencia en ChatSection.jsx: prender guarda la
+            // bandera + timestamp; apagar solo baja la bandera (deja asistenciaAt como estaba).
+            const updates = turnOn
+                ? { asistencia: true, asistenciaAt: new Date().toISOString() }
+                : { asistencia: false };
+            const r = await callInternal(req, redis, '/api/candidates', 'PUT', { id, ...updates });
+            if (!r.ok || r.data?.success === false) throw new Error(r.data?.error || `Fallo al marcar asistencia (${r.status})`);
+            return { candidateId: id, asistencia: turnOn, asistenciaAt: turnOn ? updates.asistenciaAt : null };
         }
     },
 
