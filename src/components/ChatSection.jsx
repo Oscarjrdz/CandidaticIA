@@ -1718,6 +1718,10 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
     // New Chat creation
     const [showNewChat, setShowNewChat] = useState(false);
     const [filtersHidden, setFiltersHidden] = useState(() => localStorage.getItem('chat_filters_hidden') === 'true');
+    // true mientras el colapso/expansión de filtros está animando: durante ese lapso el contenido va
+    // con overflow-hidden (para que la altura se recorte limpio); al terminar vuelve a overflow-visible
+    // para NO recortar los dropdowns de filtros (Edad/Género/Municipio/CRM) cuando se abren hacia abajo.
+    const [filtersAnimating, setFiltersAnimating] = useState(false);
     const [newChatPhone, setNewChatPhone] = useState('');
     const [newChatName, setNewChatName] = useState('');
     const [newChatLoading, setNewChatLoading] = useState(false);
@@ -5569,12 +5573,20 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                     {!isMobile && (
                         <>
                             <button
-                                onClick={() => setFiltersHidden(h => { const next = !h; localStorage.setItem('chat_filters_hidden', next); return next; })}
+                                onClick={() => { setFiltersAnimating(true); setFiltersHidden(h => { const next = !h; localStorage.setItem('chat_filters_hidden', next); return next; }); }}
                                 className="w-full text-center text-[10px] font-medium text-gray-400 dark:text-gray-500 hover:text-gray-500 dark:hover:text-gray-400 py-1 transition-colors select-none cursor-pointer"
                             >
                                 {filtersHidden ? 'Mostrar filtros' : 'Ocultar filtros'}
                             </button>
-                            {!filtersHidden && <div className="flex flex-col gap-1.5 pb-1">
+                            {/* Colapso elegante de filtros: grid-rows 0fr↔1fr anima la altura sin medir en
+                                JS (no necesita max-height mágico). overflow-hidden durante el colapso/anim
+                                y overflow-visible al reposar (para no recortar dropdowns). Ver filtersAnimating. */}
+                            <div
+                                onTransitionEnd={(e) => { if (e.target === e.currentTarget && e.propertyName === 'grid-template-rows') setFiltersAnimating(false); }}
+                                className={`grid transition-[grid-template-rows,opacity] duration-300 ease-[cubic-bezier(.22,1,.36,1)] ${filtersHidden ? 'grid-rows-[0fr] opacity-0' : 'grid-rows-[1fr] opacity-100'}`}
+                            >
+                            <div className={`min-h-0 ${(filtersHidden || filtersAnimating) ? 'overflow-hidden' : 'overflow-visible'}`}>
+                            <div className="flex flex-col gap-1.5 pb-1">
                                 {/* Renglón 1: Estados */}
                         <div 
                             className="w-full flex flex-nowrap items-center justify-between gap-1 overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
@@ -6077,7 +6089,9 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                             )}
                         </div>
 
-                    </div>}
+                    </div>
+                            </div>{/* cierra overflow clipper */}
+                            </div>{/* cierra grid colapsable */}
                         </>
                     )}
                 </div>
