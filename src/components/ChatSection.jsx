@@ -854,23 +854,27 @@ let tagsCache = null; // { tags: [...], untaggedTotal: number }
 // (al reservar/soltar el ancho), no 300 veces. Por eso uso `transition` (incluye transform y
 // opacity, NO width) en vez de `transition-all`.
 //
-// OVERLAY DESLIZANTE (NO empuja el chat). Decisión 2026-10-30 (Oscar): el panel es un overlay
-// `absolute` en TODOS los breakpoints y entra/sale deslizando desde la derecha (translate-x),
+// OVERLAY DESLIZANTE EN MOSAICO (NO empuja el chat). Decisión 2026-10-30 (Oscar): el panel es un
+// overlay `absolute` en TODOS los breakpoints y entra/sale deslizando desde la derecha (translate-x),
 // ENCIMA del chat — el chat NO se encoge, así que Virtuoso jamás re-mide y las fotos no parpadean.
 // Esto cierra de raíz la pelea histórica: las versiones que reservaban ancho (md:relative) dejaban
 // un hueco al deslizar o un "pop" del layout al reservarlo de golpe. Como overlay no hay ancho que
-// reservar: el panel simplemente se desliza sobre el chat, buttery y sin reflow. El chat queda
-// tapado ~340px mientras el panel está abierto (es el trade-off deliberado del overlay).
+// reservar: el panel simplemente se desliza sobre el chat, buttery y sin reflow.
 //
-// Solo se anima `transform` (translate) → compositor/GPU, cero layout. El root de ChatSection es
-// `relative` para anclar este overlay al área de chat (no al viewport). La sombra a la izquierda
-// (shadow-[...]) lo despega visualmente del chat.
+// MOSAICO: si hay VARIOS paneles abiertos (Banco + CRM + Expediente), cada uno se recorre a la
+// izquierda con `rightPx` (= suma de anchos de los paneles abiertos a su derecha) para que se
+// acomoden LADO A LADO y se vean todos — en vez de apilarse en el mismo right-0. El offset lo
+// calcula el padre (sabe cuáles están abiertos). En móvil rightPx=0 (overlays full-width, uno a la vez).
+//
+// Se anima `transform` (translate) + `opacity` → compositor/GPU, cero layout. El root de ChatSection
+// es `relative` para anclar estos overlays al área de chat (no al viewport). La sombra a la izquierda
+// (shadow-[...]) despega cada panel del de atrás.
 //
 // Monta al abrir y desmonta 320ms DESPUÉS de cerrar (igual que la transición) para animar también
 // la salida sin dejar data cargando de más: los paneles (Banco/CRM/Expediente) solo existen
 // mientras están abiertos o cerrándose. Ver [[project_chat_web_stable]] y
 // [[feedback_chatweb_alto_trafico]].
-const AnimatedSidePanel = ({ open, w, children }) => {
+const AnimatedSidePanel = ({ open, w, rightPx = 0, children }) => {
     const [mounted, setMounted] = React.useState(open);
     const [shown, setShown] = React.useState(open);
     const closeTimerRef = React.useRef(null);
@@ -897,8 +901,9 @@ const AnimatedSidePanel = ({ open, w, children }) => {
     return (
         <div
             aria-hidden={!open}
-            className={`absolute inset-y-0 right-0 z-30 h-full w-full ${w} overflow-hidden shadow-[-8px_0_24px_-6px_rgba(0,0,0,0.25)] transition-transform duration-300 ease-[cubic-bezier(.22,1,.36,1)] will-change-transform ${
-                shown ? 'translate-x-0' : 'translate-x-full pointer-events-none'
+            style={{ right: rightPx }}
+            className={`absolute inset-y-0 z-30 h-full w-full ${w} overflow-hidden shadow-[-8px_0_24px_-6px_rgba(0,0,0,0.25)] transition duration-300 ease-[cubic-bezier(.22,1,.36,1)] will-change-transform ${
+                shown ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0 pointer-events-none'
             }`}
         >
             <div className={`w-full ${w} h-full`}>{children}</div>
@@ -5448,6 +5453,15 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         });
     }, [messages, frozenUnreadCount, candidateSubKey]);
 
+    // MOSAICO de paneles laterales (overlays): cada panel se recorre a la izquierda tantos px como
+    // sumen los paneles abiertos a su DERECHA, para acomodarse lado a lado y verse todos a la vez.
+    // Orden derecha→izquierda: Banco (rightmost) → Expediente → CRM. Anchos = los de cada panel (w).
+    // En móvil son overlays full-width uno a la vez → offset 0.
+    const PANEL_W = { banco: 340, expediente: 340, crm: 350 };
+    const bancoRight = 0;
+    const expedienteRight = isMobile ? 0 : (showQuickRepliesPanel ? PANEL_W.banco : 0);
+    const crmRight = isMobile ? 0 : (showQuickRepliesPanel ? PANEL_W.banco : 0) + (showExpedientePanel ? PANEL_W.expediente : 0);
+
     return (
         <div className="relative flex h-full w-full bg-[#f0f2f5] dark:bg-[#111b21] font-sans overflow-hidden">
             
@@ -7017,7 +7031,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
             )}
 
             {/* RIGHT PANEL: CRM Manual Projects — animación de entrada/salida elegante */}
-            <AnimatedSidePanel open={showRightPanel} w="md:w-[350px]">
+            <AnimatedSidePanel open={showRightPanel} w="md:w-[350px]" rightPx={crmRight}>
                 <ManualProjectsSidepanel
                     selectedChat={selectedChat}
                     onClose={() => setRightPanelOpen(false)}
@@ -7031,7 +7045,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
             </AnimatedSidePanel>
 
             {/* EXPEDIENTE DIGITAL PANEL — animación de entrada/salida elegante */}
-            <AnimatedSidePanel open={showExpedientePanel} w="md:w-[340px]">
+            <AnimatedSidePanel open={showExpedientePanel} w="md:w-[340px]" rightPx={expedienteRight}>
                 <ExpedienteSidepanel
                     selectedChat={selectedChat}
                     onClose={() => setExpedientePanelOpen(false)}
@@ -7041,7 +7055,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
             </AnimatedSidePanel>
 
             {/* QUICK REPLIES PANEL — animación de entrada/salida elegante */}
-            <AnimatedSidePanel open={showQuickRepliesPanel} w="md:w-[340px]">
+            <AnimatedSidePanel open={showQuickRepliesPanel} w="md:w-[340px]" rightPx={bancoRight}>
                 <div className="w-full h-full border-l border-[#d1d7db] dark:border-[#222e35] bg-white dark:bg-[#111b21] flex flex-col">
                     {/* Header */}
                     <div className="h-[59px] px-4 bg-[#f0f2f5] dark:bg-[#202c33] border-b border-[#d1d7db] dark:border-[#222e35] flex items-center justify-between shrink-0">
