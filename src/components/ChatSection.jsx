@@ -854,11 +854,19 @@ let tagsCache = null; // { tags: [...], untaggedTotal: number }
 // (al reservar/soltar el ancho), no 300 veces. Por eso uso `transition` (incluye transform y
 // opacity, NO width) en vez de `transition-all`.
 //
-// El ancho se mantiene FIJO (w) mientras está montado; el panel entra/sale deslizando con
-// translate-x-full (fuera por la derecha). Monta al abrir y desmonta 320ms DESPUÉS de cerrar
-// (igual que la transición) para animar también la salida sin dejar data cargando de más: los
-// paneles (Banco/CRM/Expediente) solo existen mientras están abiertos o cerrándose. En móvil es
-// un overlay absoluto (no empuja). Ver [[project_chat_web_stable]] y [[feedback_chatweb_alto_trafico]].
+// El ancho se mantiene FIJO (w) mientras está montado; el panel aparece/desaparece EN SU SITIO
+// con fade + escala (origin-right), SIN deslizarse de lado. Medido en vivo con Playwright
+// (candidatic.com, 2026-10-29): la versión que entraba con translate-x-full dejaba un HUECO de
+// ~357px (el panel reservaba su ancho de golpe y luego se deslizaba cruzando ese vacío) — el
+// "primero deja un hueco, luego se recorre la columna" que se veía raro. Apareciendo en su sitio
+// con escala el hueco baja a ~17px (solo el inset del scale-95) y se cierra en ~240ms, suave.
+// El chat se encoge UNA sola vez al montar (reflow único, sin jitter — confirmado: el ancho de
+// burbuja cae 684→344 en un frame y se queda ahí); eso es inherente al empuje.
+//
+// Monta al abrir y desmonta 320ms DESPUÉS de cerrar (igual que la transición) para animar también
+// la salida sin dejar data cargando de más: los paneles (Banco/CRM/Expediente) solo existen
+// mientras están abiertos o cerrándose. En móvil es un overlay absoluto (no empuja). Ver
+// [[project_chat_web_stable]] y [[feedback_chatweb_alto_trafico]].
 const AnimatedSidePanel = ({ open, w, children }) => {
     const [mounted, setMounted] = React.useState(open);
     const [shown, setShown] = React.useState(open);
@@ -868,8 +876,8 @@ const AnimatedSidePanel = ({ open, w, children }) => {
         if (open) {
             if (closeTimerRef.current) { clearTimeout(closeTimerRef.current); closeTimerRef.current = null; }
             setMounted(true);
-            // Monta fuera (translate-x-full) y, dos frames después, dispara la transición a su
-            // sitio (un solo rAF a veces coincide con el primer paint y se "come" el 1er frame).
+            // Monta en opacity-0/scale-95 y, dos frames después, dispara la transición a su sitio
+            // (un solo rAF a veces coincide con el primer paint y se "come" el 1er frame).
             if (enterRafRef.current) cancelAnimationFrame(enterRafRef.current);
             enterRafRef.current = requestAnimationFrame(() => {
                 enterRafRef.current = requestAnimationFrame(() => setShown(true));
@@ -888,8 +896,8 @@ const AnimatedSidePanel = ({ open, w, children }) => {
             aria-hidden={!open}
             className={`absolute md:relative inset-y-0 right-0 z-30 h-full w-full ${w} overflow-hidden origin-right transition duration-300 ease-[cubic-bezier(.22,1,.36,1)] will-change-transform ${
                 shown
-                    ? 'opacity-100 translate-x-0 scale-100'
-                    : 'opacity-0 translate-x-full scale-95 pointer-events-none'
+                    ? 'opacity-100 scale-100'
+                    : 'opacity-0 scale-95 pointer-events-none'
             }`}
         >
             <div className={`w-full ${w} h-full`}>{children}</div>
