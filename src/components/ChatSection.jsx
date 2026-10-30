@@ -854,19 +854,22 @@ let tagsCache = null; // { tags: [...], untaggedTotal: number }
 // (al reservar/soltar el ancho), no 300 veces. Por eso uso `transition` (incluye transform y
 // opacity, NO width) en vez de `transition-all`.
 //
-// El ancho se mantiene FIJO (w) mientras está montado; el panel aparece/desaparece EN SU SITIO
-// con fade + escala (origin-right), SIN deslizarse de lado. Medido en vivo con Playwright
-// (candidatic.com, 2026-10-29): la versión que entraba con translate-x-full dejaba un HUECO de
-// ~357px (el panel reservaba su ancho de golpe y luego se deslizaba cruzando ese vacío) — el
-// "primero deja un hueco, luego se recorre la columna" que se veía raro. Apareciendo en su sitio
-// con escala el hueco baja a ~17px (solo el inset del scale-95) y se cierra en ~240ms, suave.
-// El chat se encoge UNA sola vez al montar (reflow único, sin jitter — confirmado: el ancho de
-// burbuja cae 684→344 en un frame y se queda ahí); eso es inherente al empuje.
+// OVERLAY DESLIZANTE (NO empuja el chat). Decisión 2026-10-30 (Oscar): el panel es un overlay
+// `absolute` en TODOS los breakpoints y entra/sale deslizando desde la derecha (translate-x),
+// ENCIMA del chat — el chat NO se encoge, así que Virtuoso jamás re-mide y las fotos no parpadean.
+// Esto cierra de raíz la pelea histórica: las versiones que reservaban ancho (md:relative) dejaban
+// un hueco al deslizar o un "pop" del layout al reservarlo de golpe. Como overlay no hay ancho que
+// reservar: el panel simplemente se desliza sobre el chat, buttery y sin reflow. El chat queda
+// tapado ~340px mientras el panel está abierto (es el trade-off deliberado del overlay).
+//
+// Solo se anima `transform` (translate) → compositor/GPU, cero layout. El root de ChatSection es
+// `relative` para anclar este overlay al área de chat (no al viewport). La sombra a la izquierda
+// (shadow-[...]) lo despega visualmente del chat.
 //
 // Monta al abrir y desmonta 320ms DESPUÉS de cerrar (igual que la transición) para animar también
 // la salida sin dejar data cargando de más: los paneles (Banco/CRM/Expediente) solo existen
-// mientras están abiertos o cerrándose. En móvil es un overlay absoluto (no empuja). Ver
-// [[project_chat_web_stable]] y [[feedback_chatweb_alto_trafico]].
+// mientras están abiertos o cerrándose. Ver [[project_chat_web_stable]] y
+// [[feedback_chatweb_alto_trafico]].
 const AnimatedSidePanel = ({ open, w, children }) => {
     const [mounted, setMounted] = React.useState(open);
     const [shown, setShown] = React.useState(open);
@@ -876,8 +879,8 @@ const AnimatedSidePanel = ({ open, w, children }) => {
         if (open) {
             if (closeTimerRef.current) { clearTimeout(closeTimerRef.current); closeTimerRef.current = null; }
             setMounted(true);
-            // Monta en opacity-0/scale-95 y, dos frames después, dispara la transición a su sitio
-            // (un solo rAF a veces coincide con el primer paint y se "come" el 1er frame).
+            // Monta fuera (translate-x-full) y, dos frames después, dispara el deslizamiento a su
+            // sitio (un solo rAF a veces coincide con el primer paint y se "come" el 1er frame).
             if (enterRafRef.current) cancelAnimationFrame(enterRafRef.current);
             enterRafRef.current = requestAnimationFrame(() => {
                 enterRafRef.current = requestAnimationFrame(() => setShown(true));
@@ -894,10 +897,8 @@ const AnimatedSidePanel = ({ open, w, children }) => {
     return (
         <div
             aria-hidden={!open}
-            className={`absolute md:relative inset-y-0 right-0 z-30 h-full w-full ${w} overflow-hidden origin-right transition duration-300 ease-[cubic-bezier(.22,1,.36,1)] will-change-transform ${
-                shown
-                    ? 'opacity-100 scale-100'
-                    : 'opacity-0 scale-95 pointer-events-none'
+            className={`absolute inset-y-0 right-0 z-30 h-full w-full ${w} overflow-hidden shadow-[-8px_0_24px_-6px_rgba(0,0,0,0.25)] transition-transform duration-300 ease-[cubic-bezier(.22,1,.36,1)] will-change-transform ${
+                shown ? 'translate-x-0' : 'translate-x-full pointer-events-none'
             }`}
         >
             <div className={`w-full ${w} h-full`}>{children}</div>
@@ -5448,7 +5449,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
     }, [messages, frozenUnreadCount, candidateSubKey]);
 
     return (
-        <div className="flex h-full w-full bg-[#f0f2f5] dark:bg-[#111b21] font-sans overflow-hidden">
+        <div className="relative flex h-full w-full bg-[#f0f2f5] dark:bg-[#111b21] font-sans overflow-hidden">
             
             {/* LADO IZQUIERDO: LISTA DE CHATS */}
             <div className={`w-full md:w-[30%] lg:w-[35%] xl:w-[500px] flex-col border-r border-[#d1d7db] dark:border-[#222e35] bg-white dark:bg-[#111b21] min-w-0 overflow-hidden ${selectedChat ? 'hidden md:flex' : 'flex'}`}>
@@ -7041,7 +7042,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
 
             {/* QUICK REPLIES PANEL — animación de entrada/salida elegante */}
             <AnimatedSidePanel open={showQuickRepliesPanel} w="md:w-[340px]">
-                <div className="w-full h-full border-l border-[#d1d7db] dark:border-[#222e35] bg-white dark:bg-[#111b21] flex flex-col shadow-2xl md:shadow-none">
+                <div className="w-full h-full border-l border-[#d1d7db] dark:border-[#222e35] bg-white dark:bg-[#111b21] flex flex-col">
                     {/* Header */}
                     <div className="h-[59px] px-4 bg-[#f0f2f5] dark:bg-[#202c33] border-b border-[#d1d7db] dark:border-[#222e35] flex items-center justify-between shrink-0">
                         <div className="flex items-center gap-2">
