@@ -845,36 +845,27 @@ let tagsCache = null; // { tags: [...], untaggedTotal: number }
 // respuestas del chat flotante de Mapa, ChatWindow.jsx): desliza + escala + funde y, en
 // escritorio, EMPUJA el chat.
 //
-// CLAVE DE RENDIMIENTO: la animación NO toca el `width`. El ancho del panel aparece/desaparece
-// de golpe (un solo reflow del chat al montar/desmontar), y lo que se anima es `transform`
-// (translate + scale) + `opacity` — compositor/GPU, sin layout. Antes animábamos el ancho
-// (0 ↔ w) durante 300ms: eso obligaba a Virtuoso a RE-MEDIR y re-acomodar la lista de mensajes
-// en CADA frame → las burbujas con imagen "parpadeaban" y las filas se recorrían escalonadas al
-// abrir/cerrar con el chat lleno de fotos. Con transform puro la lista se reacomoda UNA sola vez
-// (al reservar/soltar el ancho), no 300 veces. Por eso uso `transition` (incluye transform y
-// opacity, NO width) en vez de `transition-all`.
+// PANEL LATERAL ADAPTABLE (empuja el chat). Decisión 2026-10-30 (Oscar): el chat DEBE encogerse y
+// acomodarse según las columnas abiertas (como la referencia de columnas expandibles), no quedar
+// tapado por un overlay. Por eso en DESKTOP el panel va EN FLUJO (flex, shrink-0) y lo que se anima
+// es su `width` (0 ↔ wPx): el chat (flex-1) se adapta suave y, si hay VARIOS paneles abiertos
+// (Banco + CRM + Expediente), se acomodan LADO A LADO solos por el flujo — sin cálculo de offsets.
 //
-// OVERLAY DESLIZANTE EN MOSAICO (NO empuja el chat). Decisión 2026-10-30 (Oscar): el panel es un
-// overlay `absolute` en TODOS los breakpoints y entra/sale deslizando desde la derecha (translate-x),
-// ENCIMA del chat — el chat NO se encoge, así que Virtuoso jamás re-mide y las fotos no parpadean.
-// Esto cierra de raíz la pelea histórica: las versiones que reservaban ancho (md:relative) dejaban
-// un hueco al deslizar o un "pop" del layout al reservarlo de golpe. Como overlay no hay ancho que
-// reservar: el panel simplemente se desliza sobre el chat, buttery y sin reflow.
+// TRADE-OFF conocido (CLAUDE.md): animar el width hace que Virtuoso RE-MIDA la lista de mensajes en
+// cada frame → riesgo de parpadeo de burbujas con foto. Se mitiga así: el CONTENIDO del panel vive
+// en un hijo de ancho FIJO (wPx) pinneado a la derecha (absolute right-0) — así el contenido NO se
+// reflowea mientras el contenedor se expande, solo se revela; y el chat se reacomoda gradualmente,
+// que es justo lo que Oscar pidió. Si el parpadeo molesta, bajar la duración o volver a overlay.
 //
-// MOSAICO: si hay VARIOS paneles abiertos (Banco + CRM + Expediente), cada uno se recorre a la
-// izquierda con `rightPx` (= suma de anchos de los paneles abiertos a su derecha) para que se
-// acomoden LADO A LADO y se vean todos — en vez de apilarse en el mismo right-0. El offset lo
-// calcula el padre (sabe cuáles están abiertos). En móvil rightPx=0 (overlays full-width, uno a la vez).
-//
-// Se anima `transform` (translate) + `opacity` → compositor/GPU, cero layout. El root de ChatSection
-// es `relative` para anclar estos overlays al área de chat (no al viewport). La sombra a la izquierda
-// (shadow-[...]) despega cada panel del de atrás.
+// En MÓVIL un panel de 340px dejaría el chat en ~50px, así que ahí NO empuja: es un overlay
+// `absolute` full-width que entra deslizando (translate-x) sobre todo. El root de ChatSection es
+// `relative` para anclar ese overlay.
 //
 // Monta al abrir y desmonta 320ms DESPUÉS de cerrar (igual que la transición) para animar también
 // la salida sin dejar data cargando de más: los paneles (Banco/CRM/Expediente) solo existen
 // mientras están abiertos o cerrándose. Ver [[project_chat_web_stable]] y
 // [[feedback_chatweb_alto_trafico]].
-const AnimatedSidePanel = ({ open, w, rightPx = 0, children }) => {
+const AnimatedSidePanel = ({ open, wPx, isMobile, children }) => {
     const [mounted, setMounted] = React.useState(open);
     const [shown, setShown] = React.useState(open);
     const closeTimerRef = React.useRef(null);
@@ -883,8 +874,8 @@ const AnimatedSidePanel = ({ open, w, rightPx = 0, children }) => {
         if (open) {
             if (closeTimerRef.current) { clearTimeout(closeTimerRef.current); closeTimerRef.current = null; }
             setMounted(true);
-            // Monta fuera (translate-x-full) y, dos frames después, dispara el deslizamiento a su
-            // sitio (un solo rAF a veces coincide con el primer paint y se "come" el 1er frame).
+            // Monta colapsado (width 0 / fuera por la derecha) y, dos frames después, dispara la
+            // transición a su sitio (un solo rAF a veces coincide con el primer paint y se "come" el 1er frame).
             if (enterRafRef.current) cancelAnimationFrame(enterRafRef.current);
             enterRafRef.current = requestAnimationFrame(() => {
                 enterRafRef.current = requestAnimationFrame(() => setShown(true));
@@ -898,15 +889,30 @@ const AnimatedSidePanel = ({ open, w, rightPx = 0, children }) => {
     }, [open]);
     React.useEffect(() => () => { if (closeTimerRef.current) clearTimeout(closeTimerRef.current); }, []);
     if (!mounted) return null;
+
+    // MÓVIL: overlay full-width que entra deslizando sobre el chat (no lo empuja).
+    if (isMobile) {
+        return (
+            <div
+                aria-hidden={!open}
+                className={`absolute inset-0 z-30 h-full w-full overflow-hidden shadow-[-8px_0_24px_-6px_rgba(0,0,0,0.25)] transition-transform duration-300 ease-[cubic-bezier(.22,1,.36,1)] will-change-transform ${
+                    shown ? 'translate-x-0' : 'translate-x-full pointer-events-none'
+                }`}
+            >
+                <div className="w-full h-full">{children}</div>
+            </div>
+        );
+    }
+
+    // DESKTOP: en flujo, anima el width (0 ↔ wPx). El chat flex-1 se adapta; el contenido vive en un
+    // hijo de ancho fijo pinneado a la derecha para que NO se reflowee al expandir (solo se revela).
     return (
         <div
             aria-hidden={!open}
-            style={{ right: rightPx }}
-            className={`absolute inset-y-0 z-30 h-full w-full ${w} overflow-hidden shadow-[-8px_0_24px_-6px_rgba(0,0,0,0.25)] transition duration-300 ease-[cubic-bezier(.22,1,.36,1)] will-change-transform ${
-                shown ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0 pointer-events-none'
-            }`}
+            style={{ width: shown ? wPx : 0 }}
+            className="relative shrink-0 h-full overflow-hidden transition-[width] duration-300 ease-[cubic-bezier(.22,1,.36,1)] will-change-[width]"
         >
-            <div className={`w-full ${w} h-full`}>{children}</div>
+            <div style={{ width: wPx }} className="absolute inset-y-0 right-0 h-full">{children}</div>
         </div>
     );
 };
@@ -5453,15 +5459,6 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         });
     }, [messages, frozenUnreadCount, candidateSubKey]);
 
-    // MOSAICO de paneles laterales (overlays): cada panel se recorre a la izquierda tantos px como
-    // sumen los paneles abiertos a su DERECHA, para acomodarse lado a lado y verse todos a la vez.
-    // Orden derecha→izquierda: Banco (rightmost) → Expediente → CRM. Anchos = los de cada panel (w).
-    // En móvil son overlays full-width uno a la vez → offset 0.
-    const PANEL_W = { banco: 340, expediente: 340, crm: 350 };
-    const bancoRight = 0;
-    const expedienteRight = isMobile ? 0 : (showQuickRepliesPanel ? PANEL_W.banco : 0);
-    const crmRight = isMobile ? 0 : (showQuickRepliesPanel ? PANEL_W.banco : 0) + (showExpedientePanel ? PANEL_W.expediente : 0);
-
     return (
         <div className="relative flex h-full w-full bg-[#f0f2f5] dark:bg-[#111b21] font-sans overflow-hidden">
             
@@ -7031,7 +7028,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
             )}
 
             {/* RIGHT PANEL: CRM Manual Projects — animación de entrada/salida elegante */}
-            <AnimatedSidePanel open={showRightPanel} w="md:w-[350px]" rightPx={crmRight}>
+            <AnimatedSidePanel open={showRightPanel} wPx={350} isMobile={isMobile}>
                 <ManualProjectsSidepanel
                     selectedChat={selectedChat}
                     onClose={() => setRightPanelOpen(false)}
@@ -7045,7 +7042,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
             </AnimatedSidePanel>
 
             {/* EXPEDIENTE DIGITAL PANEL — animación de entrada/salida elegante */}
-            <AnimatedSidePanel open={showExpedientePanel} w="md:w-[340px]" rightPx={expedienteRight}>
+            <AnimatedSidePanel open={showExpedientePanel} wPx={340} isMobile={isMobile}>
                 <ExpedienteSidepanel
                     selectedChat={selectedChat}
                     onClose={() => setExpedientePanelOpen(false)}
@@ -7055,7 +7052,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
             </AnimatedSidePanel>
 
             {/* QUICK REPLIES PANEL — animación de entrada/salida elegante */}
-            <AnimatedSidePanel open={showQuickRepliesPanel} w="md:w-[340px]" rightPx={bancoRight}>
+            <AnimatedSidePanel open={showQuickRepliesPanel} wPx={340} isMobile={isMobile}>
                 <div className="w-full h-full border-l border-[#d1d7db] dark:border-[#222e35] bg-white dark:bg-[#111b21] flex flex-col">
                     {/* Header */}
                     <div className="h-[59px] px-4 bg-[#f0f2f5] dark:bg-[#202c33] border-b border-[#d1d7db] dark:border-[#222e35] flex items-center justify-between shrink-0">
