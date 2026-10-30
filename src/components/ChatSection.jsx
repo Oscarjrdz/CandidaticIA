@@ -6811,6 +6811,14 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                             key={selectedChat?.id || 'no-chat'}
                             ref={virtuosoRef}
                             scrollerRef={(el) => { virtuosoScrollerRef.current = el; }}
+                            // Mide los items SÍNCRONO (sin el frame de retraso del requestAnimationFrame
+                            // del ResizeObserver). Mata el parpadeo de las burbujas al animar el ancho del
+                            // chat cuando se abre/cierra una columna (Banco/CRM/Expediente): sin esto, el
+                            // remedido llegaba un frame tarde y la lista se posicionaba con una mezcla de
+                            // tamaños viejos/nuevos → saltaba. Remedio oficial de react-virtuoso para
+                            // resize-flicker (issue #1049). Único costo: algún warning benigno de
+                            // ResizeObserver en consola si un item cambia de tamaño justo al medirse.
+                            skipAnimationFrameInResizeObserver
                             style={{ height: '100%' }}
                             data={displayMessages}
                             context={{ bottomOverlaySpacerHeight: pendingQrPreviewHeight, candidateTyping }}
