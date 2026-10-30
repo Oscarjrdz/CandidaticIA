@@ -1,11 +1,14 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { MapPin, RefreshCw, Loader2, MessageSquare, Search, X, Plus, Trash2, Check, Tag, Briefcase, Bus } from 'lucide-react';
+import { MapPin, RefreshCw, Loader2, MessageSquare, Search, X, Plus, Trash2, Check, Tag, Briefcase, Bus, TrainFront } from 'lucide-react';
 import { useAuthContext } from '../contexts/AuthContext';
 import ChatWindow from './ChatWindow';
 import ErrorBoundary from './ui/ErrorBoundary';
 import { ECOVIA_STOPS } from '../data/ecoviaStops';
+import { METRO_LINES } from '../data/metroLines';
+
+const METRO_STOP_COUNT = new Set(METRO_LINES.flatMap(l => l.stops.map(s => `${s.lat},${s.lng}`))).size;
 
 // Sección Mapa: un pin por cada candidato que compartió su ubicación (la guarda el webhook en el
 // índice candidatic:candidate_locations). Usa Leaflet directo (sin react-leaflet) con renderer de
@@ -113,6 +116,12 @@ export default function MapSection({ onOpenCandidate }) {
     const [showEcovia, setShowEcovia] = useState(false);
     const ecoviaLayerRef = useRef(null);
     const ecoviaSvgRef = useRef(null); // renderer SVG reusado para la línea (ver nota en el effect)
+
+    // 🚇 Capa "Metro": ilumina las estaciones de las 3 líneas activas de Metrorrey (METRO_LINES),
+    // cada línea con su color oficial. Misma técnica que Ecovía (SVG para la línea, no canvas).
+    const [showMetro, setShowMetro] = useState(false);
+    const metroLayerRef = useRef(null);
+    const metroSvgRef = useRef(null);
 
     // 🔒 Candado de zoom: al activarlo, fija el zoom actual (minZoom=maxZoom=zoom actual) para que
     // la rueda, el pellizco, el doble clic y los botones +/− no cambien el acercamiento. El paneo
@@ -346,6 +355,7 @@ export default function MapSection({ onOpenCandidate }) {
         }).addTo(map);
         layerRef.current = L.layerGroup().addTo(map);
         ecoviaLayerRef.current = L.layerGroup().addTo(map); // paradas de la Ecovía (debajo de los pines propios)
+        metroLayerRef.current = L.layerGroup().addTo(map);  // estaciones del Metro
         customLayerRef.current = L.layerGroup().addTo(map);
         mapRef.current = map;
         // 🔒 Si el usuario dejó el zoom bloqueado, re-aplica el candado al nivel guardado.
@@ -534,6 +544,47 @@ export default function MapSection({ onOpenCandidate }) {
         // Encuadra la línea al encender (acción explícita del usuario → se espera que "lo lleve ahí").
         try { map.fitBounds(L.latLngBounds(latlngs), { padding: [50, 50], maxZoom: 14 }); } catch { /* bounds vacíos */ }
     }, [showEcovia]);
+
+    // 🚇 Metro: dibuja/limpia las 3 líneas (cada una con su color oficial) + estaciones iluminadas.
+    // Las líneas van en SVG (misma razón que la Ecovía: no robar clics al canvas de candidatos). Las
+    // estaciones se dibujan una sola vez aunque sean de transbordo (dedupe por coordenada); las de
+    // transbordo salen con un punto blanco de doble anillo para distinguirlas.
+    useEffect(() => {
+        const map = mapRef.current, layer = metroLayerRef.current;
+        if (!map || !layer) return;
+        layer.clearLayers();
+        if (!showMetro) return;
+        if (!metroSvgRef.current) metroSvgRef.current = L.svg();
+        const svg = metroSvgRef.current;
+        const allLatLngs = [];
+        const seen = new Map(); // "lat,lng" → { color, nombre, transfer } (1ra ocurrencia manda el color)
+        for (const line of METRO_LINES) {
+            const latlngs = line.stops.map(s => [s.lat, s.lng]);
+            if (!latlngs.length) continue;
+            L.polyline(latlngs, { renderer: svg, color: line.color, weight: 11, opacity: 0.16, lineCap: 'round', lineJoin: 'round', interactive: false }).addTo(layer);
+            L.polyline(latlngs, { renderer: svg, color: line.color, weight: 4, opacity: 0.95, lineCap: 'round', lineJoin: 'round', interactive: false }).addTo(layer);
+            for (const s of line.stops) {
+                allLatLngs.push([s.lat, s.lng]);
+                const key = `${s.lat},${s.lng}`;
+                if (!seen.has(key)) seen.set(key, { color: line.color, nombre: s.nombre, transfer: !!s.transfer, lat: s.lat, lng: s.lng });
+                else if (s.transfer) seen.get(key).transfer = true;
+            }
+        }
+        for (const st of seen.values()) {
+            const transferCls = st.transfer ? ' transfer' : '';
+            const icon = L.divIcon({
+                className: 'map-metro-stop',
+                html: `<div class="metro-stop${transferCls}" style="--metro-color:${st.color}"><span class="metro-glow"></span><span class="metro-dot"></span></div>`,
+                iconSize: [18, 18], iconAnchor: [9, 9], popupAnchor: [0, -10], tooltipAnchor: [0, -8]
+            });
+            const label = String(st.nombre || '').replace(/</g, '&lt;') + (st.transfer ? ' · transbordo' : '');
+            const m = L.marker([st.lat, st.lng], { icon, riseOnHover: true });
+            m.bindTooltip(label, { direction: 'top', className: 'map-metro-label', offset: [0, -6] });
+            m.bindPopup(`<div style="min-width:150px"><div style="font-weight:700;margin-bottom:2px">🚇 ${label}</div><div style="color:#9ca3af;font-size:11px">${st.lat}, ${st.lng}</div></div>`);
+            m.addTo(layer);
+        }
+        try { map.fitBounds(L.latLngBounds(allLatLngs), { padding: [50, 50], maxZoom: 14 }); } catch { /* bounds vacíos */ }
+    }, [showMetro]);
 
     // 📡 Pin EN VIVO (SSE): un candidato acaba de compartir su ubicación → upsert en la lista
     // (el efecto de arriba lo dibuja; no re-encuadra, respeta tu vista).
@@ -881,6 +932,11 @@ export default function MapSection({ onOpenCandidate }) {
                         className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${showEcovia ? 'bg-amber-500 border-amber-500 text-white' : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50'}`}>
                         <Bus className="w-3.5 h-3.5" />
                         Ecovía ({ECOVIA_STOPS.length})
+                    </button>
+                    <button onClick={() => setShowMetro(v => !v)}
+                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${showMetro ? 'bg-red-600 border-red-600 text-white' : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50'}`}>
+                        <TrainFront className="w-3.5 h-3.5" />
+                        Metro ({METRO_STOP_COUNT})
                     </button>
                     <button onClick={() => { setAddMode(m => !m); setDraft(null); }}
                         className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${addMode ? 'bg-blue-500 border-blue-500 text-white' : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50'}`}>

@@ -785,3 +785,54 @@ input[type="color"]::-moz-color-swatch {
   white-space: nowrap;
 }
 .map-eco-label.leaflet-tooltip::before { border-top-color: #f59e0b; }
+
+/* 🚇 Estaciones del Metro: punto brillante con el color de su línea; transbordo = doble anillo blanco */
+.map-metro-stop { background: transparent; border: 0; }
+.map-metro-stop .metro-stop { position: relative; width: 18px; height: 18px; }
+.map-metro-stop .metro-dot {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 12px;
+  height: 12px;
+  margin: -6px 0 0 -6px;
+  border-radius: 50%;
+  background: var(--metro-color, #dc2626);
+  border: 2px solid #fff;
+  box-shadow: 0 0 6px 1px var(--metro-color, #dc2626), 0 1px 3px rgba(0,0,0,0.4);
+}
+.map-metro-stop .metro-glow {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 14px;
+  height: 14px;
+  margin: -7px 0 0 -7px;
+  border-radius: 50%;
+  background: var(--metro-color, #dc2626);
+  opacity: 0.5;
+  pointer-events: none;
+  animation: eco-pulse 1.8s ease-out infinite;
+}
+.map-metro-stop .metro-stop:hover .metro-dot { transform: scale(1.25); transition: transform 0.12s ease; }
+/* Transbordo: centro blanco + anillo del color de línea (se ve como estación de conexión) */
+.map-metro-stop .metro-stop.transfer .metro-dot {
+  width: 14px;
+  height: 14px;
+  margin: -7px 0 0 -7px;
+  background: #fff;
+  border: 3px solid var(--metro-color, #dc2626);
+  box-shadow: 0 0 7px 1px var(--metro-color, #dc2626), 0 0 0 1px rgba(0,0,0,0.15), 0 1px 3px rgba(0,0,0,0.45);
+}
+.map-metro-label.leaflet-tooltip {
+  background: #111827;
+  color: #f9fafb;
+  border: 1px solid var(--metro-color, #dc2626);
+  border-radius: 8px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+  white-space: nowrap;
+}
+.map-metro-label.leaflet-tooltip::before { display: none; }
