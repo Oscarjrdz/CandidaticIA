@@ -369,7 +369,7 @@ export default function ManualProjectsSidepanel({ selectedChat, onClose, showToa
 
 
     if (loading) {
-        return <div className="absolute md:relative inset-y-0 right-0 z-30 w-full md:w-[350px] border-l border-[#d1d7db] dark:border-[#222e35] bg-white dark:bg-[#111b21] flex h-full items-center justify-center shadow-2xl md:shadow-none"><Loader2 className="w-8 h-8 animate-spin text-gray-300" /></div>;
+        return <div className="w-full h-full border-l border-[#d1d7db] dark:border-[#222e35] bg-white dark:bg-[#111b21] flex items-center justify-center shadow-2xl md:shadow-none"><Loader2 className="w-8 h-8 animate-spin text-gray-300" /></div>;
     }
 
     // Pipeline Activo (Si hay candidato seleccionado)
@@ -378,7 +378,7 @@ export default function ManualProjectsSidepanel({ selectedChat, onClose, showToa
     const activeProject = projects.find(p => p.id === activeProjectId);
 
     return (
-        <div className="absolute md:relative inset-y-0 right-0 z-30 w-full md:w-[350px] border-l border-[#d1d7db] dark:border-[#222e35] bg-[#f8f9fa] dark:bg-[#0b141a] flex flex-col h-full shadow-2xl md:shadow-none">
+        <div className="w-full h-full border-l border-[#d1d7db] dark:border-[#222e35] bg-[#f8f9fa] dark:bg-[#0b141a] flex flex-col shadow-2xl md:shadow-none">
             {/* Header */}
             <div className="h-[59px] px-4 flex items-center justify-between border-b border-[#d1d7db] dark:border-[#222e35] bg-[#f0f2f5] dark:bg-[#202c33] shrink-0">
                 <div className="flex items-center gap-2">

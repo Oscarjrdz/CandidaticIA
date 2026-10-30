@@ -841,6 +841,53 @@ let reminderTemplatesCache = null;
 // al instante con su color correcto. Guarda también untaggedTotal (se setea en el mismo loader).
 let tagsCache = null; // { tags: [...], untaggedTotal: number }
 
+// Columna lateral derecha con entrada/salida elegante (misma animación que el banco de
+// respuestas del chat flotante de Mapa, ChatWindow.jsx): desliza + escala + funde y, en
+// escritorio, EMPUJA el chat animando el ancho (0 ↔ w). El wrapper es el item flex con el
+// ancho animable; el hijo va a ancho FIJO (w) para que el contenido no se reacomode mientras
+// el ancho crece/encoge (overflow-hidden lo recorta). Monta al abrir y desmonta 320ms DESPUÉS
+// de cerrar (igual timing que la transición) para que la salida también se anime sin dejar la
+// data cargando de más: los paneles (Banco/CRM/Expediente) solo existen mientras están abiertos
+// o cerrándose, igual que antes — solo se les suma la animación. En móvil es un overlay que
+// entra/sale deslizando desde la derecha (no empuja, no hay a dónde). Ver [[project_chat_web_stable]].
+const AnimatedSidePanel = ({ open, w, children }) => {
+    const [mounted, setMounted] = React.useState(open);
+    const [shown, setShown] = React.useState(open);
+    const closeTimerRef = React.useRef(null);
+    const enterRafRef = React.useRef(null);
+    React.useEffect(() => {
+        if (open) {
+            if (closeTimerRef.current) { clearTimeout(closeTimerRef.current); closeTimerRef.current = null; }
+            setMounted(true);
+            // Monta en w-0 y, dos frames después, dispara la transición a ancho completo (un solo
+            // rAF a veces coincide con el primer paint y la animación se "come" el primer frame).
+            if (enterRafRef.current) cancelAnimationFrame(enterRafRef.current);
+            enterRafRef.current = requestAnimationFrame(() => {
+                enterRafRef.current = requestAnimationFrame(() => setShown(true));
+            });
+        } else {
+            if (enterRafRef.current) { cancelAnimationFrame(enterRafRef.current); enterRafRef.current = null; }
+            setShown(false);
+            closeTimerRef.current = setTimeout(() => setMounted(false), 320);
+        }
+        return () => { if (enterRafRef.current) cancelAnimationFrame(enterRafRef.current); };
+    }, [open]);
+    React.useEffect(() => () => { if (closeTimerRef.current) clearTimeout(closeTimerRef.current); }, []);
+    if (!mounted) return null;
+    return (
+        <div
+            aria-hidden={!open}
+            className={`absolute md:relative inset-y-0 right-0 z-30 h-full overflow-hidden origin-right transition-all duration-300 ease-[cubic-bezier(.22,1,.36,1)] ${
+                shown
+                    ? `w-full ${w} opacity-100 translate-x-0 scale-100`
+                    : 'w-full md:w-0 opacity-0 translate-x-full md:translate-x-4 scale-95 pointer-events-none'
+            }`}
+        >
+            <div className={`w-full ${w} h-full`}>{children}</div>
+        </div>
+    );
+};
+
 export default function ChatSection({ rolePermissions, onlineUsers = [], unreadCountHint = null, onUnreadCountChange }) {
     const { showToast } = useToastContext();
     const { user, setUser } = useAuthContext();
@@ -1075,6 +1122,16 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
     // — igual que un mensaje corto, sin pin continuo ni corrección visible después.
     const scrollToBottom = () => {
         if (scrollFrameRef.current) cancelAnimationFrame(scrollFrameRef.current);
+        // Pre-ancla SÍNCRONA (antes del paint). Para contenido YA medido —el caso típico: un
+        // texto cuyo alto queda reservado por el clip-path desde el frame 1— el PRIMER frame
+        // pintado ya cae al fondo, así que al enviar NO se asoma el último mensaje del candidato
+        // mientras el scroll "alcanza" (ese era el frame fantasma: con followOutput apagado, el
+        // refinamiento diferido tardaba ~2-3 frames y en ellos el viewport seguía en el fondo
+        // viejo). NO sustituye los 2 pasos de abajo: si el contenido aún no está medido (media
+        // que crece tarde) esto aterriza un poco corto y el paso diferido lo corrige — misma
+        // garantía de antes, solo que el primer frame ya no muestra el mensaje de al lado.
+        const preEl = virtuosoScrollerRef.current;
+        if (preEl) preEl.scrollTop = preEl.scrollHeight;
         scrollFrameRef.current = requestAnimationFrame(() => {
             scrollFrameRef.current = requestAnimationFrame(() => {
                 // Fondo CONFIABLE en DOS pasos coordinados (medido en producción 2026-09-25):
@@ -1667,6 +1724,13 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         );
     }, [user?.tags_own_mode, availableTags]);
 
+    // 🔢 Contador de deltas locales del badge: lo bumpea reconcileUnreadBadges en cada
+    // ajuste optimista. El refetch autoritativo "fuera de ventana" (ver
+    // scheduleAuthoritativeUnreadRefresh) lo compara antes/después de su fetch para NO
+    // pisar un delta que aterrizó mientras leía el servidor (era la causa del rebote 50↔49).
+    const unreadDeltaSeqRef = useRef(0);
+    const authUnreadRefreshTimerRef = useRef(null);
+
     const getUnreadContribution = useCallback((candidate) => {
         if (!candidate || !passesChatRBACFilter(candidate, user, ownedTagNames)) return null;
         const complete = isProfileComplete(candidate);
@@ -1720,6 +1784,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
     };
 
     const reconcileUnreadBadges = useCallback((beforeCandidate, afterCandidate) => {
+        unreadDeltaSeqRef.current += 1;
         setGlobalUnreadCounts(prev => {
             if (!prev) return prev;
             let next = { ...prev };
@@ -3287,12 +3352,12 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         return counts;
     }, [baseCandidates, user, rolePermissions]);
 
-    const refreshGlobalUnreadCounts = useCallback(async () => {
+    const fetchAuthoritativeUnreadCounts = useCallback(async () => {
         const res = await fetch('/api/chat-unread-count');
         const data = await res.json();
         if (!res.ok || !data.success) return null;
         const counts = data.counts || {};
-        const nextCounts = {
+        return {
             all: Number(data.unreadCount ?? counts.all) || 0,
             complete: Number(counts.complete) || 0,
             incomplete: Number(counts.incomplete) || 0,
@@ -3305,12 +3370,59 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
             crmProjects: counts.crmProjects || {},
             unreadIds: new Set(),
         };
-        setGlobalUnreadCounts(nextCounts);
+    }, []);
+
+    const persistUnreadCounts = useCallback((nextCounts) => {
         try {
             const { unreadIds, ...serializable } = nextCounts;
             sessionStorage.setItem('candidatic_unread_counts', JSON.stringify(serializable));
         } catch {}
+    }, []);
+
+    const refreshGlobalUnreadCounts = useCallback(async () => {
+        const nextCounts = await fetchAuthoritativeUnreadCounts();
+        if (!nextCounts) return null;
+        setGlobalUnreadCounts(nextCounts);
+        persistUnreadCounts(nextCounts);
         return nextCounts;
+    }, [fetchAuthoritativeUnreadCounts, persistUnreadCounts]);
+
+    // 🛰️ Reconciliación "fuera de ventana": el delta instantáneo (reconcileUnreadBadges) solo
+    // ve los ~10 candidatos cargados en la lista. Cuando entra/sale un no-leído de un chat que
+    // NO está en esa ventana (lo inyecta el bubble-up, o se marca leído desde otro reclutador),
+    // el delta no lo puede contar y el badge del menú se quedaba pegado hasta re-entrar a la
+    // sección (el salto brusco). Este refetch autoritativo corrige ese remanente EN VIVO, pero:
+    //   • debounced (coalescemos ráfagas) → no dispara un fetch por mensaje,
+    //   • guardado por unreadDeltaSeqRef → si un delta local aterrizó mientras leíamos el
+    //     servidor, descartamos esta lectura (sería stale) y reprogramamos, en vez de pisar el
+    //     delta con un número viejo (eso era el rebote 50↔50 histórico). Para los candidatos EN
+    //     ventana el valor del servidor ya coincide con el delta, así que no hay salto visible.
+    const scheduleAuthoritativeUnreadRefresh = useCallback(() => {
+        if (authUnreadRefreshTimerRef.current) clearTimeout(authUnreadRefreshTimerRef.current);
+        authUnreadRefreshTimerRef.current = setTimeout(async () => {
+            authUnreadRefreshTimerRef.current = null;
+            const seqAtStart = unreadDeltaSeqRef.current;
+            let nextCounts;
+            try {
+                nextCounts = await fetchAuthoritativeUnreadCounts();
+            } catch {
+                return;
+            }
+            if (!nextCounts) return;
+            // Un delta local aterrizó mientras el fetch estaba en vuelo → esta lectura es stale
+            // respecto a lo que el usuario ya vio. No la apliques; reprograma para reconciliar
+            // una vez que la ráfaga se calme.
+            if (unreadDeltaSeqRef.current !== seqAtStart) {
+                scheduleAuthoritativeUnreadRefresh();
+                return;
+            }
+            setGlobalUnreadCounts(nextCounts);
+            persistUnreadCounts(nextCounts);
+        }, 1500);
+    }, [fetchAuthoritativeUnreadCounts, persistUnreadCounts]);
+
+    useEffect(() => () => {
+        if (authUnreadRefreshTimerRef.current) clearTimeout(authUnreadRefreshTimerRef.current);
     }, []);
 
     useEffect(() => {
@@ -3758,6 +3870,14 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                     if (selectedChatRef.current?.id === sseUpdate.candidateId) {
                         selectedChatRef.current = { ...selectedChatRef.current, ...unreadSync };
                     }
+                } else {
+                    // 🛰️ Candidato FUERA de la ventana cargada (~10 chats): el delta no lo puede
+                    // contar porque no tenemos su estado `before`. Antes el badge del menú se
+                    // quedaba pegado y solo se corregía al re-entrar (el salto brusco). Pedimos
+                    // una reconciliación autoritativa debounced que sí lo refleja en vivo. Cubre
+                    // ambos sentidos: entrante que lo vuelve no-leído, y respuesta de otro
+                    // reclutador que lo marca leído.
+                    scheduleAuthoritativeUnreadRefresh();
                 }
             }
 
@@ -5022,6 +5142,11 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                 }
             })();
         }
+
+        // El scroll al fondo lo dispara el useLayoutEffect de [messages] (post-commit,
+        // pre-paint) al crecer la lista con isSendingRef activo; ahí scrollToBottom ya hace la
+        // pre-ancla síncrona que evita el "frame de otro mensaje". No hace falta llamarlo aquí
+        // (correría ANTES del commit del mensaje nuevo → no vería la burbuja todavía).
 
         // Arranca el envío del texto de inmediato (las fotos se autoencolan al inyectarse)
         processOutbox().catch(() => {});
@@ -6872,8 +6997,8 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                 </div>
             )}
 
-            {/* RIGHT PANEL: CRM Manual Projects */}
-            {showRightPanel && (
+            {/* RIGHT PANEL: CRM Manual Projects — animación de entrada/salida elegante */}
+            <AnimatedSidePanel open={showRightPanel} w="md:w-[350px]">
                 <ManualProjectsSidepanel
                     selectedChat={selectedChat}
                     onClose={() => setRightPanelOpen(false)}
@@ -6884,21 +7009,21 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                         if(selectedChat?.id === updatedCandidate.id) setSelectedChat(updatedCandidate);
                     }}
                 />
-            )}
+            </AnimatedSidePanel>
 
-            {/* EXPEDIENTE DIGITAL PANEL */}
-            {showExpedientePanel && (
+            {/* EXPEDIENTE DIGITAL PANEL — animación de entrada/salida elegante */}
+            <AnimatedSidePanel open={showExpedientePanel} w="md:w-[340px]">
                 <ExpedienteSidepanel
                     selectedChat={selectedChat}
                     onClose={() => setExpedientePanelOpen(false)}
                     showToast={showToast}
                     refreshToken={expedienteRefreshToken}
                 />
-            )}
+            </AnimatedSidePanel>
 
-            {/* QUICK REPLIES PANEL */}
-            {showQuickRepliesPanel && (
-                <div className="absolute md:relative inset-y-0 right-0 z-30 w-full md:w-[340px] border-l border-[#d1d7db] dark:border-[#222e35] bg-white dark:bg-[#111b21] flex flex-col h-full shadow-2xl md:shadow-none">
+            {/* QUICK REPLIES PANEL — animación de entrada/salida elegante */}
+            <AnimatedSidePanel open={showQuickRepliesPanel} w="md:w-[340px]">
+                <div className="w-full h-full border-l border-[#d1d7db] dark:border-[#222e35] bg-white dark:bg-[#111b21] flex flex-col shadow-2xl md:shadow-none">
                     {/* Header */}
                     <div className="h-[59px] px-4 bg-[#f0f2f5] dark:bg-[#202c33] border-b border-[#d1d7db] dark:border-[#222e35] flex items-center justify-between shrink-0">
                         <div className="flex items-center gap-2">
@@ -7379,7 +7504,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                         )}
                     </div>
                 </div>
-            )}
+            </AnimatedSidePanel>
 
             {/* VACANCY EDIT MODAL */}
             {editingVac && (

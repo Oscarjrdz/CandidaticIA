@@ -164,7 +164,7 @@ export default function ExpedienteSidepanel({ selectedChat, onClose, showToast, 
     }, [candidateId, showConfirm, selectedChat, showToast, load]);
 
     return (
-        <div className="absolute md:relative inset-y-0 right-0 z-30 w-full md:w-[340px] border-l border-[#d1d7db] dark:border-[#222e35] bg-white dark:bg-[#111b21] flex flex-col h-full shadow-2xl md:shadow-none">
+        <div className="w-full h-full border-l border-[#d1d7db] dark:border-[#222e35] bg-white dark:bg-[#111b21] flex flex-col shadow-2xl md:shadow-none">
             {/* Header */}
             <div className="h-[59px] px-4 bg-[#f0f2f5] dark:bg-[#202c33] border-b border-[#d1d7db] dark:border-[#222e35] flex items-center justify-between shrink-0">
                 <div className="flex items-center gap-2 min-w-0">
