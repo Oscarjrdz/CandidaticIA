@@ -37,6 +37,10 @@ import { substituteVariables, substituteDynamicPhrase } from '../utils/shortcuts
 import { getFilterCountsWithIndex, countSegment, resolveSegmentIds } from '../utils/facet-index.js';
 import { getCtrBlocksCached, markRetornoAttendedByGrok, getGrokAttendedTodayCount } from '../utils/ctr-stats.js';
 import { CHECKPOINT_PREFIX } from '../utils/flow-engine.js';
+// Datos de transporte ESTÁTICOS (mismos que pinta la sección Mapa): estaciones del Metro de
+// Monterrey por línea y paradas del corredor Ecovía. No viven en Redis, son datos embebidos.
+import { METRO_LINES } from '../../src/data/metroLines.js';
+import { ECOVIA_STOPS } from '../../src/data/ecoviaStops.js';
 
 // `name` = identificador estable de la implementación (no cambiar, varios clientes
 // lo usan como id). `title` = nombre legible para humanos que la UI del conector
@@ -2765,6 +2769,64 @@ const TOOLS = {
             if (busqueda) pins = pins.filter(p => p.label.toLowerCase().includes(busqueda) || p.note.toLowerCase().includes(busqueda));
             pins.sort((a, b) => (b.fecha || 0) - (a.fecha || 0));
             return { total: pins.length, pins };
+        }
+    },
+
+    ver_paradas_transporte: {
+        description: 'Las paradas de transporte público que pinta la sección Mapa (datos de referencia estáticos, NO de Redis): estaciones del Metro de Monterrey (Metrorrey) por línea (L1 amarilla, L2 verde, L3 roja; las de transbordo llevan transbordo:true) y las paradas del corredor Ecovía. Cada parada: nombre, lat, lng. Para CRUZAR info geográfica pasa cerca={lat,lng,radioKm} (radioKm default 1) y devuelve solo las paradas dentro de ese radio del punto, ordenadas por cercanía con distanciaMetros (ej. "¿qué candidato vive cerca de una estación del Metro?" → toma el lat/lng del candidato de ver_mapa_candidatos y pásalo aquí). transporte="metro" | "ecovia" | "ambos" (default) acota la capa.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                transporte: { type: 'string', enum: ['metro', 'ecovia', 'ambos'], description: 'Qué capa devolver (default "ambos").' },
+                cerca: { type: 'object', description: 'Trae solo las paradas dentro de un radio de un punto: {lat, lng, radioKm} (radioKm default 1). Ordena por cercanía y agrega distanciaMetros.' }
+            }
+        },
+        handler: async (args) => {
+            const cual = ['metro', 'ecovia'].includes(args?.transporte) ? args.transporte : 'ambos';
+
+            // Aplana todas las paradas con su etiqueta de capa/línea.
+            const todas = [];
+            if (cual === 'metro' || cual === 'ambos') {
+                for (const line of (METRO_LINES || [])) {
+                    for (const s of (line.stops || [])) {
+                        todas.push({ transporte: 'metro', linea: line.nombre || line.id || '', color: line.color || null, nombre: s.nombre || '', lat: Number(s.lat), lng: Number(s.lng), transbordo: s.transfer === true });
+                    }
+                }
+            }
+            if (cual === 'ecovia' || cual === 'ambos') {
+                for (const s of (ECOVIA_STOPS || [])) {
+                    todas.push({ transporte: 'ecovia', linea: 'Ecovía', color: null, nombre: s.nombre || '', lat: Number(s.lat), lng: Number(s.lng), transbordo: false });
+                }
+            }
+
+            // Proximidad a un punto (cruzar con la ubicación de un candidato / pin / coordenada).
+            const cerca = args?.cerca;
+            if (cerca && typeof cerca === 'object') {
+                const cLat = Number(cerca.lat), cLng = Number(cerca.lng);
+                if (!Number.isFinite(cLat) || !Number.isFinite(cLng)) throw new Error('cerca requiere lat y lng numéricos');
+                let radioKm = Number(cerca.radioKm);
+                if (!Number.isFinite(radioKm) || radioKm <= 0) radioKm = 1;
+                const radioM = radioKm * 1000;
+                const cercanas = todas
+                    .map(s => ({ ...s, distanciaMetros: distanciaMetrosEntre(cLat, cLng, s.lat, s.lng) }))
+                    .filter(s => s.distanciaMetros <= radioM)
+                    .sort((a, b) => a.distanciaMetros - b.distanciaMetros);
+                return { modo: 'cerca', transporte: cual, radioKm, total: cercanas.length, paradas: cercanas };
+            }
+
+            // Sin proximidad: devuelve la estructura completa (Metro por línea + Ecovía plano).
+            const metro = (cual === 'metro' || cual === 'ambos')
+                ? (METRO_LINES || []).map(l => ({ id: l.id, nombre: l.nombre, color: l.color, numEstaciones: (l.stops || []).length, estaciones: (l.stops || []).map(s => ({ nombre: s.nombre, lat: Number(s.lat), lng: Number(s.lng), transbordo: s.transfer === true })) }))
+                : undefined;
+            const ecovia = (cual === 'ecovia' || cual === 'ambos')
+                ? (ECOVIA_STOPS || []).map(s => ({ nombre: s.nombre, lat: Number(s.lat), lng: Number(s.lng) }))
+                : undefined;
+            return {
+                transporte: cual,
+                totalParadas: todas.length,
+                ...(metro ? { metro: { numLineas: metro.length, lineas: metro } } : {}),
+                ...(ecovia ? { ecovia: { numParadas: ecovia.length, paradas: ecovia } } : {})
+            };
         }
     },
 

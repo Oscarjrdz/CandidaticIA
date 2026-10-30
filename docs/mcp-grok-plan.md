@@ -170,6 +170,7 @@ La vista "Mapa" del dashboard, tal cual la pinta, SIN escanear blobs. Dos capas 
 |------|----------|-------------|
 | `ver_mapa_candidatos` | Capa de candidatos con ubicación compartida (pines verdes): candidateId, nombre, telefono, lat/lng, etiquetas, categoria, asistencia. Cruce de info: filtra por `etiqueta`/`categoria`/`soloAsistencia`/`busqueda`, o `cerca={lat,lng,radioKm}` → solo los dentro del radio, ordenados por cercanía (+`distanciaMetros`). Paginado `limit`/`offset`. | hash `candidatic:candidate_locations` + facet `candidate:facet:<id>` |
 | `ver_pines_mapa` | Capa de pines propios (manuales): oficinas, puntos de entrevista, clientes. Devuelve id, label, note, color, lat/lng, tieneLogo, createdBy, fecha. | hash `candidatic:map_pins` |
+| `ver_paradas_transporte` | Capa de transporte: estaciones del Metro (L1/L2/L3, con transbordo) y paradas de la Ecovía. Datos de referencia estáticos (nombre/lat/lng). Cruce: `cerca={lat,lng,radioKm}` → paradas dentro del radio ordenadas por cercanía. `transporte=metro\|ecovia\|ambos`. | `src/data/metroLines.js` + `src/data/ecoviaStops.js` (estáticos, no Redis) |
 
 > **Cruce geográfico típico:** `ver_pines_mapa` para ubicar un cliente/oficina → tomar su `lat`/`lng` → `ver_mapa_candidatos` con `cerca={lat,lng,radioKm}` para traer los candidatos alrededor. Distinto de `ver_ubicacion(es)_candidato(s)`, que leen el snapshot de ruta del nodo "Pedir Ubicación" desde el blob (más caro); estas dos leen la vista del Mapa directo de sus índices ligeros.
 
