@@ -162,6 +162,17 @@ Acceso total a la sección de Flujos. **Todas pasan por `/api/flows` vía `callI
 
 **Paginación/campos (todas las listas):** `limit` (default 50, máx 500) + `offset` → respuesta con `total`/`offset`/`hayMas`; `todos:true` (tope ~3000) y `campos:[]` para elegir columnas.
 
+### Sección Mapa (2026-10-30)
+
+La vista "Mapa" del dashboard, tal cual la pinta, SIN escanear blobs. Dos capas baratas:
+
+| Tool | Qué hace | Se apoya en |
+|------|----------|-------------|
+| `ver_mapa_candidatos` | Capa de candidatos con ubicación compartida (pines verdes): candidateId, nombre, telefono, lat/lng, etiquetas, categoria, asistencia. Cruce de info: filtra por `etiqueta`/`categoria`/`soloAsistencia`/`busqueda`, o `cerca={lat,lng,radioKm}` → solo los dentro del radio, ordenados por cercanía (+`distanciaMetros`). Paginado `limit`/`offset`. | hash `candidatic:candidate_locations` + facet `candidate:facet:<id>` |
+| `ver_pines_mapa` | Capa de pines propios (manuales): oficinas, puntos de entrevista, clientes. Devuelve id, label, note, color, lat/lng, tieneLogo, createdBy, fecha. | hash `candidatic:map_pins` |
+
+> **Cruce geográfico típico:** `ver_pines_mapa` para ubicar un cliente/oficina → tomar su `lat`/`lng` → `ver_mapa_candidatos` con `cerca={lat,lng,radioKm}` para traer los candidatos alrededor. Distinto de `ver_ubicacion(es)_candidato(s)`, que leen el snapshot de ruta del nodo "Pedir Ubicación" desde el blob (más caro); estas dos leen la vista del Mapa directo de sus índices ligeros.
+
 ---
 
 ## 4. Banco de respuestas — detalle importante

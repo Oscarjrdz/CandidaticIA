@@ -197,6 +197,18 @@ function pickFields(obj, campos) {
     return out;
 }
 
+// Distancia en metros entre dos puntos (lat/lng en grados). Haversine simple — sirve
+// para "cruzar" pines por cercanía (ej. candidatos cerca de un pin propio/cliente).
+function distanciaMetrosEntre(lat1, lng1, lat2, lng2) {
+    const R = 6371000; // radio terrestre en metros
+    const toRad = (d) => (d * Math.PI) / 180;
+    const dLat = toRad(lat2 - lat1);
+    const dLng = toRad(lng2 - lng1);
+    const a = Math.sin(dLat / 2) ** 2
+        + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+    return Math.round(R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
+}
+
 // Trae candidatos vía getCandidates con paginación o 'todos' (tope ABS_MAX_TODOS).
 async function fetchCandidatesPaged({ todos, limit, offset, search = '', tag = '' }) {
     if (!todos) {
@@ -2612,6 +2624,147 @@ const TOOLS = {
                     : null,
                 muestra
             };
+        }
+    },
+
+    // ──────────────── SECCIÓN MAPA (pines del dashboard) ────────────────
+    // Lo que la sección "Mapa" del dashboard pinta, tal cual, SIN escanear los blobs
+    // de candidatos. Dos capas, dos fuentes baratas:
+    //   • Candidatos con ubicación → hash `candidatic:candidate_locations` (lo mantiene
+    //     el webhook en cada ubicación entrante) + proyección facetada `candidate:facet:<id>`
+    //     (etiquetas / categoría / asistencia), igual que /api/system/candidate-locations.
+    //   • Pines propios (manuales, puestos por reclutadores: oficinas, puntos de entrevista,
+    //     clientes) → hash `candidatic:map_pins`, igual que /api/system/map-pins.
+    // OJO: distinto de ver_ubicacion(es)_candidato(s), que leen el snapshot de ruta del
+    // nodo "Pedir Ubicación" desde el blob (más caro). Esto es la vista del Mapa.
+
+    ver_mapa_candidatos: {
+        description: 'La capa de CANDIDATOS de la sección Mapa: cada candidato que compartió su ubicación por WhatsApp (lo que pintan los pines verdes), leído barato del índice `candidatic:candidate_locations` + facetas (NO escanea blobs). Por pin devuelve candidateId, nombre, telefono, lat, lng, fecha, etiquetas, categoria y asistencia (confirmada true/false). Para CRUZAR info: filtra por etiqueta, categoria o soloAsistencia, busca por nombre/telefono (busqueda), o pasa cerca={lat,lng,radioKm} para traer SOLO los que caen dentro de ese radio de un punto (ej. un cliente o un pin propio), ordenados por distancia (devuelve distanciaMetros). Paginado con limit/offset. Respuesta: {total, conUbicacion, mostrados, hayMas, pins}.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                etiqueta: { type: 'string', description: 'Solo candidatos con esta etiqueta exacta (opcional).' },
+                categoria: { type: 'string', description: 'Solo candidatos de esta categoría (opcional).' },
+                soloAsistencia: { type: 'boolean', description: 'true = solo candidatos con asistencia confirmada (los puntos azules de "Ver asistencias").' },
+                busqueda: { type: 'string', description: 'Texto para filtrar por nombre o teléfono (opcional).' },
+                cerca: { type: 'object', description: 'Trae solo los pines dentro de un radio de un punto: {lat, lng, radioKm} (radioKm default 5). Ordena por cercanía y agrega distanciaMetros a cada pin.' },
+                limit: { type: 'number', description: 'Cuántos por página (default 100, máx 500).' },
+                offset: { type: 'number', description: 'Desde qué posición (default 0).' }
+            }
+        },
+        handler: async (args, { redis }) => {
+            const raw = await redis.hgetall('candidatic:candidate_locations');
+            let pins = [];
+            for (const [id, val] of Object.entries(raw || {})) {
+                let p;
+                try { p = JSON.parse(val); } catch { continue; }
+                const lat = Number(p?.lat), lng = Number(p?.lng);
+                if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+                pins.push({ candidateId: id, nombre: p.nombre || '', telefono: p.whatsapp || '', lat, lng, fecha: p.ts || null, etiquetas: [], categoria: '', asistencia: false });
+            }
+            const totalConUbicacion = pins.length;
+
+            // Enriquecer etiquetas/categoría/asistencia desde la facet (~277B c/u), igual que el Mapa.
+            if (pins.length) {
+                try {
+                    const pipe = redis.pipeline();
+                    for (const pin of pins) pipe.get(`candidate:facet:${pin.candidateId}`);
+                    const results = await pipe.exec();
+                    for (let i = 0; i < pins.length; i++) {
+                        try {
+                            const facetRaw = results?.[i]?.[1];
+                            if (!facetRaw) continue;
+                            const facet = JSON.parse(facetRaw);
+                            if (Array.isArray(facet?.tags)) pins[i].etiquetas = facet.tags.map(t => typeof t === 'string' ? t : t?.name).filter(Boolean);
+                            pins[i].asistencia = facet?.asistencia === true;
+                            if (facet?.categoria) pins[i].categoria = String(facet.categoria);
+                        } catch { /* pin sin facet → se queda sin enriquecer */ }
+                    }
+                } catch { /* si falla el pipeline, van sin facetas */ }
+            }
+
+            // Filtros (cruce de info).
+            const etiqueta = String(args?.etiqueta || '').trim().toLowerCase();
+            if (etiqueta) pins = pins.filter(p => p.etiquetas.some(t => String(t).trim().toLowerCase() === etiqueta));
+            const categoria = String(args?.categoria || '').trim().toLowerCase();
+            if (categoria) pins = pins.filter(p => String(p.categoria).trim().toLowerCase() === categoria);
+            if (args?.soloAsistencia === true) pins = pins.filter(p => p.asistencia === true);
+            const busqueda = String(args?.busqueda || '').trim().toLowerCase();
+            if (busqueda) {
+                const digits = busqueda.replace(/\D/g, '');
+                pins = pins.filter(p => {
+                    const byName = String(p.nombre).toLowerCase().includes(busqueda);
+                    const byPhone = digits.length >= 3 && String(p.telefono).replace(/\D/g, '').includes(digits);
+                    return byName || byPhone;
+                });
+            }
+
+            // Proximidad a un punto (cruzar con un cliente / pin propio / coordenada).
+            let ordenadoPorCercania = false;
+            const cerca = args?.cerca;
+            if (cerca && typeof cerca === 'object') {
+                const cLat = Number(cerca.lat), cLng = Number(cerca.lng);
+                if (!Number.isFinite(cLat) || !Number.isFinite(cLng)) throw new Error('cerca requiere lat y lng numéricos');
+                let radioKm = Number(cerca.radioKm);
+                if (!Number.isFinite(radioKm) || radioKm <= 0) radioKm = 5;
+                const radioM = radioKm * 1000;
+                pins = pins
+                    .map(p => ({ ...p, distanciaMetros: distanciaMetrosEntre(cLat, cLng, p.lat, p.lng) }))
+                    .filter(p => p.distanciaMetros <= radioM)
+                    .sort((a, b) => a.distanciaMetros - b.distanciaMetros);
+                ordenadoPorCercania = true;
+            }
+
+            const totalFiltrado = pins.length;
+            let limit = parseInt(args?.limit, 10);
+            if (!Number.isFinite(limit) || limit <= 0) limit = 100;
+            limit = Math.min(limit, ABS_MAX_PAGE);
+            const offset = Math.max(parseInt(args?.offset, 10) || 0, 0);
+            const page = pins.slice(offset, offset + limit);
+
+            return {
+                conUbicacion: totalConUbicacion,
+                total: totalFiltrado,
+                offset,
+                mostrados: page.length,
+                hayMas: offset + page.length < totalFiltrado,
+                ordenadoPorCercania,
+                pins: page
+            };
+        }
+    },
+
+    ver_pines_mapa: {
+        description: 'La capa de PINES PROPIOS de la sección Mapa: los marcadores que los reclutadores pusieron a mano (oficinas, puntos de entrevista, clientes), leídos del hash `candidatic:map_pins`. Por pin devuelve id, label (nombre), note (nota), color, lat, lng, tieneLogo, createdBy y fecha. Para CRUZAR info geográfica (ej. candidatos cerca de un cliente) toma el lat/lng de un pin de aquí y pásalo a ver_mapa_candidatos con cerca={lat,lng,radioKm}. Respuesta: {total, pins}.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                busqueda: { type: 'string', description: 'Texto para filtrar por nombre (label) o nota (opcional).' }
+            }
+        },
+        handler: async (args, { redis }) => {
+            const rawAll = await redis.hgetall('candidatic:map_pins');
+            let pins = [];
+            for (const [id, val] of Object.entries(rawAll || {})) {
+                let p;
+                try { p = typeof val === 'string' ? JSON.parse(val) : val; } catch { continue; }
+                const lat = Number(p?.lat), lng = Number(p?.lng);
+                if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+                pins.push({
+                    id,
+                    label: typeof p.label === 'string' ? p.label : '',
+                    note: typeof p.note === 'string' ? p.note : '',
+                    color: p.color || 'blue',
+                    lat, lng,
+                    tieneLogo: typeof p.logo === 'string' && p.logo.startsWith('data:image/'),
+                    createdBy: p.createdBy || '',
+                    fecha: p.ts || null
+                });
+            }
+            const busqueda = String(args?.busqueda || '').trim().toLowerCase();
+            if (busqueda) pins = pins.filter(p => p.label.toLowerCase().includes(busqueda) || p.note.toLowerCase().includes(busqueda));
+            pins.sort((a, b) => (b.fecha || 0) - (a.fecha || 0));
+            return { total: pins.length, pins };
         }
     },
 
