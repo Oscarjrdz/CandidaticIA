@@ -843,13 +843,22 @@ let tagsCache = null; // { tags: [...], untaggedTotal: number }
 
 // Columna lateral derecha con entrada/salida elegante (misma animación que el banco de
 // respuestas del chat flotante de Mapa, ChatWindow.jsx): desliza + escala + funde y, en
-// escritorio, EMPUJA el chat animando el ancho (0 ↔ w). El wrapper es el item flex con el
-// ancho animable; el hijo va a ancho FIJO (w) para que el contenido no se reacomode mientras
-// el ancho crece/encoge (overflow-hidden lo recorta). Monta al abrir y desmonta 320ms DESPUÉS
-// de cerrar (igual timing que la transición) para que la salida también se anime sin dejar la
-// data cargando de más: los paneles (Banco/CRM/Expediente) solo existen mientras están abiertos
-// o cerrándose, igual que antes — solo se les suma la animación. En móvil es un overlay que
-// entra/sale deslizando desde la derecha (no empuja, no hay a dónde). Ver [[project_chat_web_stable]].
+// escritorio, EMPUJA el chat.
+//
+// CLAVE DE RENDIMIENTO: la animación NO toca el `width`. El ancho del panel aparece/desaparece
+// de golpe (un solo reflow del chat al montar/desmontar), y lo que se anima es `transform`
+// (translate + scale) + `opacity` — compositor/GPU, sin layout. Antes animábamos el ancho
+// (0 ↔ w) durante 300ms: eso obligaba a Virtuoso a RE-MEDIR y re-acomodar la lista de mensajes
+// en CADA frame → las burbujas con imagen "parpadeaban" y las filas se recorrían escalonadas al
+// abrir/cerrar con el chat lleno de fotos. Con transform puro la lista se reacomoda UNA sola vez
+// (al reservar/soltar el ancho), no 300 veces. Por eso uso `transition` (incluye transform y
+// opacity, NO width) en vez de `transition-all`.
+//
+// El ancho se mantiene FIJO (w) mientras está montado; el panel entra/sale deslizando con
+// translate-x-full (fuera por la derecha). Monta al abrir y desmonta 320ms DESPUÉS de cerrar
+// (igual que la transición) para animar también la salida sin dejar data cargando de más: los
+// paneles (Banco/CRM/Expediente) solo existen mientras están abiertos o cerrándose. En móvil es
+// un overlay absoluto (no empuja). Ver [[project_chat_web_stable]] y [[feedback_chatweb_alto_trafico]].
 const AnimatedSidePanel = ({ open, w, children }) => {
     const [mounted, setMounted] = React.useState(open);
     const [shown, setShown] = React.useState(open);
@@ -859,8 +868,8 @@ const AnimatedSidePanel = ({ open, w, children }) => {
         if (open) {
             if (closeTimerRef.current) { clearTimeout(closeTimerRef.current); closeTimerRef.current = null; }
             setMounted(true);
-            // Monta en w-0 y, dos frames después, dispara la transición a ancho completo (un solo
-            // rAF a veces coincide con el primer paint y la animación se "come" el primer frame).
+            // Monta fuera (translate-x-full) y, dos frames después, dispara la transición a su
+            // sitio (un solo rAF a veces coincide con el primer paint y se "come" el 1er frame).
             if (enterRafRef.current) cancelAnimationFrame(enterRafRef.current);
             enterRafRef.current = requestAnimationFrame(() => {
                 enterRafRef.current = requestAnimationFrame(() => setShown(true));
@@ -877,10 +886,10 @@ const AnimatedSidePanel = ({ open, w, children }) => {
     return (
         <div
             aria-hidden={!open}
-            className={`absolute md:relative inset-y-0 right-0 z-30 h-full overflow-hidden origin-right transition-all duration-300 ease-[cubic-bezier(.22,1,.36,1)] ${
+            className={`absolute md:relative inset-y-0 right-0 z-30 h-full w-full ${w} overflow-hidden origin-right transition duration-300 ease-[cubic-bezier(.22,1,.36,1)] will-change-transform ${
                 shown
-                    ? `w-full ${w} opacity-100 translate-x-0 scale-100`
-                    : 'w-full md:w-0 opacity-0 translate-x-full md:translate-x-4 scale-95 pointer-events-none'
+                    ? 'opacity-100 translate-x-0 scale-100'
+                    : 'opacity-0 translate-x-full scale-95 pointer-events-none'
             }`}
         >
             <div className={`w-full ${w} h-full`}>{children}</div>
@@ -6185,9 +6194,10 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                                 const iaSilenced = isIaSilenced(selectedChat);
                                 return (
                                 <div className="flex items-center gap-2 mr-2" style={{ order: 2 }}>
-                                    <span className={`text-xs font-medium ${iaSilenced ? 'text-red-500' : 'text-gray-400 dark:text-gray-500'} select-none whitespace-nowrap [@container(max-width:1060px)]:hidden`}>
-                                        {iaSilenced ? 'IA Silenciada' : 'IA Dinámica'}
-                                    </span>
+                                    {/* Solo el toggle, sin etiqueta de texto: antes la etiqueta
+                                        ("IA Silenciada"/"IA Dinámica") se ocultaba por container-query
+                                        <1060px, así que aparecía/desaparecía al abrir columnas. El
+                                        color (rojo/gris) y el title ya comunican el estado. */}
                                     <button
                                         onClick={(e) => handleBlockToggle(selectedChat, e)}
                                         disabled={blockLoading}
