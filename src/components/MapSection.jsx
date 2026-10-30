@@ -112,6 +112,7 @@ export default function MapSection({ onOpenCandidate }) {
     // con una línea del corredor + marcadores brillantes. Capa aparte, no toca los pines de candidatos.
     const [showEcovia, setShowEcovia] = useState(false);
     const ecoviaLayerRef = useRef(null);
+    const ecoviaSvgRef = useRef(null); // renderer SVG reusado para la línea (ver nota en el effect)
 
     // 🔒 Candado de zoom: al activarlo, fija el zoom actual (minZoom=maxZoom=zoom actual) para que
     // la rueda, el pellizco, el doble clic y los botones +/− no cambien el acercamiento. El paneo
@@ -510,9 +511,15 @@ export default function MapSection({ onOpenCandidate }) {
         const ECO = '#f59e0b';
         const latlngs = ECOVIA_STOPS.map(s => [s.lat, s.lng]);
         if (!latlngs.length) return;
+        // La línea va en SVG (no canvas): con preferCanvas:true, un canvas propio para la polilínea
+        // se apila ENCIMA del canvas de los pines de candidatos y se come sus clics (cursor de
+        // arrastre pegado). El contenedor SVG tiene pointer-events:none en la raíz → no bloquea nada.
+        // Un solo renderer reusado para no dejar <svg> huérfanos al prender/apagar varias veces.
+        if (!ecoviaSvgRef.current) ecoviaSvgRef.current = L.svg();
+        const svg = ecoviaSvgRef.current;
         // Halo (línea ancha y tenue) + corredor (línea brillante) = efecto de corredor encendido.
-        L.polyline(latlngs, { color: ECO, weight: 12, opacity: 0.18, lineCap: 'round', lineJoin: 'round', interactive: false }).addTo(layer);
-        L.polyline(latlngs, { color: ECO, weight: 4, opacity: 0.95, lineCap: 'round', lineJoin: 'round', interactive: false }).addTo(layer);
+        L.polyline(latlngs, { renderer: svg, color: ECO, weight: 12, opacity: 0.18, lineCap: 'round', lineJoin: 'round', interactive: false }).addTo(layer);
+        L.polyline(latlngs, { renderer: svg, color: ECO, weight: 4, opacity: 0.95, lineCap: 'round', lineJoin: 'round', interactive: false }).addTo(layer);
         for (const s of ECOVIA_STOPS) {
             const icon = L.divIcon({
                 className: 'map-eco-stop',
