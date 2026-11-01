@@ -160,6 +160,8 @@ export default function MapSection({ onOpenCandidate }) {
     const coloniaDataRequested = useRef(false);
     // Catálogo cargado dinámicamente: { list: COLONIAS, byId: Map(id→colonia), match: matchColoniaId }.
     const [coloniaDB, setColoniaDB] = useState(null);
+    // Toggle "Solo colonias con candidatos": persiste en las preferencias del usuario (Redis).
+    const [soloConCandidatos, setSoloConCandidatos] = useState(!!user?.preferences?.coloniasSoloConCandidatos);
 
     // 🔒 Candado de zoom: al activarlo, fija el zoom actual (minZoom=maxZoom=zoom actual) para que
     // la rueda, el pellizco, el doble clic y los botones +/− no cambien el acercamiento. El paneo
@@ -660,24 +662,47 @@ export default function MapSection({ onOpenCandidate }) {
     // Resultados del buscador: por nombre o municipio. No renderiza las 4,177 de golpe — exige ≥2 chars
     // y topa a 60 filas. Cada fila trae su conteo de candidatos (si ya cargó el índice).
     const coloniaResults = useMemo(() => {
+        if (!coloniaDB) return [];
         const q = coloniaSearch.trim().toLowerCase();
-        if (q.length < 2 || !coloniaDB) return [];
         const norm = (s) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
         const nq = norm(q);
-        const out = [];
-        for (const c of coloniaDB.list) {
-            if (norm(c.nombre).includes(nq) || norm(c.municipio).includes(nq)) {
-                out.push(c);
-                if (out.length >= 60) break;
-            }
+        const hasQuery = q.length >= 2;
+        // Con el toggle apagado y sin búsqueda: no lista nada (son 4,600 colonias).
+        if (!hasQuery && !soloConCandidatos) return [];
+
+        let list = coloniaDB.list;
+        if (soloConCandidatos) list = list.filter(c => coloniaBuckets.has(c.id));   // solo las que tienen candidatos
+        if (hasQuery) list = list.filter(c => norm(c.nombre).includes(nq) || norm(c.municipio).includes(nq));
+
+        // Solo-con-candidatos sin búsqueda: ordena por # de candidatos (las más pobladas arriba).
+        if (soloConCandidatos && !hasQuery) {
+            list = [...list].sort((a, b) => (coloniaBuckets.get(b.id)?.length || 0) - (coloniaBuckets.get(a.id)?.length || 0));
         }
-        return out;
-    }, [coloniaSearch, coloniaDB]);
+        return list.slice(0, 60);
+    }, [coloniaSearch, coloniaDB, soloConCandidatos, coloniaBuckets]);
 
     const toggleColonia = useCallback((id) => {
         ensureColoniaData();
         setSelectedColonias(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
     }, [ensureColoniaData]);
+
+    // Prende/apaga "Solo colonias con candidatos" y lo guarda en las preferencias del usuario (Redis).
+    // saveUser hace merge superficial, así que mandar solo este campo es seguro.
+    const toggleSoloConCandidatos = useCallback(() => {
+        ensureColoniaData();   // el filtro necesita los candidatos por colonia cargados
+        setSoloConCandidatos(prev => {
+            const next = !prev;
+            if (user?.id) {
+                setUser(u => u ? { ...u, preferences: { ...(u.preferences || {}), coloniasSoloConCandidatos: next } } : u);
+                fetch('/api/users', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id: user.id, preferences: { coloniasSoloConCandidatos: next } })
+                }).catch(() => {});
+            }
+            return next;
+        });
+    }, [ensureColoniaData, user?.id, setUser]);
 
     // Cierra el dropdown de colonias al hacer clic fuera.
     useEffect(() => {
@@ -1138,6 +1163,17 @@ export default function MapSection({ onOpenCandidate }) {
                                             className="w-full pl-8 pr-2 py-1.5 rounded-lg text-xs bg-gray-50 dark:bg-gray-900/40 border border-gray-200 dark:border-gray-700 text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-violet-400"
                                         />
                                     </div>
+                                    {/* Toggle: solo colonias con candidatos (se guarda en Redis) */}
+                                    <button type="button" onClick={toggleSoloConCandidatos}
+                                        className="mt-2 w-full flex items-center justify-between px-0.5 py-0.5">
+                                        <span className="text-[11px] font-medium text-gray-600 dark:text-gray-300 flex items-center gap-1.5">
+                                            <MessageSquare className="w-3 h-3 text-violet-500" />
+                                            Solo colonias con candidatos
+                                        </span>
+                                        <span className={`relative inline-flex h-4 w-7 shrink-0 rounded-full transition-colors ${soloConCandidatos ? 'bg-violet-600' : 'bg-gray-300 dark:bg-gray-600'}`}>
+                                            <span className={`absolute top-0.5 h-3 w-3 rounded-full bg-white shadow transition-transform ${soloConCandidatos ? 'translate-x-3.5' : 'translate-x-0.5'}`} />
+                                        </span>
+                                    </button>
                                 </div>
 
                                 {/* Chips de las colonias seleccionadas */}
@@ -1160,10 +1196,10 @@ export default function MapSection({ onOpenCandidate }) {
                                     {coloniaLoading && !coloniaCands && (
                                         <div className="px-3 py-2 text-[11px] text-gray-400 flex items-center gap-1.5"><Loader2 className="w-3 h-3 animate-spin" /> Cargando candidatos por colonia…</div>
                                     )}
-                                    {coloniaSearch.trim().length < 2 ? (
+                                    {(!soloConCandidatos && coloniaSearch.trim().length < 2) ? (
                                         <div className="px-3 py-3 text-xs text-gray-400 text-center">Escribe al menos 2 letras para buscar</div>
                                     ) : coloniaResults.length === 0 ? (
-                                        <div className="px-3 py-3 text-xs text-gray-400 text-center">Sin colonias</div>
+                                        coloniaLoading ? null : <div className="px-3 py-3 text-xs text-gray-400 text-center">Sin colonias{soloConCandidatos ? ' con candidatos' : ''}</div>
                                     ) : coloniaResults.map((c) => {
                                         const on = selectedColoniasSet.has(c.id);
                                         const count = coloniaBuckets.get(c.id)?.length || 0;
