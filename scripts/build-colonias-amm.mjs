@@ -198,6 +198,30 @@ async function main() {
         osmCentroid[best.id] = [round(clat, 6), round(clng, 6)];
     }
 
+    // 2d. Colonias GEOCODIFICADAS de OSM (las que dieron los candidatos y no estaban en SEPOMEX).
+    //     Vienen de src/data/coloniasGeocoded.json (lo produce el merge tras la corrida de geocodeo).
+    //     Cada una trae su punto (y contorno si OSM lo tenía). Se agregan como colonias nuevas.
+    const geocodedCentroid = {};
+    const geocodedPath = path.join(OUT, 'coloniasGeocoded.json');
+    let geocodedAdded = 0;
+    if (fs.existsSync(geocodedPath)) {
+        let gj = {};
+        try { gj = JSON.parse(fs.readFileSync(geocodedPath, 'utf8')); } catch { gj = {}; }
+        const existing = new Set(catalog.map(c => c.id));
+        for (const [id, e] of Object.entries(gj)) {
+            if (id.startsWith('_') || !e || e.lat == null) continue;
+            if (!AMM.has(e.municipio)) continue;
+            if (!existing.has(id)) {
+                catalog.push({ id, colonia: e.nombre, municipio: e.municipio, cp: '', tipo: '', lat: e.lat, lng: e.lng, hasGeom: true });
+                existing.add(id);
+                geocodedAdded++;
+            }
+            geocodedCentroid[id] = [round(e.lat, 6), round(e.lng, 6)];
+            if (Array.isArray(e.poly) && e.poly.length && !coloniaPolys[id]) coloniaPolys[id] = e.poly;
+        }
+        catalog.sort((a, b) => a.municipio.localeCompare(b.municipio) || a.colonia.localeCompare(b.colonia));
+    }
+
     // 3. Emitir los dos assets (misma estructura que consume src/components/MapSection.jsx).
     const munis = [...new Set(catalog.map(c => c.municipio))].sort((a, b) => a.localeCompare(b));
     const muniIdx = new Map(munis.map((m, i) => [m, i]));
@@ -207,10 +231,10 @@ async function main() {
     for (const c of catalog) if (c.hasGeom && c.lat != null && cpCentroid[c.cp] === undefined) cpCentroid[c.cp] = [c.lat, c.lng];
     const rows = catalog.map(c => [c.colonia, muniIdx.get(c.municipio), c.cp, tipoIdx.get(c.tipo || '')]);
 
-    // Centroide por colonia: override manual > centroide del polígono OSM > (fallback runtime: CP).
+    // Centroide por colonia: override manual > OSM (catálogo) > geocodificado > (fallback runtime: CP).
     const coloniaCentroid = {};
     for (const c of catalog) {
-        const v = overrides[c.id] || osmCentroid[c.id];
+        const v = overrides[c.id] || osmCentroid[c.id] || geocodedCentroid[c.id];
         if (v) coloniaCentroid[c.id] = v;
     }
 
@@ -222,7 +246,7 @@ async function main() {
     fs.mkdirSync(OUT, { recursive: true });
     fs.writeFileSync(path.join(OUT, 'coloniasAMM.js'), moduleBody);
     fs.writeFileSync(path.join(OUT, 'coloniasAMMPolys.js'), polyBody);
-    console.log(`✓ ${catalog.length} colonias · ${munis.length} municipios · ${overrideCount} override(s) · ${osmMatched} con contorno real OSM`);
+    console.log(`✓ ${catalog.length} colonias (${geocodedAdded} geocodificadas nuevas) · ${munis.length} municipios · ${overrideCount} override(s) · ${Object.keys(coloniaPolys).length} con contorno`);
     console.log(`  coloniasAMM.js       ${(fs.statSync(path.join(OUT, 'coloniasAMM.js')).size / 1024).toFixed(1)} KB`);
     console.log(`  coloniasAMMPolys.js  ${(fs.statSync(path.join(OUT, 'coloniasAMMPolys.js')).size / 1024).toFixed(1)} KB`);
 }
