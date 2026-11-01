@@ -1,12 +1,27 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { MapPin, RefreshCw, Loader2, MessageSquare, Search, X, Plus, Trash2, Check, Tag, Briefcase, Bus, TrainFront } from 'lucide-react';
+import { MapPin, RefreshCw, Loader2, MessageSquare, Search, X, Plus, Trash2, Check, Tag, Briefcase, Bus, TrainFront, Building2 } from 'lucide-react';
 import { useAuthContext } from '../contexts/AuthContext';
 import ChatWindow from './ChatWindow';
 import ErrorBoundary from './ui/ErrorBoundary';
 import { ECOVIA_STOPS } from '../data/ecoviaStops';
 import { METRO_LINES } from '../data/metroLines';
+// El catálogo de colonias del AMM (nombres + matcher) y sus polígonos se cargan de forma DINÁMICA
+// (import() perezoso) la 1ª vez que el usuario abre el filtro "Colonias" — ver ensureColoniaData.
+// Así, quien usa el Mapa sin tocar Colonias NO descarga ni los ~173 KB de nombres ni los polígonos.
+
+// Jitter determinista por id de candidato: dispersa los pines "solo colonia" alrededor del centroide
+// (dentro de ~450 m) para que no se encimen, estable entre renders (no brinca al redibujar).
+function jitterFor(id, lat, lng) {
+    let h = 2166136261;
+    for (let i = 0; i < id.length; i++) { h ^= id.charCodeAt(i); h = Math.imul(h, 16777619); }
+    const a = (h >>> 0) / 4294967295;        // 0..1
+    const b = ((Math.imul(h, 48271) >>> 0) / 4294967295); // 0..1 segundo stream
+    const r = 0.0040 * Math.sqrt(a);          // radio (grados ≈ 450 m máx), densidad uniforme en disco
+    const t = 2 * Math.PI * b;                // ángulo
+    return [lat + r * Math.cos(t), lng + r * Math.sin(t) / Math.cos(lat * Math.PI / 180)];
+}
 
 const METRO_STOP_COUNT = new Set(METRO_LINES.flatMap(l => l.stops.map(s => `${s.lat},${s.lng}`))).size;
 
@@ -122,6 +137,29 @@ export default function MapSection({ onOpenCandidate }) {
     const [showMetro, setShowMetro] = useState(false);
     const metroLayerRef = useRef(null);
     const metroSvgRef = useRef(null);
+
+    // 🏘️ Capa "Colonias": buscador multi-selector del catálogo del AMM. Al seleccionar colonias:
+    //   - se COLOREA su zona (polígono del CP, SVG) y
+    //   - se ILUMINAN los candidatos que solo tienen colonia en texto (sin GPS), ubicados aprox. en el
+    //     centroide de su colonia (con jitter). Los de GPS exacto siempre se ven, esta capa es aparte.
+    const [selectedColonias, setSelectedColonias] = useState([]);   // ids del catálogo
+    const [showColoniaFilter, setShowColoniaFilter] = useState(false);
+    const [coloniaSearch, setColoniaSearch] = useState('');
+    const coloniaFilterRef = useRef(null);
+    const coloniaLayerRef = useRef(null);   // polígonos coloreados
+    const coloniaPinLayerRef = useRef(null); // pines de candidatos "solo colonia"
+    const coloniaSvgRef = useRef(null);     // renderer SVG reusado para los polígonos (como Ecovía/Metro)
+    const coloniaFitSigRef = useRef('');    // firma de la última selección encuadrada (no re-encuadrar al llegar datos tarde)
+    const selectedColoniasSet = useMemo(() => new Set(selectedColonias), [selectedColonias]);
+
+    // Datos cargados PEREZOSAMENTE al abrir el panel por 1ª vez: polígonos (import dinámico) + candidatos
+    // solo-colonia (endpoint). Mientras no se abra, la sección Mapa no paga ni el bundle ni la lectura.
+    const [cpPolys, setCpPolys] = useState(null);        // { cp: [rings] } o null (sin cargar)
+    const [coloniaCands, setColoniaCands] = useState(null); // [{id,n,m,c,cat,tags}] o null
+    const [coloniaLoading, setColoniaLoading] = useState(false);
+    const coloniaDataRequested = useRef(false);
+    // Catálogo cargado dinámicamente: { list: COLONIAS, byId: Map(id→colonia), match: matchColoniaId }.
+    const [coloniaDB, setColoniaDB] = useState(null);
 
     // 🔒 Candado de zoom: al activarlo, fija el zoom actual (minZoom=maxZoom=zoom actual) para que
     // la rueda, el pellizco, el doble clic y los botones +/− no cambien el acercamiento. El paneo
@@ -353,9 +391,11 @@ export default function MapSection({ onOpenCandidate }) {
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '&copy; OpenStreetMap', maxZoom: 19
         }).addTo(map);
+        coloniaLayerRef.current = L.layerGroup().addTo(map);    // polígonos de colonias (al fondo)
         layerRef.current = L.layerGroup().addTo(map);
         ecoviaLayerRef.current = L.layerGroup().addTo(map); // paradas de la Ecovía (debajo de los pines propios)
         metroLayerRef.current = L.layerGroup().addTo(map);  // estaciones del Metro
+        coloniaPinLayerRef.current = L.layerGroup().addTo(map); // pines de candidatos "solo colonia"
         customLayerRef.current = L.layerGroup().addTo(map);
         mapRef.current = map;
         // 🔒 Si el usuario dejó el zoom bloqueado, re-aplica el candado al nivel guardado.
@@ -586,6 +626,140 @@ export default function MapSection({ onOpenCandidate }) {
         try { map.fitBounds(L.latLngBounds(allLatLngs), { padding: [50, 50], maxZoom: 14 }); } catch { /* bounds vacíos */ }
     }, [showMetro]);
 
+    // 🏘️ Carga perezosa de los datos de colonias: polígonos (import dinámico del chunk pesado) +
+    // candidatos solo-colonia (endpoint). Se dispara la 1ª vez que el usuario abre el panel.
+    const ensureColoniaData = useCallback(() => {
+        if (coloniaDataRequested.current) return;
+        coloniaDataRequested.current = true;
+        setColoniaLoading(true);
+        Promise.all([
+            import('../data/coloniasAMM').then(m => {
+                setColoniaDB({ list: m.COLONIAS, byId: new Map(m.COLONIAS.map(c => [c.id, c])), match: m.matchColoniaId });
+            }).catch(() => setColoniaDB({ list: [], byId: new Map(), match: () => null })),
+            import('../data/coloniasAMMPolys').then(m => setCpPolys(m.CP_POLYS)).catch(() => setCpPolys({})),
+            fetch('/api/system/colonia-candidates')
+                .then(r => r.json())
+                .then(d => setColoniaCands(Array.isArray(d?.candidates) ? d.candidates : []))
+                .catch(() => setColoniaCands([]))
+        ]).finally(() => setColoniaLoading(false));
+    }, []);
+
+    // Agrupa los candidatos solo-colonia por id de colonia del catálogo (match una sola vez).
+    const coloniaBuckets = useMemo(() => {
+        const m = new Map();
+        if (!coloniaDB || !Array.isArray(coloniaCands)) return m;
+        for (const cand of coloniaCands) {
+            const cid = coloniaDB.match(cand.m, cand.c);
+            if (!cid) continue;
+            if (!m.has(cid)) m.set(cid, []);
+            m.get(cid).push(cand);
+        }
+        return m;
+    }, [coloniaCands, coloniaDB]);
+
+    // Resultados del buscador: por nombre o municipio. No renderiza las 4,177 de golpe — exige ≥2 chars
+    // y topa a 60 filas. Cada fila trae su conteo de candidatos (si ya cargó el índice).
+    const coloniaResults = useMemo(() => {
+        const q = coloniaSearch.trim().toLowerCase();
+        if (q.length < 2 || !coloniaDB) return [];
+        const norm = (s) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+        const nq = norm(q);
+        const out = [];
+        for (const c of coloniaDB.list) {
+            if (norm(c.nombre).includes(nq) || norm(c.municipio).includes(nq)) {
+                out.push(c);
+                if (out.length >= 60) break;
+            }
+        }
+        return out;
+    }, [coloniaSearch, coloniaDB]);
+
+    const toggleColonia = useCallback((id) => {
+        ensureColoniaData();
+        setSelectedColonias(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+    }, [ensureColoniaData]);
+
+    // Cierra el dropdown de colonias al hacer clic fuera.
+    useEffect(() => {
+        if (!showColoniaFilter) return;
+        const onDown = (e) => { if (coloniaFilterRef.current && !coloniaFilterRef.current.contains(e.target)) setShowColoniaFilter(false); };
+        document.addEventListener('mousedown', onDown);
+        return () => document.removeEventListener('mousedown', onDown);
+    }, [showColoniaFilter]);
+
+    // Dibuja/limpia las colonias seleccionadas: polígono coloreado del CP + pines de candidatos
+    // "solo colonia" (jitter determinista alrededor del centroide). Encuadra a lo seleccionado.
+    useEffect(() => {
+        const map = mapRef.current, polyLayer = coloniaLayerRef.current, pinLayer = coloniaPinLayerRef.current;
+        if (!map || !polyLayer || !pinLayer) return;
+        polyLayer.clearLayers();
+        pinLayer.clearLayers();
+        if (!selectedColonias.length || !coloniaDB) return;
+        if (!coloniaSvgRef.current) coloniaSvgRef.current = L.svg();
+        const svg = coloniaSvgRef.current;
+        const COL = '#8b5cf6';   // violeta: zona de colonia (distinto del emerald de GPS exacto)
+        const canvas = L.canvas({ padding: 0.5 });
+        const bounds = [];
+
+        for (const id of selectedColonias) {
+            const col = coloniaDB.byId.get(id);
+            if (!col) continue;
+
+            // Polígono del CP (si ya cargó y existe). Relleno tenue + borde brillante.
+            const rings = cpPolys && cpPolys[col.cp];
+            if (rings) {
+                for (const ring of rings) {
+                    const latlngs = ring.map(([lng, lat]) => [lat, lng]);
+                    if (latlngs.length < 3) continue;
+                    L.polygon(latlngs, { renderer: svg, color: COL, weight: 2, opacity: 0.9, fillColor: COL, fillOpacity: 0.14, interactive: false }).addTo(polyLayer);
+                    bounds.push(...latlngs);
+                }
+            } else if (Number.isFinite(col.lat)) {
+                bounds.push([col.lat, col.lng]);
+            }
+
+            // Etiqueta de la colonia en su centroide.
+            if (Number.isFinite(col.lat)) {
+                const bucket = coloniaBuckets.get(id) || [];
+                const label = L.marker([col.lat, col.lng], {
+                    interactive: false,
+                    icon: L.divIcon({
+                        className: 'map-colonia-label',
+                        html: `<div class="colonia-tag"><span class="colonia-tag-name">${(col.nombre || '').replace(/</g, '&lt;')}</span>${bucket.length ? `<span class="colonia-tag-count">${bucket.length}</span>` : ''}</div>`,
+                        iconSize: [0, 0], iconAnchor: [0, 0]
+                    })
+                });
+                label.addTo(polyLayer);
+
+                // Pines de candidatos "solo colonia" (jitter determinista). Estilo aproximado (hueco).
+                for (const cand of bucket) {
+                    const [la, ln] = jitterFor(cand.id, col.lat, col.lng);
+                    const mk = L.circleMarker([la, ln], {
+                        renderer: canvas, radius: 5, weight: 2, color: COL, fillColor: '#ffffff', fillOpacity: 0.9
+                    });
+                    const nombre = (cand.n || 'Sin nombre').replace(/</g, '&lt;');
+                    mk.bindPopup(
+                        `<div style="min-width:190px">
+                           <div style="font-weight:700;margin-bottom:1px">${nombre}</div>
+                           <div style="color:#8b5cf6;font-size:11px;font-weight:600;margin-bottom:4px">🏘️ ${(col.nombre || '').replace(/</g, '&lt;')} · ${(col.municipio || '').replace(/</g, '&lt;')}</div>
+                           <div style="color:#9ca3af;font-size:10px;margin-bottom:6px">Ubicación aproximada (por colonia)</div>
+                           <button data-cand="${cand.id}" data-nombre="${encodeURIComponent(cand.n || '')}" class="map-open-chat-colonia" style="cursor:pointer;border:0;background:#8b5cf6;color:#fff;font-weight:600;font-size:12px;padding:6px 12px;border-radius:8px;width:100%">💬 Abrir chat</button>
+                         </div>`
+                    );
+                    mk.addTo(pinLayer);
+                    bounds.push([la, ln]);
+                }
+            }
+        }
+
+        // Encuadra SOLO cuando cambió la selección (no cuando llegan datos tarde y redibujan).
+        const sig = selectedColonias.join(',');
+        if (bounds.length && sig !== coloniaFitSigRef.current) {
+            coloniaFitSigRef.current = sig;
+            try { map.fitBounds(L.latLngBounds(bounds), { padding: [60, 60], maxZoom: 15 }); } catch { /* bounds vacíos */ }
+        }
+    }, [selectedColonias, coloniaBuckets, cpPolys, coloniaDB]);
+
     // 📡 Pin EN VIVO (SSE): un candidato acaba de compartir su ubicación → upsert en la lista
     // (el efecto de arriba lo dibuja; no re-encuadra, respeta tu vista).
     useEffect(() => {
@@ -627,6 +801,27 @@ export default function MapSection({ onOpenCandidate }) {
                 nombre: decodeURIComponent(chatBtn.dataset.nombre || ''),
                 whatsapp: chatBtn.dataset.tel || ''
             });
+            mapRef.current?.closePopup();
+        };
+        // Candidato "solo colonia": no traemos su teléfono en el índice ligero → lo resolvemos al vuelo
+        // (caché o /api/candidates?id=) para abrir el mismo chat embebido.
+        const coloniaBtn = root.querySelector('.map-open-chat-colonia');
+        if (coloniaBtn) coloniaBtn.onclick = async () => {
+            const id = coloniaBtn.dataset.cand;
+            let nombre = decodeURIComponent(coloniaBtn.dataset.nombre || '');
+            let whatsapp = '';
+            try {
+                const cache = candCacheRef.current;
+                let c = cache.get(id);
+                if (!c) {
+                    const res = await fetch(`/api/candidates?id=${encodeURIComponent(id)}`);
+                    const d = await res.json();
+                    c = d?.candidate;
+                    if (c) cache.set(id, c);
+                }
+                if (c) { whatsapp = c.whatsapp || ''; if (!nombre) nombre = c.nombreReal || c.nombre || ''; }
+            } catch { /* abre con lo que haya */ }
+            setChatCandidate({ id, nombre, whatsapp });
             mapRef.current?.closePopup();
         };
         const delBtn = root.querySelector('.map-del-pin');
@@ -915,6 +1110,85 @@ export default function MapSection({ onOpenCandidate }) {
                                     <div className="flex items-center justify-between px-3 py-2 border-t border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/30">
                                         <span className="text-[11px] text-gray-500 dark:text-gray-400">{selectedCats.length} seleccionada{selectedCats.length === 1 ? '' : 's'}</span>
                                         <button onClick={() => setSelectedCats([])} className="inline-flex items-center gap-1 text-[11px] font-semibold text-gray-500 dark:text-gray-400 hover:text-red-500">
+                                            <X className="w-3 h-3" /> Limpiar
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </div>
+
+                    {/* 🏘️ Buscador multi-selector de COLONIAS del AMM */}
+                    <div className="relative" ref={coloniaFilterRef}>
+                        <button onClick={() => { setShowColoniaFilter(v => !v); ensureColoniaData(); }}
+                            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${showColoniaFilter || selectedColonias.length ? 'bg-violet-600 border-violet-600 text-white' : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50'}`}>
+                            <Building2 className="w-3.5 h-3.5" />
+                            Colonias{selectedColonias.length ? ` (${selectedColonias.length})` : ''}
+                        </button>
+                        {showColoniaFilter && (
+                            <div className="absolute right-0 mt-1.5 w-80 z-[1000] rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-xl overflow-hidden">
+                                <div className="p-2 border-b border-gray-100 dark:border-gray-700">
+                                    <div className="relative">
+                                        <Search className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                                        <input
+                                            autoFocus
+                                            value={coloniaSearch}
+                                            onChange={(e) => setColoniaSearch(e.target.value)}
+                                            placeholder="Buscar colonia o municipio…"
+                                            className="w-full pl-8 pr-2 py-1.5 rounded-lg text-xs bg-gray-50 dark:bg-gray-900/40 border border-gray-200 dark:border-gray-700 text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-violet-400"
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* Chips de las colonias seleccionadas */}
+                                {selectedColonias.length > 0 && (
+                                    <div className="flex flex-wrap gap-1.5 px-2.5 py-2 border-b border-gray-100 dark:border-gray-700 max-h-24 overflow-y-auto custom-scrollbar">
+                                        {selectedColonias.map(id => {
+                                            const c = coloniaDB?.byId.get(id);
+                                            if (!c) return null;
+                                            return (
+                                                <span key={id} className="inline-flex items-center gap-1 pl-2 pr-1 py-0.5 rounded-full bg-violet-100 dark:bg-violet-500/20 text-violet-700 dark:text-violet-300 text-[11px] font-medium">
+                                                    <span className="truncate max-w-[130px]">{c.nombre}</span>
+                                                    <button onClick={() => setSelectedColonias(prev => prev.filter(x => x !== id))} className="hover:text-red-500"><X className="w-3 h-3" /></button>
+                                                </span>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+
+                                <div className="max-h-[320px] overflow-y-auto custom-scrollbar py-1">
+                                    {coloniaLoading && !coloniaCands && (
+                                        <div className="px-3 py-2 text-[11px] text-gray-400 flex items-center gap-1.5"><Loader2 className="w-3 h-3 animate-spin" /> Cargando candidatos por colonia…</div>
+                                    )}
+                                    {coloniaSearch.trim().length < 2 ? (
+                                        <div className="px-3 py-3 text-xs text-gray-400 text-center">Escribe al menos 2 letras para buscar</div>
+                                    ) : coloniaResults.length === 0 ? (
+                                        <div className="px-3 py-3 text-xs text-gray-400 text-center">Sin colonias</div>
+                                    ) : coloniaResults.map((c) => {
+                                        const on = selectedColoniasSet.has(c.id);
+                                        const count = coloniaBuckets.get(c.id)?.length || 0;
+                                        return (
+                                            <button
+                                                key={c.id}
+                                                onClick={() => toggleColonia(c.id)}
+                                                className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-gray-50 dark:hover:bg-gray-700/50"
+                                            >
+                                                <span className={`w-4 h-4 rounded flex items-center justify-center shrink-0 border ${on ? 'border-transparent bg-violet-600' : 'border-gray-300 dark:border-gray-600'}`}>
+                                                    {on && <Check className="w-3 h-3 text-white" />}
+                                                </span>
+                                                <span className="flex-1 min-w-0">
+                                                    <span className="block text-xs font-medium text-gray-800 dark:text-gray-100 truncate">{c.nombre}</span>
+                                                    <span className="block text-[10px] text-gray-400 truncate">{c.municipio}{c.cp ? ` · CP ${c.cp}` : ''}</span>
+                                                </span>
+                                                {count > 0 && <span className="shrink-0 text-[10px] font-semibold text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-500/15 px-1.5 py-0.5 rounded-full">{count}</span>}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                                {selectedColonias.length > 0 && (
+                                    <div className="flex items-center justify-between px-3 py-2 border-t border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/30">
+                                        <span className="text-[11px] text-gray-500 dark:text-gray-400">{selectedColonias.length} colonia{selectedColonias.length === 1 ? '' : 's'}</span>
+                                        <button onClick={() => setSelectedColonias([])} className="inline-flex items-center gap-1 text-[11px] font-semibold text-gray-500 dark:text-gray-400 hover:text-red-500">
                                             <X className="w-3 h-3" /> Limpiar
                                         </button>
                                     </div>

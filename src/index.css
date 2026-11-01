@@ -836,3 +836,40 @@ input[type="color"]::-moz-color-swatch {
   white-space: nowrap;
 }
 .map-metro-label.leaflet-tooltip::before { display: none; }
+
+/* 🏘️ Etiqueta de colonia seleccionada (pill violeta flotando en el centroide) */
+.map-colonia-label { background: transparent; border: 0; overflow: visible; }
+.map-colonia-label .colonia-tag {
+  position: absolute;
+  left: 0; top: 0;
+  transform: translate(-50%, -50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+  padding: 2px 6px 2px 9px;
+  border-radius: 9999px;
+  background: rgba(139, 92, 246, 0.95);
+  border: 1px solid #fff;
+  box-shadow: 0 2px 7px rgba(76, 29, 149, 0.45);
+  pointer-events: none;
+}
+.map-colonia-label .colonia-tag-name {
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  text-shadow: 0 1px 1px rgba(0,0,0,0.25);
+}
+.map-colonia-label .colonia-tag-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  border-radius: 9999px;
+  background: #fff;
+  color: #6d28d9;
+  font-size: 10px;
+  font-weight: 800;
+}
