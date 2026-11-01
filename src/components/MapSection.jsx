@@ -18,7 +18,7 @@ function jitterFor(id, lat, lng) {
     for (let i = 0; i < id.length; i++) { h ^= id.charCodeAt(i); h = Math.imul(h, 16777619); }
     const a = (h >>> 0) / 4294967295;        // 0..1
     const b = ((Math.imul(h, 48271) >>> 0) / 4294967295); // 0..1 segundo stream
-    const r = 0.0040 * Math.sqrt(a);          // radio (grados ≈ 450 m máx), densidad uniforme en disco
+    const r = 0.0015 * Math.sqrt(a);          // radio (grados ≈ 165 m máx), densidad uniforme en disco
     const t = 2 * Math.PI * b;                // ángulo
     return [lat + r * Math.cos(t), lng + r * Math.sin(t) / Math.cos(lat * Math.PI / 180)];
 }
@@ -154,7 +154,7 @@ export default function MapSection({ onOpenCandidate }) {
 
     // Datos cargados PEREZOSAMENTE al abrir el panel por 1ª vez: polígonos (import dinámico) + candidatos
     // solo-colonia (endpoint). Mientras no se abra, la sección Mapa no paga ni el bundle ni la lectura.
-    const [cpPolys, setCpPolys] = useState(null);        // { cp: [rings] } o null (sin cargar)
+    const [coloniaPolys, setColoniaPolys] = useState(null);  // { coloniaId: [rings] } contornos reales OSM, o null
     const [coloniaCands, setColoniaCands] = useState(null); // [{id,n,m,c,cat,tags}] o null
     const [coloniaLoading, setColoniaLoading] = useState(false);
     const coloniaDataRequested = useRef(false);
@@ -636,7 +636,7 @@ export default function MapSection({ onOpenCandidate }) {
             import('../data/coloniasAMM').then(m => {
                 setColoniaDB({ list: m.COLONIAS, byId: new Map(m.COLONIAS.map(c => [c.id, c])), match: m.matchColoniaId });
             }).catch(() => setColoniaDB({ list: [], byId: new Map(), match: () => null })),
-            import('../data/coloniasAMMPolys').then(m => setCpPolys(m.CP_POLYS)).catch(() => setCpPolys({})),
+            import('../data/coloniasAMMPolys').then(m => setColoniaPolys(m.COLONIA_POLYS)).catch(() => setColoniaPolys({})),
             fetch('/api/system/colonia-candidates')
                 .then(r => r.json())
                 .then(d => setColoniaCands(Array.isArray(d?.candidates) ? d.candidates : []))
@@ -705,8 +705,8 @@ export default function MapSection({ onOpenCandidate }) {
             const col = coloniaDB.byId.get(id);
             if (!col) continue;
 
-            // Polígono del CP (si ya cargó y existe). Relleno tenue + borde brillante.
-            const rings = cpPolys && cpPolys[col.cp];
+            // Contorno REAL de la colonia (OSM) si existe. Si no, no se colorea (solo pines/etiqueta).
+            const rings = coloniaPolys && coloniaPolys[col.id];
             if (rings) {
                 for (const ring of rings) {
                     const latlngs = ring.map(([lng, lat]) => [lat, lng]);
@@ -758,7 +758,7 @@ export default function MapSection({ onOpenCandidate }) {
             coloniaFitSigRef.current = sig;
             try { map.fitBounds(L.latLngBounds(bounds), { padding: [60, 60], maxZoom: 15 }); } catch { /* bounds vacíos */ }
         }
-    }, [selectedColonias, coloniaBuckets, cpPolys, coloniaDB]);
+    }, [selectedColonias, coloniaBuckets, coloniaPolys, coloniaDB]);
 
     // 📡 Pin EN VIVO (SSE): un candidato acaba de compartir su ubicación → upsert en la lista
     // (el efecto de arriba lo dibuja; no re-encuadra, respeta tu vista).
