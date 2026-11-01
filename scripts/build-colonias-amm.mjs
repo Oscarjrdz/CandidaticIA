@@ -127,6 +127,20 @@ async function main() {
     }
     catalog.sort((a, b) => a.municipio.localeCompare(b.municipio) || a.colonia.localeCompare(b.colonia));
 
+    // 2b. Overrides manuales de centroide por colonia (cuando el centroide del CP queda corrido).
+    const overridesPath = path.join(OUT, 'coloniasAMMOverrides.json');
+    let overrides = {};
+    if (fs.existsSync(overridesPath)) {
+        try {
+            const raw = JSON.parse(fs.readFileSync(overridesPath, 'utf8'));
+            for (const [k, v] of Object.entries(raw)) {
+                if (k.startsWith('_')) continue;           // claves de comentario
+                if (Array.isArray(v) && v.length === 2) overrides[k] = [round(v[0], 6), round(v[1], 6)];
+            }
+        } catch { overrides = {}; }
+    }
+    const overrideCount = Object.keys(overrides).length;
+
     // 3. Emitir los dos assets (misma estructura que consume src/components/MapSection.jsx).
     const munis = [...new Set(catalog.map(c => c.municipio))].sort((a, b) => a.localeCompare(b));
     const muniIdx = new Map(munis.map((m, i) => [m, i]));
@@ -140,32 +154,35 @@ async function main() {
     // El cuerpo del módulo (matcher) se mantiene en sync con la versión comentada en src/data.
     // Para no duplicar aquí la lógica, reusamos el generador detallado del scratchpad si existe;
     // si no, emitimos la plantilla mínima equivalente.
-    const moduleBody = buildModule(munis, tipos, cpCentroid, rows, catalog.length);
+    const moduleBody = buildModule(munis, tipos, cpCentroid, rows, catalog.length, overrides);
     const polyBody = `// AUTOGENERADO — polígonos (anillos [lng,lat] simplificados ~25m) por código postal del AMM.\n// Import() PEREZOSO desde MapSection (solo al abrir el filtro de Colonias). Varias colonias comparten\n// el polígono de su CP. Regenerar: node scripts/build-colonias-amm.mjs\nexport const CP_POLYS = ${JSON.stringify(polygons)};\n`;
 
     fs.mkdirSync(OUT, { recursive: true });
     fs.writeFileSync(path.join(OUT, 'coloniasAMM.js'), moduleBody);
     fs.writeFileSync(path.join(OUT, 'coloniasAMMPolys.js'), polyBody);
-    console.log(`✓ ${catalog.length} colonias · ${munis.length} municipios · ${cpsUsed.size} CPs con polígono`);
+    console.log(`✓ ${catalog.length} colonias · ${munis.length} municipios · ${cpsUsed.size} CPs con polígono · ${overrideCount} override(s) de centroide`);
     console.log(`  coloniasAMM.js       ${(fs.statSync(path.join(OUT, 'coloniasAMM.js')).size / 1024).toFixed(1)} KB`);
     console.log(`  coloniasAMMPolys.js  ${(fs.statSync(path.join(OUT, 'coloniasAMMPolys.js')).size / 1024).toFixed(1)} KB`);
 }
 
-function buildModule(munis, tipos, cpCentroid, rows, n) {
+function buildModule(munis, tipos, cpCentroid, rows, n, overrides) {
     return `// AUTOGENERADO — catálogo maestro de colonias del Área Metropolitana de Monterrey.
 // Fuente: polígonos por CP de open-mexico/mexico-geojson (SEPOMEX) + nombres del catálogo postal
 // gomflo/codigos-postales-mexico, unidos por código postal. ${n} colonias, ${munis.length} municipios.
 // Datos ESTÁTICOS embebidos a propósito (como Ecovía/Metro): NO cuestan ancho de banda de Redis.
-// Regenerar: node scripts/build-colonias-amm.mjs
+// Centroides: del polígono del CP, salvo los de COLONIA_OVERRIDES (ajustes manuales por colonia).
+// Regenerar: node scripts/build-colonias-amm.mjs (lee src/data/coloniasAMMOverrides.json)
 export const AMM_MUNICIPIOS = ${JSON.stringify(munis)};
 export const AMM_TIPOS = ${JSON.stringify(tipos)};
 export const CP_CENTROID = ${JSON.stringify(cpCentroid)};
+// Override de centroide por id de colonia (cuando el centro del CP queda corrido respecto a la real).
+export const COLONIA_OVERRIDES = ${JSON.stringify(overrides || {})};
 const ROWS = ${JSON.stringify(rows)};
 function norm(s){return String(s||'').normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').toLowerCase().trim().replace(/\\s+/g,' ');}
 function slug(s){return norm(s).replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'');}
 const MUNI_ALIAS={'benito juarez':'juarez','escobedo':'general escobedo','san nicolas':'san nicolas de los garza','san nicolas de los garza nuevo leon':'san nicolas de los garza','san pedro':'san pedro garza garcia','garza garcia':'san pedro garza garcia','zuazua':'general zuazua','cadereyta':'cadereyta jimenez','cienega de flores nuevo leon':'cienega de flores'};
 const muniN=(m)=>{const n=norm(m);return MUNI_ALIAS[n]||n;};
-export const COLONIAS=ROWS.map(([nombre,mi,cp,ti])=>{const municipio=AMM_MUNICIPIOS[mi];const c=CP_CENTROID[cp];return{id:slug(municipio)+'__'+slug(nombre),nombre,municipio,cp,tipo:AMM_TIPOS[ti]||'',lat:c?c[0]:null,lng:c?c[1]:null};});
+export const COLONIAS=ROWS.map(([nombre,mi,cp,ti])=>{const municipio=AMM_MUNICIPIOS[mi];const id=slug(municipio)+'__'+slug(nombre);const c=COLONIA_OVERRIDES[id]||CP_CENTROID[cp];return{id,nombre,municipio,cp,tipo:AMM_TIPOS[ti]||'',lat:c?c[0]:null,lng:c?c[1]:null};});
 const _byMuniCol=new Map(),_byColOnly=new Map(),_muniColonias=new Map(),_idMuni=new Map();
 for(const c of COLONIAS){const nm=muniN(c.municipio),nc=norm(c.nombre);_byMuniCol.set(nm+'|'+nc,c.id);if(!_byColOnly.has(nc))_byColOnly.set(nc,new Set());_byColOnly.get(nc).add(c.id);if(!_muniColonias.has(nm))_muniColonias.set(nm,[]);_muniColonias.get(nm).push({nc,id:c.id});_idMuni.set(c.id,nm);}
 function _fuzzyInMuni(nmun,ncol){const list=_muniColonias.get(nmun);if(!list)return null;let best=null,bestLen=0;for(const{nc,id}of list){if(nc.length<8)continue;if(ncol===nc||ncol.startsWith(nc+' ')||ncol.endsWith(' '+nc)){if(nc.length>bestLen){best=id;bestLen=nc.length;}}}return best;}

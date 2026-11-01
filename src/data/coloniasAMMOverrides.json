@@ -1,0 +1,4 @@
+{
+  "_comment": "Overrides MANUALES de centroide por colonia (id del catálogo → [lat, lng]). Se usan cuando el centroide del código postal queda corrido respecto a la colonia real. Los aplica scripts/build-colonias-amm.mjs al regenerar coloniasAMM.js, así que sobreviven a regeneraciones. Fuente de cada coordenada: búsqueda manual (Google Maps / web).",
+  "santa-catarina__cordilleras-del-virrey": [25.676737, -100.488409]
+}
