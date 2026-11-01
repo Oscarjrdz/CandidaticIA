@@ -238,7 +238,14 @@ async function main() {
         if (v) coloniaCentroid[c.id] = v;
     }
 
-    const moduleBody = buildModule(munis, tipos, cpCentroid, rows, catalog.length, coloniaCentroid);
+    // Correcciones de sentido común (texto candidato → id): municipio pegado, nombre único, typo cercano.
+    let aliases = {};
+    const aliasPath = path.join(OUT, 'coloniasAliases.json');
+    if (fs.existsSync(aliasPath)) {
+        try { const raw = JSON.parse(fs.readFileSync(aliasPath, 'utf8')); for (const [k, v] of Object.entries(raw)) if (!k.startsWith('_')) aliases[k] = v; } catch { aliases = {}; }
+    }
+
+    const moduleBody = buildModule(munis, tipos, cpCentroid, rows, catalog.length, coloniaCentroid, aliases);
     // Polígonos REALES por colonia (solo las que OSM tiene mapeadas). Sin fallback de CP: lo que no
     // esté aquí NO se colorea (se muestran sus pines, pero sin zona). Es lo que pidió el producto.
     const polyBody = `// AUTOGENERADO — contornos REALES de colonia (anillos [lng,lat]) de OpenStreetMap, por id de\n// colonia del catálogo. Import() PEREZOSO desde MapSection. SOLO incluye las colonias que OSM tiene\n// delineadas; las demás no se colorean (se muestran sus pines). Regenerar: node scripts/build-colonias-amm.mjs\nexport const COLONIA_POLYS = ${JSON.stringify(coloniaPolys)};\n`;
@@ -251,7 +258,7 @@ async function main() {
     console.log(`  coloniasAMMPolys.js  ${(fs.statSync(path.join(OUT, 'coloniasAMMPolys.js')).size / 1024).toFixed(1)} KB`);
 }
 
-function buildModule(munis, tipos, cpCentroid, rows, n, coloniaCentroid) {
+function buildModule(munis, tipos, cpCentroid, rows, n, coloniaCentroid, aliases) {
     return `// AUTOGENERADO — catálogo maestro de colonias del Área Metropolitana de Monterrey.
 // Fuente: nombres del catálogo postal (SEPOMEX) + contornos/centroides REALES de OpenStreetMap.
 // ${n} colonias, ${munis.length} municipios. Datos ESTÁTICOS embebidos (como Ecovía/Metro): NO cuestan
@@ -262,6 +269,8 @@ export const AMM_TIPOS = ${JSON.stringify(tipos)};
 export const CP_CENTROID = ${JSON.stringify(cpCentroid)};
 // Centroide por id de colonia (override manual u OSM). Si falta, se usa el del CP como respaldo.
 export const COLONIA_CENTROID = ${JSON.stringify(coloniaCentroid || {})};
+// Correcciones de sentido común: "muniNorm|coloniaNorm" del texto del candidato → id de colonia.
+export const COLONIA_TEXT_ALIAS = ${JSON.stringify(aliases || {})};
 const ROWS = ${JSON.stringify(rows)};
 function norm(s){return String(s||'').normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').toLowerCase().trim().replace(/\\s+/g,' ');}
 function slug(s){return norm(s).replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'');}
@@ -276,7 +285,7 @@ const _hasVal=(v)=>{const s=norm(v);return s.length>0&&!s.includes('proporcionad
 export function matchColoniaId(municipio,colonia){
   if(!_hasVal(colonia))return null;
   const ncol=norm(colonia),hasMuni=_hasVal(municipio),nmun=hasMuni?muniN(municipio):'';
-  if(hasMuni){const exact=_byMuniCol.get(nmun+'|'+ncol);if(exact)return exact;}
+  if(hasMuni){const exact=_byMuniCol.get(nmun+'|'+ncol);if(exact)return exact;const al=COLONIA_TEXT_ALIAS[nmun+'|'+ncol];if(al)return al;}
   const only=_byColOnly.get(ncol);
   if(only&&only.size===1){const id=[...only][0];if(!hasMuni)return id;const idm=_idMuni.get(id);if(idm&&(idm===nmun||nmun.includes(idm)||idm.includes(nmun)))return id;}
   if(hasMuni){const fuzzy=_fuzzyInMuni(nmun,ncol);if(fuzzy)return fuzzy;}
