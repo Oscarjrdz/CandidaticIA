@@ -198,8 +198,12 @@ body {
      EASING: cubic-bezier(0.4, 0.15, 0.5, 0.9) reparte el movimiento de forma PERCEPTIBLE
      (~58% a mitad de tiempo), no amontonado al inicio. Medido en navegador: un easeOut/overshoot
      dejaba 80% del recorrido hecho en los primeros 80ms → "se sentía super rápido" aunque durara
-     340ms. Con este easing + 400ms + offset grande (20px lateral, 12px de subida, escala 0.90→1),
-     la entrada se ve durante todo el recorrido. Solo transform/opacity → no toca layout.
+     340ms. Con este easing + 400ms + offset (18px lateral, 14px de subida), la entrada se ve
+     durante todo el recorrido. Solo translate + opacity → no toca layout.
+
+     SIN scale() a propósito: escalar el texto lo rasteriza borroso durante el movimiento y lo
+     clava nítido al final; ese snap de anti-aliasing en tema oscuro, más la box-shadow casi-negra
+     escalada, se veía como un "parpadeo negro". translate+opacity compositan limpio (AAA).
 
      MEDIA: SOLO transform — sin opacity, porque la imagen ya trae su propio fade
      (SmoothMediaImage) y duplicarlo aquí era el parpadeo original. */
@@ -250,22 +254,22 @@ body {
 /* Entrada SALIENTE: desliza desde la derecha + sube + pop de escala + fade.
    Solo transform/opacity → no toca layout → Virtuoso-safe. */
 @-webkit-keyframes chat-message-enter-outgoing {
-  0%   { opacity: 0; -webkit-transform: translate3d(20px, 12px, 0) scale(0.90); }
-  100% { opacity: 1; -webkit-transform: translate3d(0, 0, 0) scale(1); }
+  0%   { opacity: 0; -webkit-transform: translate3d(18px, 14px, 0); }
+  100% { opacity: 1; -webkit-transform: translate3d(0, 0, 0); }
 }
 @keyframes chat-message-enter-outgoing {
-  0%   { opacity: 0; transform: translate3d(20px, 12px, 0) scale(0.90); }
-  100% { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+  0%   { opacity: 0; transform: translate3d(18px, 14px, 0); }
+  100% { opacity: 1; transform: translate3d(0, 0, 0); }
 }
 
-/* Entrada ENTRANTE: desliza desde la izquierda + sube + crece escala + fade. */
+/* Entrada ENTRANTE: desliza desde la izquierda + sube + fade (sin scale). */
 @-webkit-keyframes chat-message-enter-incoming {
-  0%   { opacity: 0; -webkit-transform: translate3d(-20px, 12px, 0) scale(0.90); }
-  100% { opacity: 1; -webkit-transform: translate3d(0, 0, 0) scale(1); }
+  0%   { opacity: 0; -webkit-transform: translate3d(-18px, 14px, 0); }
+  100% { opacity: 1; -webkit-transform: translate3d(0, 0, 0); }
 }
 @keyframes chat-message-enter-incoming {
-  0%   { opacity: 0; transform: translate3d(-20px, 12px, 0) scale(0.90); }
-  100% { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+  0%   { opacity: 0; transform: translate3d(-18px, 14px, 0); }
+  100% { opacity: 1; transform: translate3d(0, 0, 0); }
 }
 
 /* Entrada para MEDIA: mismo movimiento que el texto (deslice + sube + pop de escala), SIN
@@ -273,20 +277,20 @@ body {
    era el doble-fade original. Solo transform, para que la burbuja de imagen se sienta tan viva
    como la de texto sin duplicar el fundido. */
 @-webkit-keyframes chat-message-enter-media-outgoing {
-  0%   { -webkit-transform: translate3d(20px, 12px, 0) scale(0.90); }
-  100% { -webkit-transform: translate3d(0, 0, 0) scale(1); }
+  0%   { -webkit-transform: translate3d(18px, 14px, 0); }
+  100% { -webkit-transform: translate3d(0, 0, 0); }
 }
 @keyframes chat-message-enter-media-outgoing {
-  0%   { transform: translate3d(20px, 12px, 0) scale(0.90); }
-  100% { transform: translate3d(0, 0, 0) scale(1); }
+  0%   { transform: translate3d(18px, 14px, 0); }
+  100% { transform: translate3d(0, 0, 0); }
 }
 @-webkit-keyframes chat-message-enter-media-incoming {
-  0%   { -webkit-transform: translate3d(-20px, 12px, 0) scale(0.90); }
-  100% { -webkit-transform: translate3d(0, 0, 0) scale(1); }
+  0%   { -webkit-transform: translate3d(-18px, 14px, 0); }
+  100% { -webkit-transform: translate3d(0, 0, 0); }
 }
 @keyframes chat-message-enter-media-incoming {
-  0%   { transform: translate3d(-20px, 12px, 0) scale(0.90); }
-  100% { transform: translate3d(0, 0, 0) scale(1); }
+  0%   { transform: translate3d(-18px, 14px, 0); }
+  100% { transform: translate3d(0, 0, 0); }
 }
 
 /* Entrada de una TARJETA nueva en la lista de chats (lead/chat recién llegado):
