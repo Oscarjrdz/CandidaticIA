@@ -222,13 +222,13 @@ const stripEntryAnimations = (list = []) =>
     (list || []).map(m => (m && m._animateIn) ? { ...m, _animateIn: undefined } : m);
 
 // Espera la señal REAL (ENTRY_REVEALED_EVENT desde MessageBubble.jsx) de que la burbuja
-// `key` terminó su fase 1 de entrada — usado para encolar un grupo (texto + fotos del
-// banco de respuestas) en secuencia de verdad, no con un temporizador adivinado. El
+// `key` terminó su animación de entrada (deslice/fade) — usado para encolar un grupo (texto +
+// fotos del banco de respuestas) en secuencia de verdad, no con un temporizador adivinado. El
 // fallback de tiempo es solo una red de seguridad (reduced-motion, o cualquier caso raro
 // donde el evento no dispare) para que el grupo nunca se quede atorado esperando — debe
-// quedar por ENCIMA de la fase 1 más lenta que existe (350ms para burbujas con media, ver
+// quedar por ENCIMA de la entrada más lenta que existe (400ms para burbujas con media, ver
 // MessageBubble.jsx/index.css), si no se adelanta siempre a la señal real.
-const BUBBLE_REVEAL_FALLBACK_MS = 420;
+const BUBBLE_REVEAL_FALLBACK_MS = 480;
 const waitForBubbleReveal = (key, fallbackMs = BUBBLE_REVEAL_FALLBACK_MS) => new Promise(resolve => {
     if (!key) { resolve(); return; }
     let done = false;
@@ -3807,19 +3807,6 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                         }).catch(() => {});
                     }
                     const shouldPreserveBottom = isAtBottomRef.current || isSendingRef.current;
-                    if (shouldPreserveBottom) {
-                        // Ancla al fondo DURANTE la animación de entrada de la burbuja. La fase 1
-                        // crece el ALTO REAL de la fila (0 → target en 240-350ms). Apenas crece más
-                        // de atBottomThreshold (150px), atBottomStateChange marca isAtBottom=false y
-                        // el gate `isAtBottom && grewTall` de totalListHeightChanged DEJA de seguir el
-                        // crecimiento → el último tramo no se scrollea y la burbuja nueva queda tapada
-                        // abajo. Esta ventana (misma mecánica que al enviar) hace que ese gate use
-                        // `grewTall` a secas y siga el fondo hasta que la burbuja llega a su alto final
-                        // y se ve COMPLETA. Antes no hacía falta: con clip-path el alto se reservaba de
-                        // un solo golpe; ahora que crece de verdad, sí. Math.max para no acortar un hold
-                        // de envío más largo que ya estuviera activo.
-                        sendScrollHoldUntilRef.current = Math.max(sendScrollHoldUntilRef.current, Date.now() + 700);
-                    }
                     // 🚀 Inyección Meta-standard con COALESCING: en vez de un setMessages +
                     // scroll por cada mensaje (N ciclos encimados bajo ráfaga), se bufferea el
                     // payload y se hace flush UNA vez por frame (flushPendingSseMessages).
@@ -5136,8 +5123,8 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
 
         // ── Inyección SECUENCIAL del grupo (texto → foto 1 → foto 2 …) ──
         // Cada burbuja espera la señal REAL de que la anterior terminó de entrar (evento
-        // ENTRY_REVEALED_EVENT que dispara MessageBubble.jsx al terminar su fase 1) antes de
-        // inyectar la siguiente — no un temporizador adivinado. Si mandas rápido varias veces,
+        // ENTRY_REVEALED_EVENT que dispara MessageBubble.jsx al terminar su animación de entrada
+        // deslice/fade) antes de inyectar la siguiente — no un temporizador adivinado. Si mandas rápido varias veces,
         // cada burbuja sigue teniendo su entrada completa y visible, nunca a medias. El orden
         // cronológico se mantiene por timestamp (baseTime+idx+1); los envíos reales siguen por
         // el outbox (con su pausa de orden), pareado a cada burbuja para que el dedup

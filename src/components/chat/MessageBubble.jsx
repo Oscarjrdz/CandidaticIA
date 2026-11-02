@@ -225,54 +225,21 @@ const MessageBubble = React.memo(function MessageBubble({
     const [entryDone, setEntryDone] = React.useState(false);
     const playEntry = shouldPlayEntryAnimation && !entryDone;
     const hasMedia = Boolean(msg.mediaUrl);
-    // Fase 1 (fila abre el espacio) aplica a CUALQUIER burbuja con entrada nueva y ahora usa la
-    // MISMA técnica para texto y media: el ESPACIO REAL crece (max-height 0 → alto real medido).
-    // Antes el texto usaba clip-path: no cambiaba el layout, pero reservaba TODO el alto de la
-    // burbuja desde el primer frame, así que lo de ARRIBA se recorría de golpe al insertarse la
-    // fila (el "brinco raro" al entrar) — solo el contenido adentro se veía animado. Creciendo el
-    // alto de verdad, lo de arriba sube suave empujado por el crecimiento (igual que WhatsApp real).
-    // Las clases difieren solo en el timing (texto 240ms, media 350ms) — ver index.css.
-    const playRowEntry = playEntry;
-    const rowEntryClass = playRowEntry ? (hasMedia ? 'chat-message-row-enter-media' : 'chat-message-row-enter') : '';
-    // Mide el alto REAL del contenido (no se adivina un número fijo — así nunca se corta ni
-    // sobra espacio según lo que traiga la burbuja) y lo pasa como variable CSS para que la
-    // animación de crecimiento (arriba) sepa a qué alto final animar. scrollHeight mide el
-    // contenido real aunque esté clippeado por el max-height:0 inicial de la animación.
-    // ResizeObserver (no una medición única al montar): con varias imágenes seguidas del
-    // banco de respuestas, el layout de la fila podía no estar 100% asentado en el instante
-    // exacto del montaje (más tráfico simultáneo en la lista con la 2ª/3ª imagen que con la
-    // 1ª) — una medición única a veces salía corta, la animación crecía hasta ESE número y
-    // se sentía "atorada" cerca del final, con un brinco al valor real cuando la restricción
-    // se quitaba. Con el observer, si el alto real cambia mientras la animación sigue en
-    // curso, el objetivo se actualiza solo — nunca se queda mirando un número viejo.
-    const mediaRowRef = React.useRef(null);
-    React.useLayoutEffect(() => {
-        // Aplica a CUALQUIER burbuja con entrada nueva (texto o media): ambas fases 1 crecen
-        // ahora el alto real de la fila (0 → medido), así que ambas necesitan --row-target-height.
-        if (!playRowEntry) return undefined;
-        const el = mediaRowRef.current;
-        if (!el) return undefined;
-        let lastHeight = -1;
-        const update = () => {
-            const h = el.scrollHeight;
-            if (h === lastHeight) return;
-            lastHeight = h;
-            el.style.setProperty('--row-target-height', `${h}px`);
-        };
-        update();
-        if (typeof ResizeObserver === 'undefined') return undefined;
-        const ro = new ResizeObserver(update);
-        ro.observe(el);
-        return () => ro.disconnect();
-    }, []);
-    // Fase 2 aplica a CUALQUIER burbuja, pero distinta según media o no:
-    //   • SIN media: desliza + fade (opacity incluida) — como siempre.
-    //   • CON media: SOLO desliza (transform, sin opacity) — la imagen ya tiene su propio
-    //     fade en SmoothMediaImage, y animar opacidad AQUÍ TAMBIÉN era el doble-fade/parpadeo
-    //     de antes. Así la burbuja de imagen se siente igual de "viva" que la de texto (mismo
-    //     movimiento) sin duplicar el fundido. La fase 1 (fila, clip-path) corre en paralelo
-    //     con el fade propio de la imagen — el marco se abre mientras la foto se desvanece
-    //     hacia adentro, como un solo movimiento coordinado.
+    // ENTRADA DE ALTO ESTABLE — recomendación oficial del mantenedor de react-virtuoso
+    // (issue #1447) y de la doc de chat virtualizado: la fila NUNCA anima su alto. Nace a su
+    // alto final y se queda ahí, así Virtuoso la mide UNA sola vez y scrollToIndex(LAST) aterriza
+    // en el fondo VERDADERO → la burbuja nueva (entrante o saliente) SIEMPRE se ve completa. La
+    // "entrada" se anima SOLO con transform + opacity (ver fase única abajo), que no tocan el
+    // layout, así que no desestabilizan la medición de Virtuoso ni pelean con su reanclaje.
+    //   Historia (por qué NO crecer el alto): el texto usó clip-path y luego se probó animar
+    //   max-height 0→target. Crecer el alto rompía la medición de Virtuoso: scrollToIndex usaba
+    //   el tamaño intermedio → aterrizaba CORTO y la burbuja quedaba tapada abajo; además Virtuoso
+    //   reanclaba al primer item visible y peleaba contra el pin al fondo = brinco. Alto estable
+    //   lo elimina de raíz. Confirmado en petyosi/react-virtuoso#1447.
+    // La entrada es distinta según media o no:
+    //   • SIN media: desliza + fade (transform + opacity).
+    //   • CON media: SOLO desliza (transform, sin opacity) — la imagen ya tiene su propio fade
+    //     en SmoothMediaImage; animar opacidad AQUÍ TAMBIÉN sería el doble-fade/parpadeo de antes.
     const playBubbleEntry = playEntry;
     const bubbleEntryClass = playBubbleEntry
         ? (hasMedia
@@ -297,43 +264,24 @@ const MessageBubble = React.memo(function MessageBubble({
     // Bubble starts invisible; CSS animation overrides once it fires. Se retira con entryDone.
     // Solo para burbujas SIN media: la de media no anima opacidad en este nivel (la maneja
     // SmoothMediaImage por su cuenta) — arrancar en opacity:0 aquí ocultaría también el marco
-    // gris de fondo, que sí debe verse desde el primer frame de la fase 1.
+    // gris de fondo, que sí debe verse desde el primer frame.
     const bubbleEntryStyle = (playBubbleEntry && !hasMedia) ? { opacity: 0 } : undefined;
-    // MISMO candado que opacity:0 de la burbuja, pero para el ALTO de la FILA. Una animación CSS
-    // no aplica su frame-0 (max-height:0) hasta el primer recálculo de estilo, así que en el frame
-    // de MONTAJE la fila se pinta a su altura natural COMPLETA por un instante. Con la medición
-    // síncrona de Virtuoso (skipAnimationFrameInResizeObserver) eso se mide de golpe → el scroll
-    // ancla al fondo con el alto completo → TODO el cuerpo brinca de un jalón, y recién DESPUÉS la
-    // animación clava max-height:0 y crece. Ese era el "brinco antes de que entre la burbuja".
-    // Fijando max-height:0 inline desde el primer render, la fila nunca nace a altura completa; la
-    // animación (que gana sobre inline mientras corre) la crece suave 0 → target. overflow:hidden
-    // para que recorte durante el crecimiento, igual que la clase CSS.
-    const rowEntryStyle = playRowEntry ? { maxHeight: 0, overflow: 'hidden' } : undefined;
 
     return (
         <div
-            ref={mediaRowRef}
-            style={rowEntryStyle}
             onAnimationEnd={(e) => {
-                // Fase 2 (deslice) es SIEMPRE la más larga — texto y media — así que es la
-                // que de verdad marca "esta burbuja ya terminó de entrar" y retira las clases.
-                // Si se marcara con la fase 1 (más corta, el espacio) se interrumpiría el
-                // deslice a medias. Sin marcar entryDone en algún punto, la clase se queda
-                // pegada → si Virtuoso remonta el nodo (frecuente bajo tráfico) el navegador
-                // reinicia la animación con la clase todavía puesta → parpadeo repetido.
+                // La entrada (deslice/fade) marca "esta burbuja ya terminó de entrar": retira las
+                // clases (entryDone) para que, si Virtuoso remonta el nodo bajo tráfico, el navegador
+                // no reinicie la animación con la clase puesta → parpadeo. Y avisa a quien esté
+                // esperando (p.ej. el envío escalonado del banco de respuestas en ChatSection.jsx)
+                // que la burbuja ya está puesta — reemplaza la señal de la vieja fase 1.
                 if (e.animationName === 'chat-message-enter-outgoing' || e.animationName === 'chat-message-enter-incoming'
                     || e.animationName === 'chat-message-enter-media-outgoing' || e.animationName === 'chat-message-enter-media-incoming') {
                     setEntryDone(true);
-                }
-                // chat-row-grow = fase 1 (alto real creciendo), ahora texto Y media. Solo avisa a
-                // quien esté esperando (p.ej. el envío escalonado del banco de respuestas en
-                // ChatSection.jsx) que el ESPACIO de esta burbuja ya está listo — no espera a que
-                // termine el deslice del contenido.
-                if (e.animationName === 'chat-row-grow') {
                     window.dispatchEvent(new CustomEvent(ENTRY_REVEALED_EVENT, { detail: { key: entryAnimationKey } }));
                 }
             }}
-            className={`px-[5%] flex ${isMe ? 'justify-end' : 'justify-start'} group max-w-full relative ${!isFirstInSeries ? 'mt-0.5' : 'mt-2'} ${(msg.reactions && msg.reactions.length > 0) ? 'pb-5' : ''} ${rowEntryClass}`}>
+            className={`px-[5%] flex ${isMe ? 'justify-end' : 'justify-start'} group max-w-full relative ${!isFirstInSeries ? 'mt-0.5' : 'mt-2'} ${(msg.reactions && msg.reactions.length > 0) ? 'pb-5' : ''}`}>
             <div style={bubbleEntryStyle} className={`
                 max-w-[75%] rounded-[7.5px] px-2 pt-1.5 pb-1 shadow-[0_1px_0.5px_rgba(11,20,26,.13)] relative text-[14.2px] z-10
                 ${bubbleEntryClass}
