@@ -188,20 +188,26 @@ body {
     animation: candidatic-icon-breathe 5.8s ease-in-out infinite;
   }
 
-  /* Phase 1 — row clip opens the space (snappy, estilo WhatsApp nativo).
-     Solo se retocó el TIMING: 400ms → 200ms. El keyframe (clip-path) queda igual,
-     así que sigue siendo Virtuoso-safe (no cambia layout). */
+  /* Phase 1 para TEXTO — crece el ALTO REAL de la fila (0 → --row-target-height, medido
+     por JS en MessageBubble.jsx), IGUAL que la fase 1 de media. ANTES usaba clip-path:
+     Virtuoso-safe sí, pero el clip reserva TODA la altura de la burbuja desde el frame 1,
+     así que al llegar el mensaje la conversación de arriba se recorría HACIA ARRIBA de golpe
+     (un solo frame) para abrir el hueco y la burbuja solo aparecía dentro — ese era el
+     "brinco raro" al entrar. Creciendo el alto real, lo de arriba sube suave empujado por el
+     crecimiento, como WhatsApp nativo (mismo fix que ya tenía media). overflow:hidden recorta
+     mientras crece; 240ms = snappy (el texto es corto, el espacio debe abrirse ágil). La fase 2
+     (deslice+fade) corre traslapada con delay 90ms — ver abajo. */
   .chat-message-row-enter {
-    -webkit-animation: chat-row-enter 200ms cubic-bezier(0.1, 0, 0.4, 1) forwards;
-    animation: chat-row-enter 200ms cubic-bezier(0.1, 0, 0.4, 1) forwards;
+    -webkit-animation: chat-row-grow 240ms cubic-bezier(0.1, 0, 0.4, 1) forwards;
+    animation: chat-row-grow 240ms cubic-bezier(0.1, 0, 0.4, 1) forwards;
+    overflow: hidden;
   }
 
-  /* Fase 1 para MEDIA: a diferencia de chat-row-enter (clip-path, no cambia layout), esta
-     anima el ALTO REAL de la fila (0 → --row-target-height, medida por JS en
-     MessageBubble.jsx — ver mediaRowRef). Con clip-path el espacio ya estaba reservado
-     completo desde el primer frame (solo el CONTENIDO se veía animado), así que el mensaje
-     de arriba se recorría de golpe al insertarse la fila. Creciendo el alto de verdad, lo
-     de arriba sube suave, empujado por el crecimiento — igual que WhatsApp real. 350ms:
+  /* Fase 1 para MEDIA: misma técnica que el texto (crece el ALTO REAL de la fila,
+     0 → --row-target-height, medida por JS en MessageBubble.jsx — ver mediaRowRef), solo
+     que más lenta (350ms vs 240ms del texto) porque la imagen pesa visualmente más. Creciendo
+     el alto de verdad, lo de arriba sube suave empujado por el crecimiento — igual que
+     WhatsApp real. 350ms:
      rápido a propósito (el "se abre el espacio" debe sentirse ágil) — la fase 2 (abajo)
      arranca EXACTO cuando esta termina (delay = 350ms, no antes) y es la que de verdad
      cierra la animación (ver MessageBubble.jsx). overflow:hidden necesario para que
@@ -261,18 +267,8 @@ body {
   32% { opacity: 1; filter: drop-shadow(0 0 16px rgba(219, 234, 254, 0.34)); }
 }
 
-/* Phase 1: space opens top→bottom, ends with clip-path:none to allow overflow */
-@-webkit-keyframes chat-row-enter {
-  0%   { -webkit-clip-path: inset(0 0 100% 0); clip-path: inset(0 0 100% 0); }
-  100% { -webkit-clip-path: none; clip-path: none; }
-}
-@keyframes chat-row-enter {
-  0%   { clip-path: inset(0 0 100% 0); }
-  100% { clip-path: none; }
-}
-
-/* Phase 1 para MEDIA: crece el alto REAL de la fila (0 → medido por JS), en vez de solo
-   revelar con máscara — ver .chat-message-row-enter-media arriba. --row-target-height la
+/* Phase 1 (texto Y media): crece el alto REAL de la fila (0 → medido por JS), en vez de solo
+   revelar con máscara — ver .chat-message-row-enter(-media) arriba. --row-target-height la
    pone MessageBubble.jsx antes de que arranque la animación; 340px es el respaldo por si
    ese JS no llegó a tiempo (no debería pasar, pero así nunca se queda en 0). */
 @-webkit-keyframes chat-row-grow {
