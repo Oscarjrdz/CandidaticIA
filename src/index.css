@@ -227,25 +227,20 @@ body {
   32% { opacity: 1; filter: drop-shadow(0 0 16px rgba(219, 234, 254, 0.34)); }
 }
 
-/* Entrada de burbuja: sube (rise) + fade. Lleva transform PERO MessageBubble.jsx la dispara
-   recién cuando el scroll de Virtuoso ya terminó (SCROLL_SETTLED), así el transform no pelea con
-   el reposicionamiento del scroll — esa pelea era el "parpadeo negro". Mientras el scroll corre,
-   la burbuja está invisible (guard inline opacity:0) y no anima: el scroll la coloca sin que se
-   vea nada, y al asentarse, sube+aparece limpio. Técnica del issue #115 (no animar durante scroll)
-   adaptada a chat pegado al fondo. */
+/* Entrada de burbuja: SOLO fade de opacidad. El "movimiento/vida" lo da el SCROLL SUAVE de la
+   lista al llegar el mensaje (ChatSection.jsx → scrollToBottom smooth): el contenido de arriba
+   sube deslizando (como el demo del issue #115) y la burbuja nueva se funde al aparecer. Opacidad
+   NO pelea con el scroll (el transform sí → era el "parpadeo negro"), así que corre concurrente
+   con el deslice sin flash. Reduced-motion: no se desactiva (un fade no es movimiento problemático
+   y animation:none dejaría el guard opacity:0 atascado = burbuja invisible). */
 @-webkit-keyframes chat-message-enter {
-  0%   { opacity: 0; -webkit-transform: translate3d(0, 12px, 0); }
-  100% { opacity: 1; -webkit-transform: translate3d(0, 0, 0); }
+  0%   { opacity: 0; }
+  100% { opacity: 1; }
 }
 @keyframes chat-message-enter {
-  0%   { opacity: 0; transform: translate3d(0, 12px, 0); }
-  100% { opacity: 1; transform: translate3d(0, 0, 0); }
+  0%   { opacity: 0; }
+  100% { opacity: 1; }
 }
-/* Variante solo-fade para prefers-reduced-motion (sin el rise). NO se puede usar animation:none:
-   dejaría el guard opacity:0 atascado (la burbuja nunca se vería) y nunca dispararía animationend
-   (entryDone). Un fade sí respeta reduced-motion (no es movimiento). */
-@-webkit-keyframes chat-message-fade { 0% { opacity: 0; } 100% { opacity: 1; } }
-@keyframes chat-message-fade { 0% { opacity: 0; } 100% { opacity: 1; } }
 
 /* Entrada de una TARJETA nueva en la lista de chats (lead/chat recién llegado):
    fade + slide sutil desde arriba. Solo transform+opacity → no cambia la altura del
@@ -290,13 +285,8 @@ body {
   .chat-card-exit {
     animation: none;
   }
-  /* La entrada de burbuja NO se apaga con animation:none (dejaría el guard opacity:0 atascado →
-     burbuja invisible, sin animationend → sin entryDone). En su lugar, variante solo-fade sin el
-     rise: respeta reduced-motion (sin movimiento) y la burbuja igual se revela y dispara su fin. */
-  .chat-message-enter {
-    -webkit-animation: chat-message-fade 260ms linear forwards;
-    animation: chat-message-fade 260ms linear forwards;
-  }
+  /* .chat-message-enter NO se lista: es solo un fade (no movimiento) y animation:none dejaría el
+     guard inline opacity:0 atascado = burbuja invisible para siempre (sin animationend → entryDone). */
 }
 
 @-webkit-keyframes spring-in {

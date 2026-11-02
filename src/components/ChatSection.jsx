@@ -26,7 +26,7 @@ import MessageInputBox from './chat/MessageInputBox';
 import AudioPlayer from './chat/AudioPlayer';
 import DateSeparator from './chat/DateSeparator';
 import ChatRow from './chat/ChatRow';
-import MessageBubble, { ENTRY_REVEALED_EVENT, SCROLL_SETTLED_EVENT } from './chat/MessageBubble';
+import MessageBubble, { ENTRY_REVEALED_EVENT } from './chat/MessageBubble';
 
 
 // Wrapper sortable (@dnd-kit) para cada icono de la barra del header. Da animación de
@@ -1068,6 +1068,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
     const isAtBottomRef = useRef(true);
     const virtuosoScrollerRef = useRef(null);
     const scrollFrameRef = useRef(null);
+    const smoothScrollFrameRef = useRef(null);
     // El mapa de mensajes por chat vive a nivel MÓDULO y sobrevive al remontaje de la sección
     // (se desmonta al cambiar de tab). Antes era un useRef que se perdía al re-entrar → abrir un
     // chat visitado pintaba VACÍO y luego llegaba loadMessages ("muestra y desaparece"). Ahora
@@ -1149,32 +1150,59 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
     // real, y el scroll aterriza corto. Un segundo rAF le da a Virtuoso ese frame de
     // margen antes de leer scrollHeight, así que aterriza en el fondo REAL a la primera
     // — igual que un mensaje corto, sin pin continuo ni corrección visible después.
-    const scrollToBottom = () => {
+    const scrollToBottom = (opts) => {
+        const smooth = opts === true || (opts && opts.smooth === true);
         if (scrollFrameRef.current) cancelAnimationFrame(scrollFrameRef.current);
-        // Pre-ancla SÍNCRONA (antes del paint). Para contenido YA medido —el caso típico: un
-        // texto cuyo alto queda reservado por el clip-path desde el frame 1— el PRIMER frame
-        // pintado ya cae al fondo, así que al enviar NO se asoma el último mensaje del candidato
-        // mientras el scroll "alcanza" (ese era el frame fantasma: con followOutput apagado, el
-        // refinamiento diferido tardaba ~2-3 frames y en ellos el viewport seguía en el fondo
-        // viejo). NO sustituye los 2 pasos de abajo: si el contenido aún no está medido (media
-        // que crece tarde) esto aterriza un poco corto y el paso diferido lo corrige — misma
-        // garantía de antes, solo que el primer frame ya no muestra el mensaje de al lado.
+        if (smoothScrollFrameRef.current) cancelAnimationFrame(smoothScrollFrameRef.current);
+
+        // SCROLL SUAVE (mensaje nuevo estando al fondo): el contenido de arriba SUBE DESLIZANDO en
+        // vez de saltar instantáneo. Es lo que hace ver "AAA" la llegada de un mensaje (como el demo
+        // del issue #115 de react-virtuoso) y lo que hace uniforme la entrada de mensajes
+        // consecutivos del mismo lado (antes el salto instantáneo se notaba feo entre ellos). Tween
+        // manual de scrollTop para controlar duración/easing. Con ALTO ESTABLE el fondo es confiable
+        // desde el frame 1 (el item nuevo ya está medido), así que no aterriza corto como la pelea
+        // del #1447; aun así re-leo el objetivo cada frame por si una imagen asienta tarde. SOLO para
+        // este caso — abrir chat / reacción / typing siguen instantáneos (abajo). La ventana de
+        // anclaje evita que el botón "ir al fondo" parpadee mientras desliza.
+        if (smooth) {
+            const el = virtuosoScrollerRef.current;
+            if (el) {
+                const start = el.scrollTop;
+                const target = el.scrollHeight - el.clientHeight;
+                if (target - start <= 3) { el.scrollTop = el.scrollHeight; return; } // ya al fondo
+                sendScrollHoldUntilRef.current = Math.max(sendScrollHoldUntilRef.current, Date.now() + 320);
+                const t0 = performance.now();
+                const dur = 240;
+                const ease = (p) => 1 - Math.pow(1 - p, 3); // easeOutCubic
+                const tick = (now) => {
+                    const p = Math.min(1, (now - t0) / dur);
+                    const tgt = el.scrollHeight - el.clientHeight; // re-lee (alto estable → estable)
+                    el.scrollTop = start + (tgt - start) * ease(p);
+                    if (p < 1) { smoothScrollFrameRef.current = requestAnimationFrame(tick); }
+                    else { el.scrollTop = el.scrollHeight; }
+                };
+                smoothScrollFrameRef.current = requestAnimationFrame(tick);
+                return;
+            }
+            // sin scroller → cae al instantáneo
+        }
+
+        // INSTANTÁNEO (default): abrir chat, reacción, typing, correcciones.
+        // Pre-ancla SÍNCRONA (antes del paint). Para contenido YA medido el PRIMER frame pintado ya
+        // cae al fondo, así que al enviar NO se asoma el último mensaje del candidato mientras el
+        // scroll "alcanza". NO sustituye los 2 pasos de abajo: si el contenido aún no está medido
+        // (media que crece tarde) esto aterriza un poco corto y el paso diferido lo corrige.
         const preEl = virtuosoScrollerRef.current;
         if (preEl) preEl.scrollTop = preEl.scrollHeight;
         scrollFrameRef.current = requestAnimationFrame(() => {
             scrollFrameRef.current = requestAnimationFrame(() => {
                 // Fondo CONFIABLE en DOS pasos coordinados (medido en producción 2026-09-25):
-                //   1) scrollToIndex('LAST', align:'end') RENDERIZA y MIDE los últimos items (que
-                //      pueden estar virtualizados/estimados). Solo con esto NO basta: align:'end'
-                //      alinea el ITEM, y con medidas que llegan tarde aterriza ~148px CORTO. Como
-                //      148 < atBottomThreshold (150), Virtuoso reporta isAtBottom=true por 2px → el
-                //      gate `isAtBottom && grewTall` cree que ya estás al fondo y NUNCA corrige → el
-                //      último mensaje queda tapado (100% bajo el pliegue, confirmado en vivo).
-                //   2) Ya con los últimos items medidos por el paso 1, un `scrollTop = scrollHeight`
-                //      en el frame siguiente cae en el fondo VERDADERO (limpia el aire del Footer y
-                //      el delta de medición). Medido: distancia al fondo 148px → 1px, último mensaje
-                //      visible con aire. El crudo solo falla si los items NO están medidos; por eso
-                //      va DESPUÉS del scrollToIndex, no en su lugar (ese fue el bug original).
+                //   1) scrollToIndex('LAST', align:'end') RENDERIZA y MIDE los últimos items. Solo con
+                //      esto NO basta: con medidas que llegan tarde aterriza ~148px CORTO y, como
+                //      148 < atBottomThreshold (150), Virtuoso cree que ya estás al fondo y NUNCA
+                //      corrige → el último mensaje queda tapado.
+                //   2) Ya con los últimos items medidos, un `scrollTop = scrollHeight` en el frame
+                //      siguiente cae en el fondo VERDADERO. Va DESPUÉS del scrollToIndex, no en su lugar.
                 // Idempotente: llamarlo varias veces siempre termina en el mismo fondo, sin brincos.
                 const el = virtuosoScrollerRef.current;
                 const v = virtuosoRef.current;
@@ -1184,16 +1212,11 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                         scrollFrameRef.current = requestAnimationFrame(() => {
                             const s = virtuosoScrollerRef.current;
                             if (s) s.scrollTop = s.scrollHeight;
-                            // Scroll asentado → ahora las burbujas nuevas pueden animar su entrada
-                            // (transform) sin pelear con el reposicionamiento. Ver SCROLL_SETTLED_EVENT
-                            // en MessageBubble.jsx (técnica del issue #115: no animar durante scroll).
-                            window.dispatchEvent(new CustomEvent(SCROLL_SETTLED_EVENT));
                         });
                         return;
                     } catch { /* cae al scroll crudo */ }
                 }
                 if (el) el.scrollTop = el.scrollHeight;
-                window.dispatchEvent(new CustomEvent(SCROLL_SETTLED_EVENT));
             });
         });
     };
@@ -2402,6 +2425,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         return () => {
             Object.values(typingTimersRef.current).forEach(t => clearTimeout(t));
             if (scrollFrameRef.current) cancelAnimationFrame(scrollFrameRef.current);
+            if (smoothScrollFrameRef.current) cancelAnimationFrame(smoothScrollFrameRef.current);
         };
     }, []);
 
@@ -6907,10 +6931,12 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                                     ? grewTall
                                     : (isAtBottomRef.current && grewTall);
                                 if (bottomAnchorRef.current || atBottomTrigger) {
-                                    // Mismo scrollToBottom() para cualquier tamaño de mensaje — ya espera
-                                    // el frame que Virtuoso necesita para medir burbujas altas (ver arriba),
-                                    // así que un texto largo (vacante/maletita) no necesita mecanismo aparte.
-                                    scrollToBottom();
+                                    // SUAVE para un mensaje nuevo (el contenido sube deslizando = se ve
+                                    // AAA, uniforme para consecutivos del mismo lado). INSTANTÁNEO al ABRIR
+                                    // el chat (bottomAnchorRef): ahí hay que caer al fondo de una, no
+                                    // deslizar desde el tope. scrollToBottom ya espera el frame que
+                                    // Virtuoso necesita para medir burbujas altas.
+                                    scrollToBottom({ smooth: atBottomTrigger && !bottomAnchorRef.current });
                                     // Revelar (fin de la máscara) + consumir el ancla SOLO cuando YA hay
                                     // mensajes. En el PRIMER open (sin caché) la lista arranca vacía y
                                     // loadMessages trae los datos un poco después; si reveláramos en el
