@@ -8,11 +8,16 @@ const playedEntryAnimations = new Set();
 const playedEntryAnimationOrder = [];
 const MAX_PLAYED_ENTRY_ANIMATIONS = 800;
 const OUTGOING_STATUS_REVEAL_MS = 800;
-// Evento que avisa que la FASE 1 (fila abriendo el espacio, chat-row-grow) de una
-// burbuja terminó — lo escucha ChatSection.jsx para encolar la siguiente burbuja de un
-// grupo (texto + fotos del banco) recién cuando la anterior de verdad terminó de entrar,
-// en vez de un setTimeout a ciegas.
+// Evento que avisa que la entrada (deslice/fade) de una burbuja terminó — lo escucha
+// ChatSection.jsx para encolar la siguiente burbuja de un grupo (texto + fotos del banco)
+// recién cuando la anterior de verdad terminó de entrar, en vez de un setTimeout a ciegas.
 export const ENTRY_REVEALED_EVENT = 'chat-bubble-entry-revealed';
+// ChatSection.jsx dispara esto cuando su scrollToBottom ya asentó. La burbuja nueva NO arranca
+// su animación de entrada (que lleva transform) hasta recibirlo: animar el transform MIENTRAS
+// Virtuoso reposiciona el scroll era justo lo que causaba el "parpadeo negro" (ver issue #115 de
+// react-virtuoso). Mientras espera, la burbuja está invisible (guard opacity:0): el scroll la
+// coloca sin que se vea moverse nada, y al asentarse sube+aparece limpio.
+export const SCROLL_SETTLED_EVENT = 'chat-scroll-settled';
 
 const rememberEntryAnimation = (key) => {
     if (!key || playedEntryAnimations.has(key)) return;
@@ -224,22 +229,35 @@ const MessageBubble = React.memo(function MessageBubble({
     // fix del doble-fade en ChatRow.
     const [entryDone, setEntryDone] = React.useState(false);
     const playEntry = shouldPlayEntryAnimation && !entryDone;
-    // ENTRADA DE ALTO ESTABLE + SOLO-OPACITY — doble recomendación del mantenedor de
+    // ENTRADA DE ALTO ESTABLE + ANIMAR DESPUÉS DEL SCROLL — dos reglas del mantenedor de
     // react-virtuoso:
     //   1) La fila NUNCA anima su alto (issue #1447): nace a su alto final → Virtuoso la mide una
     //      vez → scrollToIndex(LAST) aterriza en el fondo verdadero → la burbuja SIEMPRE se ve
     //      completa (crecer el alto la dejaba tapada + brinco).
-    //   2) La entrada NO usa transform (issue #115): animar transform PELEA con el reposicionamiento
-    //      del scroll de Virtuoso (cuando llega el mensaje, scrollToBottom mueve el scrollTop
-    //      mientras la burbuja se trasladaría) y además crea una capa GPU cuyo teardown se veía como
-    //      un "parpadeo negro/flash". Un fade de opacidad NO interactúa con la posición del scroll
-    //      ni rasteriza geometría → entrada limpia (AAA). El movimiento se perdió a propósito: con
-    //      alto estable la conversación ya se recorre sola al llegar el mensaje; el fade basta.
-    // Una sola animación para texto y media (mismo fade). La media, además, trae su propio fade de
-    // imagen en SmoothMediaImage, pero es un fade único (no el doble-fade/re-fade que el Set
-    // fadedInImages previene), así que combinar ambos solo da un fundido limpio.
+    //   2) NO animar el transform MIENTRAS Virtuoso scrollea (issue #115): animar el deslice/sube
+    //      mientras scrollToBottom reposiciona el scroll era el "parpadeo negro". Por eso la burbuja
+    //      nace INVISIBLE (guard opacity:0) y su animación (rise+fade con transform) NO arranca hasta
+    //      que ChatSection avisa SCROLL_SETTLED_EVENT (scroll asentado). El scroll la coloca sin que
+    //      se vea moverse nada; al asentarse, sube+aparece limpio. `animateReady` es ese gate.
+    // Una sola animación para texto y media. La media, además, trae su propio fade de imagen en
+    // SmoothMediaImage, pero es un fade único (el Set fadedInImages previene el re-fade), así que
+    // combinar ambos solo da un fundido limpio.
     const playBubbleEntry = playEntry;
-    const bubbleEntryClass = playBubbleEntry ? 'chat-message-enter' : '';
+    const [animateReady, setAnimateReady] = React.useState(false);
+    React.useEffect(() => {
+        if (!shouldPlayEntryAnimation) return undefined;
+        // Espera a que el scroll asiente antes de animar el transform (ver arriba). Red de
+        // seguridad por tiempo por si el mensaje no dispara scroll (no estás al fondo) o el evento
+        // se pierde en una carrera de montaje — así la burbuja nunca se queda invisible esperando.
+        let done = false;
+        const go = () => { if (done) return; done = true; window.removeEventListener(SCROLL_SETTLED_EVENT, go); window.clearTimeout(fallback); setAnimateReady(true); };
+        window.addEventListener(SCROLL_SETTLED_EVENT, go);
+        const fallback = window.setTimeout(go, 220);
+        return () => { window.removeEventListener(SCROLL_SETTLED_EVENT, go); window.clearTimeout(fallback); };
+    }, [shouldPlayEntryAnimation]);
+    // La clase (animación con transform) SOLO cuando el scroll asentó. Antes de eso, la burbuja está
+    // invisible por el guard opacity:0 de abajo — colocada pero sin animar, sin pelear con el scroll.
+    const bubbleEntryClass = (playBubbleEntry && animateReady) ? 'chat-message-enter' : '';
 
     React.useEffect(() => {
         if (!shouldPlayEntryAnimation) return undefined;
@@ -255,9 +273,9 @@ const MessageBubble = React.memo(function MessageBubble({
         return () => window.clearTimeout(timer);
     }, [shouldPlayEntryAnimation, entryAnimationKey, isMe]);
 
-    // Bubble starts invisible; la animación de opacidad la revela. Se retira con entryDone.
-    // Ahora aplica a texto Y media (ambos hacen fade): arrancar en opacity:0 evita el frame-0
-    // visible y es justo lo que el fade necesita (el marco de media también se funde al entrar).
+    // Guard: la burbuja nace invisible y así se queda MIENTRAS espera el SCROLL_SETTLED (el scroll
+    // la coloca sin verse). Al animar (animateReady), la animación de entrada la revela (opacity
+    // 0→1 + rise). Se retira con entryDone. Aplica a texto y media.
     const bubbleEntryStyle = playBubbleEntry ? { opacity: 0 } : undefined;
 
     return (
@@ -268,7 +286,8 @@ const MessageBubble = React.memo(function MessageBubble({
                 // reinicie la animación con la clase puesta → parpadeo. Y avisa a quien esté
                 // esperando (p.ej. el envío escalonado del banco de respuestas en ChatSection.jsx)
                 // que la burbuja ya está puesta.
-                if (e.animationName === 'chat-message-enter') {
+                // 'chat-message-fade' = variante solo-fade de prefers-reduced-motion (ver index.css).
+                if (e.animationName === 'chat-message-enter' || e.animationName === 'chat-message-fade') {
                     setEntryDone(true);
                     window.dispatchEvent(new CustomEvent(ENTRY_REVEALED_EVENT, { detail: { key: entryAnimationKey } }));
                 }

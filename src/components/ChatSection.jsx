@@ -26,7 +26,7 @@ import MessageInputBox from './chat/MessageInputBox';
 import AudioPlayer from './chat/AudioPlayer';
 import DateSeparator from './chat/DateSeparator';
 import ChatRow from './chat/ChatRow';
-import MessageBubble, { ENTRY_REVEALED_EVENT } from './chat/MessageBubble';
+import MessageBubble, { ENTRY_REVEALED_EVENT, SCROLL_SETTLED_EVENT } from './chat/MessageBubble';
 
 
 // Wrapper sortable (@dnd-kit) para cada icono de la barra del header. Da animación de
@@ -1184,11 +1184,16 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                         scrollFrameRef.current = requestAnimationFrame(() => {
                             const s = virtuosoScrollerRef.current;
                             if (s) s.scrollTop = s.scrollHeight;
+                            // Scroll asentado → ahora las burbujas nuevas pueden animar su entrada
+                            // (transform) sin pelear con el reposicionamiento. Ver SCROLL_SETTLED_EVENT
+                            // en MessageBubble.jsx (técnica del issue #115: no animar durante scroll).
+                            window.dispatchEvent(new CustomEvent(SCROLL_SETTLED_EVENT));
                         });
                         return;
                     } catch { /* cae al scroll crudo */ }
                 }
                 if (el) el.scrollTop = el.scrollHeight;
+                window.dispatchEvent(new CustomEvent(SCROLL_SETTLED_EVENT));
             });
         });
     };
@@ -1448,6 +1453,27 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
     const [qrForm, setQrForm] = useState({ name: '', message: '', shortcut: '', dynamicPhrase: '', imageUrl: '', imageUrl2: '', imageUrl3: '', imageUrl4: '', type: 'text', locName: '', locAddress: '', locLat: '', locLng: '', audioUrl: '', audioMime: '', audioVoice: false, audioDurationMs: 0, documentUrl: '', documentName: '' });
     const [qrImageUploading, setQrImageUploading] = useState(false);
     const [qrDocumentUploading, setQrDocumentUploading] = useState(false);
+    // Drag-and-drop para reordenar las fotos del banco (define el orden de envío).
+    // Los 4 slots son fijos (imageUrl…imageUrl4); al reordenar compactamos los valores
+    // no vacíos y los reasignamos contiguos en orden a los slots.
+    const qrImgDragKeyRef = useRef(null);
+    const [qrImgDragOverKey, setQrImgDragOverKey] = useState(null);
+    const reorderQrImages = (fromKey, toKey) => {
+        if (!fromKey || !toKey || fromKey === toKey) return;
+        setQrForm(prev => {
+            const keys = ['imageUrl', 'imageUrl2', 'imageUrl3', 'imageUrl4'];
+            const imgs = keys.map(k => prev[k]).filter(Boolean);
+            const fromIdx = imgs.indexOf(prev[fromKey]);
+            const toIdx = imgs.indexOf(prev[toKey]);
+            if (fromIdx === -1 || toIdx === -1) return prev;
+            const next = [...imgs];
+            const [moved] = next.splice(fromIdx, 1);
+            next.splice(toIdx, 0, moved);
+            const patch = {};
+            keys.forEach((k, i) => { patch[k] = next[i] || ''; });
+            return { ...prev, ...patch };
+        });
+    };
     // Grabación de audio para banco de respuestas (nota de voz nativa ogg/opus)
     const [qrRecording, setQrRecording] = useState(false);
     const [qrRecordSecs, setQrRecordSecs] = useState(0);
@@ -7285,12 +7311,28 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                                     Escribe <code className="px-1 rounded bg-gray-100 dark:bg-gray-700">{'{{texto ultimo boton}}'}</code> para insertar el texto del último botón/opción que clicó el candidato (ej. su horario de cita elegido).
                                 </p>
                                 {/* Image slots */}
+                                {[qrForm.imageUrl, qrForm.imageUrl2, qrForm.imageUrl3, qrForm.imageUrl4].filter(Boolean).length > 1 && (
+                                    <p className="text-[10px] text-gray-400 dark:text-gray-500 leading-relaxed">
+                                        Arrastra las imágenes para cambiar el orden en que se envían.
+                                    </p>
+                                )}
                                 <div className="grid grid-cols-2 gap-2">
                                     {[{ key: 'imageUrl', label: 'Imagen 1' }, { key: 'imageUrl2', label: 'Imagen 2 (opcional)' }, { key: 'imageUrl3', label: 'Imagen 3 (opcional)' }, { key: 'imageUrl4', label: 'Imagen 4 (opcional)' }].map(({ key, label }) => (
                                         <div key={key} className="flex-1 relative">
                                             {qrForm[key] ? (
-                                                <div className="relative rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700">
-                                                    <img src={qrForm[key]} alt="preview" className="w-full h-24 object-cover" />
+                                                <div
+                                                    draggable
+                                                    onDragStart={(e) => { qrImgDragKeyRef.current = key; e.dataTransfer.effectAllowed = 'move'; }}
+                                                    onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; if (qrImgDragOverKey !== key) setQrImgDragOverKey(key); }}
+                                                    onDragLeave={() => setQrImgDragOverKey(prev => (prev === key ? null : prev))}
+                                                    onDrop={(e) => { e.preventDefault(); reorderQrImages(qrImgDragKeyRef.current, key); qrImgDragKeyRef.current = null; setQrImgDragOverKey(null); }}
+                                                    onDragEnd={() => { qrImgDragKeyRef.current = null; setQrImgDragOverKey(null); }}
+                                                    className={`relative rounded-lg overflow-hidden border cursor-move transition-all ${qrImgDragOverKey === key ? 'border-green-500 ring-2 ring-green-400' : 'border-gray-200 dark:border-gray-700'}`}
+                                                >
+                                                    <img src={qrForm[key]} alt="preview" draggable={false} className="w-full h-24 object-cover pointer-events-none" />
+                                                    <span className="absolute bottom-1 left-1 w-4 h-4 rounded-full bg-black/60 text-white flex items-center justify-center text-[9px] font-bold leading-none pointer-events-none">
+                                                        {[qrForm.imageUrl, qrForm.imageUrl2, qrForm.imageUrl3, qrForm.imageUrl4].filter(Boolean).indexOf(qrForm[key]) + 1}
+                                                    </span>
                                                     <button
                                                         type="button"
                                                         onClick={() => setQrForm(prev => ({ ...prev, [key]: '' }))}
