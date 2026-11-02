@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Users, Search, Trash2, RefreshCw, User, MessageCircle, Clock, Loader2, CheckCircle, Check, Sparkles, Send, Ban, GripVertical, Tag, ChevronDown, ChevronLeft, ChevronRight, X, Pencil, Plus, AlertTriangle, TrendingUp, CalendarDays, RotateCcw, Flag, EyeOff, Eye } from 'lucide-react';
+import { Users, Search, Trash2, RefreshCw, User, MessageCircle, Clock, Loader2, CheckCircle, Check, Sparkles, Send, Ban, GripVertical, Tag, ChevronDown, ChevronLeft, ChevronRight, X, Pencil, Plus, AlertTriangle, TrendingUp, CalendarDays, RotateCcw, Flag, EyeOff, Eye, MapPin } from 'lucide-react';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, horizontalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -1049,6 +1049,8 @@ const CandidatesSection = () => {
     const retornosHoyTotal = realCtr?.retornosHoy?.total || 0;
     // De esos retornados, cuántos atendió Grok hoy (lo marca vía la tool MCP marcar_retorno_atendido).
     const retornosAtendidosGrok = realCtr?.retornosHoy?.atendidosPorGrok || 0;
+    // Candidatos que compartieron su ubicación HOY vía el botón del nodo "Pedir Ubicación" de Flujos.
+    const ubicacionesHoy = realCtr?.ubicacionesHoy || 0;
 
     // ✅ META AUDIT: Memoized pipeline — filter + sort only recalculated when deps change
     const displayedCandidates = React.useMemo(() => {
@@ -1213,6 +1215,16 @@ const CandidatesSection = () => {
                                             {retornosAtendidosGrok > 0 && (
                                                 <span className="text-[9px] text-gray-400 dark:text-gray-500">({retornosAtendidosGrok} atendidos por Grok)</span>
                                             )}
+                                        </div>
+                                    )}
+                                    {/* Ubicaciones compartidas hoy: candidatos que mandaron su GPS vía el botón del
+                                        nodo "Pedir Ubicación" de Flujos. Dato REAL del servidor; visible siempre que
+                                        haya respondido /api/candidates/ctr (incluso en 0, es un KPI en vivo). */}
+                                    {realCtr && (
+                                        <div className="mt-1.5 pt-1.5 border-t border-gray-100 dark:border-gray-700/60 flex items-center gap-1 text-[10px] text-gray-500 dark:text-gray-400 tabular-nums">
+                                            <MapPin className="w-3 h-3 text-cyan-500 shrink-0" />
+                                            <span className="font-bold text-cyan-600 dark:text-cyan-400">{ubicacionesHoy}</span>
+                                            <span>{ubicacionesHoy === 1 ? 'compartió ubicación hoy' : 'compartieron ubicación hoy'}</span>
                                         </div>
                                     )}
                                 </div>

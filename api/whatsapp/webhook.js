@@ -1241,7 +1241,14 @@ export default async function handler(req, res) {
                         // caer la ubicación al agente y RE-DISPARABA el flujo. Un solo read elimina eso.
                         const { resumeWaitingLocationFlow } = await import('../utils/flow-engine.js');
                         const routed = await resumeWaitingLocationFlow(candidateId, updatedCandidate, incomingLocation).catch(() => false);
-                        if (routed) continue; // ubicación resuelta por el motor de flujos, nunca por Brenda
+                        if (routed) {
+                            // 📊 KPI "Ubicaciones compartidas hoy" (tarjeta CTR de Hoy): el candidato
+                            // compartió su ubicación vía el botón del nodo de flujo. Fire-and-forget.
+                            import('../utils/ctr-stats.js')
+                                .then(({ markLocationSharedViaFlow }) => markLocationSharedViaFlow(candidateId))
+                                .catch(() => {});
+                            continue; // ubicación resuelta por el motor de flujos, nunca por Brenda
+                        }
                     } catch (e) {
                         console.error('[Webhook] location flow guard error:', e?.message);
                     }

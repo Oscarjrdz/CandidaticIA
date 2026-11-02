@@ -186,6 +186,45 @@ export async function getGrokAttendedTodayCount() {
     } catch { return 0; }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Ubicaciones compartidas HOY vía el nodo "Pedir Ubicación" de Flujos.
+// ─────────────────────────────────────────────────────────────────────────────
+// Cuenta cuántos candidatos ÚNICOS compartieron su ubicación HOY en respuesta al botón nativo
+// "Enviar ubicación" de un nodo de flujo (señal: el webhook ruteó la ubicación por el motor de
+// flujos, no por Brenda). Mismo patrón que los atendidos por Grok: set por día (zona Monterrey),
+// idempotente (SADD — si el mismo candidato comparte dos veces cuenta una), autolimpia a 7 días.
+const LOC_SHARED_KEY = 'stats:ubicacion_compartida'; // :YYYY-MM-DD
+const LOC_SHARED_TTL_SECONDS = 7 * 24 * 60 * 60; // 7 días: se autolimpia sin cron
+
+function locSharedKey(ymd) {
+    return `${LOC_SHARED_KEY}:${ymd || mtyTodayYmd()}`;
+}
+
+// Marca que un candidato compartió su ubicación HOY vía el nodo de flujo. Idempotente (SADD).
+// Fire-and-forget desde el webhook; no devuelve nada crítico.
+export async function markLocationSharedViaFlow(candidateId) {
+    const redis = getRedisClient();
+    if (!redis || !candidateId) return 0;
+    const key = locSharedKey();
+    const res = await redis.pipeline()
+        .sadd(key, String(candidateId))
+        .expire(key, LOC_SHARED_TTL_SECONDS)
+        .scard(key)
+        .exec();
+    const scard = res?.[2]?.[1];
+    return Number.isFinite(scard) ? scard : 0;
+}
+
+// Cuántos candidatos compartieron ubicación vía flujo HOY (SCARD del set del día). Barato (1 cmd).
+export async function getLocationSharedTodayCount() {
+    const redis = getRedisClient();
+    if (!redis) return 0;
+    try {
+        const n = await redis.scard(locSharedKey());
+        return Number.isFinite(n) ? n : 0;
+    } catch { return 0; }
+}
+
 // Proyección ligera para el dashboard: solo conteos (sin la composición id+nombre).
 export function stripComposition(block) {
     if (!block) return { total: 0, completos: 0, pct: 0, stuck: [] };
