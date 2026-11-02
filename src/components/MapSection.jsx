@@ -368,7 +368,18 @@ export default function MapSection({ onOpenCandidate }) {
         const center = savedView ? [savedView.lat, savedView.lng] : MTY;
         const zoom = savedView?.zoom || 11;
         // zoomControl a la derecha para que los botones +/− no choquen con el buscador (arriba-izquierda).
-        const map = L.map(containerRef.current, { center, zoom, preferCanvas: true, zoomControl: false });
+        // Zoom del scroll "AAA": con el zoomSnap=1 de Leaflet, el handler de rueda hace Math.ceil() del
+        // gesto, así que UN solo scroll un poco fuerte salta 2 niveles ("doble zoom"). Con zoomSnap 0.5 el
+        // scroll aterriza en medios niveles (suave, predecible, sin brinco doble); zoomDelta queda en 1 para
+        // que los botones +/− sigan dando pasos enteros. wheelPxPerZoomLevel más alto = menos sensible (pide
+        // más scroll por nivel) y wheelDebounceTime junta los eventos rápidos del trackpad en un solo zoom.
+        const map = L.map(containerRef.current, {
+            center, zoom, preferCanvas: true, zoomControl: false,
+            zoomSnap: 0.5,
+            zoomDelta: 1,
+            wheelPxPerZoomLevel: 120,
+            wheelDebounceTime: 60,
+        });
         L.control.zoom({ position: 'topright' }).addTo(map);
         // 🔒 Candado de zoom: control propio apilado JUSTO debajo de los botones +/− (mismo
         // estilo leaflet-bar). La armella se abre/cierra con animación; el clic bloquea/libera.
