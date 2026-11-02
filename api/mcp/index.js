@@ -2137,6 +2137,92 @@ const TOOLS = {
         }
     },
 
+    alinear_nodos: {
+        description: 'Acomoda varios nodos de golpe, igual que la barra de alineación del editor (la que sale al seleccionar 2+ nodos en el canvas). SOLO mueve la posición en el canvas — no cambia el comportamiento del flujo. "modo":\n' +
+            '• izquierda / centro / derecha — alinea la X (eje horizontal) al borde izquierdo común, al centro, o al borde derecho.\n' +
+            '• arriba / medio / abajo — alinea la Y (eje vertical) al borde superior común, al medio, o al borde inferior.\n' +
+            '• distribuir_horizontal / distribuir_vertical — deja los HUECOS entre nodos parejos a lo largo de ese eje (fija el primero y el último en su lugar y reparte los de en medio).\n' +
+            'Alinear necesita 2+ nodos; distribuir necesita 3+. Usa los nodeIds que ves en ver_flujo/ver_nodo. Devuelve las posiciones nuevas.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                flujoId: { type: 'string', description: 'ID del flujo.' },
+                nodeIds: { type: 'array', items: { type: 'string' }, description: 'IDs de los nodos a acomodar (2+ para alinear, 3+ para distribuir).' },
+                modo: { type: 'string', enum: ['izquierda', 'centro', 'derecha', 'arriba', 'medio', 'abajo', 'distribuir_horizontal', 'distribuir_vertical'], description: 'Qué acomodo aplicar.' }
+            },
+            required: ['flujoId', 'nodeIds', 'modo']
+        },
+        handler: async (args, { redis, req }) => {
+            const flujoId = String(args?.flujoId || '').trim();
+            const modo = String(args?.modo || '').trim();
+            if (!flujoId) throw new Error('Falta flujoId');
+            const MODOS = new Set(['izquierda', 'centro', 'derecha', 'arriba', 'medio', 'abajo', 'distribuir_horizontal', 'distribuir_vertical']);
+            if (!MODOS.has(modo)) throw new Error(`modo inválido: "${modo}". Usa uno de: ${[...MODOS].join(', ')}.`);
+            const ids = Array.isArray(args?.nodeIds) ? [...new Set(args.nodeIds.map(x => String(x || '').trim()).filter(Boolean))] : [];
+            if (ids.length < 2) throw new Error('Manda al menos 2 nodeIds (la alineación necesita 2+ nodos).');
+
+            const f = await fetchFlowOrThrow(req, redis, flujoId);
+            const nodes = Array.isArray(f.nodes) ? [...f.nodes] : [];
+            const idSet = new Set(ids);
+            const sel = nodes.filter(n => idSet.has(n?.id));
+            const faltantes = ids.filter(id => !sel.some(n => n.id === id));
+            if (faltantes.length) throw new Error(`Estos nodeIds no están en el flujo: ${faltantes.join(', ')}`);
+
+            // Mismo cálculo que handleAlign/handleDistribute en FlowEditor.jsx. Del lado
+            // servidor NO existe measured (interno de React Flow), así que el tamaño cae a
+            // width/height guardado (bg/texto los traen) y, si no, a los mismos defaults
+            // que usa el canvas: 240×80.
+            const widthOf = (n) => Number.isFinite(n.width) ? n.width : 240;
+            const heightOf = (n) => Number.isFinite(n.height) ? n.height : 80;
+            const posOf = (n) => n.position || { x: 0, y: 0 };
+
+            const distribuir = modo === 'distribuir_horizontal' || modo === 'distribuir_vertical';
+            const nuevaPos = new Map(); // nodeId → {x?, y?}
+
+            if (!distribuir) {
+                const horizontal = modo === 'izquierda' || modo === 'centro' || modo === 'derecha';
+                const axis = horizontal ? 'x' : 'y';
+                const sizeOf = horizontal ? widthOf : heightOf;
+                const minEdge = Math.min(...sel.map(n => posOf(n)[axis]));
+                const maxEdge = Math.max(...sel.map(n => posOf(n)[axis] + sizeOf(n)));
+                const mid = (minEdge + maxEdge) / 2;
+                const coord = (n) => (modo === 'izquierda' || modo === 'arriba') ? minEdge
+                    : (modo === 'derecha' || modo === 'abajo') ? maxEdge - sizeOf(n)
+                        : mid - sizeOf(n) / 2;
+                for (const n of sel) nuevaPos.set(n.id, { ...posOf(n), [axis]: coord(n) });
+            } else {
+                if (sel.length < 3) throw new Error('Distribuir necesita al menos 3 nodos (para tener huecos que repartir).');
+                const vertical = modo === 'distribuir_vertical';
+                const coordOf = (n) => vertical ? posOf(n).y : posOf(n).x;
+                const sizeOf = vertical ? heightOf : widthOf;
+                const sorted = [...sel].sort((a, b) => coordOf(a) - coordOf(b));
+                const start = coordOf(sorted[0]);
+                const last = sorted[sorted.length - 1];
+                const end = coordOf(last) + sizeOf(last);
+                const totalSize = sorted.reduce((s, n) => s + sizeOf(n), 0);
+                const gap = (end - start - totalSize) / (sorted.length - 1);
+                let cursor = start;
+                for (const n of sorted) {
+                    nuevaPos.set(n.id, vertical ? { ...posOf(n), y: cursor } : { ...posOf(n), x: cursor });
+                    cursor += sizeOf(n) + gap;
+                }
+            }
+
+            const next = nodes.map(n => nuevaPos.has(n?.id) ? { ...n, position: nuevaPos.get(n.id) } : n);
+            await saveFlowNodes(req, redis, flujoId, next);
+            return {
+                flujoId,
+                modo,
+                acomodados: sel.length,
+                posiciones: sel.map(n => ({
+                    nodeId: n.id,
+                    nombre: nodeDisplayName(n),
+                    position: nuevaPos.get(n.id)
+                }))
+            };
+        }
+    },
+
     eliminar_nodo: {
         description: 'Elimina UN nodo de un flujo y TODAS sus aristas (entrantes y salientes). No se puede deshacer. Devuelve cuántas aristas se quitaron. No borres el nodo raíz (inicio/inicio_lista/inicio_incompleto_silencio) salvo que vayas a reemplazarlo: un flujo sin raíz no corre.',
         inputSchema: {
