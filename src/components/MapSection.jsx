@@ -368,17 +368,17 @@ export default function MapSection({ onOpenCandidate }) {
         const center = savedView ? [savedView.lat, savedView.lng] : MTY;
         const zoom = savedView?.zoom || 11;
         // zoomControl a la derecha para que los botones +/− no choquen con el buscador (arriba-izquierda).
-        // Zoom del scroll "AAA": con el zoomSnap=1 de Leaflet, el handler de rueda hace Math.ceil() del
-        // gesto, así que UN solo scroll un poco fuerte salta 2 niveles ("doble zoom"). Con zoomSnap 0.5 el
-        // scroll aterriza en medios niveles (suave, predecible, sin brinco doble); zoomDelta queda en 1 para
-        // que los botones +/− sigan dando pasos enteros. wheelPxPerZoomLevel más alto = menos sensible (pide
-        // más scroll por nivel) y wheelDebounceTime junta los eventos rápidos del trackpad en un solo zoom.
+        // Zoom del scroll "AAA": DESACTIVAMOS el handler nativo de rueda de Leaflet (scrollWheelZoom:false)
+        // porque mapea el delta acumulado con una sigmoide que SE SATURA: al acumular mucho scroll (p. ej.
+        // vienes de alejar y luego giras el scroll para acercar) dispara hasta ~4 niveles de golpe ("varios
+        // zoom de un solo scroll"). Más abajo cableamos un handler propio determinista: 1 gesto = 1 paso fijo
+        // hacia el cursor, y al invertir la dirección se reinicia el acumulador (sin arrastre del gesto previo).
+        // zoomSnap 0.5 = el zoom aterriza en medios niveles (suave); zoomDelta 1 = botones +/− en pasos enteros.
         const map = L.map(containerRef.current, {
             center, zoom, preferCanvas: true, zoomControl: false,
+            scrollWheelZoom: false,
             zoomSnap: 0.5,
             zoomDelta: 1,
-            wheelPxPerZoomLevel: 120,
-            wheelDebounceTime: 60,
         });
         L.control.zoom({ position: 'topright' }).addTo(map);
         // 🔒 Candado de zoom: control propio apilado JUSTO debajo de los botones +/− (mismo
@@ -433,8 +433,29 @@ export default function MapSection({ onOpenCandidate }) {
             const root = e.popup?.getElement?.();
             if (root) handlePopupOpenRef.current(root);
         });
+        // 🖱️ Zoom de scroll determinista (reemplaza el nativo). Acumula el scroll y da UN paso fijo
+        // hacia el cursor cada vez que cruza el umbral; al invertir la dirección reinicia el acumulador
+        // (zoom-out seguido de zoom-in ya no arrastra el delta previo) y topa a 1 nivel por evento, así
+        // que ni un scroll fuerte brinca varios niveles. Respeta el candado: si min==max, _limitZoom clampa.
+        const ZOOM_STEP = 0.5;       // nivel por paso (medios niveles = suave)
+        const WHEEL_THRESHOLD = 50;  // px de scroll acumulado por paso
+        let wheelAcc = 0, wheelDir = 0;
+        const onWheel = (e) => {
+            e.preventDefault();
+            const dir = e.deltaY < 0 ? 1 : -1;   // scroll arriba = acercar
+            if (dir !== wheelDir) { wheelAcc = 0; wheelDir = dir; }  // invirtió → reinicia
+            wheelAcc += Math.abs(e.deltaY);
+            let steps = 0;
+            while (wheelAcc >= WHEEL_THRESHOLD && steps < 2) { wheelAcc -= WHEEL_THRESHOLD; steps++; }
+            if (!steps) return;
+            const pt = map.mouseEventToContainerPoint(e);
+            const target = map._limitZoom(map.getZoom() + dir * steps * ZOOM_STEP);
+            if (target !== map.getZoom()) map.setZoomAround(pt, target, { animate: true });
+        };
+        const wheelEl = containerRef.current;
+        wheelEl.addEventListener('wheel', onWheel, { passive: false });
         setTimeout(() => map.invalidateSize(), 150);
-        return () => { map.remove(); mapRef.current = null; };
+        return () => { wheelEl.removeEventListener('wheel', onWheel); map.remove(); mapRef.current = null; };
     }, []);
 
     // Dibuja un pin (circleMarker de canvas) con su popup. Reusado por la carga y por el SSE en vivo.
