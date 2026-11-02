@@ -3807,6 +3807,19 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                         }).catch(() => {});
                     }
                     const shouldPreserveBottom = isAtBottomRef.current || isSendingRef.current;
+                    if (shouldPreserveBottom) {
+                        // Ancla al fondo DURANTE la animación de entrada de la burbuja. La fase 1
+                        // crece el ALTO REAL de la fila (0 → target en 240-350ms). Apenas crece más
+                        // de atBottomThreshold (150px), atBottomStateChange marca isAtBottom=false y
+                        // el gate `isAtBottom && grewTall` de totalListHeightChanged DEJA de seguir el
+                        // crecimiento → el último tramo no se scrollea y la burbuja nueva queda tapada
+                        // abajo. Esta ventana (misma mecánica que al enviar) hace que ese gate use
+                        // `grewTall` a secas y siga el fondo hasta que la burbuja llega a su alto final
+                        // y se ve COMPLETA. Antes no hacía falta: con clip-path el alto se reservaba de
+                        // un solo golpe; ahora que crece de verdad, sí. Math.max para no acortar un hold
+                        // de envío más largo que ya estuviera activo.
+                        sendScrollHoldUntilRef.current = Math.max(sendScrollHoldUntilRef.current, Date.now() + 700);
+                    }
                     // 🚀 Inyección Meta-standard con COALESCING: en vez de un setMessages +
                     // scroll por cada mensaje (N ciclos encimados bajo ráfaga), se bufferea el
                     // payload y se hace flush UNA vez por frame (flushPendingSseMessages).
