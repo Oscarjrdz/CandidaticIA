@@ -83,8 +83,10 @@ El cuerpo también pasa por `substituteVariables`, así que admite los tokens no
 ## Cómo armarlo (reclutador)
 
 1. En Flujos → **Agregar nodo → "Crear Ruta (Maps)"** (ícono de ruta, verde).
-2. Conéctalo **después** de un **"Pedir Ubicación"** (por su salida que prefieras — normalmente la
-   que sigue tras validar).
+2. Conéctalo **después** de un **"Pedir Ubicación"**, a su salida **"Sí"**. Si ese nodo **no tiene
+   paradas** configuradas (lo normal para este patrón — solo quieres el GPS, no validar cercanía),
+   al compartir la ubicación **siempre sale por "Sí"** → llega a Crear Ruta. (Con paradas, "Sí" es
+   solo si queda dentro del radio; en ese caso conéctalo donde tenga sentido.)
 3. Abre el lugar de la empresa en Google Maps → **Compartir → copiar enlace** → pégalo en
    **Destino**. (O escribe `lat, lng` a mano.) Verifica el ✓ verde con las coordenadas.
 4. Pon el **Nombre del destino** (ej. "Planta García") para el token `{{destino}}`.

@@ -24,7 +24,10 @@ inteligente: mensaje + foto/PDF por ruta, token `{{numero parada}}`, `nunca-venc
    (fórmula Haversine, local, gratis) y decide:
    - **≤ radio →** rama **Sí**: manda el **mensaje de felicitación + la foto/PDF de la ruta que
      ganó** (ambos opcionales y por ruta), luego continúa por la salida Sí.
-   - **> radio** (o llegó tarde / sin paradas válidas) **→** rama **No**.
+   - **> radio** (o llegó tarde) **→** rama **No**.
+   - **SIN ninguna parada configurada →** rama **Sí** (el nodo es un simple "recolector de GPS":
+     no hay nada que validar por distancia, compartir la ubicación = éxito). Es el patrón que usa
+     [`nodo-crear-ruta.md`](nodo-crear-ruta.md). (Si tiene rutas pero con coords inválidas → No.)
 
 ### Importante: la imagen/mensaje son SIEMPRE de la ruta que le quedó
 `nearest.rutaObj` apunta al objeto de la ruta dueña de la parada ganadora. El mensaje

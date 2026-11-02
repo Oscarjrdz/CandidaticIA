@@ -2242,8 +2242,14 @@ export async function resumeWaitingLocationFlow(candidateId, candidateSnapshot, 
                         }
                     }
                 }
-                // Sin paradas válidas en ninguna ruta → nadie "queda cerca": rutea 'no'.
-                handle = (nearest && nearest.meters <= radio) ? 'si' : 'no';
+                // Sin NINGUNA parada configurada el nodo es un simple "recolector de GPS" (patrón
+                // Pedir Ubicación → Crear Ruta): no hay nada que validar por distancia, así que
+                // compartir la ubicación = éxito → rutea 'si'. CON paradas, rutea 'si' solo si la
+                // más cercana queda dentro del radio; fuera (o sin parada válida pese a tener rutas)
+                // → 'no'.
+                const hasAnyStop = rutas.some(r => (Array.isArray(r?.paradas) ? r.paradas : [])
+                    .some(p => Number.isFinite(Number(p?.lat)) && Number.isFinite(Number(p?.lng))));
+                handle = !hasAnyStop ? 'si' : (nearest && nearest.meters <= radio) ? 'si' : 'no';
             }
 
             // Consume la espera ANTES de reanudar (idempotencia: una ubicación = una reanudación).
