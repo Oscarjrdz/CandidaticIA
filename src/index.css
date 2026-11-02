@@ -195,31 +195,32 @@ body {
      (chat-row-grow) que rompía la medición (petyosi/react-virtuoso#1447) — por eso no hay delay
      que la espere.
 
-     El easing con pequeño overshoot (cubic-bezier con y>1 al final) da un "pop" perceptible
-     sin tocar el layout: escala 0.92→1 (rebota a ~1.03 y asienta), leve subida y deslice
-     lateral. Antes era un deslice de 24px en 200ms = casi imperceptible ("entra super rápido").
+     EASING: cubic-bezier(0.4, 0.15, 0.5, 0.9) reparte el movimiento de forma PERCEPTIBLE
+     (~58% a mitad de tiempo), no amontonado al inicio. Medido en navegador: un easeOut/overshoot
+     dejaba 80% del recorrido hecho en los primeros 80ms → "se sentía super rápido" aunque durara
+     340ms. Con este easing + 400ms + offset grande (20px lateral, 12px de subida, escala 0.90→1),
+     la entrada se ve durante todo el recorrido. Solo transform/opacity → no toca layout.
 
      MEDIA: SOLO transform — sin opacity, porque la imagen ya trae su propio fade
-     (SmoothMediaImage) y duplicarlo aquí era el parpadeo original. Arranca de inmediato. */
+     (SmoothMediaImage) y duplicarlo aquí era el parpadeo original. */
   .chat-message-enter-media-outgoing {
-    -webkit-animation: chat-message-enter-media-outgoing 400ms cubic-bezier(0.34, 1.3, 0.64, 1) forwards;
-    animation: chat-message-enter-media-outgoing 400ms cubic-bezier(0.34, 1.3, 0.64, 1) forwards;
+    -webkit-animation: chat-message-enter-media-outgoing 440ms cubic-bezier(0.4, 0.15, 0.5, 0.9) forwards;
+    animation: chat-message-enter-media-outgoing 440ms cubic-bezier(0.4, 0.15, 0.5, 0.9) forwards;
   }
   .chat-message-enter-media-incoming {
-    -webkit-animation: chat-message-enter-media-incoming 400ms cubic-bezier(0.34, 1.3, 0.64, 1) forwards;
-    animation: chat-message-enter-media-incoming 400ms cubic-bezier(0.34, 1.3, 0.64, 1) forwards;
+    -webkit-animation: chat-message-enter-media-incoming 440ms cubic-bezier(0.4, 0.15, 0.5, 0.9) forwards;
+    animation: chat-message-enter-media-incoming 440ms cubic-bezier(0.4, 0.15, 0.5, 0.9) forwards;
   }
 
-  /* TEXTO: desliza + sube + "pop" de escala + fade. Arranca de inmediato (sin delay) y dura
-     340ms para que la entrada se PERCIBA bien (antes casi no se veía). */
+  /* TEXTO: desliza + sube + crece escala + fade. Sin delay, 400ms con easing bien repartido. */
   .chat-message-enter-outgoing {
-    -webkit-animation: chat-message-enter-outgoing 340ms cubic-bezier(0.34, 1.3, 0.64, 1) forwards;
-    animation: chat-message-enter-outgoing 340ms cubic-bezier(0.34, 1.3, 0.64, 1) forwards;
+    -webkit-animation: chat-message-enter-outgoing 400ms cubic-bezier(0.4, 0.15, 0.5, 0.9) forwards;
+    animation: chat-message-enter-outgoing 400ms cubic-bezier(0.4, 0.15, 0.5, 0.9) forwards;
   }
 
   .chat-message-enter-incoming {
-    -webkit-animation: chat-message-enter-incoming 340ms cubic-bezier(0.34, 1.3, 0.64, 1) forwards;
-    animation: chat-message-enter-incoming 340ms cubic-bezier(0.34, 1.3, 0.64, 1) forwards;
+    -webkit-animation: chat-message-enter-incoming 400ms cubic-bezier(0.4, 0.15, 0.5, 0.9) forwards;
+    animation: chat-message-enter-incoming 400ms cubic-bezier(0.4, 0.15, 0.5, 0.9) forwards;
   }
 }
 
@@ -249,21 +250,21 @@ body {
 /* Entrada SALIENTE: desliza desde la derecha + sube + pop de escala + fade.
    Solo transform/opacity → no toca layout → Virtuoso-safe. */
 @-webkit-keyframes chat-message-enter-outgoing {
-  0%   { opacity: 0; -webkit-transform: translate3d(14px, 10px, 0) scale(0.92); }
+  0%   { opacity: 0; -webkit-transform: translate3d(20px, 12px, 0) scale(0.90); }
   100% { opacity: 1; -webkit-transform: translate3d(0, 0, 0) scale(1); }
 }
 @keyframes chat-message-enter-outgoing {
-  0%   { opacity: 0; transform: translate3d(14px, 10px, 0) scale(0.92); }
+  0%   { opacity: 0; transform: translate3d(20px, 12px, 0) scale(0.90); }
   100% { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
 }
 
-/* Entrada ENTRANTE: desliza desde la izquierda + sube + pop de escala + fade. */
+/* Entrada ENTRANTE: desliza desde la izquierda + sube + crece escala + fade. */
 @-webkit-keyframes chat-message-enter-incoming {
-  0%   { opacity: 0; -webkit-transform: translate3d(-14px, 10px, 0) scale(0.92); }
+  0%   { opacity: 0; -webkit-transform: translate3d(-20px, 12px, 0) scale(0.90); }
   100% { opacity: 1; -webkit-transform: translate3d(0, 0, 0) scale(1); }
 }
 @keyframes chat-message-enter-incoming {
-  0%   { opacity: 0; transform: translate3d(-14px, 10px, 0) scale(0.92); }
+  0%   { opacity: 0; transform: translate3d(-20px, 12px, 0) scale(0.90); }
   100% { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
 }
 
@@ -272,19 +273,19 @@ body {
    era el doble-fade original. Solo transform, para que la burbuja de imagen se sienta tan viva
    como la de texto sin duplicar el fundido. */
 @-webkit-keyframes chat-message-enter-media-outgoing {
-  0%   { -webkit-transform: translate3d(14px, 10px, 0) scale(0.92); }
+  0%   { -webkit-transform: translate3d(20px, 12px, 0) scale(0.90); }
   100% { -webkit-transform: translate3d(0, 0, 0) scale(1); }
 }
 @keyframes chat-message-enter-media-outgoing {
-  0%   { transform: translate3d(14px, 10px, 0) scale(0.92); }
+  0%   { transform: translate3d(20px, 12px, 0) scale(0.90); }
   100% { transform: translate3d(0, 0, 0) scale(1); }
 }
 @-webkit-keyframes chat-message-enter-media-incoming {
-  0%   { -webkit-transform: translate3d(-14px, 10px, 0) scale(0.92); }
+  0%   { -webkit-transform: translate3d(-20px, 12px, 0) scale(0.90); }
   100% { -webkit-transform: translate3d(0, 0, 0) scale(1); }
 }
 @keyframes chat-message-enter-media-incoming {
-  0%   { transform: translate3d(-14px, 10px, 0) scale(0.92); }
+  0%   { transform: translate3d(-20px, 12px, 0) scale(0.90); }
   100% { transform: translate3d(0, 0, 0) scale(1); }
 }
 
