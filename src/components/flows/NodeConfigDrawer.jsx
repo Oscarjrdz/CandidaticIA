@@ -785,20 +785,52 @@ const CrearRutaConfig = ({ data, patch }) => {
                 </div>
                 <textarea rows={3} maxLength={1024} value={data.body || ''} onChange={(e) => patch({ body: e.target.value })}
                     placeholder="Ej. Te paso cómo llegar a {{destino}} desde donde estás 👇" className={inputCls} />
-                <p className="text-[10px] text-gray-400 mt-1">Debajo de tu mensaje se agregan los enlaces de las apps que elijas.</p>
+                <p className="text-[10px] text-gray-400 mt-1">Acompaña al botón “Abrir”. El token {'{{destino}}'} se reemplaza por el nombre del destino.</p>
+            </div>
+
+            {/* 🚗 Preguntar modo de transporte ANTES de dar la ruta */}
+            <div className="rounded-xl border border-gray-200 dark:border-gray-700 p-3 space-y-2.5">
+                <label className="flex items-start gap-2 cursor-pointer">
+                    <input type="checkbox" checked={data.askMode !== false} onChange={(e) => patch({ askMode: e.target.checked })}
+                        className="w-4 h-4 mt-0.5 rounded text-emerald-600 focus:ring-emerald-500" />
+                    <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">Preguntar cómo va a llegar (botones antes de la ruta)</span>
+                </label>
+                {data.askMode !== false && (
+                    <>
+                        <div>
+                            <label className="text-[11px] text-gray-500 dark:text-gray-400 mb-1 block">Pregunta</label>
+                            <input type="text" maxLength={1024} value={data.modeQuestion ?? ''} onChange={(e) => patch({ modeQuestion: e.target.value })}
+                                placeholder="¿Cómo llegarás a tu entrevista? 🚗" className={inputCls} />
+                        </div>
+                        <div className="space-y-1.5">
+                            <label className="text-[11px] text-gray-500 dark:text-gray-400 block">Opciones (botones, máx. 3)</label>
+                            {[['carro', '🚗 Carro'], ['transporte', '🚌 Transporte'], ['moto', '🏍️ Moto']].map(([key, def]) => (
+                                <div key={key} className="flex items-center gap-2">
+                                    <input type="checkbox" checked={data[`mode_${key}`] !== false} onChange={(e) => patch({ [`mode_${key}`]: e.target.checked })}
+                                        className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 shrink-0" />
+                                    <input type="text" maxLength={20} value={data[`modeLabel_${key}`] ?? def}
+                                        disabled={data[`mode_${key}`] === false}
+                                        onChange={(e) => patch({ [`modeLabel_${key}`]: e.target.value })}
+                                        className={`${inputCls} py-1.5 ${data[`mode_${key}`] === false ? 'opacity-40' : ''}`} />
+                                </div>
+                            ))}
+                        </div>
+                        <p className="text-[10px] text-gray-400">Al tocar una opción, le llegan los botones “Abrir en Maps/Waze” con ese modo. 🏍️ Moto en Google Maps solo funciona en algunos países; si no, abre como carro. Waze siempre es en carro.</p>
+                    </>
+                )}
             </div>
 
             <div className="rounded-xl border border-gray-200 dark:border-gray-700 p-3 space-y-2.5">
-                <label className="text-xs font-semibold text-gray-700 dark:text-gray-300 block">Apps de mapas (enlaces que recibe el candidato)</label>
+                <label className="text-xs font-semibold text-gray-700 dark:text-gray-300 block">Botones de mapa (uno por app, cada uno en su burbuja)</label>
                 <label className="flex items-center gap-2 cursor-pointer">
                     <input type="checkbox" checked={data.appGoogle !== false} onChange={(e) => patch({ appGoogle: e.target.checked })}
                         className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500" />
-                    <span className="text-xs text-gray-700 dark:text-gray-300">🗺️ Google Maps</span>
+                    <span className="text-xs text-gray-700 dark:text-gray-300">🗺️ Abrir en Google Maps</span>
                 </label>
                 <label className="flex items-center gap-2 cursor-pointer">
                     <input type="checkbox" checked={data.appWaze !== false} onChange={(e) => patch({ appWaze: e.target.checked })}
                         className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500" />
-                    <span className="text-xs text-gray-700 dark:text-gray-300">🚗 Waze</span>
+                    <span className="text-xs text-gray-700 dark:text-gray-300">🚗 Abrir en Waze</span>
                 </label>
                 <p className="text-[10px] text-gray-400">La ruta sale desde la ubicación que compartió el candidato (pon un nodo “Pedir Ubicación” antes de este). Si no la compartió, Google Maps usa el GPS de su teléfono; Waze siempre navega desde su ubicación actual.</p>
             </div>

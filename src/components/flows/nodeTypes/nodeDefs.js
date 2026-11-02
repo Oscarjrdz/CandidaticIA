@@ -224,7 +224,8 @@ export const NODE_DEFS = {
             const hasDest = Number.isFinite(Number(data.destLat)) && Number.isFinite(Number(data.destLng));
             if (!hasDest) return 'Configura el destino (link de Maps o lat,lng)';
             const apps = [data.appGoogle !== false ? 'Maps' : null, data.appWaze !== false ? 'Waze' : null].filter(Boolean).join(' + ');
-            return `→ ${data.destName?.trim() || `${Number(data.destLat).toFixed(4)},${Number(data.destLng).toFixed(4)}`}${apps ? ` · ${apps}` : ''}`;
+            const mode = data.askMode !== false ? ' · pregunta modo' : '';
+            return `→ ${data.destName?.trim() || `${Number(data.destLat).toFixed(4)},${Number(data.destLng).toFixed(4)}`}${apps ? ` · ${apps}` : ''}${mode}`;
         }
     },
     frase_dinamica: {
