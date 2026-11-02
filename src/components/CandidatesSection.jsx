@@ -1204,27 +1204,25 @@ const CandidatesSection = () => {
                                             <span className="text-[10px] text-gray-400 dark:text-gray-500 font-medium">Sin candidatos hoy aún</span>
                                         </div>
                                     )}
-                                    {/* Retornados completos de hoy: completos que YA existían y volvieron a escribir hoy
-                                        (actividad de Sala de Espera). Dato REAL del servidor; visible siempre que haya
-                                        respondido /api/candidates/ctr, incluso en 0 (es un KPI en vivo). */}
-                                    {realCtr?.retornosHoy && (
-                                        <div className="mt-2 pt-1.5 border-t border-gray-100 dark:border-gray-700/60 flex items-center gap-1 text-[10px] text-gray-500 dark:text-gray-400 tabular-nums">
-                                            <RotateCcw className="w-3 h-3 text-cyan-500 shrink-0" />
-                                            <span className="font-bold text-cyan-600 dark:text-cyan-400">{retornosHoyTotal}</span>
-                                            <span>{retornosHoyTotal === 1 ? 'completo volvió hoy' : 'completos volvieron hoy'}</span>
-                                            {retornosAtendidosGrok > 0 && (
-                                                <span className="text-[9px] text-gray-400 dark:text-gray-500">({retornosAtendidosGrok} atendidos por Grok)</span>
-                                            )}
-                                        </div>
-                                    )}
-                                    {/* Ubicaciones compartidas hoy: candidatos que mandaron su GPS vía el botón del
-                                        nodo "Pedir Ubicación" de Flujos. Dato REAL del servidor; visible siempre que
-                                        haya respondido /api/candidates/ctr (incluso en 0, es un KPI en vivo). */}
+                                    {/* Retornados completos de hoy (izquierda) + ubicaciones compartidas vía nodo
+                                        "Pedir Ubicación" de Flujos (derecha). Ambos son datos REALES del servidor,
+                                        en el MISMO renglón para no agrandar la tarjeta; visibles siempre que haya
+                                        respondido /api/candidates/ctr, incluso en 0 (son KPIs en vivo). */}
                                     {realCtr && (
-                                        <div className="mt-1.5 pt-1.5 border-t border-gray-100 dark:border-gray-700/60 flex items-center gap-1 text-[10px] text-gray-500 dark:text-gray-400 tabular-nums">
-                                            <MapPin className="w-3 h-3 text-cyan-500 shrink-0" />
-                                            <span className="font-bold text-cyan-600 dark:text-cyan-400">{ubicacionesHoy}</span>
-                                            <span>{ubicacionesHoy === 1 ? 'compartió ubicación hoy' : 'compartieron ubicación hoy'}</span>
+                                        <div className="mt-2 pt-1.5 border-t border-gray-100 dark:border-gray-700/60 flex items-center justify-between gap-2 text-[10px] text-gray-500 dark:text-gray-400 tabular-nums">
+                                            <span className="flex items-center gap-1 min-w-0">
+                                                <RotateCcw className="w-3 h-3 text-cyan-500 shrink-0" />
+                                                <span className="font-bold text-cyan-600 dark:text-cyan-400">{retornosHoyTotal}</span>
+                                                <span className="truncate">volvieron hoy</span>
+                                                {retornosAtendidosGrok > 0 && (
+                                                    <span className="text-[9px] text-gray-400 dark:text-gray-500 shrink-0">({retornosAtendidosGrok} Grok)</span>
+                                                )}
+                                            </span>
+                                            <span className="flex items-center gap-1 shrink-0" title="Candidatos que compartieron su ubicación vía el nodo Pedir Ubicación">
+                                                <MapPin className="w-3 h-3 text-cyan-500 shrink-0" />
+                                                <span className="font-bold text-cyan-600 dark:text-cyan-400">{ubicacionesHoy}</span>
+                                                <span>ubicación</span>
+                                            </span>
                                         </div>
                                     )}
                                 </div>
