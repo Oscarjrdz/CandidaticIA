@@ -634,7 +634,7 @@ async function resendLocationRequest(redis, candidate, flowId, node) {
 // ignora el modo (siempre maneja). Los tres caben en los 3 botones de respuesta que admite Meta.
 const ROUTE_MODES = {
     carro:      { handle: 'carro',      defaultLabel: '🚗 CARRO',              travelmode: 'driving',     name: 'carro' },
-    transporte: { handle: 'transporte', defaultLabel: '🚌 TRANSPORTE PÚBLICO', travelmode: 'transit',     name: 'transporte público' },
+    transporte: { handle: 'transporte', defaultLabel: '🚌 TRANSPORTE',          travelmode: 'transit',     name: 'transporte público' },
     moto:       { handle: 'moto',       defaultLabel: '🏍️ MOTO',               travelmode: 'two-wheeler', name: 'moto' }
 };
 
@@ -1044,7 +1044,7 @@ export async function evaluateOrExecute(node, candidate, flowId, redis, opts = {
                 const config = await getUltraMsgConfig(candidate.incomingPhoneNumberId || candidate.instanceId);
                 if (!config?.token || !config?.instanceId) throw new Error('sin credenciales de WhatsApp');
                 const cleanTo = String(candidate.whatsapp).replace(/\D/g, '');
-                const q = substituteVariables((data.modeQuestion || '').trim() || '¿Cómo llegarás a tu entrevista? 🚗', candidate);
+                const q = substituteVariables((data.modeQuestion || '').trim() || '¿Cómo llegarás a tu entrevista? 🤔', candidate);
                 const btns = activeModes.slice(0, 3).map(m => ({ id: m.handle, title: truncateTitleSafe(m.label, 20) }));
                 const sendResult = await pacedSend(opts, () => sendUltraMsgMessageWithRetry(config.instanceId, config.token, cleanTo, q, 'interactive', {
                     interactiveType: 'button', buttons: btns, priority: 1

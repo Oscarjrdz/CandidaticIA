@@ -804,7 +804,7 @@ const CrearRutaConfig = ({ data, patch }) => {
                         </div>
                         <div className="space-y-1.5">
                             <label className="text-[11px] text-gray-500 dark:text-gray-400 block">Opciones (botones, máx. 3 · máx. 20 caracteres c/u)</label>
-                            {[['carro', '🚗 CARRO'], ['transporte', '🚌 TRANSPORTE PÚBLICO'], ['moto', '🏍️ MOTO']].map(([key, def]) => (
+                            {[['carro', '🚗 CARRO'], ['transporte', '🚌 TRANSPORTE'], ['moto', '🏍️ MOTO']].map(([key, def]) => (
                                 <div key={key} className="flex items-center gap-2">
                                     <input type="checkbox" checked={data[`mode_${key}`] !== false} onChange={(e) => patch({ [`mode_${key}`]: e.target.checked })}
                                         className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 shrink-0" />
