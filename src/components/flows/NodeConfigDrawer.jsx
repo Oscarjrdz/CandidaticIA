@@ -730,6 +730,82 @@ const parseRutaJson = (text) => {
 // Mensaje de felicitación por default al crear una ruta nueva (editable por ruta).
 const DEFAULT_SUCCESS_MSG = '🎉 ¡Felicidades {{nombre}}! Te queda la ruta {{ruta cercana}} en la parada #{{numero parada}} ({{parada cercana}}), a {{metros parada}} m.';
 
+// 🧭 Extrae lat,lng de un texto pegado: "lat, lng" crudo o un link de Google Maps (varios formatos).
+const parseDestino = (text) => {
+    const s = String(text || '').trim();
+    if (!s) return { lat: null, lng: null };
+    // 1) "lat, lng" directo
+    let m = s.match(/^\s*(-?\d{1,3}(?:\.\d+)?)\s*,\s*(-?\d{1,3}(?:\.\d+)?)\s*$/);
+    if (m) return { lat: Number(m[1]), lng: Number(m[2]) };
+    // 2) !3dLAT!4dLNG (link "place" de Google Maps — es el pin EXACTO del lugar)
+    m = s.match(/!3d(-?\d{1,3}\.\d+)!4d(-?\d{1,3}\.\d+)/);
+    if (m) return { lat: Number(m[1]), lng: Number(m[2]) };
+    // 3) q / query / destination / ll = lat,lng
+    m = s.match(/[?&](?:q|query|destination|ll)=(-?\d{1,3}\.\d+),(-?\d{1,3}\.\d+)/);
+    if (m) return { lat: Number(m[1]), lng: Number(m[2]) };
+    // 4) @lat,lng (centro del mapa — último recurso)
+    m = s.match(/@(-?\d{1,3}\.\d+),(-?\d{1,3}\.\d+)/);
+    if (m) return { lat: Number(m[1]), lng: Number(m[2]) };
+    return { lat: null, lng: null };
+};
+
+// 🧭 Config del nodo "Crear Ruta (Maps)": destino fijo (link de Maps o lat,lng) + apps a ofrecer.
+// En ejecución el motor arma la ruta DESDE la ubicación que compartió el candidato (nodo "Pedir
+// Ubicación" previo) HASTA este destino, y le manda los enlaces tappables de Google Maps y/o Waze.
+const CrearRutaConfig = ({ data, patch }) => {
+    const parsed = parseDestino(data.destRaw || '');
+    const valid = Number.isFinite(parsed.lat) && Number.isFinite(parsed.lng);
+    const onDestChange = (val) => {
+        const p = parseDestino(val);
+        patch({ destRaw: val, destLat: Number.isFinite(p.lat) ? p.lat : null, destLng: Number.isFinite(p.lng) ? p.lng : null });
+    };
+    return (
+        <div className="space-y-5">
+            <div>
+                <label className="text-xs text-gray-500 dark:text-gray-400 mb-1.5 block">Destino (el punto de la empresa)</label>
+                <input type="text" value={data.destRaw || ''} onChange={(e) => onDestChange(e.target.value)}
+                    placeholder="Pega el link de Google Maps o escribe: 25.6866, -100.3161" className={inputCls} />
+                {(data.destRaw || '').trim()
+                    ? (valid
+                        ? <p className="text-[11px] text-emerald-600 dark:text-emerald-400 mt-1">✓ Coordenadas detectadas: {parsed.lat.toFixed(5)}, {parsed.lng.toFixed(5)}</p>
+                        : <p className="text-[11px] text-red-500 mt-1">No pude leer coordenadas. Abre el lugar en Google Maps, copia el link y pégalo aquí (o usa el formato lat, lng).</p>)
+                    : <p className="text-[10px] text-gray-400 mt-1">Abre el lugar en Google Maps, toca “Compartir” → copia el link y pégalo aquí.</p>}
+            </div>
+
+            <div>
+                <label className="text-xs text-gray-500 dark:text-gray-400 mb-1.5 block">Nombre del destino <span className="text-gray-400">(para el token {'{{destino}}'})</span></label>
+                <input type="text" maxLength={80} value={data.destName || ''} onChange={(e) => patch({ destName: e.target.value })}
+                    placeholder="Ej. Planta García" className={inputCls} />
+            </div>
+
+            <div>
+                <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-xs text-gray-500 dark:text-gray-400">Mensaje</label>
+                    <EmojiPickerButton onPick={(emoji) => patch({ body: (data.body || '') + emoji })} />
+                </div>
+                <textarea rows={3} maxLength={1024} value={data.body || ''} onChange={(e) => patch({ body: e.target.value })}
+                    placeholder="Ej. Te paso cómo llegar a {{destino}} desde donde estás 👇" className={inputCls} />
+                <p className="text-[10px] text-gray-400 mt-1">Debajo de tu mensaje se agregan los enlaces de las apps que elijas.</p>
+            </div>
+
+            <div className="rounded-xl border border-gray-200 dark:border-gray-700 p-3 space-y-2.5">
+                <label className="text-xs font-semibold text-gray-700 dark:text-gray-300 block">Apps de mapas (enlaces que recibe el candidato)</label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" checked={data.appGoogle !== false} onChange={(e) => patch({ appGoogle: e.target.checked })}
+                        className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500" />
+                    <span className="text-xs text-gray-700 dark:text-gray-300">🗺️ Google Maps</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" checked={data.appWaze !== false} onChange={(e) => patch({ appWaze: e.target.checked })}
+                        className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500" />
+                    <span className="text-xs text-gray-700 dark:text-gray-300">🚗 Waze</span>
+                </label>
+                <p className="text-[10px] text-gray-400">La ruta sale desde la ubicación que compartió el candidato (pon un nodo “Pedir Ubicación” antes de este). Si no la compartió, Google Maps usa el GPS de su teléfono; Waze siempre navega desde su ubicación actual.</p>
+            </div>
+        </div>
+    );
+};
+
 // 📍 Config del nodo "Pedir Ubicación": mensaje del botón nativo + VARIAS rutas. Cada ruta trae su
 // JSON de paradas, su mensaje de felicitación (con {{variables}}) y una foto/PDF opcional. El motor
 // compara la ubicación contra la parada MÁS CERCANA de todas las rutas: dentro del radio → Sí, y
@@ -1589,6 +1665,10 @@ const NodeConfigDrawer = ({ node, flowId, meta, quickReplies, onSaveQuickReply, 
 
                 {node.type === 'accion_ubicacion' && (
                     <UbicacionConfig data={data} patch={patch} />
+                )}
+
+                {node.type === 'crear_ruta' && (
+                    <CrearRutaConfig data={data} patch={patch} />
                 )}
 
                 {node.type === 'test' && (

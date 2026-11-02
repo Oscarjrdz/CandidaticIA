@@ -47,6 +47,7 @@ const DEFAULT_DATA_BY_TYPE = {
         reaskText: 'Por favor elige una de las opciones 👇'
     },
     accion_ubicacion: { body: '📍 ¡Mándame tu ubicación! Con el botón de abajo compárteme dónde vives y te digo si la ruta te queda cerca 😊', rutas: [], radioMetros: 1000, timeoutHoras: 48, timeoutNever: true, reask: true, reaskMax: 2 },
+    crear_ruta: { body: '📍 Te paso cómo llegar a {{destino}} desde donde estás 👇', destRaw: '', destName: '', destLat: null, destLng: null, appGoogle: true, appWaze: true },
     frase_dinamica: { value: '' },
     accion_etiqueta: { tag: '' },
     accion_quitar_etiqueta: { tag: '' },

@@ -1,4 +1,4 @@
-import { Play, Tag, CalendarRange, MapPin, Briefcase, GraduationCap, MessageCircle, Hash, UserRound, CircleMinus, BellRing, FolderKanban, FlaskConical, Eraser, Filter, MessageSquareText, ListChecks, CheckCheck, BotOff, Bot, Ear, AlarmClock, StickyNote, Quote, Square, Type, Flag, MousePointerClick, Navigation, Forward } from 'lucide-react';
+import { Play, Tag, CalendarRange, MapPin, Briefcase, GraduationCap, MessageCircle, Hash, UserRound, CircleMinus, BellRing, FolderKanban, FlaskConical, Eraser, Filter, MessageSquareText, ListChecks, CheckCheck, BotOff, Bot, Ear, AlarmClock, StickyNote, Quote, Square, Type, Flag, MousePointerClick, Navigation, Forward, Route } from 'lucide-react';
 
 export const PROFILE_FILTER_LABELS = {
     active: 'Activos (no bloqueados)',
@@ -212,6 +212,19 @@ export const NODE_DEFS = {
             const radio = Number(data.radioMetros) > 0 ? Number(data.radioMetros) : 1000;
             const rLabel = radio >= 1000 ? `${(radio / 1000).toFixed(radio % 1000 === 0 ? 0 : 1)} km` : `${radio} m`;
             return stops ? `${rutas.length} ${rutas.length === 1 ? 'ruta' : 'rutas'} · ${stops} paradas · radio ${rLabel}` : 'Carga rutas (JSON) y fija el radio';
+        }
+    },
+    crear_ruta: {
+        label: 'Crear Ruta (Maps)',
+        icon: Route,
+        color: 'emerald',
+        hasTarget: true,
+        hasSource: true,
+        summary: (data) => {
+            const hasDest = Number.isFinite(Number(data.destLat)) && Number.isFinite(Number(data.destLng));
+            if (!hasDest) return 'Configura el destino (link de Maps o lat,lng)';
+            const apps = [data.appGoogle !== false ? 'Maps' : null, data.appWaze !== false ? 'Waze' : null].filter(Boolean).join(' + ');
+            return `→ ${data.destName?.trim() || `${Number(data.destLat).toFixed(4)},${Number(data.destLng).toFixed(4)}`}${apps ? ` · ${apps}` : ''}`;
         }
     },
     frase_dinamica: {

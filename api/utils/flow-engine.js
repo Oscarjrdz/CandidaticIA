@@ -943,6 +943,57 @@ export async function evaluateOrExecute(node, candidate, flowId, redis, opts = {
             return true;
         }
 
+        // 🧭 CREAR RUTA (Maps): manda al candidato CÓMO LLEGAR desde la ubicación que compartió
+        // (candidate.ubicacionLat/Lng, que deja el nodo "Pedir Ubicación" previo) HASTA el destino
+        // configurado aquí. Enlaces tappables de Google Maps y/o Waze en un solo mensaje. Si el
+        // candidato no compartió ubicación, el link de Google Maps omite el origen (usa el GPS del
+        // teléfono); Waze siempre navega desde el GPS actual, así que no necesita origen en el link.
+        case 'crear_ruta': {
+            const destLat = Number(data.destLat);
+            const destLng = Number(data.destLng);
+            if (!Number.isFinite(destLat) || !Number.isFinite(destLng)) return true; // sin destino → no rompe la cadena
+            const dest = `${destLat},${destLng}`;
+            const oLat = Number(candidate.ubicacionLat);
+            const oLng = Number(candidate.ubicacionLng);
+            const hasOrigin = Number.isFinite(oLat) && Number.isFinite(oLng);
+
+            const links = [];
+            if (data.appGoogle !== false) {
+                const gUrl = hasOrigin
+                    ? `https://www.google.com/maps/dir/?api=1&origin=${oLat},${oLng}&destination=${dest}&travelmode=driving`
+                    : `https://www.google.com/maps/dir/?api=1&destination=${dest}&travelmode=driving`;
+                links.push(`🗺️ Google Maps: ${gUrl}`);
+            }
+            if (data.appWaze !== false) {
+                links.push(`🚗 Waze: https://waze.com/ul?ll=${dest}&navigate=yes`);
+            }
+            if (!links.length) return true; // ninguna app elegida → nada que mandar
+
+            try {
+                const config = await getUltraMsgConfig(candidate.incomingPhoneNumberId || candidate.instanceId);
+                if (!config?.token || !config?.instanceId) throw new Error('sin credenciales de WhatsApp');
+                const cleanTo = String(candidate.whatsapp).replace(/\D/g, '');
+
+                // {{destino}} = nombre del destino configurado; el resto de tokens por substituteVariables.
+                const bodyRaw = (data.body || '').replace(/\{\{\s*destino\s*\}\}/gi, data.destName || 'tu destino');
+                const bodyText = substituteVariables(bodyRaw, candidate).trim();
+                const text = (bodyText ? `${bodyText}\n\n` : '') + links.join('\n');
+
+                const sendResult = await pacedSend(opts, () => sendUltraMsgMessageWithRetry(config.instanceId, config.token, cleanTo, text, 'chat', { priority: 1 }));
+                if (sendResult?.success) {
+                    await saveFlowOutbound(candidate.id, {
+                        from: 'me', content: text, timestamp: new Date().toISOString(),
+                        meta: { flow: true, flowId, nodeId: node.id }
+                    }, sendResult);
+                } else {
+                    console.error(`[FLOW-ENGINE] crear_ruta ${flowId}/${node.id} candidato ${candidate.id}: envío falló —`, sendResult?.error);
+                }
+            } catch (e) {
+                console.error(`[FLOW-ENGINE] crear_ruta ${flowId}/${node.id}:`, e?.message);
+            }
+            return true;
+        }
+
         // 🔘 MANDAR BOTONES / OPCIONES (mensaje interactivo de Meta, totalmente configurable).
         // Modos: 'button' (1-3 botones de respuesta), 'list' (menú de hasta 10 filas) o
         // 'cta_url' (botón de enlace, sin respuesta). Header (texto/imagen/video/documento),
