@@ -1192,24 +1192,6 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
             });
         });
     };
-    // Scroll DEFINITIVO al terminar la fase 1 de entrada de una burbuja (ENTRY_REVEALED_EVENT,
-    // que MessageBubble.jsx dispara al acabar chat-row-grow = la fila YA llegó a su alto final).
-    // Por qué hace falta: la fase 1 crece el ALTO REAL de la fila (0→target). Durante ese
-    // crecimiento, totalListHeightChanged puede aterrizar CORTO (Virtuoso aún trae el alto
-    // intermedio en su caché de tamaños mientras la fila crece) y, cuando deja de disparar, la
-    // burbuja quedó más abajo del fondo → se ve "escondida"/tapada. Aquí el alto ya es el FINAL,
-    // así que scrollToBottom cae en el fondo verdadero y la burbuja (entrante o saliente) se ve
-    // COMPLETA. Gate: solo cuando estamos anclando al fondo (ventana tras recibir/enviar) para no
-    // jalar a quien subió a leer historial. Un ref mantiene scrollToBottom fresco sin re-suscribir.
-    const scrollToBottomRef = useRef(scrollToBottom);
-    scrollToBottomRef.current = scrollToBottom;
-    useEffect(() => {
-        const onBubbleRevealed = () => {
-            if (Date.now() < sendScrollHoldUntilRef.current) scrollToBottomRef.current();
-        };
-        window.addEventListener(ENTRY_REVEALED_EVENT, onBubbleRevealed);
-        return () => window.removeEventListener(ENTRY_REVEALED_EVENT, onBubbleRevealed);
-    }, []);
     // El typing "escribiendo…" vive en el Footer de Virtuoso (crece el contenido, no el
     // viewport). Al aparecer, si estás al fondo hay que re-anclar: si no, el footer crece por
     // debajo del borde y la burbuja de typing quedaría medio escondida. Solo baja si ya estabas
