@@ -634,7 +634,7 @@ async function resendLocationRequest(redis, candidate, flowId, node) {
 // ignora el modo (siempre maneja). Los tres caben en los 3 botones de respuesta que admite Meta.
 const ROUTE_MODES = {
     carro:      { handle: 'carro',      defaultLabel: '🚗 CARRO',              travelmode: 'driving',     name: 'carro' },
-    transporte: { handle: 'transporte', defaultLabel: '🚌 TRANSPORTE',          travelmode: 'transit',     name: 'transporte público' },
+    transporte: { handle: 'transporte', defaultLabel: '🚌 TRANSPORTE',          travelmode: 'transit',     name: 'Transporte Público' },
     moto:       { handle: 'moto',       defaultLabel: '🏍️ MOTO',               travelmode: 'two-wheeler', name: 'moto' }
 };
 
@@ -660,7 +660,8 @@ async function sendRouteButtons(redis, node, candidate, flowId, travelmode, mode
             : `https://www.google.com/maps/dir/?api=1&destination=${dest}&travelmode=${tm}`;
         buttons.push({ display: 'ABRIR EN MAPS', url: gUrl, appName: 'Google Maps' });
     }
-    if (data.appWaze !== false) {
+    // Waze NO hace transporte público (solo maneja) → en modo transit no se ofrece.
+    if (data.appWaze !== false && tm !== 'transit') {
         buttons.push({ display: 'ABRIR EN WAZE', url: `https://waze.com/ul?ll=${dest}&navigate=yes`, appName: 'Waze' });
     }
     if (!buttons.length) return;
