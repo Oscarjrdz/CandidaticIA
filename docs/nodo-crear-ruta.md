@@ -93,10 +93,13 @@ Implementado en noviembre 2026. Commits: `bca5a552` (base, links de texto), más
 
 | Token | De dónde sale | Qué es |
 |-------|---------------|--------|
-| `{{destino}}` | `data.destName` del nodo | Nombre del destino configurado (se sustituye antes de `substituteVariables`) |
+| `{{modo}}` | `name` de la opción tocada | Modo elegido en texto natural: `carro` / `transporte público` / `moto` |
+| `{{destino}}` | `data.destName` del nodo | Nombre del destino configurado |
 
-El cuerpo también pasa por `substituteVariables`, así que admite los tokens normales
-(`{{nombre}}`, etc.).
+El cuerpo también pasa por `substituteVariables` ({{nombre}}, etc.). Rodea un token con `*asteriscos*`
+para que WhatsApp lo muestre en **negritas** (ej. `en *{{modo}}* a {{destino}}`). Los **títulos de
+los botones** (modo y "ABRIR EN MAPS/WAZE") NO admiten negritas — Meta los pinta en texto plano;
+solo se puede jugar con MAYÚSCULAS y emojis (máx. 20 caracteres c/u).
 
 ---
 

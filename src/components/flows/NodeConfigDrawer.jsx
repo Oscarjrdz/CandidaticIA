@@ -784,8 +784,8 @@ const CrearRutaConfig = ({ data, patch }) => {
                     <EmojiPickerButton onPick={(emoji) => patch({ body: (data.body || '') + emoji })} />
                 </div>
                 <textarea rows={3} maxLength={1024} value={data.body || ''} onChange={(e) => patch({ body: e.target.value })}
-                    placeholder="Ej. Te paso cómo llegar a {{destino}} desde donde estás 👇" className={inputCls} />
-                <p className="text-[10px] text-gray-400 mt-1">Acompaña al botón “Abrir”. El token {'{{destino}}'} se reemplaza por el nombre del destino.</p>
+                    placeholder="Ej. Te paso cómo llegar en *{{modo}}* a {{destino}} 👇" className={inputCls} />
+                <p className="text-[10px] text-gray-400 mt-1">Acompaña al botón “Abrir”. Tokens: {'{{modo}}'} (carro / transporte público / moto que eligió) y {'{{destino}}'}. Rodéalos con *asteriscos* para negritas.</p>
             </div>
 
             {/* 🚗 Preguntar modo de transporte ANTES de dar la ruta */}
@@ -800,11 +800,11 @@ const CrearRutaConfig = ({ data, patch }) => {
                         <div>
                             <label className="text-[11px] text-gray-500 dark:text-gray-400 mb-1 block">Pregunta</label>
                             <input type="text" maxLength={1024} value={data.modeQuestion ?? ''} onChange={(e) => patch({ modeQuestion: e.target.value })}
-                                placeholder="¿Cómo llegarás a tu entrevista? 🚗" className={inputCls} />
+                                placeholder="¿Cómo llegarás a tu entrevista? 🤔" className={inputCls} />
                         </div>
                         <div className="space-y-1.5">
-                            <label className="text-[11px] text-gray-500 dark:text-gray-400 block">Opciones (botones, máx. 3)</label>
-                            {[['carro', '🚗 Carro'], ['transporte', '🚌 Transporte'], ['moto', '🏍️ Moto']].map(([key, def]) => (
+                            <label className="text-[11px] text-gray-500 dark:text-gray-400 block">Opciones (botones, máx. 3 · máx. 20 caracteres c/u)</label>
+                            {[['carro', '🚗 CARRO'], ['transporte', '🚌 TRANSPORTE PÚBLICO'], ['moto', '🏍️ MOTO']].map(([key, def]) => (
                                 <div key={key} className="flex items-center gap-2">
                                     <input type="checkbox" checked={data[`mode_${key}`] !== false} onChange={(e) => patch({ [`mode_${key}`]: e.target.checked })}
                                         className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 shrink-0" />

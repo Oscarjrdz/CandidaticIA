@@ -633,16 +633,16 @@ async function resendLocationRequest(redis, candidate, flowId, node) {
 // (two-wheeler) solo funciona por URL en ciertos países; si no, Maps lo abre como carro. Waze
 // ignora el modo (siempre maneja). Los tres caben en los 3 botones de respuesta que admite Meta.
 const ROUTE_MODES = {
-    carro:      { handle: 'carro',      defaultLabel: '🚗 Carro',      travelmode: 'driving' },
-    transporte: { handle: 'transporte', defaultLabel: '🚌 Transporte', travelmode: 'transit' },
-    moto:       { handle: 'moto',       defaultLabel: '🏍️ Moto',       travelmode: 'two-wheeler' }
+    carro:      { handle: 'carro',      defaultLabel: '🚗 CARRO',              travelmode: 'driving',     name: 'carro' },
+    transporte: { handle: 'transporte', defaultLabel: '🚌 TRANSPORTE PÚBLICO', travelmode: 'transit',     name: 'transporte público' },
+    moto:       { handle: 'moto',       defaultLabel: '🏍️ MOTO',               travelmode: 'two-wheeler', name: 'moto' }
 };
 
 // Construye y ENVÍA los botones nativos de enlace (cta_url) de un nodo "Crear Ruta": uno por app
 // elegida (Google Maps / Waze), cada uno en su burbuja, con el `travelmode` dado. El primero lleva
 // el mensaje del nodo; los siguientes un cuerpo mínimo. Lo usan la fase directa (sin menú de modo)
 // y la reanudación tras elegir el modo. Best-effort: loggea y sigue si algo falla.
-async function sendRouteButtons(redis, node, candidate, flowId, travelmode, opts = {}) {
+async function sendRouteButtons(redis, node, candidate, flowId, travelmode, modeName, opts = {}) {
     const data = node.data || {};
     const destLat = Number(data.destLat);
     const destLng = Number(data.destLng);
@@ -658,10 +658,10 @@ async function sendRouteButtons(redis, node, candidate, flowId, travelmode, opts
         const gUrl = hasOrigin
             ? `https://www.google.com/maps/dir/?api=1&origin=${oLat},${oLng}&destination=${dest}&travelmode=${tm}`
             : `https://www.google.com/maps/dir/?api=1&destination=${dest}&travelmode=${tm}`;
-        buttons.push({ display: 'Abrir en Maps', url: gUrl, appName: 'Google Maps' });
+        buttons.push({ display: 'ABRIR EN MAPS', url: gUrl, appName: 'Google Maps' });
     }
     if (data.appWaze !== false) {
-        buttons.push({ display: 'Abrir en Waze', url: `https://waze.com/ul?ll=${dest}&navigate=yes`, appName: 'Waze' });
+        buttons.push({ display: 'ABRIR EN WAZE', url: `https://waze.com/ul?ll=${dest}&navigate=yes`, appName: 'Waze' });
     }
     if (!buttons.length) return;
 
@@ -669,7 +669,10 @@ async function sendRouteButtons(redis, node, candidate, flowId, travelmode, opts
         const config = await getUltraMsgConfig(candidate.incomingPhoneNumberId || candidate.instanceId);
         if (!config?.token || !config?.instanceId) throw new Error('sin credenciales de WhatsApp');
         const cleanTo = String(candidate.whatsapp).replace(/\D/g, '');
-        const bodyRaw = (data.body || '').replace(/\{\{\s*destino\s*\}\}/gi, data.destName || 'tu destino');
+        // {{modo}} = modo elegido (carro / transporte público / moto); {{destino}} = nombre del destino.
+        const bodyRaw = (data.body || '')
+            .replace(/\{\{\s*modo\s*\}\}/gi, modeName || 'carro')
+            .replace(/\{\{\s*destino\s*\}\}/gi, data.destName || 'tu destino');
         const mainBody = substituteVariables(bodyRaw, candidate).trim() || '📍 Abre tu ruta aquí 👇';
 
         for (let i = 0; i < buttons.length; i++) {
@@ -1031,7 +1034,7 @@ export async function evaluateOrExecute(node, candidate, flowId, redis, opts = {
 
             // Sin menú de modo (toggle off, sin modos, o corrida de prueba/redirección): envía ya.
             if (data.askMode === false || activeModes.length === 0 || opts.skipClaim || opts.redirectRun) {
-                await sendRouteButtons(redis, node, candidate, flowId, 'driving', opts);
+                await sendRouteButtons(redis, node, candidate, flowId, 'driving', 'carro', opts);
                 return true;
             }
 
@@ -1059,7 +1062,7 @@ export async function evaluateOrExecute(node, candidate, flowId, redis, opts = {
                 console.error(`[FLOW-ENGINE] crear_ruta ${flowId}/${node.id}:`, e?.message);
             }
             // Si no se pudo mandar el menú, manda la ruta directa (carro) para no dejar al candidato colgado.
-            if (!sendOk) { await sendRouteButtons(redis, node, candidate, flowId, 'driving', opts); return true; }
+            if (!sendOk) { await sendRouteButtons(redis, node, candidate, flowId, 'driving', 'carro', opts); return true; }
 
             // Registra la espera como menú interactivo VIVO (routeMode): el clic lo rutea el webhook
             // vía hasLiveInteractiveMenuFor + resumeWaitingFlowIfMatch. options.mode = travelmode.
@@ -1071,7 +1074,7 @@ export async function evaluateOrExecute(node, candidate, flowId, redis, opts = {
                 const key = `${WAITING_PREFIX}${candidate.id}`;
                 await redis.hset(key, flowId, JSON.stringify({
                     nodeId: node.id, kind: 'interactive', routeMode: true,
-                    options: activeModes.map(m => ({ handle: m.handle, match: truncateTitleSafe(m.label, 20), mode: m.travelmode })),
+                    options: activeModes.map(m => ({ handle: m.handle, match: truncateTitleSafe(m.label, 20), mode: m.travelmode, name: m.name })),
                     ...(neverExpires ? {} : { expiresAt: Date.now() + timeoutHoras * 3600 * 1000 })
                 }));
                 await redis.expire(key, ttlSec);
@@ -2188,13 +2191,14 @@ export async function resumeWaitingFlowIfMatch(candidateId, candidateSnapshot, i
             //  • legacy (nodo "Esperando Respuesta"): grupos de frases → handle 'si'/'no'.
             let matched = false;
             let handle = null;
-            let chosenMode = null; // nodo "Crear Ruta" (st.routeMode): travelmode de la opción tocada
+            let chosenMode = null;     // nodo "Crear Ruta" (st.routeMode): travelmode de la opción tocada
+            let chosenModeName = null; // nombre natural del modo (carro / transporte público / moto)
             if (st.kind === 'interactive') {
                 if (!expired) {
                     const inTxt = normInteractiveTitle(incomingText);
                     const opt = (Array.isArray(st.options) ? st.options : [])
                         .find(o => normInteractiveTitle(o.match) === inTxt);
-                    if (opt) { matched = true; handle = opt.handle; chosenMode = opt.mode || null; }
+                    if (opt) { matched = true; handle = opt.handle; chosenMode = opt.mode || null; chosenModeName = opt.name || null; }
                     else {
                         // Escribió algo que NO es una opción y no expiró. Si el nodo tiene activado
                         // "re-mandar", le reenvía los botones con un empujón ("elige una opción"),
@@ -2270,7 +2274,7 @@ export async function resumeWaitingFlowIfMatch(candidateId, candidateSnapshot, i
             // por la salida ÚNICA del nodo (handle null), sin rutear por el id de la opción tocada.
             if (st.routeMode) {
                 const rmNode = flow.nodes.find(n => n.id === st.nodeId);
-                if (rmNode) await sendRouteButtons(redis, rmNode, candidateSnapshot, flowId, chosenMode || 'driving', {}).catch(() => {});
+                if (rmNode) await sendRouteButtons(redis, rmNode, candidateSnapshot, flowId, chosenMode || 'driving', chosenModeName || 'carro', {}).catch(() => {});
                 await runOneFlow(redis, flow, candidateId, { ...candidateSnapshot }, {
                     resumeWait: { nodeId: st.nodeId, handle: null }
                 });
