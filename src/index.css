@@ -188,43 +188,19 @@ body {
     animation: candidatic-icon-breathe 5.8s ease-in-out infinite;
   }
 
-  /* ENTRADA DE ALTO ESTABLE (ver MessageBubble.jsx): la fila NO anima su alto — nace a su alto
-     final y Virtuoso la mide una vez, así el scroll al fondo aterriza bien y la burbuja se ve
-     completa. La entrada es SOLO transform/opacity (no toca el layout → no desestabiliza la
-     medición de Virtuoso ni pelea con su reanclaje). Ya NO existe la fase 1 de crecer-alto
-     (chat-row-grow) que rompía la medición (petyosi/react-virtuoso#1447) — por eso no hay delay
-     que la espere.
-
-     EASING: cubic-bezier(0.4, 0.15, 0.5, 0.9) reparte el movimiento de forma PERCEPTIBLE
-     (~58% a mitad de tiempo), no amontonado al inicio. Medido en navegador: un easeOut/overshoot
-     dejaba 80% del recorrido hecho en los primeros 80ms → "se sentía super rápido" aunque durara
-     340ms. Con este easing + 400ms + offset (18px lateral, 14px de subida), la entrada se ve
-     durante todo el recorrido. Solo translate + opacity → no toca layout.
-
-     SIN scale() a propósito: escalar el texto lo rasteriza borroso durante el movimiento y lo
-     clava nítido al final; ese snap de anti-aliasing en tema oscuro, más la box-shadow casi-negra
-     escalada, se veía como un "parpadeo negro". translate+opacity compositan limpio (AAA).
-
-     MEDIA: SOLO transform — sin opacity, porque la imagen ya trae su propio fade
-     (SmoothMediaImage) y duplicarlo aquí era el parpadeo original. */
-  .chat-message-enter-media-outgoing {
-    -webkit-animation: chat-message-enter-media-outgoing 440ms cubic-bezier(0.4, 0.15, 0.5, 0.9) forwards;
-    animation: chat-message-enter-media-outgoing 440ms cubic-bezier(0.4, 0.15, 0.5, 0.9) forwards;
-  }
-  .chat-message-enter-media-incoming {
-    -webkit-animation: chat-message-enter-media-incoming 440ms cubic-bezier(0.4, 0.15, 0.5, 0.9) forwards;
-    animation: chat-message-enter-media-incoming 440ms cubic-bezier(0.4, 0.15, 0.5, 0.9) forwards;
-  }
-
-  /* TEXTO: desliza + sube + crece escala + fade. Sin delay, 400ms con easing bien repartido. */
-  .chat-message-enter-outgoing {
-    -webkit-animation: chat-message-enter-outgoing 400ms cubic-bezier(0.4, 0.15, 0.5, 0.9) forwards;
-    animation: chat-message-enter-outgoing 400ms cubic-bezier(0.4, 0.15, 0.5, 0.9) forwards;
-  }
-
-  .chat-message-enter-incoming {
-    -webkit-animation: chat-message-enter-incoming 400ms cubic-bezier(0.4, 0.15, 0.5, 0.9) forwards;
-    animation: chat-message-enter-incoming 400ms cubic-bezier(0.4, 0.15, 0.5, 0.9) forwards;
+  /* ENTRADA DE ALTO ESTABLE + SOLO-OPACITY (ver MessageBubble.jsx). Dos reglas del mantenedor
+     de react-virtuoso:
+       1) La fila NO anima su alto (issue #1447): nace a su alto final → Virtuoso la mide una vez
+          → el scroll al fondo aterriza bien → burbuja completa (crecer el alto la dejaba tapada).
+       2) La entrada NO usa transform (issue #115): animar transform pelea con el reposicionamiento
+          del scroll de Virtuoso y su capa GPU hacía un teardown que se veía como "parpadeo negro".
+          Un fade de opacidad no toca la posición del scroll ni rasteriza geometría → limpio (AAA).
+     EASING cubic-bezier(0.4,0.15,0.5,0.9) a 400ms: el fade se reparte parejo (~58% a mitad de
+     tiempo, no amontonado) para que la entrada se PERCIBA sin sentirse ni rápida ni brusca.
+     Una sola animación para texto y media. */
+  .chat-message-enter {
+    -webkit-animation: chat-message-enter 400ms cubic-bezier(0.4, 0.15, 0.5, 0.9) forwards;
+    animation: chat-message-enter 400ms cubic-bezier(0.4, 0.15, 0.5, 0.9) forwards;
   }
 }
 
@@ -251,46 +227,17 @@ body {
   32% { opacity: 1; filter: drop-shadow(0 0 16px rgba(219, 234, 254, 0.34)); }
 }
 
-/* Entrada SALIENTE: desliza desde la derecha + sube + pop de escala + fade.
-   Solo transform/opacity → no toca layout → Virtuoso-safe. */
-@-webkit-keyframes chat-message-enter-outgoing {
-  0%   { opacity: 0; -webkit-transform: translate3d(18px, 14px, 0); }
-  100% { opacity: 1; -webkit-transform: translate3d(0, 0, 0); }
+/* Entrada de burbuja: SOLO opacidad (fade). Sin transform a propósito — ver el bloque
+   .chat-message-enter arriba y MessageBubble.jsx: el transform peleaba con el reposicionamiento
+   del scroll de Virtuoso y su capa GPU hacía un teardown que se veía como "parpadeo negro".
+   Un fade puro composita limpio y no interactúa con la posición del scroll. */
+@-webkit-keyframes chat-message-enter {
+  0%   { opacity: 0; }
+  100% { opacity: 1; }
 }
-@keyframes chat-message-enter-outgoing {
-  0%   { opacity: 0; transform: translate3d(18px, 14px, 0); }
-  100% { opacity: 1; transform: translate3d(0, 0, 0); }
-}
-
-/* Entrada ENTRANTE: desliza desde la izquierda + sube + fade (sin scale). */
-@-webkit-keyframes chat-message-enter-incoming {
-  0%   { opacity: 0; -webkit-transform: translate3d(-18px, 14px, 0); }
-  100% { opacity: 1; -webkit-transform: translate3d(0, 0, 0); }
-}
-@keyframes chat-message-enter-incoming {
-  0%   { opacity: 0; transform: translate3d(-18px, 14px, 0); }
-  100% { opacity: 1; transform: translate3d(0, 0, 0); }
-}
-
-/* Entrada para MEDIA: mismo movimiento que el texto (deslice + sube + pop de escala), SIN
-   opacity — la imagen ya tiene su propio fade (SmoothMediaImage); animar opacidad aquí TAMBIÉN
-   era el doble-fade original. Solo transform, para que la burbuja de imagen se sienta tan viva
-   como la de texto sin duplicar el fundido. */
-@-webkit-keyframes chat-message-enter-media-outgoing {
-  0%   { -webkit-transform: translate3d(18px, 14px, 0); }
-  100% { -webkit-transform: translate3d(0, 0, 0); }
-}
-@keyframes chat-message-enter-media-outgoing {
-  0%   { transform: translate3d(18px, 14px, 0); }
-  100% { transform: translate3d(0, 0, 0); }
-}
-@-webkit-keyframes chat-message-enter-media-incoming {
-  0%   { -webkit-transform: translate3d(-18px, 14px, 0); }
-  100% { -webkit-transform: translate3d(0, 0, 0); }
-}
-@keyframes chat-message-enter-media-incoming {
-  0%   { transform: translate3d(-18px, 14px, 0); }
-  100% { transform: translate3d(0, 0, 0); }
+@keyframes chat-message-enter {
+  0%   { opacity: 0; }
+  100% { opacity: 1; }
 }
 
 /* Entrada de una TARJETA nueva en la lista de chats (lead/chat recién llegado):
@@ -332,10 +279,9 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .candidatic-thinking-logo,
   .candidatic-brand-icon,
-  .chat-message-enter-outgoing,
-  .chat-message-enter-incoming,
-  .chat-message-enter-media-outgoing,
-  .chat-message-enter-media-incoming,
+  /* .chat-message-enter NO va aquí a propósito: es solo un fade de opacidad (no es movimiento
+     problemático para reduced-motion) y, sobre todo, si se pusiera animation:none el guard inline
+     opacity:0 quedaría atascado y la burbuja NUNCA se vería (no hay animationend → entryDone). */
   .chat-card-enter,
   .chat-card-exit {
     animation: none;

@@ -224,28 +224,22 @@ const MessageBubble = React.memo(function MessageBubble({
     // fix del doble-fade en ChatRow.
     const [entryDone, setEntryDone] = React.useState(false);
     const playEntry = shouldPlayEntryAnimation && !entryDone;
-    const hasMedia = Boolean(msg.mediaUrl);
-    // ENTRADA DE ALTO ESTABLE — recomendación oficial del mantenedor de react-virtuoso
-    // (issue #1447) y de la doc de chat virtualizado: la fila NUNCA anima su alto. Nace a su
-    // alto final y se queda ahí, así Virtuoso la mide UNA sola vez y scrollToIndex(LAST) aterriza
-    // en el fondo VERDADERO → la burbuja nueva (entrante o saliente) SIEMPRE se ve completa. La
-    // "entrada" se anima SOLO con transform + opacity (ver fase única abajo), que no tocan el
-    // layout, así que no desestabilizan la medición de Virtuoso ni pelean con su reanclaje.
-    //   Historia (por qué NO crecer el alto): el texto usó clip-path y luego se probó animar
-    //   max-height 0→target. Crecer el alto rompía la medición de Virtuoso: scrollToIndex usaba
-    //   el tamaño intermedio → aterrizaba CORTO y la burbuja quedaba tapada abajo; además Virtuoso
-    //   reanclaba al primer item visible y peleaba contra el pin al fondo = brinco. Alto estable
-    //   lo elimina de raíz. Confirmado en petyosi/react-virtuoso#1447.
-    // La entrada es distinta según media o no:
-    //   • SIN media: desliza + fade (transform + opacity).
-    //   • CON media: SOLO desliza (transform, sin opacity) — la imagen ya tiene su propio fade
-    //     en SmoothMediaImage; animar opacidad AQUÍ TAMBIÉN sería el doble-fade/parpadeo de antes.
+    // ENTRADA DE ALTO ESTABLE + SOLO-OPACITY — doble recomendación del mantenedor de
+    // react-virtuoso:
+    //   1) La fila NUNCA anima su alto (issue #1447): nace a su alto final → Virtuoso la mide una
+    //      vez → scrollToIndex(LAST) aterriza en el fondo verdadero → la burbuja SIEMPRE se ve
+    //      completa (crecer el alto la dejaba tapada + brinco).
+    //   2) La entrada NO usa transform (issue #115): animar transform PELEA con el reposicionamiento
+    //      del scroll de Virtuoso (cuando llega el mensaje, scrollToBottom mueve el scrollTop
+    //      mientras la burbuja se trasladaría) y además crea una capa GPU cuyo teardown se veía como
+    //      un "parpadeo negro/flash". Un fade de opacidad NO interactúa con la posición del scroll
+    //      ni rasteriza geometría → entrada limpia (AAA). El movimiento se perdió a propósito: con
+    //      alto estable la conversación ya se recorre sola al llegar el mensaje; el fade basta.
+    // Una sola animación para texto y media (mismo fade). La media, además, trae su propio fade de
+    // imagen en SmoothMediaImage, pero es un fade único (no el doble-fade/re-fade que el Set
+    // fadedInImages previene), así que combinar ambos solo da un fundido limpio.
     const playBubbleEntry = playEntry;
-    const bubbleEntryClass = playBubbleEntry
-        ? (hasMedia
-            ? (isMe ? 'chat-message-enter-media-outgoing' : 'chat-message-enter-media-incoming')
-            : (isMe ? 'chat-message-enter-outgoing' : 'chat-message-enter-incoming'))
-        : '';
+    const bubbleEntryClass = playBubbleEntry ? 'chat-message-enter' : '';
 
     React.useEffect(() => {
         if (!shouldPlayEntryAnimation) return undefined;
@@ -261,22 +255,20 @@ const MessageBubble = React.memo(function MessageBubble({
         return () => window.clearTimeout(timer);
     }, [shouldPlayEntryAnimation, entryAnimationKey, isMe]);
 
-    // Bubble starts invisible; CSS animation overrides once it fires. Se retira con entryDone.
-    // Solo para burbujas SIN media: la de media no anima opacidad en este nivel (la maneja
-    // SmoothMediaImage por su cuenta) — arrancar en opacity:0 aquí ocultaría también el marco
-    // gris de fondo, que sí debe verse desde el primer frame.
-    const bubbleEntryStyle = (playBubbleEntry && !hasMedia) ? { opacity: 0 } : undefined;
+    // Bubble starts invisible; la animación de opacidad la revela. Se retira con entryDone.
+    // Ahora aplica a texto Y media (ambos hacen fade): arrancar en opacity:0 evita el frame-0
+    // visible y es justo lo que el fade necesita (el marco de media también se funde al entrar).
+    const bubbleEntryStyle = playBubbleEntry ? { opacity: 0 } : undefined;
 
     return (
         <div
             onAnimationEnd={(e) => {
-                // La entrada (deslice/fade) marca "esta burbuja ya terminó de entrar": retira las
-                // clases (entryDone) para que, si Virtuoso remonta el nodo bajo tráfico, el navegador
-                // no reinicie la animación con la clase puesta → parpadeo. Y avisa a quien esté
+                // El fade de entrada marca "esta burbuja ya terminó de entrar": retira la clase
+                // (entryDone) para que, si Virtuoso remonta el nodo bajo tráfico, el navegador no
+                // reinicie la animación con la clase puesta → parpadeo. Y avisa a quien esté
                 // esperando (p.ej. el envío escalonado del banco de respuestas en ChatSection.jsx)
-                // que la burbuja ya está puesta — reemplaza la señal de la vieja fase 1.
-                if (e.animationName === 'chat-message-enter-outgoing' || e.animationName === 'chat-message-enter-incoming'
-                    || e.animationName === 'chat-message-enter-media-outgoing' || e.animationName === 'chat-message-enter-media-incoming') {
+                // que la burbuja ya está puesta.
+                if (e.animationName === 'chat-message-enter') {
                     setEntryDone(true);
                     window.dispatchEvent(new CustomEvent(ENTRY_REVEALED_EVENT, { detail: { key: entryAnimationKey } }));
                 }
