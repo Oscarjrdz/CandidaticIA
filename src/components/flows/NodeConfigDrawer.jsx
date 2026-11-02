@@ -1128,6 +1128,20 @@ const QuickReplyInlineEditor = ({ qr, onSave }) => {
     const taRef = useRef(null);
     const imgInputRef = useRef(null);
     const docInputRef = useRef(null);
+    const dragIndexRef = useRef(null);
+    const [dragOverIndex, setDragOverIndex] = useState(null);
+
+    // Reordena las fotos arrastrando (define el orden de envío: foto 1 → foto 2 …).
+    const moveImage = (from, to) => {
+        if (from == null || to == null || from === to) return;
+        setImages(prev => {
+            if (from < 0 || from >= prev.length || to < 0 || to >= prev.length) return prev;
+            const next = [...prev];
+            const [moved] = next.splice(from, 1);
+            next.splice(to, 0, moved);
+            return next;
+        });
+    };
 
     // Al cambiar de mensaje seleccionado, re-sincroniza el borrador.
     useEffect(() => {
@@ -1221,10 +1235,23 @@ const QuickReplyInlineEditor = ({ qr, onSave }) => {
             {kind === 'text' && (
                 <div className="mt-3">
                     <label className="text-xs font-semibold text-emerald-700 dark:text-emerald-300">Fotos ({images.length}/{QR_MAX_IMAGES})</label>
+                    {images.length > 1 && (
+                        <p className="mt-1 text-[11px] text-gray-400 leading-snug">Arrastra las fotos para cambiar el orden de envío (foto 1 → foto 2 …).</p>
+                    )}
                     <div className="mt-2 flex flex-wrap gap-2">
                         {images.map((url, i) => (
-                            <div key={url + i} className="relative group w-16 h-16 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700">
-                                <img src={url} alt={`foto ${i + 1}`} className="w-full h-full object-cover" />
+                            <div
+                                key={url + i}
+                                draggable
+                                onDragStart={(e) => { dragIndexRef.current = i; e.dataTransfer.effectAllowed = 'move'; }}
+                                onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; if (dragOverIndex !== i) setDragOverIndex(i); }}
+                                onDragLeave={() => setDragOverIndex(prev => (prev === i ? null : prev))}
+                                onDrop={(e) => { e.preventDefault(); moveImage(dragIndexRef.current, i); dragIndexRef.current = null; setDragOverIndex(null); }}
+                                onDragEnd={() => { dragIndexRef.current = null; setDragOverIndex(null); }}
+                                className={`relative group w-16 h-16 rounded-lg overflow-hidden border cursor-move transition-all ${dragOverIndex === i ? 'border-emerald-500 ring-2 ring-emerald-400' : 'border-gray-200 dark:border-gray-700'}`}
+                            >
+                                <img src={url} alt={`foto ${i + 1}`} draggable={false} className="w-full h-full object-cover pointer-events-none" />
+                                <span className="absolute bottom-0.5 left-0.5 w-4 h-4 rounded-full bg-black/60 text-white flex items-center justify-center text-[9px] font-bold leading-none pointer-events-none">{i + 1}</span>
                                 <button
                                     type="button"
                                     onClick={() => setImages(prev => prev.filter((_, idx) => idx !== i))}
