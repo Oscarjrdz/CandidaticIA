@@ -1752,7 +1752,13 @@ async function runOneFlow(redis, flow, candidateId, candidate, opts = {}) {
                 // rama tomada, para no re-disparar las demás ramas de ese menú.
                 const rawPrior = prior[node.id];
                 if (typeof rawPrior === 'string' && rawPrior.startsWith('H:')) {
-                    branchTaken.set(node.id, new Set([rawPrior.slice(2)]));
+                    // El handle se guardó como texto ('H:<handle>'). Un nodo de salida ÚNICA (p.ej.
+                    // "Crear Ruta") se reanuda con handle === null, que al persistirse quedó como el
+                    // STRING "null" — hay que devolverlo al valor null o su arista de salida (handle
+                    // null) no coincide al re-recorrer en una reanudación POSTERIOR (bug real: tras
+                    // "Crear Ruta" el nodo siguiente —p.ej. la lista de días— no routeaba al clicarlo).
+                    const h = rawPrior.slice(2);
+                    branchTaken.set(node.id, new Set([h === 'null' ? null : h]));
                     outcome.set(node.id, 'pass');
                     passed.set(node.id, true);
                     continue;
