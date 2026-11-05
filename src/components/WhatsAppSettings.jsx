@@ -200,7 +200,7 @@ const WhatsAppSettings = ({ showToast, className = '' }) => {
                 {(connected || isLoading) && (
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4 pt-3 border-t border-gray-100 dark:border-gray-700">
                         <div>
-                            <p className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">Nombre Verificado</p>
+                            <p className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">Nombre</p>
                             {isLoading ? <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-24 mt-1 animate-pulse"></div> : <p className="text-xs text-gray-800 dark:text-white font-medium mt-0.5">{n?.verifiedName || '—'}</p>}
                         </div>
                         <div>
