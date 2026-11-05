@@ -79,6 +79,18 @@ export const INTERNAL_SYSTEM_PROMPT = [
     'enviar_chat_interno.'
 ].join('\n');
 
+// Bitácora de diagnóstico en Redis (como mcp:log / webhooks:log). Permite ver por qué
+// Grok no contestó sin tener acceso a los logs de Vercel. Capada a 30, TTL 1 día.
+async function logInterno(redis, entry) {
+    try {
+        await redis.pipeline()
+            .lpush('grok:interno:log', JSON.stringify({ t: new Date().toISOString(), ...entry }))
+            .ltrim('grok:interno:log', 0, 29)
+            .expire('grok:interno:log', 86400)
+            .exec();
+    } catch { /* el log nunca rompe nada */ }
+}
+
 /** Arma el payload compacto del evento (solo lo mínimo; el resto Grok lo consulta con tools). */
 export function buildInternalPayload({ fromId, fromName, text }) {
     return {
@@ -177,17 +189,19 @@ export function wakeGrokFromInternalDM({ req, redis, fromId, fromName, text }) {
             let settings = {};
             try { const raw = await redis.get(SETTINGS_KEY); settings = raw ? JSON.parse(raw) : {}; } catch { /* usa defaults */ }
             const cfg = { ...INTERNAL_DEFAULTS, ...settings };
-            if (cfg.enabled === false) return;
-            if (!process.env.XAI_API_KEY) return;
+            if (cfg.enabled === false) { await logInterno(redis, { fromId, skip: 'disabled' }); return; }
+            if (!process.env.XAI_API_KEY) { await logInterno(redis, { fromId, skip: 'no_xai_key' }); return; }
 
             const [mcpToken, mcpEnabledRaw] = await Promise.all([redis.get('mcp:token'), redis.get('mcp:enabled')]);
             const mcpEnabled = mcpEnabledRaw === '1' || mcpEnabledRaw === 'true';
-            if (!mcpToken || !mcpEnabled) return;
+            if (!mcpToken || !mcpEnabled) { await logInterno(redis, { fromId, skip: 'mcp_off' }); return; }
 
             // Debounce: colapsa ráfagas del mismo reclutador en un solo despertar.
             const lockKey = `${WAKE_LOCK_PREFIX}${fromId}`;
             const got = await redis.set(lockKey, '1', 'EX', Math.max(1, cfg.debounceSeconds), 'NX');
-            if (got !== 'OK') return;
+            if (got !== 'OK') { await logInterno(redis, { fromId, skip: 'debounced' }); return; }
+
+            await logInterno(redis, { fromId, paso: 'llamando_xai', model: cfg.model });
 
             // "Grok está escribiendo…" — puro SSE, cero tokens. Que la espera se sienta viva.
             const publishTyping = (typing) => redis.publish('channel:sse:updates', JSON.stringify({
@@ -211,13 +225,16 @@ export function wakeGrokFromInternalDM({ req, redis, fromId, fromName, text }) {
 
             if (!result.ok) {
                 console.error(`[GROK-INTERNO] ❌ ${fromId}: ${result.error}`);
+                await logInterno(redis, { fromId, ok: false, error: result.error });
             } else {
                 const u = result.usage;
                 const toks = u ? ` [in:${u.input_tokens ?? u.prompt_tokens ?? '?'} out:${u.output_tokens ?? u.completion_tokens ?? '?'}]` : '';
                 console.log(`[GROK-INTERNO] ✅ ${fromId}: ${result.resumen || '(respondió vía MCP)'}${toks}`);
+                await logInterno(redis, { fromId, ok: true, resumen: result.resumen || null, usage: u || null });
             }
         } catch (e) {
             console.error('[GROK-INTERNO] excepción:', e?.message);
+            await logInterno(redis, { fromId, ok: false, error: `excepción: ${e?.message}` }).catch(() => {});
         }
     })());
 }
