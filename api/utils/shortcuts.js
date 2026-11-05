@@ -42,6 +42,7 @@ export const substituteVariables = (text, candidate) => {
             'phone': candidate.whatsapp || '',
             'tel': candidate.whatsapp || '',
             'municipio': candidate.municipio || 'No especificado',
+            'colonia': candidate.colonia || 'No especificada',
             'fechanacimiento': candidate.fechaNacimiento || 'No especificada',
             'tieneempleo': candidate.tieneEmpleo || 'No especificado',
             'aspiracionsalarial': candidate.aspiracionSalarial || 'No especificada',
