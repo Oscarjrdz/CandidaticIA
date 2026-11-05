@@ -66,6 +66,11 @@ function avatarColor(name) { return COLORS[(name?.charCodeAt(0) || 0) % COLORS.l
 // Debe coincidir con GROK_INTERNAL_ID/NAME de api/utils/grok-internal-chat.js.
 const GROK_ID = 'grok-ai';
 const GROK_NAME = 'Grok';
+// Grok queda ESCONDIDO hasta tener un proveedor de IA que conteste (xAI salió caro;
+// Cursor Cloud Agent tiene un bug que no expone el MCP a su agente). TODO el cableado
+// (wake, tools MCP, avatar, typing) sigue intacto: para reactivarlo, pon esto en true
+// y asegura una credencial válida del proveedor.
+const GROK_ENABLED = false;
 
 // Carita de bot ORIGINAL (no es el logo de xAI). Si el equipo sube un archivo a
 // public/grok.svg, GrokAvatar lo usa en su lugar al instante.
@@ -239,13 +244,15 @@ export default function InternalChat({ onlineUsers = [] }) {
         return id && id !== myId && id !== GROK_ID;
     });
 
-    // Grok vive SIEMPRE en la tira (no depende de presencia online) y va primero.
+    // Grok va primero en la tira SOLO cuando está habilitado (hoy ESCONDIDO: GROK_ENABLED).
     const grokContact = { userId: GROK_ID, userName: GROK_NAME, isGrok: true };
-    const contacts = [grokContact, ...others];
+    const contacts = GROK_ENABLED ? [grokContact, ...others] : others;
 
     useEffect(() => {
-        if (recipientId === null) setRecipientId(GROK_ID);
-    }, [recipientId]);
+        if (recipientId !== null) return;
+        if (GROK_ENABLED) setRecipientId(GROK_ID);
+        else if (others.length > 0) setRecipientId(others[0].userId);
+    }, [recipientId, others]);
 
     const recipient = recipientId === 'all'
         ? { userId: 'all', userName: 'Todos' }
