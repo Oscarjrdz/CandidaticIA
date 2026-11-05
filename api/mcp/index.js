@@ -380,7 +380,90 @@ async function saveFlowNodes(req, redis, id, nodes, edges) {
 // Cada tool: { description, inputSchema, handler(args, { redis, req }) -> any }
 // El valor que regrese el handler se serializa a JSON dentro de un content text.
 // ─────────────────────────────────────────────────────────────────────────────
+// ── Identidad de Grok en el CHAT INTERNO del equipo (debe coincidir con
+// api/utils/grok-internal-chat.js y el frontend InternalChat.jsx). ──────────────
+const GROK_INTERNAL_ID = 'grok-ai';
+const GROK_INTERNAL_NAME = 'Grok';
+// Llave canónica de un hilo DM (misma fórmula que api/internal-chat.js).
+function internalDmKey(a, b) { return `internal:dm:${[a, b].sort().join(':')}`; }
+
 const TOOLS = {
+    // ── Chat INTERNO del equipo (reclutadores ↔ Grok). NO es WhatsApp con candidatos. ──
+    leer_chat_interno: {
+        description: 'Lee el CHAT INTERNO del equipo de reclutadores (los mensajes entre humanos del dashboard y Grok; NO es WhatsApp con candidatos). Úsalo BAJO DEMANDA cuando necesites contexto: no se te manda el chat completo. Devuelve el canal "Todos" (broadcast) y/o el hilo privado (DM) con un reclutador, viejo→nuevo.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                con: { type: 'string', description: 'ID del reclutador para leer el HILO PRIVADO (DM) entre Grok y esa persona. Es el "de.id" que te llegó en el evento. Omítelo para leer solo el canal Todos.' },
+                incluirBroadcast: { type: 'boolean', description: 'Incluir el canal "Todos" (default true).' },
+                limite: { type: 'number', description: 'Cuántos mensajes recientes por canal (default 30, máx 100).' }
+            }
+        },
+        handler: async (args, { redis }) => {
+            let limite = parseInt(args?.limite, 10);
+            if (!Number.isFinite(limite) || limite <= 0) limite = 30;
+            limite = Math.min(limite, 100);
+            const incluirBroadcast = args?.incluirBroadcast !== false;
+            const con = String(args?.con || '').trim();
+
+            const pipe = redis.pipeline();
+            if (incluirBroadcast) pipe.lrange('internal:broadcast', 0, limite - 1);
+            if (con) pipe.lrange(internalDmKey(GROK_INTERNAL_ID, con), 0, limite - 1);
+            const res = await pipe.exec();
+
+            const parse = (raw) => { try { return JSON.parse(raw); } catch { return null; } };
+            let idx = 0;
+            const broadcast = incluirBroadcast ? (res[idx++]?.[1] || []).map(parse).filter(Boolean) : [];
+            const dm = con ? (res[idx++]?.[1] || []).map(parse).filter(Boolean) : [];
+
+            const shape = (m) => ({
+                id: m.id,
+                de: m.from === GROK_INTERNAL_ID ? 'grok' : (m.fromName || m.from),
+                deId: m.from,
+                para: m.to === 'all' ? 'todos' : (m.to === GROK_INTERNAL_ID ? 'grok' : m.to),
+                texto: m.content || '',
+                fecha: m.timestamp || null
+            });
+            const asc = (a, b) => (a.timestamp || '').localeCompare(b.timestamp || '');
+            return {
+                todos: broadcast.sort(asc).map(shape),
+                ...(con ? { dm: dm.sort(asc).map(shape) } : {})
+            };
+        }
+    },
+
+    enviar_chat_interno: {
+        description: 'Envía un mensaje al CHAT INTERNO del equipo COMO "Grok". TÚ decides el destinatario: para="all" = BROADCAST a todo el equipo (úsalo solo cuando de verdad le sirve a todos); para=<id del reclutador> = respuesta PRIVADA (DM) solo a esa persona (normalmente el "de.id" de quien te escribió). Es la ÚNICA forma de que tu respuesta se vea en el chat interno.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                para: { type: 'string', description: '"all" para todo el equipo, o el ID del reclutador para un DM privado.' },
+                texto: { type: 'string', description: 'El mensaje a enviar (texto breve y claro, en español).' }
+            },
+            required: ['para', 'texto']
+        },
+        handler: async (args, { req, redis }) => {
+            const para = String(args?.para || '').trim();
+            const texto = String(args?.texto || '').trim();
+            if (!para) throw new Error('Falta "para" ("all" o el ID del reclutador)');
+            if (!texto) throw new Error('Falta "texto"');
+
+            const r = await callInternal(req, redis, '/api/internal-chat', 'POST', {
+                from: GROK_INTERNAL_ID,
+                fromName: GROK_INTERNAL_NAME,
+                fromRole: 'Grok',
+                to: para,
+                toName: para === 'all' ? 'Todos' : undefined,
+                content: texto
+            });
+            if (!r.ok || r.data?.success === false) {
+                throw new Error(r.data?.error || `Fallo al enviar al chat interno (${r.status})`);
+            }
+            const msg = r.data?.message || {};
+            return { enviado: true, para: para === 'all' ? 'todos' : para, id: msg.id || null, fecha: msg.timestamp || null };
+        }
+    },
+
     listar_chats: {
         description: 'Lista los chats/candidatos del Chat Web (resumen). Paginado: limit (default 50, máx 500) + offset, o todos:true para traer toda la base (tope de seguridad ~3000). Elige columnas con "campos". Respuesta: {total, offset, hayMas, chats}.',
         inputSchema: {

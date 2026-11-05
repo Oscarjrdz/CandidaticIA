@@ -8,6 +8,7 @@
  *   internal:threads:{userId}       → set of partner IDs for this user
  */
 import { getRedisClient, validateAdminSession } from './utils/storage.js';
+import { wakeGrokFromInternalDM, GROK_INTERNAL_ID } from './utils/grok-internal-chat.js';
 
 const BROADCAST_KEY = 'internal:broadcast';
 const MAX_BROADCAST = 100;
@@ -140,6 +141,19 @@ export default async function handler(req, res) {
             type: 'internal:message',
             ...msg,
         })).catch(() => {});
+
+        // ── Grok vive como un usuario más del chat interno ──────────────────────
+        // Si el DM es PARA Grok (y no lo mandó Grok mismo), lo "despertamos":
+        //  1) marcamos su mensaje como leído (Grok lo vio),
+        //  2) corremos la llamada a xAI en segundo plano (sobrevive al congelamiento
+        //     serverless vía runInBackground). El typing lo publica el wake.
+        if (to === GROK_INTERNAL_ID && from !== GROK_INTERNAL_ID) {
+            redis.set(`internal:status:${msg.id}`, 'read', 'EX', 86400 * 30).catch(() => {});
+            redis.publish('channel:sse:updates', JSON.stringify({
+                type: 'internal:status', msgId: msg.id, status: 'read',
+            })).catch(() => {});
+            wakeGrokFromInternalDM({ req, redis, fromId: from, fromName: msg.fromName, text: msg.content });
+        }
 
         return res.json({ success: true, message: msg });
     }

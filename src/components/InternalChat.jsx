@@ -62,7 +62,42 @@ function formatElapsed(secs) {
 const COLORS = ['bg-blue-500', 'bg-emerald-500', 'bg-violet-500', 'bg-rose-500', 'bg-amber-500', 'bg-cyan-500'];
 function avatarColor(name) { return COLORS[(name?.charCodeAt(0) || 0) % COLORS.length]; }
 
+// ── Grok como un usuario más del chat interno ───────────────────────────────────
+// Debe coincidir con GROK_INTERNAL_ID/NAME de api/utils/grok-internal-chat.js.
+const GROK_ID = 'grok-ai';
+const GROK_NAME = 'Grok';
+
+// Carita de bot ORIGINAL (no es el logo de xAI). Si el equipo sube un archivo a
+// public/grok.svg, GrokAvatar lo usa en su lugar al instante.
+function BotFace({ className = 'w-6 h-6' }) {
+    return (
+        <div className={`${className} rounded-full bg-gradient-to-br from-slate-800 to-slate-950 flex items-center justify-center shrink-0 ring-1 ring-white/10`}>
+            <svg viewBox="0 0 24 24" fill="none" className="w-[64%] h-[64%]">
+                <line x1="12" y1="2.8" x2="12" y2="6" stroke="#5eead4" strokeWidth="1.6" strokeLinecap="round" />
+                <circle cx="12" cy="2.4" r="1.25" fill="#5eead4" />
+                <rect x="4.3" y="6" width="15.4" height="12" rx="4.2" fill="#0b1220" stroke="#5eead4" strokeWidth="1.3" />
+                <circle cx="9.4" cy="12" r="1.7" fill="#5eead4" />
+                <circle cx="14.6" cy="12" r="1.7" fill="#5eead4" />
+            </svg>
+        </div>
+    );
+}
+
+function GrokAvatar({ className = 'w-6 h-6' }) {
+    const [broken, setBroken] = useState(false);
+    if (broken) return <BotFace className={className} />;
+    return (
+        <img
+            src="/grok.svg"
+            alt="Grok"
+            onError={() => setBroken(true)}
+            className={`${className} rounded-full object-cover shrink-0 bg-slate-900`}
+        />
+    );
+}
+
 function Avatar({ name }) {
+    if (name === GROK_NAME) return <GrokAvatar className="w-6 h-6" />;
     return (
         <div className={`w-6 h-6 rounded-full ${avatarColor(name)} flex items-center justify-center text-white font-bold shrink-0 text-[10px]`}>
             {name?.charAt(0)?.toUpperCase() || '?'}
@@ -110,6 +145,7 @@ export default function InternalChat({ onlineUsers = [] }) {
     const [pickerFor, setPickerFor] = useState(null);
     const [sharing, setSharing] = useState(false);
     const [viewing, setViewing] = useState(false);
+    const [grokTyping, setGrokTyping] = useState(false);
 
     // Screen share state — drives the in-chat RTC card
     const [rtcStatus, setRtcStatus] = useState(null);
@@ -124,6 +160,7 @@ export default function InternalChat({ onlineUsers = [] }) {
     const seenMessageIdsRef = useRef(new Set());
     const recipientIdRef = useRef(null);
     const clearedAtRef = useRef(localStorage.getItem('internalChatClearedAt') || null);
+    const grokTypingTimerRef = useRef(null);
     const pcRef = useRef(null);
     const localStreamRef = useRef(null);
     const videoRef = useRef(null);
@@ -185,18 +222,22 @@ export default function InternalChat({ onlineUsers = [] }) {
 
     const others = onlineUsers.filter(u => {
         const id = u.whatsapp || u.userId;
-        return id && id !== myId;
+        return id && id !== myId && id !== GROK_ID;
     });
 
+    // Grok vive SIEMPRE en la tira (no depende de presencia online) y va primero.
+    const grokContact = { userId: GROK_ID, userName: GROK_NAME, isGrok: true };
+    const contacts = [grokContact, ...others];
+
     useEffect(() => {
-        if (recipientId === null && others.length > 0) {
-            setRecipientId(others[0].userId);
-        }
-    }, [others, recipientId]);
+        if (recipientId === null) setRecipientId(GROK_ID);
+    }, [recipientId]);
 
     const recipient = recipientId === 'all'
         ? { userId: 'all', userName: 'Todos' }
-        : others.find(u => u.userId === recipientId) ?? (recipientId ? { userId: recipientId, userName: recipientId } : null);
+        : recipientId === GROK_ID
+            ? grokContact
+            : others.find(u => u.userId === recipientId) ?? (recipientId ? { userId: recipientId, userName: recipientId } : null);
 
     // ── Elapsed timer while sharing ────────────────────────────────────────
     useEffect(() => {
@@ -387,6 +428,22 @@ export default function InternalChat({ onlineUsers = [] }) {
         return () => window.removeEventListener('sse:internal:reaction', handle);
     }, []);
 
+    // ── SSE typing — "Grok está escribiendo…" ──────────────────────────────
+    useEffect(() => {
+        const handle = (e) => {
+            const d = e.detail || {};
+            if (d.from !== GROK_ID) return;
+            const forMe = d.to === myIdRef.current || d.to === myIdAltRef.current;
+            if (!forMe) return;
+            clearTimeout(grokTypingTimerRef.current);
+            setGrokTyping(!!d.typing);
+            // Apagado de seguridad por si no llega el "stop" (red/caída): el tope de xAI es 60s.
+            if (d.typing) grokTypingTimerRef.current = setTimeout(() => setGrokTyping(false), 70000);
+        };
+        window.addEventListener('sse:internal:typing', handle);
+        return () => { window.removeEventListener('sse:internal:typing', handle); clearTimeout(grokTypingTimerRef.current); };
+    }, []);
+
     // ── Mark as read when chat opens or conversation changes ───────────────
     useEffect(() => {
         if (!open || !myId) return;
@@ -567,8 +624,8 @@ export default function InternalChat({ onlineUsers = [] }) {
                         </div>
                     </div>
 
-                    {/* Online users strip */}
-                    {others.length > 0 && (
+                    {/* Contact strip — Grok siempre presente + quien esté en línea */}
+                    {contacts.length > 0 && (
                         <div className="flex gap-2 px-3 py-2 border-b border-gray-100 dark:border-gray-700 overflow-x-auto shrink-0">
                             <button
                                 onClick={() => setRecipientId('all')}
@@ -579,20 +636,28 @@ export default function InternalChat({ onlineUsers = [] }) {
                                 </div>
                                 <span className={`text-[9px] font-medium ${recipientId === 'all' ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'}`}>Todos</span>
                             </button>
-                            {others.map(u => (
+                            {contacts.map(u => (
                                 <button
                                     key={u.userId}
                                     onClick={() => setRecipientId(u.userId)}
                                     className={`flex flex-col items-center gap-0.5 shrink-0 px-1.5 py-1 rounded-xl transition-colors ${recipientId === u.userId ? 'bg-blue-50 dark:bg-blue-900/30' : 'hover:bg-gray-50 dark:hover:bg-gray-800'}`}
                                 >
                                     <div className="relative">
-                                        <div className={`w-8 h-8 rounded-full ${avatarColor(u.userName)} flex items-center justify-center text-white text-xs font-bold ${recipientId === u.userId ? 'ring-2 ring-blue-500 ring-offset-1' : ''}`}>
-                                            {u.userName?.charAt(0)?.toUpperCase() || '?'}
-                                        </div>
-                                        <span className="absolute bottom-0 right-0 w-2 h-2 bg-green-400 rounded-full border border-white dark:border-gray-900" />
+                                        {u.isGrok ? (
+                                            <div className={`rounded-full ${recipientId === u.userId ? 'ring-2 ring-blue-500 ring-offset-1' : ''}`}>
+                                                <GrokAvatar className="w-8 h-8" />
+                                            </div>
+                                        ) : (
+                                            <>
+                                                <div className={`w-8 h-8 rounded-full ${avatarColor(u.userName)} flex items-center justify-center text-white text-xs font-bold ${recipientId === u.userId ? 'ring-2 ring-blue-500 ring-offset-1' : ''}`}>
+                                                    {u.userName?.charAt(0)?.toUpperCase() || '?'}
+                                                </div>
+                                                <span className="absolute bottom-0 right-0 w-2 h-2 bg-green-400 rounded-full border border-white dark:border-gray-900" />
+                                            </>
+                                        )}
                                     </div>
                                     <span className={`text-[9px] font-medium max-w-[48px] truncate ${recipientId === u.userId ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'}`}>
-                                        {u.userName?.split(' ')[0]}
+                                        {u.isGrok ? GROK_NAME : u.userName?.split(' ')[0]}
                                     </span>
                                 </button>
                             ))}
@@ -820,6 +885,17 @@ export default function InternalChat({ onlineUsers = [] }) {
                                         </p>
                                     </div>
                                 )}
+                            </div>
+                        )}
+
+                        {grokTyping && recipientId === GROK_ID && (
+                            <div className="flex items-end gap-1.5">
+                                <GrokAvatar className="w-6 h-6" />
+                                <div className="bg-gray-100 dark:bg-gray-800 rounded-2xl rounded-tl-sm px-3 py-2.5 flex items-center gap-1">
+                                    <span className="w-1.5 h-1.5 bg-gray-400 dark:bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                                    <span className="w-1.5 h-1.5 bg-gray-400 dark:bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                                    <span className="w-1.5 h-1.5 bg-gray-400 dark:bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                                </div>
                             </div>
                         )}
 

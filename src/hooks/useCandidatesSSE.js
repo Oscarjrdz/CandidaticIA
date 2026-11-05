@@ -120,6 +120,8 @@ function _connectSingleton() {
                     window.dispatchEvent(new CustomEvent('sse:internal:status', { detail: data.data }));
                 } else if (data.type === 'internal:reaction') {
                     window.dispatchEvent(new CustomEvent('sse:internal:reaction', { detail: data.data }));
+                } else if (data.type === 'internal:typing') {
+                    window.dispatchEvent(new CustomEvent('sse:internal:typing', { detail: data.data }));
                 } else if (data.type === 'chat:lock') {
                     window.dispatchEvent(new CustomEvent('sse:chat:lock', { detail: data.data || data }));
                 } else if (data.type === 'crm:project') {
