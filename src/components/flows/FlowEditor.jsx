@@ -500,6 +500,25 @@ const FlowEditorInner = ({ flowId, onBack }) => {
         }
     }, [rf]);
 
+    // Clic en el lienzo vacío → deselecciona todo y cierra la barra flotante. React Flow solo
+    // dispara onPaneClick en un clic REAL (mousedown+mouseup sin arrastre): un clic sostenido
+    // dentro de la selección para arrastrar/panear NO lo dispara, así que el drag sigue intacto.
+    const handlePaneClick = useCallback(() => {
+        setNodes(nds => nds.some(n => n.selected) ? nds.map(n => n.selected ? { ...n, selected: false } : n) : nds);
+        setEdges(eds => eds.some(e => e.selected) ? eds.map(e => e.selected ? { ...e, selected: false } : e) : eds);
+        setSelectedIds([]);
+        setSelMenu(null);
+        setSelectedNodeId(null);
+    }, [setNodes, setEdges]);
+
+    // Un "Fondo" (bg) CON CANDADO es, para todo fin práctico, parte del lienzo: ya no es
+    // seleccionable (selectable:false) ni arrastrable, así que un clic encima no lo selecciona
+    // pero tampoco cuenta como clic al pane → la selección y la barra quedaban pegadas. Aquí lo
+    // tratamos como fondo: clic sobre un bg bloqueado = clic al lienzo (deselecciona y cierra).
+    const handleNodeClick = useCallback((_, node) => {
+        if (node?.type === 'bg' && node?.data?.locked) handlePaneClick();
+    }, [handlePaneClick]);
+
     // Duplica nodos (+ aristas internas) con IDs nuevos y offset. Ignora nodos de inicio.
     const buildDuplicate = useCallback((srcNodes, srcEdges, offset = { x: 48, y: 48 }) => {
         const idMap = new Map();
@@ -984,6 +1003,8 @@ const FlowEditorInner = ({ flowId, onBack }) => {
                 onEdgesChange={onEdgesChange}
                 onConnect={onConnect}
                 onSelectionChange={onSelectionChange}
+                onPaneClick={handlePaneClick}
+                onNodeClick={handleNodeClick}
                 onNodeMouseEnter={(_, node) => setHoveredNodeId(node.id)}
                 onNodeMouseLeave={() => setHoveredNodeId(null)}
                 nodeTypes={flowNodeTypes}
