@@ -3,7 +3,7 @@ import { DndContext, closestCenter, PointerSensor, useSensor, useSensors } from 
 import { SortableContext, horizontalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import ConfirmModal from './ui/ConfirmModal';
-import { MapPin, List as ListIcon, ShoppingBag, UserSquare, MousePointerClick, Search, MessageSquare, Plus, Smile, Paperclip, Mic, Square, ArrowLeft, Send, Tag, Pencil, Check, X, Trash2, Briefcase, Kanban, BookOpen, Keyboard, Loader2, Edit2, Reply, Zap, Pin, MessageCirclePlus, Phone, User, Bell, GripVertical, ChevronDown, ChevronUp, Snowflake, LayoutTemplate, Workflow, Ban, FolderArchive } from 'lucide-react';
+import { MapPin, List as ListIcon, ShoppingBag, UserSquare, MousePointerClick, Search, MessageSquare, Plus, Smile, Paperclip, Mic, Square, ArrowLeft, Send, Tag, Pencil, Check, X, Trash2, Briefcase, Kanban, BookOpen, Keyboard, Loader2, Edit2, Reply, Zap, Pin, MessageCirclePlus, Phone, User, Bell, GripVertical, ChevronDown, ChevronUp, Snowflake, LayoutTemplate, Workflow, Ban, FolderArchive, Navigation } from 'lucide-react';
 import { getCandidates, getCandidateById, blockCandidate, metaBlockCandidate, deleteCandidate } from '../services/candidatesService';
 import { getFlows, runFlowListItem } from '../services/flowsService';
 import { substituteVariables, substituteDynamicPhrase, hasDynamicPhrase } from '../../api/utils/shortcuts.js';
@@ -1049,6 +1049,13 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
     const [availableFlows, setAvailableFlows] = useState([]);
     const [flowsLoading, setFlowsLoading] = useState(false);
     const [runningFlowId, setRunningFlowId] = useState(null);
+    // 🧭 Crear Ruta (Maps) manual: panel de pin de empresa + modo de viaje
+    const [routeMenuOpen, setRouteMenuOpen] = useState(false);
+    const [routePins, setRoutePins] = useState(null); // null = aún no cargado
+    const [routePinsLoading, setRoutePinsLoading] = useState(false);
+    const [selectedRoutePinId, setSelectedRoutePinId] = useState(null);
+    const [routeMode, setRouteMode] = useState('carro');
+    const [routeSending, setRouteSending] = useState(false);
     // 🎨 Styled Confirm Modal (replaces ugly window.confirm)
     const [confirmModal, setConfirmModal] = useState(null);
 
@@ -2419,6 +2426,22 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         });
         return () => document.removeEventListener('click', closeMenu);
     }, [flowMenuOpen]);
+
+    // Menú de Crear Ruta (Maps): cerrar al clic afuera + cargar los pines del Mapa al abrir (una vez).
+    useEffect(() => {
+        if (!routeMenuOpen) return;
+        const closeMenu = () => setRouteMenuOpen(false);
+        document.addEventListener('click', closeMenu);
+        if (routePins === null && !routePinsLoading) {
+            setRoutePinsLoading(true);
+            fetch('/api/system/map-pins')
+                .then(r => r.ok ? r.json() : { pins: [] })
+                .then(d => setRoutePins(Array.isArray(d.pins) ? d.pins : []))
+                .catch(() => setRoutePins([]))
+                .finally(() => setRoutePinsLoading(false));
+        }
+        return () => document.removeEventListener('click', closeMenu);
+    }, [routeMenuOpen, routePins, routePinsLoading]);
 
     // HIGH-3: Clean up typing indicator timers on unmount to prevent state updates on unmounted component
     useEffect(() => {
@@ -4518,6 +4541,31 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         }
     }, [selectedChat, showToast]);
 
+    // 🧭 Mandar "cómo llegar" (botón Abrir en Maps) al candidato, desde su ubicación hasta el pin elegido.
+    const handleSendRoute = useCallback(async () => {
+        if (!selectedChat || !selectedRoutePinId || routeSending) return;
+        setRouteSending(true);
+        try {
+            const res = await fetch('/api/candidates/send-route', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ candidateId: selectedChat.id, pinId: selectedRoutePinId, mode: routeMode })
+            });
+            const data = await res.json().catch(() => ({}));
+            if (res.ok && data.success) {
+                showToast && showToast('Ruta enviada', 'success');
+                setRouteMenuOpen(false);
+                setSelectedRoutePinId(null);
+            } else {
+                showToast && showToast(data.error || 'No se pudo enviar la ruta', 'error');
+            }
+        } catch {
+            showToast && showToast('Error de red al enviar la ruta', 'error');
+        } finally {
+            setRouteSending(false);
+        }
+    }, [selectedChat, selectedRoutePinId, routeMode, routeSending, showToast]);
+
     const handleBlockToggle = useCallback(async (chatToBlock, e) => {
         if (e) e.stopPropagation();
         if (!chatToBlock) return;
@@ -6338,6 +6386,93 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                                             </div>
                                         )}
                                     </div>
+                                    {/* Crear Ruta (Maps): mandar al candidato "cómo llegar" a un pin de empresa.
+                                        Solo activo si el candidato compartió su ubicación. */}
+                                    {(() => {
+                                        const hasLoc = selectedChat?.ubicacionLat != null && selectedChat?.ubicacionLat !== ''
+                                            && selectedChat?.ubicacionLng != null && selectedChat?.ubicacionLng !== '';
+                                        return (
+                                            <div className="relative">
+                                                <button
+                                                    type="button"
+                                                    disabled={!hasLoc}
+                                                    onClick={(e) => { e.stopPropagation(); if (hasLoc) setRouteMenuOpen(v => !v); }}
+                                                    className={`p-2 rounded-full transition-colors ${!hasLoc
+                                                        ? 'text-gray-300 dark:text-gray-600 cursor-not-allowed'
+                                                        : `text-[#54656f] dark:text-[#aebac1] hover:text-teal-500 dark:hover:text-teal-400 hover:bg-black/5 dark:hover:bg-white/5 ${routeMenuOpen ? 'bg-black/5 dark:bg-white/5 text-teal-500 dark:text-teal-400' : ''}`}`}
+                                                    title={hasLoc ? 'Mandar cómo llegar (Maps)' : 'Sin ubicación del candidato'}
+                                                    aria-label="Mandar cómo llegar (Maps)"
+                                                >
+                                                    <Navigation className="w-5 h-5" />
+                                                </button>
+                                                {routeMenuOpen && hasLoc && (
+                                                    <div
+                                                        onClick={(e) => e.stopPropagation()}
+                                                        className="absolute left-0 top-full mt-1 w-72 bg-white dark:bg-[#202c33] rounded-lg shadow-xl z-50 border border-gray-100 dark:border-gray-700 overflow-hidden"
+                                                    >
+                                                        <div className="px-3 py-2 text-xs font-bold text-[#8696a0] border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-[#111b21]">
+                                                            Mandar cómo llegar
+                                                        </div>
+                                                        {/* Pin de empresa */}
+                                                        <div className="px-3 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wide text-gray-400">¿A qué punto?</div>
+                                                        <div className="max-h-44 overflow-y-auto">
+                                                            {routePinsLoading ? (
+                                                                <div className="px-3 py-4 text-center text-xs text-gray-400">Cargando pines…</div>
+                                                            ) : !routePins || routePins.length === 0 ? (
+                                                                <div className="px-3 py-4 text-center text-xs text-gray-400">No hay pines. Créalos en la sección Mapa.</div>
+                                                            ) : (
+                                                                routePins.map(p => (
+                                                                    <button
+                                                                        key={p.id}
+                                                                        type="button"
+                                                                        onClick={() => setSelectedRoutePinId(p.id)}
+                                                                        className={`w-full text-left px-3 py-2 flex items-center gap-2 transition-colors ${selectedRoutePinId === p.id ? 'bg-teal-50 dark:bg-teal-900/20' : 'hover:bg-gray-50 dark:hover:bg-white/5'}`}
+                                                                    >
+                                                                        {p.logo
+                                                                            ? <img src={p.logo} alt="" className="w-5 h-5 rounded object-cover shrink-0" />
+                                                                            : <MapPin className="w-4 h-4 shrink-0 text-teal-500" />}
+                                                                        <span className="flex-1 min-w-0 text-sm font-medium text-slate-800 dark:text-slate-100 truncate">{p.label || 'Pin sin nombre'}</span>
+                                                                        {selectedRoutePinId === p.id && <Check className="w-4 h-4 shrink-0 text-teal-500" />}
+                                                                    </button>
+                                                                ))
+                                                            )}
+                                                        </div>
+                                                        {/* Modo de viaje */}
+                                                        <div className="px-3 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wide text-gray-400">¿Cómo mandarla?</div>
+                                                        <div className="px-3 pb-2 flex gap-1.5">
+                                                            {[
+                                                                { k: 'carro', label: '🚗 Carro' },
+                                                                { k: 'transporte', label: '🚌 Transporte' },
+                                                                { k: 'moto', label: '🏍️ Moto' }
+                                                            ].map(m => (
+                                                                <button
+                                                                    key={m.k}
+                                                                    type="button"
+                                                                    onClick={() => setRouteMode(m.k)}
+                                                                    className={`flex-1 px-1.5 py-1.5 rounded-md text-[11px] font-semibold border transition-colors ${routeMode === m.k
+                                                                        ? 'bg-teal-500 text-white border-teal-500'
+                                                                        : 'bg-transparent text-slate-600 dark:text-slate-300 border-gray-200 dark:border-gray-600 hover:border-teal-400'}`}
+                                                                >
+                                                                    {m.label}
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                        <div className="px-3 pb-3 pt-1 border-t border-gray-100 dark:border-gray-700">
+                                                            <button
+                                                                type="button"
+                                                                disabled={!selectedRoutePinId || routeSending}
+                                                                onClick={handleSendRoute}
+                                                                className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold bg-teal-500 text-white hover:bg-teal-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                                                            >
+                                                                {routeSending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                                                                {routeSending ? 'Enviando…' : 'Enviar a WhatsApp'}
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        );
+                                    })()}
                                     <button
                                         type="button"
                                         onClick={(e) => { e.stopPropagation(); setReminderModalCandidate(selectedChat); }}

@@ -5,6 +5,7 @@ import { substituteVariables, splitBubbles, substituteDynamicPhrase } from './sh
 import { getBotVacancies, vacancyMessageText } from './flows-data.js';
 import { runInBackground } from './background.js';
 import { businessDayOffset, isPastCutoff } from './reminder-schedule.js';
+import { ROUTE_MODES, buildMapsDirUrl } from './route-links.js';
 
 // ════════════════════════════════════════════════════════════════════════════
 // MOTOR DE FLOWS — ejecución determinística de automatizaciones post-extracción.
@@ -629,14 +630,8 @@ async function resendLocationRequest(redis, candidate, flowId, node) {
     return false;
 }
 
-// 🧭 Modos de viaje del nodo "Crear Ruta". `mode` = valor travelmode de Google Maps. Moto
-// (two-wheeler) solo funciona por URL en ciertos países; si no, Maps lo abre como carro. Waze
-// ignora el modo (siempre maneja). Los tres caben en los 3 botones de respuesta que admite Meta.
-const ROUTE_MODES = {
-    carro:      { handle: 'carro',      defaultLabel: '🚗 CARRO',              travelmode: 'driving',     name: 'carro' },
-    transporte: { handle: 'transporte', defaultLabel: '🚌 TRANSPORTE',          travelmode: 'transit',     name: 'Transporte Público' },
-    moto:       { handle: 'moto',       defaultLabel: '🏍️ MOTO',               travelmode: 'two-wheeler', name: 'moto' }
-};
+// 🧭 Los modos de viaje (ROUTE_MODES) y el armado de la URL de Maps (buildMapsDirUrl) viven en
+// ./route-links.js — fuente única compartida con el botón manual del Chat Web. No duplicar aquí.
 
 // Construye y ENVÍA los botones nativos de enlace (cta_url) de un nodo "Crear Ruta": uno por app
 // elegida (Google Maps / Waze), cada uno en su burbuja, con el `travelmode` dado. El primero lleva
@@ -650,15 +645,12 @@ async function sendRouteButtons(redis, node, candidate, flowId, travelmode, mode
     const dest = `${destLat},${destLng}`;
     const oLat = Number(candidate.ubicacionLat);
     const oLng = Number(candidate.ubicacionLng);
-    const hasOrigin = Number.isFinite(oLat) && Number.isFinite(oLng);
     const tm = travelmode || 'driving';
 
     const buttons = [];
     if (data.appGoogle !== false) {
-        const gUrl = hasOrigin
-            ? `https://www.google.com/maps/dir/?api=1&origin=${oLat},${oLng}&destination=${dest}&travelmode=${tm}`
-            : `https://www.google.com/maps/dir/?api=1&destination=${dest}&travelmode=${tm}`;
-        buttons.push({ display: 'ABRIR EN MAPS', url: gUrl, appName: 'Google Maps' });
+        const gUrl = buildMapsDirUrl({ destLat, destLng, originLat: oLat, originLng: oLng, travelmode: tm });
+        if (gUrl) buttons.push({ display: 'ABRIR EN MAPS', url: gUrl, appName: 'Google Maps' });
     }
     // Waze NO hace transporte público (solo maneja) → en modo transit no se ofrece.
     if (data.appWaze !== false && tm !== 'transit') {
