@@ -123,7 +123,7 @@ function extractOutputText(data) {
  * (enviar_chat_interno). Devuelve { ok, resumen, usage } o { ok:false, error }.
  */
 export async function sendInternalEventToGrok({ payload, fromId, mcpUrl, mcpToken, model, maxOutputTokens, allowedTools }) {
-    const apiKey = process.env.XAI_API_KEY;
+    const apiKey = (process.env.XAI_API_KEY || '').trim(); // por si Vercel guardó un \n/espacio invisible
     if (!apiKey) return { ok: false, error: 'XAI_API_KEY no configurada' };
     if (!mcpUrl || !mcpToken) return { ok: false, error: 'Falta mcpUrl o mcpToken' };
 
