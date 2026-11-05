@@ -56,3 +56,22 @@ api/bot-ia/test-*.js
 
 # Playwright MCP (navegador virtual): capturas/snapshots temporales
 .playwright-mcp/
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Artefactos de la tarea de NORMALIZACIÓN DE COLONIAS (una sola sesión, no es
+# código de la app). Se dejan en disco a propósito como respaldo/registro pero
+# NUNCA se commitean: son dumps de datos + script de subida + docs de trabajo.
+# Ignorados para que ninguna sesión los reporte como "pendientes de subir".
+# ─────────────────────────────────────────────────────────────────────────────
+backup-colonias-previas.json
+backup-municipios-previas.json
+subir-colonias-normalizadas.mjs
+# export nombre/tel/municipio/colonia (.csv .txt)
+candidatos-nombre-tel-municipio-colonia.*
+# export tel<->colonia (.csv .txt .html)
+tel-colonia.*
+# variante con columna colonia (.csv .txt .html)
+tel-colonia-con-colonia.*
+# docs de trabajo de la normalización
+docs/colonias-aliases-aplicados.md
+docs/colonias-por-revisar.md
