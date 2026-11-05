@@ -1,5 +1,5 @@
 import React from 'react';
-import { MapPin, List as ListIcon, ShoppingBag, UserSquare, Paperclip, Smile, Reply, X, FolderArchive } from 'lucide-react';
+import { MapPin, List as ListIcon, ShoppingBag, UserSquare, Paperclip, Smile, Reply, X, FolderArchive, ExternalLink } from 'lucide-react';
 import { safeFormatTime, formatWhatsAppText } from './chatUtils';
 import AudioPlayer from './AudioPlayer';
 import MessageStatusTicks from './MessageStatusTicks';
@@ -171,11 +171,13 @@ function cleanInteractivePreview(text) {
     const stripped = text
         .replace(/\n*\s*\[📍 Pide ubicación\]\s*$/u, '')
         .replace(/\n*\s*\[Botones:[^\]]*\]\s*$/u, '')
+        .replace(/\n*\s*\[Botón:[^\]]*\]\s*$/u, '')
         .replace(/\n*\s*\[Lista:[^\]]*\]\s*$/u, '')
         .trim();
     if (stripped) return stripped;
     if (/\[📍 Pide ubicación\]/.test(text)) return '📍 Pide ubicación';
     if (/\[Botones:/.test(text)) return 'Opciones';
+    if (/\[Botón:/.test(text)) return '🔗 Enlace';
     if (/\[Lista:/.test(text)) return 'Lista de opciones';
     return text;
 }
@@ -423,6 +425,33 @@ const MessageBubble = React.memo(function MessageBubble({
                                                     </div>
                                                 ))}
                                             </div>
+                                        </div>
+                                    );
+                                }
+
+                                // Botón de enlace (cta_url): usado por "Crear Ruta" (ABRIR EN MAPS/WAZE) y
+                                // por el modo Enlace de "Botones/Opciones". Contenido: "texto\n\n[Botón: DISPLAY → URL]".
+                                // Lo pintamos como pastilla clickeable, NO como texto crudo con la URL gigante.
+                                const isCtaLink = typeof msg.content === 'string' && msg.content.includes('[Botón:');
+                                if (isCtaLink) {
+                                    const parts = msg.content.split('\n\n[Botón:');
+                                    const mainText = parts[0];
+                                    const inner = (parts[1] || '').replace(/\]\s*$/, '');
+                                    const arrowIdx = inner.indexOf('→');
+                                    const display = (arrowIdx >= 0 ? inner.slice(0, arrowIdx) : inner).trim() || 'Abrir';
+                                    const url = (arrowIdx >= 0 ? inner.slice(arrowIdx + 1) : '').trim();
+                                    const safeUrl = /^https?:\/\//i.test(url) ? url : '';
+                                    const PillTag = safeUrl ? 'a' : 'div';
+                                    const pillProps = safeUrl ? { href: safeUrl, target: '_blank', rel: 'noopener noreferrer' } : {};
+                                    return (
+                                        <div className="flex flex-col w-full min-w-[220px]">
+                                            <div dangerouslySetInnerHTML={{ __html: formatWhatsAppText(mainText) }} className="mb-2" />
+                                            <PillTag
+                                                {...pillProps}
+                                                className="w-full flex items-center justify-center gap-1.5 py-2 px-3 bg-black/5 dark:bg-white/5 text-blue-500 dark:text-blue-400 text-sm rounded-lg border border-black/10 dark:border-white/10 font-medium mt-1 no-underline hover:bg-black/10 dark:hover:bg-white/10 transition-colors"
+                                            >
+                                                <ExternalLink className="w-4 h-4" /> {display}
+                                            </PillTag>
                                         </div>
                                     );
                                 }
