@@ -443,6 +443,8 @@ export default function InternalChat({ onlineUsers = [] }) {
     }, []);
 
     // ── SSE typing — "Grok está escribiendo…" ──────────────────────────────
+    // Solo se pinta si el "escribiendo" dura ≥350ms. Si xAI falla/responde al instante,
+    // el prende-y-apaga sub-segundo NO llega a mostrarse → se acabó el parpadeo del globo.
     useEffect(() => {
         const handle = (e) => {
             const d = e.detail || {};
@@ -450,9 +452,15 @@ export default function InternalChat({ onlineUsers = [] }) {
             const forMe = d.to === myIdRef.current || d.to === myIdAltRef.current;
             if (!forMe) return;
             clearTimeout(grokTypingTimerRef.current);
-            setGrokTyping(!!d.typing);
-            // Apagado de seguridad por si no llega el "stop" (red/caída): el tope de xAI es 60s.
-            if (d.typing) grokTypingTimerRef.current = setTimeout(() => setGrokTyping(false), 70000);
+            if (d.typing) {
+                grokTypingTimerRef.current = setTimeout(() => {
+                    setGrokTyping(true);
+                    // Apagado de seguridad por si no llega el "stop" (red/caída): tope xAI 60s.
+                    grokTypingTimerRef.current = setTimeout(() => setGrokTyping(false), 70000);
+                }, 350);
+            } else {
+                setGrokTyping(false);
+            }
         };
         window.addEventListener('sse:internal:typing', handle);
         return () => { window.removeEventListener('sse:internal:typing', handle); clearTimeout(grokTypingTimerRef.current); };
