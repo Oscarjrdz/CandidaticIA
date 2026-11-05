@@ -83,17 +83,31 @@ function BotFace({ className = 'w-6 h-6' }) {
     );
 }
 
+// /grok.svg se prueba UNA sola vez a nivel módulo y se cachea. Antes, cada <img> que
+// fallaba el 404 re-disparaba onError en CADA montaje del avatar → parpadeo en el chat
+// de Grok (al mandar/re-render). Ahora, mientras no se sepa (o si no existe), se pinta
+// la carita inline directa: cero red, cero parpadeo.
+let _grokSvgOk = null;               // null = sin probar, true/false = resultado
+const _grokSvgWaiters = new Set();
+if (typeof window !== 'undefined') {
+    const probe = new Image();
+    probe.onload = () => { _grokSvgOk = true; _grokSvgWaiters.forEach(fn => fn()); _grokSvgWaiters.clear(); };
+    probe.onerror = () => { _grokSvgOk = false; _grokSvgWaiters.forEach(fn => fn()); _grokSvgWaiters.clear(); };
+    probe.src = '/grok.svg';
+}
+
 function GrokAvatar({ className = 'w-6 h-6' }) {
-    const [broken, setBroken] = useState(false);
-    if (broken) return <BotFace className={className} />;
-    return (
-        <img
-            src="/grok.svg"
-            alt="Grok"
-            onError={() => setBroken(true)}
-            className={`${className} rounded-full object-cover shrink-0 bg-slate-900`}
-        />
-    );
+    const [, bump] = useState(0);
+    useEffect(() => {
+        if (_grokSvgOk !== null) return;           // ya se sabe → no hay que esperar
+        const fn = () => bump(n => n + 1);
+        _grokSvgWaiters.add(fn);
+        return () => _grokSvgWaiters.delete(fn);
+    }, []);
+    if (_grokSvgOk === true) {
+        return <img src="/grok.svg" alt="Grok" className={`${className} rounded-full object-cover shrink-0 bg-slate-900`} />;
+    }
+    return <BotFace className={className} />;
 }
 
 function Avatar({ name }) {
