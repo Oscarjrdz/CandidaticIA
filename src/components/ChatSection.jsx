@@ -1141,7 +1141,6 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         if (!chatSectionCache.selectedChat) return;
         chatReadyTimerRef.current = setTimeout(() => setChatContentReady(true), 600);
         return () => { if (chatReadyTimerRef.current) { clearTimeout(chatReadyTimerRef.current); chatReadyTimerRef.current = null; } };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
     // Ventana "acabo de enviar" (~2s): durante ella, la lista de mensajes SOLO hace scroll al
     // fondo cuando CRECE (llega una burbuja nueva), no en re-mediciones (palomita de estado,
@@ -1577,13 +1576,11 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
     const [loadingMore, setLoadingMore] = useState(false);
     const [visibleChatLimit, setVisibleChatLimit] = useState(CHAT_LIST_PAGE_SIZE);
     const loadingMoreRef = useRef(false);
-    // ── Estabilidad de la lista ("scroll anchoring" / freeze-while-engaged) ──
-    // isListAtTop: la lista está pegada al tope (no te has alejado). Lo alimenta el
-    // Virtuoso vía atTopStateChange. frozenOrder: snapshot del orden visible capturado
-    // al entrar en "engaged" (chat abierto o scrolleado) — mientras dure, las tarjetas
-    // NO se reordenan; lo nuevo se acomoda fuera de pantalla y nada de lo que ves salta.
+    // ── Estabilidad de la lista (orden EN VIVO estilo WhatsApp Web + anclaje de scroll) ──
+    // isListAtTop: la lista está pegada al tope (no te has alejado). Lo alimenta el Virtuoso
+    // vía atTopStateChange. Se usa para el anclaje: pegado al tope un chat que sube DEBE verse
+    // aparecer (no se ancla); alejado del tope se ancla la fila-tope para no dar tirones.
     const [isListAtTop, setIsListAtTop] = useState(true);
-    const [frozenOrder, setFrozenOrder] = useState(null); // Map<id, rank> | null
     const activeFilterRef = useRef('unread');
     const _hasSetInitialFilter = useRef(false);
     const filterValueRef = useRef(null);
@@ -1596,34 +1593,6 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
     const nextCandidatesOffsetRef = useRef(chatSectionCache.nextOffset || 0);
     const prevSearchRef = useRef(null);
     const sseWasConnectedOnceRef = useRef(false);
-    const [chatListSortHold, setChatListSortHold] = useState({ candidateId: null, sortTime: 0, until: 0 });
-    const chatListSortHoldRef = useRef(chatListSortHold);
-    const chatListSortHoldTimerRef = useRef(null);
-
-    const holdChatListPosition = useCallback((candidateId, holdMs = 4200) => {
-        if (!candidateId) return;
-        const now = Date.now();
-        const currentHold = chatListSortHoldRef.current;
-        const candidate =
-            candidatesRef.current.find(c => String(c.id) === String(candidateId)) ||
-            (selectedChatRef.current?.id === candidateId ? selectedChatRef.current : null);
-        const currentSortTime = candidate?.ultimoMensaje ? new Date(candidate.ultimoMensaje).getTime() : 0;
-        const sortTime = currentHold.candidateId === candidateId && currentHold.until > now
-            ? currentHold.sortTime
-            : (Number.isFinite(currentSortTime) ? currentSortTime : 0);
-        const nextHold = { candidateId, sortTime, until: now + holdMs };
-        chatListSortHoldRef.current = nextHold;
-        setChatListSortHold(nextHold);
-
-        if (chatListSortHoldTimerRef.current) clearTimeout(chatListSortHoldTimerRef.current);
-        chatListSortHoldTimerRef.current = setTimeout(() => {
-            const latest = chatListSortHoldRef.current;
-            if (latest.candidateId !== candidateId || latest.until > Date.now()) return;
-            const emptyHold = { candidateId: null, sortTime: 0, until: 0 };
-            chatListSortHoldRef.current = emptyHold;
-            setChatListSortHold(emptyHold);
-        }, holdMs + 80);
-    }, []);
 
     // Multi-select Filters State
     const [selectedAges, setSelectedAges] = useState([]);
@@ -1706,10 +1675,6 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
 
     useEffect(() => { searchRef.current = deferredSearch; }, [deferredSearch]);
     useEffect(() => { candidatesRef.current = candidates; }, [candidates]);
-    useEffect(() => { chatListSortHoldRef.current = chatListSortHold; }, [chatListSortHold]);
-    useEffect(() => () => {
-        if (chatListSortHoldTimerRef.current) clearTimeout(chatListSortHoldTimerRef.current);
-    }, []);
 
     const prevActiveFilterRef = useRef(null);
     const prevSelectedTagRef = useRef(undefined);
@@ -1900,9 +1865,11 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
     }, [reconcileUnreadBadges]);
 
 
-    const markReplyHandledOptimistically = useCallback((candidateId, holdMs = 4200) => {
+    // Limpia el badge de no-leído de forma optimista al responder (antes de que el servidor
+    // confirme). El reacomodo de la lista lo maneja el orden en vivo + FLIP: tu respuesta
+    // sube el chat al tope como en WhatsApp Web, sin retenciones.
+    const markReplyHandledOptimistically = useCallback((candidateId) => {
         if (!candidateId) return;
-        holdChatListPosition(candidateId, holdMs);
         const now = new Date().toISOString();
         applyCandidateUnreadPatch(candidateId, {
             unreadMsgCount: 0,
@@ -1910,7 +1877,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
             ultimoMensajeBot: now,
             lastHumanMessageAt: now,
         });
-    }, [applyCandidateUnreadPatch, holdChatListPosition]);
+    }, [applyCandidateUnreadPatch]);
 
 
     // Optimistic unread clearance
@@ -2776,16 +2743,11 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         });
 
         // 🏎️ Pre-compute timestamps ONCE (eliminates ~44,000 Date objects per sort)
+        // Orden estilo WhatsApp Web: SIEMPRE por el reloj real del último mensaje — un mensaje
+        // (entrante o tuyo) sube el chat al tope de inmediato, sin excepciones ni retenciones.
         const tsCache = new Map();
-        const sortHoldActive = chatListSortHold.candidateId && chatListSortHold.until > Date.now();
         for (const c of result) {
-            const realTime = c.ultimoMensaje ? new Date(c.ultimoMensaje).getTime() : 0;
-            tsCache.set(
-                c.id,
-                sortHoldActive && String(c.id) === String(chatListSortHold.candidateId)
-                    ? chatListSortHold.sortTime
-                    : realTime
-            );
+            tsCache.set(c.id, c.ultimoMensaje ? new Date(c.ultimoMensaje).getTime() : 0);
         }
 
         // WhatsApp-Native Sort: Pinned first → then strictly chronological (with deterministic tie-breaker)
@@ -2804,61 +2766,17 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         selectedTag,
         manualPipelineFilter, manualStepFilter,
         pinnedChats,
-        selectedAges, selectedGenders, selectedMunicipalities,
-        chatListSortHold
+        selectedAges, selectedGenders, selectedMunicipalities
     ]);
 
-    // ── FREEZE-WHILE-ENGAGED ──────────────────────────────────────────────
-    // "Engaged" = estás trabajando en la lista: hay un chat abierto O te alejaste
-    // del tope. Mientras dure, el orden visible se CONGELA: cada tarjeta conserva su
-    // posición y lo nuevo (o lo que sube por un mensaje) se acomoda al final —fuera de
-    // pantalla— en vez de empujar lo que ves. Al soltar (cierras el chat Y vuelves al
-    // tope) se re-sincroniza al orden real (la cola de prioridad más reciente-primero).
-    // Esto elimina de raíz el temblor bajo tráfico: la lista deja de reordenarse en cada
-    // mensaje, así que no hay correcciones de scroll compitiendo entre sí.
-    const isEngaged = Boolean(selectedChat?.id) || !isListAtTop;
-
-    // Orden REAL vigente (para el snapshot y para el estado "no engaged"). Se guarda en un
-    // ref para poder capturarlo justo al entrar en engaged sin recomputar de más.
-    const filteredIdsOrderRef = useRef([]);
-    useEffect(() => { filteredIdsOrderRef.current = filteredCandidates.map(c => c.id); }, [filteredCandidates]);
-
-    // Captura/limpia el snapshot al cruzar engaged↔libre. Post-commit está bien: en el
-    // instante de la transición el orden congelado == orden real (seleccionar un chat o
-    // scrollear no cambia el orden), así que no hay parpadeo.
-    useEffect(() => {
-        if (isEngaged) {
-            setFrozenOrder(prev => {
-                if (prev) return prev; // ya congelado: conservar el snapshot original
-                const m = new Map();
-                filteredIdsOrderRef.current.forEach((id, i) => m.set(id, i));
-                return m;
-            });
-        } else {
-            setFrozenOrder(prev => (prev ? null : prev));
-        }
-    }, [isEngaged]);
-
-    // displaySorted: orden de PINTADO. Congelado → por rank del snapshot (lo no capturado
-    // —arrivals nuevos, páginas cargadas después— va al final, fuera de pantalla). Libre →
-    // el orden real tal cual (filteredCandidates ya viene ordenado cronológico).
-    const displaySorted = useMemo(() => {
-        if (!frozenOrder) return filteredCandidates;
-        const base = frozenOrder.size + 1;
-        return filteredCandidates
-            .map((c, idx) => {
-                const r = frozenOrder.get(c.id);
-                return { c, rank: r !== undefined ? r : base + idx };
-            })
-            .sort((a, b) => {
-                const aPinned = pinnedChats.includes(a.c.id);
-                const bPinned = pinnedChats.includes(b.c.id);
-                if (aPinned && !bPinned) return -1;
-                if (!aPinned && bPinned) return 1;
-                return a.rank - b.rank;
-            })
-            .map(x => x.c);
-    }, [filteredCandidates, frozenOrder, pinnedChats]);
+    // ── ORDEN SIEMPRE EN VIVO (estilo WhatsApp Web) ───────────────────────────────────
+    // La lista refleja SIEMPRE el orden real cronológico (filteredCandidates ya viene
+    // ordenado: pineados primero → último mensaje más reciente). Ya NO se congela mientras
+    // trabajas: un chat que recibe —o al que le envías— un mensaje sube al tope de inmediato,
+    // incluido el chat abierto. El deslizamiento suave de ese reacomodo lo pone la animación
+    // FLIP (ver más abajo), que solo mueve transform de las filas, nunca el scroll — por eso
+    // no reintroduce el temblor del viejo enfoque de "perseguir el scroll en cada mensaje".
+    const displaySorted = filteredCandidates;
 
     const visibleCandidates = useMemo(
         () => displaySorted.slice(0, visibleChatLimit),
@@ -2977,34 +2895,10 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         });
         if (extra.length === 0) return visibleCandidates;
 
-        if (frozenOrder) {
-            // Congelado: cada tarjeta (incluida la que sale) mantiene su rank del snapshot,
-            // así el fantasma se desvanece EXACTAMENTE donde estaba y el hueco se cierra
-            // alrededor de tu tarjeta activa sin moverla.
-            const base = frozenOrder.size + 1;
-            return [...visibleCandidates, ...extra]
-                .map((c, i) => {
-                    const r = frozenOrder.get(c.id);
-                    return { c, rank: r !== undefined ? r : base + i };
-                })
-                .sort((a, b) => {
-                    const aPinned = pinnedChats.includes(a.c.id);
-                    const bPinned = pinnedChats.includes(b.c.id);
-                    if (aPinned && !bPinned) return -1;
-                    if (!aPinned && bPinned) return 1;
-                    if (a.rank !== b.rank) return a.rank - b.rank;
-                    return String(b.c.id || '').localeCompare(String(a.c.id || ''));
-                })
-                .map(x => x.c);
-        }
-
-        // Libre (tope de la lista): orden real cronológico, con el hold de posición que
-        // evita que TU chat salte al tope en el instante en que respondes.
-        const sortHoldActive = chatListSortHold.candidateId && chatListSortHold.until > Date.now();
+        // Orden real cronológico (estilo WhatsApp Web): los fantasmas en salida se intercalan
+        // con el MISMO criterio (pineados + reloj del último mensaje) para desvanecerse donde
+        // estaban, no en un lugar random.
         const getChatSortTime = (candidate) => {
-            if (sortHoldActive && String(candidate?.id) === String(chatListSortHold.candidateId)) {
-                return chatListSortHold.sortTime;
-            }
             const time = candidate?.ultimoMensaje ? new Date(candidate.ultimoMensaje).getTime() : 0;
             return Number.isFinite(time) ? time : 0;
         };
@@ -3017,57 +2911,60 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
             if (diff !== 0) return diff;
             return String(b.id || '').localeCompare(String(a.id || ''));
         });
-    }, [visibleCandidates, leavingCandidates, pinnedChats, chatListSortHold, frozenOrder]);
+    }, [visibleCandidates, leavingCandidates, pinnedChats]);
 
-    // ── ANCLAJE de scroll (scroll anchoring, estilo navegador/Slack/Twitter) ──────────
-    // Mantiene FIJA en pantalla la primera fila visible cuando el conjunto/orden de filas
-    // cambia (p.ej. una tarjeta visible sale del filtro y su hueco se cierra). Es el
-    // complemento del freeze: el freeze evita que lo visible se reordene por mensajes; el
-    // anclaje absorbe los cambios de altura que sí ocurren (salidas) para que tu tarjeta no
-    // brinque. Claves de por qué NO tiembla como el pivote anterior:
-    //   • Ancla la primera fila VISIBLE (siempre montada) — no un chat que puede salir del
-    //     buffer de virtualización y volverse null.
-    //   • Corrige SÍNCRONO antes del paint (sin rAF) → sin lag de un frame.
-    //   • Solo corre cuando cambia la FIRMA de ids (orden/altas/bajas), no en updates de
-    //     contenido, y solo mientras estás "engaged" — al tope y libre, la cola de prioridad
-    //     fluye en vivo sin que la toquemos.
+    // ── ANCLAJE de scroll + animación FLIP (reacomodo suave estilo WhatsApp Web) ──────
+    // Dos piezas que trabajan juntas en el MISMO layout effect (síncrono, antes del paint):
+    //   • ANCLA: alejado del tope, mantiene fija la primera fila visible cuando el orden
+    //     cambia, para que un reacomodo de arriba no te dé un tirón. PEGADO AL TOPE no ancla:
+    //     ahí el chat que sube al tope DEBE verse aparecer (scrollTop se queda en 0).
+    //   • FLIP: cada fila visible se DESLIZA de su posición previa a la nueva (transform GPU
+    //     + easeOutCubic, el mismo easing que las burbujas del chat), en vez de saltar. Solo
+    //     toca `transform` de la fila — NUNCA el scroll — así que no pelea con el scroll ni
+    //     reintroduce el temblor del viejo pivote-rAF que "perseguía" el scroll en cada mensaje.
     const chatListVirtuosoRef = useRef(null);
     const chatListScrollerRef = useRef(null);
-    const listAnchorRef = useRef({ id: null, offset: 0 });
+    const listAnchorRef = useRef({ id: null, offset: 0 });   // fila-tope a mantener fija (alejado del tope)
+    const flipPrevTopsRef = useRef(new Map());                // id -> offset del commit previo (base "First" del FLIP)
+    const flipPrevFilterSigRef = useRef(null);                // firma del filtro en el commit previo (para no animar al cambiar de filtro)
     const anchorRafRef = useRef(0);
-    const holdingRef = useRef(false); // true mientras el sostén de salida controla el scroll
+    const flipRafRef = useRef(0);
+    const prefersReducedMotionRef = useRef(
+        typeof window !== 'undefined' && window.matchMedia
+            ? window.matchMedia('(prefers-reduced-motion: reduce)').matches
+            : false
+    );
 
-    // Mide la primera fila visible (id + offset desde el tope del scroller) y la guarda como
-    // ancla. Se llama en CADA scroll (throttled por rAF) para que la referencia esté siempre
-    // fresca: si solo se refrescara al cambiar el orden, tras un scroll manual la
-    // compensación compararía contra un offset viejo y pegaría un tirón al siguiente cambio.
-    const captureListAnchor = useCallback(() => {
+    const FLIP_DUR_MS = 260;
+    const FLIP_EASE = 'cubic-bezier(0.33, 1, 0.68, 1)'; // easeOutCubic (igual que el scroll de las burbujas)
+    const cssEscId = (id) => ((window.CSS && CSS.escape) ? CSS.escape(id) : id);
+
+    // Mide las filas visibles (ignora las que están SALIENDO, que corren su propia animación):
+    // devuelve sus offsets desde el tope del scroller (base del FLIP) y la primera fila visible
+    // (ancla). Se llama en CADA scroll (throttled por rAF) para mantener la referencia fresca:
+    // tras un scroll manual, comparar contra offsets viejos daría tirones falsos o FLIPs fantasma.
+    const measureRowState = useCallback(() => {
         const sc = chatListScrollerRef.current;
-        if (!sc) return;
+        if (!sc) return null;
         const scTop = sc.getBoundingClientRect().top;
-        const clientH = sc.clientHeight;
-        // Ignora filas que están SALIENDO (.chat-card-exit): su colapso es intencional
-        // (p.ej. contestaste un no-leído que tenías abierto y sale del filtro). Anclar en
-        // una fila que colapsa pelearía contra su animación → el ancla siempre es estable.
-        const rows = [...sc.querySelectorAll('[data-cid]:not(.chat-card-exit)')];
-        // 1) Preferir el CHAT ABIERTO si está visible: es "la tarjeta en la que trabajas",
-        //    la que —por regla del negocio— nunca debe moverse en pantalla. Todo lo demás
-        //    (arriba o abajo) reflowa alrededor de ella.
-        const selId = selectedChatRef.current?.id;
-        if (selId) {
-            const selEl = rows.find(el => el.getAttribute('data-cid') === selId);
-            if (selEl) {
-                const off = selEl.getBoundingClientRect().top - scTop;
-                if (off >= -1 && off <= clientH - 1) { listAnchorRef.current = { id: selId, offset: off }; return; }
-            }
-        }
-        // 2) Si no hay chat abierto (o no está en pantalla): primera fila visible.
-        for (const el of rows) {
+        const tops = new Map();
+        let anchor = null;
+        sc.querySelectorAll('[data-cid]').forEach((el) => {
+            if (el.classList.contains('chat-card-exit')) return;
             const off = el.getBoundingClientRect().top - scTop;
-            if (off >= -1) { listAnchorRef.current = { id: el.getAttribute('data-cid'), offset: off }; return; }
-        }
-        listAnchorRef.current = { id: null, offset: 0 };
+            const id = el.getAttribute('data-cid');
+            tops.set(id, off);
+            if (anchor === null && off >= -1) anchor = { id, offset: off };
+        });
+        return { tops, anchor: anchor || { id: null, offset: 0 } };
     }, []);
+
+    const captureListAnchor = useCallback(() => {
+        const st = measureRowState();
+        if (!st) return;
+        flipPrevTopsRef.current = st.tops;
+        listAnchorRef.current = st.anchor;
+    }, [measureRowState]);
 
     const handleChatListScrollerRef = useCallback((el) => {
         const prevEl = chatListScrollerRef.current;
@@ -3079,9 +2976,6 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         chatListScrollerRef.current = el;
         if (el) {
             const handler = () => {
-                // Mientras el sostén de salida mueve el scroll, NO recapturar: sería medir la
-                // posición que el propio sostén está corrigiendo → contaminaría el objetivo.
-                if (holdingRef.current) return;
                 if (anchorRafRef.current) return;
                 anchorRafRef.current = requestAnimationFrame(() => {
                     anchorRafRef.current = 0;
@@ -3098,69 +2992,77 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         [renderedCandidates]
     );
 
-    // Compensación: al cambiar el orden/altas-bajas (renderedIdsSig), medir dónde quedó la
-    // fila-ancla (fresca gracias al scroll handler) y devolver el scroll para que no se haya
-    // movido en pantalla. Síncrono, antes del paint. Solo mientras estás "engaged".
+    // Al cambiar el orden (renderedIdsSig): compensar el scroll si estás alejado del tope, luego
+    // medir el layout nuevo y DESLIZAR (FLIP) cada fila que se movió. Síncrono, antes del paint.
     useLayoutEffect(() => {
         const sc = chatListScrollerRef.current;
         if (!sc) return;
-        if (isEngaged) {
+        const prevTops = flipPrevTopsRef.current; // "First" = layout real del commit previo
+
+        // Cancela cualquier FLIP en vuelo y limpia sus transforms para medir el layout real nuevo
+        // (getBoundingClientRect incluye transform; sin esto, una ráfaga mediría posiciones a medias).
+        if (flipRafRef.current) { cancelAnimationFrame(flipRafRef.current); flipRafRef.current = 0; }
+        sc.querySelectorAll('[data-cid]').forEach((el) => {
+            if (el.style.transform) { el.style.transition = 'none'; el.style.transform = ''; }
+        });
+
+        // 1) ANCLA — solo alejado del tope (pegado al tope el chat nuevo debe verse en el #0).
+        if (!isListAtTop) {
             const prev = listAnchorRef.current;
             if (prev.id) {
-                const el = sc.querySelector(`[data-cid="${(window.CSS && CSS.escape) ? CSS.escape(prev.id) : prev.id}"]`);
-                // Si la fila-ancla arrancó su propia salida, no compensar: dejar colapsar.
+                const el = sc.querySelector(`[data-cid="${cssEscId(prev.id)}"]`);
                 if (el && !el.classList.contains('chat-card-exit')) {
-                    const newOffset = el.getBoundingClientRect().top - sc.getBoundingClientRect().top;
-                    const delta = newOffset - prev.offset;
+                    const delta = (el.getBoundingClientRect().top - sc.getBoundingClientRect().top) - prev.offset;
                     if (Math.abs(delta) > 0.5) sc.scrollTop += delta;
                 }
             }
         }
-        captureListAnchor();
-    }, [renderedIdsSig, isEngaged, captureListAnchor]);
 
-    useEffect(() => () => { if (anchorRafRef.current) cancelAnimationFrame(anchorRafRef.current); }, []);
+        // 2) "Last" = layout nuevo. Prepara el FLIP de cada fila que se movió respecto al previo.
+        // Un cambio de FILTRO/búsqueda (set entero distinto) NO se anima: deslizar chats de una
+        // lista a otra se ve mal. Solo animamos reacomodos reales DENTRO del mismo filtro.
+        const filterChanged = flipPrevFilterSigRef.current !== chatFilterSignature;
+        flipPrevFilterSigRef.current = chatFilterSignature;
 
-    // Al abrir/cambiar de chat, el ancla pasa a ser ESE chat (tu tarjeta de trabajo) aunque
-    // no haya scroll ni cambio de lista — si no, seguiría anclada en la primera fila visible
-    // y un cambio posterior movería tu chat. captureListAnchor ya prioriza el seleccionado.
-    useEffect(() => { captureListAnchor(); }, [selectedChat?.id, captureListAnchor]);
+        const st = measureRowState();
+        if (!st) return;
+        const toPlay = [];
+        if (!prefersReducedMotionRef.current && !filterChanged) {
+            st.tops.forEach((top, id) => {
+                const old = prevTops.get(id);
+                if (old === undefined) return;                       // recién montada → entra con su fade, no desliza
+                const d = old - top;
+                if (Math.abs(d) <= 1 || Math.abs(d) >= 2000) return; // sin movimiento real, o salto fuera de la ventana visible
+                const el = sc.querySelector(`[data-cid="${cssEscId(id)}"]`);
+                if (el) toPlay.push([el, d]);
+            });
+        }
+        // La base del próximo FLIP = estas posiciones nuevas.
+        flipPrevTopsRef.current = st.tops;
+        listAnchorRef.current = st.anchor;
 
-    // ── SOSTÉN durante la SALIDA elegante ──────────────────────────────────────────────
-    // Cuando una tarjeta VISIBLE por encima de tu ancla sale del filtro, su animación de
-    // colapso (chat-card-exit, 260ms) empuja tu tarjeta frame a frame. El cambio de firma
-    // solo llega AL FINAL (cuando se remueve el fantasma), así que sin esto tu tarjeta se
-    // desliza durante la animación y luego pega un jalón. Aquí, MIENTRAS haya una tarjeta
-    // saliendo, un rAF corto mantiene el ancla clavada en su offset previo. Es acotado a la
-    // ventana de salida (rara, ~260ms) — NO corre en cada mensaje, así que no reintroduce el
-    // temblor bajo tráfico. Pegado al tope el scroll llega a 0 y ya no puede sostener (límite
-    // físico esperado: no hay nada arriba que traer).
-    const holdRafRef = useRef(0);
-    useEffect(() => {
-        if (!isEngaged || leavingCandidates.size === 0) return;
-        const sc = chatListScrollerRef.current;
-        const target = { ...listAnchorRef.current }; // offset a sostener (pre-colapso)
-        if (!sc || !target.id) return;
-        const scoped = (window.CSS && CSS.escape) ? CSS.escape(target.id) : target.id;
-        holdingRef.current = true;
-        const snapToTarget = () => {
-            const el = sc.querySelector(`[data-cid="${scoped}"]`);
-            if (el && !el.classList.contains('chat-card-exit')) {
-                const cur = el.getBoundingClientRect().top - sc.getBoundingClientRect().top;
-                const delta = cur - target.offset;
-                if (Math.abs(delta) > 0.5) sc.scrollTop += delta;
+        if (toPlay.length) {
+            // Invert: clava cada fila en su posición VIEJA, sin transición.
+            for (const [el, d] of toPlay) {
+                el.style.transition = 'none';
+                el.style.transform = `translate3d(0, ${d}px, 0)`;
             }
-        };
-        const hold = () => { snapToTarget(); holdRafRef.current = requestAnimationFrame(hold); };
-        holdRafRef.current = requestAnimationFrame(hold);
-        return () => {
-            if (holdRafRef.current) cancelAnimationFrame(holdRafRef.current);
-            holdRafRef.current = 0;
-            snapToTarget();               // corrección final exacta al terminar la salida
-            listAnchorRef.current = { id: target.id, offset: target.offset }; // objetivo limpio
-            holdingRef.current = false;
-        };
-    }, [isEngaged, leavingCandidates.size]);
+            void sc.offsetHeight; // reflow: fija el punto de partida antes de animar
+            flipRafRef.current = requestAnimationFrame(() => {
+                flipRafRef.current = 0;
+                // Play: suéltala hacia su posición nueva con transición → desliza suave.
+                for (const [el] of toPlay) {
+                    el.style.transition = `transform ${FLIP_DUR_MS}ms ${FLIP_EASE}`;
+                    el.style.transform = '';
+                }
+            });
+        }
+    }, [renderedIdsSig, isListAtTop, chatFilterSignature, measureRowState]);
+
+    useEffect(() => () => {
+        if (anchorRafRef.current) cancelAnimationFrame(anchorRafRef.current);
+        if (flipRafRef.current) cancelAnimationFrame(flipRafRef.current);
+    }, []);
 
     // ── Entrada por CAMBIO DE ESTATUS: detecta tarjetas que RECIÉN pasan a matchear el
     // filtro actual (p.ej. un chat leído recibe mensaje → entra a "no leídos", o vuelve a
@@ -5152,8 +5054,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
 
         // Auto-silence bot on manual intervention
         autoSilenceBot(currentChat);
-        const chatListHoldMs = Math.min(9000, 3200 + queuedImages.length * 1500 + (textMessage ? 700 : 0));
-        markReplyHandledOptimistically(currentCandidateId, chatListHoldMs);
+        markReplyHandledOptimistically(currentCandidateId);
 
         // El input queda libre de inmediato: el envío real corre en el outbox
         setPendingQrImages([]);
