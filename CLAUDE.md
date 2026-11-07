@@ -105,7 +105,7 @@ Oscar quiere pasar sección por sección del dashboard dejando cada una "en su m
 
 **Estado por sección** (marca al terminar cada una):
 - ✅ **Candidatos** — limpiada 2026-11-06 (detalle abajo).
-- ⬜ Chat Web (`ChatSection.jsx` — archivo gigante, el más delicado; alto tráfico SSE, ver [[feedback_chatweb_alto_trafico]]).
+- ✅ **Chat Web** — limpiada 2026-11-06 (detalle abajo).
 - ⬜ Flujos (`FlowsSection.jsx`) · ⬜ Envíos Masivos (`BulksSection.jsx`) · ⬜ CRM (`CRMProjectsSection.jsx`) · ⬜ Mapa (`MapSection.jsx`) · ⬜ Estadísticas (`StatsSection.jsx`) · ⬜ Ads (`AdsStatisticsSection.jsx`) · ⬜ Configuración (`SettingsSection.jsx`) · ⬜ Vacantes (`VacanciesSection.jsx`) · ⬜ Bolsa (`BolsaSection.jsx`) · ⬜ Notificaciones (`NotificacionesSection.jsx`) · ⬜ Media (`MediaLibrarySection.jsx`) · ⬜ Bot IA (`BotIASection.jsx`).
 
 ### ✅ Candidatos — 2026-11-06
@@ -121,6 +121,20 @@ Oscar quiere pasar sección por sección del dashboard dejando cada una "en su m
   - Se eliminó el `useEffect` que llamaba `subscriptionRef.current.updateParams()` en cada cambio de página/búsqueda — era un no-op (nada lee esos params después del montaje; el refetch real lo hace el efecto debounced de `loadCandidates`). Con eso `subscriptionRef` quedó huérfano y también se removió. La llamada `updateParams` del montaje **se conservó** porque sí alimenta `pollFull()` de la carga inicial.
 - **Micro-mejora:** `fieldsMap` pasó de `reduce` con spread (O(n²)) a `Object.fromEntries(fields.map(...))` — resultado idéntico, sin crear objetos intermedios.
 - **Intacto a propósito** (bajo el principio de no tocar lo que funciona): el `sectionCache` de módulo (pintado instantáneo al re-entrar), `candidatesListCache` + headers `X-Candidatic-Cache`/`Cache-Control`, el patrón stale-while-revalidate, `reconcileCandidates` (su `JSON.stringify` por fila es intencional a 100 filas), el SSE singleton y los `Set` de sesión (`_firedConfettiIds`, `dailySeenCandidateIdsRef`).
+
+### ✅ Chat Web — 2026-11-06
+
+**Intención:** dejar la sección más delicada (archivo gigante + alto tráfico SSE) en su mejor versión **sin tocar ninguna ruta de caché ni la arquitectura SSE**. Todo lo borrado es código muerto o estado write-only — **cero parches, salida del DOM idéntica**. Verificado con `npm run build` (✓) y `eslint` en los archivos tocados (exit 0, cero errores nuevos).
+
+- **Archivos 100% muertos eliminados (0 referencias en `src/` y `api/`, grep):**
+  - `src/components/ChatHistoryModal.jsx` (87 líneas) — cero imports en todo el repo.
+  - `src/services/chatExportService.js` — sus 4 funciones (`generateChatHistoryText`, `exportChatToFile`, `deleteOldChatFile`, `downloadChatHistory`) sin un solo caller; `exportChatToFile`/`deleteOldChatFile` ya eran stubs (`'Cloud export no disponible'`), resto arqueológico del viejo export a Knowledge Base.
+- **Refs muertos en `ChatSection.jsx` (solo la línea de declaración, nunca leídos/escritos):** `_messagesEndRef`, `_messagesContainerRef`, `_hasSetInitialFilter`. Los 3 empezaban con `_`, por eso ESLint los ignoraba (`varsIgnorePattern: '^[A-Z_]'`) y no salían como error.
+- **Estado write-only eliminado (el valor nunca se leía; solo se llamaba al setter → re-renders que no pintaban nada distinto):**
+  - `_sending`/`setSending` — redundante: la señal real de "enviando" la lleva `isSendingRef` (que sí se lee) + `addSendingMedia`/`removeSendingMedia`. Se quitó el estado y sus 2 llamadas.
+  - `_recruiterTypingName`/`setRecruiterTypingName` — el indicador "otro reclutador escribiendo" ya no se pinta; se quitó el estado y la rama SSE completa (`if (recruiterTyping)` + su `setTimeout` de 8s) que solo lo alimentaba. El typing del **candidato** (`setCandidateTyping`) es otra cosa y **se conservó**. `typingTimersRef` sigue (lo usa el candidato); el cleanup `Object.values(...).forEach(clearTimeout)` sigue correcto aunque ya no exista la key `recruiter`.
+  - `_chatSearchIdx`/`setChatSearchIdx` — índice de navegación de resultados de búsqueda que ya no existe; valor nunca leído. Se quitó el estado y el `setChatSearchIdx(0)` del `onChange`.
+- **Intacto a propósito:** TODA la ruta de caché (`chatSectionCache` de módulo, `candidatesListCache`, headers `X-Candidatic-Cache`/`Cache-Control`, stale-while-revalidate, `reconcileCandidates`); el **SSE singleton** (`useCandidatesSSE.js` + `api/sse/candidates.js` + pub/sub) — arquitectura, no se toca; consts inline con `_` (`_mod`, `_gc`, `_quotedResolved`, etc.) que **sí se usan** (el `_` es estilo); `Set` de sesión que crecen, catch vacíos y fire-and-forget. **Fuera de alcance** (no son la sección Chat Web): `ChatWindow.jsx` (popup flotante de Candidatos/Mapa/CRM) e `InternalChat.jsx` (chat de equipo).
 
 ## Convenciones y patrones establecidos
 

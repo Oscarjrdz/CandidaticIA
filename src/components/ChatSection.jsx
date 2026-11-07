@@ -1023,7 +1023,6 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         return seeded ? stripEntryAnimations(seeded) : [];
     });
     const messageInputRef = useRef(null);
-    const [_sending, setSending] = useState(false);
     const [loadingChats, setLoadingChats] = useState(() => !chatSectionCache.candidates); // sin skeleton si hay caché
     const [availableTags, setAvailableTags] = useState(() => tagsCache?.tags || []);
     const [manualProjects, setManualProjects] = useState([]);
@@ -1059,17 +1058,12 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
     // 🎨 Styled Confirm Modal (replaces ugly window.confirm)
     const [confirmModal, setConfirmModal] = useState(null);
 
-    // Typing Indicators
-
-    const [_recruiterTypingName, setRecruiterTypingName] = useState('');
     const [metaTemplates, setMetaTemplates] = useState([]);
     const typingTimersRef = useRef({});
 
     // ═══ INSTANCE MAP for I01/I02 badges ═══
 
 
-    const _messagesEndRef = useRef(null);
-    const _messagesContainerRef = useRef(null);
     const virtuosoRef = useRef(null);
     const isSendingRef = useRef(false);
     const isAtBottomRef = useRef(true);
@@ -1239,7 +1233,6 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
     const [unseenCount, setUnseenCount] = useState(0);
     const [chatSearch, setChatSearch] = useState('');
     const [showChatSearch, setShowChatSearch] = useState(false);
-    const [_chatSearchIdx, setChatSearchIdx] = useState(0);
     const chatSearchInputRef = useRef(null);
     // ✅ META AUDIT: Ghost guard — prevents SSE re-insertion after delete (same pattern as CandidatesSection)
     const recentlyDeletedRef = useRef(new Set());
@@ -1582,7 +1575,6 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
     // aparecer (no se ancla); alejado del tope se ancla la fila-tope para no dar tirones.
     const [isListAtTop, setIsListAtTop] = useState(true);
     const activeFilterRef = useRef('unread');
-    const _hasSetInitialFilter = useRef(false);
     const filterValueRef = useRef(null);
     // Sembrado desde el caché para que el auto-open del primer chat (que checa !selectedChatRef.current)
     // NO dispare al re-entrar cuando ya había un chat abierto.
@@ -3710,17 +3702,6 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         
         const currentChat = selectedChatRef.current;
 
-        // --- Typing indicator ---
-        if (sseUpdate.updates?.recruiterTyping !== undefined) {
-            if (sseUpdate.candidateId === currentChat?.id) {
-                if ((user?.name || 'Reclutador') !== sseUpdate.updates.recruiterTyping) {
-                    setRecruiterTypingName(sseUpdate.updates.recruiterTyping);
-                    clearTimeout(typingTimersRef.current.recruiter);
-                    typingTimersRef.current.recruiter = setTimeout(() => setRecruiterTypingName(''), 8000);
-                }
-            }
-        }
-
         // --- Candidate Typing indicator ---
         if (sseUpdate.updates?.candidateTyping !== undefined) {
             if (sseUpdate.candidateId === currentChat?.id) {
@@ -4679,7 +4660,6 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         };
         isSendingRef.current = true;
         updateChatMessages(currentCandidateId, prev => [...prev, withMessageEntryAnimation(tempMsg, 'outgoing')]);
-        setSending(true);
         addSendingMedia(currentCandidateId); // Mute polling during upload (solo este chat)
 
         try {
@@ -4734,7 +4714,6 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
             // Mark as failed instead of removing — so the user sees it didn't go through
             updateChatMessages(currentCandidateId, prev => prev.map(m => m.id === tempId ? { ...m, status: 'failed', error: err.message } : m));
         } finally {
-            setSending(false);
             removeSendingMedia(currentCandidateId);
             setTimeout(() => URL.revokeObjectURL(localUrl), 60000);
         }
@@ -6877,7 +6856,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                                 type="text"
                                 placeholder="Buscar en conversación..."
                                 value={chatSearch}
-                                onChange={e => { setChatSearch(e.target.value); setChatSearchIdx(0); }}
+                                onChange={e => setChatSearch(e.target.value)}
                                 className="flex-1 bg-transparent outline-none text-[14px] text-[#111b21] dark:text-[#e9edef] placeholder-[#8696a0]"
                             />
                             {chatSearch && (
