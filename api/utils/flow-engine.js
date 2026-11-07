@@ -845,6 +845,40 @@ export async function evaluateOrExecute(node, candidate, flowId, redis, opts = {
                     }
                     return false; // rama cerrada: el candidato no entra al flujo de esa empresa
                 }
+
+                // 🔁 RE-CLIC MISMA CAMPAÑA (rama abierta): si el candidato volvió clickeando la MISMA
+                // etiqueta que ya traía (opts._adReclick, puesto por el despachador de regreso) y ESTA
+                // rama tiene "mensaje re-clic misma campaña", se lo mandamos antes de descender ("ya te
+                // postulaste a esta vacante antes, aquí va la info de nuevo"). Por rama = personalizado
+                // por empresa. Solo en retorno con reclick=true; la caducidad ya tuvo prioridad arriba.
+                if (opts._adReclick) {
+                    const rmsg = typeof data.reclickMessage === 'string' ? data.reclickMessage.trim() : '';
+                    if (rmsg) {
+                        try {
+                            const config = await getUltraMsgConfig(candidate.incomingPhoneNumberId || candidate.instanceId);
+                            if (config?.token && config?.instanceId) {
+                                const cleanTo = String(candidate.whatsapp).replace(/\D/g, '');
+                                const text = substituteDynamicPhrase(
+                                    substituteVariables(data.reclickMessage, candidate),
+                                    substituteVariables(opts._dynamicPhrase || '', candidate)
+                                );
+                                for (const bubbleText of splitBubbles(text)) {
+                                    const sendResult = await pacedSend(opts, () => sendUltraMsgMessageWithRetry(config.instanceId, config.token, cleanTo, bubbleText, 'chat', { priority: 1 }));
+                                    if (sendResult?.success) {
+                                        await saveFlowOutbound(candidate.id, {
+                                            from: 'me', content: bubbleText, timestamp: new Date().toISOString(),
+                                            meta: { flow: true, flowId, nodeId: node.id, reclick: true }
+                                        }, sendResult);
+                                    } else {
+                                        console.error(`[FLOW-ENGINE] etiqueta reclick ${flowId}/${node.id} candidato ${candidate.id}: envío falló —`, sendResult?.error);
+                                    }
+                                }
+                            }
+                        } catch (e) {
+                            console.error(`[FLOW-ENGINE] etiqueta reclick ${flowId}/${node.id}:`, e?.message);
+                        }
+                    }
+                }
             }
             return true;
         }
@@ -2185,39 +2219,10 @@ export async function runReturningFlowsForCandidate(candidateId, candidateSnapsh
         // en modo "actual" contra vacanteActual.
         runInBackground((async () => {
             for (const flow of eligible) {
-                const flowOpts = { ephemeral: true };
-                // 🔁 RE-CLIC MISMA CAMPAÑA: si volvió clickeando la MISMA etiqueta que YA traía
-                // (reclick=true) y el Inicio tiene "mensaje re-clic misma campaña", se lo mandamos
-                // UNA vez ANTES de re-meterlo al flujo ("ya te postulaste antes, aquí va la info de
-                // nuevo"). Solo en reclick=true: una campaña NUEVA (reclick=false) es info de otra
-                // vacante, no esto. El mismo flowOpts se pasa a runOneFlow → el ritmo de envíos continúa.
-                if (adReclick) {
-                    const inicio = flow.nodes.find(n => n.type === 'inicio');
-                    const msg = typeof inicio?.data?.reclickMessage === 'string' ? inicio.data.reclickMessage.trim() : '';
-                    if (msg) {
-                        try {
-                            const config = await getUltraMsgConfig(candidateSnapshot.incomingPhoneNumberId || candidateSnapshot.instanceId);
-                            if (config?.token && config?.instanceId) {
-                                const cleanTo = String(candidateSnapshot.whatsapp).replace(/\D/g, '');
-                                const text = substituteVariables(inicio.data.reclickMessage, candidateSnapshot);
-                                for (const bubbleText of splitBubbles(text)) {
-                                    const sendResult = await pacedSend(flowOpts, () => sendUltraMsgMessageWithRetry(config.instanceId, config.token, cleanTo, bubbleText, 'chat', { priority: 1 }));
-                                    if (sendResult?.success) {
-                                        await saveFlowOutbound(candidateSnapshot.id, {
-                                            from: 'me', content: bubbleText, timestamp: new Date().toISOString(),
-                                            meta: { flow: true, flowId: flow.id, nodeId: inicio.id, reclick: true }
-                                        }, sendResult);
-                                    } else {
-                                        console.error(`[FLOW-RETURN] reclick msg ${flow.id} candidato ${candidateSnapshot.id}: envío falló —`, sendResult?.error);
-                                    }
-                                }
-                            }
-                        } catch (e) {
-                            console.error(`[FLOW-RETURN] reclick msg ${flow.id} candidato ${candidateSnapshot.id}:`, e?.message);
-                        }
-                    }
-                }
-                await runOneFlow(redis, flow, candidateId, { ...candidateSnapshot }, flowOpts)
+                // _adReclick viaja al evaluador: el nodo Etiqueta (inicio de empresa) manda su
+                // "mensaje re-clic misma campaña" POR RAMA cuando el candidato re-clickeó la MISMA
+                // etiqueta que ya traía. Es por rama = personalizado por empresa (no uno global).
+                await runOneFlow(redis, flow, candidateId, { ...candidateSnapshot }, { ephemeral: true, _adReclick: adReclick })
                     .catch(e => console.error(`[FLOW-RETURN] flujo ${flow.id} candidato ${candidateId}:`, e?.message));
             }
         })());

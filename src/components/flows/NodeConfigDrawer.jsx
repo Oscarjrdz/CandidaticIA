@@ -1508,24 +1508,9 @@ const NodeConfigDrawer = ({ node, flowId, meta, quickReplies, onSaveQuickReply, 
                                         <p className="text-xs text-gray-400 mt-1.5">Mínimo entre disparos.</p>
                                     </div>
                                 </div>
-                                {data.returnOnAd !== false && (
-                                    <div className="pt-3 border-t border-gray-100 dark:border-gray-700">
-                                        <label className="text-xs text-gray-500 dark:text-gray-400 mb-2 block">
-                                            Mensaje re-clic <strong>misma campaña</strong> <span className="text-gray-400">(opcional)</span>
-                                        </label>
-                                        <textarea
-                                            rows={3}
-                                            maxLength={1024}
-                                            value={data.reclickMessage || ''}
-                                            onChange={(e) => patch({ reclickMessage: e.target.value })}
-                                            placeholder="Ej. Ya te postulaste a esta vacante antes {{nombre}} 🙂, pero aquí va la info de nuevo…"
-                                            className={inputCls}
-                                        />
-                                        <p className="text-xs text-gray-400 mt-1.5">
-                                            Se manda <strong>una sola vez, antes</strong> de re-entrar al flujo, y SOLO cuando el candidato vuelve a clickear <strong>la MISMA</strong> etiqueta/campaña que ya traía (re-clic real). Si clickea otra vacante, no se manda. Admite variables (<code>{'{{nombre}}'}</code>…).
-                                        </p>
-                                    </div>
-                                )}
+                                <p className="text-[11px] text-gray-400 dark:text-gray-500 leading-relaxed pt-1">
+                                    💡 El <strong>mensaje “re-clic misma campaña”</strong> (“ya te postulaste antes, aquí va de nuevo”) se configura <strong>por rama</strong>, en cada nodo <strong>Filtro: Etiqueta</strong> — así es personalizado por empresa.
+                                </p>
                             </div>
                         )}
                         {showBroadcast && (
@@ -1684,6 +1669,22 @@ const NodeConfigDrawer = ({ node, flowId, meta, quickReplies, onSaveQuickReply, 
                                 <p className="text-[11px] text-gray-400 dark:text-gray-500 leading-relaxed">
                                     Candado de caducidad: si <strong>toda</strong> esta rama tiene sus menús con fecha vencidos, el candidato <strong>no entra</strong> — se le manda este mensaje y se detiene. Admite variables (<code>{'{{nombre}}'}</code>…). Si lo dejas vacío, simplemente no entra (sin avisarle). La orilla del nodo se pinta 🟢 abierta / 🔴 cerrada.
                                 </p>
+                                <div className="pt-3 mt-1 border-t border-gray-100 dark:border-gray-700 space-y-2">
+                                    <label className="text-xs text-gray-500 dark:text-gray-400 block">
+                                        Mensaje <strong>re-clic misma campaña</strong> <span className="text-gray-400">(al regresar)</span>
+                                    </label>
+                                    <textarea
+                                        rows={3}
+                                        maxLength={1024}
+                                        value={data.reclickMessage || ''}
+                                        onChange={(e) => patch({ reclickMessage: e.target.value })}
+                                        placeholder="Ej. Ya te postulaste a esta vacante antes {{nombre}} 🙂, pero aquí va la info de nuevo…"
+                                        className={inputCls}
+                                    />
+                                    <p className="text-[11px] text-gray-400 dark:text-gray-500 leading-relaxed">
+                                        Se manda al <strong>re-entrar</strong> a esta rama, SOLO cuando el candidato vuelve a clickear <strong>esta MISMA</strong> vacante que ya traía (re-clic real, flujo “al regresar”). Si re-clickea otra vacante, no se manda. Si la rama está cerrada, gana el mensaje de caducidad de arriba. Admite variables (<code>{'{{nombre}}'}</code>…).
+                                    </p>
+                                </div>
                             </div>
                         )}
                     </div>
