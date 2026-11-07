@@ -930,13 +930,38 @@ const FlowEditorInner = ({ flowId, onBack }) => {
     // solo la capa de render. Los nodos de inicio nunca son borrables (ya lo eran).
     const nodeLocks = user?.preferences?.flowNodeLocks?.[flowId] || EMPTY_LOCKS; // getFlowLocks devuelve {} nuevo; aquí usamos ref estable para el memo
     // Estado de caducidad por rama (Etiqueta en rol "inicio de empresa"): 'open'/'closed'/null.
-    // Alimenta la orilla 🟢/🔴 del nodo. Se recalcula cuando cambian nodos o aristas (incluye
-    // editar fechas de botones, que reemplaza el array de nodos). Capa de render — no toca estado base.
+    // Alimenta la orilla 🟢/🔴 del nodo. La caducidad es por RELOJ y los horarios vencen EN PUNTO
+    // (…Thh:00), así que re-evaluamos en cada CAMBIO DE HORA (+5s de colchón para cruzar el umbral):
+    // la orilla se voltea SOLA al vencer, sin recargar ni servidor (el navegador ya tiene las fechas).
+    // branchStates también recalcula al editar nodos/aristas. Capa de render — no toca estado base.
+    const hasBranchStart = useMemo(() => nodes.some(isBranchStartEtiqueta), [nodes]);
+    const [branchTick, setBranchTick] = useState(0);
+    useEffect(() => {
+        if (!hasBranchStart) return;
+        let timer;
+        const scheduleTopOfHour = () => {
+            const now = new Date();
+            const next = new Date(now);
+            next.setHours(now.getHours() + 1, 0, 5, 0); // próximo HH:00:05 (hora local = Monterrey para el equipo)
+            timer = setTimeout(() => { setBranchTick(x => x + 1); scheduleTopOfHour(); }, next - now);
+        };
+        scheduleTopOfHour();
+        return () => clearTimeout(timer);
+    }, [hasBranchStart]);
+    const prevBranchStatesRef = useRef({});
     const branchStates = useMemo(() => {
         const m = {};
         for (const n of nodes) if (isBranchStartEtiqueta(n)) m[n.id] = computeBranchExpiry(n.id, nodes, edges);
+        // Estabilidad de referencia: si NINGUNA rama cambió de estado respecto al tick anterior,
+        // conserva el MISMO objeto para que displayNodes (y los 261 nodos) no se re-rendericen cada
+        // 30s. Solo entrega un objeto nuevo cuando una rama realmente se voltea 🟢↔🔴.
+        const prev = prevBranchStatesRef.current;
+        const keys = Object.keys(m);
+        const same = keys.length === Object.keys(prev).length && keys.every(k => prev[k] === m[k]);
+        if (same) return prev;
+        prevBranchStatesRef.current = m;
         return m;
-    }, [nodes, edges]);
+    }, [nodes, edges, branchTick]);
     const displayNodes = useMemo(() => nodes.map(n => {
         const locked = !!nodeLocks[n.id];
         const branchState = branchStates[n.id] || null;
