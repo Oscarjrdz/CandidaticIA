@@ -75,7 +75,7 @@ const ChatRow = React.memo(({ chat, isSelected, isPinned, onSelect, onBlock, onD
             data-cid={chat.id}
             onClick={() => { if (!isLeaving) onSelect(chat); }}
             onAnimationEnd={(e) => { if (e.animationName === 'chat-card-enter') setEntryPlayed(true); }}
-            className={`group flex items-center px-3 py-3 cursor-pointer hover:bg-[#f5f6f6] dark:hover:bg-[#202c33] transition-colors duration-100 border-l-0 md:border-l-4 ${isLeaving ? 'chat-card-exit pointer-events-none' : (shouldAnimateEntry ? 'chat-card-enter' : '')} ${isSelected ? 'bg-[#f0f2f5] dark:bg-[#2a3942] border-[#25d366] dark:border-[#00a884] md:shadow-sm md:relative md:z-10' : 'border-transparent'}`}
+            className={`group flex items-center px-3 py-2 cursor-pointer hover:bg-[#f5f6f6] dark:hover:bg-[#202c33] transition-colors duration-100 border-l-0 md:border-l-4 ${isLeaving ? 'chat-card-exit pointer-events-none' : (shouldAnimateEntry ? 'chat-card-enter' : '')} ${isSelected ? 'bg-[#f0f2f5] dark:bg-[#2a3942] border-[#25d366] dark:border-[#00a884] md:shadow-sm md:relative md:z-10' : 'border-transparent'}`}
         >
             <div className={`w-12 h-12 rounded-full flex-shrink-0 flex items-center justify-center mr-3 relative overflow-hidden ${isEmptyChat ? 'ring-2 ring-blue-500 ring-offset-2 ring-offset-[#ffffff] dark:ring-offset-[#111b21]' : ''}`}>
                 {chat.profilePic && !imgError ? (
@@ -88,7 +88,7 @@ const ChatRow = React.memo(({ chat, isSelected, isPinned, onSelect, onBlock, onD
                     </span>
                 )}
             </div>
-            <div className="flex-1 min-w-0 border-b border-[#f0f2f5] dark:border-[#222e35] pb-3 pt-1">
+            <div className="flex-1 min-w-0 border-b border-[#f0f2f5] dark:border-[#222e35] pb-2 pt-0.5">
                 <div className="flex flex-row justify-between items-center mb-1 w-full min-w-0">
                     <div className="flex items-center gap-1.5 flex-1 min-w-0">
                         {isPinned && <Pin className="w-3 h-3 text-[#25d366] dark:text-[#00a884] shrink-0 fill-current" />}
@@ -187,9 +187,15 @@ const ChatRow = React.memo(({ chat, isSelected, isPinned, onSelect, onBlock, onD
                     {(chat.edad || chat.escolaridad || chat.municipio) && chat.categoria && <span className="shrink-0">•</span>}
                     {chat.categoria && <span className="truncate shrink-0">{toTitleCase(chat.categoria)}</span>}
                 </div>
-                {Array.isArray(chat.tags) && chat.tags.length > 0 && (
-                    <div className="hidden lg:flex flex-wrap items-center gap-1 mt-1">
-                        {chat.tags.slice(0, 4).map(t => {
+                {/* Renglón inferior ÚNICO: etiquetas + anuncio + atendiendo + lectores en línea
+                    en una sola línea (antes eran dos renglones) → tarjeta más delgada. flex-wrap
+                    para que SIEMPRE quepa aunque haya muchas etiquetas (se acomoda dinámicamente).
+                    En lg se renderiza SIEMPRE con altura reservada (min-h): la tarjeta mide igual
+                    tenga o no etiquetas/presencia/lock, así la lista virtualizada no brinca cuando
+                    un lector entra/sale o expira un lock. En pantallas chicas sigue oculto. */}
+                <div className="hidden lg:flex items-start justify-between gap-2 mt-1 min-h-[20px]">
+                    <div className="flex flex-wrap items-center gap-1 min-w-0">
+                        {Array.isArray(chat.tags) && chat.tags.slice(0, 4).map(t => {
                             const color = tagColorMap?.get(t) || '#64748b';
                             return (
                                 <span key={t} className="inline-flex items-center text-[9px] font-semibold text-white px-2 py-0.5 rounded-full shrink-0"
@@ -198,53 +204,36 @@ const ChatRow = React.memo(({ chat, isSelected, isPinned, onSelect, onBlock, onD
                                 </span>
                             );
                         })}
-                        {chat.tags.length > 4 && (
-                            <span className="text-[9px] text-[#8696a0] dark:text-[#697882]">+{chat.tags.length - 4}</span>
+                        {Array.isArray(chat.tags) && chat.tags.length > 4 && (
+                            <span className="text-[9px] text-[#8696a0] dark:text-[#697882] shrink-0">+{chat.tags.length - 4}</span>
+                        )}
+                        {chat.adId && (
+                            <button
+                                type="button"
+                                title="Copiar Ad ID"
+                                onClick={(e) => { e.stopPropagation(); navigator.clipboard?.writeText(chat.adId); }}
+                                className="shrink-0 font-mono text-[9px] text-violet-400 dark:text-violet-500 bg-violet-50 dark:bg-violet-500/10 hover:bg-violet-100 dark:hover:bg-violet-500/20 px-1.5 py-0.5 rounded border border-violet-200/60 dark:border-violet-500/20 transition-colors"
+                            >
+                                📢 {chat.adId}
+                            </button>
+                        )}
+                        {lockText && (
+                            <span className="inline-flex items-center gap-1 text-[9px] font-semibold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-500/10 border border-blue-100 dark:border-blue-500/20 px-1.5 py-0.5 rounded truncate max-w-[130px]" title={lockText}>
+                                <Lock className="w-2.5 h-2.5 shrink-0" />
+                                <span className="truncate">{lockText}</span>
+                            </span>
                         )}
                     </div>
-                )}
-                {/* Renglón meta inferior (anuncio / atendiendo / lectores en línea). En lg SIEMPRE
-                    se renderiza con altura reservada (min-h): así la tarjeta mide IGUAL tenga o no
-                    presencia/lock, y la lista virtualizada no se recorre unos px cuando un lector
-                    entra/sale o expira un lock (ese era el "sube y baja"). Estándar de listas
-                    virtualizadas (WhatsApp/Slack): altura de fila estable, la presencia no agrega
-                    alto. En pantallas chicas sigue oculto (no hay jitter ahí). */}
-                {(chat.adId || chat.adHeadline || onlineReaders.length > 0 || lockText) ? (
-                    <div className="hidden lg:flex items-center justify-between mt-0.5 min-h-[18px] text-[10px] text-[#8696a0] dark:text-[#697882]">
-                        <span className="flex items-center gap-1.5 min-w-0 truncate">
-                            {chat.adId && (
-                                <button
-                                    type="button"
-                                    title="Copiar Ad ID"
-                                    onClick={(e) => { e.stopPropagation(); navigator.clipboard?.writeText(chat.adId); }}
-                                    className="shrink-0 font-mono text-[9px] text-violet-400 dark:text-violet-500 bg-violet-50 dark:bg-violet-500/10 hover:bg-violet-100 dark:hover:bg-violet-500/20 px-1.5 py-0.5 rounded border border-violet-200/60 dark:border-violet-500/20 transition-colors"
-                                >
-                                    📢 {chat.adId}
-                                </button>
-                            )}
-                            {lockText && (
-                                <span className="inline-flex items-center gap-1 text-[9px] font-semibold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-500/10 border border-blue-100 dark:border-blue-500/20 px-1.5 py-0.5 rounded truncate max-w-[130px]" title={lockText}>
-                                    <Lock className="w-2.5 h-2.5 shrink-0" />
-                                    <span className="truncate">{lockText}</span>
+                    {onlineReaders.length > 0 && (
+                        <div className="flex gap-1 shrink-0 ml-2">
+                            {onlineReaders.map((r, idx) => (
+                                <span key={idx} className="text-[10px] text-blue-600 dark:text-blue-400 font-medium whitespace-nowrap">
+                                    {r.userId === userId ? 'Tú' : (r.userName || '?')}
                                 </span>
-                            )}
-                        </span>
-                        {onlineReaders.length > 0 && (
-                            <div className="flex gap-1 shrink-0 ml-2">
-                                {onlineReaders.map((r, idx) => (
-                                    <span key={idx} className="text-[10px] text-blue-600 dark:text-blue-400 font-medium whitespace-nowrap">
-                                        {r.userId === userId ? 'Tú' : (r.userName || '?')}
-                                    </span>
-                                ))}
-                            </div>
-                        )}
-                    </div>
-                ) : (
-                    // Slot vacío con la MISMA altura reservada: mantiene la tarjeta a alto
-                    // constante cuando no hay anuncio/lectores/lock (evita el jitter al aparecer
-                    // un lector). Solo en lg, igual que el renglón real.
-                    <div className="hidden lg:block mt-0.5 min-h-[18px]" aria-hidden="true" />
-                )}
+                            ))}
+                        </div>
+                    )}
+                </div>
             </div>
         </div>
     );
