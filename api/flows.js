@@ -41,7 +41,7 @@ export const NL_MUNICIPIOS = [
     'Vallecillo', 'Villaldama'
 ];
 
-export const ESCOLARIDADES = ['Primaria', 'Secundaria', 'Preparatoria', 'Licenciatura', 'Técnica', 'Posgrado'];
+const ESCOLARIDADES = ['Primaria', 'Secundaria', 'Preparatoria', 'Licenciatura', 'Técnica', 'Posgrado'];
 
 async function getFlows(redis) {
     const raw = await getCachedConfig(redis, REDIS_KEY);

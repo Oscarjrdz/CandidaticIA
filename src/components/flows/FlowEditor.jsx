@@ -34,7 +34,7 @@ const DEFAULT_DATA_BY_TYPE = {
         header: { type: 'none', text: '', mediaUrl: '', filename: '' },
         body: '',
         footer: '',
-        buttons: [{ id: '__OPT__', title: '' }], // ids se regeneran al crear el nodo (freshInteractiveData)
+        buttons: [{ id: '__OPT__', title: '' }], // ids se regeneran al crear el nodo (freshDefaultData)
         listButtonText: 'Ver opciones',
         sections: [{ title: 'Opciones', rows: [{ id: '__OPT__', title: '', description: '' }] }],
         ctaDisplayText: '',

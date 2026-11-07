@@ -107,7 +107,20 @@ Oscar quiere pasar sección por sección del dashboard dejando cada una "en su m
 - ✅ **Candidatos** — limpiada 2026-11-06 (detalle abajo).
 - ✅ **Chat Web** — limpiada 2026-11-06 (detalle abajo).
 - ✅ **Mapa** — limpiada 2026-11-06 (detalle abajo).
-- ⬜ Flujos (`FlowsSection.jsx`) · ⬜ Envíos Masivos (`BulksSection.jsx`) · ⬜ CRM (`CRMProjectsSection.jsx`) · ⬜ Estadísticas (`StatsSection.jsx`) · ⬜ Ads (`AdsStatisticsSection.jsx`) · ⬜ Configuración (`SettingsSection.jsx`) · ⬜ Vacantes (`VacanciesSection.jsx`) · ⬜ Bolsa (`BolsaSection.jsx`) · ⬜ Notificaciones (`NotificacionesSection.jsx`) · ⬜ Media (`MediaLibrarySection.jsx`) · ⬜ Bot IA (`BotIASection.jsx`).
+- ✅ **Flujos** — limpiada 2026-11-06 (detalle abajo). · ⬜ Envíos Masivos (`BulksSection.jsx`) · ⬜ CRM (`CRMProjectsSection.jsx`) · ⬜ Estadísticas (`StatsSection.jsx`) · ⬜ Ads (`AdsStatisticsSection.jsx`) · ⬜ Configuración (`SettingsSection.jsx`) · ⬜ Vacantes (`VacanciesSection.jsx`) · ⬜ Bolsa (`BolsaSection.jsx`) · ⬜ Notificaciones (`NotificacionesSection.jsx`) · ⬜ Media (`MediaLibrarySection.jsx`) · ⬜ Bot IA (`BotIASection.jsx`).
+
+### ✅ Flujos — 2026-11-06
+
+**Intención:** dejar el **editor visual de flujos** (UI: nodos, drag, panel de edición + endpoint CRUD) en su mejor versión **sin tocar el MOTOR de ejecución** (`flow-engine.js`, `flows-data.js`, `cron/flow-incompletos.js` — hot path de WhatsApp, intacto por completo) ni ninguna ruta de caché. Verificado con `node --check`, `npm run build` (✓) y `eslint` (exit 0, cero errores nuevos). **Hallazgo clave: la sección ya estaba casi impecable** (mantenimiento continuo) — cero componentes huérfanos, cero estado write-only, cero imports sin usar. Solo 3 cambios de cirugía mínima, todos de comportamiento idéntico:
+
+- **Código muerto eliminado (0 referencias en `src/` y `api/`, grep):**
+  - `isNodeLocked()` en `src/utils/nodeLocks.js` — helper puro exportado, nunca importado en ningún lado. Se borró la función + su comentario. `getFlowLocks`/`toggleNodeLock`/`initFlowLocksIfNeeded` (los otros 3 exports) SÍ se usan en `FlowEditor.jsx` y quedan intactos.
+- **Resto arqueológico (nombre que mentía):**
+  - `FlowEditor.jsx` línea 37: comentario decía `(freshInteractiveData)` pero la función real es `freshDefaultData` (rename viejo). Solo se corrigió el comentario.
+- **Export muerto adelgazado:**
+  - `api/flows.js`: `export const ESCOLARIDADES` → `const ESCOLARIDADES` (solo se usa localmente en el endpoint `meta`; nadie lo importa afuera). Su hermano `NL_MUNICIPIOS` SÍ lo importa `api/bulks.js`, así que ese conserva el `export`.
+- **Verificado vivo (NO se tocó):** las 18 funciones de `flowsService.js`; los 15 componentes locales del drawer; todos los `useState` de `FlowEditor` (leídos y escritos); el `mode=checkpoint-today` de `api/flows.js` (lo consume `CandidatesSection.jsx`).
+- **Intacto a propósito:** el MOTOR completo (límite duro); el `flowsCache` stale-while-revalidate de `FlowsGallery` y el par `getFlowsFresh` (editor, sin caché) vs `getCachedConfig` (hot path) de `api/flows.js`; el SSE del caminante (`flow:step`/`flow:counter`), el heartbeat `watch`, el historial de undo, los candados por usuario (`flowNodeLocks`), el `FlowMetricsBoard` (widget flotante global), y el par de constantes `NL_MUNICIPIOS`/`ESCOLARIDADES`.
 
 ### ✅ Candidatos — 2026-11-06
 

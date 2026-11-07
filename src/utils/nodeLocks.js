@@ -11,11 +11,6 @@ export function getFlowLocks(preferences, flowId) {
     return preferences?.flowNodeLocks?.[flowId] || {};
 }
 
-// ¿Ese nodo está bloqueado para este usuario en este flujo?
-export function isNodeLocked(preferences, flowId, nodeId) {
-    return !!getFlowLocks(preferences, flowId)[nodeId];
-}
-
 // Migración una-sola-vez por usuario+flujo: si este flujo NUNCA se ha inicializado (no existe
 // su llave en flowNodeLocks), cierra TODOS los nodos actuales — así "lo ya hecho" nace
 // protegido. Los nodos que se agreguen después no estarán en el mapa → nacen abiertos.
