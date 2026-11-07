@@ -2185,7 +2185,39 @@ export async function runReturningFlowsForCandidate(candidateId, candidateSnapsh
         // en modo "actual" contra vacanteActual.
         runInBackground((async () => {
             for (const flow of eligible) {
-                await runOneFlow(redis, flow, candidateId, { ...candidateSnapshot }, { ephemeral: true })
+                const flowOpts = { ephemeral: true };
+                // 🔁 RE-CLIC MISMA CAMPAÑA: si volvió clickeando la MISMA etiqueta que YA traía
+                // (reclick=true) y el Inicio tiene "mensaje re-clic misma campaña", se lo mandamos
+                // UNA vez ANTES de re-meterlo al flujo ("ya te postulaste antes, aquí va la info de
+                // nuevo"). Solo en reclick=true: una campaña NUEVA (reclick=false) es info de otra
+                // vacante, no esto. El mismo flowOpts se pasa a runOneFlow → el ritmo de envíos continúa.
+                if (adReclick) {
+                    const inicio = flow.nodes.find(n => n.type === 'inicio');
+                    const msg = typeof inicio?.data?.reclickMessage === 'string' ? inicio.data.reclickMessage.trim() : '';
+                    if (msg) {
+                        try {
+                            const config = await getUltraMsgConfig(candidateSnapshot.incomingPhoneNumberId || candidateSnapshot.instanceId);
+                            if (config?.token && config?.instanceId) {
+                                const cleanTo = String(candidateSnapshot.whatsapp).replace(/\D/g, '');
+                                const text = substituteVariables(inicio.data.reclickMessage, candidateSnapshot);
+                                for (const bubbleText of splitBubbles(text)) {
+                                    const sendResult = await pacedSend(flowOpts, () => sendUltraMsgMessageWithRetry(config.instanceId, config.token, cleanTo, bubbleText, 'chat', { priority: 1 }));
+                                    if (sendResult?.success) {
+                                        await saveFlowOutbound(candidateSnapshot.id, {
+                                            from: 'me', content: bubbleText, timestamp: new Date().toISOString(),
+                                            meta: { flow: true, flowId: flow.id, nodeId: inicio.id, reclick: true }
+                                        }, sendResult);
+                                    } else {
+                                        console.error(`[FLOW-RETURN] reclick msg ${flow.id} candidato ${candidateSnapshot.id}: envío falló —`, sendResult?.error);
+                                    }
+                                }
+                            }
+                        } catch (e) {
+                            console.error(`[FLOW-RETURN] reclick msg ${flow.id} candidato ${candidateSnapshot.id}:`, e?.message);
+                        }
+                    }
+                }
+                await runOneFlow(redis, flow, candidateId, { ...candidateSnapshot }, flowOpts)
                     .catch(e => console.error(`[FLOW-RETURN] flujo ${flow.id} candidato ${candidateId}:`, e?.message));
             }
         })());
