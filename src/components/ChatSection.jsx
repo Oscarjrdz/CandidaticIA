@@ -2685,8 +2685,16 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
     }, [hasMore, manualPipelineFilter, manualStepFilter]);
 
     // Filter and sort candidates (search is handled server-side via loadCandidates)
+    // 📌 Chat abierto "pegajoso": con un filtro de No leídos activo, el chat que estás
+    // atendiendo NO se cae de la lista al contestarle (ya pasó a leído). Se queda anclado
+    // hasta que selecciones OTRO chat — ahí sí sale (con su animación de salida normal).
+    // Solo exime el criterio de NO-LEÍDO; el resto de filtros (RBAC, etiqueta, perfil,
+    // edad/género/municipio) siguen aplicando igual, para no "resucitar" un chat que en
+    // realidad ya no pertenece a la vista.
+    const stickySelectedId = selectedChat?.id;
     const filteredCandidates = useMemo(() => {
         const result = (candidates || []).filter(c => {
+            const isSticky = stickySelectedId && c.id === stickySelectedId;
 
             // --- RBAC Base Filter: Only show candidates from allowed projects or tags ---
             if (!passesChatRBACFilter(c, user, ownedTagNames)) return false;
@@ -2708,7 +2716,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                 if (!hasAnyTag && !isRecent) return false;
             }
 
-            if (activeFilter === 'unread' && !checkIfUnread(c)) return false;
+            if (activeFilter === 'unread' && !checkIfUnread(c) && !isSticky) return false;
             if (selectedTagValues.length > 0) {
                 const tagNames = Array.isArray(c?.tags)
                     ? c.tags.map(t => (typeof t === 'string' ? t : (t?.name || '')).trim()).filter(Boolean)
@@ -2726,7 +2734,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                 const isComplete = isProfileComplete(c);
                 if (filterValue === 'complete' && !isComplete) return false;
                 if (filterValue === 'incomplete' && isComplete) return false;
-                if (profileUnreadOnly && !checkIfUnread(c)) return false;
+                if (profileUnreadOnly && !checkIfUnread(c) && !isSticky) return false;
             }
 
             // --- Filtros Múltiples (Edad, Género, Municipio) ---
@@ -2766,7 +2774,8 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         selectedTag,
         manualPipelineFilter, manualStepFilter,
         pinnedChats,
-        selectedAges, selectedGenders, selectedMunicipalities
+        selectedAges, selectedGenders, selectedMunicipalities,
+        stickySelectedId
     ]);
 
     // ── ORDEN SIEMPRE EN VIVO (estilo WhatsApp Web) ───────────────────────────────────
