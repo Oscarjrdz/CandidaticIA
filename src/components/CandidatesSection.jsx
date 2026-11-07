@@ -274,7 +274,7 @@ const CandidatesSection = () => {
     // Dynamic Fields & Column Order State
     const [fields, setFields] = useState(() => sectionCache.fields || []);
     const [fieldsLoaded, setFieldsLoaded] = useState(() => !!sectionCache.fields);
-    const fieldsMap = React.useMemo(() => fields.reduce((acc, f) => ({ ...acc, [f.value]: f }), {}), [fields]);
+    const fieldsMap = React.useMemo(() => Object.fromEntries(fields.map(f => [f.value, f])), [fields]);
     const [columnOrder, setColumnOrder] = useState(() => {
         try {
             const saved = localStorage.getItem('candidateColumnOrder');
@@ -769,7 +769,6 @@ const CandidatesSection = () => {
         if (candidates.length > 0 || sectionCache.candidates) sectionCache.candidates = candidates;
     }, [candidates]);
 
-    const subscriptionRef = useRef(null);
     const aiFilteredCandidatesRef = useRef(aiFilteredCandidates);
     
     useEffect(() => {
@@ -831,22 +830,13 @@ const CandidatesSection = () => {
             }
         });
 
-        subscriptionRef.current = subscription;
         subscription.updateParams(LIMIT, 0, '');
         subscription.start();
 
         return () => {
             subscription.stop();
-            subscriptionRef.current = null;
         };
     }, []);
-
-    // Dynamic subscription params updater
-    useEffect(() => {
-        if (subscriptionRef.current) {
-            subscriptionRef.current.updateParams(LIMIT, (currentPage - 1) * LIMIT, search);
-        }
-    }, [currentPage, search]);
 
     const loadCandidates = async (page = 1) => {
         setLoading(true);

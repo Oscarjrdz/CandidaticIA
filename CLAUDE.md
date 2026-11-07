@@ -84,6 +84,44 @@ Todas verificadas con `MONITOR` en vivo contra Redis de producción, no solo rev
 - `deleteCandidate()` en `storage.js` hace un `SCAN` completo del keyspace para limpiar marcadores de pipeline — costoso con ~15,500 llaves, pero es una acción de admin poco frecuente.
 - `adId`/`adHeadline` (campos de anuncio, más chicos que los de arriba) siguen en la respuesta de lista porque `ChatSection.jsx`/`ChatRow.jsx` los usan para el badge "vino de anuncio" — no quitar.
 
+## Limpieza quirúrgica de secciones — playbook repetible (desde 2026-11-06)
+
+Oscar quiere pasar sección por sección del dashboard dejando cada una "en su mejor versión": sin código muerto, sin logs viejos, sin parches, con arquitectura sólida — **pero sin romper nada y sin degradar la carga rápida**. Esto se hace de forma incremental, una sección por sesión. Si en una sesión futura te piden "limpia la sección X igual que Candidatos", este es el procedimiento exacto.
+
+**Principios NO negociables (violarlos = retroceso):**
+1. **La carga rápida es sagrada.** No tocar NINGUNA ruta de caché: `sectionCache` de módulo (pintado instantáneo al re-entrar), cachés de endpoint (`candidatesListCache` y equivalentes), headers `X-Candidatic-Cache`/`Cache-Control`, el patrón stale-while-revalidate ni `reconcileCandidates`. Ver [[project_anti_brinco_secciones]].
+2. **Borrar solo con 0 referencias confirmadas por grep** en `src/` **Y** `api/` (grep exacto del identificador/archivo, con ojo en falsos positivos por substring — p.ej. "ADN" aparece en nombres de colonias).
+3. **Cambios de comportamiento idéntico únicamente:** renombres, inline de wrappers no-op, dedupe de funciones, O(n²)→lineal. Nada que cambie la salida observable.
+4. **Nada de refactors de arquitectura "de fondo" sin aprobación explícita** (ej. reescribir el SSE, desacoplar el ack de Meta, cambiar el motor de paginación). Eso es proyecto aparte.
+5. **Dejar intacto a propósito** lo que ya funciona aunque "se vea raro": SSE singleton, `Set` de sesión que crecen (p.ej. `_firedConfettiIds`), catch vacíos intencionales, fire-and-forget con `.catch(()=>{})`.
+
+**Pasos:**
+1. Mapear TODOS los archivos de la sección: componente(s) de `src/components/`, su `service`, su `hook`, el endpoint `api/<x>.js` y los endpoints hijos `api/<x>/*.js`.
+2. Cazar código muerto: componentes/endpoints/funciones/refs/efectos con 0 lectores reales.
+3. Identificar restos arqueológicos: wrappers no-op, nombres que mienten (de sistemas ya borrados), efectos que no leen nada, comentarios de sistemas eliminados.
+4. Micro-mejoras de bajo riesgo sin cambiar comportamiento.
+5. Verificar SIEMPRE: `node --check <archivo>` (backend), `npm run build` (frontend), `npx eslint <solo-archivos-tocados>` (el repo tiene ~30-40 errores preexistentes — compara, no asumas que son tuyos). Si tocaste Redis, prueba contra Redis real con candidato de prueba desechable.
+6. Documentar aquí abajo con fecha: qué se borró/cambió, la intención, y qué quedó intacto a propósito.
+
+**Estado por sección** (marca al terminar cada una):
+- ✅ **Candidatos** — limpiada 2026-11-06 (detalle abajo).
+- ⬜ Chat Web (`ChatSection.jsx` — archivo gigante, el más delicado; alto tráfico SSE, ver [[feedback_chatweb_alto_trafico]]).
+- ⬜ Flujos (`FlowsSection.jsx`) · ⬜ Envíos Masivos (`BulksSection.jsx`) · ⬜ CRM (`CRMProjectsSection.jsx`) · ⬜ Mapa (`MapSection.jsx`) · ⬜ Estadísticas (`StatsSection.jsx`) · ⬜ Ads (`AdsStatisticsSection.jsx`) · ⬜ Configuración (`SettingsSection.jsx`) · ⬜ Vacantes (`VacanciesSection.jsx`) · ⬜ Bolsa (`BolsaSection.jsx`) · ⬜ Notificaciones (`NotificacionesSection.jsx`) · ⬜ Media (`MediaLibrarySection.jsx`) · ⬜ Bot IA (`BotIASection.jsx`).
+
+### ✅ Candidatos — 2026-11-06
+
+**Intención:** dejar la sección en su mejor versión sin reintroducir riesgo y **sin tocar ninguna ruta de caché**. Verificado con `node --check`, `npm run build` (2×) y `eslint` (cero errores nuevos).
+
+- **Código muerto eliminado (0 referencias en todo el repo, verificado con grep):**
+  - `api/candidates/clean-gender.js` — endpoint de migración one-off para normalizar `genero`; ningún caller ni UI.
+  - `src/components/CandidateADNCard.jsx` — componente huérfano (140 líneas), cero imports.
+- **Restos arqueológicos del sistema de métricas eliminado (`usage-metrics.js`, borrado en julio 2026):**
+  - En `api/candidates.js` se quitó el wrapper no-op `finishCandidatesResponse(status, payload)` (era solo `res.status().json()`) y se renombró `redisForMetrics` → `redis` (ya no mide nada, es el cliente general). Puro adelgazamiento de indirección; comportamiento idéntico.
+- **`CandidatesSubscription` ya no hace polling (es carga inicial de un solo tiro):**
+  - Se eliminó el `useEffect` que llamaba `subscriptionRef.current.updateParams()` en cada cambio de página/búsqueda — era un no-op (nada lee esos params después del montaje; el refetch real lo hace el efecto debounced de `loadCandidates`). Con eso `subscriptionRef` quedó huérfano y también se removió. La llamada `updateParams` del montaje **se conservó** porque sí alimenta `pollFull()` de la carga inicial.
+- **Micro-mejora:** `fieldsMap` pasó de `reduce` con spread (O(n²)) a `Object.fromEntries(fields.map(...))` — resultado idéntico, sin crear objetos intermedios.
+- **Intacto a propósito** (bajo el principio de no tocar lo que funciona): el `sectionCache` de módulo (pintado instantáneo al re-entrar), `candidatesListCache` + headers `X-Candidatic-Cache`/`Cache-Control`, el patrón stale-while-revalidate, `reconcileCandidates` (su `JSON.stringify` por fila es intencional a 100 filas), el SSE singleton y los `Set` de sesión (`_firedConfettiIds`, `dailySeenCandidateIdsRef`).
+
 ## Convenciones y patrones establecidos
 
 - **Fire-and-forget para lo que no es crítico:** usa `.catch(() => {})` sin `await` para telemetría, logs de debug, notificaciones SSE — patrón ya usado en decenas de lugares (`recordAITelemetry`, `sendConversionEvent`, `notifyCandidateUpdate`). No lo confundas con negligencia: es intencional.

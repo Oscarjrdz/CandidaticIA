@@ -119,10 +119,7 @@ export default async function handler(req, res) {
     try {
         // DYNAMIC IMPORTS
         const { getCandidates, getCandidatesUnreadFirst, getCandidatesUnreadFirstByTag, getCandidatesFiltered, getCandidateById, deleteCandidate, validateAdminSession, getRedisClient, getUsers, getCandidatesForRestrictedUser } = await import('./utils/storage.js');
-        const redisForMetrics = getRedisClient();
-        const finishCandidatesResponse = async (status, payload) => {
-            return res.status(status).json(payload);
-        };
+        const redis = getRedisClient();
 
         // Validar sesión admin
         const userId = await validateAdminSession(req);
@@ -133,15 +130,13 @@ export default async function handler(req, res) {
             const { limit = '100', offset = '0', search = '', stats, id, excludeLinked = 'false', tag = '', unreadFirst = 'false', filter = '', unreadOnly = 'false', action = '', manualProjectId = '', manualStepId = '' } = req.query;
 
             if (action === 'filter_counts') {
-                const counts = await buildFilterCounts(redisForMetrics);
-                return finishCandidatesResponse(200, { success: true, counts });
+                const counts = await buildFilterCounts(redis);
+                return res.status(200).json({ success: true, counts });
             }
 
             // Estadísticas (Optional mixed response)
             let statsData = null;
             if (stats === 'true') {
-                const redis = redisForMetrics;
-
                 const pipeline = redis.pipeline();
                 pipeline.get('stats:msg:incoming');
                 pipeline.get('stats:msg:outgoing');
@@ -172,7 +167,7 @@ export default async function handler(req, res) {
                         error: 'Candidato no encontrado'
                     });
                 }
-                return finishCandidatesResponse(200, {
+                return res.status(200).json({
                     success: true,
                     candidate: candidate
                 });
@@ -196,7 +191,7 @@ export default async function handler(req, res) {
             if (cachedPayload) {
                 res.setHeader('X-Candidatic-Cache', 'HIT');
                 res.setHeader('Cache-Control', 'private, max-age=10');
-                return finishCandidatesResponse(200, cachedPayload);
+                return res.status(200).json(cachedPayload);
             }
 
             // ── RBAC: usuario CON restricción (número/etiqueta) → lista filtrada server-side. ──
@@ -226,7 +221,7 @@ export default async function handler(req, res) {
                 setCachedCandidatesList(cacheKey, payload);
                 res.setHeader('X-Candidatic-Cache', 'MISS');
                 res.setHeader('Cache-Control', 'private, max-age=10');
-                return finishCandidatesResponse(200, payload);
+                return res.status(200).json(payload);
             }
 
             // Modo filtro servidor: unread / complete / incomplete (sin tag ni búsqueda)
@@ -247,7 +242,7 @@ export default async function handler(req, res) {
                 setCachedCandidatesList(cacheKey, payload);
                 res.setHeader('X-Candidatic-Cache', 'MISS');
                 res.setHeader('Cache-Control', 'private, max-age=10');
-                return finishCandidatesResponse(200, payload);
+                return res.status(200).json(payload);
             }
 
             if (['unread', 'complete', 'incomplete'].includes(filter) && !search && !tag) {
@@ -258,7 +253,7 @@ export default async function handler(req, res) {
                 setCachedCandidatesList(cacheKey, payload);
                 res.setHeader('X-Candidatic-Cache', 'MISS');
                 res.setHeader('Cache-Control', 'private, max-age=10');
-                return finishCandidatesResponse(200, payload);
+                return res.status(200).json(payload);
             }
 
             // Modo unreadFirst sin filtro: no-leídos + N recientes
@@ -276,7 +271,7 @@ export default async function handler(req, res) {
                 setCachedCandidatesList(cacheKey, payload);
                 res.setHeader('X-Candidatic-Cache', 'MISS');
                 res.setHeader('Cache-Control', 'private, max-age=10');
-                return finishCandidatesResponse(200, payload);
+                return res.status(200).json(payload);
             }
 
             // Modo unreadFirst con tag activo y primera página: no-leídos con ese tag primero.
@@ -291,7 +286,7 @@ export default async function handler(req, res) {
                 setCachedCandidatesList(cacheKey, payload);
                 res.setHeader('X-Candidatic-Cache', 'MISS');
                 res.setHeader('Cache-Control', 'private, max-age=10');
-                return finishCandidatesResponse(200, payload);
+                return res.status(200).json(payload);
             }
 
             // Lista de candidatos (modo normal)
@@ -315,7 +310,7 @@ export default async function handler(req, res) {
             setCachedCandidatesList(cacheKey, payload);
             res.setHeader('X-Candidatic-Cache', 'MISS');
             res.setHeader('Cache-Control', 'private, max-age=10');
-            return finishCandidatesResponse(200, payload);
+            return res.status(200).json(payload);
         }
 
         // POST /api/candidates - Crear candidato manualmente
@@ -347,7 +342,7 @@ export default async function handler(req, res) {
                 ultimoMensaje: new Date().toISOString()
             });
             clearCandidatesListCache();
-            clearFilterCountsCache(redisForMetrics);
+            clearFilterCountsCache(redis);
 
             return res.status(201).json({ success: true, candidate, existed: false });
         }
@@ -421,7 +416,7 @@ export default async function handler(req, res) {
 
             const updatedCandidate = await updateCandidate(id, updates);
             clearCandidatesListCache();
-            clearFilterCountsCache(redisForMetrics);
+            clearFilterCountsCache(redis);
             // Trigger stats refresh in background (don't block the UI)
             import('./utils/bot-stats.js').then(m => m.calculateBotStats()).catch(() => { });
 
@@ -444,7 +439,7 @@ export default async function handler(req, res) {
 
             await deleteCandidate(id);
             clearCandidatesListCache();
-            clearFilterCountsCache(redisForMetrics);
+            clearFilterCountsCache(redis);
             // Non-blocking background sync
             import('./utils/bot-stats.js').then(m => m.calculateBotStats()).catch(() => { });
 
