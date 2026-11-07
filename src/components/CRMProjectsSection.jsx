@@ -300,19 +300,13 @@ const CRMProjectsSection = () => {
     const [activeProject, setActiveProject] = useState(() => activeProjectCache);
     const [candidates, setCandidates] = useState(() => (activeProjectCache && projectCandidatesCache[activeProjectCache.id]) || []);
     const [loading, setLoading] = useState(() => !projectsCache);
-    const [_loadingCands, setLoadingCands] = useState(false);
     const [showCreate, setShowCreate] = useState(false);
     const [projName, setProjName] = useState('');
     const [projDesc, setProjDesc] = useState('');
     const [projColor, setProjColor] = useState('#3b82f6');
     const [editingProject, setEditingProject] = useState(null);
-    const [searchOpen, setSearchOpen] = useState(false);
-    const [_activeChatCandidate, _setActiveChatCandidate] = useState(null);
-    
+
     const [calendarModalConfig, setCalendarModalConfig] = useState({ isOpen: false, projectId: null, projectName: '', candidateId: null, candidateName: '' });
-    const [searchQuery, setSearchQuery] = useState('');
-    const [searchResults, setSearchResults] = useState([]);
-    const [searching, setSearching] = useState(false);
     const [chatCandidate, setChatCandidate] = useState(null);
 
     // Step Edit Modal state
@@ -422,13 +416,11 @@ const CRMProjectsSection = () => {
     };
 
     const fetchCandidates = async (id) => {
-        setLoadingCands(true);
         try {
             const res = await fetch(`/api/manual_projects?id=${id}&view=candidates`);
             const data = await res.json();
             if (data.success) { setCandidates(data.candidates); projectCandidatesCache[id] = data.candidates; }
         } catch (e) { console.error(e); }
-        finally { setLoadingCands(false); }
     };
 
     const refreshCandidatesSilently = async (projectId) => {
@@ -702,35 +694,6 @@ const CRMProjectsSection = () => {
                 body: JSON.stringify({ id: candidateId, tags: newTags })
             });
         } catch (e) { showToast('Error al actualizar etiqueta', 'error'); }
-    };
-
-    const handleSearch = async () => {
-        if (!searchQuery.trim()) return;
-        setSearching(true);
-        try {
-            const res = await fetch('/api/candidates');
-            const data = await res.json();
-            if (data.success) {
-                const q = searchQuery.toLowerCase();
-                const linked = new Set(candidates.map(c => c.id));
-                const filtered = data.candidates.filter(c =>
-                    !linked.has(c.id) && ((c.nombre || '').toLowerCase().includes(q) || (c.whatsapp || '').includes(q))
-                ).slice(0, 20);
-                setSearchResults(filtered);
-            }
-        } catch (e) { console.error(e); }
-        finally { setSearching(false); }
-    };
-
-    const handleLinkCandidate = async (candidateId) => {
-        if (!activeProject) return;
-        const stepId = activeProject.steps?.[0]?.id || 'step_inicio';
-        try {
-            await fetch('/api/manual_projects', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'linkCandidate', projectId: activeProject.id, candidateId, stepId }) });
-            setSearchResults(prev => prev.filter(c => c.id !== candidateId));
-            fetchCandidates(activeProject.id);
-            showToast('Candidato vinculado', 'success');
-        } catch (e) { showToast('Error', 'error'); }
     };
 
     const handleUnlink = async (candidateId) => {
@@ -1223,46 +1186,6 @@ const CRMProjectsSection = () => {
                         <div className="flex gap-3">
                             <Button onClick={() => setShowCreate(false)} className="flex-1 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl py-3 font-bold">Cancelar</Button>
                             <Button onClick={handleCreate} disabled={!projName.trim()} className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl py-3 font-bold">{editingProject ? 'Guardar' : 'Crear'}</Button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Search/Add Candidates Modal */}
-            {searchOpen && (
-                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setSearchOpen(false)}>
-                    <div onClick={e => e.stopPropagation()} className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-lg p-6 space-y-4 animate-in zoom-in-95 duration-200 max-h-[80vh] flex flex-col">
-                        <div className="flex items-center justify-between">
-                            <h3 className="text-lg font-black text-slate-800 dark:text-white">Agregar Candidatos</h3>
-                            <button onClick={() => setSearchOpen(false)} className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700"><X className="w-5 h-5 text-slate-400" /></button>
-                        </div>
-                        <div className="flex gap-2">
-                            <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSearch()}
-                                placeholder="Buscar por nombre o teléfono..."
-                                className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm outline-none focus:border-blue-500 dark:text-white" autoFocus />
-                            <Button onClick={handleSearch} disabled={searching} className="bg-blue-600 text-white rounded-xl px-4 font-bold">
-                                {searching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
-                            </Button>
-                        </div>
-                        <div className="flex-1 overflow-y-auto space-y-2">
-                            {searchResults.length === 0 ? (
-                                <p className="text-center text-slate-400 text-sm py-8">{searching ? 'Buscando...' : 'Busca candidatos para agregar al proyecto'}</p>
-                            ) : searchResults.map(c => (
-                                <div key={c.id} className="flex items-center gap-3 p-3 rounded-xl border border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
-                                    {c.profilePic ? (
-                                        <img src={c.profilePic} className="w-9 h-9 rounded-full object-cover" alt="" />
-                                    ) : (
-                                        <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center text-white text-xs font-bold">{(c.nombre||'?')[0]?.toUpperCase()}</div>
-                                    )}
-                                    <div className="flex-1 min-w-0">
-                                        <p className="text-sm font-semibold text-slate-700 dark:text-slate-200 truncate">{c.nombre}</p>
-                                        <p className="text-[10px] text-slate-400">{formatPhone(c.whatsapp)}</p>
-                                    </div>
-                                    <Button onClick={() => handleLinkCandidate(c.id)} className="bg-blue-600 hover:bg-blue-700 text-white text-xs rounded-lg px-3 py-1.5 font-bold">
-                                        <Plus className="w-3 h-3 mr-1" /> Agregar
-                                    </Button>
-                                </div>
-                            ))}
                         </div>
                     </div>
                 </div>

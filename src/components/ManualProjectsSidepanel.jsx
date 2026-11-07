@@ -24,7 +24,7 @@ const extractPersistentCandidatePatch = (patch = {}) => {
 // Ver docs/anti-brinco-secciones.md.
 let projectsCache = null;
 
-const CustomProjectDropdown = ({ activeProjectId, projects, onChange, _candidates = [] }) => {
+const CustomProjectDropdown = ({ activeProjectId, projects, onChange }) => {
     const [isOpen, setIsOpen] = useState(false);
     
     const activeProject = projects.find(p => p.id === activeProjectId);
@@ -71,7 +71,7 @@ const CustomProjectDropdown = ({ activeProjectId, projects, onChange, _candidate
     );
 };
 
-export default function ManualProjectsSidepanel({ selectedChat, onClose, showToast, onCandidateUpdated, candidates = [] }) {
+export default function ManualProjectsSidepanel({ selectedChat, onClose, showToast, onCandidateUpdated }) {
     const { confirmModalJSX, showConfirm } = useConfirmModal();
     const [projects, setProjects] = useState(() => projectsCache || []);
     const [loading, setLoading] = useState(() => !projectsCache);
@@ -420,11 +420,10 @@ export default function ManualProjectsSidepanel({ selectedChat, onClose, showToa
                             <>
                                 <div className="bg-white dark:bg-[#111b21] border border-gray-100 dark:border-gray-800 rounded-xl p-4 shadow-sm">
                                     <h3 className="text-[13px] font-bold text-gray-400 uppercase tracking-wider mb-3">Proyecto Asignado</h3>
-                                    <CustomProjectDropdown 
-                                        activeProjectId={activeProjectId} 
-                                        projects={projects} 
+                                    <CustomProjectDropdown
+                                        activeProjectId={activeProjectId}
+                                        projects={projects}
                                         onChange={(val) => handleAssignCandidate(val, null)}
-                                        candidates={candidates}
                                     />
                                 </div>
 

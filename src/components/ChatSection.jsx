@@ -7131,7 +7131,6 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                     selectedChat={selectedChat}
                     onClose={() => setRightPanelOpen(false)}
                     showToast={showToast}
-                    candidates={candidates}
                     onCandidateUpdated={(updatedCandidate) => {
                         setCandidates(prev => prev.map(c => c.id === updatedCandidate.id ? updatedCandidate : c));
                         if(selectedChat?.id === updatedCandidate.id) setSelectedChat(updatedCandidate);

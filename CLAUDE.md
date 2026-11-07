@@ -107,7 +107,19 @@ Oscar quiere pasar sección por sección del dashboard dejando cada una "en su m
 - ✅ **Candidatos** — limpiada 2026-11-06 (detalle abajo).
 - ✅ **Chat Web** — limpiada 2026-11-06 (detalle abajo).
 - ✅ **Mapa** — limpiada 2026-11-06 (detalle abajo).
-- ✅ **Flujos** — limpiada 2026-11-06 (detalle abajo). · ⬜ Envíos Masivos (`BulksSection.jsx`) · ⬜ CRM (`CRMProjectsSection.jsx`) · ⬜ Estadísticas (`StatsSection.jsx`) · ⬜ Ads (`AdsStatisticsSection.jsx`) · ⬜ Configuración (`SettingsSection.jsx`) · ⬜ Vacantes (`VacanciesSection.jsx`) · ⬜ Bolsa (`BolsaSection.jsx`) · ⬜ Notificaciones (`NotificacionesSection.jsx`) · ⬜ Media (`MediaLibrarySection.jsx`) · ⬜ Bot IA (`BotIASection.jsx`).
+- ✅ **Flujos** — limpiada 2026-11-06 (detalle abajo).
+- ✅ **Proyectos (CRM)** — limpiada 2026-11-06 (detalle abajo). · ⬜ Envíos Masivos (`BulksSection.jsx`) · ⬜ Estadísticas (`StatsSection.jsx`) · ⬜ Ads (`AdsStatisticsSection.jsx`) · ⬜ Configuración (`SettingsSection.jsx`) · ⬜ Vacantes (`VacanciesSection.jsx`) · ⬜ Bolsa (`BolsaSection.jsx`) · ⬜ Notificaciones (`NotificacionesSection.jsx`) · ⬜ Media (`MediaLibrarySection.jsx`) · ⬜ Bot IA (`BotIASection.jsx`).
+
+### ✅ Proyectos (CRM) — 2026-11-06
+
+**Intención:** dejar el tablero Kanban de Proyectos y su panel lateral en su mejor versión **sin tocar el endpoint** (`api/manual_projects.js`, impecable), **ninguna ruta de caché** (`projectsCache`/`activeProjectCache`/`projectCandidatesCache`/`availableTagsCache` + stale-while-revalidate), **el hot path SSE** (`crm:project`/`crm:candidate`/`candidate:update`/`candidate:delete`), el **RBAC** (`crm_own_mode`/`allowed_crm_projects`) ni la **estructura Redis** (`candidatic_manual_projects` / `crm_links:<id>`). Verificado con `npm run build` (✓) y `eslint` en los 3 archivos tocados (exit 0, cero errores nuevos). Todo lo borrado es código muerto / estado write-only / prop inerte — **comportamiento idéntico, salida del DOM idéntica**.
+
+- **Modal "Agregar Candidatos" completo = código muerto (`CRMProjectsSection.jsx`):** `setSearchOpen(true)` **no se llamaba en ningún lado** (grep en `src/` y `api/`) — el modal nunca podía abrirse. Se eliminó todo su clúster: los estados `searchOpen`/`searchQuery`/`searchResults`/`searching`, las funciones `handleSearch` y `handleLinkCandidate` (esta última solo la invocaba el modal muerto), y el bloque JSX. **El `linkCandidate` real del backend lo siguen usando el sidepanel (`handleAssignCandidate`) y el MCP (Grok) — intacto.** Ningún import quedó huérfano (todos los iconos se usan en otro lado).
+- **Estado write-only muerto (`CRMProjectsSection.jsx`, prefijo `_` que ESLint ignora):**
+  - `_loadingCands`/`setLoadingCands`: el valor nunca se leía (no hay spinner atado); se quitó el estado y sus 2 `setLoadingCands(...)` en `fetchCandidates`.
+  - `_activeChatCandidate`/`_setActiveChatCandidate`: 100% muerto (ni el setter se usaba). El chat real lo maneja `chatCandidate`/`setChatCandidate`.
+- **Prop `candidates` inerte en el sidepanel (cadena de datos que nadie leía):** `CustomProjectDropdown` destructuraba `_candidates` (nombre que NO coincide con el `candidates={candidates}` que le pasaban → se ignoraba) y nunca lo leía. Se quitó la cadena entera: el param `_candidates` del dropdown, el `candidates={candidates}` que le pasaba el sidepanel, el param `candidates = []` de `ManualProjectsSidepanel`, y el `candidates={candidates}` que lo alimentaba en `ChatSection.jsx:7134` (único toque fuera de la sección — borrado de una línea de prop, cero efecto).
+- **Intacto a propósito:** TODO el endpoint `api/manual_projects.js`; la acción `batchLink` (hoy sin emisores — ni front, ni MCP, ni bulks — pero es una acción de endpoint autoconsistente cuyos 2 listeners SSE son defensivos; se deja por el principio de no tocar SSE ni lo que podría cablearse a futuro); toda la ruta de caché; el hot path SSE y sus handlers restantes; el RBAC; la estructura Redis; el `ManualProjectsSidepanel` por completo salvo el prop muerto; `CalendarNotesModal`/`ChatWindow` (compartidos).
 
 ### ✅ Flujos — 2026-11-06
 
