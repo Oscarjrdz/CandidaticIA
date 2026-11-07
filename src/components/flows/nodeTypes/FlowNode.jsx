@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Handle, Position, NodeToolbar, NodeResizer, useUpdateNodeInternals } from '@xyflow/react';
 import { X, Play, Loader2, Check, RefreshCw, Minus, Plus, Lock, LockOpen, Copy } from 'lucide-react';
-import { NODE_DEFS, COLOR_CLASSES } from './nodeDefs';
+import { NODE_DEFS, COLOR_CLASSES, isBranchStartEtiqueta } from './nodeDefs';
 
 // #RRGGBB (o #RGB) + alpha → rgba(). Para pintar el fondo del BG con su transparencia.
 function hexToRgba(hex, alpha) {
@@ -408,9 +408,17 @@ const FlowNode = ({ id, type, data, selected }) => {
     const testRing = data.testPassed === true ? 'ring-2 ring-emerald-400' : data.testPassed === false ? 'ring-2 ring-gray-300 dark:ring-gray-600' : '';
     const locked = !!data.locked;
 
+    // 🏷️ Etiqueta en rol "inicio de empresa": orilla 🟢 abierta / 🔴 cerrada (todos sus horarios
+    // vencidos) + chip de entrantes. branchState lo inyecta displayNodes (FlowEditor). null = la
+    // rama no usa fechas → orilla normal.
+    const branchStart = isBranchStartEtiqueta({ type, data });
+    const branchBorder = data.branchState === 'closed' ? 'border-red-400 dark:border-red-500'
+        : data.branchState === 'open' ? 'border-emerald-400 dark:border-emerald-500'
+        : null;
+
     return (
         <div
-            className={`group relative w-60 rounded-2xl border-2 shadow-sm transition-shadow ${colors.bg} ${locked ? 'cursor-default' : 'cursor-pointer'} ${selected ? 'border-gray-900 dark:border-white shadow-md' : colors.border} ${testRing}`}
+            className={`group relative w-60 rounded-2xl border-2 shadow-sm transition-shadow ${colors.bg} ${locked ? 'cursor-default' : 'cursor-pointer'} ${selected ? 'border-gray-900 dark:border-white shadow-md' : (branchBorder || colors.border)} ${testRing}`}
             onClick={locked ? undefined : () => data.onConfigure?.(id)}
         >
             <TestResultBadge testPassed={data.testPassed} />
@@ -456,6 +464,19 @@ const FlowNode = ({ id, type, data, selected }) => {
                         <span className={`inline-flex items-center mt-1.5 px-2 py-0.5 rounded-full text-xs font-bold ${colors.icon} text-white`}>
                             {data.liveCount ?? '—'}
                         </span>
+                    )}
+                    {branchStart && (
+                        <div className="mt-1.5 flex items-center gap-1.5">
+                            <span title="Entrantes a esta rama" className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold ${colors.icon} text-white`}>
+                                {data.liveCount ?? '—'}
+                            </span>
+                            {data.branchState === 'closed' && (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300">Cerrada</span>
+                            )}
+                            {data.branchState === 'open' && (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">Abierta</span>
+                            )}
+                        </div>
                     )}
                     {(type === 'inicio' || type === 'inicio_incompleto_silencio' || type === 'inicio_sin_extraccion') && (
                         <InicioToggle active={!!data.active} onToggle={data.onToggleActive} />

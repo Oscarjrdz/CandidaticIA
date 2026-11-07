@@ -1650,6 +1650,24 @@ const NodeConfigDrawer = ({ node, flowId, meta, quickReplies, onSaveQuickReply, 
                                 Pasa solo si esta es la <strong>última vacante</strong> del candidato (el anuncio que clickeó más recientemente), aunque tenga otras etiquetas en su historial. Ideal para rutear un flujo <strong>“cuando regresa”</strong> a la vacante correcta.
                             </p>
                         )}
+                        {(data.mode === 'especifica' || data.mode === 'actual') && !!data.tag && (
+                            <div className="pt-3 mt-1 border-t border-gray-100 dark:border-gray-700 space-y-2">
+                                <label className="text-xs text-gray-500 dark:text-gray-400 block">
+                                    Mensaje si la rama está <strong>cerrada</strong> <span className="text-gray-400">(todos sus horarios vencidos)</span>
+                                </label>
+                                <textarea
+                                    rows={3}
+                                    maxLength={1024}
+                                    value={data.caducadoMessage || ''}
+                                    onChange={(e) => patch({ caducadoMessage: e.target.value })}
+                                    placeholder="Ej. Esta vacante ya cerró 🙏 pero tenemos otras opciones para ti…"
+                                    className={inputCls}
+                                />
+                                <p className="text-[11px] text-gray-400 dark:text-gray-500 leading-relaxed">
+                                    Candado de caducidad: si <strong>toda</strong> esta rama tiene sus menús con fecha vencidos, el candidato <strong>no entra</strong> — se le manda este mensaje y se detiene. Admite variables (<code>{'{{nombre}}'}</code>…). Si lo dejas vacío, simplemente no entra (sin avisarle). La orilla del nodo se pinta 🟢 abierta / 🔴 cerrada.
+                                </p>
+                            </div>
+                        )}
                     </div>
                 )}
 

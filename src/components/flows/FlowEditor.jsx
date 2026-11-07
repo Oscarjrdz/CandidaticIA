@@ -11,6 +11,7 @@ import { useAuthContext } from '../../contexts/AuthContext';
 import { getFlowLocks, toggleNodeLock, initFlowLocksIfNeeded } from '../../utils/nodeLocks';
 import { getFlow, updateFlow, getFlowsMeta, getFlowCounters, getQuickReplies, saveQuickReplies, getReminderTemplates, getManualProjects, testFlow, getFilteredFlowCandidates, runFlowListItem, watchFlow } from '../../services/flowsService';
 import { flowNodeTypes, COLOR_CLASSES, NODE_DEFS } from './nodeTypes';
+import { computeBranchExpiry, isBranchStartEtiqueta } from './nodeTypes/nodeDefs';
 import FlowEdge from './edgeTypes/FlowEdge';
 import NodeConfigDrawer from './NodeConfigDrawer';
 import FlowToolbar from './FlowToolbar';
@@ -361,12 +362,14 @@ const FlowEditorInner = ({ flowId, onBack }) => {
     // contador nuevo). Las actualizaciones posteriores llegan por SSE (efecto de abajo),
     // sin poll recurrente.
     useEffect(() => {
-        const hasCounters = nodes.some(n => n.type === 'contador');
+        // El contador en vivo aplica a los nodos 'contador' Y a las Etiquetas en rol de "inicio
+        // de empresa" (cuentan sus entrantes, ver el motor). Ambos usan el mismo esquema de llaves.
+        const hasCounters = nodes.some(n => n.type === 'contador' || isBranchStartEtiqueta(n));
         if (!hasCounters) return;
         (async () => {
             const res = await getFlowCounters(flowId);
             if (!res.success) return;
-            setNodes(nds => nds.map(n => n.type === 'contador'
+            setNodes(nds => nds.map(n => (n.type === 'contador' || isBranchStartEtiqueta(n))
                 ? { ...n, data: { ...n.data, liveCount: res.counters[n.id]?.total ?? n.data.liveCount ?? 0 } }
                 : n));
         })();
@@ -402,7 +405,7 @@ const FlowEditorInner = ({ flowId, onBack }) => {
         const handler = (e) => {
             const { flowId: evFlowId, nodeId, count } = e.detail || {};
             if (evFlowId !== flowId) return;
-            setNodes(nds => nds.map(n => (n.type === 'contador' && n.id === nodeId)
+            setNodes(nds => nds.map(n => ((n.type === 'contador' || isBranchStartEtiqueta(n)) && n.id === nodeId)
                 ? { ...n, data: { ...n.data, liveCount: count } }
                 : n));
             triggerEdgeFlow(edgesRef.current.filter(ed => ed.target === nodeId).map(ed => ed.id));
@@ -926,8 +929,17 @@ const FlowEditorInner = ({ flowId, onBack }) => {
     // no-borrable. onNodesChange sigue aplicando los cambios sobre `nodes` (base); esto es
     // solo la capa de render. Los nodos de inicio nunca son borrables (ya lo eran).
     const nodeLocks = user?.preferences?.flowNodeLocks?.[flowId] || EMPTY_LOCKS; // getFlowLocks devuelve {} nuevo; aquí usamos ref estable para el memo
+    // Estado de caducidad por rama (Etiqueta en rol "inicio de empresa"): 'open'/'closed'/null.
+    // Alimenta la orilla 🟢/🔴 del nodo. Se recalcula cuando cambian nodos o aristas (incluye
+    // editar fechas de botones, que reemplaza el array de nodos). Capa de render — no toca estado base.
+    const branchStates = useMemo(() => {
+        const m = {};
+        for (const n of nodes) if (isBranchStartEtiqueta(n)) m[n.id] = computeBranchExpiry(n.id, nodes, edges);
+        return m;
+    }, [nodes, edges]);
     const displayNodes = useMemo(() => nodes.map(n => {
         const locked = !!nodeLocks[n.id];
+        const branchState = branchStates[n.id] || null;
         return {
             ...n,
             draggable: !locked,
@@ -943,9 +955,9 @@ const FlowEditorInner = ({ flowId, onBack }) => {
             // trae pointer-events:all. Lo apagamos en el wrapper del texto para que su zona vacía
             // deje pasar el clic; FlowNode re-activa eventos solo en el texto/candado/manijas.
             style: n.type === 'texto' ? { ...n.style, pointerEvents: 'none' } : n.style,
-            data: { ...n.data, locked, onToggleLock: handleToggleLock }
+            data: { ...n.data, locked, onToggleLock: handleToggleLock, branchState }
         };
-    }), [nodes, nodeLocks, handleToggleLock]);
+    }), [nodes, nodeLocks, handleToggleLock, branchStates]);
 
     // Capa de render de aristas: inyecta `highlighted` (hover de un nodo que la toca) y
     // `flowing` (candidato recién pasó) SIN tocar el estado base `edges` — así no marca

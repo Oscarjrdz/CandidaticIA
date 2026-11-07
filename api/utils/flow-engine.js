@@ -452,6 +452,35 @@ function isOptionExpired(expiresAt) {
     return exp <= nowMty.replace(' ', 'T'); // a la hora exacta ya vence ("a partir de ahí ya no se manda")
 }
 
+// 🏷️ CANDADO DE CADUCIDAD DE RAMA (nodo Etiqueta en rol "inicio de empresa"). Invariante del
+// diseño: después de una Etiqueta las ramas NUNCA convergen, así que el subárbol alcanzable
+// desde ella es su rama EXCLUSIVA. Miramos SOLO los menús 'accion_botones' con al menos una
+// opción con fecha ("sensibles al tiempo", p.ej. horarios de entrevista). Un menú así está
+// "muerto" cuando NINGUNA de sus opciones sigue viva (una opción sin fecha siempre cuenta como
+// viva, igual que isOptionExpired / el liveButtons del envío). La rama está CERRADA cuando tiene
+// ≥1 menú sensible al tiempo y TODOS están muertos. Ramas sin menús con fecha (solo navegación,
+// o siempre abiertas) nunca se consideran cerradas.
+function branchExpiryState(startId, nodes, edges) {
+    if (!startId || !Array.isArray(nodes) || !nodes.length) return { hasDated: false, closed: false };
+    const reachable = forwardReachableFrom(startId, edges);
+    const byId = new Map(nodes.map(n => [n.id, n]));
+    let hasDated = false, anyLive = false;
+    for (const id of reachable) {
+        if (id === startId) continue; // la propia etiqueta no es un menú
+        const n = byId.get(id);
+        if (!n || n.type !== 'accion_botones') continue;
+        const d = n.data || {};
+        const bs = [
+            ...(Array.isArray(d.buttons) ? d.buttons : []),
+            ...((Array.isArray(d.sections) ? d.sections : []).flatMap(s => Array.isArray(s.rows) ? s.rows : [])),
+        ].filter(b => b?.title?.trim());
+        if (!bs.some(b => b.expiresAt)) continue; // menú sin fechas → no es sensible al tiempo
+        hasDated = true;
+        if (bs.some(b => !isOptionExpired(b.expiresAt))) anyLive = true;
+    }
+    return { hasDated, closed: hasDated && !anyLive };
+}
+
 // Trunca un título a N "caracteres" visibles (graphemes), espejo del límite de Meta
 // (20 para botón, 24 para fila de lista). CRÍTICO: NO usar `.substring(0, N)` — corta por
 // unidades UTF-16 y parte un emoji al final en un surrogate suelto (ej. "…RUTA😄" → "…RUTA\uD83D"),
@@ -745,20 +774,77 @@ export async function evaluateOrExecute(node, candidate, flowId, redis, opts = {
         case 'etiqueta': {
             const mode = data.mode || 'todas';
             const tags = Array.isArray(candidate.tags) ? candidate.tags : [];
-            if (mode === 'todas') return true;
-            if (mode === 'ninguna') return tags.length === 0;
-            if (mode === 'especifica') {
-                if (!data.tag) return true; // sin configurar aún → no bloquea
-                return tags.includes(data.tag);
-            }
-            if (mode === 'actual') {
-                // Ruteo por ÚLTIMA vacante: solo pasa si la etiqueta del último anuncio
-                // clickeado (candidate.vacanteActual, sobreescrita en cada click desde el
-                // webhook) es JUSTO esta. Así, un candidato con historial [Metalsa, Kemet]
-                // que hoy clickeó Kemet pasa solo por el flujo de Kemet — el de Metalsa se
-                // cae, aunque siga teniendo esa etiqueta en su historial (tags).
-                if (!data.tag) return true; // sin configurar aún → no bloquea
-                return candidate.vacanteActual === data.tag;
+            // ¿El candidato PASA el portón de esta etiqueta?
+            let passes;
+            if (mode === 'ninguna') passes = tags.length === 0;
+            else if (mode === 'especifica') passes = !data.tag || tags.includes(data.tag); // sin configurar → no bloquea
+            // Ruteo por ÚLTIMA vacante: solo pasa si la etiqueta del último anuncio clickeado
+            // (candidate.vacanteActual, sobreescrita en cada click desde el webhook) es JUSTO esta.
+            // Así un candidato con historial [Metalsa, Kemet] que hoy clickeó Kemet pasa solo por
+            // el flujo de Kemet — el de Metalsa se cae, aunque siga con esa etiqueta en tags.
+            else if (mode === 'actual') passes = !data.tag || candidate.vacanteActual === data.tag;
+            else passes = true; // 'todas' (o desconocido): pasa
+            if (!passes) return false;
+
+            // 🏷️ ROL "INICIO DE EMPRESA": la etiqueta es la raíz EXCLUSIVA de su rama (invariante:
+            // después de una Etiqueta las ramas nunca convergen). Al pasar el portón: (1) cuenta al
+            // entrante y (2) aplica el candado de caducidad de rama. Solo aplica a 'especifica' y
+            // 'actual' (que delimitan una empresa); 'todas'/'ninguna' no son inicios de empresa.
+            const isBranchStart = (mode === 'especifica' || mode === 'actual') && !!data.tag;
+            if (isBranchStart) {
+                // Contador de entrantes a la rama (respeta skipCounters como el nodo 'contador').
+                if (!opts.skipCounters) {
+                    try {
+                        const ck = `${COUNTER_PREFIX}${flowId}:${node.id}`;
+                        const cts = `${COUNTER_TS_PREFIX}${flowId}:${node.id}`;
+                        const [[, added], [, count]] = await redis.pipeline()
+                            .sadd(ck, candidate.id)
+                            .scard(ck)
+                            .zadd(cts, 'NX', Date.now(), candidate.id)
+                            .exec();
+                        if (added === 1) {
+                            redis.publish('channel:sse:updates', JSON.stringify({
+                                type: 'flow:counter', flowId, nodeId: node.id, count,
+                                timestamp: new Date().toISOString()
+                            })).catch(() => {});
+                        }
+                    } catch (e) {
+                        console.error(`[FLOW-ENGINE] etiqueta contador ${flowId}/${node.id}:`, e?.message);
+                    }
+                }
+
+                // CANDADO DE CADUCIDAD: si toda la rama tiene sus menús con fecha vencidos, no
+                // desciende — manda el mensaje configurable (si hay) y detiene la rama (return false).
+                const { closed } = branchExpiryState(node.id, opts._flowNodes || [], opts._flowEdges || []);
+                if (closed) {
+                    const msg = typeof data.caducadoMessage === 'string' ? data.caducadoMessage.trim() : '';
+                    if (msg) {
+                        try {
+                            const config = await getUltraMsgConfig(candidate.incomingPhoneNumberId || candidate.instanceId);
+                            if (config?.token && config?.instanceId) {
+                                const cleanTo = String(candidate.whatsapp).replace(/\D/g, '');
+                                const text = substituteDynamicPhrase(
+                                    substituteVariables(data.caducadoMessage, candidate),
+                                    substituteVariables(opts._dynamicPhrase || '', candidate)
+                                );
+                                for (const bubbleText of splitBubbles(text)) {
+                                    const sendResult = await pacedSend(opts, () => sendUltraMsgMessageWithRetry(config.instanceId, config.token, cleanTo, bubbleText, 'chat', { priority: 1 }));
+                                    if (sendResult?.success) {
+                                        await saveFlowOutbound(candidate.id, {
+                                            from: 'me', content: bubbleText, timestamp: new Date().toISOString(),
+                                            meta: { flow: true, flowId, nodeId: node.id, caducado: true }
+                                        }, sendResult);
+                                    } else {
+                                        console.error(`[FLOW-ENGINE] etiqueta caducado ${flowId}/${node.id} candidato ${candidate.id}: envío falló —`, sendResult?.error);
+                                    }
+                                }
+                            }
+                        } catch (e) {
+                            console.error(`[FLOW-ENGINE] etiqueta caducado ${flowId}/${node.id}:`, e?.message);
+                        }
+                    }
+                    return false; // rama cerrada: el candidato no entra al flujo de esa empresa
+                }
             }
             return true;
         }
@@ -1567,6 +1653,12 @@ async function runOneFlow(redis, flow, candidateId, candidate, opts = {}) {
     const nodes = Array.isArray(flow.nodes) ? flow.nodes : [];
     const edges = Array.isArray(flow.edges) ? flow.edges : [];
     if (!nodes.length) return passed;
+
+    // Expone el grafo de ESTE flujo al evaluador por-nodo (lo usa el candado de caducidad del
+    // nodo Etiqueta, que necesita el subárbol de su rama). Se reasigna en cada runOneFlow —
+    // incluidas las sub-corridas de redirección, que apuntan al grafo del flujo destino.
+    opts._flowNodes = nodes;
+    opts._flowEdges = edges;
 
     const testMode = !!opts.skipClaim;
     // Modo ephemeral (cron de incompletos-en-silencio): corre el grafo FRESCO en cada

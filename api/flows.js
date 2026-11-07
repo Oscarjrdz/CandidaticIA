@@ -248,7 +248,12 @@ export default async function handler(req, res) {
             const flow = flows.find(f => f.id === id);
             if (!flow) return res.status(404).json({ success: false, error: 'Flow not found' });
 
-            const counterNodeIds = (flow.nodes || []).filter(n => n.type === 'contador').map(n => n.id);
+            // Cuentan: los nodos 'contador' Y las Etiquetas en rol "inicio de empresa" (específica/
+            // actual con etiqueta), que llevan su propio contador de entrantes en el mismo esquema.
+            const counterNodeIds = (flow.nodes || []).filter(n =>
+                n.type === 'contador'
+                || (n.type === 'etiqueta' && (n.data?.mode === 'especifica' || n.data?.mode === 'actual') && n.data?.tag)
+            ).map(n => n.id);
             if (!counterNodeIds.length) return res.status(200).json({ success: true, counters: {} });
 
             const { todayStart, yesterdayStart, mondayStart, monthStart } = mtyRanges();

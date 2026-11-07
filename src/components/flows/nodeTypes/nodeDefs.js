@@ -41,6 +41,50 @@ export const COLOR_CLASSES = {
     rose: { bg: 'bg-rose-50 dark:bg-rose-900/20', border: 'border-rose-200 dark:border-rose-800', icon: 'bg-rose-500', text: 'text-rose-700 dark:text-rose-300' }
 };
 
+// ── Candado de caducidad de rama (espejo FRONTEND del motor en api/utils/flow-engine.js) ──
+// Solo para pintar la orilla 🟢/🔴 del nodo Etiqueta en el editor. DEBE mantenerse en sincronía
+// con isOptionExpired/branchExpiryState del motor (misma regla de reloj de pared en Monterrey).
+
+// ¿Esta Etiqueta actúa como "inicio de empresa"? (modo específica/actual con etiqueta elegida).
+export const isBranchStartEtiqueta = (n) =>
+    n?.type === 'etiqueta' && (n?.data?.mode === 'especifica' || n?.data?.mode === 'actual') && !!n?.data?.tag;
+
+export function isFlowOptionExpired(expiresAt) {
+    if (!expiresAt) return false;
+    let exp = String(expiresAt).trim();
+    if (!exp) return false;
+    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(exp)) exp += ':00';
+    const nowMty = new Date().toLocaleString('sv-SE', { timeZone: 'America/Monterrey' });
+    return exp <= nowMty.replace(' ', 'T');
+}
+
+// Estado de caducidad de la rama que arranca en `startId`: 'closed' (tiene menús con fecha y
+// TODOS vencidos), 'open' (hay ≥1 horario vivo) o null (la rama no usa fechas → no aplica).
+export function computeBranchExpiry(startId, nodes, edges) {
+    if (!startId || !Array.isArray(nodes) || !nodes.length) return null;
+    const adj = new Map();
+    for (const e of (edges || [])) { if (!adj.has(e.source)) adj.set(e.source, []); adj.get(e.source).push(e.target); }
+    const seen = new Set([startId]);
+    const stack = [startId];
+    while (stack.length) { const id = stack.pop(); for (const t of (adj.get(id) || [])) if (!seen.has(t)) { seen.add(t); stack.push(t); } }
+    const byId = new Map(nodes.map(n => [n.id, n]));
+    let hasDated = false, anyLive = false;
+    for (const id of seen) {
+        if (id === startId) continue;
+        const n = byId.get(id);
+        if (!n || n.type !== 'accion_botones') continue;
+        const d = n.data || {};
+        const bs = [
+            ...(Array.isArray(d.buttons) ? d.buttons : []),
+            ...((Array.isArray(d.sections) ? d.sections : []).flatMap(s => Array.isArray(s.rows) ? s.rows : [])),
+        ].filter(b => b?.title?.trim());
+        if (!bs.some(b => b.expiresAt)) continue;
+        hasDated = true;
+        if (bs.some(b => !isFlowOptionExpired(b.expiresAt))) anyLive = true;
+    }
+    return hasDated ? (anyLive ? 'open' : 'closed') : null;
+}
+
 export const NODE_DEFS = {
     inicio: {
         label: 'Inicio',
