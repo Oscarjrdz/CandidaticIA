@@ -8,7 +8,7 @@
  *   1. candidates:list → universo de ids (se actualiza en CADA saveCandidate → los nuevos entran ya).
  *   2. menos los ids con pin GPS (candidatic:candidate_locations).
  *   3. pipeline GET candidate:facet:<id> (~277B c/u, escrita en cada saveCandidate) → nombreReal,
- *      municipio, colonia, categoría, tags. Se filtra en código: del AMM + con colonia.
+ *      municipio, colonia. Se filtra en código: del AMM + con colonia.
  *
  * Frescura: como se enumera desde candidates:list y se leen las proyecciones (ambas se escriben en
  * cada guardado), un candidato NUEVO con colonia aparece dentro de la ventana de caché (~1 min), sin
@@ -95,16 +95,11 @@ export default async function handler(req, res) {
             let f;
             try { f = JSON.parse(raw); } catch { continue; }
             if (!muniInAMM(f.municipio) || !hasColonia(f.colonia)) continue;
-            const tags = Array.isArray(f.tags)
-                ? f.tags.map(t => (typeof t === 'string' ? t : t?.name)).filter(Boolean)
-                : [];
             out.push({
                 id: targetIds[i],
                 n: String(f.nombreReal || '').slice(0, 60),   // nombre para el popup
                 m: String(f.municipio || ''),                  // municipio crudo → matchColoniaId
-                c: String(f.colonia || ''),                    // colonia cruda   → matchColoniaId
-                cat: String(f.categoria || ''),                // para el filtro de categoría del mapa
-                tags                                           // para el filtro de etiqueta del mapa
+                c: String(f.colonia || '')                     // colonia cruda   → matchColoniaId
             });
         }
 

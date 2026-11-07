@@ -469,7 +469,7 @@ function AppShell() {
           ) : activeSection === 'projects' ? (
             <CRMProjectsSection />
           ) : activeSection === 'mapa' ? (
-            <MapSection onOpenCandidate={(id) => { setActiveSection('chat'); window.dispatchEvent(new CustomEvent('navigate_to_recruiter_chat', { detail: { candidateId: id } })); }} />
+            <MapSection />
           ) : (
             <SettingsSection />
           )}

@@ -95,7 +95,7 @@ function renderDemographics(c) {
       </div>`;
 }
 
-export default function MapSection({ onOpenCandidate }) {
+export default function MapSection() {
     const { user, setUser } = useAuthContext();
     const savedView = user?.preferences?.mapView || null;
 
@@ -106,8 +106,6 @@ export default function MapSection({ onOpenCandidate }) {
     const hadSavedView = useRef(!!savedView); // si el usuario ya tiene vista guardada, NO auto-encuadrar
     const didFit = useRef(false);
     const saveTimer = useRef(null);
-    const onOpenRef = useRef(onOpenCandidate);
-    useEffect(() => { onOpenRef.current = onOpenCandidate; });
 
     const [pins, setPins] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -691,7 +689,7 @@ export default function MapSection({ onOpenCandidate }) {
         return m;
     }, [coloniaCands, coloniaDB]);
 
-    // Resultados del buscador: por nombre o municipio. No renderiza las 4,177 de golpe — exige ≥2 chars
+    // Resultados del buscador: por nombre o municipio. No renderiza las ~4,605 de golpe — exige ≥2 chars
     // y topa a 60 filas. Cada fila trae su conteo de candidatos (si ya cargó el índice).
     const coloniaResults = useMemo(() => {
         if (!coloniaDB) return [];
@@ -699,7 +697,7 @@ export default function MapSection({ onOpenCandidate }) {
         const norm = (s) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
         const nq = norm(q);
         const hasQuery = q.length >= 2;
-        // Con el toggle apagado y sin búsqueda: no lista nada (son 4,600 colonias).
+        // Con el toggle apagado y sin búsqueda: no lista nada (son ~4,605 colonias).
         if (!hasQuery && !soloConCandidatos) return [];
 
         let list = coloniaDB.list;
