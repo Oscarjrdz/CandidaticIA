@@ -2,8 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { Briefcase, Plus, Building2, Tag, Loader2, Save, Trash2, Pencil, Copy, Power, GripVertical, X } from 'lucide-react';
 import Card from './ui/Card';
 import Button from './ui/Button';
-import Input from './ui/Input';
-import Modal from './ui/Modal';
 import VacancyEditorModal from './VacancyEditorModal';
 import { useConfirmModal } from './ui/ConfirmModal';
 
@@ -250,7 +248,6 @@ const VacanciesSection = () => {
     const [vacancies, setVacancies] = useState(() => vacanciesCache || []);
     const [loading, setLoading] = useState(() => !vacanciesCache);
     const [isModalOpen, setIsModalOpen] = useState(false);
-    const [_saving, _setSaving] = useState(false);
     const [editingId, setEditingId] = useState(null);
     const { confirmModalJSX, showConfirm } = useConfirmModal();
 

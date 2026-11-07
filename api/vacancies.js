@@ -8,8 +8,6 @@
 
 import { randomUUID } from 'crypto';
 
-// Sync to Candidatic removed as per UltraMsg migration
-
 export default async function handler(req, res) {
     if (req.method === 'OPTIONS') {
         return res.status(200).end();
@@ -20,20 +18,10 @@ export default async function handler(req, res) {
         const { getRedisClient, validateAdminSession } = await import('./utils/storage.js');
         const redis = getRedisClient();
 
-        // En memoria local (storage.js) getRedisClient retorna null,
-        // así que debemos manejar ese caso si estamos en modo "sin redis".
-        // Sin embargo, si storage.js está en modo memoria, getRedisClient retorna null
-        // y este endpoint falla con "redis.get is not a function" o similar.
-        // Adaptaremos para usar memoria si redis es null?
-        // NO, este endpoint está diseñado alrededor de Redis por su uso de 'getKey', etc.
-        // PERO, si estamos en modo memoria, quizás deberíamos simular?
-        // Por ahora, asumimos que si getRedisClient retorna null es un problema de config o modo memoria.
-        // Si es null, retornamos lista vacía para no romper el frontend.
-
+        // Sin cliente Redis (modo memoria / config faltante): en GET devolvemos lista
+        // vacía para no romper el frontend; cualquier mutación responde 503.
         if (!redis) {
-            console.warn('⚠️ Vacancies API: Redis client is null (Memory Mode?). 返回空列表.');
-            // Si el método es GET, retornamos vacío. Si es POST/PUT, error 501 Not Implemented?
-            // Para mejor UX, permitamos que el frontend cargue vacío en vez de error.
+            console.warn('⚠️ Vacancies API: Redis client is null (Memory Mode?).');
             if (req.method === 'GET') {
                 return res.status(200).json({ success: true, data: [] });
             }
@@ -143,12 +131,9 @@ export default async function handler(req, res) {
             return res.status(200).json({ success: true, data: vacancies[index] });
         }
 
-        // DELETE - Remove vacancy OR Purge All Files
+        // DELETE - Remove vacancy
         if (req.method === 'DELETE') {
-            const { id, _purge } = req.query;
-
-            // Manual Purge Action
-            // Purge legacy Candidatic files removed
+            const { id } = req.query;
 
             if (!id) return res.status(400).json({ error: 'Missing id query parameter' });
 
@@ -158,9 +143,6 @@ export default async function handler(req, res) {
             const newVacancies = vacancies.filter(v => v.id !== id);
 
             await redis.set(KEY, JSON.stringify(newVacancies));
-
-            // TRIGGER SYNC
-            // Sync to Candidatic removed
 
             return res.status(200).json({ success: true });
         }

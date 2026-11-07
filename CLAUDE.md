@@ -109,7 +109,8 @@ Oscar quiere pasar sección por sección del dashboard dejando cada una "en su m
 - ✅ **Mapa** — limpiada 2026-11-06 (detalle abajo).
 - ✅ **Flujos** — limpiada 2026-11-06 (detalle abajo).
 - ✅ **Proyectos (CRM)** — limpiada 2026-11-06 (detalle abajo).
-- ✅ **Envíos Masivos** — limpiada 2026-11-06 (detalle abajo). · ⬜ Estadísticas (`StatsSection.jsx`) · ⬜ Ads (`AdsStatisticsSection.jsx`) · ⬜ Configuración (`SettingsSection.jsx`) · ⬜ Vacantes (`VacanciesSection.jsx`) · ⬜ Bolsa (`BolsaSection.jsx`) · ⬜ Notificaciones (`NotificacionesSection.jsx`) · ⬜ Media (`MediaLibrarySection.jsx`) · ⬜ Bot IA (`BotIASection.jsx`).
+- ✅ **Envíos Masivos** — limpiada 2026-11-06 (detalle abajo).
+- ✅ **Vacantes** — limpiada 2026-11-06 (detalle abajo). · ⬜ Estadísticas (`StatsSection.jsx`) · ⬜ Ads (`AdsStatisticsSection.jsx`) · ⬜ Configuración (`SettingsSection.jsx`) · ⬜ Bolsa (`BolsaSection.jsx`) · ⬜ Notificaciones (`NotificacionesSection.jsx`) · ⬜ Media (`MediaLibrarySection.jsx`) · ⬜ Bot IA (`BotIASection.jsx`).
 
 ### ✅ Envíos Masivos — 2026-11-06
 
@@ -120,6 +121,16 @@ Oscar quiere pasar sección por sección del dashboard dejando cada una "en su m
   - `clone_ai` (POST) — resto arqueológico del viejo botón "Clonar con IA" (reescribía el texto con GPT-4o-mini); la UI ya se había removido y dejó el endpoint colgando. Era el **único** consumidor de dos imports del archivo, que se eliminaron con él: `import axios` e `import { getCachedConfig }`.
 - **Verificado vivo (NO se tocó):** las acciones UI-CRUD `facets`/`phone_lookup`/`audiences_list`/`audience_create`/`audience_update`/`audience_delete`/`save_draft`/`get_draft`/`history_list`/`history_delete`/`history_stats`/`broadcast_tags`/`status`; `status_light` (lo consume el poll ligero de `App.jsx` cada 5s); el import `NL_MUNICIPIOS` de `api/flows.js`.
 - **Intacto a propósito:** TODO el MOTOR (límite duro); el frontend completo; `excludeIds` (dice "(legado)" pero sigue cableado de punta a punta en draft + `audience_create`/`update` + `start` — es parte del payload del segmento); `metaTemplatePreview.js` (compartido con ChatSection/CandidateReminderModal/MessageInputBox).
+
+### ✅ Vacantes — 2026-11-06
+
+**Intención:** dejar el tablero de Vacantes + gestión de Categorías en su mejor versión **sin tocar el shape ni las llaves Redis** del catálogo (`candidatic_vacancies` / `candidatic_categories`) — las lee Brenda en paso 1 (extracción de categoría), los filtros de candidatos, el MCP (Grok) y Flujos — ni ninguna ruta de caché. Verificado con `node --check` (✓), `npm run build` (✓) y `eslint src/components/VacanciesSection.jsx api/vacancies.js` (exit 0, cero errores). **La sección ya estaba muy sana** (cero componentes/handlers huérfanos, caché propio intacto). Solo 4 cirugías mínimas de comportamiento idéntico:
+
+- **Estado 100% muerto (`VacanciesSection.jsx`):** `const [_saving, _setSaving]` — ni se leía ni se escribía (grep: solo la línea de declaración). El `saving` real vive dentro de `VacancyEditorModal`. El prefijo `_` lo ocultaba de ESLint. Eliminado.
+- **Imports huérfanos (`VacanciesSection.jsx`):** `Input` y `Modal` de `./ui/*` — nunca se usaban (`<input>` nativo + el modal real es `VacancyEditorModal`, importado aparte). Eliminados.
+- **Destructuring muerto (`api/vacancies.js`):** `const { id, _purge }` → `const { id }` en el DELETE; la acción "purge" se eliminó hace tiempo y `_purge` ya no se leía.
+- **Comentarios arqueológicos (`api/vacancies.js`):** se quitaron los restos de sistemas borrados (`// Sync to Candidatic removed`, `// Purge legacy Candidatic files removed`, `// TRIGGER SYNC`) y se condensó el bloque divagante de "modo memoria" (preguntas retóricas) a 2 líneas que dicen lo mismo — sin tocar el `if (!redis)`.
+- **Intacto a propósito:** la caché stale-while-revalidate `vacanciesCache`/`categoriesCache` de módulo + sus `useEffect` espejo; las llaves/shape de Redis de vacantes y categorías; `api/categories.js` entero (ya estaba limpio); **`api/vacancies/faq.js`** completo (NO es de Vacantes — lo consumen `SimulatorSection.jsx` y `faq-engine.js` del agente); el campo `documents` de `VacancyEditorModal` (arqueológico, siempre `[]` y sin UI, pero *round-trips* en el PUT → quitarlo cambiaría el shape escrito en Redis, se deja por la regla de no tocar shape); `description` (vivo, round-trips en clonar/editar).
 
 ### ✅ Proyectos (CRM) — 2026-11-06
 
