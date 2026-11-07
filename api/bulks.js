@@ -1,9 +1,7 @@
 import { getCandidateById, saveMessage, updateCandidate, updateMessageStatus, getCandidateByPhone } from './utils/storage.js';
 import { substituteVariables } from './utils/shortcuts.js';
 import { sendUltraMsgMessage, getUltraMsgConfig, buildMetaTemplateComponents, renderMetaTemplatePreviewText, resolveTemplateHeaderMedia } from './whatsapp/utils.js';
-import axios from 'axios';
 import { getRedisClient, validateAdminSession } from './utils/storage.js';
-import { getCachedConfig } from './utils/cache.js';
 import { ensureFacetIndex, computeFacets, resolveSegmentIds, hydratePreview, countSegment } from './utils/facet-index.js';
 import { runInBackground } from './utils/background.js';
 import { NL_MUNICIPIOS } from './flows.js';
@@ -655,22 +653,6 @@ export default async function handler(req, res) {
         }
     }
 
-    // ─── PÚBLICOS: HISTORIAL DE ENVÍOS (campañas ligadas a este público) ────────
-    if (req.method === 'GET' && action === 'audience_history') {
-        const redis = getRedisClient();
-        if (!redis) return res.status(200).json({ success: true, history: [] });
-        try {
-            const { id } = req.query;
-            if (!id) return res.status(400).json({ error: 'Falta id del público' });
-            const raw = await redis.get(REDIS_KEY_HISTORY);
-            const history = raw ? (typeof raw === 'string' ? JSON.parse(raw) : raw) : [];
-            return res.status(200).json({ success: true, history: history.filter(h => h.audienceId === id) });
-        } catch (e) {
-            console.error('[AUDIENCES] history error:', e?.message);
-            return res.status(500).json({ error: 'Error obteniendo historial del público' });
-        }
-    }
-
     // ─── START ───────────────────────────────────────────────────────────────
     if (req.method === 'POST' && action === 'start') {
         const existingState = await getState();
@@ -1026,58 +1008,6 @@ export default async function handler(req, res) {
             }
         } catch (e) { /* non-critical */ }
         return res.status(500).json({ error: 'Failed deleting history' });
-    }
-
-    // ─── CLONE AI ────────────────────────────────────────────────────────────
-    if (req.method === 'POST' && action === 'clone_ai') {
-        const { text } = req.body;
-        if (!text) return res.status(400).json({ error: 'Falta texto a clonar' });
-
-        try {
-            const redis = getRedisClient();
-            let apiKey = process.env.OPENAI_API_KEY;
-
-            if (redis) {
-                const aiConfigJson = await getCachedConfig(redis, 'ai_config') || await redis.get('ai_config');
-                if (aiConfigJson) {
-                    const aiConfig = typeof aiConfigJson === 'string' ? JSON.parse(aiConfigJson) : aiConfigJson;
-                    if (aiConfig.openaiApiKey) apiKey = aiConfig.openaiApiKey;
-                }
-            }
-
-            if (!apiKey) {
-                return res.status(500).json({ error: 'No OpenAI API Key found' });
-            }
-
-            const prompt = `Re-escribe el siguiente mensaje utilizando sinónimos, cambiando sutilmente la estructura para que parezca escrito por una persona natural. 
-MANTÉN EL MISMO CONTEXTO, LA MISMA AMIGABILIDAD, y la longitud muy similar. 
-Asegúrate de incluir EMOJIS variados (diferentes a los originales si los había, o agrégalos si no).
-ESTE TEXTO RE-ESCRITO SE ENVIARÁ POR WHATSAPP, POR LO QUE NO SALUDES TÚ NI DIGAS "Aquí tienes tu texto". ÚNICAMENTE entrega el mensaje final que se mandará.
-
-TEXTO ORIGINAL:
-"${text}"
-`;
-
-            const response = await axios.post('https://api.openai.com/v1/chat/completions', {
-                model: 'gpt-4o-mini',
-                messages: [{ role: 'system', content: prompt }],
-                temperature: 0.8,
-                max_tokens: 300
-            }, {
-                headers: {
-                    'Authorization': `Bearer ${apiKey.trim()}`,
-                    'Content-Type': 'application/json'
-                },
-                timeout: 15000
-            });
-
-            const rewritten = response.data.choices[0].message.content.trim();
-            return res.status(200).json({ success: true, result: rewritten });
-
-        } catch (error) {
-            console.error('Clone AI Error', error.message);
-            return res.status(500).json({ error: 'No se pudo generar con IA' });
-        }
     }
 
     return res.status(405).json({ error: 'Method not allowed' });

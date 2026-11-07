@@ -108,7 +108,18 @@ Oscar quiere pasar sección por sección del dashboard dejando cada una "en su m
 - ✅ **Chat Web** — limpiada 2026-11-06 (detalle abajo).
 - ✅ **Mapa** — limpiada 2026-11-06 (detalle abajo).
 - ✅ **Flujos** — limpiada 2026-11-06 (detalle abajo).
-- ✅ **Proyectos (CRM)** — limpiada 2026-11-06 (detalle abajo). · ⬜ Envíos Masivos (`BulksSection.jsx`) · ⬜ Estadísticas (`StatsSection.jsx`) · ⬜ Ads (`AdsStatisticsSection.jsx`) · ⬜ Configuración (`SettingsSection.jsx`) · ⬜ Vacantes (`VacanciesSection.jsx`) · ⬜ Bolsa (`BolsaSection.jsx`) · ⬜ Notificaciones (`NotificacionesSection.jsx`) · ⬜ Media (`MediaLibrarySection.jsx`) · ⬜ Bot IA (`BotIASection.jsx`).
+- ✅ **Proyectos (CRM)** — limpiada 2026-11-06 (detalle abajo).
+- ✅ **Envíos Masivos** — limpiada 2026-11-06 (detalle abajo). · ⬜ Estadísticas (`StatsSection.jsx`) · ⬜ Ads (`AdsStatisticsSection.jsx`) · ⬜ Configuración (`SettingsSection.jsx`) · ⬜ Vacantes (`VacanciesSection.jsx`) · ⬜ Bolsa (`BolsaSection.jsx`) · ⬜ Notificaciones (`NotificacionesSection.jsx`) · ⬜ Media (`MediaLibrarySection.jsx`) · ⬜ Bot IA (`BotIASection.jsx`).
+
+### ✅ Envíos Masivos — 2026-11-06
+
+**Intención:** dejar la **UI de Envíos Masivos** (`BulksSection.jsx` — armar público/segmento, elegir plantilla, lanzar/monitorear) en su mejor versión **sin tocar el MOTOR de envío** (driver server-side `drive`/lock `bulk_driver_lock`/`status_light`, abort durable `bulks:engine_aborted`, índice invertido `bulk:idx:v1:*` + `SINTERCARD` de `facet-index.js`, selección fija `includeIds`/palomas, variables por `templateId`, media por número, etiqueta `broadcast:*`) ni ninguna ruta de caché. Verificado con `node --check` (✓), `npm run build` (✓) y `eslint api/bulks.js` (exit 0, cero errores). **Hallazgo clave: el frontend ya estaba impecable** — cero estado write-only (los 38 `useState`/7 `useRef` se leen todos), cero imports huérfanos (16 íconos de lucide + `metaTemplatePreview` vivos), cero variables prefijo `_`, cero handlers/componentes muertos. **No se tocó una sola línea de `BulksSection.jsx`.** Todo el cambio fue en el endpoint, lado UI-CRUD, nunca el motor:
+
+- **Endpoints muertos eliminados de `api/bulks.js` (0 referencias en `src/`, `api/`, scripts y docs — `git grep`):**
+  - `audience_history` (GET) — devolvía el historial de campañas filtrado por público; nunca se cableó a la UI. Read-only, no toca el motor. `REDIS_KEY_HISTORY` sigue vivo (lo usan `history_list`/`history_delete`/`history_stats`).
+  - `clone_ai` (POST) — resto arqueológico del viejo botón "Clonar con IA" (reescribía el texto con GPT-4o-mini); la UI ya se había removido y dejó el endpoint colgando. Era el **único** consumidor de dos imports del archivo, que se eliminaron con él: `import axios` e `import { getCachedConfig }`.
+- **Verificado vivo (NO se tocó):** las acciones UI-CRUD `facets`/`phone_lookup`/`audiences_list`/`audience_create`/`audience_update`/`audience_delete`/`save_draft`/`get_draft`/`history_list`/`history_delete`/`history_stats`/`broadcast_tags`/`status`; `status_light` (lo consume el poll ligero de `App.jsx` cada 5s); el import `NL_MUNICIPIOS` de `api/flows.js`.
+- **Intacto a propósito:** TODO el MOTOR (límite duro); el frontend completo; `excludeIds` (dice "(legado)" pero sigue cableado de punta a punta en draft + `audience_create`/`update` + `start` — es parte del payload del segmento); `metaTemplatePreview.js` (compartido con ChatSection/CandidateReminderModal/MessageInputBox).
 
 ### ✅ Proyectos (CRM) — 2026-11-06
 
