@@ -188,13 +188,14 @@ const ChatRow = React.memo(({ chat, isSelected, isPinned, onSelect, onBlock, onD
                     {chat.categoria && <span className="truncate shrink-0">{toTitleCase(chat.categoria)}</span>}
                 </div>
                 {/* Renglón inferior ÚNICO: etiquetas + anuncio + atendiendo + lectores en línea
-                    en una sola línea (antes eran dos renglones) → tarjeta más delgada. flex-wrap
-                    para que SIEMPRE quepa aunque haya muchas etiquetas (se acomoda dinámicamente).
-                    En lg se renderiza SIEMPRE con altura reservada (min-h): la tarjeta mide igual
-                    tenga o no etiquetas/presencia/lock, así la lista virtualizada no brinca cuando
-                    un lector entra/sale o expira un lock. En pantallas chicas sigue oculto. */}
-                <div className="hidden lg:flex items-start justify-between gap-2 mt-1 min-h-[20px]">
-                    <div className="flex flex-wrap items-center gap-1 min-w-0">
+                    SIEMPRE en una sola línea (antes eran dos renglones) → tarjeta más delgada.
+                    nowrap: nunca baja a segundo renglón. Para que siempre quepa, el ID del anuncio
+                    (lo único largo) es lo que se encoge/trunca (min-w-0 + truncate); etiquetas y
+                    "atendiendo" van shrink-0 para verse completos. El clic del anuncio copia el ID
+                    completo aunque se vea truncado. min-h reservado = altura estable (la lista
+                    virtualizada no brinca al entrar/salir presencia o lock). En chicas, oculto. */}
+                <div className="hidden lg:flex items-center justify-between gap-2 mt-1 min-h-[20px]">
+                    <div className="flex items-center gap-1 min-w-0">
                         {Array.isArray(chat.tags) && chat.tags.slice(0, 4).map(t => {
                             const color = tagColorMap?.get(t) || '#64748b';
                             return (
@@ -212,13 +213,13 @@ const ChatRow = React.memo(({ chat, isSelected, isPinned, onSelect, onBlock, onD
                                 type="button"
                                 title="Copiar Ad ID"
                                 onClick={(e) => { e.stopPropagation(); navigator.clipboard?.writeText(chat.adId); }}
-                                className="shrink-0 font-mono text-[9px] text-violet-400 dark:text-violet-500 bg-violet-50 dark:bg-violet-500/10 hover:bg-violet-100 dark:hover:bg-violet-500/20 px-1.5 py-0.5 rounded border border-violet-200/60 dark:border-violet-500/20 transition-colors"
+                                className="min-w-0 font-mono text-[9px] text-violet-400 dark:text-violet-500 bg-violet-50 dark:bg-violet-500/10 hover:bg-violet-100 dark:hover:bg-violet-500/20 px-1.5 py-0.5 rounded border border-violet-200/60 dark:border-violet-500/20 transition-colors truncate"
                             >
                                 📢 {chat.adId}
                             </button>
                         )}
                         {lockText && (
-                            <span className="inline-flex items-center gap-1 text-[9px] font-semibold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-500/10 border border-blue-100 dark:border-blue-500/20 px-1.5 py-0.5 rounded truncate max-w-[130px]" title={lockText}>
+                            <span className="inline-flex items-center gap-1 text-[9px] font-semibold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-500/10 border border-blue-100 dark:border-blue-500/20 px-1.5 py-0.5 rounded shrink-0 max-w-[130px]" title={lockText}>
                                 <Lock className="w-2.5 h-2.5 shrink-0" />
                                 <span className="truncate">{lockText}</span>
                             </span>
