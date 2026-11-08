@@ -1698,7 +1698,7 @@ const NodeConfigDrawer = ({ node, flowId, meta, quickReplies, onSaveQuickReply, 
                                         className={inputCls}
                                     />
                                     <p className="text-[11px] text-gray-400 dark:text-gray-500 leading-relaxed">
-                                        Si el candidato clickea un <strong>botón de fecha ya vencida</strong>, en vez de confirmarle un día muerto se le manda esto y se le <strong>re-envía el mismo menú</strong> con las fechas vivas → elige una y <strong>continúa desde ahí</strong> sin perder su avance. Si ese menú ya no tiene ninguna fecha viva, el flujo se reinicia (y ahí aplica el mensaje de caducidad). La vigencia se mide por la fecha que él <strong>realmente vio</strong> (inmune a reciclar el botón). Admite variables (<code>{'{{nombre}}'}</code>…).
+                                        Si el candidato clickea un <strong>botón de fecha ya vencida</strong>, en vez de confirmarle un día muerto se le <strong>re-envía el mismo menú</strong> con las fechas vivas, usando <strong>este texto como cuerpo</strong> (sin el preámbulo del nodo) → elige una y <strong>continúa desde ahí</strong> sin perder su avance. Si ese menú ya no tiene ninguna fecha viva, el flujo se reinicia (y ahí aplica el mensaje de caducidad). La vigencia se mide por la fecha que él <strong>realmente vio</strong> (inmune a reciclar el botón). Admite variables (<code>{'{{nombre}}'}</code>…).
                                     </p>
                                 </div>
                             </div>

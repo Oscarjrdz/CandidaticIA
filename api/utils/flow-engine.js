@@ -494,30 +494,30 @@ async function resendExpiredDateMenu(redis, flow, menuNode, candidateId, candida
         n.type === 'etiqueta' && (n.data?.mode === 'especifica' || n.data?.mode === 'actual') && n.data?.tag
         && forwardReachableFrom(n.id, flow.edges || []).has(menuNode.id));
     const ropts = { ephemeral: true };
-    const msg = typeof etiqueta?.data?.fechaVencidaMessage === 'string' ? etiqueta.data.fechaVencidaMessage.trim() : '';
-    if (msg) {
-        try {
-            const config = await getUltraMsgConfig(candidateSnapshot.incomingPhoneNumberId || candidateSnapshot.instanceId);
-            if (config?.token && config?.instanceId) {
-                const cleanTo = String(candidateSnapshot.whatsapp).replace(/\D/g, '');
-                const text = substituteVariables(etiqueta.data.fechaVencidaMessage, candidateSnapshot);
-                for (const bubbleText of splitBubbles(text)) {
-                    const sr = await pacedSend(ropts, () => sendUltraMsgMessageWithRetry(config.instanceId, config.token, cleanTo, bubbleText, 'chat', { priority: 1 }));
-                    if (sr?.success) {
-                        await saveFlowOutbound(candidateSnapshot.id, {
-                            from: 'me', content: bubbleText, timestamp: new Date().toISOString(),
-                            meta: { flow: true, flowId, nodeId: etiqueta?.id || menuNode.id, fechaVencida: true }
-                        }, sr);
+    const configured = typeof etiqueta?.data?.fechaVencidaMessage === 'string' ? etiqueta.data.fechaVencidaMessage.trim() : '';
+    // El aviso de fecha vencida se vuelve el CUERPO del menú re-enviado (sin el preámbulo del nodo).
+    // Un solo mensaje: aviso + botones de las fechas vivas. (Meta exige cuerpo no vacío → default.)
+    const bodyOverride = configured || 'Esa fecha ya venció 🙏, elige otra opción 👇';
+
+    // Re-envía el MISMO menú con SOLO las fechas vivas (sendInteractiveNode filtra las vencidas),
+    // usando el aviso como cuerpo en vez del preámbulo del nodo.
+    const { sendOk, options, allExpired } = await sendInteractiveNode(redis, menuNode, candidateSnapshot, flowId, ropts, '', bodyOverride);
+    if (allExpired || !sendOk || !Array.isArray(options) || !options.length) {
+        // Ese menú ya no tiene NINGUNA fecha viva → el aviso-cuerpo no se mandó (no hubo menú).
+        // Manda el aviso aparte (si está configurado) y re-corre fresco → candado de caducidad.
+        if (configured) {
+            try {
+                const config = await getUltraMsgConfig(candidateSnapshot.incomingPhoneNumberId || candidateSnapshot.instanceId);
+                if (config?.token && config?.instanceId) {
+                    const cleanTo = String(candidateSnapshot.whatsapp).replace(/\D/g, '');
+                    const text = substituteVariables(configured, candidateSnapshot);
+                    for (const bubbleText of splitBubbles(text)) {
+                        const sr = await pacedSend(ropts, () => sendUltraMsgMessageWithRetry(config.instanceId, config.token, cleanTo, bubbleText, 'chat', { priority: 1 }));
+                        if (sr?.success) await saveFlowOutbound(candidateSnapshot.id, { from: 'me', content: bubbleText, timestamp: new Date().toISOString(), meta: { flow: true, flowId, nodeId: etiqueta?.id || menuNode.id, fechaVencida: true } }, sr);
                     }
                 }
-            }
-        } catch (e) { console.error(`[FLOW-ENGINE] fechaVencida msg ${flowId}:`, e?.message); }
-    }
-
-    // Re-envía el MISMO menú con SOLO las fechas vivas (sendInteractiveNode filtra las vencidas).
-    const { sendOk, options, allExpired } = await sendInteractiveNode(redis, menuNode, candidateSnapshot, flowId, ropts);
-    if (allExpired || !sendOk || !Array.isArray(options) || !options.length) {
-        // Ese menú ya no tiene NINGUNA fecha viva → re-corre fresco (candado de caducidad / re-ruteo).
+            } catch (e) { console.error(`[FLOW-ENGINE] fechaVencida msg ${flowId}:`, e?.message); }
+        }
         await runOneFlow(redis, flow, candidateId, { ...candidateSnapshot }, ropts)
             .catch(e => console.error(`[FLOW-ENGINE] fechaVencida restart ${flowId}:`, e?.message));
         return;
@@ -590,12 +590,15 @@ function haversineMeters(a, b) {
 // { sendOk, options } — options = [{handle, match}] para registrar la espera del ruteo.
 // `prefixText` antepone una línea al cuerpo (se usa al RE-MANDAR: "elige una opción 👇").
 // Reutilizado por el case 'accion_botones' y por el re-envío de resumeWaitingFlowIfMatch.
-async function sendInteractiveNode(redis, node, candidate, flowId, opts = {}, prefixText = '') {
+async function sendInteractiveNode(redis, node, candidate, flowId, opts = {}, prefixText = '', bodyOverride = null) {
     const data = node.data || {};
     const mode = data.mode || 'button';
-    if (!data.body?.trim()) return { sendOk: false, options: [] };
+    // bodyOverride reemplaza el cuerpo del nodo (ej. re-envío por fecha vencida: el aviso se vuelve
+    // el cuerpo del menú, sin el preámbulo del nodo). Meta exige cuerpo no vacío en interactivos.
+    const rawBody = (typeof bodyOverride === 'string' && bodyOverride.trim()) ? bodyOverride : data.body;
+    if (!rawBody?.trim()) return { sendOk: false, options: [] };
 
-    const bodyText = (prefixText ? `${prefixText}\n\n` : '') + substituteVariables(data.body, candidate);
+    const bodyText = (prefixText ? `${prefixText}\n\n` : '') + substituteVariables(rawBody, candidate);
     const header = (data.header && data.header.type && data.header.type !== 'none')
         ? { ...data.header, ...(data.header.text ? { text: substituteVariables(data.header.text, candidate) } : {}) }
         : null;
