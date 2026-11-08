@@ -481,6 +481,65 @@ function branchExpiryState(startId, nodes, edges) {
     return { hasDated, closed: hasDated && !anyLive };
 }
 
+// 📅 FECHA VENCIDA — RE-ENVÍA EL MENÚ ACTUALIZADO Y CONTINÚA: el candidato tocó un botón cuya
+// vigencia (snapshot) ya pasó. En vez de confirmarle un día muerto NI reiniciar todo el flujo, le
+// mandamos el mensaje del porqué (Etiqueta.fechaVencidaMessage) y RE-ENVIAMOS EL MISMO menú con solo
+// las fechas VIVAS, re-registrando la espera EN ESE nodo → el candidato elige una viva y CONTINÚA
+// desde ahí, sin perder su avance ni re-recibir el preámbulo (el ledger de progreso se conserva).
+// FALLBACK: si ese menú ya no tiene NINGUNA fecha viva, re-corre el flujo fresco (ephemeral) → ahí
+// entra el candado de caducidad. La Etiqueta raíz se halla por alcanzabilidad (ramas disjuntas).
+async function resendExpiredDateMenu(redis, flow, menuNode, candidateId, candidateSnapshot) {
+    const flowId = flow.id;
+    const etiqueta = (flow.nodes || []).find(n =>
+        n.type === 'etiqueta' && (n.data?.mode === 'especifica' || n.data?.mode === 'actual') && n.data?.tag
+        && forwardReachableFrom(n.id, flow.edges || []).has(menuNode.id));
+    const ropts = { ephemeral: true };
+    const msg = typeof etiqueta?.data?.fechaVencidaMessage === 'string' ? etiqueta.data.fechaVencidaMessage.trim() : '';
+    if (msg) {
+        try {
+            const config = await getUltraMsgConfig(candidateSnapshot.incomingPhoneNumberId || candidateSnapshot.instanceId);
+            if (config?.token && config?.instanceId) {
+                const cleanTo = String(candidateSnapshot.whatsapp).replace(/\D/g, '');
+                const text = substituteVariables(etiqueta.data.fechaVencidaMessage, candidateSnapshot);
+                for (const bubbleText of splitBubbles(text)) {
+                    const sr = await pacedSend(ropts, () => sendUltraMsgMessageWithRetry(config.instanceId, config.token, cleanTo, bubbleText, 'chat', { priority: 1 }));
+                    if (sr?.success) {
+                        await saveFlowOutbound(candidateSnapshot.id, {
+                            from: 'me', content: bubbleText, timestamp: new Date().toISOString(),
+                            meta: { flow: true, flowId, nodeId: etiqueta?.id || menuNode.id, fechaVencida: true }
+                        }, sr);
+                    }
+                }
+            }
+        } catch (e) { console.error(`[FLOW-ENGINE] fechaVencida msg ${flowId}:`, e?.message); }
+    }
+
+    // Re-envía el MISMO menú con SOLO las fechas vivas (sendInteractiveNode filtra las vencidas).
+    const { sendOk, options, allExpired } = await sendInteractiveNode(redis, menuNode, candidateSnapshot, flowId, ropts);
+    if (allExpired || !sendOk || !Array.isArray(options) || !options.length) {
+        // Ese menú ya no tiene NINGUNA fecha viva → re-corre fresco (candado de caducidad / re-ruteo).
+        await runOneFlow(redis, flow, candidateId, { ...candidateSnapshot }, ropts)
+            .catch(e => console.error(`[FLOW-ENGINE] fechaVencida restart ${flowId}:`, e?.message));
+        return;
+    }
+    // Re-registra la espera EN ESE nodo con el snapshot nuevo (solo vivas) → elige una y continúa.
+    // El ledger de progreso NO se toca: su avance (nodos previos) se conserva.
+    try {
+        const d = menuNode.data || {};
+        const neverExpires = d.timeoutNever === true;
+        const timeoutHoras = Number(d.timeoutHoras) > 0 ? Number(d.timeoutHoras) : 48;
+        const NEVER_TTL_SEC = 60 * 60 * 24 * 365 * 5;
+        const ttlSec = neverExpires ? NEVER_TTL_SEC : Math.max(PROGRESS_TTL_SEC, Math.ceil(timeoutHoras * 3600) + 86400);
+        const key = `${WAITING_PREFIX}${candidateId}`;
+        const payload = JSON.stringify({
+            nodeId: menuNode.id, kind: 'interactive', options, reaskCount: 0,
+            ...(neverExpires ? {} : { expiresAt: Date.now() + timeoutHoras * 3600 * 1000 })
+        });
+        await redis.hset(key, flowId, payload);
+        await redis.expire(key, ttlSec);
+    } catch (e) { console.error(`[FLOW-ENGINE] fechaVencida re-registro ${flowId}:`, e?.message); }
+}
+
 // Trunca un título a N "caracteres" visibles (graphemes), espejo del límite de Meta
 // (20 para botón, 24 para fila de lista). CRÍTICO: NO usar `.substring(0, N)` — corta por
 // unidades UTF-16 y parte un emoji al final en un surrogate suelto (ej. "…RUTA😄" → "…RUTA\uD83D"),
@@ -619,11 +678,14 @@ async function sendInteractiveNode(redis, node, candidate, flowId, opts = {}, pr
 
     // opciones para la espera de ruteo (handle = id estable; match = título que devuelve Meta al clic).
     // Solo las VIGENTES: nadie debe quedar esperando un botón que no se mandó.
+    // 📸 SNAPSHOT de `expiresAt`: guardamos la vigencia TAL COMO SE MANDÓ. Así, al clickear días
+    // después, re-chequeamos contra la fecha que el candidato REALMENTE vio — inmune a que el botón
+    // se recicle (mismo id, otra fecha), se borre o se reestructure el menú luego.
     const options = [];
     if (mode === 'button') {
-        for (const b of liveButtons) if (b?.id) options.push({ handle: b.id, match: truncateTitleSafe(substituteVariables(b.title, candidate), 20) });
+        for (const b of liveButtons) if (b?.id) options.push({ handle: b.id, match: truncateTitleSafe(substituteVariables(b.title, candidate), 20), expiresAt: b.expiresAt || null });
     } else if (mode === 'list') {
-        for (const sec of liveSections) for (const r of sec.rows) if (r?.id) options.push({ handle: r.id, match: truncateTitleSafe(substituteVariables(r.title, candidate), 24) });
+        for (const sec of liveSections) for (const r of sec.rows) if (r?.id) options.push({ handle: r.id, match: truncateTitleSafe(substituteVariables(r.title, candidate), 24), expiresAt: r.expiresAt || null });
     }
     return { sendOk, options };
 }
@@ -2326,6 +2388,18 @@ export async function resumeWaitingFlowIfMatch(candidateId, candidateSnapshot, i
                     const inTxt = normInteractiveTitle(incomingText);
                     const opt = (Array.isArray(st.options) ? st.options : [])
                         .find(o => normInteractiveTitle(o.match) === inTxt);
+                    // 📅 FECHA VENCIDA: tocó un botón cuya vigencia (snapshot al enviar) YA pasó. No
+                    // ruteamos el día muerto: consumimos la espera, mandamos el mensaje de la rama y
+                    // RE-INICIAMOS el flujo con las fechas vivas. (opt.expiresAt ausente en esperas
+                    // viejas previas a esta feature → isOptionExpired=false → ruteo normal, sin romper.)
+                    if (opt && isOptionExpired(opt.expiresAt)) {
+                        await redis.hdel(key, flowId).catch(() => {});
+                        const rflow = flows.find(f => f.id === flowId && f.active && Array.isArray(f.nodes) && f.nodes.length);
+                        const menuNode = rflow?.nodes?.find(n => n.id === st.nodeId);
+                        if (rflow && menuNode) await resendExpiredDateMenu(redis, rflow, menuNode, candidateId, candidateSnapshot);
+                        else if (rflow) await runOneFlow(redis, rflow, candidateId, { ...candidateSnapshot }, { ephemeral: true }).catch(() => {});
+                        return true;
+                    }
                     if (opt) { matched = true; handle = opt.handle; chosenMode = opt.mode || null; chosenModeName = opt.name || null; }
                     else {
                         // Escribió algo que NO es una opción y no expiró. Si el nodo tiene activado

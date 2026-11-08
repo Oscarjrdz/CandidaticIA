@@ -1685,6 +1685,22 @@ const NodeConfigDrawer = ({ node, flowId, meta, quickReplies, onSaveQuickReply, 
                                         Se manda al <strong>re-entrar</strong> a esta rama, SOLO cuando el candidato vuelve a clickear <strong>esta MISMA</strong> vacante que ya traía (re-clic real, flujo “al regresar”). Si re-clickea otra vacante, no se manda. Si la rama está cerrada, gana el mensaje de caducidad de arriba. Admite variables (<code>{'{{nombre}}'}</code>…).
                                     </p>
                                 </div>
+                                <div className="pt-3 mt-1 border-t border-gray-100 dark:border-gray-700 space-y-2">
+                                    <label className="text-xs text-gray-500 dark:text-gray-400 block">
+                                        Mensaje <strong>fecha de entrevista vencida</strong>
+                                    </label>
+                                    <textarea
+                                        rows={3}
+                                        maxLength={1024}
+                                        value={data.fechaVencidaMessage || ''}
+                                        onChange={(e) => patch({ fechaVencidaMessage: e.target.value })}
+                                        placeholder="Ej. Esa fecha de entrevista ya venció {{nombre}} 🙏, volvemos a empezar tu proceso…"
+                                        className={inputCls}
+                                    />
+                                    <p className="text-[11px] text-gray-400 dark:text-gray-500 leading-relaxed">
+                                        Si el candidato clickea un <strong>botón de fecha ya vencida</strong>, en vez de confirmarle un día muerto se le manda esto y se le <strong>re-envía el mismo menú</strong> con las fechas vivas → elige una y <strong>continúa desde ahí</strong> sin perder su avance. Si ese menú ya no tiene ninguna fecha viva, el flujo se reinicia (y ahí aplica el mensaje de caducidad). La vigencia se mide por la fecha que él <strong>realmente vio</strong> (inmune a reciclar el botón). Admite variables (<code>{'{{nombre}}'}</code>…).
+                                    </p>
+                                </div>
                             </div>
                         )}
                     </div>
