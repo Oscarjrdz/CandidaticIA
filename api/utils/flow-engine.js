@@ -162,6 +162,13 @@ export const CHECKPOINT_PREFIX = 'flow:checkpoint:v1:';
 // no re-crear recordatorios). Se borra al completar; TTL como red de seguridad.
 const PROGRESS_PREFIX = 'flow:progress:v1:';
 const PROGRESS_TTL_SEC = 60 * 60 * 24 * 7; // 7 días
+
+// 📅 Fecha de entrevista COMPROMETIDA por el candidato: { nodeId (menú de fecha), expiresAt (snapshot
+// de la opción elegida) }. Se fija al elegir un día válido; se re-chequea en CUALQUIER continuación
+// (mandar ubicación, pedir pase, cualquier clic que no sea de fecha). Si venció → se le re-manda el
+// menú de fechas (no se le confirma un día muerto). Se borra al re-mandar el menú o completar. TTL red.
+const DATECHOICE_PREFIX = 'flow:datechoice:v1:';
+const DATECHOICE_TTL_SEC = 60 * 60 * 24 * 60; // 60 días
 // Lock de exclusión mutua por candidato/flujo: evita que dos invocaciones concurrentes
 // (reentrega de webhook, doble disparo) corran el mismo flujo para el mismo candidato a
 // la vez. TTL > maxDuration (120s) para que se auto-libere si la instancia muere a medias.
@@ -522,8 +529,18 @@ async function resendExpiredDateMenu(redis, flow, menuNode, candidateId, candida
             .catch(e => console.error(`[FLOW-ENGINE] fechaVencida restart ${flowId}:`, e?.message));
         return;
     }
+    // Limpia el avance DESDE el menú hacia adelante (su subárbol) + la fecha comprometida: así, al
+    // re-elegir, el candidato re-corre lo que venía DESPUÉS del menú (p.ej. re-pide ubicación / pase)
+    // fresco. Lo de ANTES del menú (preámbulo/vacante) conserva su '1' y NO se re-envía. En el Punto 1
+    // (clic del propio menú, sin avance posterior) es no-op. resumeWait vuelve a fijar H:handle al clic.
+    try {
+        const progressKey = `${PROGRESS_PREFIX}${flowId}:${candidateId}`;
+        const downstream = [...forwardReachableFrom(menuNode.id, flow.edges || [])];
+        if (downstream.length) await redis.hdel(progressKey, ...downstream).catch(() => {});
+        await redis.del(`${DATECHOICE_PREFIX}${candidateId}:${flowId}`).catch(() => {});
+    } catch { /* no crítico */ }
+
     // Re-registra la espera EN ESE nodo con el snapshot nuevo (solo vivas) → elige una y continúa.
-    // El ledger de progreso NO se toca: su avance (nodos previos) se conserva.
     try {
         const d = menuNode.data || {};
         const neverExpires = d.timeoutNever === true;
@@ -2046,7 +2063,7 @@ async function runOneFlow(redis, flow, candidateId, candidate, opts = {}) {
         // Grafo completo → marcar candidato como terminado y limpiar el ledger.
         // (No en ephemeral: no se marca "completado para siempre" — puede volver a disparar.)
         if (useClaim) {
-            await redis.pipeline().sadd(execKey, candidateId).del(progressKey).exec();
+            await redis.pipeline().sadd(execKey, candidateId).del(progressKey).del(`${DATECHOICE_PREFIX}${candidateId}:${flow.id}`).exec();
         }
     } finally {
         if (lockAcquired) await redis.del(lockKey).catch(() => {});
@@ -2403,7 +2420,28 @@ export async function resumeWaitingFlowIfMatch(candidateId, candidateSnapshot, i
                         else if (rflow) await runOneFlow(redis, rflow, candidateId, { ...candidateSnapshot }, { ephemeral: true }).catch(() => {});
                         return true;
                     }
-                    if (opt) { matched = true; handle = opt.handle; chosenMode = opt.mode || null; chosenModeName = opt.name || null; }
+                    if (opt) {
+                        if (opt.expiresAt) {
+                            // 📅 Eligió un DÍA VÁLIDO → recuerda la fecha comprometida (snapshot) para
+                            // re-checarla en CUALQUIER continuación posterior (ubicación, pase, etc.).
+                            redis.set(`${DATECHOICE_PREFIX}${candidateId}:${flowId}`, JSON.stringify({ nodeId: st.nodeId, expiresAt: opt.expiresAt }), 'EX', DATECHOICE_TTL_SEC).catch(() => {});
+                        } else {
+                            // 📅 Botón de CONTINUACIÓN (ej. "Dame Pase Entrevista", sin fecha propia): si
+                            // la fecha que ya había elegido venció mientras tanto → NO le damos el pase a un
+                            // día muerto: re-mandamos el menú de fechas (mismo trato que el clic vencido).
+                            const dcRaw = await redis.get(`${DATECHOICE_PREFIX}${candidateId}:${flowId}`).catch(() => null);
+                            if (dcRaw) {
+                                let dc = null; try { dc = JSON.parse(dcRaw); } catch { dc = null; }
+                                if (dc && isOptionExpired(dc.expiresAt)) {
+                                    await redis.hdel(key, flowId).catch(() => {});
+                                    const rflow = flows.find(f => f.id === flowId && f.active && Array.isArray(f.nodes) && f.nodes.length);
+                                    const dateMenuNode = rflow?.nodes?.find(n => n.id === dc.nodeId);
+                                    if (rflow && dateMenuNode) { await resendExpiredDateMenu(redis, rflow, dateMenuNode, candidateId, candidateSnapshot); return true; }
+                                }
+                            }
+                        }
+                        matched = true; handle = opt.handle; chosenMode = opt.mode || null; chosenModeName = opt.name || null;
+                    }
                     else {
                         // Escribió algo que NO es una opción y no expiró. Si el nodo tiene activado
                         // "re-mandar", le reenvía los botones con un empujón ("elige una opción"),
@@ -2565,6 +2603,20 @@ export async function resumeWaitingLocationFlow(candidateId, candidateSnapshot, 
             // Consume la espera ANTES de reanudar (idempotencia: una ubicación = una reanudación).
             await redis.hdel(key, flowId).catch(() => {});
             if (!flow) return false; // flujo borrado/desactivado mientras esperaba → se descarta
+
+            // 📅 ¿La fecha de entrevista que eligió ANTES venció mientras compartía su ubicación? Si
+            // sí → no lo confirmamos a un día muerto: re-mandamos el menú de fechas (mismo trato que el
+            // clic de botón vencido). Cubre el caso "eligió válido, pero la fecha pasó esperando su GPS".
+            try {
+                const dcRaw = await redis.get(`${DATECHOICE_PREFIX}${candidateId}:${flowId}`).catch(() => null);
+                if (dcRaw) {
+                    let dc = null; try { dc = JSON.parse(dcRaw); } catch { dc = null; }
+                    if (dc && isOptionExpired(dc.expiresAt)) {
+                        const dateMenuNode = flow.nodes.find(n => n.id === dc.nodeId);
+                        if (dateMenuNode) { await resendExpiredDateMenu(redis, flow, dateMenuNode, candidateId, candidateSnapshot); return true; }
+                    }
+                }
+            } catch { /* no crítico: sigue el ruteo normal */ }
 
             // Guarda el resultado en el candidato para tokens posteriores ({{ruta cercana}},
             // {{parada cercana}}, {{numero parada}}, {{metros parada}}). Se aplica al snapshot
