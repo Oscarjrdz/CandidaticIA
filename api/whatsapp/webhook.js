@@ -807,6 +807,26 @@ export default async function handler(req, res) {
                 }
             }
 
+            // 🔁 RE-CLIC SIN REFERRAL (post / página / vacante reenviada por WhatsApp): si un
+            // candidato EXISTENTE que ya trae etiqueta (vacanteActual) manda el texto EXACTO
+            // pre-llenado del anuncio pero SIN el objeto referral de Meta, lo tratamos como
+            // RE-CLIC de su misma etiqueta. Pasa cuando NO hay anuncio pagado vivo detrás del
+            // clic: le compartieron la vacante por WhatsApp, le mandaron el post, o entró a la
+            // página y dio clic — en todos esos casos Meta no adjunta atribución (referral),
+            // aunque la intención es idéntica a un clic real. Escribimos la MISMA marca que un
+            // referral ({ tag, reclick:true }) y el despachador decide TODO lo demás (ruteo
+            // "actual", caducidad, mensaje de re-clic, cadencia). NO cambia ninguna otra política.
+            // Gate estricto: texto EXACTO (normalizado) + candidato existente + con vacanteActual
+            // + SIN referral este turno (si hubiera referral, los bloques de arriba ya marcaron).
+            if (!isNewCandidate && !metaMsg.referral && redis && candidate?.vacanteActual) {
+                const _norm = (body || '').toLowerCase()
+                    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')  // quita acentos
+                    .replace(/[¡!¿?.,…]/g, '').replace(/\s+/g, ' ').trim();
+                if (_norm === 'hola quiero mas informacion') {
+                    redis.set(`return:adclick:v1:${candidateId}`, JSON.stringify({ tag: candidate.vacanteActual, reclick: true, viaText: true }), 'EX', 600).catch(() => {});
+                }
+            }
+
             const previousUserTime = freshCandidate?.lastUserMessageAt ? new Date(freshCandidate.lastUserMessageAt).getTime() : 0;
             const previousHumanTime = freshCandidate?.lastHumanMessageAt ? new Date(freshCandidate.lastHumanMessageAt).getTime() : 0;
             const wasUnread = !!previousUserTime && previousUserTime > previousHumanTime;

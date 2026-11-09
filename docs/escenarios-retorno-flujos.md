@@ -74,6 +74,18 @@
 ### CO-8 · Completo que **ya agendó** y re-clickea un anuncio
 - **Esperado:** re-entra al **flujo completo** (toda la cascada). **Intencional** — no se detecta "ya agendó". (Decisión de diseño: un re-clic de anuncio = "muéstrame esta vacante".)
 
+### CO-9 · Completo regresa con el **texto exacto del anuncio pero SIN `referral`** (post / página / vacante reenviada)
+- **Estado:** completo que ya trae etiqueta (`vacanteActual` seteado); manda el texto **exacto** pre-llenado del anuncio — `"¡Hola! Quiero más información."` — pero el turno **NO** trae el objeto `referral` de Meta.
+- **Por qué pasa:** no hay anuncio pagado vivo detrás del clic. Le **compartieron la vacante por WhatsApp**, le mandaron **el post**, o entró a la **página** y dio clic — en todos esos Meta no adjunta atribución (`referral`), aunque la intención es idéntica a un clic real. (Confirmado en prod 2026-11-09, candidato 8135538667: el mismo texto con `referral` el 11-07 disparó el flujo; sin `referral` el 11-09 caía a Sala de Espera.)
+- **Webhook:** detecta el texto exacto (normalizado: minúsculas, sin acentos ni signos) en un candidato **existente** con `vacanteActual` y **sin `referral`** este turno → escribe la **misma** marca `return:adclick:v1` que un clic real, con `{ tag: vacanteActual, reclick: true, viaText: true }`.
+- **Disparo:** `al_regresar` (idéntico a un re-clic con `referral`).
+- **Esperado:** entra a la rama de su etiqueta (`vacanteActual`), con **`reclick: true`** → se comporta como **CO-4** (mensaje de re-clic "ya te postulaste…" + re-manda el flujo). Toda la demás política aplica sin cambios: ruteo "actual", caducidad (rama cerrada → gana la caducidad), cadencia.
+- **Variables:**
+  - Candidato **sin `vacanteActual`** (orgánico que nunca vino de anuncio) → no hay rama a la cual rutear → **no marca** → cae a Sala de Espera (CO-2).
+  - Turno **con `referral`** → los bloques normales ya marcaron; este no se dispara (gate `!metaMsg.referral`).
+  - Texto que **no es exacto** ("hola quiero info", "quiero más información de la vacante") → **no marca** (evita falsos positivos con mensajes orgánicos).
+- **NO modifica** ninguna otra política: es solo una **fuente adicional** de la marca de clic. Gate estricto: texto exacto + existente + con `vacanteActual` + sin `referral`.
+
 ---
 
 # INCOMPLETOS
