@@ -1984,14 +1984,22 @@ Responde ÚNICAMENTE con el número entero de meses. Si evade o no menciona ning
         // _paso2EnProceso / _paso2Listo se definen arriba (~línea 1642), justo antes del disparador
         // de regreso de incompletos, para poder gatear ese gancho por completitud real de paso 2.
 
-        // 🧩 CANDIDATO LEGADO SIN PASO 2: paso 1 completo y YA felicitado en su día, pero el paso 2
-        // (colonia/experiencia) nunca arrancó — típico de contactos creados antes de que existiera
-        // el paso 2 (paso2Estado y paso2Requerido en undefined, colonia vacía). Sin esto caían a
-        // Sala de Espera como si estuvieran completos. Mandamos un PUENTE determinista y arrancamos
-        // el paso 2; de ahí en adelante la maquinaria normal (bloque ~1693) extrae colonia→
-        // experiencia con sus reglas de evasión. Solo la primera vez: al setear paso2Estado, los
-        // turnos siguientes caen directo en el extractor del paso 2.
-        if (!isRecruiterMode && !isBridgeActive && isProfileComplete && candidateData.congratulated === true
+        // 🧩 PASO 1 COMPLETO SIN PASO 2: paso 1 cerrado pero el paso 2 (colonia/experiencia) nunca
+        // arrancó (paso2Estado y paso2Requerido en undefined, colonia vacía). Sin esto caían a Sala
+        // de Espera como si estuvieran completos — y peor: se auto-bloqueaban 24h. Dos poblaciones:
+        //   • Contactos creados antes de que existiera el paso 2.
+        //   • Candidatos que cerraron paso 1 SIN pasar por el handoff normal (~2615) que setea
+        //     congratulated + paso2Requerido juntos — p.ej. un reclutador tomó el chat justo al
+        //     completarse paso 1, o el handover se disparó ese turno. Quedan en limbo: paso 1 ok,
+        //     pero congratulated/paso2Requerido en undefined. Por eso NO condicionamos a
+        //     `congratulated === true` (antes lo exigía y a estos nunca los atrapaba).
+        // Mandamos un PUENTE determinista y arrancamos el paso 2; de ahí en adelante la maquinaria
+        // normal (bloque ~1693) extrae colonia→experiencia con sus reglas de evasión. Solo la
+        // primera vez: al setear paso2Estado, los turnos siguientes caen directo en el extractor del
+        // paso 2. Gatea por `isProfileComplete` (paso 1 real, medido al inicio del turno) + paso 2 no
+        // iniciado, así que nunca dispara en el turno en que paso 1 recién se completa (ese lo cierra
+        // el handoff de ~2615) ni antes de tener paso 1.
+        if (!isRecruiterMode && !isBridgeActive && isProfileComplete
             && !candidateData.paso2Estado && !candidateData.colonia && !responseTextVal) {
             const _lgName = (candidateData.nombreReal || '').split(' ')[0] || '';
             const _lgHi = _lgName ? `Hola ${_lgName}` : 'Hola';
