@@ -805,6 +805,10 @@ export async function evaluateOrExecute(node, candidate, flowId, redis, opts = {
 
     switch (node.type) {
         case 'inicio': {
+            // 🔧 Inserción MANUAL desde Chat Web (botón "Meter al flujo"): ignora el filtro de
+            // perfil para poder meter/testear a cualquier candidato. Solo lo activa esa acción
+            // (opts.manualForce); los disparadores en vivo nunca lo setean.
+            if (opts.manualForce) return true;
             const filter = data.profileFilter || 'todos';
             if (filter === 'todos') return true;
             if (filter === 'active') return !candidate.blocked;
@@ -858,7 +862,12 @@ export async function evaluateOrExecute(node, candidate, flowId, redis, opts = {
             const tags = Array.isArray(candidate.tags) ? candidate.tags : [];
             // ¿El candidato PASA el portón de esta etiqueta?
             let passes;
-            if (mode === 'ninguna') passes = tags.length === 0;
+            // 🔧 Inserción MANUAL desde Chat Web: ignora el MODO del portón (incl. "actual"/
+            // vacanteActual, que exige un click fresco del anuncio) y deja entrar por TENER la
+            // etiqueta — así el candidato cae SOLO en la rama de su etiqueta, no en todas. Sin
+            // etiqueta configurada, pasa (igual que 'especifica'). Solo lo activa el botón manual.
+            if (opts.manualForce) passes = !data.tag || tags.includes(data.tag);
+            else if (mode === 'ninguna') passes = tags.length === 0;
             else if (mode === 'especifica') passes = !data.tag || tags.includes(data.tag); // sin configurar → no bloquea
             // Ruteo por ÚLTIMA vacante: solo pasa si la etiqueta del último anuncio clickeado
             // (candidate.vacanteActual, sobreescrita en cada click desde el webhook) es JUSTO esta.
@@ -897,8 +906,10 @@ export async function evaluateOrExecute(node, candidate, flowId, redis, opts = {
 
                 // CANDADO DE CADUCIDAD: si toda la rama tiene sus menús con fecha vencidos, no
                 // desciende — manda el mensaje configurable (si hay) y detiene la rama (return false).
+                // 🔧 La inserción MANUAL (Chat Web) ignora el candado de caducidad: permite
+                // meter/testear la rama aunque sus menús con fecha ya vencieron.
                 const { closed } = branchExpiryState(node.id, opts._flowNodes || [], opts._flowEdges || []);
-                if (closed) {
+                if (closed && !opts.manualForce) {
                     const msg = typeof data.caducadoMessage === 'string' ? data.caducadoMessage.trim() : '';
                     if (msg) {
                         try {
@@ -2795,7 +2806,10 @@ export async function runFlowForListCandidate(flow, candidateSnapshot, opts = {}
         return { alreadyExecuted: true, passed: {} };
     }
 
-    const passed = await runOneFlow(redis, flow, candidateSnapshot.id, { ...candidateSnapshot }, {});
+    // force = botón "Meter al flujo" de Chat Web → manualForce: brinca TODOS los candados de
+    // entrada (filtro de perfil del inicio, portón de etiqueta incl. "actual", y caducidad). El
+    // "run" masivo del editor no pasa force, así que corre con los candados normales.
+    const passed = await runOneFlow(redis, flow, candidateSnapshot.id, { ...candidateSnapshot }, force ? { manualForce: true } : {});
     // passed vacío aquí = otra invocación tomó el lock (corriendo en paralelo) o justo se
     // marcó completado — de cualquier modo no hubo trabajo nuevo que reportar en esta llamada.
     // Con force nunca reportamos "ya pasó" (acabamos de limpiarlo y corrió a propósito).

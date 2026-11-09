@@ -4407,7 +4407,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         const nombre = selectedChat.nombreReal || selectedChat.nombre || 'este candidato';
         const confirmed = await new Promise(resolve => setConfirmModal({
             title: 'Meter al flujo',
-            message: `¿Meter a ${nombre} al flujo "${flow.name}"? Se ejecutarán sus acciones (mensajes, etiquetas, recordatorios, etc.). Aunque ya haya pasado antes por este flujo, se volverá a ejecutar.`,
+            message: `¿Meter a ${nombre} al flujo "${flow.name}"? Se ejecutarán sus acciones (mensajes, etiquetas, recordatorios, etc.). Se brincan todos los candados de entrada: corre aunque ya haya pasado antes, aunque su perfil no cumpla el filtro, sin importar el modo de la etiqueta (entra por la rama de la etiqueta que tenga) y aunque la rama esté caducada.`,
             confirmText: 'Meter al flujo',
             variant: 'warning',
             onConfirm: () => resolve(true),
