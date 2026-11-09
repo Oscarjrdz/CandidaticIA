@@ -19,7 +19,7 @@ import { getCachedConfigBatch } from '../utils/cache.js';
 import { getOpenAIResponse } from '../utils/openai.js';
 
 import { inferGender } from '../utils/gender-helper.js';
-import { runFlowsForCandidate, resumeWaitingFlowIfMatch, runReturningFlowsForCandidate, runBroadcastReplyFlowsForCandidate } from '../utils/flow-engine.js';
+import { runFlowsForCandidate, resumeWaitingFlowIfMatch, runReturningFlowsForCandidate, runBroadcastReplyFlowsForCandidate, RETURN_ADCLICK_PREFIX } from '../utils/flow-engine.js';
 import { runInBackground } from '../utils/background.js';
 import { FEATURES } from '../utils/feature-flags.js';
 import { AIGuard } from '../utils/ai-guard.js';
@@ -1142,6 +1142,29 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null,
             // que siempre. Se hace await (necesitamos que responda antes de cerrar la función),
             // pero está blindado para nunca lanzar ni bloquear el silencio.
             await resumeWaitingFlowIfMatch(candidateId, candidateData, incomingMessage).catch(() => {});
+
+            // 🔁 RE-CLIC DE ANUNCIO GANA SOBRE EL COOLDOWN DE SALA DE ESPERA.
+            // Regla: un COMPLETO que re-clickea un anuncio (misma o distinta campaña) SIEMPRE re-entra
+            // al flujo de su última etiqueta — aunque traiga el bloqueo de 24h que puso la Sala de Espera.
+            // Ese bloqueo es solo un cooldown del bot, NO una intervención humana: el re-clic es intención
+            // explícita y manda. Una intervención humana real (blockedReason 'human_intervention') NO se
+            // toca: ahí un reclutador está en la conversación. La marca { reclick } la pone el webhook en
+            // return:adclick:v1 al llegar el click; runReturningFlowsForCandidate se auto-filtra a completos
+            // (profileFilter) y consume la marca. Si dispara, limpiamos el bloqueo (re-enganche fresco) y
+            // Brenda queda muda: habla el flujo.
+            if (candidateData.blockedReason === 'sala_espera' && redis) {
+                const _adMark = await redis.get(`${RETURN_ADCLICK_PREFIX}${candidateId}`).catch(() => null);
+                if (_adMark) {
+                    const _fired = await runReturningFlowsForCandidate(
+                        candidateId,
+                        candidateData,
+                        { incomingText: typeof incomingMessage === 'string' ? incomingMessage : '', botHasSpoken: true, minSinceLastBot: 0 }
+                    ).catch(() => 0);
+                    if (_fired > 0) {
+                        await updateCandidate(candidateId, { blocked: false, blockedReason: null, blockedExpiresAt: null }).catch(() => {});
+                    }
+                }
+            }
             return null;
         }
 
