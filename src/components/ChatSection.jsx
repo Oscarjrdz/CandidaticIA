@@ -105,7 +105,7 @@ const CHAT_LOCK_HEARTBEAT_MS = 30_000;
 
 const CHAT_LIST_PAGE_SIZE = 10;
 const CHAT_LIST_LOCAL_FILTER_PAGE_SIZE = 500;
-const CHAT_EXIT_ANIM_MS = 260; // debe coincidir con la duración de .chat-card-exit en index.css
+const CHAT_EXIT_ANIM_MS = 420; // debe coincidir con la duración de .chat-card-exit en index.css (fade 45% + colapso 55%)
 const UNTAGGED_TAG_FILTER = '__candidatic_untagged__';
 const UNTAGGED_TAG_LABEL = 'Sin Etiqueta';
 const UNTAGGED_TAG_COLOR = '#ef4444';

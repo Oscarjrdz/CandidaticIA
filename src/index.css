@@ -259,22 +259,29 @@ body {
 }
 
 /* Salida elegante de una TARJETA que deja de cumplir el filtro activo (se marca leída,
-   pierde la etiqueta seleccionada, etc.): se desvanece y colapsa su alto en vez de
-   desaparecer de golpe. overflow:hidden + max-height/padding en 0 para que Virtuoso
-   mida el colapso real (ResizeObserver) y el resto de la lista suba suave, no de un salto. */
+   pierde la etiqueta seleccionada, etc.) — p.ej. el chat abierto "pegajoso" al que le das
+   clic para irte a otro. DOS FASES SECUENCIADAS, no simultáneas, para que no se "trasplape"
+   con las filas que suben:
+     1) FADE en su sitio: se desvanece por completo SIN mover su alto (max-height fijo) →
+        la fila que viene abajo todavía no se mueve, así nada cruza por encima de la tarjeta
+        a medio desaparecer.
+     2) COLAPSO: ya invisible, recién entonces colapsa su alto/padding (easeOutCubic, el
+        mismo easing del FLIP/burbujas) → el resto de la lista sube suave hacia el hueco.
+   overflow:hidden + max-height/padding en 0 para que Virtuoso mida el colapso real
+   (ResizeObserver) y el resto de la lista suba fluido, no de un salto. */
 .chat-card-exit {
-  -webkit-animation: chat-card-exit 260ms cubic-bezier(0.4, 0, 1, 1) both;
-  animation: chat-card-exit 260ms cubic-bezier(0.4, 0, 1, 1) both;
+  -webkit-animation: chat-card-exit 420ms linear both;
+  animation: chat-card-exit 420ms linear both;
   overflow: hidden;
 }
 @-webkit-keyframes chat-card-exit {
-  0%   { max-height: 160px; opacity: 1; }
-  55%  { opacity: 0; }
+  0%   { max-height: 200px; opacity: 1; -webkit-animation-timing-function: cubic-bezier(0.4, 0, 1, 1); }
+  45%  { max-height: 200px; opacity: 0; -webkit-animation-timing-function: cubic-bezier(0.33, 1, 0.68, 1); }
   100% { max-height: 0; opacity: 0; padding-top: 0; padding-bottom: 0; }
 }
 @keyframes chat-card-exit {
-  0%   { max-height: 160px; opacity: 1; }
-  55%  { opacity: 0; }
+  0%   { max-height: 200px; opacity: 1; animation-timing-function: cubic-bezier(0.4, 0, 1, 1); }
+  45%  { max-height: 200px; opacity: 0; animation-timing-function: cubic-bezier(0.33, 1, 0.68, 1); }
   100% { max-height: 0; opacity: 0; padding-top: 0; padding-bottom: 0; }
 }
 
