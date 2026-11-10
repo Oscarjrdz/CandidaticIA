@@ -704,6 +704,57 @@ const TOOLS = {
         }
     },
 
+    editar_banco_respuesta: {
+        description: 'Edita el TEXTO de una respuesta existente del banco de respuestas (su mensaje, y opcionalmente su nombre, atajo o frase dinámica). Identifica la respuesta por quickReplyId (preferido) o por atajo. NO crea respuestas nuevas ni toca la media (imágenes/audio/PDF). El cambio aplica a TODO el equipo. Manda solo los campos que quieras cambiar.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                quickReplyId: { type: 'string', description: 'ID de la respuesta del banco a editar (el "id" de listar_banco_respuestas). Preferido.' },
+                atajo: { type: 'string', description: 'Atajo (shortcut) de la respuesta, si no tienes el id.' },
+                mensaje: { type: 'string', description: 'Nuevo texto del mensaje. Puede incluir variables como {{nombre}}, {{municipio}}, etc.' },
+                nombre: { type: 'string', description: 'Nuevo nombre (etiqueta) de la respuesta en el banco (opcional).' },
+                nuevoAtajo: { type: 'string', description: 'Nuevo atajo (shortcut) de la respuesta (opcional).' },
+                fraseDinamica: { type: 'string', description: 'Nueva frase dinámica (opcional). Manda cadena vacía "" para quitarla.' }
+            }
+        },
+        handler: async (args, { redis }) => {
+            const qrId = String(args?.quickReplyId || '').trim();
+            const atajo = String(args?.atajo || '').trim();
+            if (!qrId && !atajo) throw new Error('Indica quickReplyId o atajo');
+
+            // Solo cuentan los campos realmente presentes en el payload (así una cadena
+            // vacía en fraseDinamica/nombre sí la limpia, sin asumir cambios no pedidos).
+            const has = (k) => Object.prototype.hasOwnProperty.call(args || {}, k);
+            if (!has('mensaje') && !has('nombre') && !has('nuevoAtajo') && !has('fraseDinamica')) {
+                throw new Error('Nada que editar: manda al menos mensaje, nombre, nuevoAtajo o fraseDinamica');
+            }
+
+            const raw = await redis.get('candidatic:quick_replies');
+            const replies = raw ? JSON.parse(raw) : [];
+            if (!Array.isArray(replies)) throw new Error('Banco de respuestas corrupto');
+            const idx = replies.findIndex(r =>
+                (qrId && r.id === qrId) || (atajo && String(r.shortcut || '').toLowerCase() === atajo.toLowerCase()));
+            if (idx === -1) throw new Error('Respuesta del banco no encontrada');
+
+            const qr = replies[idx];
+            if (has('mensaje')) qr.message = String(args.mensaje);
+            if (has('nombre')) qr.name = String(args.nombre);
+            if (has('nuevoAtajo')) qr.shortcut = String(args.nuevoAtajo);
+            if (has('fraseDinamica')) qr.dynamicPhrase = String(args.fraseDinamica);
+
+            await redis.set('candidatic:quick_replies', JSON.stringify(replies));
+
+            return {
+                ok: true,
+                id: qr.id,
+                nombre: qr.name || '',
+                atajo: qr.shortcut || '',
+                preview: String(qr.message || '').slice(0, 140),
+                tieneFraseDinamica: !!qr.dynamicPhrase
+            };
+        }
+    },
+
     listar_etiquetas: {
         description: 'Lista todas las etiquetas disponibles en el Chat Web.',
         inputSchema: { type: 'object', properties: {} },
