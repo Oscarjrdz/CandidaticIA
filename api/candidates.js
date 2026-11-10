@@ -414,6 +414,20 @@ export default async function handler(req, res) {
                 updates.paso2Estado = computePaso2Estado(merged);
             }
 
+            // 🏷️ ETIQUETA MANUAL = VACANTE ACTUAL: si este PUT AGREGA una etiqueta (no la quita),
+            // esa etiqueta pasa a ser la "más reciente" del candidato → se refleja en vacanteActual
+            // (que normalmente solo escribe el webhook en un clic de anuncio). Así el botón manual
+            // "Meter al flujo" lo manda SIEMPRE a su última etiqueta sin importar el origen (anuncio
+            // o puesta a mano por el reclutador), y el ruteo "actual" la toma como su rama. Solo en
+            // ALTA de etiqueta; QUITAR una NO cambia vacanteActual. (El etiquetado en MASA desde la
+            // lista va por otra ruta —bulk-tag.js— que a propósito NO toca vacanteActual.)
+            if (Array.isArray(updates.tags)) {
+                const _existingForTag = await getCandidateById(id);
+                const _oldTags = Array.isArray(_existingForTag?.tags) ? _existingForTag.tags : [];
+                const _added = updates.tags.filter(t => !_oldTags.includes(t));
+                if (_added.length) updates.vacanteActual = _added[_added.length - 1];
+            }
+
             const updatedCandidate = await updateCandidate(id, updates);
             clearCandidatesListCache();
             clearFilterCountsCache(redis);
