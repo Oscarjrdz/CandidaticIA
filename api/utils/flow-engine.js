@@ -443,6 +443,15 @@ async function saveFlowOutbound(candidateId, msg, sendResult) {
     if (!saved?.id) return;
     const remoteId = sendResult?.messageId || sendResult?.data?.messages?.[0]?.id || null;
     await updateMessageStatus(candidateId, saved.id, 'sent', remoteId ? { ultraMsgId: remoteId } : {}).catch(() => {});
+    // 🔔 NO-LEÍDO: dejar constancia en el blob de que NOSOTROS (el flujo) hablamos al último.
+    // saveMessage emite el SSE pero NO persiste el timestamp; sin esto, tras un refetch/recarga
+    // la burbuja de no-leído reaparecía aunque el último mensaje fuera del flujo (candidateIsUnread
+    // compara contra lastHuman/lastBot). Los nodos de flujo salen como 'me' o 'bot' → ambos = "nosotros".
+    const t = msg.timestamp || new Date().toISOString();
+    const spokePatch = msg.from === 'me'
+        ? { lastHumanMessageAt: t, ultimoMensaje: t }
+        : { lastBotMessageAt: t, ultimoMensajeBot: t, ultimoMensaje: t };
+    await updateCandidate(candidateId, spokePatch).catch(() => {});
 }
 
 // Vigencia por opción (botón/fila): un botón con `expiresAt` en el pasado ya NO se manda ni

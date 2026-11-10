@@ -4,6 +4,7 @@
  */
 import { Buffer } from 'node:buffer';
 import { getCachedConfig } from './utils/cache.js';
+import { candidateIsUnread } from './utils/storage.js';
 import { candidatePassesUserFilter, resolveAllowedLabels } from './utils/rbac.js';
 
 const AGGREGATE_CACHE_TTL_SECONDS = 60;
@@ -88,13 +89,8 @@ async function readOrBuildUnreadAggregate({ redis, unreadIds, unreadVersion, isP
             let candidate;
             try { candidate = JSON.parse(raw); } catch { continue; }
 
-            const userTime = candidate.lastUserMessageAt ? new Date(candidate.lastUserMessageAt).getTime() : 0;
-            const humanTime = candidate.lastHumanMessageAt ? new Date(candidate.lastHumanMessageAt).getTime() : 0;
-            const botTime = candidate.lastBotMessageAt
-                ? new Date(candidate.lastBotMessageAt).getTime()
-                : (candidate.ultimoMensajeBot ? new Date(candidate.ultimoMensajeBot).getTime() : 0);
-            // No-leído = el candidato habló al último (ni humano ni bot respondieron después).
-            if (!userTime || userTime <= Math.max(humanTime, botTime)) continue;
+            // Regla ÚNICA de no-leído, compartida con el resto del backend (ver storage.js).
+            if (!candidateIsUnread(candidate)) continue;
 
             const summary = {
                 id: candidate.id,

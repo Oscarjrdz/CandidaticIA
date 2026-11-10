@@ -242,6 +242,10 @@ export default async function handler(req, res) {
             await updateCandidate(candidate.id, {
                 reengagement_attempts: attemptNumber,
                 reengagement_last_sent: new Date().toISOString(),
+                // 🔔 NO-LEÍDO: el reenganche (bot) habló al último → no debe quedar como no-leído.
+                lastBotMessageAt: new Date().toISOString(),
+                ultimoMensajeBot: new Date().toISOString(),
+                ultimoMensaje: new Date().toISOString(),
             });
 
             await saveMessage(candidate.id, {
@@ -376,6 +380,10 @@ export default async function handler(req, res) {
                     await updateCandidate(candidate.id, {
                         paso2_reengagement_attempts: p2Attempts + 1,
                         paso2_reengagement_last_sent: new Date().toISOString(),
+                        // 🔔 NO-LEÍDO: el reenganche (bot) habló al último → no debe quedar como no-leído.
+                        lastBotMessageAt: new Date().toISOString(),
+                        ultimoMensajeBot: new Date().toISOString(),
+                        ultimoMensaje: new Date().toISOString(),
                     });
 
                     await saveMessage(candidate.id, {

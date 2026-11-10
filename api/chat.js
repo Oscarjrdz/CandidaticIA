@@ -1,4 +1,4 @@
-import { getMessages, getRecentMessages, saveMessage, getCandidateById, updateCandidate, updateMessageStatus, getRedisClient, validateAdminSession, getUsers, getRoles, isProfileComplete, getOwnedLabelSet } from './utils/storage.js';
+import { getMessages, getRecentMessages, saveMessage, getCandidateById, updateCandidate, updateMessageStatus, getRedisClient, validateAdminSession, getUsers, getRoles, isProfileComplete, getOwnedLabelSet, candidateIsUnread } from './utils/storage.js';
 import { substituteVariables } from './utils/shortcuts.js';
 import { sendUltraMsgMessage, getUltraMsgConfig, buildMetaTemplateComponents, renderMetaTemplatePreviewText, resolveTemplateHeaderMedia } from './whatsapp/utils.js';
 import { getCachedConfig } from './utils/cache.js';
@@ -38,16 +38,8 @@ const candidateTagNames = (candidate = {}) => (
         : []
 );
 
-const isCandidateUnread = (candidate = {}) => {
-    const userTime = candidate.lastUserMessageAt ? new Date(candidate.lastUserMessageAt).getTime() : 0;
-    if (!userTime) return false;
-    const humanTime = candidate.lastHumanMessageAt ? new Date(candidate.lastHumanMessageAt).getTime() : 0;
-    const botTime = candidate.lastBotMessageAt
-        ? new Date(candidate.lastBotMessageAt).getTime()
-        : (candidate.ultimoMensajeBot ? new Date(candidate.ultimoMensajeBot).getTime() : 0);
-    // No-leído = el candidato habló al último (ni humano ni bot respondieron después).
-    return userTime > Math.max(humanTime, botTime);
-};
+// Regla ÚNICA de no-leído, compartida con el resto del backend (ver storage.js).
+const isCandidateUnread = candidateIsUnread;
 
 export default async function handler(req, res) {
     if (req.method === 'OPTIONS') {
@@ -90,15 +82,8 @@ export default async function handler(req, res) {
             // If no messages exist but candidate is flagged as unread, auto-clear silently
             if (messages.length === 0) {
                 const candidate = await getCandidateById(candidateId);
-                if (candidate?.lastUserMessageAt) {
-                    const ut = new Date(candidate.lastUserMessageAt).getTime();
-                    const ht = candidate.lastHumanMessageAt ? new Date(candidate.lastHumanMessageAt).getTime() : 0;
-                    const bt = candidate.lastBotMessageAt
-                        ? new Date(candidate.lastBotMessageAt).getTime()
-                        : (candidate.ultimoMensajeBot ? new Date(candidate.ultimoMensajeBot).getTime() : 0);
-                    if (ut > Math.max(ht, bt)) {
-                        updateCandidate(candidateId, { lastHumanMessageAt: candidate.lastUserMessageAt }).catch(() => {});
-                    }
+                if (candidateIsUnread(candidate)) {
+                    updateCandidate(candidateId, { lastHumanMessageAt: candidate.lastUserMessageAt }).catch(() => {});
                 }
             }
 

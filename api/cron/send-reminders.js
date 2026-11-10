@@ -17,7 +17,7 @@
  * también recordatorios reales pendientes).
  */
 
-import { getRedisClient, getCandidateById, saveMessage } from '../utils/storage.js';
+import { getRedisClient, getCandidateById, saveMessage, updateCandidate } from '../utils/storage.js';
 import { getUltraMsgConfig, sendUltraMsgMessage } from '../whatsapp/utils.js';
 import { acquireProcessingLock, releaseProcessingLock, markCompleted, isCompleted } from '../utils/reminder-lock.js';
 import { recordBandwidthSnapshot } from '../utils/redis-bandwidth.js';
@@ -222,6 +222,14 @@ export async function processDirectReminderItem(redis, remId, now = Date.now()) 
                 sentVia,
                 usedFallbackTemplate: sentVia === 'template_fallback'
             }
+        }).catch(() => {});
+
+        // 🔔 NO-LEÍDO: el recordatorio (nosotros) habló al último. saveMessage emite el SSE pero
+        // NO persiste el timestamp en el blob; sin esto la burbuja de no-leído reaparecía tras un
+        // refetch aunque el último mensaje fuera el recordatorio. Sale como 'me' → lastHumanMessageAt.
+        await updateCandidate(reminder.candidateId, {
+            lastHumanMessageAt: new Date().toISOString(),
+            ultimoMensaje: new Date().toISOString(),
         }).catch(() => {});
 
         if (sentVia === 'text' && restBubbles.length) {

@@ -1002,6 +1002,25 @@ export const getVisibleCandidateIds = async (user) => {
         .map(x => x.id);
 };
 
+// 🔔 REGLA ÚNICA DE NO-LEÍDO (fuente de verdad del servidor). Debe coincidir carácter por
+// carácter con `checkIfUnread` del front (src/components/chat/chatUtils.js) y con el inline de
+// api/chat.js / api/chat-unread-count.js. Un chat está NO-LEÍDO solo si el candidato fue el
+// ÚLTIMO en hablar: su último mensaje entrante es más nuevo que NUESTRA última respuesta, sea
+// de un humano (lastHumanMessageAt) O del bot/Brenda/flujo/recordatorio (lastBotMessageAt, con
+// fallback al legado ultimoMensajeBot). Incluir el tiempo del bot es lo que evita que la burbuja
+// se quede pegada cuando ya respondimos automáticamente. Antes varias copias comparaban solo
+// contra lastHumanMessageAt y se desincronizaban — por eso vive aquí, en un solo lugar.
+export const candidateIsUnread = (c) => {
+    if (!c) return false;
+    const userTime = c.lastUserMessageAt ? new Date(c.lastUserMessageAt).getTime() : 0;
+    if (!userTime) return false;
+    const humanTime = c.lastHumanMessageAt ? new Date(c.lastHumanMessageAt).getTime() : 0;
+    const botTime = c.lastBotMessageAt
+        ? new Date(c.lastBotMessageAt).getTime()
+        : (c.ultimoMensajeBot ? new Date(c.ultimoMensajeBot).getTime() : 0);
+    return userTime > Math.max(humanTime, botTime);
+};
+
 // Tope de hidratación para usuarios restringidos. Su universo (por etiqueta/número) es acotado;
 // esto protege contra casos patológicos ('Ver TODAS' + número con muchísimos candidatos).
 const RESTRICTED_HYDRATE_CAP = 4000;
@@ -1039,11 +1058,7 @@ export const getCandidatesForRestrictedUser = async (user, {
 
     const needAudit = filter === 'complete' || filter === 'incomplete';
     const customFields = needAudit ? JSON.parse((await getCachedConfig(client, 'custom_fields')) || '[]') : [];
-    const isUnread = (c) => {
-        const u = c.lastUserMessageAt ? new Date(c.lastUserMessageAt).getTime() : 0;
-        const h = c.lastHumanMessageAt ? new Date(c.lastHumanMessageAt).getTime() : 0;
-        return !!u && u > h;
-    };
+    const isUnread = candidateIsUnread;
     const lower = search.toLowerCase();
     const cleanSearch = search.replace(/\D/g, '');
     candidates = candidates.filter(c => {
@@ -1128,9 +1143,7 @@ export const getCandidates = async (limit = 100, offset = 0, search = '', exclud
             if (stepId && String(c?.manualProjectStepId || '').trim() !== stepId) return false;
 
             if (normalizedStatusFilter === 'unread') {
-                const userTs = c.lastUserMessageAt ? new Date(c.lastUserMessageAt).getTime() : 0;
-                const humanTs = c.lastHumanMessageAt ? new Date(c.lastHumanMessageAt).getTime() : 0;
-                if (!userTs || userTs <= humanTs) return false;
+                if (!candidateIsUnread(c)) return false;
             } else if (normalizedStatusFilter === 'complete') {
                 if (!isProfileComplete(c, customFields)) return false;
             } else if (normalizedStatusFilter === 'incomplete') {
@@ -1311,8 +1324,9 @@ export const getCandidates = async (limit = 100, offset = 0, search = '', exclud
 };
 
 /**
- * Siembra candidates:unread escaneando todos los candidatos donde lastUserMessageAt > lastHumanMessageAt.
- * Se llama una sola vez en background cuando el Set está vacío (primer deploy).
+ * Siembra candidates:unread escaneando todos los candidatos no-leídos (candidateIsUnread:
+ * el candidato habló al último vs humano O bot). Se llama una sola vez en background cuando
+ * el Set está vacío (primer deploy).
  */
 async function _seedUnreadSet(client) {
     try {
@@ -1331,9 +1345,7 @@ async function _seedUnreadSet(client) {
                 if (err || !res) continue;
                 try {
                     const c = normalizeCandidateSilence(JSON.parse(res));
-                    const ut = c.lastUserMessageAt ? new Date(c.lastUserMessageAt).getTime() : 0;
-                    const ht = c.lastHumanMessageAt ? new Date(c.lastHumanMessageAt).getTime() : 0;
-                    if (ut > ht) unreadIds.push(c.id);
+                    if (candidateIsUnread(c)) unreadIds.push(c.id);
                 } catch {}
             }
             if (unreadIds.length > 0) {
@@ -1446,9 +1458,7 @@ export const getCandidatesFiltered = async (filter, limit = 500, offset = 0) => 
         .map(([err, res]) => (err || !res) ? null : normalizeCandidateSilence(JSON.parse(res)))
         .filter(c => {
             if (!c) return false;
-            const u = new Date(c.lastUserMessageAt || 0).getTime();
-            const h = new Date(c.lastHumanMessageAt || 0).getTime();
-            if (!u || u <= h) return false; // no es realmente no-leído
+            if (!candidateIsUnread(c)) return false; // no es realmente no-leído
             if (filter === 'complete') return isProfileComplete(c, customFields);
             if (filter === 'incomplete') return !isProfileComplete(c, customFields);
             return true; // 'unread' = todos los no-leídos
@@ -1824,9 +1834,7 @@ export const deleteCandidate = async (id) => {
             if (raw) {
                 const c = JSON.parse(raw);
                 phone = c.whatsapp ? c.whatsapp.replace(/\D/g, '') : null;
-                const userTime = c.lastUserMessageAt ? new Date(c.lastUserMessageAt).getTime() : 0;
-                const humanTime = c.lastHumanMessageAt ? new Date(c.lastHumanMessageAt).getTime() : 0;
-                wasUnread = !!userTime && userTime > humanTime;
+                wasUnread = candidateIsUnread(c);
                 // Decrement tag counts
                 const deletedTags = cleanTagValues(c.tags);
                 if (deletedTags.length > 0) {
@@ -2207,16 +2215,13 @@ export const updateCandidate = async (id, data) => {
         }
     }
 
-    // 📊 ATOMIC UNREAD: Track unread state using timestamps (lastUserMessageAt > lastHumanMessageAt)
+    // 📊 ATOMIC UNREAD: la membresía del set candidates:unread sigue la regla ÚNICA
+    // (candidateIsUnread: candidato habló al último vs humano O bot). Antes miraba solo el
+    // tiempo del humano e ignoraba al bot, así que un chat que Brenda/flujo ya había contestado
+    // seguía contando como no-leído en el set y el contador del menú.
     {
-        const _isUnread = (c) => {
-            const ut = c.lastUserMessageAt ? new Date(c.lastUserMessageAt).getTime() : 0;
-            if (!ut) return false;
-            const ht = c.lastHumanMessageAt ? new Date(c.lastHumanMessageAt).getTime() : 0;
-            return ut > ht;
-        };
-        const wasUnread = _isUnread(candidate);
-        const isNowUnread = _isUnread(updated);
+        const wasUnread = candidateIsUnread(candidate);
+        const isNowUnread = candidateIsUnread(updated);
         if (wasUnread !== isNowUnread) {
             const redisAtomic = getRedisClient();
             if (redisAtomic) {

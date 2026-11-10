@@ -1185,6 +1185,16 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null,
             if (isNoInteresa || reengageState) {
                 const firstName = getFirstName(candidateData.nombreReal) || 'candidato';
 
+                // 🔔 NO-LEÍDO: estas ramas de re-engagement retornan temprano y se saltan el tail
+                // normal del agente que persiste candidateUpdates.lastBotMessageAt. Sin dejar esa
+                // constancia en el blob, la burbuja de no-leído reaparecía tras un refetch aunque el
+                // último mensaje fuera de Brenda (candidateIsUnread compara contra lastHuman/lastBot).
+                // markBotSpoke se llama justo antes de cada return de este bloque.
+                const markBotSpoke = async () => {
+                    const t = new Date().toISOString();
+                    await updateCandidate(candidateId, { lastBotMessageAt: t, ultimoMensajeBot: t, ultimoMensaje: t }).catch(() => {});
+                };
+
                 if (reengageState === 'ASKED') {
                     if (saidYes) {
                         // ── Phase 2: Candidate said YES ──────────────────────────────────────
@@ -1212,6 +1222,7 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null,
                             await saveMessage(candidateId, { from: 'bot', content: profileMsg, timestamp: new Date().toISOString() });
 
                             await redis?.set(reengageKey, 'CONFIRMING_PROFILE', 'EX', 604800);
+                            await markBotSpoke();
                             return noVacMsg;
                         }
 
@@ -1231,6 +1242,7 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null,
                         await saveMessage(candidateId, { from: 'bot', content: ctaMsg, timestamp: new Date().toISOString() });
 
                         await redis?.set(reengageKey, 'SHOWING', 'EX', 604800);
+                        await markBotSpoke();
                         return listMsg;
 
                     } else if (saidNo) {
@@ -1240,6 +1252,7 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null,
                         await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, closeMsg, 'chat');
                         await saveMessage(candidateId, { from: 'bot', content: closeMsg, timestamp: new Date().toISOString() });
                         await redis?.del(reengageKey);
+                        await markBotSpoke();
                         return closeMsg;
                     }
                     // If not clearly yes/no, fall through to normal GPT response (ambiguous)
@@ -1253,6 +1266,7 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null,
                         await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, closeMsg, 'chat');
                         await saveMessage(candidateId, { from: 'bot', content: closeMsg, timestamp: new Date().toISOString() });
                         await redis?.del(reengageKey);
+                        await markBotSpoke();
                         return closeMsg;
                     } else {
                         // Candidate wants to correct something → ask them explicitly to avoid GPT fallback to farewell
@@ -1261,6 +1275,7 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null,
                         const config = await getUltraMsgConfig(resolvedInstanceId);
                         await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, correctionMsg, 'chat');
                         await saveMessage(candidateId, { from: 'bot', content: correctionMsg, timestamp: new Date().toISOString() });
+                        await markBotSpoke();
                         return correctionMsg;
                     }
 
@@ -1287,6 +1302,7 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null,
                         await saveMessage(candidateId, { from: 'bot', content: ctaMsg2, timestamp: new Date().toISOString() });
 
                         await redis?.set(reengageKey, 'SHOWING', 'EX', 604800);
+                        await markBotSpoke();
                         return goodNewsMsg;
                     } else {
                         // Still no match after correction
@@ -1294,6 +1310,7 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null,
                         await sendUltraMsgMessage(config.instanceId, config.token, phone, stillNoMsg, 'chat');
                         await saveMessage(candidateId, { from: 'bot', content: stillNoMsg, timestamp: new Date().toISOString() });
                         await redis?.del(reengageKey);
+                        await markBotSpoke();
                         return stillNoMsg;
                     }
 
@@ -1335,7 +1352,7 @@ SOLO responde al mensaje actual, de forma corta (máximo 2 oraciones). NO mencio
                     await saveMessage(candidateId, { from: 'bot', content: ctaBubble, timestamp: new Date().toISOString() });
 
                     await redis?.set(reengageKey, 'ASKED', 'EX', 604800);
-                    await updateCandidate(candidateId, { ultimoMensaje: new Date().toISOString() });
+                    await markBotSpoke();
                     return greetText;
                 }
                 // 🎯 SHOWING STATE: Candidate picks a vacancy by number or name from the re-engagement list
