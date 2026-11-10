@@ -851,11 +851,16 @@ export async function evaluateOrExecute(node, candidate, flowId, redis, opts = {
             const tags = Array.isArray(candidate.tags) ? candidate.tags : [];
             // ¿El candidato PASA el portón de esta etiqueta?
             let passes;
-            // 🔧 Inserción MANUAL desde Chat Web: ignora el MODO del portón (incl. "actual"/
-            // vacanteActual, que exige un click fresco del anuncio) y deja entrar por TENER la
-            // etiqueta — así el candidato cae SOLO en la rama de su etiqueta, no en todas. Sin
-            // etiqueta configurada, pasa (igual que 'especifica'). Solo lo activa el botón manual.
-            if (opts.manualForce) passes = !data.tag || tags.includes(data.tag);
+            // 🔧 Inserción MANUAL desde Chat Web: brinca los candados (modo del portón incl.
+            // "actual" que exige click fresco, filtro de perfil, caducidad) PERO cae en UNA SOLA
+            // rama: la de su etiqueta MÁS RECIENTE (vacanteActual = último anuncio; si no hubiera,
+            // la última de tags). Sin esto, un candidato con varias etiquetas entraba a TODAS sus
+            // ramas → recibía varias vacantes en una corrida (bug prod 2026-11-09, cand. multi-tag).
+            // Sin etiqueta configurada en el nodo, pasa (igual que 'especifica').
+            if (opts.manualForce) {
+                const target = candidate.vacanteActual || tags[tags.length - 1] || null;
+                passes = !data.tag || data.tag === target;
+            }
             else if (mode === 'ninguna') passes = tags.length === 0;
             else if (mode === 'especifica') passes = !data.tag || tags.includes(data.tag); // sin configurar → no bloquea
             // Ruteo por ÚLTIMA vacante: solo pasa si la etiqueta del último anuncio clickeado
