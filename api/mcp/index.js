@@ -33,7 +33,7 @@ import {
     getExpediente,
     getUsers
 } from '../utils/storage.js';
-import { substituteVariables, substituteDynamicPhrase } from '../utils/shortcuts.js';
+import { substituteVariables, substituteDynamicPhrase, splitBubbles } from '../utils/shortcuts.js';
 import { getFilterCountsWithIndex, countSegment, resolveSegmentIds } from '../utils/facet-index.js';
 import { getCtrBlocksCached, markRetornoAttendedByGrok, getGrokAttendedTodayCount } from '../utils/ctr-stats.js';
 import { CHECKPOINT_PREFIX } from '../utils/flow-engine.js';
@@ -203,6 +203,21 @@ async function ingestBankAssetFromUrl(redis, sourceUrl, hintName) {
     ]);
 
     return { url: `/api/image?id=${id}`, mime: mimeType, metaMediaId, filename };
+}
+
+// Resuelve una lista de URLs de imagen para guardarlas en el banco (máx 4): las http(s)
+// EXTERNAS se ingieren como assets permanentes (ingestBankAssetFromUrl); las que ya son
+// assets internos del banco (/api/image?id=…) o rutas relativas se conservan tal cual —
+// así Grok puede releer con ver_banco_respuesta y reenviar el mismo arreglo sin duplicar.
+async function resolveBankImageList(redis, urls) {
+    const out = [];
+    for (const raw of (Array.isArray(urls) ? urls : [])) {
+        const src = String(raw || '').trim();
+        if (!src) continue;
+        out.push(/^https?:\/\//i.test(src) ? (await ingestBankAssetFromUrl(redis, src)).url : src);
+        if (out.length >= 4) break;
+    }
+    return out;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -755,17 +770,63 @@ const TOOLS = {
         }
     },
 
+    ver_banco_respuesta: {
+        description: 'Devuelve UNA respuesta del banco COMPLETA y SIN CORTAR: el texto íntegro tal como está guardado (con los marcadores [burbuja] y las variables {{...}} literales, sin resolver), su nombre, atajo, frase dinámica, tipo, y las URLs de sus imágenes / PDF / audio / ubicación. Úsalo SIEMPRE antes de editar una respuesta, para no borrar nada por accidente (listar_banco_respuestas solo da un preview de ~140 caracteres).',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                quickReplyId: { type: 'string', description: 'ID de la respuesta (el "id" de listar_banco_respuestas). Preferido.' },
+                atajo: { type: 'string', description: 'Atajo (shortcut) de la respuesta, si no tienes el id.' }
+            }
+        },
+        handler: async (args, { redis }) => {
+            const qrId = String(args?.quickReplyId || '').trim();
+            const atajo = String(args?.atajo || '').trim();
+            if (!qrId && !atajo) throw new Error('Indica quickReplyId o atajo');
+
+            const raw = await redis.get('candidatic:quick_replies');
+            const replies = raw ? JSON.parse(raw) : [];
+            const qr = (Array.isArray(replies) ? replies : []).find(r =>
+                (qrId && r.id === qrId) || (atajo && String(r.shortcut || '').toLowerCase() === atajo.toLowerCase()));
+            if (!qr) throw new Error('Respuesta del banco no encontrada');
+
+            const imagenes = Array.isArray(qr.imageUrls) && qr.imageUrls.length
+                ? qr.imageUrls
+                : [qr.imageUrl, qr.imageUrl2, qr.imageUrl3, qr.imageUrl4].filter(Boolean);
+
+            return {
+                id: qr.id,
+                nombre: qr.name || '',
+                atajo: qr.shortcut || '',
+                tipo: qr.type || 'text',
+                mensaje: typeof qr.message === 'string' ? qr.message : '',   // íntegro, sin cortar ni resolver
+                fraseDinamica: qr.dynamicPhrase || '',
+                imagenes,                                                     // URLs tal cual (assets internos /api/image?id=…)
+                documentoUrl: qr.documentUrl || '',
+                documentoNombre: qr.documentName || '',
+                audioUrl: qr.audioUrl || '',
+                audioMime: qr.audioMime || '',
+                esNotaDeVoz: !!qr.voice,
+                ubicacion: qr.location || null
+            };
+        }
+    },
+
     editar_banco_respuesta: {
-        description: 'Edita el TEXTO de una respuesta existente del banco de respuestas (su mensaje, y opcionalmente su nombre, atajo o frase dinámica). Identifica la respuesta por quickReplyId (preferido) o por atajo. NO crea respuestas nuevas ni toca la media (imágenes/audio/PDF). El cambio aplica a TODO el equipo. Manda solo los campos que quieras cambiar.',
+        description: 'Edita una respuesta existente del banco de respuestas: su texto (mensaje), nombre, atajo, frase dinámica, Y su media (imágenes, PDF o audio). Identifica la respuesta por quickReplyId (preferido) o por atajo. Manda SOLO los campos que quieras cambiar (lo demás queda igual). Lee primero con ver_banco_respuesta para no perder nada. La media solo se puede cambiar dentro del MISMO tipo de la respuesta (una de texto admite imágenes, una de PDF admite otro PDF, etc.); para cambiar el tipo, bórrala y créala de nuevo. El cambio aplica a TODO el equipo.',
         inputSchema: {
             type: 'object',
             properties: {
                 quickReplyId: { type: 'string', description: 'ID de la respuesta del banco a editar (el "id" de listar_banco_respuestas). Preferido.' },
                 atajo: { type: 'string', description: 'Atajo (shortcut) de la respuesta, si no tienes el id.' },
-                mensaje: { type: 'string', description: 'Nuevo texto del mensaje. Puede incluir variables como {{nombre}}, {{municipio}}, etc.' },
+                mensaje: { type: 'string', description: 'Nuevo texto del mensaje. Puede incluir variables como {{nombre}}, {{municipio}}, etc. y marcadores [burbuja].' },
                 nombre: { type: 'string', description: 'Nuevo nombre (etiqueta) de la respuesta en el banco (opcional).' },
                 nuevoAtajo: { type: 'string', description: 'Nuevo atajo (shortcut) de la respuesta (opcional).' },
-                fraseDinamica: { type: 'string', description: 'Nueva frase dinámica (opcional). Manda cadena vacía "" para quitarla.' }
+                fraseDinamica: { type: 'string', description: 'Nueva frase dinámica (opcional). Manda cadena vacía "" para quitarla.' },
+                imagenes: { type: 'array', items: { type: 'string' }, description: 'SOLO respuestas de tipo "text": REEMPLAZA el set completo de imágenes (hasta 4). URLs http(s) externas se ingieren; las internas (/api/image?id=…, como las da ver_banco_respuesta) se conservan. Manda [] para quitar todas las imágenes.' },
+                documentoUrl: { type: 'string', description: 'SOLO respuestas de tipo "document": URL http(s) del nuevo PDF (reemplaza el actual).' },
+                documentoNombre: { type: 'string', description: 'SOLO tipo "document": nuevo nombre a mostrar del PDF.' },
+                audioUrl: { type: 'string', description: 'SOLO respuestas de tipo "audio": URL http(s) del nuevo audio (reemplaza el actual). ogg/opus se marca como nota de voz.' }
             }
         },
         handler: async (args, { redis }) => {
@@ -776,8 +837,9 @@ const TOOLS = {
             // Solo cuentan los campos realmente presentes en el payload (así una cadena
             // vacía en fraseDinamica/nombre sí la limpia, sin asumir cambios no pedidos).
             const has = (k) => Object.prototype.hasOwnProperty.call(args || {}, k);
-            if (!has('mensaje') && !has('nombre') && !has('nuevoAtajo') && !has('fraseDinamica')) {
-                throw new Error('Nada que editar: manda al menos mensaje, nombre, nuevoAtajo o fraseDinamica');
+            const editables = ['mensaje', 'nombre', 'nuevoAtajo', 'fraseDinamica', 'imagenes', 'documentoUrl', 'documentoNombre', 'audioUrl'];
+            if (!editables.some(has)) {
+                throw new Error('Nada que editar: manda al menos uno de ' + editables.join(', '));
             }
 
             const raw = await redis.get('candidatic:quick_replies');
@@ -788,10 +850,43 @@ const TOOLS = {
             if (idx === -1) throw new Error('Respuesta del banco no encontrada');
 
             const qr = replies[idx];
+            const tipo = qr.type || 'text';
+
+            // ── Texto y metadatos ──
             if (has('mensaje')) qr.message = String(args.mensaje);
             if (has('nombre')) qr.name = String(args.nombre);
             if (has('nuevoAtajo')) qr.shortcut = String(args.nuevoAtajo);
             if (has('fraseDinamica')) qr.dynamicPhrase = String(args.fraseDinamica);
+
+            // ── Media (acotada al tipo de la respuesta, para no dejar entradas incoherentes) ──
+            if (has('imagenes')) {
+                if (tipo !== 'text') throw new Error(`Esta respuesta es de tipo "${tipo}", no admite imágenes. Para cambiarle el tipo, bórrala y créala de nuevo.`);
+                const ingested = await resolveBankImageList(redis, args.imagenes);
+                qr.imageUrls = ingested; // formato canónico
+                ['imageUrl', 'imageUrl2', 'imageUrl3', 'imageUrl4'].forEach((k, i) => {
+                    if (ingested[i]) qr[k] = ingested[i]; else delete qr[k]; // espejo para enviar_banco_respuesta + form del dashboard
+                });
+            }
+            if (has('documentoUrl')) {
+                if (tipo !== 'document') throw new Error(`Esta respuesta es de tipo "${tipo}", no es un PDF. Para cambiarle el tipo, bórrala y créala de nuevo.`);
+                const src = String(args.documentoUrl).trim();
+                if (!src) throw new Error('documentoUrl vacío: para quitar el PDF, borra la respuesta (una de tipo "document" sin PDF quedaría inservible).');
+                const asset = await ingestBankAssetFromUrl(redis, src, has('documentoNombre') ? String(args.documentoNombre).trim() || undefined : undefined);
+                qr.documentUrl = asset.url;
+                qr.documentName = (has('documentoNombre') ? String(args.documentoNombre).trim() : '') || qr.documentName || asset.filename || 'documento.pdf';
+            } else if (has('documentoNombre')) {
+                if (tipo !== 'document') throw new Error(`Esta respuesta es de tipo "${tipo}", no es un PDF.`);
+                qr.documentName = String(args.documentoNombre).trim() || qr.documentName;
+            }
+            if (has('audioUrl')) {
+                if (tipo !== 'audio') throw new Error(`Esta respuesta es de tipo "${tipo}", no es un audio. Para cambiarle el tipo, bórrala y créala de nuevo.`);
+                const src = String(args.audioUrl).trim();
+                if (!src) throw new Error('audioUrl vacío: para quitar el audio, borra la respuesta.');
+                const asset = await ingestBankAssetFromUrl(redis, src);
+                qr.audioUrl = asset.url;
+                qr.audioMime = asset.mime || 'audio/ogg';
+                qr.voice = /ogg/i.test(asset.mime || '');
+            }
 
             await redis.set('candidatic:quick_replies', JSON.stringify(replies));
 
@@ -800,7 +895,11 @@ const TOOLS = {
                 id: qr.id,
                 nombre: qr.name || '',
                 atajo: qr.shortcut || '',
+                tipo,
                 preview: String(qr.message || '').slice(0, 140),
+                imagenes: (qr.imageUrls || []).length,
+                tieneDocumento: !!qr.documentUrl,
+                tieneAudio: !!qr.audioUrl,
                 tieneFraseDinamica: !!qr.dynamicPhrase
             };
         }
@@ -866,13 +965,9 @@ const TOOLS = {
                 entry.voice = /ogg/i.test(asset.mime || '');
                 entry.audioDurationMs = 0;
             } else {
-                const urls = Array.isArray(args?.imagenes) ? args.imagenes.filter(Boolean).slice(0, 4) : [];
+                const urls = Array.isArray(args?.imagenes) ? args.imagenes.filter(Boolean) : [];
                 if (!mensaje && !urls.length) throw new Error('tipo "text" requiere mensaje o al menos una imagen');
-                const ingested = [];
-                for (const src of urls) {
-                    const asset = await ingestBankAssetFromUrl(redis, src);
-                    ingested.push(asset.url);
-                }
+                const ingested = await resolveBankImageList(redis, urls);
                 entry.message = mensaje;
                 entry.imageUrls = ingested; // formato canónico (lo leen el form del dashboard y flow-engine)
                 // Espejo imageUrl..imageUrl4: enviar_banco_respuesta (MCP) lee esos campos, no el arreglo.
@@ -1490,13 +1585,14 @@ const TOOLS = {
     },
 
     enviar_banco_respuesta: {
-        description: 'Envía una respuesta del banco de respuestas a un candidato. Elige la respuesta por su id o atajo; el servidor resuelve variables, frase dinámica y media, y la manda. Usa listar_banco_respuestas para ver las disponibles.',
+        description: 'Envía una respuesta del banco a un candidato, EXACTAMENTE como lo hace un flujo: parte el texto en varias burbujas por el marcador [burbuja], resuelve variables ({{nombre}}, etc.) y frase dinámica, y manda las imágenes/PDF/audio de la respuesta. Elige la respuesta por quickReplyId o atajo. Para {{texto ultimo boton}} usa, por default, el último botón que picó el candidato; pásale textoUltimoBoton para forzar otro valor (ej. el día/punto correcto de la cita).',
         inputSchema: {
             type: 'object',
             properties: {
                 candidateId: { type: 'string', description: 'ID del candidato.' },
                 quickReplyId: { type: 'string', description: 'ID de la respuesta del banco (preferido).' },
-                atajo: { type: 'string', description: 'Atajo (shortcut) de la respuesta, si no tienes el id.' }
+                atajo: { type: 'string', description: 'Atajo (shortcut) de la respuesta, si no tienes el id.' },
+                textoUltimoBoton: { type: 'string', description: 'Valor con el que se sustituye {{texto ultimo boton}} en ESTE envío (y en la frase dinámica). Útil para reenviar el día/punto correcto. Si se omite, se usa el último botón que realmente picó el candidato.' }
             },
             required: ['candidateId']
         },
@@ -1516,15 +1612,19 @@ const TOOLS = {
             const candidate = await getCandidateById(id);
             if (!candidate) throw new Error('Candidato no encontrado');
 
-            // Resolver texto igual que el Chat Web: variables + frase dinámica (ambas pasan por substituteVariables).
-            const caption = qr.message
-                ? substituteDynamicPhrase(
-                    substituteVariables(qr.message, candidate),
-                    substituteVariables(qr.dynamicPhrase || '', candidate)
-                  ).replace(/[^\S\n]{2,}/g, ' ').trim()
-                : '';
+            // Override de {{texto ultimo boton}}: se inyecta en una copia del candidato (así lo
+            // ven tanto el mensaje como la frase dinámica, igual que en el flujo). Sin override,
+            // se usa el candidate.ultimoBotonTexto real.
+            const candForText = Object.prototype.hasOwnProperty.call(args || {}, 'textoUltimoBoton')
+                ? { ...candidate, ultimoBotonTexto: String(args.textoUltimoBoton) }
+                : candidate;
+            // MISMA resolución que el motor de flujos (api/utils/flow-engine.js, case
+            // 'accion_whatsapp'): variables + frase dinámica, sin colapsar espacios.
+            const resolve = (tpl) => substituteDynamicPhrase(
+                substituteVariables(tpl || '', candForText),
+                substituteVariables(qr.dynamicPhrase || '', candForText)
+            );
 
-            const images = [qr.imageUrl, qr.imageUrl2, qr.imageUrl3, qr.imageUrl4].filter(Boolean);
             const enviados = [];
             const send = async (body) => {
                 const r = await callInternal(req, redis, '/api/chat', 'POST', { candidateId: id, senderId: 'mcp-grok', senderName: 'Grok (IA)', ...body });
@@ -1534,17 +1634,30 @@ const TOOLS = {
                 enviados.push(body.type);
             };
 
-            if (images.length) {
-                await send({ type: 'image', mediaUrl: images[0], message: caption });
-                for (const extra of images.slice(1)) await send({ type: 'image', mediaUrl: extra, message: '' });
-            } else if (qr.documentUrl) {
-                await send({ type: 'document', mediaUrl: qr.documentUrl, message: caption });
-            } else if (qr.audioUrl) {
-                await send({ type: 'audio', mediaUrl: qr.audioUrl, message: '', extraParams: { voice: !!qr.audioVoice } });
-                if (caption) await send({ type: 'text', message: caption });
+            const tipo = qr.type || 'text';
+            if (tipo === 'location' && qr.location?.lat && qr.location?.lng) {
+                await send({ type: 'location', message: qr.location.address || '', extraParams: { name: qr.location.name, address: qr.location.address, lat: qr.location.lat, lng: qr.location.lng } });
+            } else if (tipo === 'audio' && qr.audioUrl) {
+                // Igual que el flujo: el audio va solo (sin caption).
+                await send({ type: 'audio', mediaUrl: qr.audioUrl, message: '', extraParams: { voice: !!qr.voice } });
+            } else if (tipo === 'document' && qr.documentUrl) {
+                // El filename lo deriva /api/chat del meta del asset; el caption va en message.
+                await send({ type: 'document', mediaUrl: qr.documentUrl, message: resolve(qr.message) });
             } else {
-                if (!caption) throw new Error('La respuesta no tiene texto ni media para enviar');
-                await send({ type: 'text', message: caption });
+                // text: texto partido en burbujas (cada una un mensaje) + imágenes aparte,
+                // en ese orden — tal cual el flujo.
+                const images = Array.isArray(qr.imageUrls) && qr.imageUrls.length
+                    ? qr.imageUrls
+                    : [qr.imageUrl, qr.imageUrl2, qr.imageUrl3, qr.imageUrl4].filter(Boolean);
+                const text = resolve(qr.message);
+                const bubbles = String(text || '').trim() ? splitBubbles(text) : [];
+                if (!bubbles.length && !images.length) throw new Error('La respuesta no tiene texto ni media para enviar');
+                for (const bubble of bubbles) {
+                    if (bubble.trim()) await send({ type: 'text', message: bubble });
+                }
+                for (const imgUrl of images) {
+                    await send({ type: 'image', mediaUrl: imgUrl, message: '' });
+                }
             }
 
             return { candidateId: id, respuesta: qr.name || qr.shortcut || qr.id, enviado: true, partes: enviados };
