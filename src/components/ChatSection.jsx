@@ -939,7 +939,7 @@ const AdContextCard = ({ creative }) => {
                     <img
                         src={adImageUrl}
                         alt={adHeadline || 'Anuncio'}
-                        className="w-full aspect-[4/3] object-cover bg-gray-100 dark:bg-black/30"
+                        className="w-full aspect-video object-contain bg-gray-100 dark:bg-black/30"
                         onError={(e) => { e.currentTarget.style.display = 'none'; }}
                     />
                 )}

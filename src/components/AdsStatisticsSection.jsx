@@ -1077,15 +1077,17 @@ const AdsStatisticsSection = () => {
                                         style={{ display: '-webkit-box', WebkitLineClamp: 10, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{ad.adBody}</p>
                                 )}
 
-                                {/* Imagen — a todo lo ancho y completa (el alto lo dicta la proporción
-                                    del creativo). Los 200px fijos quedan solo para video/placeholder. */}
+                                {/* Imagen — a todo lo ancho, con tope de alto para que los creativos
+                                    verticales no salgan enormes (object-contain = no recorta, solo los
+                                    encaja parejo con los horizontales). Los 200px fijos quedan solo
+                                    para video/placeholder. */}
                                 <div className="w-full bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
                                     {ad.adMediaType === 'video' && !ad.adImageUrl ? (
                                         <div className="flex items-center justify-center w-full" style={{ height: '200px' }}>
                                             <Video className="w-10 h-10 text-gray-300" />
                                         </div>
                                     ) : ad.adImageUrl ? (
-                                        <img src={ad.adImageUrl} alt="" loading="lazy" decoding="async" className="block w-full h-auto object-contain"
+                                        <img src={ad.adImageUrl} alt="" loading="lazy" decoding="async" className="block w-full max-h-72 object-contain"
                                             onError={(e) => { e.target.onerror = null; e.target.style.display='none'; }} />
                                     ) : (
                                         <div className="flex items-center justify-center w-full" style={{ height: '200px' }}>
