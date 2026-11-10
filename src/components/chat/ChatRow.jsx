@@ -208,16 +208,6 @@ const ChatRow = React.memo(({ chat, isSelected, isPinned, onSelect, onBlock, onD
                         {Array.isArray(chat.tags) && chat.tags.length > 4 && (
                             <span className="text-[9px] text-[#8696a0] dark:text-[#697882] shrink-0">+{chat.tags.length - 4}</span>
                         )}
-                        {chat.adId && (
-                            <button
-                                type="button"
-                                title="Copiar Ad ID"
-                                onClick={(e) => { e.stopPropagation(); navigator.clipboard?.writeText(chat.adId); }}
-                                className="min-w-0 font-mono text-[9px] text-violet-400 dark:text-violet-500 bg-violet-50 dark:bg-violet-500/10 hover:bg-violet-100 dark:hover:bg-violet-500/20 px-1.5 py-0.5 rounded border border-violet-200/60 dark:border-violet-500/20 transition-colors truncate"
-                            >
-                                📢 Anuncio
-                            </button>
-                        )}
                         {lockText && (
                             <span className="inline-flex items-center gap-1 text-[9px] font-semibold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-500/10 border border-blue-100 dark:border-blue-500/20 px-1.5 py-0.5 rounded shrink-0 max-w-[130px]" title={lockText}>
                                 <Lock className="w-2.5 h-2.5 shrink-0" />
