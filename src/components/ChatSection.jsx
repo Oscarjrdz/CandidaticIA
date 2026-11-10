@@ -929,7 +929,9 @@ const AdContextCard = ({ creative }) => {
     if (!adImageUrl && !adBody && !adHeadline) return null;
     return (
         <div className="flex justify-start mb-1">
-            <div className="max-w-[75%] rounded-lg overflow-hidden border border-violet-200/70 dark:border-violet-500/25 bg-violet-50/70 dark:bg-violet-500/10">
+            {/* Ancho fijo + imagen con proporción fija: todas las tarjetas se ven idénticas,
+                sin importar el largo del copy ni la proporción original del creativo. */}
+            <div className="w-[260px] max-w-[75%] rounded-lg overflow-hidden border border-violet-200/70 dark:border-violet-500/25 bg-violet-50/70 dark:bg-violet-500/10">
                 <div className="px-2.5 pt-1.5 pb-1 text-[10px] font-semibold text-violet-500 dark:text-violet-400 flex items-center gap-1">
                     📢 Vino de este anuncio
                 </div>
@@ -937,7 +939,7 @@ const AdContextCard = ({ creative }) => {
                     <img
                         src={adImageUrl}
                         alt={adHeadline || 'Anuncio'}
-                        className="w-full max-h-48 object-cover bg-gray-100 dark:bg-black/30"
+                        className="w-full aspect-[4/3] object-cover bg-gray-100 dark:bg-black/30"
                         onError={(e) => { e.currentTarget.style.display = 'none'; }}
                     />
                 )}
