@@ -510,21 +510,10 @@ async function resendExpiredDateMenu(redis, flow, menuNode, candidateId, candida
     // usando el aviso como cuerpo en vez del preámbulo del nodo.
     const { sendOk, options, allExpired } = await sendInteractiveNode(redis, menuNode, candidateSnapshot, flowId, ropts, '', bodyOverride);
     if (allExpired || !sendOk || !Array.isArray(options) || !options.length) {
-        // Ese menú ya no tiene NINGUNA fecha viva → el aviso-cuerpo no se mandó (no hubo menú).
-        // Manda el aviso aparte (si está configurado) y re-corre fresco → candado de caducidad.
-        if (configured) {
-            try {
-                const config = await getUltraMsgConfig(candidateSnapshot.incomingPhoneNumberId || candidateSnapshot.instanceId);
-                if (config?.token && config?.instanceId) {
-                    const cleanTo = String(candidateSnapshot.whatsapp).replace(/\D/g, '');
-                    const text = substituteVariables(configured, candidateSnapshot);
-                    for (const bubbleText of splitBubbles(text)) {
-                        const sr = await pacedSend(ropts, () => sendUltraMsgMessageWithRetry(config.instanceId, config.token, cleanTo, bubbleText, 'chat', { priority: 1 }));
-                        if (sr?.success) await saveFlowOutbound(candidateSnapshot.id, { from: 'me', content: bubbleText, timestamp: new Date().toISOString(), meta: { flow: true, flowId, nodeId: etiqueta?.id || menuNode.id, fechaVencida: true } }, sr);
-                    }
-                }
-            } catch (e) { console.error(`[FLOW-ENGINE] fechaVencida msg ${flowId}:`, e?.message); }
-        }
+        // Ese menú ya no tiene NINGUNA fecha viva → NO se manda el aviso de fecha vencida (promete
+        // "aquí te dejo las fechas disponibles 👇" que no existen). Va DIRECTO al re-correr fresco →
+        // el candado de caducidad manda SOLO el caducadoMessage ("ya cerró sus fechas"). Un solo
+        // mensaje, sin contradicción.
         await runOneFlow(redis, flow, candidateId, { ...candidateSnapshot }, ropts)
             .catch(e => console.error(`[FLOW-ENGINE] fechaVencida restart ${flowId}:`, e?.message));
         return;
