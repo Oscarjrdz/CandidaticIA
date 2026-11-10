@@ -769,12 +769,15 @@ const ProfileModal = React.memo(({ candidate, onClose, onSave }) => {
     );
 });
 
-// Defined outside ChatSection so Virtuoso doesn't remount it on every render
-const MessagesEncryptionHeader = () => (
+// Defined outside ChatSection so Virtuoso doesn't remount it on every render.
+// Debajo del aviso de cifrado va la tarjeta del anuncio (CTWA) si el candidato vino de uno —
+// queda justo ARRIBA del primer mensaje ("Quiero más información"), como el contexto de WhatsApp.
+const MessagesEncryptionHeader = ({ context }) => (
     <div className="px-[5%] pt-[5%] pb-1">
         <div className="text-center py-2 bg-[#ffeed0] dark:bg-[#cca868]/10 text-[#111b21] dark:text-[#f7cd73]/70 rounded-lg mx-auto w-fit px-4 shadow-sm select-none mb-4 border border-black/5 dark:border-white/5">
             <p className="text-[12px] leading-tight">Los mensajes están protegidos de extremo a extremo por Candidatic y la IA.</p>
         </div>
+        {context?.adCreative && <AdContextCard creative={context.adCreative} />}
     </div>
 );
 
@@ -913,6 +916,36 @@ const AnimatedSidePanel = ({ open, wPx, isMobile, children }) => {
             className="relative shrink-0 h-full overflow-hidden transition-[width] duration-300 ease-[cubic-bezier(.22,1,.36,1)] will-change-[width]"
         >
             <div style={{ width: wPx }} className="absolute inset-y-0 right-0 h-full">{children}</div>
+        </div>
+    );
+};
+
+// Tarjeta del creativo del anuncio (CTWA), estilo contexto de WhatsApp: se pinta DENTRO de la
+// conversación, pegada arriba del primer mensaje del candidato ("Quiero más información").
+// Imagen + título + copy del anuncio. No es clickeable (solo informativa).
+const AdContextCard = ({ creative }) => {
+    if (!creative?.found) return null;
+    const { adHeadline, adBody, adImageUrl } = creative;
+    if (!adImageUrl && !adBody && !adHeadline) return null;
+    return (
+        <div className="flex justify-start mb-1">
+            <div className="max-w-[75%] rounded-lg overflow-hidden border border-violet-200/70 dark:border-violet-500/25 bg-violet-50/70 dark:bg-violet-500/10">
+                <div className="px-2.5 pt-1.5 pb-1 text-[10px] font-semibold text-violet-500 dark:text-violet-400 flex items-center gap-1">
+                    📢 Vino de este anuncio
+                </div>
+                {adImageUrl && (
+                    <img
+                        src={adImageUrl}
+                        alt={adHeadline || 'Anuncio'}
+                        className="w-full max-h-48 object-cover bg-gray-100 dark:bg-black/30"
+                        onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                    />
+                )}
+                <div className="px-2.5 py-1.5">
+                    {adHeadline && <p className="text-xs font-semibold text-gray-800 dark:text-gray-100 leading-snug">{adHeadline}</p>}
+                    {adBody && <p className="mt-0.5 text-[11px] text-gray-600 dark:text-gray-300 leading-snug whitespace-pre-wrap line-clamp-5">{adBody}</p>}
+                </div>
+            </div>
         </div>
     );
 };
@@ -1234,6 +1267,12 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
     const [chatSearch, setChatSearch] = useState('');
     const [showChatSearch, setShowChatSearch] = useState(false);
     const chatSearchInputRef = useRef(null);
+    // Popover del creativo del anuncio (CTWA): { open, loading, data } — se carga bajo demanda
+    // al clic del badge 📢, no en cada mensaje. data = creativo de /api/ad-creative o null.
+    // Creativo del anuncio (CTWA) del candidato abierto: se trae al abrir el chat (si tiene adId)
+    // y se pinta inline dentro de la conversación, junto al primer mensaje del candidato.
+    const [adCreative, setAdCreative] = useState(null); // { found, adHeadline, adBody, adImageUrl, adUrl, ... } | null
+    const adCreativeCacheRef = useRef(new Map()); // por adId: no refetch al reabrir el chat
     // ✅ META AUDIT: Ghost guard — prevents SSE re-insertion after delete (same pattern as CandidatesSection)
     const recentlyDeletedRef = useRef(new Set());
     const draftsRef = useRef(new Map());
@@ -1244,6 +1283,28 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         if (!chatId || !Array.isArray(messages)) return;
         messagesByChatRef.current.set(chatId, messages);
     }, [messages, selectedChat?.id]);
+
+    // Trae el creativo del anuncio al abrir un chat que vino de CTWA (tiene adId). Se pinta inline
+    // en la conversación. Cacheado por adId; si el candidato no vino de anuncio, no hace nada.
+    useEffect(() => {
+        const adId = selectedChat?.adId;
+        if (!adId) { setAdCreative(null); return; }
+        const key = String(adId);
+        const cached = adCreativeCacheRef.current.get(key);
+        if (cached) { setAdCreative(cached); return; }
+        setAdCreative(null);
+        let cancelled = false;
+        (async () => {
+            let data = null;
+            try {
+                const res = await fetch(`/api/ad-creative?adId=${encodeURIComponent(key)}`);
+                if (res.ok) data = await res.json();
+            } catch { /* red/anuncio inaccesible — no pintamos nada */ }
+            if (data?.found) adCreativeCacheRef.current.set(key, data);
+            if (!cancelled) setAdCreative(data?.found ? data : null);
+        })();
+        return () => { cancelled = true; };
+    }, [selectedChat?.id, selectedChat?.adId]);
 
     // Aplica una actualizacion de la lista de mensajes ANCLADA a un chat concreto.
     // Los envios son asincronos: si en lo que un mensaje va en vuelo el reclutador
@@ -6919,7 +6980,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                             skipAnimationFrameInResizeObserver
                             style={{ height: '100%' }}
                             data={displayMessages}
-                            context={{ bottomOverlaySpacerHeight: pendingQrPreviewHeight, candidateTyping }}
+                            context={{ bottomOverlaySpacerHeight: pendingQrPreviewHeight, candidateTyping, adCreative }}
                             // Con pocos mensajes (lista mas corta que el viewport) Virtuoso alinea
                             // arriba por defecto: las burbujas quedan pegadas al tope y el hueco vacio
                             // abajo, junto al input. Al inyectar del banco algo con imagenes (~520px),
