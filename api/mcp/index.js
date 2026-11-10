@@ -2074,6 +2074,43 @@ const TOOLS = {
         }
     },
 
+    ver_mapa_flujo: {
+        description: 'Devuelve SOLO el mapa espacial de un flujo para acomodar el canvas: por cada nodo su posición y tamaño {nodeId, tipo, nombre, x, y, w, h}, el grafo liviano de aristas [{from, to, salida}] (salida = sourceHandle, para saber qué rama es), y el bounding box total del canvas. NO trae el "data" de los nodos (usa ver_nodo para eso). Es la lectura ligera que acompaña a mover_nodos: léelo, razona un acomodo limpio siguiendo las aristas, y escribe todas las posiciones nuevas de un jalón con mover_nodos. OJO con el tamaño: el servidor no conoce el "measured" real de React Flow, así que para nodos sin width/height guardado w/h caen al default 240×80 (los nodos bg/texto sí traen su tamaño real) — acomoda con esos números para no encimar; queda parejo pero no pixel-perfect vs el render.',
+        inputSchema: {
+            type: 'object',
+            properties: { flujoId: { type: 'string', description: 'ID del flujo (de listar_flujos).' } },
+            required: ['flujoId']
+        },
+        handler: async (args, { redis, req }) => {
+            const flujoId = String(args?.flujoId || '').trim();
+            if (!flujoId) throw new Error('Falta flujoId');
+            const f = await fetchFlowOrThrow(req, redis, flujoId);
+            const nodes = Array.isArray(f.nodes) ? f.nodes : [];
+            const edges = Array.isArray(f.edges) ? f.edges : [];
+            // Mismos defaults de tamaño que alinear_nodos (el servidor no tiene "measured").
+            const widthOf = (n) => Number.isFinite(n.width) ? n.width : 240;
+            const heightOf = (n) => Number.isFinite(n.height) ? n.height : 80;
+            const nodos = nodes.map(n => {
+                const p = n.position || { x: 0, y: 0 };
+                const x = Number(p.x) || 0, y = Number(p.y) || 0;
+                return { nodeId: n.id, tipo: n.type, nombre: nodeDisplayName(n), x, y, w: widthOf(n), h: heightOf(n) };
+            });
+            const canvas = nodos.length ? {
+                minX: Math.min(...nodos.map(n => n.x)),
+                minY: Math.min(...nodos.map(n => n.y)),
+                maxX: Math.max(...nodos.map(n => n.x + n.w)),
+                maxY: Math.max(...nodos.map(n => n.y + n.h))
+            } : { minX: 0, minY: 0, maxX: 0, maxY: 0 };
+            return {
+                flujoId,
+                nombre: f.name || null,
+                canvas,
+                nodos,
+                edges: edges.map(e => ({ from: e.source, to: e.target, salida: e.sourceHandle || null }))
+            };
+        }
+    },
+
     ver_catalogos_flujos: {
         description: 'Devuelve los valores válidos para configurar nodos: municipios de Nuevo León, categorías, escolaridades, etiquetas y vacantes (con id y nombre). Consúltalo antes de editar la data de un nodo para no poner valores inválidos.',
         inputSchema: { type: 'object', properties: {} },
@@ -2472,7 +2509,10 @@ const TOOLS = {
                 tipo: { type: 'string', description: 'Tipo de nodo (ver lista en la descripción).' },
                 data: { type: 'object', description: 'Config del nodo (opcional; default {}). Copia la forma de un nodo igual con ver_nodo.' },
                 alias: { type: 'string', description: 'Nombre visible del nodo en el canvas (data.customName, opcional).' },
-                posicion: { type: 'object', description: 'Posición {x, y} en el canvas (opcional; default aproximado).' }
+                posicion: { type: 'object', description: 'Posición {x, y} en el canvas (opcional; default aproximado).' },
+                ancho: { type: 'number', description: 'Ancho inicial (width). Útil para cajas bg/texto que deben envolver un grupo (opcional).' },
+                alto: { type: 'number', description: 'Alto inicial (height). Útil para cajas bg/texto (opcional).' },
+                color: { type: 'string', description: 'Color del nodo (hex, p. ej. "#6366f1"). Atajo para data.color — relevante en nodos bg (caja de fondo) y texto (opcional).' }
             },
             required: ['flujoId', 'tipo']
         },
@@ -2493,8 +2533,21 @@ const TOOLS = {
             const data = { ...(args?.data || {}) };
             const alias = String(args?.alias || '').trim();
             if (alias) data.customName = alias;
+            const color = String(args?.color || '').trim();
+            if (color) data.color = color;
 
-            nodes.push({ id: nodeId, type: tipo, position: pos, data });
+            const node = { id: nodeId, type: tipo, position: pos, data };
+            if (args?.ancho !== undefined) {
+                const w = Number(args.ancho);
+                if (!Number.isFinite(w) || w <= 0) throw new Error('ancho inválido');
+                node.width = w;
+            }
+            if (args?.alto !== undefined) {
+                const h = Number(args.alto);
+                if (!Number.isFinite(h) || h <= 0) throw new Error('alto inválido');
+                node.height = h;
+            }
+            nodes.push(node);
             const saved = await saveFlowNodes(req, redis, flujoId, nodes);
             return {
                 flujoId,
@@ -2642,6 +2695,88 @@ const TOOLS = {
                     nombre: nodeDisplayName(n),
                     position: nuevaPos.get(n.id)
                 }))
+            };
+        }
+    },
+
+    mover_nodos: {
+        description: 'Reescribe la POSICIÓN (y opcionalmente el TAMAÑO) de varios nodos de un flujo en UNA sola operación atómica. Es el escritor masivo que acompaña a ver_mapa_flujo: tú calculas el acomodo y mandas aquí las coordenadas nuevas de todos. SOLO toca position/width/height de los nodos que listes — el "data" de cada nodo, sus aristas, y los nodos que NO listes quedan 100% intactos. No cambia el comportamiento del flujo. Cada entrada de "posiciones": {nodeId, x, y, ancho?, alto?} — x,y son obligatorios; ancho/alto son opcionales (útiles para redimensionar cajas bg/texto; en nodos normales el tamaño real lo mide el canvas). Usa los nodeId de ver_mapa_flujo/ver_flujo.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                flujoId: { type: 'string', description: 'ID del flujo.' },
+                posiciones: {
+                    type: 'array',
+                    description: 'Posiciones nuevas: [{nodeId, x, y, ancho?, alto?}, ...]. Solo se tocan los nodos listados.',
+                    items: {
+                        type: 'object',
+                        properties: {
+                            nodeId: { type: 'string', description: 'ID del nodo a mover.' },
+                            x: { type: 'number', description: 'Nueva X en el canvas.' },
+                            y: { type: 'number', description: 'Nueva Y en el canvas.' },
+                            ancho: { type: 'number', description: 'Ancho opcional (width). Útil para cajas bg/texto.' },
+                            alto: { type: 'number', description: 'Alto opcional (height). Útil para cajas bg/texto.' }
+                        },
+                        required: ['nodeId', 'x', 'y']
+                    }
+                }
+            },
+            required: ['flujoId', 'posiciones']
+        },
+        handler: async (args, { redis, req }) => {
+            const flujoId = String(args?.flujoId || '').trim();
+            if (!flujoId) throw new Error('Falta flujoId');
+            const lista = Array.isArray(args?.posiciones) ? args.posiciones : [];
+            if (!lista.length) throw new Error('Manda al menos una entrada en "posiciones".');
+
+            // Normaliza y valida cada entrada antes de tocar Redis.
+            const porId = new Map(); // nodeId → {x, y, ancho?, alto?}
+            for (const p of lista) {
+                const nodeId = String(p?.nodeId || '').trim();
+                if (!nodeId) throw new Error('Cada entrada necesita nodeId.');
+                const x = Number(p?.x), y = Number(p?.y);
+                if (!Number.isFinite(x) || !Number.isFinite(y)) throw new Error(`x/y inválidos para "${nodeId}".`);
+                const entry = { x, y };
+                if (p?.ancho !== undefined) {
+                    const w = Number(p.ancho);
+                    if (!Number.isFinite(w) || w <= 0) throw new Error(`ancho inválido para "${nodeId}".`);
+                    entry.w = w;
+                }
+                if (p?.alto !== undefined) {
+                    const h = Number(p.alto);
+                    if (!Number.isFinite(h) || h <= 0) throw new Error(`alto inválido para "${nodeId}".`);
+                    entry.h = h;
+                }
+                porId.set(nodeId, entry);
+            }
+
+            const f = await fetchFlowOrThrow(req, redis, flujoId);
+            const nodes = Array.isArray(f.nodes) ? [...f.nodes] : [];
+            const faltantes = [...porId.keys()].filter(id => !nodes.some(n => n?.id === id));
+            if (faltantes.length) throw new Error(`Estos nodeIds no están en el flujo: ${faltantes.join(', ')}`);
+
+            const next = nodes.map(n => {
+                const e = porId.get(n?.id);
+                if (!e) return n;
+                const m = { ...n, position: { x: e.x, y: e.y } };
+                if (e.w !== undefined) m.width = e.w;
+                if (e.h !== undefined) m.height = e.h;
+                return m;
+            });
+            const saved = await saveFlowNodes(req, redis, flujoId, next);
+            const savedNodes = Array.isArray(saved?.nodes) ? saved.nodes : next;
+            return {
+                flujoId,
+                movidos: porId.size,
+                posiciones: savedNodes
+                    .filter(n => porId.has(n?.id))
+                    .map(n => ({
+                        nodeId: n.id,
+                        nombre: nodeDisplayName(n),
+                        position: n.position || null,
+                        width: Number.isFinite(n.width) ? n.width : null,
+                        height: Number.isFinite(n.height) ? n.height : null
+                    }))
             };
         }
     },
