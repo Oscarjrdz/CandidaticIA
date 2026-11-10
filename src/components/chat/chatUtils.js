@@ -97,5 +97,11 @@ export const checkIfUnread = (chat) => {
     const userTime = chat.lastUserMessageAt ? new Date(chat.lastUserMessageAt).getTime() : 0;
     if (!userTime) return false;
     const humanTime = chat.lastHumanMessageAt ? new Date(chat.lastHumanMessageAt).getTime() : 0;
-    return userTime > humanTime;
+    const botTime = chat.lastBotMessageAt
+        ? new Date(chat.lastBotMessageAt).getTime()
+        : (chat.ultimoMensajeBot ? new Date(chat.ultimoMensajeBot).getTime() : 0);
+    // No-leído = el candidato fue el ÚLTIMO en hablar. Si NOSOTROS (humano O bot/Brenda)
+    // respondimos después, ya no se muestra la burbuja — solo cuenta quién habló al final.
+    const ourTime = Math.max(humanTime, botTime);
+    return userTime > ourTime;
 };

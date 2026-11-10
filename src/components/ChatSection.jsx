@@ -3837,12 +3837,14 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
             // "marcar leído" el menú se quedaba pegado hasta re-entrar a la sección. Aquí
             // aplicamos el mismo delta local que ya usan marcar-leído/responder/marcar-no-leído
             // (reconcileUnreadBadges), calculado sobre el estado ANTES/DESPUÉS de este patch.
-            // Solo lastUserMessageAt/lastHumanMessageAt afectan checkIfUnread, así que basta con
-            // esos dos campos. No hay doble conteo: el estado optimista de las acciones locales
-            // ya dejó candidatesRef actualizado, así que el eco SSE ve before === after (delta 0);
-            // y un mensaje a un chat ya no-leído también da delta 0 (el menú cuenta chats, no
-            // mensajes). El refetch de respaldo sigue existiendo y solo re-afirma el mismo total.
-            if (patch.lastUserMessageAt !== undefined || patch.lastHumanMessageAt !== undefined) {
+            // lastUserMessageAt/lastHumanMessageAt/lastBotMessageAt afectan checkIfUnread (no-leído =
+            // el candidato habló al último), así que basta con esos tres campos. Incluir el tiempo del
+            // bot aquí es lo que limpia la burbuja en vivo cuando Brenda responde (y baja el contador
+            // del menú). No hay doble conteo: el estado optimista de las acciones locales ya dejó
+            // candidatesRef actualizado, así que el eco SSE ve before === after (delta 0); y un mensaje
+            // a un chat ya no-leído también da delta 0 (el menú cuenta chats, no mensajes). El refetch
+            // de respaldo sigue existiendo y solo re-afirma el mismo total.
+            if (patch.lastUserMessageAt !== undefined || patch.lastHumanMessageAt !== undefined || patch.lastBotMessageAt !== undefined) {
                 const beforeUnread =
                     candidatesRef.current.find(c => c.id === sseUpdate.candidateId) ||
                     (selectedChatRef.current?.id === sseUpdate.candidateId ? selectedChatRef.current : null);
@@ -3850,6 +3852,10 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                     const afterUnread = { ...beforeUnread };
                     if (patch.lastUserMessageAt !== undefined) afterUnread.lastUserMessageAt = patch.lastUserMessageAt;
                     if (patch.lastHumanMessageAt !== undefined) afterUnread.lastHumanMessageAt = patch.lastHumanMessageAt;
+                    if (patch.lastBotMessageAt !== undefined) {
+                        afterUnread.lastBotMessageAt = patch.lastBotMessageAt;
+                        afterUnread.ultimoMensajeBot = patch.lastBotMessageAt;
+                    }
                     reconcileUnreadBadges(beforeUnread, afterUnread);
                     // 🔑 Espejar candidatesRef/selectedChatRef SÍNCRONAMENTE con los dos campos que
                     // mueven checkIfUnread. setCandidates (abajo) solo refresca el ref en el PRÓXIMO
@@ -3861,6 +3867,8 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                     const unreadSync = {
                         lastUserMessageAt: afterUnread.lastUserMessageAt,
                         lastHumanMessageAt: afterUnread.lastHumanMessageAt,
+                        lastBotMessageAt: afterUnread.lastBotMessageAt,
+                        ultimoMensajeBot: afterUnread.ultimoMensajeBot,
                     };
                     candidatesRef.current = candidatesRef.current.map(c =>
                         c.id === sseUpdate.candidateId ? { ...c, ...unreadSync } : c
@@ -4407,7 +4415,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         const nombre = selectedChat.nombreReal || selectedChat.nombre || 'este candidato';
         const confirmed = await new Promise(resolve => setConfirmModal({
             title: 'Meter al flujo',
-            message: `¿Meter a ${nombre} al flujo "${flow.name}"? Se ejecutarán sus acciones (mensajes, etiquetas, recordatorios, etc.). Se brincan todos los candados de entrada: corre aunque ya haya pasado antes, aunque su perfil no cumpla el filtro, sin importar el modo de la etiqueta (entra por la rama de la etiqueta que tenga) y aunque la rama esté caducada.`,
+            message: `¿Meter a ${nombre} al flujo "${flow.name}"?`,
             confirmText: 'Meter al flujo',
             variant: 'warning',
             onConfirm: () => resolve(true),
@@ -4566,8 +4574,10 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
         if (e) e.stopPropagation();
         if (!chatToMark) return;
 
-        // Optimistic update: clear lastHumanMessageAt so checkIfUnread returns true
-        applyCandidateUnreadPatch(chatToMark.id, { lastHumanMessageAt: null });
+        // Optimistic update: borrar AMBOS tiempos nuestros (humano + bot) para que
+        // checkIfUnread (userTime > max(humano, bot)) vuelva a dar true aunque Brenda
+        // haya respondido al último. Espeja el mark_unread del backend.
+        applyCandidateUnreadPatch(chatToMark.id, { lastHumanMessageAt: null, lastBotMessageAt: null, ultimoMensajeBot: null });
 
         try {
             await fetch('/api/chat', {
@@ -6824,7 +6834,7 @@ export default function ChatSection({ rolePermissions, onlineUsers = [], unreadC
                                     )}
                                     {(selectedChat.adHeadline || selectedChat.adId) && (
                                         <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap bg-violet-50 dark:bg-violet-500/10 text-violet-500 dark:text-violet-400 border border-violet-200/60 dark:border-violet-500/20 truncate max-w-[180px]" title={selectedChat.adHeadline || selectedChat.adId}>
-                                            📢 {selectedChat.adHeadline || `Ad ${selectedChat.adId}`}
+                                            📢 {selectedChat.adHeadline || 'Anuncio'}
                                         </span>
                                     )}
                                 </div>

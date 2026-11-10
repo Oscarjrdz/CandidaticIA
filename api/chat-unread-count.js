@@ -90,7 +90,11 @@ async function readOrBuildUnreadAggregate({ redis, unreadIds, unreadVersion, isP
 
             const userTime = candidate.lastUserMessageAt ? new Date(candidate.lastUserMessageAt).getTime() : 0;
             const humanTime = candidate.lastHumanMessageAt ? new Date(candidate.lastHumanMessageAt).getTime() : 0;
-            if (!userTime || userTime <= humanTime) continue;
+            const botTime = candidate.lastBotMessageAt
+                ? new Date(candidate.lastBotMessageAt).getTime()
+                : (candidate.ultimoMensajeBot ? new Date(candidate.ultimoMensajeBot).getTime() : 0);
+            // No-leído = el candidato habló al último (ni humano ni bot respondieron después).
+            if (!userTime || userTime <= Math.max(humanTime, botTime)) continue;
 
             const summary = {
                 id: candidate.id,

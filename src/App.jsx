@@ -149,6 +149,7 @@ function AppShell() {
     updatedCandidate?.updates?.unreadMsgCount,
     updatedCandidate?.updates?.lastUserMessageAt,
     updatedCandidate?.updates?.lastHumanMessageAt,
+    updatedCandidate?.updates?.lastBotMessageAt,
     deletedCandidate?.candidateId,
     deletedCandidate?.id,
     globalStats?.unread,

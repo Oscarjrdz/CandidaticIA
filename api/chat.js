@@ -42,7 +42,11 @@ const isCandidateUnread = (candidate = {}) => {
     const userTime = candidate.lastUserMessageAt ? new Date(candidate.lastUserMessageAt).getTime() : 0;
     if (!userTime) return false;
     const humanTime = candidate.lastHumanMessageAt ? new Date(candidate.lastHumanMessageAt).getTime() : 0;
-    return userTime > humanTime;
+    const botTime = candidate.lastBotMessageAt
+        ? new Date(candidate.lastBotMessageAt).getTime()
+        : (candidate.ultimoMensajeBot ? new Date(candidate.ultimoMensajeBot).getTime() : 0);
+    // No-leído = el candidato habló al último (ni humano ni bot respondieron después).
+    return userTime > Math.max(humanTime, botTime);
 };
 
 export default async function handler(req, res) {
@@ -89,7 +93,10 @@ export default async function handler(req, res) {
                 if (candidate?.lastUserMessageAt) {
                     const ut = new Date(candidate.lastUserMessageAt).getTime();
                     const ht = candidate.lastHumanMessageAt ? new Date(candidate.lastHumanMessageAt).getTime() : 0;
-                    if (ut > ht) {
+                    const bt = candidate.lastBotMessageAt
+                        ? new Date(candidate.lastBotMessageAt).getTime()
+                        : (candidate.ultimoMensajeBot ? new Date(candidate.ultimoMensajeBot).getTime() : 0);
+                    if (ut > Math.max(ht, bt)) {
                         updateCandidate(candidateId, { lastHumanMessageAt: candidate.lastUserMessageAt }).catch(() => {});
                     }
                 }
@@ -329,8 +336,13 @@ export default async function handler(req, res) {
 
             if (action === 'mark_unread') {
                 try {
+                    // Forzar no-leído: borrar AMBOS tiempos nuestros (humano + bot) para que
+                    // checkIfUnread (userTime > max(humano, bot)) vuelva a dar true aunque Brenda
+                    // haya respondido al último.
                     await updateCandidate(candidateId, {
-                        lastHumanMessageAt: null
+                        lastHumanMessageAt: null,
+                        lastBotMessageAt: null,
+                        ultimoMensajeBot: null
                     });
                 } catch {
                     // Best effort: keep UI responsive even if unread flag update fails.

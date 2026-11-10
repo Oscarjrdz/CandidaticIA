@@ -199,8 +199,8 @@ const ChatRow = React.memo(({ chat, isSelected, isPinned, onSelect, onBlock, onD
                         {Array.isArray(chat.tags) && chat.tags.slice(0, 4).map(t => {
                             const color = tagColorMap?.get(t) || '#64748b';
                             return (
-                                <span key={t} className="inline-flex items-center text-[9px] font-semibold text-white px-2 py-0.5 rounded-full shrink-0"
-                                    style={{ backgroundColor: color }}>
+                                <span key={t} className="inline-flex items-center text-[8px] font-semibold px-1.5 py-0 rounded-full border shrink-0"
+                                    style={{ color, backgroundColor: `${color}1f`, borderColor: `${color}40` }}>
                                     {t}
                                 </span>
                             );
@@ -215,7 +215,7 @@ const ChatRow = React.memo(({ chat, isSelected, isPinned, onSelect, onBlock, onD
                                 onClick={(e) => { e.stopPropagation(); navigator.clipboard?.writeText(chat.adId); }}
                                 className="min-w-0 font-mono text-[9px] text-violet-400 dark:text-violet-500 bg-violet-50 dark:bg-violet-500/10 hover:bg-violet-100 dark:hover:bg-violet-500/20 px-1.5 py-0.5 rounded border border-violet-200/60 dark:border-violet-500/20 transition-colors truncate"
                             >
-                                📢 {chat.adId}
+                                📢 Anuncio
                             </button>
                         )}
                         {lockText && (
