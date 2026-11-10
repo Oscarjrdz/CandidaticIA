@@ -154,6 +154,57 @@ async function callInternal(req, redis, path, method, body) {
     }
 }
 
+// Ingesta un asset (imagen/PDF/audio) desde una URL pública al banco de respuestas,
+// EXACTAMENTE como /api/media/upload con candidateId 'quick_reply_asset': lo sube a Meta
+// (media_id pre-cacheado), lo persiste en Vercel Blob (privado, permanente) y deja el
+// base64 en Redis 90d sin TTL en la metadata. Devuelve { url:'/api/image?id=…', mime, filename }.
+// Así los assets que crea Grok se comportan idéntico a los que suben los reclutadores.
+async function ingestBankAssetFromUrl(redis, sourceUrl, hintName) {
+    const u = String(sourceUrl || '').trim();
+    if (!/^https?:\/\//i.test(u)) throw new Error(`URL de asset inválida (debe ser http/https): ${u.slice(0, 80)}`);
+
+    const resp = await fetch(u);
+    if (!resp.ok) throw new Error(`No se pudo descargar el asset (${resp.status}): ${u.slice(0, 80)}`);
+    const fileBuffer = Buffer.from(await resp.arrayBuffer());
+    if (fileBuffer.length > 5 * 1024 * 1024) throw new Error('El asset pesa más de 5MB (tope del banco).');
+
+    const mimeType = (resp.headers.get('content-type') || '').split(';')[0].trim() || 'application/octet-stream';
+    let filename = hintName;
+    if (!filename) {
+        try { filename = decodeURIComponent(new URL(u).pathname.split('/').pop() || '') || 'archivo'; } catch { filename = 'archivo'; }
+    }
+
+    // Pre-subida a Meta (igual que upload.js) — no fatal: si falla, se envía por URL.
+    let metaMediaId = null;
+    try {
+        const { uploadMediaToMeta } = await import('../whatsapp/utils.js');
+        const result = await uploadMediaToMeta(fileBuffer, mimeType, filename);
+        if (result?.mediaId) metaMediaId = result.mediaId;
+    } catch { /* se degrada a envío por URL */ }
+
+    const id = `med_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+    const key = `image:${id}`;
+    const metaKey = `meta:image:${id}`;
+
+    let blobPath = null;
+    if (process.env.BLOB_READ_WRITE_TOKEN) {
+        try {
+            const { put } = await import('@vercel/blob');
+            await put(`media/${id}`, fileBuffer, { access: 'private', contentType: mimeType, addRandomSuffix: false });
+            blobPath = `media/${id}`;
+        } catch { /* no fatal: queda el base64 en Redis */ }
+    }
+
+    const metaData = { mime: mimeType, filename, size: fileBuffer.length, createdAt: new Date().toISOString(), metaMediaId, blobPath };
+    await Promise.all([
+        redis.set(metaKey, JSON.stringify(metaData)),            // asset de banco = sin TTL
+        redis.zadd('candidatic:media_library', Date.now(), id),
+        redis.set(key, fileBuffer.toString('base64'), 'EX', 86400 * 90)
+    ]);
+
+    return { url: `/api/image?id=${id}`, mime: mimeType, metaMediaId, filename };
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Utilidades de forma de datos (resumen compacto, sin volcar blobs enormes)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -751,6 +802,131 @@ const TOOLS = {
                 atajo: qr.shortcut || '',
                 preview: String(qr.message || '').slice(0, 140),
                 tieneFraseDinamica: !!qr.dynamicPhrase
+            };
+        }
+    },
+
+    crear_banco_respuesta: {
+        description: 'Crea una respuesta NUEVA en el banco de respuestas (aplica a TODO el equipo). Tipos: "text" (texto + hasta 4 imágenes), "document" (PDF + texto), "audio" (nota de voz/audio) o "location" (ubicación). Las imágenes/PDF/audio se mandan como URLs públicas (http/https): Candidatic las descarga y las guarda como assets PERMANENTES del banco (las sube a Meta y a Vercel Blob, igual que cuando un reclutador las sube). Devuelve el id de la respuesta creada.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                nombre: { type: 'string', description: 'Nombre (etiqueta) de la respuesta en el banco. Requerido.' },
+                tipo: { type: 'string', enum: ['text', 'document', 'audio', 'location'], description: 'Tipo de respuesta (default "text").' },
+                mensaje: { type: 'string', description: 'Texto del mensaje (para "text" y "document"). Puede incluir variables como {{nombre}}, {{municipio}}, etc.' },
+                atajo: { type: 'string', description: 'Atajo de teclado opcional (ej. "Ctrl + H").' },
+                fraseDinamica: { type: 'string', description: 'Frase dinámica opcional (sustituye {{frase dinamica}}).' },
+                imagenes: { type: 'array', items: { type: 'string' }, description: 'Hasta 4 URLs públicas de imágenes (solo tipo "text").' },
+                documentoUrl: { type: 'string', description: 'URL pública del PDF (solo tipo "document").' },
+                documentoNombre: { type: 'string', description: 'Nombre a mostrar del PDF (opcional).' },
+                audioUrl: { type: 'string', description: 'URL pública del audio (solo tipo "audio"). Un ogg/opus se manda como nota de voz.' },
+                ubicacion: {
+                    type: 'object',
+                    description: 'Solo tipo "location".',
+                    properties: {
+                        lat: { type: 'number' }, lng: { type: 'number' },
+                        nombre: { type: 'string' }, direccion: { type: 'string' }
+                    }
+                }
+            },
+            required: ['nombre']
+        },
+        handler: async (args, { redis }) => {
+            const nombre = String(args?.nombre || '').trim();
+            if (!nombre) throw new Error('Falta "nombre"');
+            const tipo = ['text', 'document', 'audio', 'location'].includes(args?.tipo) ? args.tipo : 'text';
+            const mensaje = String(args?.mensaje || '').trim();
+
+            const entry = {
+                id: `qr_${Date.now()}`,
+                name: nombre,
+                shortcut: String(args?.atajo || '').trim(),
+                dynamicPhrase: String(args?.fraseDinamica || '').trim(),
+                type: tipo
+            };
+
+            if (tipo === 'location') {
+                const loc = args?.ubicacion || {};
+                const lat = parseFloat(loc.lat), lng = parseFloat(loc.lng);
+                if (!Number.isFinite(lat) || !Number.isFinite(lng)) throw new Error('tipo "location" requiere ubicacion.lat y ubicacion.lng numéricos');
+                entry.location = { lat, lng, name: String(loc.nombre || '').trim(), address: String(loc.direccion || '').trim() };
+            } else if (tipo === 'document') {
+                const src = String(args?.documentoUrl || '').trim();
+                if (!src) throw new Error('tipo "document" requiere documentoUrl');
+                const asset = await ingestBankAssetFromUrl(redis, src, String(args?.documentoNombre || '').trim() || undefined);
+                entry.documentUrl = asset.url;
+                entry.documentName = String(args?.documentoNombre || '').trim() || asset.filename || 'documento.pdf';
+                entry.message = mensaje;
+            } else if (tipo === 'audio') {
+                const src = String(args?.audioUrl || '').trim();
+                if (!src) throw new Error('tipo "audio" requiere audioUrl');
+                const asset = await ingestBankAssetFromUrl(redis, src);
+                entry.audioUrl = asset.url;
+                entry.audioMime = asset.mime || 'audio/ogg';
+                entry.voice = /ogg/i.test(asset.mime || '');
+                entry.audioDurationMs = 0;
+            } else {
+                const urls = Array.isArray(args?.imagenes) ? args.imagenes.filter(Boolean).slice(0, 4) : [];
+                if (!mensaje && !urls.length) throw new Error('tipo "text" requiere mensaje o al menos una imagen');
+                const ingested = [];
+                for (const src of urls) {
+                    const asset = await ingestBankAssetFromUrl(redis, src);
+                    ingested.push(asset.url);
+                }
+                entry.message = mensaje;
+                entry.imageUrls = ingested; // formato canónico (lo leen el form del dashboard y flow-engine)
+                // Espejo imageUrl..imageUrl4: enviar_banco_respuesta (MCP) lee esos campos, no el arreglo.
+                ['imageUrl', 'imageUrl2', 'imageUrl3', 'imageUrl4'].forEach((k, i) => { if (ingested[i]) entry[k] = ingested[i]; });
+            }
+
+            const raw = await redis.get('candidatic:quick_replies');
+            const replies = raw ? JSON.parse(raw) : [];
+            const list = Array.isArray(replies) ? replies : [];
+            list.push(entry);
+            await redis.set('candidatic:quick_replies', JSON.stringify(list));
+
+            return {
+                ok: true,
+                id: entry.id,
+                nombre: entry.name,
+                tipo: entry.type,
+                atajo: entry.shortcut || '',
+                preview: String(entry.message || '').slice(0, 140),
+                imagenes: (entry.imageUrls || []).length,
+                tieneDocumento: !!entry.documentUrl,
+                tieneAudio: !!entry.audioUrl
+            };
+        }
+    },
+
+    borrar_banco_respuesta: {
+        description: 'Borra una respuesta del banco de respuestas (aplica a TODO el equipo). Identifícala por quickReplyId (preferido) o por atajo. Acción irreversible. No borra la media del storage (igual que el botón de borrar del dashboard), solo quita la respuesta del banco.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                quickReplyId: { type: 'string', description: 'ID de la respuesta a borrar (el "id" de listar_banco_respuestas). Preferido.' },
+                atajo: { type: 'string', description: 'Atajo (shortcut) de la respuesta, si no tienes el id.' }
+            }
+        },
+        handler: async (args, { redis }) => {
+            const qrId = String(args?.quickReplyId || '').trim();
+            const atajo = String(args?.atajo || '').trim();
+            if (!qrId && !atajo) throw new Error('Indica quickReplyId o atajo');
+
+            const raw = await redis.get('candidatic:quick_replies');
+            const replies = raw ? JSON.parse(raw) : [];
+            if (!Array.isArray(replies)) throw new Error('Banco de respuestas corrupto');
+            const idx = replies.findIndex(r =>
+                (qrId && r.id === qrId) || (atajo && String(r.shortcut || '').toLowerCase() === atajo.toLowerCase()));
+            if (idx === -1) throw new Error('Respuesta del banco no encontrada');
+
+            const [removed] = replies.splice(idx, 1);
+            await redis.set('candidatic:quick_replies', JSON.stringify(replies));
+
+            return {
+                ok: true,
+                borrada: { id: removed.id, nombre: removed.name || '', atajo: removed.shortcut || '' },
+                restantes: replies.length
             };
         }
     },
