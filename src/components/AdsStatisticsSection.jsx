@@ -1077,22 +1077,17 @@ const AdsStatisticsSection = () => {
                                         style={{ display: '-webkit-box', WebkitLineClamp: 10, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{ad.adBody}</p>
                                 )}
 
-                                {/* Imagen — a todo lo ancho, con tope de alto para que los creativos
-                                    verticales no salgan enormes (object-contain = no recorta, solo los
-                                    encaja parejo con los horizontales). Los 200px fijos quedan solo
-                                    para video/placeholder. */}
-                                <div className="w-full bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
+                                {/* Imagen — caja horizontal fija (16:9) con object-contain: el anuncio
+                                    se ve COMPLETO (no recorta) aunque sea vertical, y todas las tarjetas
+                                    quedan del mismo alto. Los verticales quedan con barras a los lados. */}
+                                <div className="w-full aspect-video bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
                                     {ad.adMediaType === 'video' && !ad.adImageUrl ? (
-                                        <div className="flex items-center justify-center w-full" style={{ height: '200px' }}>
-                                            <Video className="w-10 h-10 text-gray-300" />
-                                        </div>
+                                        <Video className="w-10 h-10 text-gray-300" />
                                     ) : ad.adImageUrl ? (
-                                        <img src={ad.adImageUrl} alt="" loading="lazy" decoding="async" className="block w-full max-h-72 object-contain"
+                                        <img src={ad.adImageUrl} alt="" loading="lazy" decoding="async" className="w-full h-full object-contain"
                                             onError={(e) => { e.target.onerror = null; e.target.style.display='none'; }} />
                                     ) : (
-                                        <div className="flex items-center justify-center w-full" style={{ height: '200px' }}>
-                                            <Megaphone className="w-10 h-10 text-gray-200 dark:text-gray-700" />
-                                        </div>
+                                        <Megaphone className="w-10 h-10 text-gray-200 dark:text-gray-700" />
                                     )}
                                 </div>
 
