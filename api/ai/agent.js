@@ -827,6 +827,25 @@ function extractBirthDateFromText(text) {
 }
 
 /**
+ * 🎂 Edad en AÑOS dicha por el candidato ("tengo 43", "49 años de edad", "edad 59").
+ * Devuelve el número (15–80) o null. NO es años de experiencia: este extractor se llama
+ * solo en PASO 1 (cuando aún NO hay fecha de nacimiento) — en esa etapa "años" es edad;
+ * la experiencia se pregunta en paso 2, cuando la fecha ya está guardada. Aun así se
+ * excluye explícitamente el contexto de experiencia y el "hace N años".
+ */
+function extractAgeInYears(text) {
+    if (!text || typeof text !== 'string') return null;
+    const t = text.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    if (/experiencia|trabaj|labor|antigue/.test(t)) return null;
+    if (/\bhace\s+\d/.test(t)) return null; // "hace 20 años" no es edad
+    const m = t.match(/\b(?:tengo|mi edad es|edad(?:\s+de)?|soy de)\s+(\d{1,2})\b/)
+           || t.match(/\b(\d{1,2})\s*anos\b/)
+           || t.match(/\bedad[:\s]+(\d{1,2})\b/);
+    if (m) { const a = parseInt(m[1], 10); if (a >= 15 && a <= 80) return a; }
+    return null;
+}
+
+/**
  * 🧬 COALESCENCE HELPERS (Zuckerberg Standard)
  * Merges partial data fragments into a complete state.
  */
@@ -2429,6 +2448,22 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
                         delete ext.nombreReal;
                     }
 
+                    // 🎂 EDAD EN AÑOS → FECHA APROXIMADA. Si el candidato da su edad en años
+                    // ("tengo 43", "49 años de edad", "edad 59") y aún NO tenemos fecha de
+                    // nacimiento, Brenda exigía la fecha exacta DD/MM/AAAA y entraba en BUCLE
+                    // (auditoría 2026-11-10, chat 5218110300948: 6 re-preguntas → "creo es estafa"
+                    // → lead perdido). Aceptamos el dato que el humano SÍ da: sintetizamos
+                    // 01/01/(añoActual−edad) para que el perfil avance. Si luego da la fecha real,
+                    // el guard de perfil (abajo) la reemplaza. Solo corre en paso 1 (sin fecha aún).
+                    let _ageSynthesized = false;
+                    if (!ext.fechaNacimiento && !candidateData.fechaNacimiento) {
+                        const _ageYrs = extractAgeInYears(aggregatedText);
+                        if (_ageYrs) {
+                            ext.fechaNacimiento = `01/01/${new Date().getFullYear() - _ageYrs}`;
+                            _ageSynthesized = true;
+                        }
+                    }
+
                     if (ext.fechaNacimiento) {
                         // 🚫 FECHA SIN DÍA: si el candidato dio SOLO mes y año (ej. "en mayo de 1983")
                         // y aún no teníamos su fecha, GPT tiende a rellenar el día con "01". No lo
@@ -2478,6 +2513,17 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
                                 const _calcAge = Math.abs(_ageDate.getUTCFullYear() - 1970);
                                 if (_calcAge >= 15 && _calcAge <= 80) ext.edad = _calcAge;
                             }
+                        }
+                    }
+
+                    // Si sintetizamos la fecha desde la edad, NO sigas pidiendo la fecha este turno:
+                    // reconoce y pide el siguiente dato que falte del paso 1 (rompe el bucle de inmediato).
+                    if (_ageSynthesized && ext.fechaNacimiento) {
+                        const _mergedAudit = auditProfile({ ...candidateData, ...ext }, customFields);
+                        const _nextField = _mergedAudit.missingValues.find(v => PASO1_ASK[v]);
+                        if (_nextField) {
+                            responseTextVal = `¡Perfecto! 😊 Registré tu edad.[MSG_SPLIT]${PASO1_ASK[_nextField]}`;
+                            if (aiResult) aiResult.response_text = responseTextVal;
                         }
                     }
                     // 🧹 CLEANER PIPELINE: Normalize extracted values through dictionary before saving

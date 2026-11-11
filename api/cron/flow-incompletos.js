@@ -172,6 +172,14 @@ export default async function handler(req, res) {
 
                 await runFlowForIncompleteSilence(flow, candidate.id, candidate);
 
+                // 🔁 ANTI-DOBLE-FLUJO: marca que INCOMPLETOS ya le entregó vacante+entrevista a
+                // este candidato. Si luego COMPLETA la extracción, el gancho de completado
+                // (runFlowsForCandidate en flow-engine.js) ve esta marca y SUPRIME el flujo de
+                // COMPLETOS para no mandar la MISMA vacante+agendado dos veces (bug auditoría
+                // 2026-11-10: Sara/Brayan/Jonas recibieron ambos flujos). TTL 3 días: cubre el
+                // ciclo de la entrevista ("esta semana"); pasado eso, un completado fresco sí re-rutea.
+                await redis.set(`flow:reengaged:v1:${candidate.id}`, flow.id, 'EX', 3 * 24 * 3600).catch(() => {});
+
                 fired++;
                 log.push({ flowId: flow.id, candidateId: candidate.id, pass: passCount + 1 });
                 console.log(`[FLOW-INCOMPLETOS] ✅ Flujo ${flow.id} → candidato ${candidate.id} (pase ${passCount + 1}/${maxPasses + 1})`);

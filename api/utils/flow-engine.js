@@ -2124,6 +2124,18 @@ export async function runFlowsForCandidate(candidateId, candidateSnapshot) {
             await pipe.exec().catch(() => {});
         }
 
+        // 🔁 ANTI-DOBLE-FLUJO: si el flujo de INCOMPLETOS ya le entregó la vacante+entrevista a
+        // este candidato (marca puesta por api/cron/flow-incompletos.js) y AHORA completa, NO
+        // dispares el flujo de COMPLETOS: mandaría la MISMA vacante+agendado por segunda vez
+        // (bug auditoría 2026-11-10: Sara/Brayan/Jonas recibieron ambos flujos). La limpieza de
+        // arriba ya corrió; aquí solo saltamos el envío duplicado. La marca tiene TTL de 3 días,
+        // así que un completado muy posterior sí vuelve a rutear con info fresca.
+        const _reengaged = await redis.get(`flow:reengaged:v1:${candidateId}`).catch(() => null);
+        if (_reengaged) {
+            console.log(`[FLOW-ENGINE] COMPLETOS suprimido para ${candidateId}: ya reenganchado por INCOMPLETOS ${_reengaged} (anti-doble-flujo).`);
+            return;
+        }
+
         // Los flujos de INCOMPLETOS EN SILENCIO se disparan por cron (por AUSENCIA de
         // respuesta), no en este path en vivo (que corre al COMPLETAR el perfil). Se
         // excluyen aquí para que el evento de completado nunca los dispare.
