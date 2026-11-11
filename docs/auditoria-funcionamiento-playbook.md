@@ -20,7 +20,19 @@ node scripts/auditoria/auditar-ventana.mjs hoy
 # Deep-dive de una anomalía (conversación completa de un candidato):
 node scripts/auditoria/ver-chat.mjs 521XXXXXXXXXX          # por teléfono
 node scripts/auditoria/ver-chat.mjs cand_1794320190795_...  # por id
+
+# Auditoría ENFOCADA a la extracción (garantiza: Brenda contestó + guardó + coherente):
+node scripts/auditoria/auditar-extraccion.mjs "2026-11-11 00:00" "2026-11-11 14:30"
 ```
+
+`auditar-extraccion.mjs` verifica 3 garantías por chat en extracción: **A** no muda (todo
+turno de texto tuvo respuesta ≤120s, solo cuenta en extracción), **B** guardó lo que dieron
+(fecha/escolaridad/categoría reconocible → campo no vacío), **C** coherente (no re-preguntó un
+dato ya dado ni entró en bucle de la MISMA pregunta real ≥3×). Ojo al interpretar: un "bucle de
+nombre" suele ser Brenda **re-preguntando bien** a un candidato evasivo que no da el dato (no es
+bug); una "categoría no guardada" suele ser un **clic de botón del flujo** (p.ej. "MONTACARGAS"
+→ "vacante cerrada") que no persiste el campo. El bug real de "no guardó" es la familia
+**edad-en-años** (ya con fix) y los turnos perdidos (muda).
 
 `auditar-ventana.mjs` imprime el resumen y escribe el detalle por chat en
 `scripts/auditoria/out/` (gitignored — **tiene PII**, no commitear). `REDIS_URL` se toma del
