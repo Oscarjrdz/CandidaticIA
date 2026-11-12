@@ -23,7 +23,17 @@ node scripts/auditoria/ver-chat.mjs cand_1794320190795_...  # por id
 
 # Auditoría ENFOCADA a la extracción (garantiza: Brenda contestó + guardó + coherente):
 node scripts/auditoria/auditar-extraccion.mjs "2026-11-11 00:00" "2026-11-11 14:30"
+
+# Auditoría de REGRESADOS (¿entraron donde debían? ¿se re-extrajo un completo?):
+node scripts/auditoria/auditar-regresados.mjs "2026-11-11 00:00" "2026-11-11 13:30"
 ```
+
+> **Lección 2026-11-11 (falso positivo):** para saber si un regresado "ya estaba completo" NO
+> uses `candidate.nombreReal` ACTUAL — se llena durante la extracción de HOY. Usa la señal
+> histórica: ¿Brenda dijo *"ya tengo todo lo que necesitaba"* ANTES de la ventana? Dos candidatos
+> (Martha, Jose Luis) parecían "re-extraídos indebidamente" pero estaban **incompletos** desde
+> agosto/octubre (agendados a mano sin terminar registro) → extraerlos hoy fue correcto. Con la
+> medición correcta: **0 re-extracciones indebidas** el 2026-11-11.
 
 `auditar-extraccion.mjs` verifica 3 garantías por chat en extracción: **A** no muda (todo
 turno de texto tuvo respuesta ≤120s, solo cuenta en extracción), **B** guardó lo que dieron
