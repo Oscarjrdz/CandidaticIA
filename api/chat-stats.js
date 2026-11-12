@@ -2,8 +2,9 @@
  * Chat Stats API — O(1) unread count + active locks
  * GET /api/chat-stats → { unreadCount, locks }
  * 
- * Uses Redis SET 'stats:unread:ids' maintained atomically by updateCandidate()
- * instead of scanning all 5000 candidates every request.
+ * Uses Redis SET 'candidates:unread' (SCARD) maintained atomically por los webhooks
+ * (SADD en cada entrante) y updateCandidate (SREM/SADD por la regla candidateIsUnread),
+ * en vez de escanear todos los candidatos en cada request.
  */
 
 export default async function handler(req, res) {
