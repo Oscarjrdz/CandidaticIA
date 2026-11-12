@@ -27,7 +27,8 @@ import {
     markMessageAsDone,
     updateMessageReaction,
     getRecentMessages,
-    auditProfile
+    auditProfile,
+    candidateIsUnread
 } from '../utils/storage.js';
 import { getCachedConfig } from '../utils/cache.js';
 import { markMessageAsRead, downloadMetaMedia, uploadMediaToMeta } from './utils.js';
@@ -827,13 +828,18 @@ export default async function handler(req, res) {
                 }
             }
 
-            const previousUserTime = freshCandidate?.lastUserMessageAt ? new Date(freshCandidate.lastUserMessageAt).getTime() : 0;
-            const previousHumanTime = freshCandidate?.lastHumanMessageAt ? new Date(freshCandidate.lastHumanMessageAt).getTime() : 0;
-            const wasUnread = !!previousUserTime && previousUserTime > previousHumanTime;
+            // Regla ÚNICA de no-leído (candidateIsUnread, storage.js): el candidato YA estaba
+            // no-leído si era el último en hablar vs NUESTRA última respuesta — humano O bot. Antes
+            // esto comparaba solo contra lastHumanMessageAt e IGNORABA al bot, así que la transición
+            // más común ("Brenda respondió → el candidato vuelve a escribir" = leído→no-leído) no se
+            // detectaba y no bumpeaba stats:unread:version. El SADD es incondicional (un entrante
+            // siempre deja al candidato como último); el contador/versión solo marcan la transición.
+            const wasUnread = candidateIsUnread(freshCandidate);
             if (redis) {
                 await redis.sadd('candidates:unread', candidateId).catch(() => {});
+                // El conteo sale de SCARD del set; en la transición leído→no-leído solo bumpeamos
+                // la versión para invalidar el caché de chat-unread-count.
                 if (!wasUnread) {
-                    await redis.incr('stats:bot:unread_v2').catch(() => {});
                     await redis.incr('stats:unread:version').catch(() => {});
                 }
             }

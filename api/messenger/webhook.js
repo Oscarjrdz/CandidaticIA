@@ -23,7 +23,8 @@ import {
     unlockMessage,
     addToWaitlist,
     saveWebhookTransaction,
-    markMessageAsDone
+    markMessageAsDone,
+    candidateIsUnread
 } from '../utils/storage.js';
 import { getMessengerProfile, markMessengerMessageAsRead } from './utils.js';
 import { logTelemetry } from '../utils/telemetry.js';
@@ -352,13 +353,15 @@ async function processMessengerMessage(psid, message, timestamp, referral) {
             if (referral.source) updatedCandidate.adSource = referral.source;
         }
 
-        const previousUserTime = freshCandidate?.lastUserMessageAt ? new Date(freshCandidate.lastUserMessageAt).getTime() : 0;
-        const previousHumanTime = freshCandidate?.lastHumanMessageAt ? new Date(freshCandidate.lastHumanMessageAt).getTime() : 0;
-        const wasUnread = !!previousUserTime && previousUserTime > previousHumanTime;
+        // Regla ÚNICA de no-leído (candidateIsUnread, storage.js): mismo criterio que WhatsApp.
+        // Compara contra NUESTRA última respuesta (humano O bot), no solo el humano, para que la
+        // transición leído→no-leído tras una respuesta automática sí bumpee stats:unread:version.
+        const wasUnread = candidateIsUnread(freshCandidate);
         if (redis) {
             await redis.sadd('candidates:unread', candidateId).catch(() => {});
+            // El conteo sale de SCARD del set; en la transición leído→no-leído solo bumpeamos
+            // la versión para invalidar el caché de chat-unread-count.
             if (!wasUnread) {
-                await redis.incr('stats:bot:unread_v2').catch(() => {});
                 await redis.incr('stats:unread:version').catch(() => {});
             }
         }

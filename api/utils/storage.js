@@ -1355,7 +1355,6 @@ async function _seedUnreadSet(client) {
             index += CHUNK;
             await new Promise(r => setTimeout(r, 5));
         }
-        await client.set('stats:bot:unread_v2', totalUnread);
         await client.incr('stats:unread:version').catch(() => {});
         console.log(`✅ [candidates:unread] Set sembrado: ${totalUnread} no leídos`);
     } catch (err) {
@@ -1860,11 +1859,8 @@ export const deleteCandidate = async (id) => {
             .hdel('candidatic:candidate_locations', id) // pin del Mapa
             .zrem(INDEX_KEYS.UNTAGGED, id);
         if (wasUnread) {
-            multi.eval(
-                "local current = tonumber(redis.call('GET', KEYS[1]) or '0'); if current > 0 then return redis.call('DECR', KEYS[1]); end; return current;",
-                1,
-                'stats:bot:unread_v2'
-            );
+            // El SREM de CANDIDATES_UNREAD de arriba ya baja el conteo (sale de SCARD); solo
+            // bumpeamos la versión para invalidar el caché de chat-unread-count.
             multi.incr('stats:unread:version');
         }
         if (phone) {
@@ -2216,9 +2212,10 @@ export const updateCandidate = async (id, data) => {
     }
 
     // 📊 ATOMIC UNREAD: la membresía del set candidates:unread sigue la regla ÚNICA
-    // (candidateIsUnread: candidato habló al último vs humano O bot). Antes miraba solo el
-    // tiempo del humano e ignoraba al bot, así que un chat que Brenda/flujo ya había contestado
-    // seguía contando como no-leído en el set y el contador del menú.
+    // (candidateIsUnread: candidato habló al último vs humano O bot). El conteo que ve el menú
+    // y los filtros sale de SCARD de este set (via _publishGlobalStats) + el re-chequeo por
+    // candidateIsUnread en chat-unread-count.js — por eso basta con mantener el set + bumpear
+    // la versión del caché; no hay contador paralelo que sincronizar.
     {
         const wasUnread = candidateIsUnread(candidate);
         const isNowUnread = candidateIsUnread(updated);
@@ -2226,14 +2223,8 @@ export const updateCandidate = async (id, data) => {
             const redisAtomic = getRedisClient();
             if (redisAtomic) {
                 if (wasUnread && !isNowUnread) {
-                    await redisAtomic.eval(
-                        "local current = tonumber(redis.call('GET', KEYS[1]) or '0'); if current > 0 then return redis.call('DECR', KEYS[1]); end; return current;",
-                        1,
-                        'stats:bot:unread_v2'
-                    ).catch(() => {});
                     await redisAtomic.srem(KEYS.CANDIDATES_UNREAD, id).catch(() => {});
                 } else {
-                    await redisAtomic.incr('stats:bot:unread_v2').catch(() => {});
                     await redisAtomic.sadd(KEYS.CANDIDATES_UNREAD, id).catch(() => {});
                 }
                 await redisAtomic.incr('stats:unread:version').catch(() => {});

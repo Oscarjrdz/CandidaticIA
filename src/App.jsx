@@ -134,6 +134,16 @@ function AppShell() {
       const next = Number(data.unreadCount) || 0;
       setChatUnreadCount(next);
       localStorage.setItem('chat_unread_rbac_v2', String(next));
+      // Mantener CALIENTE el desglose completo (No Leídos + verdecitas de Completos/Incompletos +
+      // por etiqueta) en el mismo caché que lee ChatSection al montar (readStoredUnreadCounts).
+      // Sin esto, App solo refrescaba el número grande `all` y el desglose quedaba congelado desde
+      // la última visita → al re-entrar a Chat Web las badges de filtro brincaban ~150ms después
+      // (cuando la revalidación autoritativa aterrizaba). Con el desglose caliente, el re-montaje
+      // pinta el valor correcto desde el primer frame. Mismo endpoint/RBAC que usa ChatSection, así
+      // que no hay divergencia. La forma de data.counts coincide con la que ChatSection persiste.
+      if (data.counts) {
+        try { sessionStorage.setItem('candidatic_unread_counts', JSON.stringify(data.counts)); } catch { /* storage lleno/privado: no crítico */ }
+      }
     };
 
     const timer = setTimeout(refreshUnreadBadge, 150);
