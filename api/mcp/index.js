@@ -1137,17 +1137,32 @@ const TOOLS = {
     },
 
     listar_plantillas: {
-        description: 'Lista las plantillas oficiales de Meta aprobadas (nombre e idioma). Úsalas con enviar_plantilla para escribirle a candidatos fuera de la ventana de 24h.',
+        description: 'Lista las plantillas oficiales de Meta aprobadas, con su TEXTO REAL: encabezado, cuerpo, pie y botones (los {{1}}, {{2}}… son variables que Meta rellena al enviar). Úsalas con enviar_plantilla para escribirle a candidatos fuera de la ventana de 24h.',
         inputSchema: { type: 'object', properties: {} },
         handler: async (_args, { redis, req }) => {
             const r = await callInternal(req, redis, '/api/whatsapp/templates', 'GET');
             const templates = Array.isArray(r.data?.data) ? r.data.data : [];
             return {
-                plantillas: templates.map(t => ({
-                    nombre: t.name || null,
-                    idioma: t.language || null,
-                    estado: t.status || null
-                }))
+                plantillas: templates.map(t => {
+                    const comps = Array.isArray(t.components) ? t.components : [];
+                    const header = comps.find(c => c.type === 'HEADER');
+                    const body = comps.find(c => c.type === 'BODY');
+                    const footer = comps.find(c => c.type === 'FOOTER');
+                    const buttons = comps.find(c => c.type === 'BUTTONS');
+                    return {
+                        nombre: t.name || null,
+                        idioma: t.language || null,
+                        estado: t.status || null,
+                        categoria: t.category || null,
+                        // Texto del header solo si es de tipo TEXT (si es IMAGE/VIDEO/DOCUMENT no hay texto).
+                        encabezado: header?.format === 'TEXT' ? (header.text || null) : (header ? `[${header.format || 'MEDIA'}]` : null),
+                        cuerpo: body?.text || null,
+                        pie: footer?.text || null,
+                        botones: Array.isArray(buttons?.buttons)
+                            ? buttons.buttons.map(b => b.text || b.type).filter(Boolean)
+                            : []
+                    };
+                })
             };
         }
     },
