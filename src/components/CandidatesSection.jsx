@@ -1404,7 +1404,7 @@ const CandidatesSection = () => {
                                                     <div className="font-bold">{tot(day)} atendidos · {day.label}</div>
                                                     <div>🟦 {day.count || 0} nuevos</div>
                                                     <div>🟩 {day.compReg || 0} compl. reg.</div>
-                                                    <div>🟪 {day.incompReg || 0} incompl. reg.</div>
+                                                    <div>🟨 {day.incompReg || 0} incompl. reg.</div>
                                                 </div>
                                                 {/* Columna apilada: de abajo hacia arriba nuevos → compReg → incompReg */}
                                                 <div className="w-full flex flex-col justify-end" style={{ height: '100%' }}>
