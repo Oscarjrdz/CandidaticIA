@@ -1,4 +1,5 @@
 import { getCandidates, validateAdminSession, getRedisClient } from './utils/storage.js';
+import { ensureReturnsInitialized, getReturnsMaps } from './utils/returns-daily-stats.js';
 
 const TZ = 'America/Monterrey';
 const HASH_KEY = 'stats:daily:captures';
@@ -94,9 +95,21 @@ export default async function handler(req, res) {
             if (initialized) {
                 const hash = await redis.hgetall(HASH_KEY) || {};
                 const days = buildDayArray(fromStr, toStr, hash);
+                // Enriquecer cada día con retornados (completos/incompletos) para el apilado.
+                // El backfill de returns se dispara una vez aquí (igual que el de capturas).
+                try {
+                    await ensureReturnsInitialized(redis);
+                    const { complete, incomplete } = await getReturnsMaps(redis);
+                    for (const d of days) {
+                        d.compReg = parseInt(complete[d.date] || 0);
+                        d.incompReg = parseInt(incomplete[d.date] || 0);
+                        d.atendidos = d.count + d.compReg + d.incompReg;
+                    }
+                } catch { for (const d of days) { d.compReg = 0; d.incompReg = 0; d.atendidos = d.count; } }
                 const total = days.reduce((s, d) => s + d.count, 0);
+                const totalAtendidos = days.reduce((s, d) => s + (d.atendidos ?? d.count), 0);
                 res.setHeader('Cache-Control', 'private, max-age=60');
-                return res.status(200).json({ days, total, from: fromStr, to: toStr, source: 'hash' });
+                return res.status(200).json({ days, total, totalAtendidos, from: fromStr, to: toStr, source: 'hash' });
             }
         } catch {}
     }

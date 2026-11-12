@@ -16,6 +16,7 @@
  */
 import { getRedisClient } from './storage.js';
 import { isProfileComplete, firstMissingStep, STUCK_STEPS } from '../../src/utils/profileUtils.js';
+import { persistTodayReturns, wasCompleteBefore } from './returns-daily-stats.js';
 
 const TZ = 'America/Monterrey';
 const LIST_KEY = 'candidates:list';
@@ -117,6 +118,23 @@ export async function computeCtrBlocks() {
         if (retornosRefs.length < MAX_REFS_PER_BUCKET) retornosRefs.push({ id: c.id, nombre: candName(c) });
     }
 
+    // RETORNADOS — split y convertidos para la tarjeta (todo desde el MISMO superconjunto ya cargado):
+    //   • todos        = cualquier retornado activo hoy (completos + incompletos), estado ACTUAL.
+    //   • incompletos  = retornados aún sin completar.
+    //   • convertidos  = retornados que LLEGARON incompletos (no completos antes de hoy) y COMPLETARON hoy
+    //                    (incompleto→completo recuperado). Subconjunto de los completos actuales.
+    const retornadosTodos = activeToday.filter(c => mtyDateOf(c.primerContacto || c.createdAt) !== todayYmd);
+    const retornadosIncompletos = retornadosTodos.filter(c => !isProfileComplete(c));
+    const convertidos = retornadosTodos.filter(c => {
+        if (wasCompleteBefore(c, startMs)) return false;           // ya estaba completo al llegar
+        const compAt = c.paso2CompletadoAt ? Date.parse(c.paso2CompletadoAt) : null;
+        return compAt !== null && !isNaN(compAt) && compAt >= startMs; // completó HOY
+    }).length;
+
+    // Mantiene al día la gráfica "Atendidos por día" sin hook en el hot path: persiste el conteo de
+    // HOY (split por estatus al llegar) en los hashes stats:daily:returns:*. Fire-and-forget.
+    persistTodayReturns(redis, activeToday, todayYmd).catch(() => {});
+
     // ÚLTIMOS 100: los 100 más recientes del índice.
     const last100Ids = await redis.zrevrange(LIST_KEY, 0, 99);
     const last100 = await mgetCandidates(redis, last100Ids);
@@ -124,7 +142,16 @@ export async function computeCtrBlocks() {
     return {
         today: classify(todayCohort),
         ultimos100: classify(last100),
-        retornosHoy: { total: retornadosCohort.length, refs: retornosRefs },
+        // `total` se conserva = COMPLETOS retornados (compat con el MCP/Grok y la tarjeta previa).
+        // Campos nuevos para el split completo de la tarjeta.
+        retornosHoy: {
+            total: retornadosCohort.length,          // completos retornados (191) — NO cambiar (lo usa el MCP)
+            completos: retornadosCohort.length,
+            incompletos: retornadosIncompletos.length,
+            todos: retornadosTodos.length,            // total retornados (completos + incompletos)
+            convertidos,                              // incompletos retornados que completaron hoy
+            refs: retornosRefs,
+        },
         asOf: Date.now(),
         fecha: todayYmd,
     };

@@ -1037,8 +1037,12 @@ const CandidatesSection = () => {
     // sabe el servidor (no se puede aproximar con los 100 cargados en cliente), así que se muestra
     // únicamente cuando responde /api/candidates/ctr.
     const retornosHoyTotal = realCtr?.retornosHoy?.total || 0;
-    // De esos retornados, cuántos atendió Grok hoy (lo marca vía la tool MCP marcar_retorno_atendido).
-    const retornosAtendidosGrok = realCtr?.retornosHoy?.atendidosPorGrok || 0;
+    // Split completo de retornados de hoy para la tarjeta (estado ACTUAL): total, completos,
+    // incompletos; + convertidos = retornados que LLEGARON incompletos y completaron HOY (recuperados).
+    const retTodos = realCtr?.retornosHoy?.todos ?? retornosHoyTotal;
+    const retCompletos = realCtr?.retornosHoy?.completos ?? retornosHoyTotal;
+    const retIncompletos = realCtr?.retornosHoy?.incompletos ?? 0;
+    const retConvertidos = realCtr?.retornosHoy?.convertidos ?? 0;
     // Candidatos que compartieron su ubicación HOY vía el botón del nodo "Pedir Ubicación" de Flujos.
     const ubicacionesHoy = realCtr?.ubicacionesHoy || 0;
 
@@ -1159,6 +1163,11 @@ const CandidatesSection = () => {
                                             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
                                             <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-500"></span>
                                         </span>
+                                        {ctrHoy?.total > 0 && (
+                                            <span className="ml-auto text-[10px] font-bold text-cyan-600 dark:text-cyan-400 tabular-nums" title="CTR de conversión de los candidatos nuevos de hoy">
+                                                {ctrHoy.pct}% nuevos
+                                            </span>
+                                        )}
                                     </div>
                                     {ctrHoy.total > 0 ? (
                                         <>
@@ -1167,7 +1176,7 @@ const CandidatesSection = () => {
                                                     {ctrHoy.pct}%
                                                 </h3>
                                                 <span className="text-[10px] text-gray-400 dark:text-gray-500 font-medium">
-                                                    {ctrHoy.completos}/{ctrHoy.total} hoy
+                                                    {ctrHoy.completos}/{ctrHoy.total} nuevos
                                                 </span>
                                             </div>
                                             <div className="mt-2 w-full bg-gray-100 dark:bg-gray-700 rounded-full h-1.5">
@@ -1202,16 +1211,16 @@ const CandidatesSection = () => {
                                         <div className="mt-2 pt-1.5 border-t border-gray-100 dark:border-gray-700/60 flex items-center justify-between gap-2 text-[10px] text-gray-500 dark:text-gray-400 tabular-nums">
                                             <span className="flex items-center gap-1 min-w-0">
                                                 <RotateCcw className="w-3 h-3 text-cyan-500 shrink-0" />
-                                                <span className="font-bold text-cyan-600 dark:text-cyan-400">{retornosHoyTotal}</span>
-                                                <span className="truncate">volvieron hoy</span>
-                                                {retornosAtendidosGrok > 0 && (
-                                                    <span className="text-[9px] text-gray-400 dark:text-gray-500 shrink-0">({retornosAtendidosGrok} Grok)</span>
-                                                )}
+                                                <span className="font-bold text-cyan-600 dark:text-cyan-400">{retTodos}</span>
+                                                <span className="shrink-0">volvieron</span>
+                                                <span className="text-[9px] text-gray-400 dark:text-gray-500 shrink-0 whitespace-nowrap" title="Retornados: completos / incompletos · convertidos = llegaron incompletos y completaron hoy">
+                                                    (<span className="text-emerald-500 font-semibold">✓{retCompletos}</span> · <span className="text-amber-500 font-semibold">◷{retIncompletos}</span>{retConvertidos > 0 && <> · <span className="text-cyan-500 font-semibold">⚡{retConvertidos}</span></>})
+                                                </span>
                                             </span>
                                             <span className="flex items-center gap-1 shrink-0" title="Candidatos que compartieron su ubicación vía el nodo Pedir Ubicación">
                                                 <MapPin className="w-3 h-3 text-cyan-500 shrink-0" />
                                                 <span className="font-bold text-cyan-600 dark:text-cyan-400">{ubicacionesHoy}</span>
-                                                <span>ubicación</span>
+                                                <span>ubic</span>
                                             </span>
                                         </div>
                                     )}
@@ -1306,11 +1315,11 @@ const CandidatesSection = () => {
                             <div className="bg-white dark:bg-gray-800 p-3 pb-2 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm flex flex-col" style={{ minHeight: '130px' }}>
                                 {/* Header + calendar icon */}
                                 <div className="flex items-center justify-between mb-2">
-                                    <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">Capturas por día</span>
+                                    <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">Atendidos por día</span>
                                     <div className="flex items-center gap-1.5">
                                         {dailyStats && (
                                             <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 px-1.5 py-px rounded-full whitespace-nowrap tabular-nums">
-                                                {dailyStats.total.toLocaleString()} · {dailyStats.days.length === 7 ? 'últ. 7 días' : `${dailyStats.days.length} días`}
+                                                {(dailyStats.totalAtendidos ?? dailyStats.total).toLocaleString()} · {dailyStats.days.length === 7 ? 'últ. 7 días' : `${dailyStats.days.length} días`}
                                             </span>
                                         )}
                                         <div className="relative" ref={calRef}>
@@ -1382,17 +1391,28 @@ const CandidatesSection = () => {
                                             <Loader2 className="w-4 h-4 animate-spin text-gray-300" />
                                         </div>
                                     ) : dailyStats?.days?.length ? (() => {
-                                        const max = Math.max(...dailyStats.days.map(d => d.count), 1);
+                                        // Apilado: nuevos (abajo) + completos regresados + incompletos regresados.
+                                        // La altura total de cada barra = total ATENDIDOS de ese día; el máximo
+                                        // de la ventana marca la escala para que el apilado sea comparable.
+                                        const tot = (d) => (d.count || 0) + (d.compReg || 0) + (d.incompReg || 0);
+                                        const max = Math.max(...dailyStats.days.map(tot), 1);
                                         const showLabels = dailyStats.days.length <= 31;
+                                        const seg = (v) => v > 0 ? `${(v / max) * 100}%` : '0%';
                                         return dailyStats.days.map((day) => (
                                             <div key={day.date} className="flex-1 flex flex-col items-center justify-end min-w-0 group/bar relative h-full">
-                                                <div className="absolute bottom-full mb-1 left-1/2 -translate-x-1/2 bg-gray-800 dark:bg-gray-600 text-white text-[8px] rounded px-1 py-0.5 whitespace-nowrap opacity-0 group-hover/bar:opacity-100 pointer-events-none transition-opacity z-10">
-                                                    {day.count} · {day.label}
+                                                <div className="absolute bottom-full mb-1 left-1/2 -translate-x-1/2 bg-gray-800 dark:bg-gray-600 text-white text-[8px] rounded px-1 py-0.5 whitespace-nowrap opacity-0 group-hover/bar:opacity-100 pointer-events-none transition-opacity z-10 leading-tight text-left">
+                                                    <div className="font-bold">{tot(day)} atendidos · {day.label}</div>
+                                                    <div>🟦 {day.count || 0} nuevos</div>
+                                                    <div>🟩 {day.compReg || 0} compl. reg.</div>
+                                                    <div>🟪 {day.incompReg || 0} incompl. reg.</div>
                                                 </div>
+                                                {/* Columna apilada: de abajo hacia arriba nuevos → compReg → incompReg */}
                                                 <div className="w-full flex flex-col justify-end" style={{ height: '100%' }}>
+                                                    <div className="w-full rounded-t-sm bg-amber-400 dark:bg-amber-500 transition-[height] duration-500 ease-out" style={{ height: seg(day.incompReg) }} />
+                                                    <div className="w-full bg-emerald-400 dark:bg-emerald-500 transition-[height] duration-500 ease-out" style={{ height: seg(day.compReg) }} />
                                                     <div
-                                                        className="w-full rounded-t-sm bg-indigo-400 dark:bg-indigo-500 group-hover/bar:bg-indigo-600 transition-[height,background-color] duration-500 ease-out"
-                                                        style={{ height: `${Math.max((day.count / max) * 100, day.count > 0 ? 3 : 0)}%` }}
+                                                        className="w-full bg-indigo-400 dark:bg-indigo-500 transition-[height] duration-500 ease-out"
+                                                        style={{ height: `${Math.max((day.count / max) * 100, (day.count > 0 && (day.compReg||0)+(day.incompReg||0) === 0) ? 3 : 0)}%`, borderTopLeftRadius: ((day.compReg||0)+(day.incompReg||0) === 0) ? '0.125rem' : 0, borderTopRightRadius: ((day.compReg||0)+(day.incompReg||0) === 0) ? '0.125rem' : 0 }}
                                                     />
                                                 </div>
                                                 {showLabels && (
