@@ -78,6 +78,14 @@ entorno o de `.env.production`.
 |---|---|---|---|---|---|---|---|---|---|
 | 2026-11-10 | 00:00–14:30 | 153 | 110 | 110/110 ✅ | 99 | 89/99 | 6 (1 perdido) | 3 | 0 |
 | 2026-11-10 | 14:30–20:56 | 179 | 119 | 119/119 ✅ | 115 | 98/115 | 6 | 7 | 0 (1 a vigilar) |
+| 2026-11-11 | 00:00–13:30 | 195 | 116 | 116/116 ✅ | 139 | 108/139 | 6 | **0** ✅ | 0 |
+
+**2026-11-11 — fixes validados en producción:** Flujo DOBLE pasó de 3+7 a **0**. Edad-en-años:
+**11 fechas `01/01` sintetizadas (8 de candidatos nuevos que completaron)** — confirmado en vivo
+(Juan Méndez: "39 años" → "Registré tu edad" → avanzó sin bucle). Extracción del día: **192/193
+limpias (99.5%), 0 "no guardó", 0 bucle** (ayer 92.6% con la familia edad-en-años). Pendiente que
+CRECE: completos filtrados sin vacante = **31/139 (22%)**, incluye categorías fuera del catálogo
+(Almacenista, Chofer Vendedor) y Mantenimiento saturado → siempre caen sin vacante ni cierre (P1).
 
 **Lectura de hoy:** arquitectura sana (escenarios 100%, 0 drops reales). Los dos bugs
 confirmados a escala (bucle de fecha ~6/ventana, flujo doble ~0.5–1/hora) — por eso se
