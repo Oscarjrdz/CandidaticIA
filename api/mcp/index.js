@@ -24,7 +24,7 @@
  * Plan y lista completa de tools: docs/mcp-grok-plan.md
  */
 
-import { randomBytes } from 'crypto';
+import { randomBytes, randomUUID } from 'crypto';
 import {
     getRedisClient,
     getCandidates,
@@ -203,6 +203,32 @@ async function ingestBankAssetFromUrl(redis, sourceUrl, hintName) {
     ]);
 
     return { url: `/api/image?id=${id}`, mime: mimeType, metaMediaId, filename };
+}
+
+// Sube una imagen/PDF para la BOLSA DE EMPLEO (vacantes de la app) desde una URL pública.
+// Calca api/bolsa-upload.js: guarda en Redis sin TTL bajo `bolsa_img:<uuid>` y devuelve la
+// URL pública servida por api/bolsa-image.js. NO usa Meta (es una imagen web de la app, no
+// un media de WhatsApp). Tope 4MB, igual que el endpoint del dashboard.
+async function ingestBolsaImageFromUrl(redis, sourceUrl, hintName) {
+    const u = String(sourceUrl || '').trim();
+    if (!/^https?:\/\//i.test(u)) throw new Error(`URL de imagen inválida (debe ser http/https): ${u.slice(0, 80)}`);
+
+    const resp = await fetch(u);
+    if (!resp.ok) throw new Error(`No se pudo descargar la imagen (${resp.status}): ${u.slice(0, 80)}`);
+    const buffer = Buffer.from(await resp.arrayBuffer());
+    if (buffer.length > 4 * 1024 * 1024) throw new Error('La imagen pesa más de 4MB (tope de la Bolsa).');
+
+    const mime = (resp.headers.get('content-type') || 'image/jpeg').split(';')[0].trim();
+    if (!mime.startsWith('image/') && mime !== 'application/pdf') throw new Error('Solo se aceptan imágenes o PDF.');
+
+    let filename = hintName;
+    if (!filename) {
+        try { filename = decodeURIComponent(new URL(u).pathname.split('/').pop() || '') || 'imagen'; } catch { filename = 'imagen'; }
+    }
+
+    const id = randomUUID();
+    await redis.set(`bolsa_img:${id}`, JSON.stringify({ data: buffer.toString('base64'), mime, name: filename }));
+    return { url: `https://www.candidatic.com/api/bolsa-image?id=${id}`, mime, filename };
 }
 
 // Resuelve una lista de URLs de imagen para guardarlas en el banco (máx 4): las http(s)
@@ -1330,6 +1356,319 @@ const TOOLS = {
             if (!id) throw new Error('Falta id');
             const r = await callInternal(req, redis, `/api/categories?id=${encodeURIComponent(id)}`, 'DELETE');
             if (!r.ok || r.data?.success === false) throw new Error(r.data?.error || `Fallo al borrar la categoría (${r.status})`);
+            return { borrada: true, id };
+        }
+    },
+
+    // ── BOLSA DE EMPLEO (vacantes de la APP de candidatos, sección "App"). ──────────
+    // OJO: NO confundir con listar_vacantes/crear_vacante/etc, que son el CATÁLOGO de
+    // vacantes que lee Brenda (/api/vacancies). Estas tools (`*_vacante_app`) manejan los
+    // puestos públicos que se muestran en la app móvil (/api/bolsa, llave
+    // candidatic_bolsa_empleo). Cada vacante recibe postulaciones y solicitudes de contacto.
+    listar_vacantes_app: {
+        description: 'Lista las vacantes de la BOLSA DE EMPLEO (los puestos públicos que se muestran en la APP de candidatos, sección "App"). NO es el catálogo de Brenda. Por default devuelve solo conteos de postulaciones/solicitudes/comentarios para no saturar; usa ver_vacante_app para el detalle de una. Pon soloActivas:true para ver solo las publicadas.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                soloActivas: { type: 'boolean', description: 'Si true, solo las vacantes publicadas (activas/públicas). Default false (todas, incluidas pausadas).' }
+            }
+        },
+        handler: async (args, { redis, req }) => {
+            const soloActivas = args?.soloActivas === true;
+            const r = await callInternal(req, redis, `/api/bolsa${soloActivas ? '?public=true' : ''}`, 'GET');
+            if (!r.ok || r.data?.success === false) throw new Error(r.data?.error || `Fallo al listar vacantes de la app (${r.status})`);
+            const jobs = Array.isArray(r.data?.data) ? r.data.data : [];
+            return {
+                total: jobs.length,
+                vacantes: jobs.map(j => ({
+                    id: j.id,
+                    titulo: j.title || null,
+                    empresa: j.company || null,
+                    ubicacion: j.location || '',
+                    salario: j.salary || '',
+                    tipo: j.type || '',
+                    telefonoReclutador: j.recruiterPhone || '',
+                    descripcion: j.description || '',
+                    imagenUrl: j.mediaUrl || '',
+                    logoUrl: j.companyLogo || '',
+                    activa: j.active !== false,
+                    creada: j.createdAt || null,
+                    likes: j.likes || 0,
+                    postulaciones: Array.isArray(j.applications) ? j.applications.length : 0,
+                    solicitudes: Array.isArray(j.requests) ? j.requests.length : 0,
+                    comentarios: Array.isArray(j.comments) ? j.comments.length : 0
+                }))
+            };
+        }
+    },
+
+    ver_vacante_app: {
+        description: 'Devuelve el DETALLE COMPLETO de una vacante de la Bolsa de Empleo (app) por su id: datos del puesto + la lista completa de postulaciones (candidatos que aplicaron), solicitudes de contacto ("me llamen"/"me escriban") y comentarios.',
+        inputSchema: {
+            type: 'object',
+            properties: { id: { type: 'string', description: 'ID de la vacante (de listar_vacantes_app).' } },
+            required: ['id']
+        },
+        handler: async (args, { redis, req }) => {
+            const id = String(args?.id || '').trim();
+            if (!id) throw new Error('Falta id');
+            const r = await callInternal(req, redis, '/api/bolsa', 'GET');
+            if (!r.ok || r.data?.success === false) throw new Error(r.data?.error || `Fallo al leer la bolsa (${r.status})`);
+            const jobs = Array.isArray(r.data?.data) ? r.data.data : [];
+            const j = jobs.find(x => x.id === id);
+            if (!j) throw new Error('Vacante no encontrada');
+            return {
+                id: j.id,
+                titulo: j.title || null,
+                empresa: j.company || null,
+                ubicacion: j.location || '',
+                salario: j.salary || '',
+                tipo: j.type || '',
+                telefonoReclutador: j.recruiterPhone || '',
+                descripcion: j.description || '',
+                imagenUrl: j.mediaUrl || '',
+                logoUrl: j.companyLogo || '',
+                activa: j.active !== false,
+                creada: j.createdAt || null,
+                likes: j.likes || 0,
+                postulaciones: (j.applications || []).map(a => ({
+                    id: a.id, candidato: a.candidateName, telefono: a.candidatePhone, mensaje: a.message || '', perfil: a.profile || {}, fecha: a.createdAt
+                })),
+                solicitudes: (j.requests || []).map(s => ({
+                    id: s.id, candidato: s.candidateName, telefono: s.candidatePhone, tipo: s.requestType, preferenciaHorario: s.timePreference, fecha: s.createdAt
+                })),
+                comentarios: (j.comments || []).map(c => ({ id: c.id, usuario: c.user, texto: c.text, fecha: c.createdAt }))
+            };
+        }
+    },
+
+    crear_vacante_app: {
+        description: 'Crea una vacante nueva en la Bolsa de Empleo (app de candidatos). titulo, empresa y telefonoReclutador son obligatorios (el teléfono recibe por WhatsApp las postulaciones). imagenUrl/logoUrl deben ser URLs de /api/bolsa-image: súbelas antes con cargar_imagen_vacante_app. La vacante nace publicada (salvo que la empresa del reclutador esté pausada).',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                titulo: { type: 'string', description: 'Título/puesto de la vacante.' },
+                empresa: { type: 'string', description: 'Nombre de la empresa.' },
+                telefonoReclutador: { type: 'string', description: 'Teléfono (WhatsApp) que recibe las postulaciones y solicitudes.' },
+                ubicacion: { type: 'string', description: 'Ubicación/zona (opcional).' },
+                salario: { type: 'string', description: 'Salario o rango (opcional).' },
+                tipo: { type: 'string', description: 'Tipo de jornada (opcional, default "Tiempo Completo").' },
+                descripcion: { type: 'string', description: 'Descripción del puesto (opcional).' },
+                imagenUrl: { type: 'string', description: 'URL de la imagen/banner de la vacante (usa cargar_imagen_vacante_app).' },
+                logoUrl: { type: 'string', description: 'URL del logo de la empresa (usa cargar_imagen_vacante_app).' }
+            },
+            required: ['titulo', 'empresa', 'telefonoReclutador']
+        },
+        handler: async (args, { redis, req }) => {
+            const title = String(args?.titulo || '').trim();
+            const company = String(args?.empresa || '').trim();
+            const recruiterPhone = String(args?.telefonoReclutador || '').trim();
+            if (!title || !company || !recruiterPhone) throw new Error('Faltan titulo, empresa o telefonoReclutador');
+            const r = await callInternal(req, redis, '/api/bolsa', 'POST', {
+                title, company, recruiterPhone,
+                location: args?.ubicacion || '',
+                salary: args?.salario || '',
+                type: args?.tipo || 'Tiempo Completo',
+                description: args?.descripcion || '',
+                mediaUrl: args?.imagenUrl || '',
+                companyLogo: args?.logoUrl || ''
+            });
+            if (!r.ok || r.data?.success === false) throw new Error(r.data?.error || `Fallo al crear la vacante (${r.status})`);
+            const j = r.data?.data || {};
+            return { creada: true, id: j.id, titulo: j.title, empresa: j.company, activa: j.active !== false };
+        }
+    },
+
+    editar_vacante_app: {
+        description: 'Edita una vacante de la Bolsa de Empleo (app). Manda solo los campos a cambiar (merge: lo que no mandes se conserva). Para publicar/pausar es más claro usar publicar_vacante_app, pero aquí también puedes mandar "activa".',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                id: { type: 'string', description: 'ID de la vacante.' },
+                titulo: { type: 'string', description: 'Nuevo título (opcional).' },
+                empresa: { type: 'string', description: 'Nueva empresa (opcional).' },
+                telefonoReclutador: { type: 'string', description: 'Nuevo teléfono de recepción (opcional).' },
+                ubicacion: { type: 'string', description: 'Nueva ubicación (opcional).' },
+                salario: { type: 'string', description: 'Nuevo salario (opcional).' },
+                tipo: { type: 'string', description: 'Nuevo tipo de jornada (opcional).' },
+                descripcion: { type: 'string', description: 'Nueva descripción (opcional).' },
+                imagenUrl: { type: 'string', description: 'Nueva imagen (URL de /api/bolsa-image; opcional).' },
+                logoUrl: { type: 'string', description: 'Nuevo logo (URL de /api/bolsa-image; opcional).' },
+                activa: { type: 'boolean', description: 'Publicar (true) / pausar (false) la vacante (opcional).' }
+            },
+            required: ['id']
+        },
+        handler: async (args, { redis, req }) => {
+            const id = String(args?.id || '').trim();
+            if (!id) throw new Error('Falta id');
+            const updates = { id };
+            if (args?.titulo !== undefined) updates.title = String(args.titulo).trim();
+            if (args?.empresa !== undefined) updates.company = String(args.empresa).trim();
+            if (args?.telefonoReclutador !== undefined) updates.recruiterPhone = String(args.telefonoReclutador).replace(/\D/g, '');
+            if (args?.ubicacion !== undefined) updates.location = String(args.ubicacion);
+            if (args?.salario !== undefined) updates.salary = String(args.salario);
+            if (args?.tipo !== undefined) updates.type = String(args.tipo);
+            if (args?.descripcion !== undefined) updates.description = String(args.descripcion);
+            if (args?.imagenUrl !== undefined) updates.mediaUrl = String(args.imagenUrl);
+            if (args?.logoUrl !== undefined) updates.companyLogo = String(args.logoUrl);
+            if (typeof args?.activa === 'boolean') updates.active = args.activa;
+            const r = await callInternal(req, redis, '/api/bolsa', 'PUT', updates);
+            if (r.status === 404) throw new Error('Vacante no encontrada');
+            if (!r.ok || r.data?.success === false) throw new Error(r.data?.error || `Fallo al editar la vacante (${r.status})`);
+            const j = r.data?.data || {};
+            return { editada: true, id, titulo: j.title, empresa: j.company, activa: j.active !== false };
+        }
+    },
+
+    publicar_vacante_app: {
+        description: 'Publica (aprueba) o pausa una vacante de la Bolsa de Empleo. activa:true = pública/visible en la app; activa:false = oculta/pausada. Es el equivalente al botón Publicar/Pausar del dashboard.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                id: { type: 'string', description: 'ID de la vacante.' },
+                activa: { type: 'boolean', description: 'true = publicar/aprobar; false = pausar/ocultar.' }
+            },
+            required: ['id', 'activa']
+        },
+        handler: async (args, { redis, req }) => {
+            const id = String(args?.id || '').trim();
+            if (!id) throw new Error('Falta id');
+            if (typeof args?.activa !== 'boolean') throw new Error('Falta "activa" (true=publicar, false=pausar)');
+            const r = await callInternal(req, redis, '/api/bolsa', 'PUT', { id, active: args.activa });
+            if (r.status === 404) throw new Error('Vacante no encontrada');
+            if (!r.ok || r.data?.success === false) throw new Error(r.data?.error || `Fallo al cambiar el estado (${r.status})`);
+            const j = r.data?.data || {};
+            return { id, activa: j.active !== false, estado: j.active !== false ? 'publicada' : 'pausada' };
+        }
+    },
+
+    borrar_vacante_app: {
+        description: 'Borra una vacante de la Bolsa de Empleo (app) por su id. Acción irreversible: elimina también sus postulaciones, solicitudes y comentarios.',
+        inputSchema: {
+            type: 'object',
+            properties: { id: { type: 'string', description: 'ID de la vacante a borrar.' } },
+            required: ['id']
+        },
+        handler: async (args, { redis, req }) => {
+            const id = String(args?.id || '').trim();
+            if (!id) throw new Error('Falta id');
+            const r = await callInternal(req, redis, `/api/bolsa?id=${encodeURIComponent(id)}`, 'DELETE');
+            if (!r.ok || r.data?.success === false) throw new Error(r.data?.error || `Fallo al borrar la vacante (${r.status})`);
+            return { borrada: true, id };
+        }
+    },
+
+    cargar_imagen_vacante_app: {
+        description: 'Sube (carga) una imagen o PDF para una vacante de la Bolsa de Empleo desde una URL pública http(s). La guarda permanente y devuelve la URL de /api/bolsa-image para usar como imagenUrl (banner) o logoUrl (logo de empresa) en crear_vacante_app/editar_vacante_app. Tope 4MB.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                url: { type: 'string', description: 'URL pública http(s) de la imagen/PDF a cargar.' },
+                nombre: { type: 'string', description: 'Nombre del archivo (opcional, solo referencia).' }
+            },
+            required: ['url']
+        },
+        handler: async (args, { redis }) => {
+            const src = String(args?.url || '').trim();
+            if (!src) throw new Error('Falta url');
+            const asset = await ingestBolsaImageFromUrl(redis, src, String(args?.nombre || '').trim() || undefined);
+            return { cargada: true, url: asset.url, mime: asset.mime, nombre: asset.filename };
+        }
+    },
+
+    // ── EMPRESAS de la Bolsa de Empleo (las que publican vacantes en la app). ───────
+    // Directorio de empresas (/api/empresas, llave candidatic_empresas). Al seleccionar
+    // una empresa al crear una vacante se autocompletan nombre/logo/teléfono. OJO con las
+    // cascadas del endpoint (heredadas vía callInternal): cambiar el estatus activa/pausa
+    // TODAS sus vacantes; borrar hace BORRADO PROFUNDO (empresa + registro del reclutador +
+    // todas sus vacantes).
+    listar_empresas_app: {
+        description: 'Lista las EMPRESAS registradas en la Bolsa de Empleo (las que publican vacantes en la app). Devuelve nombre, teléfono, estatus (activo/pausado), logo, último acceso y fecha de alta.',
+        inputSchema: { type: 'object', properties: {} },
+        handler: async (_args, { redis, req }) => {
+            const r = await callInternal(req, redis, '/api/empresas', 'GET');
+            if (!r.ok || r.data?.success === false) throw new Error(r.data?.error || `Fallo al listar empresas (${r.status})`);
+            const list = Array.isArray(r.data?.data) ? r.data.data : [];
+            return {
+                total: list.length,
+                empresas: list.map(e => ({
+                    id: e.id,
+                    nombre: e.nombre || null,
+                    telefono: e.telefono || '',
+                    estatus: e.status === 'pausado' ? 'pausado' : 'activo',
+                    logo: e.logo || '',
+                    ultimoAcceso: e.lastLogin || null,
+                    creada: e.createdAt || null
+                }))
+            };
+        }
+    },
+
+    crear_empresa_app: {
+        description: 'Registra una EMPRESA nueva en la Bolsa de Empleo. nombre y telefono son obligatorios; logo opcional (debe ser una URL de /api/bolsa-image: súbela antes con cargar_imagen_vacante_app). Nace activa. Después puedes crear vacantes a su nombre con crear_vacante_app usando ese mismo telefono como telefonoReclutador.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                nombre: { type: 'string', description: 'Nombre de la empresa.' },
+                telefono: { type: 'string', description: 'Teléfono (WhatsApp) de la empresa/reclutador.' },
+                logo: { type: 'string', description: 'URL del logo (usa cargar_imagen_vacante_app). Opcional.' }
+            },
+            required: ['nombre', 'telefono']
+        },
+        handler: async (args, { redis, req }) => {
+            const nombre = String(args?.nombre || '').trim();
+            const telefono = String(args?.telefono || '').trim();
+            if (!nombre || !telefono) throw new Error('Faltan nombre o telefono');
+            const r = await callInternal(req, redis, '/api/empresas', 'POST', {
+                nombre, telefono, logo: args?.logo || ''
+            });
+            if (!r.ok || r.data?.success === false) throw new Error(r.data?.error || `Fallo al crear la empresa (${r.status})`);
+            const e = r.data?.data || {};
+            return { creada: true, id: e.id, nombre: e.nombre, telefono: e.telefono, estatus: e.status || 'activo' };
+        }
+    },
+
+    editar_empresa_app: {
+        description: 'Edita una EMPRESA de la Bolsa de Empleo (merge: lo que no mandes se conserva). Puedes cambiar nombre, telefono, logo (URL de /api/bolsa-image) y estatus. OJO: cambiar estatus a "pausado" PAUSA todas las vacantes de la empresa, y "activo" las REACTIVA (cascada automática).',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                id: { type: 'string', description: 'ID de la empresa.' },
+                nombre: { type: 'string', description: 'Nuevo nombre (opcional).' },
+                telefono: { type: 'string', description: 'Nuevo teléfono (opcional).' },
+                logo: { type: 'string', description: 'Nuevo logo (URL de /api/bolsa-image; opcional).' },
+                estatus: { type: 'string', enum: ['activo', 'pausado'], description: 'Activar/pausar la empresa y en cascada TODAS sus vacantes (opcional).' }
+            },
+            required: ['id']
+        },
+        handler: async (args, { redis, req }) => {
+            const id = String(args?.id || '').trim();
+            if (!id) throw new Error('Falta id');
+            const updates = { id };
+            if (args?.nombre !== undefined) updates.nombre = String(args.nombre).trim();
+            if (args?.telefono !== undefined) updates.telefono = String(args.telefono).trim();
+            if (args?.logo !== undefined) updates.logo = String(args.logo);
+            if (args?.estatus === 'activo' || args?.estatus === 'pausado') updates.status = args.estatus;
+            const r = await callInternal(req, redis, '/api/empresas', 'PUT', updates);
+            if (r.status === 404) throw new Error('Empresa no encontrada');
+            if (!r.ok || r.data?.success === false) throw new Error(r.data?.error || `Fallo al editar la empresa (${r.status})`);
+            const e = r.data?.data || {};
+            return { editada: true, id, nombre: e.nombre, telefono: e.telefono, estatus: e.status || 'activo' };
+        }
+    },
+
+    borrar_empresa_app: {
+        description: 'Borra (elimina) una EMPRESA de la Bolsa de Empleo por su id. ⚠️ BORRADO PROFUNDO e irreversible: elimina también el registro de acceso del reclutador y TODAS las vacantes publicadas con el teléfono de esa empresa. Úsalo con cuidado.',
+        inputSchema: {
+            type: 'object',
+            properties: { id: { type: 'string', description: 'ID de la empresa a borrar.' } },
+            required: ['id']
+        },
+        handler: async (args, { redis, req }) => {
+            const id = String(args?.id || '').trim();
+            if (!id) throw new Error('Falta id');
+            const r = await callInternal(req, redis, `/api/empresas?id=${encodeURIComponent(id)}`, 'DELETE');
+            if (!r.ok || r.data?.success === false) throw new Error(r.data?.error || `Fallo al borrar la empresa (${r.status})`);
             return { borrada: true, id };
         }
     },

@@ -3,6 +3,7 @@ import {
     Briefcase, Plus, Building2, Tag, Loader2, Trash2, Pencil, Power,
     Smartphone, Image as ImageIcon, MessageSquare, Heart, Users, Clock,
     Phone, X, Eye, ChevronDown, Building, PhoneCall, MessagesSquare, Upload,
+    MapPin, Wallet, Send, ChevronLeft, Share2, Bookmark,
 } from 'lucide-react';
 import Button from './ui/Button';
 import Input from './ui/Input';
@@ -132,6 +133,160 @@ const fmtDate = (d) => {
 // instante (sin skeleton ni salto) y revalida en silencio. Ver docs/anti-brinco-secciones.md.
 let bolsaJobsCache = null;
 let bolsaEmpresasCache = null;
+
+// ── Vista previa en vivo: mockup de celular con la tarjeta de la vacante ──────
+// Renderiza EXACTAMENTE lo que el candidato ve en la app, en tiempo real conforme
+// se llena el formulario. Siempre en tema claro (es la pantalla del teléfono, no del
+// dashboard) para que se vea realista en light y dark mode.
+function VacancyPhonePreview({ formData }) {
+    const title = (formData.title || '').trim();
+    const company = (formData.company || '').trim();
+    const location = (formData.location || '').trim();
+    const salary = (formData.salary || '').trim();
+    const type = (formData.type || '').trim();
+    const description = (formData.description || '').trim();
+    const { mediaUrl, companyLogo } = formData;
+
+    return (
+        <div className="sticky top-0">
+            <div className="flex items-center justify-center gap-1.5 mb-3 text-xs font-semibold text-gray-500 dark:text-gray-400">
+                <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500" />
+                </span>
+                Vista previa en la app · en vivo
+            </div>
+
+            {/* Carcasa del teléfono */}
+            <div className="relative mx-auto w-[278px] h-[566px] rounded-[2.9rem] bg-gray-900 dark:bg-black p-2.5 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.45)] ring-1 ring-black/20">
+                {/* Botones laterales */}
+                <div className="absolute -left-[3px] top-28 w-[3px] h-9 rounded-l bg-gray-700" />
+                <div className="absolute -left-[3px] top-40 w-[3px] h-14 rounded-l bg-gray-700" />
+                <div className="absolute -right-[3px] top-36 w-[3px] h-16 rounded-r bg-gray-700" />
+
+                {/* Pantalla */}
+                <div className="relative w-full h-full rounded-[2.35rem] bg-slate-50 overflow-hidden flex flex-col">
+                    {/* Barra de estado + dynamic island */}
+                    <div className="relative h-8 bg-white flex items-center justify-between px-6 pt-1.5 flex-shrink-0 z-10">
+                        <span className="text-[11px] font-bold text-gray-900">9:41</span>
+                        <div className="absolute left-1/2 -translate-x-1/2 top-2 w-[74px] h-[22px] bg-black rounded-full" />
+                        <div className="flex items-center gap-1 text-gray-900">
+                            <div className="flex items-end gap-[1.5px] h-2.5">
+                                <span className="w-[2px] h-1 bg-gray-900 rounded-sm" />
+                                <span className="w-[2px] h-1.5 bg-gray-900 rounded-sm" />
+                                <span className="w-[2px] h-2 bg-gray-900 rounded-sm" />
+                                <span className="w-[2px] h-2.5 bg-gray-900 rounded-sm" />
+                            </div>
+                            <span className="text-[9px] font-bold ml-0.5">5G</span>
+                            <div className="w-5 h-2.5 rounded-[3px] border border-gray-900 relative ml-0.5">
+                                <div className="absolute inset-[1.5px] right-1 bg-gray-900 rounded-[1px]" />
+                                <div className="absolute -right-[2.5px] top-1/2 -translate-y-1/2 w-[1.5px] h-1 bg-gray-900 rounded-r" />
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* App bar */}
+                    <div className="px-3 py-2.5 bg-white border-b border-gray-100 flex items-center gap-2 flex-shrink-0">
+                        <ChevronLeft className="w-5 h-5 text-gray-700" />
+                        <span className="text-sm font-bold text-gray-900 flex-1">Detalle de vacante</span>
+                        <Bookmark className="w-[18px] h-[18px] text-gray-400" />
+                        <Share2 className="w-[18px] h-[18px] text-gray-400" />
+                    </div>
+
+                    {/* Contenido scrolleable */}
+                    <div className="flex-1 overflow-y-auto">
+                        {/* Hero */}
+                        {mediaUrl ? (
+                            <div className="relative h-36 w-full">
+                                <img src={mediaUrl} alt="" className="w-full h-full object-cover" />
+                                <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent" />
+                            </div>
+                        ) : (
+                            <div className="relative h-36 w-full bg-gradient-to-br from-blue-500 via-indigo-500 to-indigo-600 flex items-center justify-center overflow-hidden">
+                                <Briefcase className="w-14 h-14 text-white/30" />
+                                <div className="absolute -top-6 -right-6 w-24 h-24 rounded-full bg-white/10" />
+                                <div className="absolute -bottom-8 -left-4 w-28 h-28 rounded-full bg-white/10" />
+                            </div>
+                        )}
+
+                        {/* Tarjeta de info */}
+                        <div className="px-4 -mt-9 relative">
+                            <div className="w-[66px] h-[66px] rounded-2xl bg-white shadow-md ring-4 ring-white overflow-hidden flex items-center justify-center">
+                                {companyLogo ? (
+                                    <img src={companyLogo} alt="" className="w-full h-full object-cover" />
+                                ) : (
+                                    <Building2 className="w-7 h-7 text-blue-400" />
+                                )}
+                            </div>
+
+                            <h1 className={`mt-3 text-[19px] font-extrabold leading-tight ${title ? 'text-gray-900' : 'text-gray-300'}`}>
+                                {title || 'Título del puesto'}
+                            </h1>
+                            <p className={`mt-0.5 text-sm font-semibold flex items-center gap-1 ${company ? 'text-gray-600' : 'text-gray-300'}`}>
+                                <Building2 className="w-3.5 h-3.5 flex-shrink-0" />
+                                {company || 'Nombre de la empresa'}
+                            </p>
+
+                            {/* Chips */}
+                            <div className="flex flex-wrap gap-1.5 mt-3">
+                                {location && (
+                                    <span className="inline-flex items-center gap-1 text-[11px] font-semibold bg-blue-50 text-blue-700 px-2.5 py-1 rounded-full">
+                                        <MapPin className="w-3 h-3" />{location}
+                                    </span>
+                                )}
+                                {salary && (
+                                    <span className="inline-flex items-center gap-1 text-[11px] font-semibold bg-green-50 text-green-700 px-2.5 py-1 rounded-full">
+                                        <Wallet className="w-3 h-3" />{salary}
+                                    </span>
+                                )}
+                                {type && (
+                                    <span className="inline-flex items-center gap-1 text-[11px] font-semibold bg-indigo-50 text-indigo-700 px-2.5 py-1 rounded-full">
+                                        <Clock className="w-3 h-3" />{type}
+                                    </span>
+                                )}
+                            </div>
+
+                            {/* Métricas sociales (como las ve el candidato) */}
+                            <div className="flex items-center gap-4 mt-3 text-gray-400">
+                                <span className="inline-flex items-center gap-1 text-xs"><Heart className="w-3.5 h-3.5" />0</span>
+                                <span className="inline-flex items-center gap-1 text-xs"><MessageSquare className="w-3.5 h-3.5" />0</span>
+                            </div>
+
+                            {/* Descripción */}
+                            <div className="mt-4 mb-3">
+                                <h3 className="text-xs font-bold text-gray-800 uppercase tracking-wide mb-1.5">Descripción</h3>
+                                {description ? (
+                                    <p className="text-[13px] text-gray-600 leading-relaxed whitespace-pre-wrap">{description}</p>
+                                ) : (
+                                    <div className="space-y-1.5">
+                                        <div className="h-2.5 rounded-full bg-gray-200 w-full" />
+                                        <div className="h-2.5 rounded-full bg-gray-200 w-11/12" />
+                                        <div className="h-2.5 rounded-full bg-gray-200 w-4/6" />
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Barra de acciones del candidato (fija abajo) */}
+                    <div className="p-3 bg-white border-t border-gray-100 flex-shrink-0 space-y-2">
+                        <button className="w-full py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-sm font-bold flex items-center justify-center gap-1.5 shadow-sm">
+                            <Send className="w-4 h-4" /> Postularme
+                        </button>
+                        <div className="grid grid-cols-2 gap-2">
+                            <button className="py-2 rounded-xl border border-purple-200 bg-purple-50 text-purple-700 text-xs font-bold flex items-center justify-center gap-1">
+                                <PhoneCall className="w-3.5 h-3.5" /> Me llamen
+                            </button>
+                            <button className="py-2 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-700 text-xs font-bold flex items-center justify-center gap-1">
+                                <MessagesSquare className="w-3.5 h-3.5" /> Escríbeme
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+}
 
 // ── Tab Vacantes ─────────────────────────────────────────────────────────────
 function TabVacantes({ empresas }) {
@@ -507,66 +662,76 @@ function TabVacantes({ empresas }) {
                 })()}
             </Modal>
 
-            {/* ── Modal Crear/Editar ── */}
-            <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingJob ? 'Editar Vacante' : 'Nueva Vacante'}>
-                <div className="space-y-4">
-                    {/* Selector de empresa */}
-                    {empresas.length > 0 && (
-                        <div className="space-y-1">
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                Seleccionar empresa registrada
-                            </label>
-                            <select
-                                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                                value={formData.empresaId}
-                                onChange={e => handleSelectEmpresa(e.target.value)}
-                            >
-                                <option value="">— Seleccionar o llenar manualmente —</option>
-                                {empresas.map(e => (
-                                    <option key={e.id} value={e.id}>{e.nombre} · {e.telefono}</option>
-                                ))}
-                            </select>
+            {/* ── Modal Crear/Editar (horizontal: formulario + preview en vivo) ── */}
+            <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingJob ? 'Editar Vacante' : 'Nueva Vacante'} maxWidth="max-w-4xl">
+                <div className="flex flex-col lg:flex-row gap-6 lg:gap-8">
+                    {/* ── Columna izquierda: formulario ── */}
+                    <div className="flex-1 min-w-0 space-y-4">
+                        {/* Selector de empresa */}
+                        {empresas.length > 0 && (
+                            <div className="space-y-1">
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                    Seleccionar empresa registrada
+                                </label>
+                                <select
+                                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                    value={formData.empresaId}
+                                    onChange={e => handleSelectEmpresa(e.target.value)}
+                                >
+                                    <option value="">— Seleccionar o llenar manualmente —</option>
+                                    {empresas.map(e => (
+                                        <option key={e.id} value={e.id}>{e.nombre} · {e.telefono}</option>
+                                    ))}
+                                </select>
+                            </div>
+                        )}
+                        <div className="pt-1 border-t border-gray-100 dark:border-gray-700" />
+                        <Input label="Título del Puesto *" value={formData.title} onChange={e => setFormData(p => ({ ...p, title: e.target.value }))} placeholder="Ej. Gerente de Ventas" />
+                        <Input label="Empresa *" value={formData.company} onChange={e => setFormData(p => ({ ...p, company: e.target.value }))} placeholder="Ej. TechCorp" />
+                        <div className="grid grid-cols-2 gap-4">
+                            <Input label="Ubicación" value={formData.location} onChange={e => setFormData(p => ({ ...p, location: e.target.value }))} placeholder="Ej. Monterrey" />
+                            <Input label="Sueldo" value={formData.salary} onChange={e => setFormData(p => ({ ...p, salary: e.target.value }))} placeholder="Ej. $20k-$30k" />
                         </div>
-                    )}
-                    <div className="pt-1 border-t border-gray-100 dark:border-gray-700" />
-                    <Input label="Título del Puesto *" value={formData.title} onChange={e => setFormData(p => ({ ...p, title: e.target.value }))} placeholder="Ej. Gerente de Ventas" />
-                    <Input label="Empresa *" value={formData.company} onChange={e => setFormData(p => ({ ...p, company: e.target.value }))} placeholder="Ej. TechCorp" />
-                    <div className="grid grid-cols-2 gap-4">
-                        <Input label="Ubicación" value={formData.location} onChange={e => setFormData(p => ({ ...p, location: e.target.value }))} placeholder="Ej. Monterrey" />
-                        <Input label="Sueldo" value={formData.salary} onChange={e => setFormData(p => ({ ...p, salary: e.target.value }))} placeholder="Ej. $20k-$30k" />
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-1">
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Tipo</label>
-                            <select className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white" value={formData.type} onChange={e => setFormData(p => ({ ...p, type: e.target.value }))}>
-                                <option>Tiempo Completo</option>
-                                <option>Medio Tiempo</option>
-                                <option>Remoto</option>
-                                <option>Híbrido</option>
-                            </select>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-1">
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Tipo</label>
+                                <select className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white" value={formData.type} onChange={e => setFormData(p => ({ ...p, type: e.target.value }))}>
+                                    <option>Tiempo Completo</option>
+                                    <option>Medio Tiempo</option>
+                                    <option>Remoto</option>
+                                    <option>Híbrido</option>
+                                </select>
+                            </div>
+                            <Input label="WhatsApp Reclutador *" value={formData.recruiterPhone} onChange={e => setFormData(p => ({ ...p, recruiterPhone: e.target.value }))} placeholder="Ej. 8112345678" />
                         </div>
-                        <Input label="WhatsApp Reclutador *" value={formData.recruiterPhone} onChange={e => setFormData(p => ({ ...p, recruiterPhone: e.target.value }))} placeholder="Ej. 8112345678" />
+                        <div className="pt-2 border-t border-gray-100 dark:border-gray-700 space-y-4">
+                            <ImageUploader
+                                label="Logo de Empresa"
+                                value={formData.companyLogo}
+                                onChange={v => setFormData(p => ({ ...p, companyLogo: v }))}
+                            />
+                            <ImageUploader
+                                label="Imagen de Vacante"
+                                value={formData.mediaUrl}
+                                onChange={v => setFormData(p => ({ ...p, mediaUrl: v }))}
+                            />
+                        </div>
+                        <div className="space-y-1">
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Descripción</label>
+                            <textarea className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white min-h-[100px]" value={formData.description} onChange={e => setFormData(p => ({ ...p, description: e.target.value }))} placeholder="Requisitos, beneficios, etc." />
+                        </div>
                     </div>
-                    <div className="pt-2 border-t border-gray-100 dark:border-gray-700 space-y-4">
-                        <ImageUploader
-                            label="Logo de Empresa"
-                            value={formData.companyLogo}
-                            onChange={v => setFormData(p => ({ ...p, companyLogo: v }))}
-                        />
-                        <ImageUploader
-                            label="Imagen de Vacante"
-                            value={formData.mediaUrl}
-                            onChange={v => setFormData(p => ({ ...p, mediaUrl: v }))}
-                        />
+
+                    {/* ── Columna derecha: preview en vivo dentro del celular ── */}
+                    <div className="lg:w-[300px] flex-shrink-0">
+                        <VacancyPhonePreview formData={formData} />
                     </div>
-                    <div className="space-y-1">
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Descripción</label>
-                        <textarea className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white min-h-[100px]" value={formData.description} onChange={e => setFormData(p => ({ ...p, description: e.target.value }))} placeholder="Requisitos, beneficios, etc." />
-                    </div>
-                    <div className="flex justify-end gap-3 pt-4 border-t border-gray-100 dark:border-gray-700">
-                        <Button variant="outline" onClick={() => setIsModalOpen(false)}>Cancelar</Button>
-                        <Button onClick={handleSave} loading={saving}>{saving ? 'Guardando...' : 'Guardar Vacante'}</Button>
-                    </div>
+                </div>
+
+                {/* Footer de ancho completo */}
+                <div className="flex justify-end gap-3 pt-4 mt-6 border-t border-gray-100 dark:border-gray-700">
+                    <Button variant="outline" onClick={() => setIsModalOpen(false)}>Cancelar</Button>
+                    <Button onClick={handleSave} loading={saving}>{saving ? 'Guardando...' : 'Guardar Vacante'}</Button>
                 </div>
             </Modal>
 
