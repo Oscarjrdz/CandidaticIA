@@ -9,7 +9,8 @@ import { getCtrBlocksCached, stripComposition, getGrokAttendedTodayCount, getLoc
  * Cada bloque CTR: { total, completos, pct, stuck:[{key,short,count}] }.
  *   - today      = candidatos con primer contacto HOY (00:00 → ahora, zona Monterrey).
  *   - ultimos100 = los 100 candidatos más recientes.
- *   - retornosHoy = { total } — completos que YA existían y volvieron a escribir hoy.
+ *   - retornosHoy = { total, completos, incompletos, todos, convertidos } — candidatos que YA
+ *     existían y están activos hoy (split por estado + convertidos = incompleto→completo hoy).
  *
  * La composición (qué candidatos forman cada número) NO se devuelve aquí — eso es para Grok vía
  * la tool MCP `ver_ctr`. El dashboard solo necesita los conteos. Cacheado 60s en el servidor.
@@ -34,7 +35,14 @@ export default async function handler(req, res) {
         return res.status(200).json({
             today: stripComposition(data.today),
             ultimos100: stripComposition(data.ultimos100),
-            retornosHoy: { total: data.retornosHoy?.total || 0, atendidosPorGrok },
+            retornosHoy: {
+                total: data.retornosHoy?.total || 0,            // completos retornados (compat MCP/tarjeta previa)
+                completos: data.retornosHoy?.completos ?? data.retornosHoy?.total ?? 0,
+                incompletos: data.retornosHoy?.incompletos || 0,
+                todos: data.retornosHoy?.todos ?? data.retornosHoy?.total ?? 0, // completos + incompletos
+                convertidos: data.retornosHoy?.convertidos || 0, // llegaron incompletos y completaron hoy
+                atendidosPorGrok,
+            },
             ubicacionesHoy,
             asOf: data.asOf,
             fecha: data.fecha,
