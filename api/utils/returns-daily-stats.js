@@ -3,7 +3,9 @@
  * completos regresados + incompletos regresados) del dashboard.
  *
  * Definición (acordada con Oscar, 2026-11-12):
- *   • Retornado del día D = candidato cuyo PRIMER CONTACTO fue un día ANTERIOR y tuvo actividad el día D.
+ *   • Retornado del día D = candidato cuyo PRIMER CONTACTO fue un día ANTERIOR y que VOLVIÓ A ESCRIBIR
+ *     el día D (mensaje ENTRANTE o clic en otro anuncio —que genera un entrante—). NO cuenta si solo
+ *     lo contactamos nosotros ese día (un envío masivo manda un saliente pero eso no es un retorno).
  *   • Se clasifica por su estatus AL LLEGAR ese día (no por el estado de ahorita):
  *        completo regresado   → ya había completado su perfil ANTES de D (paso2CompletadoAt < inicio de D).
  *        incompleto regresado → aún no había completado al inicio de D (aunque lo complete ese mismo día;
@@ -24,7 +26,10 @@
 const TZ = 'America/Monterrey';
 export const RET_COMPLETE_KEY = 'stats:daily:returns:complete';
 export const RET_INCOMPLETE_KEY = 'stats:daily:returns:incomplete';
-const INIT_MARKER = 'stats:daily:returns:initialized';
+// v2: el backfill ahora cuenta solo retornos REALES (mensaje entrante del candidato), no cualquier
+// actividad del día. El nombre nuevo re-dispara el backfill una vez tras el deploy, reconstruyendo
+// el histórico sin inflación por envíos masivos salientes.
+const INIT_MARKER = 'stats:daily:returns:initialized:v2';
 const BACKFILL_LOCK_KEY = 'stats:daily:returns:backfill_lock';
 // Cuántos días hacia atrás reconstruye el backfill (cubre de sobra la ventana de 7 días del chart).
 const BACKFILL_DAYS = 14;
@@ -61,6 +66,9 @@ export async function persistTodayReturns(redis, activeTodayBlobs, todayYmd) {
     for (const c of activeTodayBlobs) {
         const pc = mtyDate(c.primerContacto || c.createdAt);
         if (!pc || pc === todayYmd) continue; // nuevo de hoy → no es retornado
+        // Retorno REAL = escribió hoy (entrante). Si solo recibió un saliente (envío masivo) no cuenta.
+        const lu = c.lastUserMessageAt ? Date.parse(c.lastUserMessageAt) : 0;
+        if (isNaN(lu) || lu < dayStartMs) continue;
         if (wasCompleteBefore(c, dayStartMs)) compReg++; else incompReg++;
     }
     try {
@@ -110,6 +118,7 @@ export async function backfillReturnsDaily(redis) {
                 const activeDays = new Set();
                 for (const m of rawMsgs) {
                     let obj; try { obj = JSON.parse(m); } catch { continue; }
+                    if (obj.from !== 'user') continue; // solo ENTRANTES = retorno real (no salientes nuestros)
                     const t = Date.parse(obj.timestamp || 0);
                     if (isNaN(t) || t < windowStartMs) continue;
                     const day = mtyDate(obj.timestamp);

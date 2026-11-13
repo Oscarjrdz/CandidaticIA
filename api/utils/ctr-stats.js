@@ -105,14 +105,22 @@ export async function computeCtrBlocks() {
     const activeToday = await mgetCandidates(redis, activeTodayIds);
     const todayCohort = activeToday.filter(c => mtyDateOf(c.primerContacto || c.createdAt) === todayYmd);
 
+    // Un RETORNO real = el candidato VOLVIÓ a escribir hoy (mensaje entrante, o clic en otro anuncio
+    // —que también genera un entrante—). NO cuenta si solo lo contactamos NOSOTROS: un envío masivo
+    // sube el score de candidates:list (por el mensaje saliente) pero eso no es un retorno. Señal
+    // barata y sin lecturas extra: lastUserMessageAt (SOLO se escribe con mensajes ENTRANTES del
+    // candidato, ver storage.js) >= inicio de hoy. (Definición acordada con Oscar 2026-11-12.)
+    const escribioHoy = (c) => {
+        const t = c.lastUserMessageAt ? Date.parse(c.lastUserMessageAt) : 0;
+        return !isNaN(t) && t >= startMs;
+    };
+    const esRetorno = (c) => mtyDateOf(c.primerContacto || c.createdAt) !== todayYmd && escribioHoy(c);
+
     // RETORNADOS COMPLETOS DE HOY: candidatos con perfil completo que YA existían (primer contacto
-    // en un día anterior) y volvieron a escribir hoy. Señal de actividad de Sala de Espera. Se saca
-    // del MISMO superconjunto "activos hoy" (sin lectura extra de Redis): activos hoy − leads nuevos
-    // de hoy, filtrado a completos. Disjunto del cohorte de hoy (esos tienen primer contacto hoy),
-    // así que nunca se cuenta dos veces un "completo nuevo" como "retornado".
-    const retornadosCohort = activeToday.filter(c =>
-        isProfileComplete(c) && mtyDateOf(c.primerContacto || c.createdAt) !== todayYmd
-    );
+    // en un día anterior) y volvieron a ESCRIBIR hoy. Se saca del MISMO superconjunto "activos hoy"
+    // (sin lectura extra de Redis), filtrado a completos que escribieron. Disjunto del cohorte de hoy
+    // (esos tienen primer contacto hoy), así que nunca se cuenta dos veces un "completo nuevo".
+    const retornadosCohort = activeToday.filter(c => isProfileComplete(c) && esRetorno(c));
     const retornosRefs = [];
     for (const c of retornadosCohort) {
         if (retornosRefs.length < MAX_REFS_PER_BUCKET) retornosRefs.push({ id: c.id, nombre: candName(c) });
@@ -123,7 +131,7 @@ export async function computeCtrBlocks() {
     //   • incompletos  = retornados aún sin completar.
     //   • convertidos  = retornados que LLEGARON incompletos (no completos antes de hoy) y COMPLETARON hoy
     //                    (incompleto→completo recuperado). Subconjunto de los completos actuales.
-    const retornadosTodos = activeToday.filter(c => mtyDateOf(c.primerContacto || c.createdAt) !== todayYmd);
+    const retornadosTodos = activeToday.filter(esRetorno);
     const retornadosIncompletos = retornadosTodos.filter(c => !isProfileComplete(c));
     const convertidos = retornadosTodos.filter(c => {
         if (wasCompleteBefore(c, startMs)) return false;           // ya estaba completo al llegar
