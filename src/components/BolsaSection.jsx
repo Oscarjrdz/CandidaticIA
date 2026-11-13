@@ -1,14 +1,16 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import {
     Briefcase, Plus, Building2, Tag, Loader2, Trash2, Pencil, Power,
     Smartphone, Image as ImageIcon, MessageSquare, Heart, Users, Clock,
     Phone, X, Eye, ChevronDown, Building, PhoneCall, MessagesSquare, Upload,
-    MapPin, Wallet, Send, ChevronLeft, Share2, Bookmark,
+    MapPin, Wallet, Send, ChevronLeft, Share2, Bookmark, Smile, Sparkles,
 } from 'lucide-react';
 import Button from './ui/Button';
 import Input from './ui/Input';
 import Modal from './ui/Modal';
 import { useConfirmModal } from './ui/ConfirmModal';
+import { candidaticEmojiPickerProps } from '../utils/candidaticEmoji';
+const EmojiPicker = lazy(() => import('emoji-picker-react'));
 
 // ── Subidor de imagen ────────────────────────────────────────────────────────
 function ImageUploader({ label, value, onChange }) {
@@ -288,6 +290,95 @@ function VacancyPhonePreview({ formData }) {
     );
 }
 
+// ── Composer de descripción (estilo Facebook): emojis + secciones con color ───
+// Secciones rápidas que insertan encabezados con emoji para armar un post atractivo.
+// Texto plano (la app lo muestra tal cual con whitespace-pre-wrap) — NADA de markdown
+// ni asteriscos, para que se vea igual en el dashboard y en la app del candidato.
+const DESC_SECTIONS = [
+    { label: '✅ Requisitos', text: '\n\n✅ Requisitos:\n• ', cls: 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-900/30 dark:text-emerald-400' },
+    { label: '💰 Ofrecemos', text: '\n\n💰 Ofrecemos:\n• ', cls: 'bg-amber-50 text-amber-700 hover:bg-amber-100 dark:bg-amber-900/30 dark:text-amber-400' },
+    { label: '🎯 Funciones', text: '\n\n🎯 Funciones:\n• ', cls: 'bg-violet-50 text-violet-700 hover:bg-violet-100 dark:bg-violet-900/30 dark:text-violet-400' },
+    { label: '🕐 Horario', text: '\n\n🕐 Horario:\n', cls: 'bg-blue-50 text-blue-700 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400' },
+    { label: '📍 Zona', text: '\n\n📍 Zona:\n', cls: 'bg-rose-50 text-rose-700 hover:bg-rose-100 dark:bg-rose-900/30 dark:text-rose-400' },
+    { label: '📞 Contáctanos', text: '\n\n📞 Contáctanos:\n', cls: 'bg-cyan-50 text-cyan-700 hover:bg-cyan-100 dark:bg-cyan-900/30 dark:text-cyan-400' },
+];
+
+function DescriptionComposer({ value, onChange }) {
+    const taRef = useRef(null);
+    const [showEmojis, setShowEmojis] = useState(false);
+
+    // Inserta texto en la posición del cursor (o al final si no hay foco) y reposiciona el cursor.
+    const insert = (text) => {
+        const ta = taRef.current;
+        const v = value || '';
+        if (!ta) { onChange(v + text); return; }
+        const s = ta.selectionStart ?? v.length;
+        const e = ta.selectionEnd ?? v.length;
+        onChange(v.slice(0, s) + text + v.slice(e));
+        requestAnimationFrame(() => {
+            ta.focus();
+            const pos = s + text.length;
+            try { ta.setSelectionRange(pos, pos); } catch { /* noop */ }
+        });
+    };
+
+    useEffect(() => {
+        if (!showEmojis) return;
+        const onKey = (e) => { if (e.key === 'Escape') setShowEmojis(false); };
+        const onClick = (e) => {
+            if (!e.target.closest?.('[data-emoji-pop]') && !e.target.closest?.('[data-emoji-btn]')) setShowEmojis(false);
+        };
+        document.addEventListener('keydown', onKey);
+        document.addEventListener('mousedown', onClick);
+        return () => { document.removeEventListener('keydown', onKey); document.removeEventListener('mousedown', onClick); };
+    }, [showEmojis]);
+
+    return (
+        <div className="flex flex-col h-full min-h-[380px]">
+            <div className="flex items-center justify-between mb-2">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Descripción del puesto</label>
+                <span className="text-xs text-gray-400">{(value || '').length} caracteres</span>
+            </div>
+
+            {/* Secciones rápidas */}
+            <div className="flex flex-wrap gap-1.5 mb-2">
+                {DESC_SECTIONS.map(s => (
+                    <button key={s.label} type="button" onClick={() => insert(s.text)}
+                        className={`text-[11px] font-semibold px-2.5 py-1 rounded-full transition-colors ${s.cls}`}>
+                        {s.label}
+                    </button>
+                ))}
+            </div>
+
+            {/* Textarea + emojis */}
+            <div className="relative flex-1 flex flex-col">
+                <textarea
+                    ref={taRef}
+                    value={value}
+                    onChange={e => onChange(e.target.value)}
+                    placeholder={`Escribe aquí tu vacante… dale vida con emojis y secciones 🎉\n\nEj:\n🚀 ¡Únete a nuestro equipo!\nBuscamos gente con muchas ganas de crecer 💪`}
+                    className="flex-1 w-full px-3 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-none min-h-[300px] leading-relaxed"
+                />
+                <button type="button" data-emoji-btn onClick={() => setShowEmojis(v => !v)} title="Emojis"
+                    className={`absolute bottom-3 right-3 p-1.5 rounded-lg transition-colors ${showEmojis ? 'text-blue-600 bg-blue-50 dark:bg-blue-900/30' : 'text-gray-400 hover:text-blue-500 hover:bg-gray-100 dark:hover:bg-gray-700'}`}>
+                    <Smile className="w-5 h-5" />
+                </button>
+                {showEmojis && (
+                    <div data-emoji-pop className="absolute bottom-12 right-0 z-30 shadow-2xl rounded-2xl overflow-hidden">
+                        <Suspense fallback={<div className="w-[300px] h-[380px] bg-white dark:bg-gray-800 flex items-center justify-center"><Loader2 className="w-6 h-6 animate-spin text-blue-400" /></div>}>
+                            <EmojiPicker onEmojiClick={(ed) => insert(ed.emoji)} {...candidaticEmojiPickerProps()} />
+                        </Suspense>
+                    </div>
+                )}
+            </div>
+
+            <p className="text-xs text-gray-400 mt-2 flex items-center gap-1">
+                <Sparkles className="w-3 h-3" /> Usa secciones y emojis para un post atractivo, tipo publicación.
+            </p>
+        </div>
+    );
+}
+
 // ── Tab Vacantes ─────────────────────────────────────────────────────────────
 function TabVacantes({ empresas }) {
     const [jobs, setJobs] = useState(() => bolsaJobsCache || []);
@@ -297,6 +388,8 @@ function TabVacantes({ empresas }) {
     const [editingJob, setEditingJob] = useState(null);
     const [detailJob, setDetailJob] = useState(null);
     const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+    const [geoLoading, setGeoLoading] = useState(false);
+    const [geoError, setGeoError] = useState('');
     const sentinelRef = useRef(null);
     const { confirmModalJSX, showConfirm } = useConfirmModal();
     const { showToast } = useToastContext();
@@ -332,7 +425,46 @@ function TabVacantes({ empresas }) {
     // Espeja mutaciones locales (crear/editar/borrar) al caché tras la primera carga real.
     useEffect(() => { if (bolsaJobsCache) bolsaJobsCache = jobs; }, [jobs]);
 
-    const handleOpenCreate = () => { setEditingJob(null); setFormData(defaultForm); setIsModalOpen(true); };
+    const handleOpenCreate = () => { setEditingJob(null); setFormData(defaultForm); setGeoError(''); setIsModalOpen(true); };
+
+    // ── Ubicación por liga de Google Maps ──
+    const isMapsLink = (s) => /(google\.[a-z.]+\/maps|maps\.app\.goo\.gl|goo\.gl\/maps|maps\.google\.)/i.test(String(s || ''));
+
+    const geocodeLocation = async (url) => {
+        const link = String(url || '').trim();
+        if (!isMapsLink(link)) return;
+        setGeoError(''); setGeoLoading(true);
+        try {
+            const res = await fetch(`/api/bolsa-geocode?url=${encodeURIComponent(link)}`);
+            const data = await res.json();
+            if (data.success && data.address) {
+                setFormData(p => ({ ...p, location: data.address }));
+                showToast('Dirección obtenida de la liga', 'success');
+            } else {
+                setGeoError(data.error || 'No se pudo obtener la dirección');
+            }
+        } catch {
+            setGeoError('Error de conexión al obtener la dirección');
+        } finally {
+            setGeoLoading(false);
+        }
+    };
+
+    const handleLocationPaste = (e) => {
+        const text = (e.clipboardData?.getData('text') || '').trim();
+        if (isMapsLink(text)) {
+            e.preventDefault();
+            setFormData(p => ({ ...p, location: text }));
+            geocodeLocation(text);
+        }
+    };
+
+    // ── Sueldo por semana: $ automático, solo números y coma ──
+    const salaryDigits = (formData.salary || '').replace(/[^\d,]/g, '');
+    const handleSalaryChange = (e) => {
+        const d = e.target.value.replace(/[^\d,]/g, '');
+        setFormData(p => ({ ...p, salary: d ? `$${d} /sem` : '' }));
+    };
 
     const handleEdit = (job) => {
         setEditingJob(job);
@@ -343,6 +475,7 @@ function TabVacantes({ empresas }) {
             description: job.description || '', mediaUrl: job.mediaUrl || '',
             companyLogo: job.companyLogo || '',
         });
+        setGeoError('');
         setIsModalOpen(true);
     };
 
@@ -663,10 +796,10 @@ function TabVacantes({ empresas }) {
             </Modal>
 
             {/* ── Modal Crear/Editar (horizontal: formulario + preview en vivo) ── */}
-            <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingJob ? 'Editar Vacante' : 'Nueva Vacante'} maxWidth="max-w-4xl">
-                <div className="flex flex-col lg:flex-row gap-6 lg:gap-8">
-                    {/* ── Columna izquierda: formulario ── */}
-                    <div className="flex-1 min-w-0 space-y-4">
+            <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingJob ? 'Editar Vacante' : 'Nueva Vacante'} maxWidth="max-w-6xl">
+                <div className="flex flex-col xl:flex-row gap-6">
+                    {/* ── Columna 1: datos de la vacante ── */}
+                    <div className="xl:w-[320px] flex-shrink-0 space-y-4">
                         {/* Selector de empresa */}
                         {empresas.length > 0 && (
                             <div className="space-y-1">
@@ -688,11 +821,50 @@ function TabVacantes({ empresas }) {
                         <div className="pt-1 border-t border-gray-100 dark:border-gray-700" />
                         <Input label="Título del Puesto *" value={formData.title} onChange={e => setFormData(p => ({ ...p, title: e.target.value }))} placeholder="Ej. Gerente de Ventas" />
                         <Input label="Empresa *" value={formData.company} onChange={e => setFormData(p => ({ ...p, company: e.target.value }))} placeholder="Ej. TechCorp" />
-                        <div className="grid grid-cols-2 gap-4">
-                            <Input label="Ubicación" value={formData.location} onChange={e => setFormData(p => ({ ...p, location: e.target.value }))} placeholder="Ej. Monterrey" />
-                            <Input label="Sueldo" value={formData.salary} onChange={e => setFormData(p => ({ ...p, salary: e.target.value }))} placeholder="Ej. $20k-$30k" />
+                        {/* Ubicación — acepta liga de Google Maps y trae la dirección sola */}
+                        <div className="space-y-1">
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Ubicación</label>
+                            <div className="relative">
+                                <input
+                                    value={formData.location}
+                                    onChange={e => setFormData(p => ({ ...p, location: e.target.value }))}
+                                    onPaste={handleLocationPaste}
+                                    placeholder="Ciudad, o pega una liga de Google Maps"
+                                    className="w-full px-3 py-2 pr-10 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                />
+                                {geoLoading ? (
+                                    <Loader2 className="w-4 h-4 animate-spin text-blue-500 absolute right-3 top-1/2 -translate-y-1/2" />
+                                ) : isMapsLink(formData.location) ? (
+                                    <button
+                                        type="button"
+                                        onClick={() => geocodeLocation(formData.location)}
+                                        title="Traer dirección de la liga"
+                                        className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-md bg-blue-50 text-blue-600 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400 transition-colors"
+                                    >
+                                        <MapPin className="w-4 h-4" />
+                                    </button>
+                                ) : null}
+                            </div>
+                            {geoError
+                                ? <p className="text-xs text-red-500">{geoError}</p>
+                                : <p className="text-xs text-gray-400">Pega una liga de Google Maps y traemos la dirección sola.</p>}
                         </div>
                         <div className="grid grid-cols-2 gap-4">
+                            {/* Sueldo por semana: $ automático, solo números y coma */}
+                            <div className="space-y-1">
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Sueldo por semana</label>
+                                <div className="relative">
+                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400 font-semibold pointer-events-none">$</span>
+                                    <input
+                                        value={salaryDigits}
+                                        onChange={handleSalaryChange}
+                                        inputMode="numeric"
+                                        placeholder="1,500"
+                                        className="w-full pl-7 pr-14 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                    />
+                                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm pointer-events-none">/ sem</span>
+                                </div>
+                            </div>
                             <div className="space-y-1">
                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Tipo</label>
                                 <select className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white" value={formData.type} onChange={e => setFormData(p => ({ ...p, type: e.target.value }))}>
@@ -702,8 +874,8 @@ function TabVacantes({ empresas }) {
                                     <option>Híbrido</option>
                                 </select>
                             </div>
-                            <Input label="WhatsApp Reclutador *" value={formData.recruiterPhone} onChange={e => setFormData(p => ({ ...p, recruiterPhone: e.target.value }))} placeholder="Ej. 8112345678" />
                         </div>
+                        <Input label="WhatsApp Reclutador *" value={formData.recruiterPhone} onChange={e => setFormData(p => ({ ...p, recruiterPhone: e.target.value }))} placeholder="Ej. 8112345678" />
                         <div className="pt-2 border-t border-gray-100 dark:border-gray-700 space-y-4">
                             <ImageUploader
                                 label="Logo de Empresa"
@@ -716,14 +888,15 @@ function TabVacantes({ empresas }) {
                                 onChange={v => setFormData(p => ({ ...p, mediaUrl: v }))}
                             />
                         </div>
-                        <div className="space-y-1">
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Descripción</label>
-                            <textarea className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white min-h-[100px]" value={formData.description} onChange={e => setFormData(p => ({ ...p, description: e.target.value }))} placeholder="Requisitos, beneficios, etc." />
-                        </div>
                     </div>
 
-                    {/* ── Columna derecha: preview en vivo dentro del celular ── */}
-                    <div className="lg:w-[300px] flex-shrink-0">
+                    {/* ── Columna 2: descripción (composer tipo Facebook) ── */}
+                    <div className="flex-1 min-w-0 flex flex-col">
+                        <DescriptionComposer value={formData.description} onChange={v => setFormData(p => ({ ...p, description: v }))} />
+                    </div>
+
+                    {/* ── Columna 3: preview en vivo dentro del celular ── */}
+                    <div className="xl:w-[290px] flex-shrink-0">
                         <VacancyPhonePreview formData={formData} />
                     </div>
                 </div>
