@@ -1312,9 +1312,12 @@ const CandidatesSection = () => {
                             </div>
 
                             {/* Card 5: Candidatos por día */}
-                            <div className="bg-white dark:bg-gray-800 p-3 pb-2 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm flex flex-col" style={{ minHeight: '130px' }}>
+                            <div className="bg-white dark:bg-gray-800 p-3 pb-2 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm flex flex-col relative overflow-hidden group" style={{ minHeight: '130px' }}>
+                                <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity pointer-events-none">
+                                    <Users className="w-16 h-16 text-indigo-500 transform -rotate-6" />
+                                </div>
                                 {/* Header + calendar icon */}
-                                <div className="flex items-center justify-between mb-2">
+                                <div className="flex items-center justify-between mb-2 relative z-10">
                                     <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">Atendidos por día</span>
                                     <div className="flex items-center gap-1.5">
                                         {dailyStats && (
