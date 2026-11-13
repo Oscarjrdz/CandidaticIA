@@ -75,7 +75,7 @@ function ImageUploader({ label, value, onChange, hint = 'JPG, PNG, GIF · máx 4
                         {uploading ? 'Subiendo...' : value ? 'Cambiar imagen' : 'Subir imagen'}
                     </button>
                     {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
-                    {!error && <p className="text-xs text-gray-400 mt-1">{hint}</p>}
+                    {!error && <p className="text-[10px] leading-tight text-gray-400 mt-1 whitespace-nowrap">{hint}</p>}
                 </div>
             </div>
         </div>
