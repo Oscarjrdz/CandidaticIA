@@ -231,6 +231,33 @@ async function ingestBolsaImageFromUrl(redis, sourceUrl, hintName) {
     return { url: `https://www.candidatic.com/api/bolsa-image?id=${id}`, mime, filename };
 }
 
+// ¿El texto es una liga de Google Maps? (mismo criterio que BolsaSection del front).
+function isMapsLink(s) {
+    return /(google\.[a-z.]+\/maps|maps\.app\.goo\.gl|goo\.gl\/maps|maps\.google\.)/i.test(String(s || ''));
+}
+
+// Resuelve una liga de Google Maps a una dirección legible reusando /api/bolsa-geocode
+// (expande ligas cortas + reverse-geocode con Nominatim). Devuelve null si no se pudo.
+async function resolveMapsLocation(req, redis, url) {
+    try {
+        const r = await callInternal(req, redis, `/api/bolsa-geocode?url=${encodeURIComponent(url)}`, 'GET');
+        if (r.ok && r.data?.success && r.data.address) return r.data.address;
+    } catch { /* si falla, se deja la ubicación tal cual */ }
+    return null;
+}
+
+// Normaliza un sueldo a "semanal" como la UI de la Bolsa: si es puramente numérico
+// (con $, comas, espacios o "/sem"), lo deja como "$<n> /sem". Texto libre (ej.
+// "20k-30k mensual") se respeta tal cual.
+function formatWeeklySalary(raw) {
+    const s = String(raw ?? '').trim();
+    if (!s) return '';
+    const digits = s.replace(/[^\d,]/g, '');
+    const leftover = s.replace(/[\d,$\s]|\/?sem(ana)?(les|al|ales)?/gi, '').trim();
+    if (digits && !leftover) return `$${digits} /sem`;
+    return s;
+}
+
 // Resuelve una lista de URLs de imagen para guardarlas en el banco (máx 4): las http(s)
 // EXTERNAS se ingieren como assets permanentes (ingestBankAssetFromUrl); las que ya son
 // assets internos del banco (/api/image?id=…) o rutas relativas se conservan tal cual —
@@ -1443,19 +1470,19 @@ const TOOLS = {
     },
 
     crear_vacante_app: {
-        description: 'Crea una vacante nueva en la Bolsa de Empleo (app de candidatos). titulo, empresa y telefonoReclutador son obligatorios (el teléfono recibe por WhatsApp las postulaciones). imagenUrl/logoUrl deben ser URLs de /api/bolsa-image: súbelas antes con cargar_imagen_vacante_app. La vacante nace publicada (salvo que la empresa del reclutador esté pausada).',
+        description: 'Crea una vacante nueva en la Bolsa de Empleo (app de candidatos). titulo, empresa y telefonoReclutador son obligatorios (el teléfono recibe por WhatsApp las postulaciones). ubicacion puede ser texto (ej. "Monterrey") O una liga de Google Maps (maps.app.goo.gl / google.com/maps): si mandas una liga, se resuelve sola a la dirección. salario se maneja como SEMANAL: si mandas solo un número se guarda como "$<n> /sem". descripcion admite emojis y saltos de línea para un post atractivo (texto plano). imagenUrl/logoUrl deben ser URLs de /api/bolsa-image (súbelas con cargar_imagen_vacante_app). La vacante nace publicada (salvo que la empresa del reclutador esté pausada).',
         inputSchema: {
             type: 'object',
             properties: {
                 titulo: { type: 'string', description: 'Título/puesto de la vacante.' },
                 empresa: { type: 'string', description: 'Nombre de la empresa.' },
                 telefonoReclutador: { type: 'string', description: 'Teléfono (WhatsApp) que recibe las postulaciones y solicitudes.' },
-                ubicacion: { type: 'string', description: 'Ubicación/zona (opcional).' },
-                salario: { type: 'string', description: 'Salario o rango (opcional).' },
-                tipo: { type: 'string', description: 'Tipo de jornada (opcional, default "Tiempo Completo").' },
-                descripcion: { type: 'string', description: 'Descripción del puesto (opcional).' },
-                imagenUrl: { type: 'string', description: 'URL de la imagen/banner de la vacante (usa cargar_imagen_vacante_app).' },
-                logoUrl: { type: 'string', description: 'URL del logo de la empresa (usa cargar_imagen_vacante_app).' }
+                ubicacion: { type: 'string', description: 'Ubicación: texto libre (ej. "Monterrey") o una liga de Google Maps — si es liga, se resuelve a la dirección automáticamente (opcional).' },
+                salario: { type: 'string', description: 'Sueldo SEMANAL. Un número solo (ej. "1500") se guarda como "$1500 /sem"; texto libre (ej. "20k-30k mensual") se respeta (opcional).' },
+                tipo: { type: 'string', description: 'Tipo de jornada: "Tiempo Completo" | "Medio Tiempo" | "Remoto" | "Híbrido" (opcional, default "Tiempo Completo").' },
+                descripcion: { type: 'string', description: 'Descripción del puesto. Admite emojis y saltos de línea (\\n) para un post atractivo tipo publicación (opcional).' },
+                imagenUrl: { type: 'string', description: 'URL de la imagen/banner de la vacante — JPG/PNG horizontal 1200×675 px (usa cargar_imagen_vacante_app).' },
+                logoUrl: { type: 'string', description: 'URL del logo de la empresa — JPG/PNG cuadrado 512×512 px (usa cargar_imagen_vacante_app).' }
             },
             required: ['titulo', 'empresa', 'telefonoReclutador']
         },
@@ -1464,10 +1491,12 @@ const TOOLS = {
             const company = String(args?.empresa || '').trim();
             const recruiterPhone = String(args?.telefonoReclutador || '').trim();
             if (!title || !company || !recruiterPhone) throw new Error('Faltan titulo, empresa o telefonoReclutador');
+            let location = String(args?.ubicacion || '').trim();
+            if (isMapsLink(location)) location = (await resolveMapsLocation(req, redis, location)) || location;
             const r = await callInternal(req, redis, '/api/bolsa', 'POST', {
                 title, company, recruiterPhone,
-                location: args?.ubicacion || '',
-                salary: args?.salario || '',
+                location,
+                salary: formatWeeklySalary(args?.salario),
                 type: args?.tipo || 'Tiempo Completo',
                 description: args?.descripcion || '',
                 mediaUrl: args?.imagenUrl || '',
@@ -1475,12 +1504,12 @@ const TOOLS = {
             });
             if (!r.ok || r.data?.success === false) throw new Error(r.data?.error || `Fallo al crear la vacante (${r.status})`);
             const j = r.data?.data || {};
-            return { creada: true, id: j.id, titulo: j.title, empresa: j.company, activa: j.active !== false };
+            return { creada: true, id: j.id, titulo: j.title, empresa: j.company, ubicacion: j.location || '', salario: j.salary || '', activa: j.active !== false };
         }
     },
 
     editar_vacante_app: {
-        description: 'Edita una vacante de la Bolsa de Empleo (app). Manda solo los campos a cambiar (merge: lo que no mandes se conserva). Para publicar/pausar es más claro usar publicar_vacante_app, pero aquí también puedes mandar "activa".',
+        description: 'Edita una vacante de la Bolsa de Empleo (app). Manda solo los campos a cambiar (merge: lo que no mandes se conserva). ubicacion acepta texto o una liga de Google Maps (se resuelve sola). salario es SEMANAL (un número → "$<n> /sem"). descripcion admite emojis y saltos de línea. Para publicar/pausar es más claro usar publicar_vacante_app, pero aquí también puedes mandar "activa".',
         inputSchema: {
             type: 'object',
             properties: {
@@ -1488,12 +1517,12 @@ const TOOLS = {
                 titulo: { type: 'string', description: 'Nuevo título (opcional).' },
                 empresa: { type: 'string', description: 'Nueva empresa (opcional).' },
                 telefonoReclutador: { type: 'string', description: 'Nuevo teléfono de recepción (opcional).' },
-                ubicacion: { type: 'string', description: 'Nueva ubicación (opcional).' },
-                salario: { type: 'string', description: 'Nuevo salario (opcional).' },
+                ubicacion: { type: 'string', description: 'Nueva ubicación: texto o liga de Google Maps (se resuelve a la dirección) (opcional).' },
+                salario: { type: 'string', description: 'Nuevo sueldo SEMANAL: un número → "$<n> /sem"; texto libre se respeta (opcional).' },
                 tipo: { type: 'string', description: 'Nuevo tipo de jornada (opcional).' },
-                descripcion: { type: 'string', description: 'Nueva descripción (opcional).' },
-                imagenUrl: { type: 'string', description: 'Nueva imagen (URL de /api/bolsa-image; opcional).' },
-                logoUrl: { type: 'string', description: 'Nuevo logo (URL de /api/bolsa-image; opcional).' },
+                descripcion: { type: 'string', description: 'Nueva descripción. Admite emojis y saltos de línea (opcional).' },
+                imagenUrl: { type: 'string', description: 'Nueva imagen — JPG/PNG horizontal 1200×675 px (URL de /api/bolsa-image; opcional).' },
+                logoUrl: { type: 'string', description: 'Nuevo logo — JPG/PNG cuadrado 512×512 px (URL de /api/bolsa-image; opcional).' },
                 activa: { type: 'boolean', description: 'Publicar (true) / pausar (false) la vacante (opcional).' }
             },
             required: ['id']
@@ -1505,8 +1534,12 @@ const TOOLS = {
             if (args?.titulo !== undefined) updates.title = String(args.titulo).trim();
             if (args?.empresa !== undefined) updates.company = String(args.empresa).trim();
             if (args?.telefonoReclutador !== undefined) updates.recruiterPhone = String(args.telefonoReclutador).replace(/\D/g, '');
-            if (args?.ubicacion !== undefined) updates.location = String(args.ubicacion);
-            if (args?.salario !== undefined) updates.salary = String(args.salario);
+            if (args?.ubicacion !== undefined) {
+                let loc = String(args.ubicacion).trim();
+                if (isMapsLink(loc)) loc = (await resolveMapsLocation(req, redis, loc)) || loc;
+                updates.location = loc;
+            }
+            if (args?.salario !== undefined) updates.salary = formatWeeklySalary(args.salario);
             if (args?.tipo !== undefined) updates.type = String(args.tipo);
             if (args?.descripcion !== undefined) updates.description = String(args.descripcion);
             if (args?.imagenUrl !== undefined) updates.mediaUrl = String(args.imagenUrl);
@@ -1559,7 +1592,7 @@ const TOOLS = {
     },
 
     cargar_imagen_vacante_app: {
-        description: 'Sube (carga) una imagen o PDF para una vacante de la Bolsa de Empleo desde una URL pública http(s). La guarda permanente y devuelve la URL de /api/bolsa-image para usar como imagenUrl (banner) o logoUrl (logo de empresa) en crear_vacante_app/editar_vacante_app. Tope 4MB.',
+        description: 'Sube (carga) una imagen o PDF para una vacante de la Bolsa de Empleo desde una URL pública http(s). La guarda permanente y devuelve la URL de /api/bolsa-image para usar como imagenUrl (banner) o logoUrl (logo de empresa) en crear_vacante_app/editar_vacante_app. Formato JPG o PNG. Medidas recomendadas: LOGO cuadrado 512×512 px; IMAGEN de vacante horizontal 1200×675 px (16:9). Tope 4MB.',
         inputSchema: {
             type: 'object',
             properties: {
@@ -1573,6 +1606,23 @@ const TOOLS = {
             if (!src) throw new Error('Falta url');
             const asset = await ingestBolsaImageFromUrl(redis, src, String(args?.nombre || '').trim() || undefined);
             return { cargada: true, url: asset.url, mime: asset.mime, nombre: asset.filename };
+        }
+    },
+
+    direccion_desde_maps: {
+        description: 'Convierte una liga de Google Maps (maps.app.goo.gl, goo.gl/maps o google.com/maps) en una dirección legible + coordenadas. Útil para rellenar la ubicacion de una vacante. crear_vacante_app/editar_vacante_app ya resuelven las ligas solas, pero esta tool te deja ver la dirección antes.',
+        inputSchema: {
+            type: 'object',
+            properties: { url: { type: 'string', description: 'Liga de Google Maps.' } },
+            required: ['url']
+        },
+        handler: async (args, { redis, req }) => {
+            const url = String(args?.url || '').trim();
+            if (!url) throw new Error('Falta url');
+            if (!isMapsLink(url)) throw new Error('La liga debe ser de Google Maps');
+            const r = await callInternal(req, redis, `/api/bolsa-geocode?url=${encodeURIComponent(url)}`, 'GET');
+            if (!r.ok || r.data?.success === false) throw new Error(r.data?.error || `No se pudo resolver la liga (${r.status})`);
+            return { direccion: r.data?.address || null, lugar: r.data?.place || null, lat: r.data?.lat ?? null, lng: r.data?.lng ?? null };
         }
     },
 
@@ -1611,7 +1661,7 @@ const TOOLS = {
             properties: {
                 nombre: { type: 'string', description: 'Nombre de la empresa.' },
                 telefono: { type: 'string', description: 'Teléfono (WhatsApp) de la empresa/reclutador.' },
-                logo: { type: 'string', description: 'URL del logo (usa cargar_imagen_vacante_app). Opcional.' }
+                logo: { type: 'string', description: 'URL del logo — JPG/PNG cuadrado 512×512 px (usa cargar_imagen_vacante_app). Opcional.' }
             },
             required: ['nombre', 'telefono']
         },
@@ -1636,7 +1686,7 @@ const TOOLS = {
                 id: { type: 'string', description: 'ID de la empresa.' },
                 nombre: { type: 'string', description: 'Nuevo nombre (opcional).' },
                 telefono: { type: 'string', description: 'Nuevo teléfono (opcional).' },
-                logo: { type: 'string', description: 'Nuevo logo (URL de /api/bolsa-image; opcional).' },
+                logo: { type: 'string', description: 'Nuevo logo — JPG/PNG cuadrado 512×512 px (URL de /api/bolsa-image; opcional).' },
                 estatus: { type: 'string', enum: ['activo', 'pausado'], description: 'Activar/pausar la empresa y en cascada TODAS sus vacantes (opcional).' }
             },
             required: ['id']

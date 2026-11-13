@@ -13,7 +13,7 @@ import { candidaticEmojiPickerProps } from '../utils/candidaticEmoji';
 const EmojiPicker = lazy(() => import('emoji-picker-react'));
 
 // ── Subidor de imagen ────────────────────────────────────────────────────────
-function ImageUploader({ label, value, onChange }) {
+function ImageUploader({ label, value, onChange, hint = 'JPG, PNG, GIF · máx 4 MB' }) {
     const inputRef = useRef(null);
     const [uploading, setUploading] = useState(false);
     const [error, setError] = useState('');
@@ -75,7 +75,7 @@ function ImageUploader({ label, value, onChange }) {
                         {uploading ? 'Subiendo...' : value ? 'Cambiar imagen' : 'Subir imagen'}
                     </button>
                     {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
-                    {!error && <p className="text-xs text-gray-400 mt-1">JPG, PNG, GIF · máx 4 MB</p>}
+                    {!error && <p className="text-xs text-gray-400 mt-1">{hint}</p>}
                 </div>
             </div>
         </div>
@@ -860,14 +860,14 @@ function TabVacantes({ empresas }) {
                                         onChange={handleSalaryChange}
                                         inputMode="numeric"
                                         placeholder="1,500"
-                                        className="w-full pl-7 pr-14 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                        className="w-full pl-6 pr-11 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                                     />
                                     <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm pointer-events-none">/ sem</span>
                                 </div>
                             </div>
                             <div className="space-y-1">
                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Tipo</label>
-                                <select className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white" value={formData.type} onChange={e => setFormData(p => ({ ...p, type: e.target.value }))}>
+                                <select className="w-full pl-2.5 pr-7 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white truncate" value={formData.type} onChange={e => setFormData(p => ({ ...p, type: e.target.value }))}>
                                     <option>Tiempo Completo</option>
                                     <option>Medio Tiempo</option>
                                     <option>Remoto</option>
@@ -881,11 +881,13 @@ function TabVacantes({ empresas }) {
                                 label="Logo de Empresa"
                                 value={formData.companyLogo}
                                 onChange={v => setFormData(p => ({ ...p, companyLogo: v }))}
+                                hint="JPG o PNG · cuadrado 512×512 px · máx 4 MB"
                             />
                             <ImageUploader
                                 label="Imagen de Vacante"
                                 value={formData.mediaUrl}
                                 onChange={v => setFormData(p => ({ ...p, mediaUrl: v }))}
+                                hint="JPG o PNG · horizontal 1200×675 px (16:9) · máx 4 MB"
                             />
                         </div>
                     </div>
@@ -1064,6 +1066,7 @@ function TabEmpresas({ onEmpresasChange }) {
                         label="Logo de la Empresa"
                         value={form.logo}
                         onChange={v => setForm(p => ({ ...p, logo: v }))}
+                        hint="JPG o PNG · cuadrado 512×512 px · máx 4 MB"
                     />
                     <div className="flex justify-end gap-3 pt-4 border-t border-gray-100 dark:border-gray-700">
                         <Button variant="outline" onClick={() => setIsModalOpen(false)}>Cancelar</Button>
